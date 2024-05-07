@@ -284,6 +284,9 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 	camera.HasSky = true;
 
 	const auto i = mat4(1);
+	
+	const auto arealight = Material::DiffuseLight(vec3(30,30,30));
+	auto box0 = Model::CreateBox(vec3(-2, 0.5, -1), vec3(2, 3, -0.5), arealight);
 	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
 	auto lucy0 = Model::LoadModel("../assets/models/livingroom.obj");
 
@@ -296,7 +299,7 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 
 	std::vector<Model> models;
 	//models.push_back(Model::CreateCornellBox(555));
-	//models.push_back(sphere);
+	models.push_back(box0);
 	models.push_back(lucy0);
 
 	return std::forward_as_tuple(std::move(models), std::vector<Texture>());
