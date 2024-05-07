@@ -67,21 +67,31 @@ Model Model::LoadModel(const std::string& filename)
 	// Materials
 	std::vector<Material> materials;
 
-	for (const auto& material : objReader.GetMaterials())
+	for (const auto& _material : objReader.GetMaterials())
 	{
+		tinyobj::material_t material = _material;
 		Material m{};
-
+		
+		// if( material.diffuse_texname != "")
+		// {
+		// 	material.diffuse[0] = 0.5f;
+		// 	material.diffuse[1] = 0.5f;
+		// 	material.diffuse[2] = 0.5f;
+		// }
+		
 		m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
-		if( material.diffuse_texname != "")
-		{
-			m.Diffuse = vec4(0.5, 0.5, 0.5, 1.0);
-		}
 		m.DiffuseTextureId = -1;
 
 		if( material.roughness < 0.4 )
 		{
-			m = Material::Metallic(vec3(material.diffuse[0],material.diffuse[1],material.diffuse[2]), material.roughness);
+			//m = Material::Metallic(vec3(material.diffuse[0],material.diffuse[1],material.diffuse[2]), material.roughness);
+
+			//m = Material::Dielectric(0);
+			//m.Fuzziness = material.roughness;
 		}
+
+		m.Fuzziness = material.roughness;
+		m.RefractionIndex = 0.75f;
 		
 		if( material.emission[0] > 0 )
 		{
