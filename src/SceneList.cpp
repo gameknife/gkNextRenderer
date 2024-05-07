@@ -68,6 +68,7 @@ const std::vector<std::pair<std::string, std::function<SceneAssets (SceneList::C
 	{"Lucy In One Weekend", LucyInOneWeekend},
 	{"Cornell Box", CornellBox},
 	{"Cornell Box & Lucy", CornellBoxLucy},
+	{"LivingRoom", LivingRoom},
 };
 
 SceneAssets SceneList::CubeAndSpheres(CameraInitialSate& camera)
@@ -267,6 +268,35 @@ SceneAssets SceneList::CornellBoxLucy(CameraInitialSate& camera)
 	std::vector<Model> models;
 	models.push_back(Model::CreateCornellBox(555));
 	models.push_back(sphere);
+	models.push_back(lucy0);
+
+	return std::forward_as_tuple(std::move(models), std::vector<Texture>());
+}
+
+SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
+{
+	camera.ModelView = lookAt(vec3(0, 1.5, 8), vec3(0, 1.5, 4.5), vec3(0, 1, 0));
+	camera.FieldOfView = 45;
+	camera.Aperture = 0.0f;
+	camera.FocusDistance = 10.0f;
+	camera.ControlSpeed = 5.0f;
+	camera.GammaCorrection = true;
+	camera.HasSky = true;
+
+	const auto i = mat4(1);
+	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+	auto lucy0 = Model::LoadModel("../assets/models/livingroom.obj");
+
+	lucy0.Transform(
+		rotate(
+			scale(
+				translate(i, vec3(0, 0, 0)),
+				vec3(1.0)),
+			radians(0.0f), vec3(0, 1, 0)));
+
+	std::vector<Model> models;
+	//models.push_back(Model::CreateCornellBox(555));
+	//models.push_back(sphere);
 	models.push_back(lucy0);
 
 	return std::forward_as_tuple(std::move(models), std::vector<Texture>());

@@ -250,6 +250,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 		ImGui::Text("Frame rate: %.1f fps", statistics.FrameRate);
 		ImGui::Text("Primary ray rate: %.2f Gr/s", statistics.RayRate);
 		ImGui::Text("Accumulated samples:  %u", statistics.TotalSamples);
+		ImGui::Text("Campos:  %.1f %.1f %.1f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 	}
 	ImGui::End();
 }

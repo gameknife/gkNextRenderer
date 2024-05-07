@@ -20,6 +20,9 @@ struct Statistics final
 	float FrameRate;
 	float RayRate;
 	uint32_t TotalSamples;
+	float CamPosX;
+	float CamPosY;
+	float CamPosZ;
 };
 
 class UserInterface final

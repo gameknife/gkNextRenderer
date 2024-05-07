@@ -164,6 +164,10 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	stats.FramebufferSize = Window().FramebufferSize();
 	stats.FrameRate = static_cast<float>(1 / timeDelta);
 
+	stats.CamPosX = modelViewController_.ModelView()[3][0];
+	stats.CamPosY = modelViewController_.ModelView()[3][1];
+	stats.CamPosZ = modelViewController_.ModelView()[3][2];
+
 	if (userSettings_.IsRayTraced)
 	{
 		const auto extent = SwapChain().Extent();

@@ -72,7 +72,21 @@ Model Model::LoadModel(const std::string& filename)
 		Material m{};
 
 		m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
+		if( material.diffuse_texname != "")
+		{
+			m.Diffuse = vec4(0.5, 0.5, 0.5, 1.0);
+		}
 		m.DiffuseTextureId = -1;
+
+		if( material.roughness < 0.4 )
+		{
+			m = Material::Metallic(vec3(material.diffuse[0],material.diffuse[1],material.diffuse[2]), material.roughness);
+		}
+		
+		if( material.emission[0] > 0 )
+		{
+			m = Material::DiffuseLight(vec3(material.emission[0],material.emission[1],material.emission[2]));
+		}
 
 		materials.emplace_back(m);
 	}
@@ -93,12 +107,12 @@ Model Model::LoadModel(const std::string& filename)
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 	std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
-	size_t faceId = 0;
+	
 
 	for (const auto& shape : objReader.GetShapes())
 	{
 		const auto& mesh = shape.mesh;
-
+		size_t faceId = 0;
 		for (const auto& index : mesh.indices)
 		{
 			Vertex vertex = {};
