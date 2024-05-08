@@ -41,6 +41,7 @@ struct UserSettings final
 	bool RequiresAccumulationReset(const UserSettings& prev) const
 	{
 		return
+			UseCheckerBoardRendering != prev.UseCheckerBoardRendering ||
 			IsRayTraced != prev.IsRayTraced ||
 			AccumulateRays != prev.AccumulateRays ||
 			NumberOfBounces != prev.NumberOfBounces ||

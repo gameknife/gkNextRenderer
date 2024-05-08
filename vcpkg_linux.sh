@@ -3,10 +3,15 @@ set -e
 
 mkdir -p build
 cd build
-git clone https://github.com/Microsoft/vcpkg.git vcpkg.linux
-cd vcpkg.linux
-git checkout 2024.03.25
-./bootstrap-vcpkg.sh
+
+#if vcpkg.linux exists
+if [ -d "vcpkg.linux" ]; then
+	cd vcpkg.linux
+else
+	git clone https://github.com/Microsoft/vcpkg.git vcpkg.linux
+	cd vcpkg.linux
+	git checkout 2024.03.25
+	./bootstrap-vcpkg.sh
 
 ./vcpkg install \
 	boost-exception:x64-linux \
@@ -16,4 +21,5 @@ git checkout 2024.03.25
 	glm:x64-linux \
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-linux \
 	stb:x64-linux \
-	tinyobjloader:x64-linux
+	tinyobjloader:x64-linux \
+	curl:x64-linux

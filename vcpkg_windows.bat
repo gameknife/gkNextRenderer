@@ -1,9 +1,17 @@
+@echo off
+
 mkdir build
 cd build || goto :error
-git clone https://github.com/Microsoft/vcpkg.git vcpkg.windows || goto :error
-cd vcpkg.windows || goto :error
-git checkout 2024.03.25 || goto :error
-call bootstrap-vcpkg.bat || goto :error
+
+IF EXIST vcpkg.windows (
+	echo "vcpkg.windows already exists."
+	cd vcpkg.windows || goto :error
+) ELSE (
+	git clone https://github.com/Microsoft/vcpkg.git vcpkg.windows || goto :error
+	cd vcpkg.windows || goto :error
+	git checkout 2024.03.25 || goto :error
+	call bootstrap-vcpkg.bat || goto :error
+)
 
 vcpkg.exe install ^
 	boost-exception:x64-windows-static ^
@@ -14,6 +22,7 @@ vcpkg.exe install ^
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-windows-static ^
 	stb:x64-windows-static ^
 	tinyobjloader:x64-windows-static ^
+	curl:x64-windows-static ^
 	|| goto :error
 
 cd ..
@@ -21,7 +30,7 @@ cd ..
 
 exit /b
 
-
 :error
 echo Failed with error #%errorlevel%.
 exit /b %errorlevel%
+

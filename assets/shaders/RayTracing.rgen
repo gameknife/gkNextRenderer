@@ -20,6 +20,7 @@ layout(location = 0) rayPayloadEXT RayPayload Ray;
 void main() 
 {
 	// use checkerbord to skip sample
+	bool bCheckerBoard = Camera.UseCheckerBoard && Camera.NumberOfSamples == 1;
 	int adder = Camera.TotalNumberOfSamples % 2 == 0 ? 1 : 0;
     
 	const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
@@ -35,7 +36,7 @@ void main()
 	// Accumulate all the rays for this pixels.
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
 	{
-	    if (Camera.UseCheckerBoard && (int(gl_LaunchIDEXT.x) + int(gl_LaunchIDEXT.y) + adder) % 2 == 0) break;
+	    if (bCheckerBoard && (int(gl_LaunchIDEXT.x) + int(gl_LaunchIDEXT.y) + adder) % 2 == 0) break;
 		//if (Camera.NumberOfSamples != Camera.TotalNumberOfSamples) break;
 		const vec2 pixel = vec2(gl_LaunchIDEXT.x + RandomFloat(pixelRandomSeed), gl_LaunchIDEXT.y + RandomFloat(pixelRandomSeed));
 		vec2 uv = (pixel / gl_LaunchSizeEXT.xy) * 2.0 - 1.0;
@@ -90,21 +91,14 @@ void main()
 		pixelColor += rayColor;
 	}
 
+    const float checkerboardIncreaser = bCheckerBoard ? 2.0f : 1.0f;
 	const bool accumulate = Camera.NumberOfSamples != Camera.TotalNumberOfSamples;
-	const vec3 accumulatedColor = (accumulate ? imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)) : vec4(0)).rgb + pixelColor;
+	const vec3 accumulatedColor = (accumulate ? imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)) : vec4(0)).rgb + pixelColor * checkerboardIncreaser;
 
 	pixelColor = accumulatedColor / Camera.TotalNumberOfSamples;
 
 	// Apply raytracing-in-one-weekend gamma correction.
-	if(Camera.UseCheckerBoard)
-	{
-	    pixelColor = sqrt(pixelColor * 2.0);
-	}
-	else
-	{
-	    pixelColor = sqrt(pixelColor);
-	}
-	
+	pixelColor = sqrt(pixelColor);
 
 	if (Camera.ShowHeatmap)
 	{

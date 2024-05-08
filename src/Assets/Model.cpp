@@ -82,11 +82,11 @@ Model Model::LoadModel(const std::string& filename)
 		m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
 		m.DiffuseTextureId = -1;
 
-		if( material.roughness < 0.8 )
+		//if( material.roughness < 0.8 )
 		{
 			m.MaterialModel = Material::Enum::Mixture;
 			m.Fuzziness = material.roughness;
-			m.RefractionIndex = 0.75f;
+			m.RefractionIndex = 1.46f; // plastic
 		}
 		
 		if( material.emission[0] > 0 )

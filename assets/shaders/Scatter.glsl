@@ -15,12 +15,8 @@ float Schlick(const float cosine, const float refractionIndex)
 RayPayload ScatterMixture(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed)
 {
     const float dot = dot(direction, normal);
-	const vec3 outwardNormal = dot > 0 ? -normal : normal;
-	const float niOverNt = dot > 0 ? m.RefractionIndex : 1 / m.RefractionIndex;
 	const float cosine = dot > 0 ? m.RefractionIndex * dot : -dot;
-
-	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
-	const float reflectProb = Schlick(cosine, m.RefractionIndex);//refracted != vec3(0) ? Schlick(cosine, m.RefractionIndex) : 1;
+	const float reflectProb = Schlick(cosine, m.RefractionIndex);
 	
 	const bool isScattered = dot < 0;
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);

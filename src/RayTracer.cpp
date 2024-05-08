@@ -12,6 +12,7 @@
 #include "Vulkan/Window.hpp"
 #include <iostream>
 #include <sstream>
+#include "curl/curl.h"
 
 namespace
 {
@@ -329,6 +330,28 @@ void RayTracer::CheckAndUpdateBenchmarkState(double prevTime)
 		{
 			if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) == SceneList::AllScenes.size() - 1)
 			{
+				std::cout << "Sending benchmark to perf server..." << std::endl;
+				// upload from curl
+				CURL *curl;
+				CURLcode res;
+				curl_global_init(CURL_GLOBAL_ALL);
+				curl = curl_easy_init();
+				if(curl)
+				{
+					curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
+					curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "name=daniel&project=curl");
+
+					/* Perform the request, res gets the return code */
+					res = curl_easy_perform(curl);
+					/* Check for errors */
+					if(res != CURLE_OK)
+						fprintf(stderr, "curl_easy_perform() failed: %s\n",
+							curl_easy_strerror(res));
+ 
+					/* always cleanup */
+					curl_easy_cleanup(curl);
+				}
+				
 				Window().Close();
 			}
 
