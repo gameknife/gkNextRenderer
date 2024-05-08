@@ -209,7 +209,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat("Focus", &Settings().FocusDistance, 0.1f, 20.0f, "%.1f");
+		ImGui::SliderFloat("Focus", &Settings().FocusDistance, 0.1f, 5.0f, "%.1f");
 		ImGui::NewLine();
 
 		ImGui::Text("Profiler");
@@ -252,7 +252,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 	{
 		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 		ImGui::Separator();
-		ImGui::Text("Frame rate: %.1f fps", statistics.FrameRate);
+		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		ImGui::Text("Primary ray rate: %.2f Gr/s", statistics.RayRate);
 		ImGui::Text("Accumulated samples:  %u", statistics.TotalSamples);
 		ImGui::Text("Campos:  %.1f %.1f %.1f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);

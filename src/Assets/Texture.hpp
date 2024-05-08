@@ -23,12 +23,14 @@ namespace Assets
 		const unsigned char* Pixels() const { return pixels_.get(); }
 		int Width() const { return width_; }
 		int Height() const { return height_; }
+		const std::string& Loadname() const { return loadname_; }
 
 	private:
 
-		Texture(int width, int height, int channels, unsigned char* pixels);
+		Texture(std::string loadname, int width, int height, int channels, unsigned char* pixels);
 
 		Vulkan::SamplerConfig samplerConfig_;
+		std::string loadname_;
 		int width_;
 		int height_;
 		int channels_;

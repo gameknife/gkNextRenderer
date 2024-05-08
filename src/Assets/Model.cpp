@@ -16,6 +16,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Texture.hpp"
+
 using namespace glm;
 
 namespace std
@@ -42,7 +44,7 @@ namespace std
 
 namespace Assets {
 
-Model Model::LoadModel(const std::string& filename)
+Model Model::LoadModel(const std::string& filename, std::vector<Texture> &textures)
 {
 	std::cout << "- loading '" << filename << "'... " << std::flush;
 
@@ -66,22 +68,40 @@ Model Model::LoadModel(const std::string& filename)
 
 	// Materials
 	std::vector<Material> materials;
-
+	
 	for (const auto& _material : objReader.GetMaterials())
 	{
 		tinyobj::material_t material = _material;
 		Material m{};
-		
-		// if( material.diffuse_texname != "")
-		// {
-		// 	material.diffuse[0] = 0.5f;
-		// 	material.diffuse[1] = 0.5f;
-		// 	material.diffuse[2] = 0.5f;
-		// }
+
+		// texture stuff
+		m.DiffuseTextureId = -1;
+		if( material.diffuse_texname != "")
+		{
+			material.diffuse[0] = 1.0f;
+			material.diffuse[1] = 1.0f;
+			material.diffuse[2] = 1.0f;
+
+			// find if textures contain texture with loadname equals diffuse_texname
+			std::string loadname = "../assets/textures/" + material.diffuse_texname;
+			for (size_t i = 0; i < textures.size(); i++)
+			{
+				if (textures[i].Loadname() == loadname)
+				{
+					m.DiffuseTextureId = i;
+					break;
+				}
+			}
+
+			if(m.DiffuseTextureId == -1)
+			{
+				textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
+				m.DiffuseTextureId = textures.size() - 1;
+			}
+		}
 		
 		m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
-		m.DiffuseTextureId = -1;
-
+		
 		//if( material.roughness < 0.8 )
 		{
 			m.MaterialModel = Material::Enum::Mixture;
@@ -94,6 +114,12 @@ Model Model::LoadModel(const std::string& filename)
 			m = Material::DiffuseLight(vec3(material.emission[0],material.emission[1],material.emission[2]));
 		}
 
+		if( material.metallic > 0.5f )
+		{
+			m.MaterialModel = Material::Enum::Metallic;
+			m.Fuzziness = clamp(material.roughness, 0.0f, 0.2f);
+		}
+		
 		materials.emplace_back(m);
 	}
 

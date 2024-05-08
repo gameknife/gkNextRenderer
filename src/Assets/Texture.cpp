@@ -24,10 +24,11 @@ Texture Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerC
 	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
-	return Texture(width, height, channels, pixels);
+	return Texture(filename, width, height, channels, pixels);
 }
 
-Texture::Texture(int width, int height, int channels, unsigned char* const pixels) :
+Texture::Texture(std::string loadname, int width, int height, int channels, unsigned char* const pixels) :
+	loadname_(loadname),
 	width_(width),
 	height_(height),
 	channels_(channels),

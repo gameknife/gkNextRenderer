@@ -59,3 +59,34 @@ vec3 RandomInUnitSphere(inout uint seed)
 		}
 	}
 }
+
+vec3 RandomInCone(inout uint seed, float cosAngle) {
+    const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
+    const float pi = 3.1415926535897932384626433832795;
+    float phi = 2.0f * pi * u.x;
+    float cos_phi = cos(phi);
+    float sin_phi = sin(phi);
+    float cos_theta = 1.0f - u.y + u.y * cosAngle;
+    float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
+    return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
+}
+
+vec3 RandomInHemiSphere(inout uint seed)
+{
+    const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
+    const float pi = 3.1415926535897932384626433832795;
+    float phi = 2.0f * pi * u.x;
+    float cos_phi = cos(phi);
+    float sin_phi = sin(phi);
+    float cos_theta = sqrt(u.y);
+    float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
+    return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
+}
+
+vec3 AlignWithNormal(vec3 ray, vec3 normal)
+{
+    vec3 up = normal;
+    vec3 right = normalize(cross(normal, vec3(0.0072f, 1.0f, 0.0034f)));
+    vec3 forward = cross(right, up);
+    return ray.x * right + ray.y * up + ray.z * forward;
+}
