@@ -217,6 +217,11 @@ void UserInterface::DrawSettings()
 		ImGui::Checkbox("Show heatmap", &Settings().ShowHeatmap);
 		ImGui::SliderFloat("Scaling", &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
+
+		ImGui::Text("Performance");
+		ImGui::Separator();
+		ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
+		ImGui::NewLine();
 	}
 	ImGui::End();
 }

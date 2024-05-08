@@ -14,4 +14,5 @@ struct UniformBufferObject
 	uint RandomSeed;
 	bool HasSky;
 	bool ShowHeatmap;
+	bool UseCheckerBoard;
 };

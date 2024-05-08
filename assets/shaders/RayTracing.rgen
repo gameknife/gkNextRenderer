@@ -19,6 +19,9 @@ layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 void main() 
 {
+	// use checkerbord to skip sample
+	int adder = Camera.TotalNumberOfSamples % 2 == 0 ? 1 : 0;
+    
 	const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
 
 	// Initialise separate random seeds for the pixel and the rays.
@@ -28,13 +31,19 @@ void main()
 	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y), Camera.TotalNumberOfSamples);
 
 	vec3 pixelColor = vec3(0);
-
+	
 	// Accumulate all the rays for this pixels.
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
 	{
+	    if (Camera.UseCheckerBoard && (int(gl_LaunchIDEXT.x) + int(gl_LaunchIDEXT.y) + adder) % 2 == 0) break;
 		//if (Camera.NumberOfSamples != Camera.TotalNumberOfSamples) break;
 		const vec2 pixel = vec2(gl_LaunchIDEXT.x + RandomFloat(pixelRandomSeed), gl_LaunchIDEXT.y + RandomFloat(pixelRandomSeed));
-		const vec2 uv = (pixel / gl_LaunchSizeEXT.xy) * 2.0 - 1.0;
+		vec2 uv = (pixel / gl_LaunchSizeEXT.xy) * 2.0 - 1.0;
+		
+		// anti aliasing
+        {
+            uv += vec2(RandomFloat(Ray.RandomSeed), RandomFloat(Ray.RandomSeed)) / gl_LaunchSizeEXT.xy;
+        }
 
 		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
@@ -87,7 +96,15 @@ void main()
 	pixelColor = accumulatedColor / Camera.TotalNumberOfSamples;
 
 	// Apply raytracing-in-one-weekend gamma correction.
-	pixelColor = sqrt(pixelColor);
+	if(Camera.UseCheckerBoard)
+	{
+	    pixelColor = sqrt(pixelColor * 2.0);
+	}
+	else
+	{
+	    pixelColor = sqrt(pixelColor);
+	}
+	
 
 	if (Camera.ShowHeatmap)
 	{

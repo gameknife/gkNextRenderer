@@ -29,6 +29,7 @@ namespace Assets
 		uint32_t RandomSeed;
 		uint32_t HasSky; // bool
 		uint32_t ShowHeatmap; // bool
+		uint32_t UseCheckerBoard; // bool
 	};
 
 	class UniformBuffer

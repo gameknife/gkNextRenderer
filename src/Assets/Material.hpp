@@ -38,7 +38,8 @@ namespace Assets
 			Metallic = 1,
 			Dielectric = 2,
 			Isotropic = 3,
-			DiffuseLight = 4
+			DiffuseLight = 4,
+			Mixture = 5,
 		};
 
 		// Note: vec3 and vec4 gets aligned on 16 bytes in Vulkan shaders. 

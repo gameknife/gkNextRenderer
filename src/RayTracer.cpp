@@ -54,6 +54,7 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	ubo.HasSky = init.HasSky;
 	ubo.ShowHeatmap = userSettings_.ShowHeatmap;
 	ubo.HeatmapScale = userSettings_.HeatmapScale;
+	ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
 
 	return ubo;
 }
