@@ -31,7 +31,7 @@ int main(int argc, const char* argv[]) noexcept
 		const UserSettings userSettings = CreateUserSettings(options);
 		const Vulkan::WindowConfig windowConfig
 		{
-			"Vulkan Window",
+			"RayTracer",
 			options.Width,
 			options.Height,
 			options.Benchmark && options.Fullscreen,

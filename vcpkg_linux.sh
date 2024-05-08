@@ -12,6 +12,7 @@ else
 	cd vcpkg.linux
 	git checkout 2024.03.25
 	./bootstrap-vcpkg.sh
+fi
 
 ./vcpkg install \
 	boost-exception:x64-linux \

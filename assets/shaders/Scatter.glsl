@@ -73,7 +73,7 @@ RayPayload ScatterDieletric(const Material m, const vec3 direction, const vec3 n
 // Diffuse Light
 RayPayload ScatterDiffuseLight(const Material m, const float t, inout uint seed)
 {
-	const vec4 colorAndDistance = vec4(m.Diffuse.rgb, t);
+	const vec4 colorAndDistance = vec4(m.Diffuse.rgb, -1);
 	const vec4 scatter = vec4(1, 0, 0, 0);
 
 	return RayPayload(colorAndDistance, scatter, seed);
