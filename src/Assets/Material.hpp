@@ -22,9 +22,9 @@ namespace Assets
 			return Material{ glm::vec4(0.7f, 0.7f, 1.0f, 1), textureId,  0.0f, refractionIndex, Enum::Dielectric };
 		}
 
-		static Material Isotropic(const glm::vec3& diffuse, const int32_t textureId = -1)
+		static Material Isotropic(const glm::vec3& diffuse, const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
 		{
-			return Material{ glm::vec4(diffuse, 1), textureId, 0.0f, 0.0f, Enum::Isotropic };
+			return Material{ glm::vec4(diffuse, 1), textureId, fuzziness, refractionIndex, Enum::Isotropic };
 		}
 
 		static Material DiffuseLight(const glm::vec3& diffuse, const int32_t textureId = -1)

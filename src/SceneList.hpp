@@ -35,6 +35,7 @@ public:
 	static SceneAssets CornellBox(CameraInitialSate& camera);
 	static SceneAssets CornellBoxLucy(CameraInitialSate& camera);
 	static SceneAssets LivingRoom(CameraInitialSate& camera);
+	static SceneAssets Kitchen(CameraInitialSate& camera);
 
 	static const std::vector<std::pair<std::string, std::function<SceneAssets (CameraInitialSate&)>>> AllScenes;
 };
