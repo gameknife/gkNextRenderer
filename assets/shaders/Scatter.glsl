@@ -20,12 +20,12 @@ RayPayload ScatterMixture(const Material m, const vec3 direction, const vec3 nor
 	
 	const bool isScattered = dot < 0;
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-	const vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
+	const vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb * texColor.rgb, t);
 	//const vec4 scatter = vec4(normal + RandomInUnitSphere(seed), isScattered ? 1 : 0);
 	const vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere(seed), normal), isScattered ? 1 : 0);
 	
     return RandomFloat(seed) < reflectProb
-		? RayPayload(vec4(0.5,0.5,0.5,t), vec4( AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal)), 1), seed)
+		? RayPayload(vec4(0.5,0.5,0.5,t), vec4( AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal)), isScattered ? 1 : 0), seed)
 	: RayPayload(colorAndDistance, scatter, seed);
 }
 

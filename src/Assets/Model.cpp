@@ -102,11 +102,13 @@ Model Model::LoadModel(const std::string& filename, std::vector<Texture> &textur
 		
 		m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
 		
-		//if( material.roughness < 0.8 )
+		m.MaterialModel = Material::Enum::Mixture;
+		m.Fuzziness = material.roughness;
+		m.RefractionIndex = 1.46; // plastic
+		
+		if( material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses")
 		{
-			m.MaterialModel = Material::Enum::Mixture;
-			m.Fuzziness = material.roughness;
-			m.RefractionIndex = 1.46f; // plastic
+			m.MaterialModel = Material::Enum::Dielectric;
 		}
 		
 		if( material.emission[0] > 0 )
@@ -170,8 +172,8 @@ Model Model::LoadModel(const std::string& filename, std::vector<Texture> &textur
 			{
 				vertex.TexCoord =
 				{
-					objAttrib.texcoords[2 * index.texcoord_index + 0],
-					1 - objAttrib.texcoords[2 * index.texcoord_index + 1]
+					objAttrib.texcoords[2 * max(0,index.texcoord_index) + 0],
+					1 - objAttrib.texcoords[2 * max(0,index.texcoord_index) + 1]
 				};
 			}
 

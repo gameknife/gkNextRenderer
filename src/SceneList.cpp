@@ -314,20 +314,20 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 
 SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 {
-	camera.ModelView = lookAt(vec3(0, 1.5, 4), vec3(-4, 1.5, -4), vec3(0, 1, 0));
-	camera.FieldOfView = 45;
+	camera.ModelView = lookAt(vec3(2, 1.5, 3), vec3(-4, 1.5, -4), vec3(0, 1, 0));
+	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
 	camera.FocusDistance = 10.0f;
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
-	camera.HasSky = false;
+	camera.HasSky = true;
 
 	std::vector<Model> models;
 	std::vector<Texture> textures;
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(30,30,30));
-	auto box0 = Model::CreateBox(vec3(-2, 0.5, -1), vec3(2, 3, -0.5), arealight);
+	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
+	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
 	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
 	auto lucy0 = Model::LoadModel("../assets/models/kitchen.obj", textures);
 
@@ -340,7 +340,7 @@ SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 
 	
 	//models.push_back(Model::CreateCornellBox(555));
-	//models.push_back(box0);
+	models.push_back(box0);
 	models.push_back(lucy0);
 
 	return std::forward_as_tuple(std::move(models), std::move(textures));

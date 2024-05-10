@@ -78,6 +78,12 @@ void main()
 
 			rayColor *= hitColor;
 
+            // if hit the backface, skip the sample
+            if( !isScattered && b == 0 )
+            {
+                //rayColor = vec3(0, 0, 0);
+            }
+
 			// Trace missed, or end of trace.
 			if (t < 0 || !isScattered)
 			{				
