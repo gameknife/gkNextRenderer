@@ -92,6 +92,8 @@ namespace Vulkan
 		std::vector<class Fence> inFlightFences_;
 
 		size_t currentFrame_{};
+
+		Fence* fence;
 	};
 
 }

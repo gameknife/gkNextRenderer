@@ -144,6 +144,8 @@ void Application::CreateSwapChain()
 	}
 
 	commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChainFramebuffers_.size())));
+
+	fence = nullptr;
 }
 
 void Application::DeleteSwapChain()
@@ -157,17 +159,23 @@ void Application::DeleteSwapChain()
 	imageAvailableSemaphores_.clear();
 	depthBuffer_.reset();
 	swapChain_.reset();
+	fence = nullptr;
 }
 
 void Application::DrawFrame()
 {
 	const auto noTimeout = std::numeric_limits<uint64_t>::max();
 
-	auto& inFlightFence = inFlightFences_[currentFrame_];
+	// wait the last frame command buffer to complete
+	if(fence)
+	{
+		fence->Wait(noTimeout);
+	}
+
+	// next frame synchronization objects
+	fence = &(inFlightFences_[currentFrame_]);
 	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
 	const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
-
-	inFlightFence.Wait(noTimeout);
 
 	uint32_t imageIndex;
 	auto result = vkAcquireNextImageKHR(device_->Handle(), swapChain_->Handle(), noTimeout, imageAvailableSemaphore, nullptr, &imageIndex);
@@ -205,9 +213,9 @@ void Application::DrawFrame()
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	inFlightFence.Reset();
+	fence->Reset();
 
-	Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, inFlightFence.Handle()),
+	Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
 		"submit draw command buffer");
 
 	VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
