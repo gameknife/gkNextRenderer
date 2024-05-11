@@ -13,7 +13,7 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 2, rgba8) uniform image2D OutputImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-
+layout(binding = 10, rgba8) uniform image2D GBufferImage;
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 
@@ -29,6 +29,7 @@ void main()
 	// - pixel: we want the same random seed for each pixel to get a homogeneous anti-aliasing.
 	// - ray: we want a noisy random seed, different for each pixel.
 	uint pixelRandomSeed = Camera.RandomSeed;
+    vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / gl_LaunchSizeEXT.xy;
 	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y), Camera.TotalNumberOfSamples);
 
 	vec3 pixelColor = vec3(0);
@@ -43,7 +44,7 @@ void main()
 		
 		// anti aliasing
         {
-            uv += vec2(RandomFloat(Ray.RandomSeed), RandomFloat(Ray.RandomSeed)) / gl_LaunchSizeEXT.xy;
+            uv += uvOffset;
         }
 
 		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
@@ -78,10 +79,10 @@ void main()
 
 			rayColor *= hitColor;
 
-            // if hit the backface, skip the sample
-            if( !isScattered && b == 0 )
+            if(b == 0)
             {
-                //rayColor = vec3(0, 0, 0);
+                // output gbuffer
+                imageStore(GBufferImage, ivec2(gl_LaunchIDEXT.xy), vec4(Ray.GBuffer.xyz * 0.5 + 0.5, Ray.GBuffer.w) );
             }
 
 			// Trace missed, or end of trace.

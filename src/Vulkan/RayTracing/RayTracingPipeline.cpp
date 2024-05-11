@@ -22,6 +22,7 @@ RayTracingPipeline::RayTracingPipeline(
 	const TopLevelAccelerationStructure& accelerationStructure,
 	const ImageView& accumulationImageView,
 	const ImageView& outputImageView,
+	const ImageView& gbufferImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
 	const Assets::Scene& scene) :
 	swapChain_(swapChain)
@@ -50,7 +51,10 @@ RayTracingPipeline::RayTracingPipeline(
 		{8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
 
 		// The Procedural buffer.
-		{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR}
+		{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR},
+
+		// GBuffer.
+		{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -76,6 +80,12 @@ RayTracingPipeline::RayTracingPipeline(
 		VkDescriptorImageInfo outputImageInfo = {};
 		outputImageInfo.imageView = outputImageView.Handle();
 		outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		// Gbuffer image
+		VkDescriptorImageInfo gbufferImageInfo = {};
+		gbufferImageInfo.imageView = gbufferImageView.Handle();
+		gbufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		
 
 		// Uniform buffer
 		VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -123,7 +133,8 @@ RayTracingPipeline::RayTracingPipeline(
 			descriptorSets.Bind(i, 5, indexBufferInfo),
 			descriptorSets.Bind(i, 6, materialBufferInfo),
 			descriptorSets.Bind(i, 7, offsetsBufferInfo),
-			descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
+			descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
+			descriptorSets.Bind(i, 10, gbufferImageInfo)
 		};
 
 		// Procedural buffer (optional)

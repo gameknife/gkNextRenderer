@@ -66,6 +66,10 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Image> outputImage_;
 		std::unique_ptr<DeviceMemory> outputImageMemory_;
 		std::unique_ptr<ImageView> outputImageView_;
+
+		std::unique_ptr<Image> gbufferImage_;
+		std::unique_ptr<DeviceMemory> gbufferImageMemory_;
+		std::unique_ptr<ImageView> gbufferImageView_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;

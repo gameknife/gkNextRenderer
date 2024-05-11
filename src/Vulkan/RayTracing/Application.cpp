@@ -143,7 +143,7 @@ void Application::CreateSwapChain()
 
 	CreateOutputImage();
 
-	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, UniformBuffers(), GetScene()));
+	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, *gbufferImageView_, UniformBuffers(), GetScene()));
 
 	const std::vector<ShaderBindingTable::Entry> rayGenPrograms = { {rayTracingPipeline_->RayGenShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> missPrograms = { {rayTracingPipeline_->MissShaderIndex(), {}} };
@@ -162,6 +162,9 @@ void Application::DeleteSwapChain()
 	accumulationImageView_.reset();
 	accumulationImage_.reset();
 	accumulationImageMemory_.reset();
+	gbufferImage_.reset();
+	gbufferImageMemory_.reset();
+	gbufferImageView_.reset();
 
 	Vulkan::Application::DeleteSwapChain();
 }
@@ -185,6 +188,11 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 0,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 0,
+		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	
 
 	// Bind ray tracing pipeline.
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
@@ -216,6 +224,9 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	// Acquire output image and swap-chain image for copying.
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 
+	VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
 		VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -357,6 +368,10 @@ void Application::CreateOutputImage()
 	outputImageMemory_.reset(new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
+	gbufferImage_.reset(new Image(Device(), extent, SwapChain().Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	gbufferImageMemory_.reset(new DeviceMemory(gbufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	gbufferImageView_.reset(new ImageView(Device(), gbufferImage_->Handle(), SwapChain().Format(), VK_IMAGE_ASPECT_COLOR_BIT));
+
 	const auto& debugUtils = Device().DebugUtils();
 	
 	debugUtils.SetObjectName(accumulationImage_->Handle(), "Accumulation Image");
@@ -367,6 +382,9 @@ void Application::CreateOutputImage()
 	debugUtils.SetObjectName(outputImageMemory_->Handle(), "Output Image Memory");
 	debugUtils.SetObjectName(outputImageView_->Handle(), "Output ImageView");
 
+	debugUtils.SetObjectName(gbufferImage_->Handle(), "Gbuffer Image");
+	debugUtils.SetObjectName(gbufferImageMemory_->Handle(), "Gbuffer Image Memory");
+	debugUtils.SetObjectName(gbufferImageView_->Handle(), "Gbuffer ImageView");
 }
 
 }
