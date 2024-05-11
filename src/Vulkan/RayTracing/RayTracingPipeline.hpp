@@ -46,8 +46,11 @@ namespace Vulkan::RayTracing
 		uint32_t ProceduralHitGroupIndex() const { return proceduralHitGroupIndex_; }
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const class PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
-
+		const class PipelineLayout& PipelineLayout() const { return *rayTracePipelineLayout_; }
+	public:
+		VkPipeline denoiserPipeline_{};
+		std::unique_ptr<DescriptorSetManager> denoiserDescriptorSetManager_;
+		std::unique_ptr<class PipelineLayout> denoisePipelineLayout_;
 	private:
 
 		const SwapChain& swapChain_;
@@ -55,7 +58,11 @@ namespace Vulkan::RayTracing
 		VULKAN_HANDLE(VkPipeline, pipeline_)
 
 		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<class PipelineLayout> pipelineLayout_;
+		std::unique_ptr<class PipelineLayout> rayTracePipelineLayout_;
+		
+		
+		
+
 
 		uint32_t rayGenIndex_;
 		uint32_t missIndex_;

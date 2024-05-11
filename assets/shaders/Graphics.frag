@@ -23,8 +23,9 @@ void main()
 	vec3 c = FragColor * d;
 	if (textureId >= 0)
 	{
-		c *= texture(TextureSamplers[textureId], FragTexCoord).rgb;
+	    vec3 albedo = texture(TextureSamplers[textureId], FragTexCoord).rgb;
+		c *= albedo * albedo;
 	}
 
-    OutColor = vec4(c, 1);
+    OutColor = vec4(sqrt(c), 1);
 }

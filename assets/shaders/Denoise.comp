@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "UniformBufferObject.glsl"
+
+layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
+layout(binding = 2, rgba8) uniform image2D OutputImage;
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 10, rgba8) uniform image2D GBufferImage;
+
+void main() {
+    vec4 org = imageLoad(OutputImage, ivec2(gl_GlobalInvocationID.xy));
+    imageStore(OutputImage, ivec2(gl_GlobalInvocationID.xy), vec4( dot(vec4(.33,.33,.33,0), org)) );
+}

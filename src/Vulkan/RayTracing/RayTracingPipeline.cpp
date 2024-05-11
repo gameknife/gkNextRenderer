@@ -35,8 +35,8 @@ RayTracingPipeline::RayTracingPipeline(
 		{0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
 
 		// Image accumulation & output
-		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-		{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
+		{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
 
 		// Camera information & co
 		{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR},
@@ -54,7 +54,7 @@ RayTracingPipeline::RayTracingPipeline(
 		{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR},
 
 		// GBuffer.
-		{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+		{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -151,7 +151,7 @@ RayTracingPipeline::RayTracingPipeline(
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
 	}
 
-	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	rayTracePipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
 
 	// Load shaders.
 	const ShaderModule rayGenShader(device, "../assets/shaders/RayTracing.rgen.spv");
@@ -160,13 +160,31 @@ RayTracingPipeline::RayTracingPipeline(
 	const ShaderModule proceduralClosestHitShader(device, "../assets/shaders/RayTracing.Procedural.rchit.spv");
 	const ShaderModule proceduralIntersectionShader(device, "../assets/shaders/RayTracing.Procedural.rint.spv");
 
+	// reuse the descriptor may cause issue, fix it back
+	denoisePipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	const ShaderModule denoiseShader(device, "../assets/shaders/Denoise.comp.spv");
+	
+	VkComputePipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+	pipelineCreateInfo.layout = denoisePipelineLayout_->Handle();
+	pipelineCreateInfo.flags = 0;
+	pipelineCreateInfo.pNext = nullptr;
+	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineCreateInfo.basePipelineIndex = 0;
+
+	Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+			1, &pipelineCreateInfo,
+			NULL, &denoiserPipeline_), 
+		"create denoise pipeline");
+
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages =
 	{
 		rayGenShader.CreateShaderStage(VK_SHADER_STAGE_RAYGEN_BIT_KHR),
 		missShader.CreateShaderStage(VK_SHADER_STAGE_MISS_BIT_KHR),
 		closestHitShader.CreateShaderStage(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
 		proceduralClosestHitShader.CreateShaderStage(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
-		proceduralIntersectionShader.CreateShaderStage(VK_SHADER_STAGE_INTERSECTION_BIT_KHR)
+		proceduralIntersectionShader.CreateShaderStage(VK_SHADER_STAGE_INTERSECTION_BIT_KHR),
 	};
 
 	// Shader groups
@@ -228,7 +246,7 @@ RayTracingPipeline::RayTracingPipeline(
 	pipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
 	pipelineInfo.pGroups = groups.data();
 	pipelineInfo.maxPipelineRayRecursionDepth = 1;
-	pipelineInfo.layout = pipelineLayout_->Handle();
+	pipelineInfo.layout = rayTracePipelineLayout_->Handle();
 	pipelineInfo.basePipelineHandle = nullptr;
 	pipelineInfo.basePipelineIndex = 0;
 
@@ -244,7 +262,7 @@ RayTracingPipeline::~RayTracingPipeline()
 		pipeline_ = nullptr;
 	}
 
-	pipelineLayout_.reset();
+	rayTracePipelineLayout_.reset();
 	descriptorSetManager_.reset();
 }
 
