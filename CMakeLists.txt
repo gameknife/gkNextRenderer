@@ -48,7 +48,11 @@ if (UNIX)
 endif ()
 
 find_package(Boost REQUIRED COMPONENTS exception program_options) 
+if (VCPKG_TARGET_ANDROID)
+
+else()
 find_package(glfw3 REQUIRED)
+endif()
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
