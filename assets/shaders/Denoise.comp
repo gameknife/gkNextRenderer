@@ -1,5 +1,6 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#define WORKGROUP_SIZE 32
 
 #include "UniformBufferObject.glsl"
 
@@ -7,6 +8,7 @@ layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 2, rgba8) uniform image2D OutputImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 10, rgba8) uniform image2D GBufferImage;
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1) in;
 
 void main() {
     vec4 org = imageLoad(OutputImage, ivec2(gl_GlobalInvocationID.xy));
