@@ -144,7 +144,7 @@ void Application::CreateSwapChain()
 	CreateOutputImage();
 
 	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, *gbufferImageView_, UniformBuffers(), GetScene()));
-
+	denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, *gbufferImageView_, UniformBuffers(), GetScene()));
 	const std::vector<ShaderBindingTable::Entry> rayGenPrograms = { {rayTracingPipeline_->RayGenShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> missPrograms = { {rayTracingPipeline_->MissShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> hitGroups = { {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}} };
@@ -156,6 +156,7 @@ void Application::DeleteSwapChain()
 {
 	shaderBindingTable_.reset();
 	rayTracingPipeline_.reset();
+	denoiserPipeline_.reset();
 	outputImageView_.reset();
 	outputImage_.reset();
 	outputImageMemory_.reset();
@@ -226,9 +227,10 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	
 	// Execute Filter Kernel
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->denoiserPipeline_);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->denoisePipelineLayout_->Handle(), 0, 1, descriptorSets, 0, nullptr);
-	vkCmdDispatch(commandBuffer, extent.width, extent.height, 1);
+	VkDescriptorSet denoiserDescriptorSets[] = { denoiserPipeline_->DescriptorSet(imageIndex) };
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->Handle());
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+	vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
 
 	// Acquire output image and swap-chain image for copying.
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 

@@ -47,10 +47,7 @@ namespace Vulkan::RayTracing
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const class PipelineLayout& PipelineLayout() const { return *rayTracePipelineLayout_; }
-	public:
-		VkPipeline denoiserPipeline_{};
-		std::unique_ptr<DescriptorSetManager> denoiserDescriptorSetManager_;
-		std::unique_ptr<class PipelineLayout> denoisePipelineLayout_;
+
 	private:
 
 		const SwapChain& swapChain_;
@@ -59,10 +56,6 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<class PipelineLayout> rayTracePipelineLayout_;
-		
-		
-		
-
 
 		uint32_t rayGenIndex_;
 		uint32_t missIndex_;
@@ -70,4 +63,32 @@ namespace Vulkan::RayTracing
 		uint32_t proceduralHitGroupIndex_;
 	};
 
+	class DenoiserPipeline final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(DenoiserPipeline)
+
+		DenoiserPipeline(
+			const DeviceProcedures& deviceProcedures,
+			const SwapChain& swapChain,
+			const TopLevelAccelerationStructure& accelerationStructure,
+			const ImageView& accumulationImageView,
+			const ImageView& outputImageView,
+			const ImageView& gbufferImageView,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
+			const Assets::Scene& scene);
+		~DenoiserPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const class PipelineLayout& PipelineLayout() const { return *PipelineLayout_; }
+	private:
+
+		const SwapChain& swapChain_;
+
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<class PipelineLayout> PipelineLayout_;
+	};
 }

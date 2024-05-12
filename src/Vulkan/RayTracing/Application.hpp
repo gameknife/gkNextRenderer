@@ -72,6 +72,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<ImageView> gbufferImageView_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
+		std::unique_ptr<class DenoiserPipeline> denoiserPipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
 	};
 

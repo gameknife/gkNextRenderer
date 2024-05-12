@@ -159,25 +159,7 @@ RayTracingPipeline::RayTracingPipeline(
 	const ShaderModule closestHitShader(device, "../assets/shaders/RayTracing.rchit.spv");
 	const ShaderModule proceduralClosestHitShader(device, "../assets/shaders/RayTracing.Procedural.rchit.spv");
 	const ShaderModule proceduralIntersectionShader(device, "../assets/shaders/RayTracing.Procedural.rint.spv");
-
-	// reuse the descriptor may cause issue, fix it back
-	denoisePipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-	const ShaderModule denoiseShader(device, "../assets/shaders/Denoise.comp.spv");
 	
-	VkComputePipelineCreateInfo pipelineCreateInfo = {};
-	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
-	pipelineCreateInfo.layout = denoisePipelineLayout_->Handle();
-	pipelineCreateInfo.flags = 0;
-	pipelineCreateInfo.pNext = nullptr;
-	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-	pipelineCreateInfo.basePipelineIndex = 0;
-
-	Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
-			1, &pipelineCreateInfo,
-			NULL, &denoiserPipeline_), 
-		"create denoise pipeline");
-
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages =
 	{
 		rayGenShader.CreateShaderStage(VK_SHADER_STAGE_RAYGEN_BIT_KHR),
@@ -271,4 +253,93 @@ VkDescriptorSet RayTracingPipeline::DescriptorSet(const uint32_t index) const
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
+DenoiserPipeline::DenoiserPipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
+	const TopLevelAccelerationStructure& accelerationStructure, const ImageView& accumulationImageView,
+	const ImageView& outputImageView, const ImageView& gbufferImageView,
+	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene) : swapChain_(swapChain)
+{
+	// Create descriptor pool/sets.
+	const auto& device = swapChain.Device();
+	const std::vector<DescriptorBinding> descriptorBindings =
+	{
+		// Image accumulation & output & GBuffer.
+		{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+		// Camera information & co
+		{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+	};
+
+	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
+
+	auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+
+	for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
+	{
+		// Accumulation image
+		VkDescriptorImageInfo accumulationImageInfo = {};
+		accumulationImageInfo.imageView = accumulationImageView.Handle();
+		accumulationImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		// Output image
+		VkDescriptorImageInfo outputImageInfo = {};
+		outputImageInfo.imageView = outputImageView.Handle();
+		outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		// Gbuffer image
+		VkDescriptorImageInfo gbufferImageInfo = {};
+		gbufferImageInfo.imageView = gbufferImageView.Handle();
+		gbufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		
+		// Uniform buffer
+		VkDescriptorBufferInfo uniformBufferInfo = {};
+		uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+		uniformBufferInfo.range = VK_WHOLE_SIZE;
+		
+		std::vector<VkWriteDescriptorSet> descriptorWrites =
+		{
+			descriptorSets.Bind(i, 0, accumulationImageInfo),
+			descriptorSets.Bind(i, 1, outputImageInfo),
+			descriptorSets.Bind(i, 2, gbufferImageInfo),
+			descriptorSets.Bind(i, 3, uniformBufferInfo),
+		};
+
+		descriptorSets.UpdateDescriptors(i, descriptorWrites);
+	}
+	
+	// reuse the descriptor may cause issue, fix it back
+	PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	const ShaderModule denoiseShader(device, "../assets/shaders/Denoise.comp.spv");
+	
+	VkComputePipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+	pipelineCreateInfo.layout = PipelineLayout_->Handle();
+	pipelineCreateInfo.flags = 0;
+	pipelineCreateInfo.pNext = nullptr;
+	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineCreateInfo.basePipelineIndex = 0;
+
+	Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+			1, &pipelineCreateInfo,
+			NULL, &pipeline_), 
+		"create denoise pipeline");
+}
+
+DenoiserPipeline::~DenoiserPipeline()
+{
+	if (pipeline_ != nullptr)
+	{
+		vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+		pipeline_ = nullptr;
+	}
+
+	PipelineLayout_.reset();
+	descriptorSetManager_.reset();
+}
+
+VkDescriptorSet DenoiserPipeline::DescriptorSet(uint32_t index) const
+{
+	return descriptorSetManager_->DescriptorSets().Handle(index);
+}
 }
