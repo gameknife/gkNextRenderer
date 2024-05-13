@@ -4,8 +4,8 @@
 
 #include "UniformBufferObject.glsl"
 
-layout(binding = 0, rgba8) uniform image2D InputImage;
-layout(binding = 1, rgba8) uniform image2D OutputImage;
+layout(binding = 0, rgba8) uniform image2D PingImage;
+layout(binding = 1, rgba8) uniform image2D PongImage;
 layout(binding = 2, rgba32f) uniform image2D GBufferImage; // xyz normal, w depth
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
@@ -50,33 +50,38 @@ float computeEdgeStoppingWeight(
     return w;
 }
 
-float computeVarianceCenter(ivec2 ipos)
-{
-    float sum = 0.0f;
+//float computeVarianceCenter(ivec2 ipos)
+//{
+//    float sum = 0.0f;
+//
+//    const float kernel[2][2] = {
+//        { 1.0 / 4.0, 1.0 / 8.0 },
+//        { 1.0 / 8.0, 1.0 / 16.0 }
+//    };
+//
+//    const int radius = 1;
+//    for (int yy = -radius; yy <= radius; yy++)
+//    {
+//        for (int xx = -radius; xx <= radius; xx++)
+//        {
+//            ivec2 p = ipos + ivec2(xx, yy);
+//            float k = kernel[abs(xx)][abs(yy)];
+//            sum += imageLoad(OutputImage, p).a * k;
+//        }
+//    }
+//    return sum;
+//}
 
-    const float kernel[2][2] = {
-        { 1.0 / 4.0, 1.0 / 8.0 },
-        { 1.0 / 8.0, 1.0 / 16.0 }
-    };
-
-    const int radius = 1;
-    for (int yy = -radius; yy <= radius; yy++)
-    {
-        for (int xx = -radius; xx <= radius; xx++)
-        {
-            ivec2 p = ipos + ivec2(xx, yy);
-            float k = kernel[abs(xx)][abs(yy)];
-            sum += imageLoad(OutputImage, p).a * k;
-        }
-    }
-    return sum;
-}
+#define PINGPONG_IMAGE_IN (pingpong == 1 ? imageLoad(PingImage, ipos) : imageLoad(PongImage, ipos))
+#define PINGPONG_IMAGE_OUT (pingpong == 1 ? imageLoad(PongImage, ipos) : imageLoad(PingImage, ipos))
 
 void main() {
+    // ping pong logic, select input & output bettwen Image0 & 1
+    int pingpong = gl_NumWorkGroups.x % 2 == 0 ? 1 : 0;
+        
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
     
-    // ping pong logic, select input & output bettwen Image0 & 1
-    
+
 
     // get imagesize of gbuffer
     ivec2 size = imageSize(GBufferImage);
@@ -89,16 +94,16 @@ void main() {
 
 	const float   phiColorT   = 10.0f;
 	const float   phiNormalT  = Camera.NormalPhi;
-    const int radiusT    = 1;
+    const int radiusT = 2;
     const int   stepSizeT  = 2;
     const float sigmaDepthT = Camera.DepthPhi;
 
-    const vec4 srgbCenterColor = imageLoad(OutputImage, ipos);
+    const vec4 srgbCenterColor = PINGPONG_IMAGE_OUT;
     const vec4 centerColor = srgbCenterColor * srgbCenterColor;
     const float centerLuma = luminance(centerColor.rgb);
-    const float var = computeVarianceCenter(ipos);
+    //const float var = computeVarianceCenter(ipos);
 
-    const float phiColor = phiColorT * sqrt(max(0.0, var.r)) + epsVariance;
+    const float phiColor = 0.0f;//phiColorT * sqrt(max(0.0, var.r)) + epsVariance;
 
     float sumWeightColor = 1.0;
     vec4  sumColor = centerColor;
@@ -114,7 +119,7 @@ void main() {
 
             if (inside && (xx != 0 || yy != 0))
             {
-                const vec4 srgbSampleColor = imageLoad(OutputImage, p);
+                const vec4 srgbSampleColor = (pingpong == 1 ? imageLoad(PingImage, p) : imageLoad(PongImage, p));
                 const vec4 sampleColor = srgbSampleColor * srgbSampleColor;
                 const float sampleLuma = luminance(sampleColor.rgb);
 
@@ -142,5 +147,17 @@ void main() {
 
     sumColor = sumColor / vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor);
     vec4 outColor = sqrt(sumColor);// / Camera.TotalNumberOfSamples;
-    imageStore(OutputImage, ipos, outColor );
+        
+    if(pingpong == 1)
+    {
+        imageStore(PongImage, ipos, outColor ); 
+    }
+    else
+    {
+        imageStore(PingImage, ipos, outColor );   
+    }
+
+        // debug
+//        vec4 srcColor = PINGPONG_IMAGE_IN;
+//        imageStore(PongImage, ipos, srcColor );
 }

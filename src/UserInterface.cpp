@@ -210,8 +210,8 @@ void UserInterface::DrawSettings()
 			ImGui::Separator();
 			uint32_t min = 0, max = 10;
 			ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
-			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 0.05f, 1.0f, "%.1f");
-			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 30.0f, "%.1f");
+			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 200.0f, "%.1f");
+			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 90.0f, "%.1f");
 			ImGui::NewLine();
 		}
 		

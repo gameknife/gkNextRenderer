@@ -115,7 +115,7 @@ namespace
 
 		userSettings.DenoiseIteration = 1;
 		userSettings.DepthPhi = 0.5f;
-		userSettings.NormalPhi = 20.f;
+		userSettings.NormalPhi = 45.f;
 
 		return userSettings;
 	}

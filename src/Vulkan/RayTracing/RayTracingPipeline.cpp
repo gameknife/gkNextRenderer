@@ -254,8 +254,8 @@ VkDescriptorSet RayTracingPipeline::DescriptorSet(const uint32_t index) const
 }
 
 DenoiserPipeline::DenoiserPipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
-	const TopLevelAccelerationStructure& accelerationStructure, const ImageView& accumulationImageView,
-	const ImageView& outputImageView, const ImageView& gbufferImageView,
+	const TopLevelAccelerationStructure& accelerationStructure, const ImageView& pingpongImage0View,
+	const ImageView& pingpongImage1View, const ImageView& gbufferImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene) : swapChain_(swapChain)
 {
 	// Create descriptor pool/sets.
@@ -278,12 +278,12 @@ DenoiserPipeline::DenoiserPipeline(const DeviceProcedures& deviceProcedures, con
 	{
 		// Accumulation image
 		VkDescriptorImageInfo accumulationImageInfo = {};
-		accumulationImageInfo.imageView = accumulationImageView.Handle();
+		accumulationImageInfo.imageView = pingpongImage0View.Handle();
 		accumulationImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		// Output image
 		VkDescriptorImageInfo outputImageInfo = {};
-		outputImageInfo.imageView = outputImageView.Handle();
+		outputImageInfo.imageView = pingpongImage1View.Handle();
 		outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		// Gbuffer image
@@ -315,10 +315,6 @@ DenoiserPipeline::DenoiserPipeline(const DeviceProcedures& deviceProcedures, con
 	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
 	pipelineCreateInfo.layout = PipelineLayout_->Handle();
-	pipelineCreateInfo.flags = 0;
-	pipelineCreateInfo.pNext = nullptr;
-	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-	pipelineCreateInfo.basePipelineIndex = 0;
 
 	Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
 			1, &pipelineCreateInfo,

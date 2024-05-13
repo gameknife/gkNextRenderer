@@ -143,8 +143,8 @@ void Application::CreateSwapChain()
 
 	CreateOutputImage();
 
-	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, *gbufferImageView_, UniformBuffers(), GetScene()));
-	denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *outputImageView_, *gbufferImageView_, UniformBuffers(), GetScene()));
+	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *pingpongImage0View_, *gbufferImageView_, UniformBuffers(), GetScene()));
+	denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_, *pingpongImage1View_, *gbufferImageView_, UniformBuffers(), GetScene()));
 	const std::vector<ShaderBindingTable::Entry> rayGenPrograms = { {rayTracingPipeline_->RayGenShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> missPrograms = { {rayTracingPipeline_->MissShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> hitGroups = { {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}} };
@@ -159,6 +159,8 @@ void Application::DeleteSwapChain()
 	denoiserPipeline_.reset();
 	outputImageView_.reset();
 	outputImage_.reset();
+	pingpongImage0_.reset();
+	pingpongImage1_.reset();
 	outputImageMemory_.reset();
 	accumulationImageView_.reset();
 	accumulationImage_.reset();
@@ -187,13 +189,14 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	ImageMemoryBarrier::Insert(commandBuffer, accumulationImage_->Handle(), subresourceRange, 0,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 0,
+	ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 0,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
 	
+	ImageMemoryBarrier::Insert(commandBuffer, pingpongImage1_->Handle(), subresourceRange, 0,
+	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	// Bind ray tracing pipeline.
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
@@ -221,30 +224,45 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	deviceProcedures_->vkCmdTraceRaysKHR(commandBuffer,
 		&raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable, &callableShaderBindingTable,
 		extent.width, extent.height, 1);
-
-	// if empty run this cs, it just get 300fps, may have some issue
-	if(denoiseIteration > 0)
-	{
-		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
-	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	
+
+	ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
+VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	
+	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 
+	VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	
+	// ping & pong
+	for (int i = 0; i < denoiseIteration; i++)
+	{
 		// Execute Filter Kernel
 		VkDescriptorSet denoiserDescriptorSets[] = { denoiserPipeline_->DescriptorSet(imageIndex) };
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->Handle());
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-		vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+		// magic mark ping pong by taskgroupsize.x % 2
+		vkCmdDispatch(commandBuffer, extent.width / 8 + (i % 2), extent.height / 4, 1);
+
+		// make sure output image is ready
+		ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+		ImageMemoryBarrier::Insert(commandBuffer, pingpongImage1_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	}
+
+	Image* outputImage = pingpongImage1_.get();
+	if(denoiseIteration == 0)
+	{
+		outputImage = pingpongImage0_.get();
 	}
 	
 	// Acquire output image and swap-chain image for copying.
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage->Handle(), subresourceRange, 
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 
-	VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
 		VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	
+
 	// Copy output image into swap-chain image.
 	VkImageCopy copyRegion;
 	copyRegion.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
@@ -252,9 +270,9 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	copyRegion.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 	copyRegion.dstOffset = { 0, 0, 0 };
 	copyRegion.extent = { extent.width, extent.height, 1 };
-
+	
 	vkCmdCopyImage(commandBuffer,
-		outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		outputImage->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1, &copyRegion);
 
@@ -381,6 +399,14 @@ void Application::CreateOutputImage()
 	outputImage_.reset(new Image(Device(), extent, format, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	outputImageMemory_.reset(new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
+
+	pingpongImage0_.reset(new Image(Device(), extent, format, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	pingpongImage0Memory_.reset(new DeviceMemory(pingpongImage0_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	pingpongImage0View_.reset(new ImageView(Device(), pingpongImage0_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
+
+	pingpongImage1_.reset(new Image(Device(), extent, format, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	pingpongImage1Memory_.reset(new DeviceMemory(pingpongImage1_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	pingpongImage1View_.reset(new ImageView(Device(), pingpongImage1_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
 	gbufferImage_.reset(new Image(Device(), extent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	gbufferImageMemory_.reset(new DeviceMemory(gbufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));

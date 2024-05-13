@@ -67,6 +67,14 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<DeviceMemory> outputImageMemory_;
 		std::unique_ptr<ImageView> outputImageView_;
 
+		std::unique_ptr<Image> pingpongImage0_;
+		std::unique_ptr<DeviceMemory> pingpongImage0Memory_;
+		std::unique_ptr<ImageView> pingpongImage0View_;
+
+		std::unique_ptr<Image> pingpongImage1_;
+		std::unique_ptr<DeviceMemory> pingpongImage1Memory_;
+		std::unique_ptr<ImageView> pingpongImage1View_;
+		
 		std::unique_ptr<Image> gbufferImage_;
 		std::unique_ptr<DeviceMemory> gbufferImageMemory_;
 		std::unique_ptr<ImageView> gbufferImageView_;

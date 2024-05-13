@@ -73,8 +73,8 @@ namespace Vulkan::RayTracing
 			const DeviceProcedures& deviceProcedures,
 			const SwapChain& swapChain,
 			const TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& accumulationImageView,
-			const ImageView& outputImageView,
+			const ImageView& pingpongImage0View,
+			const ImageView& pingpongImage1View,
 			const ImageView& gbufferImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
