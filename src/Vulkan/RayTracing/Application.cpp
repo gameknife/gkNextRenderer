@@ -19,9 +19,13 @@
 #include <iostream>
 #include <numeric>
 
-
 namespace Vulkan::RayTracing {
 
+	struct DenoiserPushConstantData {
+		uint32_t pingpong;
+		uint32_t stepsize;
+	};
+	
 namespace
 {
 	template <class TAccelerationStructure>
@@ -235,12 +239,19 @@ VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	// ping & pong
 	for (int i = 0; i < denoiseIteration; i++)
 	{
+		// pingpong & stepsize via push constants
+		DenoiserPushConstantData pushData;
+		pushData.pingpong = (i + 1) % 2;
+		pushData.stepsize = 1 << i;
+		
+		
+		vkCmdPushConstants(commandBuffer,denoiserPipeline_->PipelineLayout().Handle(),VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(DenoiserPushConstantData),&pushData);
+		
 		// Execute Filter Kernel
 		VkDescriptorSet denoiserDescriptorSets[] = { denoiserPipeline_->DescriptorSet(imageIndex) };
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->Handle());
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-		// magic mark ping pong by taskgroupsize.x % 2
-		vkCmdDispatch(commandBuffer, extent.width / 8 + (i % 2), extent.height / 4, 1);
+		vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
 
 		// make sure output image is ready
 		ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,

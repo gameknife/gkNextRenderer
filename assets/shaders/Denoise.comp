@@ -9,6 +9,11 @@ layout(binding = 1, rgba8) uniform image2D PongImage;
 layout(binding = 2, rgba32f) uniform image2D GBufferImage; // xyz normal, w depth
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
+layout(push_constant) uniform PushConsts {
+    uint pingpong;
+    uint stepsize;
+} pushConsts;
+
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 float luminance(vec3 rgb)
@@ -77,8 +82,8 @@ float computeEdgeStoppingWeight(
 
 void main() {
     // ping pong logic, select input & output bettwen Image0 & 1
-    int pingpong = gl_NumWorkGroups.x % 2 == 0 ? 1 : 0;
-        
+    //int pingpong = gl_NumWorkGroups.x % 2 == 0 ? 1 : 0;
+    int pingpong = int(pushConsts.pingpong);
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
     
 
@@ -94,8 +99,8 @@ void main() {
 
 	const float   phiColorT   = 10.0f;
 	const float   phiNormalT  = Camera.NormalPhi;
-    const int radiusT = 2;
-    const int   stepSizeT  = 2;
+    const int radiusT = 1;
+    const int   stepSizeT  = int(pushConsts.stepsize);
     const float sigmaDepthT = Camera.DepthPhi;
 
     const vec4 srgbCenterColor = PINGPONG_IMAGE_OUT;

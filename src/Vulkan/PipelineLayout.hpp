@@ -13,7 +13,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(PipelineLayout)
 
-		PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout);
+		PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		~PipelineLayout();
 
 	private:

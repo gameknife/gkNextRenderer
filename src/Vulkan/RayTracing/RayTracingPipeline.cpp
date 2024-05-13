@@ -307,14 +307,20 @@ DenoiserPipeline::DenoiserPipeline(const DeviceProcedures& deviceProcedures, con
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
 	}
 	
-	// reuse the descriptor may cause issue, fix it back
-	PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	VkPushConstantRange pushConstantRange{};
+	// Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = 8;
+	
+	PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
 	const ShaderModule denoiseShader(device, "../assets/shaders/Denoise.comp.spv");
 	
 	VkComputePipelineCreateInfo pipelineCreateInfo = {};
 	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
 	pipelineCreateInfo.layout = PipelineLayout_->Handle();
+	
 
 	Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
 			1, &pipelineCreateInfo,
