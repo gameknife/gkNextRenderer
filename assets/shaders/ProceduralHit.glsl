@@ -1,5 +1,5 @@
 
 struct ProceduralHit
 {
-	vec3 NormalAndObjectId
+	vec3 NormalAndObjectId;
 };

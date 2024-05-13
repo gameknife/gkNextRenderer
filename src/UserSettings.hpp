@@ -37,6 +37,7 @@ struct UserSettings final
 
 	// Denoise
 	int DenoiseIteration;
+	float ColorPhi;
 	float DepthPhi;
 	float NormalPhi;
 	

@@ -14,6 +14,9 @@ layout(push_constant) uniform PushConsts {
     uint stepsize;
 } pushConsts;
 
+#define PINGPONG_IMAGE_IN(P) (pushConsts.pingpong == 1 ? imageLoad(PingImage, P) : imageLoad(PongImage, P))
+#define PINGPONG_IMAGE_OUT(P) (pushConsts.pingpong == 1 ? imageLoad(PongImage, P) : imageLoad(PingImage, P))
+
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 float luminance(vec3 rgb)
@@ -50,35 +53,32 @@ float computeEdgeStoppingWeight(
 {
     const float wZ      = depthEdgeStoppingWeight(centerDepth, sampleDepth, phiZ);
     const float wNormal = normalEdgeStoppingWeight(centerNormal, sampleNormal, phiNormal);
-    const float wL      = 0.0;//lumaEdgeStoppingWeight(centerLuma, sampleLuma, phiLuma);
+    const float wL      = lumaEdgeStoppingWeight(centerLuma, sampleLuma, phiLuma);
     const float w       = exp(0.0 - max(wL, 0.0) - max(wZ, 0.0)) * wNormal;
     return w;
 }
 
-//float computeVarianceCenter(ivec2 ipos)
-//{
-//    float sum = 0.0f;
-//
-//    const float kernel[2][2] = {
-//        { 1.0 / 4.0, 1.0 / 8.0 },
-//        { 1.0 / 8.0, 1.0 / 16.0 }
-//    };
-//
-//    const int radius = 1;
-//    for (int yy = -radius; yy <= radius; yy++)
-//    {
-//        for (int xx = -radius; xx <= radius; xx++)
-//        {
-//            ivec2 p = ipos + ivec2(xx, yy);
-//            float k = kernel[abs(xx)][abs(yy)];
-//            sum += imageLoad(OutputImage, p).a * k;
-//        }
-//    }
-//    return sum;
-//}
+float computeVarianceCenter(ivec2 ipos)
+{
+    float sum = 0.0f;
 
-#define PINGPONG_IMAGE_IN (pingpong == 1 ? imageLoad(PingImage, ipos) : imageLoad(PongImage, ipos))
-#define PINGPONG_IMAGE_OUT (pingpong == 1 ? imageLoad(PongImage, ipos) : imageLoad(PingImage, ipos))
+    const float kernel[2][2] = {
+        { 1.0 / 4.0, 1.0 / 8.0 },
+        { 1.0 / 8.0, 1.0 / 16.0 }
+    };
+
+    const int radius = 1;
+    for (int yy = -radius; yy <= radius; yy++)
+    {
+        for (int xx = -radius; xx <= radius; xx++)
+        {
+            ivec2 p = ipos + ivec2(xx, yy);
+            float k = kernel[abs(xx)][abs(yy)];
+            sum += PINGPONG_IMAGE_OUT(p).a * k;
+        }
+    }
+    return sum;
+}
 
 void main() {
     // ping pong logic, select input & output bettwen Image0 & 1
@@ -97,18 +97,18 @@ void main() {
     const float epsVariance      = 1e-10;
     const float kernelWeights[3] = { 1.0, 2.0 / 3.0, 1.0 / 6.0 };
 
-	const float   phiColorT   = 10.0f;
+	const float   phiColorT   = Camera.ColorPhi * 0.1;
 	const float   phiNormalT  = Camera.NormalPhi;
     const int radiusT = 1;
     const int   stepSizeT  = int(pushConsts.stepsize);
     const float sigmaDepthT = Camera.DepthPhi;
 
-    const vec4 srgbCenterColor = PINGPONG_IMAGE_OUT;
-    const vec4 centerColor = srgbCenterColor * srgbCenterColor;
+    const vec4 srgbCenterColor = PINGPONG_IMAGE_OUT(ipos);
+    const vec4 centerColor = srgbCenterColor;
     const float centerLuma = luminance(centerColor.rgb);
     //const float var = computeVarianceCenter(ipos);
 
-    const float phiColor = 0.0f;//phiColorT * sqrt(max(0.0, var.r)) + epsVariance;
+    const float phiColor = phiColorT + epsVariance;//phiColorT * sqrt(max(0.0, var.r)) + epsVariance;
 
     float sumWeightColor = 1.0;
     vec4  sumColor = centerColor;
@@ -124,8 +124,8 @@ void main() {
 
             if (inside && (xx != 0 || yy != 0))
             {
-                const vec4 srgbSampleColor = (pingpong == 1 ? imageLoad(PingImage, p) : imageLoad(PongImage, p));
-                const vec4 sampleColor = srgbSampleColor * srgbSampleColor;
+                const vec4 srgbSampleColor = PINGPONG_IMAGE_IN(p);
+                const vec4 sampleColor = srgbSampleColor;
                 const float sampleLuma = luminance(sampleColor.rgb);
 
                 vec4 sampleNormal = imageLoad(GBufferImage, p);
@@ -151,7 +151,7 @@ void main() {
     }
 
     sumColor = sumColor / vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor);
-    vec4 outColor = sqrt(sumColor);// / Camera.TotalNumberOfSamples;
+    vec4 outColor = (sumColor);// / Camera.TotalNumberOfSamples;
         
     if(pingpong == 1)
     {
@@ -161,8 +161,4 @@ void main() {
     {
         imageStore(PingImage, ipos, outColor );   
     }
-
-        // debug
-//        vec4 srcColor = PINGPONG_IMAGE_IN;
-//        imageStore(PongImage, ipos, srcColor );
 }

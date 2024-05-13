@@ -22,6 +22,7 @@ RayTracingPipeline::RayTracingPipeline(
 	const TopLevelAccelerationStructure& accelerationStructure,
 	const ImageView& accumulationImageView,
 	const ImageView& outputImageView,
+	const ImageView& output1ImageView,
 	const ImageView& gbufferImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
 	const Assets::Scene& scene) :
@@ -35,8 +36,8 @@ RayTracingPipeline::RayTracingPipeline(
 		{0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
 
 		// Image accumulation & output
-		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
-		{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
+		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+		{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
 
 		// Camera information & co
 		{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR},
@@ -54,7 +55,8 @@ RayTracingPipeline::RayTracingPipeline(
 		{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR},
 
 		// GBuffer.
-		{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_COMPUTE_BIT},
+		{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+		{11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -80,6 +82,11 @@ RayTracingPipeline::RayTracingPipeline(
 		VkDescriptorImageInfo outputImageInfo = {};
 		outputImageInfo.imageView = outputImageView.Handle();
 		outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		// Output1 image
+		VkDescriptorImageInfo output1ImageInfo = {};
+		output1ImageInfo.imageView = output1ImageView.Handle();
+		output1ImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		// Gbuffer image
 		VkDescriptorImageInfo gbufferImageInfo = {};
@@ -134,7 +141,8 @@ RayTracingPipeline::RayTracingPipeline(
 			descriptorSets.Bind(i, 6, materialBufferInfo),
 			descriptorSets.Bind(i, 7, offsetsBufferInfo),
 			descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
-			descriptorSets.Bind(i, 10, gbufferImageInfo)
+			descriptorSets.Bind(i, 10, gbufferImageInfo),
+			descriptorSets.Bind(i, 11, output1ImageInfo),
 		};
 
 		// Procedural buffer (optional)

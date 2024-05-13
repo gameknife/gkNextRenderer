@@ -14,6 +14,7 @@ layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 2, rgba8) uniform image2D OutputImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 10, rgba32f) uniform image2D GBufferImage;
+layout(binding = 11, rgba8) uniform image2D Output1Image;
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 
@@ -35,6 +36,7 @@ void main()
 	vec3 pixelColor = vec3(0);
 	
 	// Accumulate all the rays for this pixels.
+	
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
 	{
 	    if (bCheckerBoard && (int(gl_LaunchIDEXT.x) + int(gl_LaunchIDEXT.y) + adder) % 2 == 0) break;
@@ -54,15 +56,16 @@ void main()
 		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance - vec3(offset, 0)), 0);
 		vec3 rayColor = vec3(1);
 
+		uint initialRayCount = Camera.NumberOfBounces;
 		// Ray scatters are handled in this loop. There are no recursive traceRayEXT() calls in other shaders.
-		for (uint b = 0; b <= Camera.NumberOfBounces; ++b)
+		for (uint b = 0; b <= initialRayCount; ++b)
 		{
 			const float tMin = 0.001;
 			const float tMax = 10000.0;
 
 			// If we've exceeded the ray bounce limit without hitting a light source, no light is gathered.
 			// Light emitting materials never scatter in this implementation, allowing us to make this logical shortcut.
-			if (b == Camera.NumberOfBounces) 
+			if (b == initialRayCount) 
 			{
 				rayColor = vec3(0, 0, 0);
 				break;
@@ -91,6 +94,7 @@ void main()
 				break;
 			}
 
+			initialRayCount += Ray.AdaptiveRay;
 			// Trace hit.
 			origin = origin + t * direction;
 			direction = vec4(Ray.ScatterDirection.xyz, 0);
@@ -119,4 +123,8 @@ void main()
 
 	imageStore(AccumulationImage, ivec2(gl_LaunchIDEXT.xy), vec4(accumulatedColor, 0));
     imageStore(OutputImage, ivec2(gl_LaunchIDEXT.xy), vec4(pixelColor, 0));
+	if(Camera.TotalNumberOfSamples < 2)
+	{
+		imageStore(Output1Image, ivec2(gl_LaunchIDEXT.xy), vec4(pixelColor, 0));
+	}
 }

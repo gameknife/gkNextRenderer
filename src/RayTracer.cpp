@@ -57,6 +57,7 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	ubo.HeatmapScale = userSettings_.HeatmapScale;
 	ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
 
+	ubo.ColorPhi = userSettings_.ColorPhi;
 	ubo.DepthPhi = userSettings_.DepthPhi;
 	ubo.NormalPhi = userSettings_.NormalPhi;
 

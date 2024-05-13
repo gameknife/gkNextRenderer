@@ -28,8 +28,8 @@ RayPayload ScatterMixture(const Material m, const vec3 direction, const vec3 nor
 		? RayPayload(vec4(0.5,0.5,0.5,t), 
 		vec4( AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal)), isScattered ? 1 : 0), 
 		vec4(normal, m.Fuzziness),
-		seed)
-	: RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed);
+		seed,0)
+	: RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed,0);
 }
 
 // Lambertian
@@ -41,7 +41,7 @@ RayPayload ScatterLambertian(const Material m, const vec3 direction, const vec3 
 	//const vec4 scatter = vec4(normal + RandomInUnitSphere(seed), isScattered ? 1 : 0);
 	const vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere(seed), normal), isScattered ? 1 : 0);
 	
-    return RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed);
+    return RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed,0);
 }
 
 // Metallic
@@ -54,7 +54,7 @@ RayPayload ScatterMetallic(const Material m, const vec3 direction, const vec3 no
 	const vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
 	const vec4 scatter = vec4(AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflected), isScattered ? 1 : 0);
 
-	return RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed);
+	return RayPayload(colorAndDistance, scatter, vec4(normal, m.Fuzziness), seed,0);
 }
 
 // Dielectric
@@ -75,8 +75,8 @@ RayPayload ScatterDieletric(const Material m, const vec3 direction, const vec3 n
 	const vec4 scatterRefr = vec4(refracted, 1);
 	
 	return RandomFloat(seed) < reflectProb
-		? RayPayload(vec4(1,1,1,t), scatterRefl, vec4(normal, m.Fuzziness),seed)
-		: RayPayload(vec4(texColor.rgb * m.Diffuse.rgb, t), scatterRefr, vec4(normal, m.Fuzziness),seed);
+		? RayPayload(vec4(1,1,1,t), scatterRefl, vec4(normal, m.Fuzziness),seed,0)
+		: RayPayload(vec4(texColor.rgb * m.Diffuse.rgb, t), scatterRefr, vec4(normal, m.Fuzziness),seed,1);
 }
 
 // Isotropic
@@ -98,8 +98,8 @@ RayPayload ScatterIsotropic(const Material m, const vec3 direction, const vec3 n
 	const vec4 scatterRefr = vec4(AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), refracted), 1);
 	
 	return RandomFloat(seed) < reflectProb
-		? RayPayload(vec4(0.5,0.5,0.5,t), scatterRefl, vec4(normal, m.Fuzziness),seed)
-		: RayPayload(vec4(texColor.rgb * m.Diffuse.rgb * 1.25f, t), scatterRefr, vec4(normal, m.Fuzziness),seed);
+		? RayPayload(vec4(0.5,0.5,0.5,t), scatterRefl, vec4(normal, m.Fuzziness),seed,0)
+		: RayPayload(vec4(texColor.rgb * m.Diffuse.rgb * 1.25f, t), scatterRefr, vec4(normal, m.Fuzziness),seed,0);
 }
 
 // Diffuse Light
@@ -108,7 +108,7 @@ RayPayload ScatterDiffuseLight(const Material m, const float t, inout uint seed)
 	const vec4 colorAndDistance = vec4(m.Diffuse.rgb, -1);
 	const vec4 scatter = vec4(1, 0, 0, 0);
 
-	return RayPayload(colorAndDistance, scatter, vec4(1,0,0,0), seed);
+	return RayPayload(colorAndDistance, scatter, vec4(1,0,0,0), seed,0);
 }
 
 RayPayload Scatter(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed)
