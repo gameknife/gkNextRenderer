@@ -57,6 +57,9 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	ubo.HeatmapScale = userSettings_.HeatmapScale;
 	ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
 
+	ubo.DepthPhi = userSettings_.DepthPhi;
+	ubo.NormalPhi = userSettings_.NormalPhi;
+
 	return ubo;
 }
 
@@ -156,6 +159,8 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	// Check the current state of the benchmark, update it for the new frame.
 	CheckAndUpdateBenchmarkState(prevTime);
 
+	denoiseIteration = userSettings_.DenoiseIteration;
+	
 	// Render the scene
 	userSettings_.IsRayTraced
 		? Vulkan::RayTracing::Application::Render(commandBuffer, imageIndex)

@@ -205,6 +205,16 @@ void UserInterface::DrawSettings()
 		ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);
 		ImGui::NewLine();
 
+		{
+			ImGui::Text("Denoiser");
+			ImGui::Separator();
+			uint32_t min = 0, max = 10;
+			ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
+			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 0.05f, 1.0f, "%.1f");
+			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 30.0f, "%.1f");
+			ImGui::NewLine();
+		}
+		
 		ImGui::Text("Camera");
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");

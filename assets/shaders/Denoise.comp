@@ -4,9 +4,9 @@
 
 #include "UniformBufferObject.glsl"
 
-layout(binding = 0, rgba32f) uniform image2D AccumulationImage;
+layout(binding = 0, rgba8) uniform image2D InputImage;
 layout(binding = 1, rgba8) uniform image2D OutputImage;
-layout(binding = 2, rgba8) uniform image2D GBufferImage; // xyz normal, w depth
+layout(binding = 2, rgba32f) uniform image2D GBufferImage; // xyz normal, w depth
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -45,7 +45,7 @@ float computeEdgeStoppingWeight(
 {
     const float wZ      = depthEdgeStoppingWeight(centerDepth, sampleDepth, phiZ);
     const float wNormal = normalEdgeStoppingWeight(centerNormal, sampleNormal, phiNormal);
-    const float wL      = lumaEdgeStoppingWeight(centerLuma, sampleLuma, phiLuma);
+    const float wL      = 0.0;//lumaEdgeStoppingWeight(centerLuma, sampleLuma, phiLuma);
     const float w       = exp(0.0 - max(wL, 0.0) - max(wZ, 0.0)) * wNormal;
     return w;
 }
@@ -66,7 +66,7 @@ float computeVarianceCenter(ivec2 ipos)
         {
             ivec2 p = ipos + ivec2(xx, yy);
             float k = kernel[abs(xx)][abs(yy)];
-            sum += imageLoad(AccumulationImage, p).a * k;
+            sum += imageLoad(OutputImage, p).a * k;
         }
     }
     return sum;
@@ -74,20 +74,27 @@ float computeVarianceCenter(ivec2 ipos)
 
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    
+    // ping pong logic, select input & output bettwen Image0 & 1
+    
 
+    // get imagesize of gbuffer
+    ivec2 size = imageSize(GBufferImage);
     vec4 gbuffer = imageLoad(GBufferImage, ipos);
     vec3 normal = gbuffer.xyz;
-    float depth = gbuffer.w;
+    float centerDepth = gbuffer.w;
 
     const float epsVariance      = 1e-10;
     const float kernelWeights[3] = { 1.0, 2.0 / 3.0, 1.0 / 6.0 };
 
 	const float   phiColorT   = 10.0f;
-	const float   phiNormalT  = 32.f;
-    const int radiusT    = 3;
-    const int   stepSizeT  = 1;
+	const float   phiNormalT  = Camera.NormalPhi;
+    const int radiusT    = 1;
+    const int   stepSizeT  = 2;
+    const float sigmaDepthT = Camera.DepthPhi;
 
-    const vec4 centerColor = imageLoad(AccumulationImage, ipos);
+    const vec4 srgbCenterColor = imageLoad(OutputImage, ipos);
+    const vec4 centerColor = srgbCenterColor * srgbCenterColor;
     const float centerLuma = luminance(centerColor.rgb);
     const float var = computeVarianceCenter(ipos);
 
@@ -102,36 +109,38 @@ void main() {
         for (int xx = -radiusT; xx <= radiusT; xx++)
         {
             const ivec2 p = ipos + ivec2(xx, yy) * stepSizeT;
-            // const bool  inside = all(greaterThanEqual(p, ivec2(0, 0))) && all(lessThan(p, size));
-            // const float kernel = kernelWeights[abs(xx)] * kernelWeights[abs(yy)];
+            const bool  inside = all(greaterThanEqual(p, ivec2(0, 0))) && all(lessThan(p, size));
+            const float kernel = kernelWeights[abs(xx)] * kernelWeights[abs(yy)];
 
-            // if (inside && (xx != 0 || yy != 0))
-            // {
-            //     const vec4 sampleColor = texelFetch(uInput, p, 0);
-            //     const float sampleLuma = luminance(sampleColor.rgb);
+            if (inside && (xx != 0 || yy != 0))
+            {
+                const vec4 srgbSampleColor = imageLoad(OutputImage, p);
+                const vec4 sampleColor = srgbSampleColor * srgbSampleColor;
+                const float sampleLuma = luminance(sampleColor.rgb);
 
-            //     vec4 sampleNormal = texelFetch(uNormalSampler, p, 0);
-            //     float depth = texelFetch(uPBRSampler, p, 0).a;
+                vec4 sampleNormal = imageLoad(GBufferImage, p);
+                float depth = sampleNormal.a;
 
-            //     // compute the edge-stopping functions
-            //     const float w = computeEdgeStoppingWeight(centerDepth,
-            //                                                  depth,
-            //                                                  pushConstants.sigmaDepth,
-            //                                                  octohedralToDirection(normal.xy),
-            //                                                  octohedralToDirection(sampleNormal.xy),
-            //                                                  pushConstants.phiNormal,
-            //                                                  centerLuma,
-            //                                                  sampleLuma,
-            //                                                  phiColor);
+                // compute the edge-stopping functions
+                const float w = computeEdgeStoppingWeight(centerDepth,
+                                                             depth,
+                                                             sigmaDepthT,
+                                                             normal.xyz,
+                                                             sampleNormal.xyz,
+                                                             phiNormalT,
+                                                             centerLuma,
+                                                             sampleLuma,
+                                                             phiColor);
 
-            //     const float wVisibility = w * kernel;
+                const float wVisibility = w * kernel;
 
-            //     sumWeightColor += wVisibility;
-            //     sumColor += vec4(vec3(wVisibility), wVisibility * wVisibility) * sampleColor;
-            // }
+                sumWeightColor += wVisibility;
+                sumColor += vec4(vec3(wVisibility), wVisibility * wVisibility) * sampleColor;
+            }
         }
     }
 
-    vec4 outColor = centerColor / Camera.TotalNumberOfSamples;
-    imageStore(OutputImage, ipos, sqrt(outColor) );
+    sumColor = sumColor / vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor);
+    vec4 outColor = sqrt(sumColor);// / Camera.TotalNumberOfSamples;
+    imageStore(OutputImage, ipos, outColor );
 }

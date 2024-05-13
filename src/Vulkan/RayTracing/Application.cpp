@@ -223,15 +223,18 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 		extent.width, extent.height, 1);
 
 	// if empty run this cs, it just get 300fps, may have some issue
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
-		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	if(denoiseIteration > 0)
+	{
+		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	
-	// Execute Filter Kernel
-	VkDescriptorSet denoiserDescriptorSets[] = { denoiserPipeline_->DescriptorSet(imageIndex) };
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->Handle());
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-	vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
-
+		// Execute Filter Kernel
+		VkDescriptorSet denoiserDescriptorSets[] = { denoiserPipeline_->DescriptorSet(imageIndex) };
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiserPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+	}
+	
 	// Acquire output image and swap-chain image for copying.
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -379,9 +382,9 @@ void Application::CreateOutputImage()
 	outputImageMemory_.reset(new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
-	gbufferImage_.reset(new Image(Device(), extent, SwapChain().Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	gbufferImage_.reset(new Image(Device(), extent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	gbufferImageMemory_.reset(new DeviceMemory(gbufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	gbufferImageView_.reset(new ImageView(Device(), gbufferImage_->Handle(), SwapChain().Format(), VK_IMAGE_ASPECT_COLOR_BIT));
+	gbufferImageView_.reset(new ImageView(Device(), gbufferImage_->Handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
 
 	const auto& debugUtils = Device().DebugUtils();
 	

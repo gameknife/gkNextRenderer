@@ -13,7 +13,7 @@ layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 2, rgba8) uniform image2D OutputImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-layout(binding = 10, rgba8) uniform image2D GBufferImage;
+layout(binding = 10, rgba32f) uniform image2D GBufferImage;
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 
@@ -82,7 +82,7 @@ void main()
             if(b == 0)
             {
                 // output gbuffer
-                imageStore(GBufferImage, ivec2(gl_LaunchIDEXT.xy), vec4(Ray.GBuffer.xyz * 0.5 + 0.5, Ray.GBuffer.w) );
+                imageStore(GBufferImage, ivec2(gl_LaunchIDEXT.xy), vec4(Ray.GBuffer.xyz, t) );
             }
 
 			// Trace missed, or end of trace.

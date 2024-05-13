@@ -34,6 +34,11 @@ struct UserSettings final
 
 	// Performance
 	bool UseCheckerBoardRendering;
+
+	// Denoise
+	int DenoiseIteration;
+	float DepthPhi;
+	float NormalPhi;
 	
 	inline const static float FieldOfViewMinValue = 10.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;

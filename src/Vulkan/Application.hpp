@@ -67,7 +67,7 @@ namespace Vulkan
 		virtual void OnScroll(double xoffset, double yoffset) { }
 
 		bool isWireFrame_{};
-
+		int denoiseIteration;
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);
@@ -94,6 +94,8 @@ namespace Vulkan
 		size_t currentFrame_{};
 
 		Fence* fence;
+
+		
 	};
 
 }

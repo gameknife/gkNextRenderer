@@ -23,6 +23,8 @@ namespace Assets
 		float Aperture;
 		float FocusDistance;
 		float HeatmapScale;
+		float DepthPhi;
+		float NormalPhi;
 		uint32_t TotalNumberOfSamples;
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;

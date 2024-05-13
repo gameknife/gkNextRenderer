@@ -34,6 +34,7 @@ Application::Application(const WindowConfig& windowConfig, const VkPresentModeKH
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
+	denoiseIteration = 1;
 }
 
 Application::~Application()

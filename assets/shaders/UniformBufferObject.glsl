@@ -8,6 +8,8 @@ struct UniformBufferObject
 	float Aperture;
 	float FocusDistance;
 	float HeatmapScale;
+	float DepthPhi;
+	float NormalPhi;
 	uint TotalNumberOfSamples;
 	uint NumberOfSamples;
 	uint NumberOfBounces;

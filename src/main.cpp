@@ -113,6 +113,10 @@ namespace
 
 		userSettings.UseCheckerBoardRendering = true;
 
+		userSettings.DenoiseIteration = 1;
+		userSettings.DepthPhi = 0.5f;
+		userSettings.NormalPhi = 20.f;
+
 		return userSettings;
 	}
 
