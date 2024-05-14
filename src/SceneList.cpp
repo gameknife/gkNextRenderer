@@ -70,6 +70,8 @@ const std::vector<std::pair<std::string, std::function<SceneAssets (SceneList::C
 	{"Cornell Box & Lucy", CornellBoxLucy},
 	{"LivingRoom", LivingRoom},
 	{"Kitchen", Kitchen},
+	{"LuxBall", LuxBall},
+	{"Still", Still},
 };
 
 SceneAssets SceneList::CubeAndSpheres(CameraInitialSate& camera)
@@ -79,7 +81,7 @@ SceneAssets SceneList::CubeAndSpheres(CameraInitialSate& camera)
 	camera.ModelView = translate(mat4(1), vec3(0, 0, -2));
 	camera.FieldOfView = 90;
 	camera.Aperture = 0.05f;
-	camera.FocusDistance = 2.0f;
+	camera.FocusDistance = 200.0f;
 	camera.ControlSpeed = 2.0f;
 	camera.GammaCorrection = false;
 	camera.HasSky = true;
@@ -104,7 +106,7 @@ SceneAssets SceneList::RayTracingInOneWeekend(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
 	camera.Aperture = 0.1f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 1000.0f;
 	camera.ControlSpeed = 5.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
@@ -132,7 +134,7 @@ SceneAssets SceneList::PlanetsInOneWeekend(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
 	camera.Aperture = 0.1f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 5.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
@@ -165,7 +167,7 @@ SceneAssets SceneList::LucyInOneWeekend(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 1.0, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
 	camera.Aperture = 0.05f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 5.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
@@ -224,7 +226,7 @@ SceneAssets SceneList::CornellBox(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 500.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
@@ -251,7 +253,7 @@ SceneAssets SceneList::CornellBoxLucy(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 500.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
@@ -283,7 +285,7 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(0, 1.5, 8), vec3(0, 1.5, 4.5), vec3(0, 1, 0));
 	camera.FieldOfView = 45;
 	camera.Aperture = 0.0f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
@@ -317,7 +319,7 @@ SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 	camera.ModelView = lookAt(vec3(2, 1.5, 3), vec3(-4, 1.5, -4), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
-	camera.FocusDistance = 10.0f;
+	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
@@ -346,3 +348,70 @@ SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
+SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
+{
+	camera.ModelView = lookAt(vec3(0.168, 0.375, 0.487), vec3(0, 0.05, 0.0), vec3(0, 1, 0));
+	camera.FieldOfView = 20;
+	camera.Aperture = 0.02f;
+	camera.FocusDistance = 60.0f;
+	camera.ControlSpeed = 0.2f;
+	camera.GammaCorrection = true;
+	camera.HasSky = false;
+
+	std::vector<Model> models;
+	std::vector<Texture> textures;
+	const auto i = mat4(1);
+	
+	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
+	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
+	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+	auto lucy0 = Model::LoadModel("../assets/models/luxball.obj", textures);
+
+	lucy0.Transform(
+		rotate(
+			scale(
+				translate(i, vec3(0, 0, 0)),
+				vec3(1.0)),
+			radians(0.0f), vec3(0, 1, 0)));
+
+	
+	//models.push_back(Model::CreateCornellBox(555));
+	//models.push_back(box0);
+	models.push_back(lucy0);
+
+	return std::forward_as_tuple(std::move(models), std::move(textures));
+}
+
+SceneAssets SceneList::Still(CameraInitialSate& camera)
+{
+	camera.ModelView = lookAt(vec3(0.031, 0.26, 2.454), vec3(0.031, 0.26, 2), vec3(0, 1, 0));
+	camera.FieldOfView = 16;
+	camera.Aperture = 0.0f;
+	camera.FocusDistance = 100.0f;
+	camera.ControlSpeed = 0.2f;
+	camera.GammaCorrection = true;
+	camera.HasSky = false;
+
+	std::vector<Model> models;
+	std::vector<Texture> textures;
+	const auto i = mat4(1);
+	
+	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
+	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
+	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+	auto lucy0 = Model::LoadModel("../assets/models/still1.obj", textures);
+
+	lucy0.Transform(
+		rotate(
+			scale(
+				translate(i, vec3(0, 0, 0)),
+				vec3(1.0)),
+			radians(0.0f), vec3(0, 1, 0)));
+
+	
+	//models.push_back(Model::CreateCornellBox(555));
+	//models.push_back(box0);
+	models.push_back(lucy0);
+
+	return std::forward_as_tuple(std::move(models), std::move(textures));
+}

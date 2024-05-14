@@ -211,8 +211,8 @@ void UserInterface::DrawSettings()
 			uint32_t min = 0, max = 10;
 			ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
 			ImGui::SliderFloat("ColorPhi", &Settings().ColorPhi, 0.01f, 20.0f, "%.1f");
-			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 200.0f, "%.1f");
-			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 90.0f, "%.1f");
+			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 2000.0f, "%.1f");
+			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 180.0f, "%.1f");
 			ImGui::NewLine();
 		}
 		
@@ -220,7 +220,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat("Focus", &Settings().FocusDistance, 0.1f, 5.0f, "%.1f");
+		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 1000.0f, "%.1f");
 		ImGui::NewLine();
 
 		ImGui::Text("Profiler");
@@ -232,6 +232,10 @@ void UserInterface::DrawSettings()
 		ImGui::Text("Performance");
 		ImGui::Separator();
 		ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
+		{
+			uint32_t min = 0, max = 64;
+			ImGui::SliderScalar("Temporal Frames", ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
+		}
 		ImGui::NewLine();
 	}
 	ImGui::End();
@@ -266,7 +270,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		ImGui::Text("Primary ray rate: %.2f Gr/s", statistics.RayRate);
 		ImGui::Text("Accumulated samples:  %u", statistics.TotalSamples);
-		ImGui::Text("Campos:  %.1f %.1f %.1f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
+		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 	}
 	ImGui::End();
 }

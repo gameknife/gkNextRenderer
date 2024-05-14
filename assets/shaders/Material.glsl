@@ -13,4 +13,9 @@ struct Material
 	float Fuzziness;
 	float RefractionIndex;
 	uint MaterialModel;
+	float Metalness;
+
+	float Reserverd0;
+	float Reserverd1;
+	float Reserverd2;
 };

@@ -51,11 +51,12 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	ubo.TotalNumberOfSamples = totalNumberOfSamples_;
 	ubo.NumberOfSamples = numberOfSamples_;
 	ubo.NumberOfBounces = userSettings_.NumberOfBounces;
-	ubo.RandomSeed = totalNumberOfSamples_;
+	ubo.RandomSeed = rand();
 	ubo.HasSky = init.HasSky;
 	ubo.ShowHeatmap = userSettings_.ShowHeatmap;
 	ubo.HeatmapScale = userSettings_.HeatmapScale;
 	ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
+	ubo.TemporalFrames = userSettings_.TemporalFrames;
 
 	ubo.ColorPhi = userSettings_.ColorPhi;
 	ubo.DepthPhi = userSettings_.DepthPhi;
@@ -172,9 +173,9 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	stats.FramebufferSize = Window().FramebufferSize();
 	stats.FrameRate = static_cast<float>(1 / timeDelta);
 
-	stats.CamPosX = modelViewController_.ModelView()[3][0];
-	stats.CamPosY = modelViewController_.ModelView()[3][1];
-	stats.CamPosZ = modelViewController_.ModelView()[3][2];
+	stats.CamPosX = modelViewController_.Position()[0];
+	stats.CamPosY = modelViewController_.Position()[1];
+	stats.CamPosZ = modelViewController_.Position()[2];
 
 	if (userSettings_.IsRayTraced)
 	{

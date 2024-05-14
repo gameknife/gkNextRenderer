@@ -33,6 +33,7 @@ namespace Assets
 		uint32_t HasSky; // bool
 		uint32_t ShowHeatmap; // bool
 		uint32_t UseCheckerBoard; // bool
+		uint32_t TemporalFrames;
 	};
 
 	class UniformBuffer

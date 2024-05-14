@@ -56,6 +56,13 @@ namespace Assets
 
 		// Which material are we dealing with
 		Enum MaterialModel;
+
+		// metalness
+		float Metalness;
+
+		float Reserverd0;
+		float Reserverd1;
+		float Reserverd2;
 	};
 
 }

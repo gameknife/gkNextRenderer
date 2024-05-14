@@ -10,8 +10,8 @@ namespace Vulkan
 	{
 		VkFilter MagFilter = VK_FILTER_LINEAR;
 		VkFilter MinFilter = VK_FILTER_LINEAR;
-		VkSamplerAddressMode AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		VkSamplerAddressMode AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		VkSamplerAddressMode AddressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		VkSamplerAddressMode AddressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		VkSamplerAddressMode AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		bool AnisotropyEnable = true;
 		float MaxAnisotropy = 16;

@@ -112,8 +112,9 @@ namespace
 		userSettings.HeatmapScale = 1.5f;
 
 		userSettings.UseCheckerBoardRendering = true;
+		userSettings.TemporalFrames = 0;
 
-		userSettings.DenoiseIteration = 3;
+		userSettings.DenoiseIteration = 1;
 		userSettings.DepthPhi = 0.5f;
 		userSettings.NormalPhi = 45.f;
 		userSettings.ColorPhi = 20.f;

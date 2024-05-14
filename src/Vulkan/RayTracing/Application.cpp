@@ -262,7 +262,7 @@ VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	Image* outputImage = pingpongImage1_.get();
-	if(denoiseIteration == 0)
+	if(denoiseIteration % 2 == 0)
 	{
 		outputImage = pingpongImage0_.get();
 	}

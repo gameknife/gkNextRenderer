@@ -34,6 +34,7 @@ struct UserSettings final
 
 	// Performance
 	bool UseCheckerBoardRendering;
+	int TemporalFrames;
 
 	// Denoise
 	int DenoiseIteration;

@@ -18,4 +18,5 @@ struct UniformBufferObject
 	bool HasSky;
 	bool ShowHeatmap;
 	bool UseCheckerBoard;
+	uint TemporalFrames;
 };

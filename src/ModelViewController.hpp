@@ -9,6 +9,7 @@ public:
 	void Reset(const glm::mat4& modelView);
 
 	glm::mat4 ModelView() const;
+	glm::vec4 Position() const { return position_; }
 
 	bool OnKey(int key, int scancode, int action, int mods);
 	bool OnCursorPosition(double xpos, double ypos);

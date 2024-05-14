@@ -104,9 +104,10 @@ Model Model::LoadModel(const std::string& filename, std::vector<Texture> &textur
 		
 		m.MaterialModel = Material::Enum::Mixture;
 		m.Fuzziness = material.roughness;
-		m.RefractionIndex = 1.46; // plastic
+		m.RefractionIndex = 1.46f; // plastic
+		m.Metalness = material.metallic * material.metallic;
 		
-		if( material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses")
+		if( material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses" || material.name.find("Water") != std::string::npos || material.name.find("Glass") != std::string::npos || material.name.find("glass") != std::string::npos)
 		{
 			m.MaterialModel = Material::Enum::Dielectric;
 		}
@@ -116,10 +117,9 @@ Model Model::LoadModel(const std::string& filename, std::vector<Texture> &textur
 			m = Material::DiffuseLight(vec3(material.emission[0],material.emission[1],material.emission[2]));
 		}
 
-		if( material.metallic > 0.5f )
+		if( material.metallic > .99f )
 		{
 			m.MaterialModel = Material::Enum::Metallic;
-			m.Fuzziness = clamp(material.roughness, 0.0f, 0.2f);
 		}
 		
 		materials.emplace_back(m);
