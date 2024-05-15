@@ -352,8 +352,8 @@ SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
 {
 	camera.ModelView = lookAt(vec3(0.168, 0.375, 0.487), vec3(0, 0.05, 0.0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
-	camera.Aperture = 0.0f;
-	camera.FocusDistance = 60.0f;
+	camera.Aperture = 0.02f;
+	camera.FocusDistance = 55.0f;
 	camera.ControlSpeed = 0.2f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
