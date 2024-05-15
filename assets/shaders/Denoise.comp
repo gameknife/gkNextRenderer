@@ -4,10 +4,11 @@
 
 #include "UniformBufferObject.glsl"
 
-layout(binding = 0, rgba8) uniform image2D PingImage;
-layout(binding = 1, rgba8) uniform image2D PongImage;
+layout(binding = 0, rgba16f) uniform image2D PingImage;
+layout(binding = 1, rgba16f) uniform image2D PongImage;
 layout(binding = 2, rgba32f) uniform image2D GBufferImage; // xyz normal, w depth
-layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 3, rgba16f) uniform image2D AlbedoImage;
+layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(push_constant) uniform PushConsts {
     uint pingpong;
@@ -151,7 +152,7 @@ void main() {
     }
 
     sumColor = sumColor / vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor);
-    vec4 outColor = (sumColor);// / Camera.TotalNumberOfSamples;
+    vec4 outColor = sumColor;// / Camera.TotalNumberOfSamples;
         
     if(pingpong == 1)
     {

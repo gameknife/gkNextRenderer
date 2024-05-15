@@ -114,10 +114,10 @@ namespace
 		userSettings.UseCheckerBoardRendering = true;
 		userSettings.TemporalFrames = 0;
 
-		userSettings.DenoiseIteration = 1;
+		userSettings.DenoiseIteration = 3;
 		userSettings.DepthPhi = 0.5f;
-		userSettings.NormalPhi = 45.f;
-		userSettings.ColorPhi = 20.f;
+		userSettings.NormalPhi = 90.f;
+		userSettings.ColorPhi = 10.f;
 
 		return userSettings;
 	}

@@ -37,6 +37,7 @@ namespace Vulkan::RayTracing
 			const ImageView& outputImageView,
 			const ImageView& output1ImageView,
 			const ImageView& gbufferImageView,
+			const ImageView& albedoImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayTracingPipeline();
@@ -77,9 +78,37 @@ namespace Vulkan::RayTracing
 			const ImageView& pingpongImage0View,
 			const ImageView& pingpongImage1View,
 			const ImageView& gbufferImageView,
+			const ImageView& albedoImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~DenoiserPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const class PipelineLayout& PipelineLayout() const { return *PipelineLayout_; }
+	private:
+
+		const SwapChain& swapChain_;
+
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<class PipelineLayout> PipelineLayout_;
+	};
+
+	class ComposePipeline final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(ComposePipeline)
+
+		ComposePipeline(
+			const DeviceProcedures& deviceProcedures,
+			const SwapChain& swapChain,
+			const ImageView& finalImageView,
+			const ImageView& albedoImageView,
+			const ImageView& outImageView,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers);
+		~ComposePipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const class PipelineLayout& PipelineLayout() const { return *PipelineLayout_; }

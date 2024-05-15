@@ -78,9 +78,14 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Image> gbufferImage_;
 		std::unique_ptr<DeviceMemory> gbufferImageMemory_;
 		std::unique_ptr<ImageView> gbufferImageView_;
+
+		std::unique_ptr<Image> albedoImage_;
+		std::unique_ptr<DeviceMemory> albedoImageMemory_;
+		std::unique_ptr<ImageView> albedoImageView_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<class DenoiserPipeline> denoiserPipeline_;
+		std::unique_ptr<class ComposePipeline> composePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
 	};
 

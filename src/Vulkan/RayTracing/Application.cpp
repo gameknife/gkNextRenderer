@@ -147,8 +147,9 @@ void Application::CreateSwapChain()
 
 	CreateOutputImage();
 
-	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *pingpongImage0View_, *pingpongImage1View_, *gbufferImageView_, UniformBuffers(), GetScene()));
-	denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_, *pingpongImage1View_, *gbufferImageView_, UniformBuffers(), GetScene()));
+	rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *accumulationImageView_, *pingpongImage0View_, *pingpongImage1View_, *gbufferImageView_, *albedoImageView_, UniformBuffers(), GetScene()));
+	denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_, *pingpongImage1View_, *gbufferImageView_, *albedoImageView_, UniformBuffers(), GetScene()));
+	composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_, *albedoImageView_, *outputImageView_, UniformBuffers()));
 	const std::vector<ShaderBindingTable::Entry> rayGenPrograms = { {rayTracingPipeline_->RayGenShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> missPrograms = { {rayTracingPipeline_->MissShaderIndex(), {}} };
 	const std::vector<ShaderBindingTable::Entry> hitGroups = { {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}} };
@@ -161,6 +162,7 @@ void Application::DeleteSwapChain()
 	shaderBindingTable_.reset();
 	rayTracingPipeline_.reset();
 	denoiserPipeline_.reset();
+	composePipeline_.reset();
 	outputImageView_.reset();
 	outputImage_.reset();
 	pingpongImage0_.reset();
@@ -172,6 +174,9 @@ void Application::DeleteSwapChain()
 	gbufferImage_.reset();
 	gbufferImageMemory_.reset();
 	gbufferImageView_.reset();
+	albedoImage_.reset();
+	albedoImageView_.reset();
+	albedoImageMemory_.reset();
 
 	Vulkan::Application::DeleteSwapChain();
 }
@@ -198,6 +203,12 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 
 	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 0,
 		VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, albedoImage_->Handle(), subresourceRange, 0,
+	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 0,
+VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	
 	ImageMemoryBarrier::Insert(commandBuffer, pingpongImage1_->Handle(), subresourceRange, 0,
 	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -236,6 +247,9 @@ VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange, 
 	VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	
+	ImageMemoryBarrier::Insert(commandBuffer, albedoImage_->Handle(), subresourceRange, 
+VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	
 	// ping & pong
 	for (int i = 0; i < denoiseIteration; i++)
 	{
@@ -261,14 +275,21 @@ VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
-	Image* outputImage = pingpongImage1_.get();
-	if(denoiseIteration % 2 == 0)
-	{
-		outputImage = pingpongImage0_.get();
-	}
+	VkDescriptorSet denoiserDescriptorSets[] = { composePipeline_->DescriptorSet(imageIndex) };
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+	vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+
+	//Image* outputImage = pingpongImage0_.get();
+	// if(denoiseIteration % 2 == 0)
+	// {
+	// 	outputImage = pingpongImage0_.get();
+	// }
+	//
+	// outputImage= albedoImage_.get();
 	
 	// Acquire output image and swap-chain image for copying.
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage->Handle(), subresourceRange, 
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 
 		VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
@@ -283,7 +304,7 @@ VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	copyRegion.extent = { extent.width, extent.height, 1 };
 	
 	vkCmdCopyImage(commandBuffer,
-		outputImage->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1, &copyRegion);
 
@@ -411,17 +432,21 @@ void Application::CreateOutputImage()
 	outputImageMemory_.reset(new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
-	pingpongImage0_.reset(new Image(Device(), extent, format, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	pingpongImage0_.reset(new Image(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	pingpongImage0Memory_.reset(new DeviceMemory(pingpongImage0_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	pingpongImage0View_.reset(new ImageView(Device(), pingpongImage0_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
+	pingpongImage0View_.reset(new ImageView(Device(), pingpongImage0_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
 
-	pingpongImage1_.reset(new Image(Device(), extent, format, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	pingpongImage1_.reset(new Image(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, tiling, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	pingpongImage1Memory_.reset(new DeviceMemory(pingpongImage1_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	pingpongImage1View_.reset(new ImageView(Device(), pingpongImage1_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
+	pingpongImage1View_.reset(new ImageView(Device(), pingpongImage1_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
 
 	gbufferImage_.reset(new Image(Device(), extent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	gbufferImageMemory_.reset(new DeviceMemory(gbufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	gbufferImageView_.reset(new ImageView(Device(), gbufferImage_->Handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
+
+	albedoImage_.reset(new Image(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	albedoImageMemory_.reset(new DeviceMemory(albedoImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	albedoImageView_.reset(new ImageView(Device(), albedoImage_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
 
 	const auto& debugUtils = Device().DebugUtils();
 	

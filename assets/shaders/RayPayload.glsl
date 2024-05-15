@@ -6,4 +6,5 @@ struct RayPayload
 	vec4 GBuffer; // normal + roughness
 	uint RandomSeed;
 	uint AdaptiveRay;
+	uint BounceCount;
 };

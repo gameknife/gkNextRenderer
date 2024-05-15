@@ -11,10 +11,11 @@
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
-layout(binding = 2, rgba8) uniform image2D OutputImage;
+layout(binding = 2, rgba16f) uniform image2D OutputImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 10, rgba32f) uniform image2D GBufferImage;
-layout(binding = 11, rgba8) uniform image2D Output1Image;
+layout(binding = 11, rgba16f) uniform image2D Output1Image;
+layout(binding = 12, rgba16f) uniform image2D AlbedoImage;
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 
@@ -71,6 +72,7 @@ void main()
 				break;
 			}
 
+			Ray.BounceCount = b;
 			traceRayEXT(
 				Scene, gl_RayFlagsOpaqueEXT, 0xff, 
 				0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, 
@@ -80,13 +82,21 @@ void main()
 			const float t = Ray.ColorAndDistance.w;
 			const bool isScattered = Ray.ScatterDirection.w > 0;
 
-			rayColor *= hitColor;
+			
 
             if(b == 0)
             {
                 // output gbuffer
                 imageStore(GBufferImage, ivec2(gl_LaunchIDEXT.xy), vec4(Ray.GBuffer.xyz, t) );
+				vec3 history = imageLoad(AlbedoImage, ivec2(gl_LaunchIDEXT.xy)).rgb;
+				// the first albedo, pbr with monte carlo, so still noisy, this can be use appoximate algo to disable it
+				// but the problem is, who to let the hit shader to know this is the first bounce
+				imageStore(AlbedoImage, ivec2(gl_LaunchIDEXT.xy), vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
             }
+			else
+			{
+				rayColor *= hitColor;
+			}
 
 			// Trace missed, or end of trace.
 			if (t < 0 || !isScattered)
