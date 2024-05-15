@@ -156,6 +156,7 @@ endif()
 add_dependencies(${exe_name} Assets)
 set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
 
 if (VCPKG_TARGET_ANDROID)

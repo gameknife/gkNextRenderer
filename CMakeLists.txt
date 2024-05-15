@@ -59,9 +59,10 @@ find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(CURL REQUIRED)
-
 #add_definitions(-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
 #add_definitions(-DDIMGUI_DISABLE_OBSOLETE_KEYIO)
+
+find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 
 IF (NOT Vulkan_FOUND)
     message(FATAL_ERROR "Could not find Vulkan library!")

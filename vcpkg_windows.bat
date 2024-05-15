@@ -23,6 +23,7 @@ vcpkg.exe install ^
 	stb:x64-windows-static ^
 	tinyobjloader:x64-windows-static ^
 	curl:x64-windows-static ^
+	tinygltf:x64-windows-static ^
 	|| goto :error
 
 cd ..

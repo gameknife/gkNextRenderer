@@ -365,8 +365,8 @@ SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
 	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
 	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+	//auto lucy0 = Model::LoadModel("../assets/models/luxball.glb", textures);
 	auto lucy0 = Model::LoadModel("../assets/models/luxball.obj", textures);
-
 	lucy0.Transform(
 		rotate(
 			scale(

@@ -13,7 +13,8 @@ namespace Assets
 	class Model final
 	{
 	public:
-
+		static Model LoadGltfModel(const std::string& filename, std::vector<Texture> &textures);
+		static Model LoadObjModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model LoadModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model CreateCornellBox(const float scale);
 		static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, const Material& material);
