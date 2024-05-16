@@ -28,7 +28,8 @@ void main()
 
     gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
     FragColor = m.Diffuse.xyz;
-	FragNormal = vec3(Camera.ModelView * vec4(InNormal, 0.0)); // technically not correct, should be ModelInverseTranspose
+	//FragNormal = vec3(Camera.ModelView * vec4(InNormal, 0.0)); // technically not correct, should be ModelInverseTranspose
+	FragNormal = InNormal; // let it in worldspace
 	FragTexCoord = InTexCoord;
 	FragMaterialIndex = InMaterialIndex;
 }

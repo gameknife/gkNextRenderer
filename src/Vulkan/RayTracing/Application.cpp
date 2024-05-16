@@ -55,10 +55,14 @@ namespace Vulkan::RayTracing
     Application::~Application()
     {
         Application::DeleteSwapChain();
-        DeleteAccelerationStructures();
 
-        rayTracingProperties_.reset();
-        deviceProcedures_.reset();
+        if(supportRayTracing_)
+        {
+            DeleteAccelerationStructures();
+
+            rayTracingProperties_.reset();
+            deviceProcedures_.reset();         
+        }
     }
 
     void Application::SetPhysicalDeviceImpl(
@@ -101,7 +105,7 @@ namespace Vulkan::RayTracing
         rayTracingFeatures.pNext = &accelerationStructureFeatures;
         rayTracingFeatures.rayTracingPipeline = true;
 
-        Vulkan::Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, supportRayTracing_ ? &rayTracingFeatures : nullptr);
+        Vulkan::Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, supportRayTracing_ ? &rayTracingFeatures : nextDeviceFeatures);
     }
 
     void Application::OnDeviceSet()

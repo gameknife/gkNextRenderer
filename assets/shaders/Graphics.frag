@@ -27,5 +27,8 @@ void main()
 		c *= albedo * albedo;
 	}
 
-    OutColor = vec4(sqrt(c), 1);
+    //OutColor = vec4(sqrt(c), 1);
+	
+	// gbuffer output
+	OutColor = vec4(normalize(FragNormal) * 0.5 + 0.5, 1);
 }

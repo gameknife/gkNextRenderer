@@ -110,7 +110,14 @@ void Application::SetPhysicalDeviceImpl(
 	VkPhysicalDeviceFeatures& deviceFeatures,
 	void* nextDeviceFeatures)
 {
-	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, nextDeviceFeatures));
+	// support bindless material
+	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
+	indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+	indexingFeatures.pNext = nextDeviceFeatures;
+	indexingFeatures.runtimeDescriptorArray = true;
+	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	
+	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &indexingFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
 }
 
@@ -260,6 +267,7 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 
+	// make it to generate gbuffer
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
 		const auto& scene = GetScene();
@@ -277,6 +285,7 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
 
+		// drawcall
 		for (const auto& model : scene.Models())
 		{
 			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
@@ -289,6 +298,8 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 		}
 	}
 	vkCmdEndRenderPass(commandBuffer);
+
+	// add compute deferred shading & post-processing here
 }
 
 void Application::UpdateUniformBuffer(const uint32_t imageIndex)

@@ -292,7 +292,7 @@ void RayTracer::LoadScene(const uint32_t sceneIndex)
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures)));
+	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), supportRayTracing_));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
