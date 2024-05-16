@@ -108,8 +108,11 @@ namespace Vulkan::RayTracing
     {
         Vulkan::Application::OnDeviceSet();
 
-        deviceProcedures_.reset(new DeviceProcedures(Device()));
-        rayTracingProperties_.reset(new RayTracingProperties(Device()));
+        if(supportRayTracing_)
+        {
+            deviceProcedures_.reset(new DeviceProcedures(Device()));
+            rayTracingProperties_.reset(new RayTracingProperties(Device()));       
+        }
     }
 
     void Application::CreateAccelerationStructures()
@@ -152,49 +155,54 @@ namespace Vulkan::RayTracing
     void Application::CreateSwapChain()
     {
         Vulkan::Application::CreateSwapChain();
+        if(supportRayTracing_)
+        {
+            CreateOutputImage();
 
-        CreateOutputImage();
-
-        rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
-                                                         *accumulationImageView_, *pingpongImage0View_,
+            rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
+                                                             *accumulationImageView_, *pingpongImage0View_,
+                                                             *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
+                                                             UniformBuffers(), GetScene()));
+            denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
                                                          *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
                                                          UniformBuffers(), GetScene()));
-        denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
-                                                     *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
-                                                     UniformBuffers(), GetScene()));
-        composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_,
-                                                   *albedoImageView_, *outputImageView_, UniformBuffers()));
-        const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
-        const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
-        const std::vector<ShaderBindingTable::Entry> hitGroups = {
-            {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}}
-        };
+            composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_,
+                                                       *albedoImageView_, *outputImageView_, UniformBuffers()));
+            const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
+            const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
+            const std::vector<ShaderBindingTable::Entry> hitGroups = {
+                {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}}
+            };
 
-        shaderBindingTable_.reset(new ShaderBindingTable(*deviceProcedures_, *rayTracingPipeline_,
-                                                         *rayTracingProperties_, rayGenPrograms, missPrograms,
-                                                         hitGroups));
+            shaderBindingTable_.reset(new ShaderBindingTable(*deviceProcedures_, *rayTracingPipeline_,
+                                                             *rayTracingProperties_, rayGenPrograms, missPrograms,
+                                                             hitGroups));     
+        }
     }
 
     void Application::DeleteSwapChain()
     {
-        shaderBindingTable_.reset();
-        rayTracingPipeline_.reset();
-        denoiserPipeline_.reset();
-        composePipeline_.reset();
-        outputImageView_.reset();
-        outputImage_.reset();
-        pingpongImage0_.reset();
-        pingpongImage1_.reset();
-        outputImageMemory_.reset();
-        accumulationImageView_.reset();
-        accumulationImage_.reset();
-        accumulationImageMemory_.reset();
-        gbufferImage_.reset();
-        gbufferImageMemory_.reset();
-        gbufferImageView_.reset();
-        albedoImage_.reset();
-        albedoImageView_.reset();
-        albedoImageMemory_.reset();
+        if(supportRayTracing_)
+        {
+            shaderBindingTable_.reset();
+            rayTracingPipeline_.reset();
+            denoiserPipeline_.reset();
+            composePipeline_.reset();
+            outputImageView_.reset();
+            outputImage_.reset();
+            pingpongImage0_.reset();
+            pingpongImage1_.reset();
+            outputImageMemory_.reset();
+            accumulationImageView_.reset();
+            accumulationImage_.reset();
+            accumulationImageMemory_.reset();
+            gbufferImage_.reset();
+            gbufferImageMemory_.reset();
+            gbufferImageView_.reset();
+            albedoImage_.reset();
+            albedoImageView_.reset();
+            albedoImageMemory_.reset();
+        }
 
         Vulkan::Application::DeleteSwapChain();
     }
