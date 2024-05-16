@@ -1,0 +1,36 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "Material.glsl"
+#include "UniformBufferObject.glsl"
+
+layout(binding = 0, rgba8) uniform image2D MiniGBuffer;
+layout(binding = 1, rgba8) uniform image2D OutImage;
+layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 3) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 4) uniform sampler2D[] TextureSamplers;
+
+
+
+//layout(push_constant) uniform PushConsts {
+//    uint pingpong;
+//    uint stepsize;
+//} pushConsts;
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+void main() {
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+
+    vec4 miniGBuffer = imageLoad(MiniGBuffer, ipos);
+    uint materialId = uint(miniGBuffer.w * 255.f);
+    // fetch material by material id
+    Material mat = Materials[materialId];
+
+    const vec3 lightVector = normalize(vec3(5, 4, 3));
+    const float d = max(dot(lightVector, normalize(miniGBuffer.rgb * 2.0 - 1.0)), 0.2);
+    
+    vec4 outColor = mat.Diffuse * d;
+
+    // quick check pipeline
+    imageStore(OutImage, ipos, outColor);
+}

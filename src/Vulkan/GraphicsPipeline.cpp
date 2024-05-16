@@ -213,4 +213,93 @@ VkDescriptorSet GraphicsPipeline::DescriptorSet(const uint32_t index) const
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
+ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene, bool isWireFrame):swapChain_(swapChain)
+{
+	 // Create descriptor pool/sets.
+        const auto& device = swapChain.Device();
+        const std::vector<DescriptorBinding> descriptorBindings =
+        {
+            // MiniGbuffer and output
+            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+        	
+        	// Others like in frag
+			{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{4, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT}
+        };
+
+        descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
+        {
+            VkDescriptorImageInfo Info0 = {NULL,  miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	
+        	// Uniform buffer
+        	VkDescriptorBufferInfo uniformBufferInfo = {};
+        	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+        	uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Material buffer
+        	VkDescriptorBufferInfo materialBufferInfo = {};
+        	materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+        	materialBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Image and texture samplers
+        	std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
+
+        	for (size_t t = 0; t != imageInfos.size(); ++t)
+        	{
+        		auto& imageInfo = imageInfos[t];
+        		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        		imageInfo.imageView = scene.TextureImageViews()[t];
+        		imageInfo.sampler = scene.TextureSamplers()[t];
+        	}
+
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(i, 0, Info0),
+                descriptorSets.Bind(i, 1, Info1),
+                descriptorSets.Bind(i, 2, uniformBufferInfo),
+                descriptorSets.Bind(i, 3, materialBufferInfo),
+        		descriptorSets.Bind(i, 4, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
+
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        const ShaderModule denoiseShader(device, "../assets/shaders/DeferredShading.comp.spv");
+
+        VkComputePipelineCreateInfo pipelineCreateInfo = {};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+        pipelineCreateInfo.layout = pipelineLayout_->Handle();
+	
+        Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+                                       1, &pipelineCreateInfo,
+                                       NULL, &pipeline_),
+              "create deferred shading pipeline");
+}
+
+ShadingPipeline::~ShadingPipeline()
+{
+	if (pipeline_ != nullptr)
+	{
+		vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+		pipeline_ = nullptr;
+	}
+
+	pipelineLayout_.reset();
+	descriptorSetManager_.reset();
+}
+
+VkDescriptorSet ShadingPipeline::DescriptorSet(uint32_t index) const
+{
+	return descriptorSetManager_->DescriptorSets().Handle(index);
+}
 }

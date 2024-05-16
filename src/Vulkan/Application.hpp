@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+#include "Image.hpp"
+
 namespace Assets
 {
 	class Scene;
@@ -91,6 +93,17 @@ namespace Vulkan
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
 
+		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
+		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
+
+		std::unique_ptr<Image> miniGBufferImage_;
+		std::unique_ptr<DeviceMemory> miniGBufferImageMemory_;
+		std::unique_ptr<ImageView> miniGBufferImageView_;
+
+		std::unique_ptr<Image> outputImage_;
+		std::unique_ptr<DeviceMemory> outputImageMemory_;
+		std::unique_ptr<ImageView> outputImageView_;
+		
 		size_t currentFrame_{};
 
 		Fence* fence;

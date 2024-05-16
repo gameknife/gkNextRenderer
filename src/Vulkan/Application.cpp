@@ -21,6 +21,8 @@
 #include "Utilities/Exception.hpp"
 #include <array>
 
+#include "ImageMemoryBarrier.hpp"
+
 namespace Vulkan {
 
 Application::Application(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
@@ -145,22 +147,50 @@ void Application::CreateSwapChain()
 	}
 
 	graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), isWireFrame_));
+	//deferredShadingPipeline_.reset(new class ShadingPipeline(*swapChain_, uniformBuffers_, GetScene(), isWireFrame_));
 
 	for (const auto& imageView : swapChain_->ImageViews())
 	{
 		swapChainFramebuffers_.emplace_back(*imageView, graphicsPipeline_->RenderPass());
 	}
 
+	const auto extent = SwapChain().Extent();
+	const auto format = SwapChain().Format();
+	
+	miniGBufferImage_.reset(new Image(Device(), extent, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+									   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	miniGBufferImageMemory_.reset(
+		new DeviceMemory(miniGBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	miniGBufferImageView_.reset(new ImageView(Device(), miniGBufferImage_->Handle(),
+											   VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT));
+
+	outputImage_.reset(new Image(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
+								   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	outputImageMemory_.reset(
+		new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(),
+											   format, VK_IMAGE_ASPECT_COLOR_BIT));
+	
+	deferredFrameBuffer_.reset(new FrameBuffer(*miniGBufferImageView_, graphicsPipeline_->RenderPass()));
+
+	deferredShadingPipeline_.reset(new ShadingPipeline(*swapChain_, *miniGBufferImageView_, *outputImageView_, uniformBuffers_, GetScene(), isWireFrame_));
+
 	commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChainFramebuffers_.size())));
 
 	fence = nullptr;
+
+	const auto& debugUtils = Device().DebugUtils();
+	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
+	debugUtils.SetObjectName(miniGBufferImage_->Handle(), "Mini GBuffer Image");
 }
 
 void Application::DeleteSwapChain()
 {
 	commandBuffers_.reset();
 	swapChainFramebuffers_.clear();
+	deferredFrameBuffer_.reset();
 	graphicsPipeline_.reset();
+	deferredShadingPipeline_.reset();
 	uniformBuffers_.clear();
 	inFlightFences_.clear();
 	renderFinishedSemaphores_.clear();
@@ -168,6 +198,16 @@ void Application::DeleteSwapChain()
 	depthBuffer_.reset();
 	swapChain_.reset();
 	fence = nullptr;
+
+	miniGBufferImage_.reset();
+	miniGBufferImageMemory_.reset();
+	miniGBufferImageView_.reset();
+
+	outputImage_.reset();
+	outputImageMemory_.reset();
+	outputImageView_.reset();
+
+	
 }
 
 void Application::DrawFrame()
@@ -254,6 +294,13 @@ void Application::DrawFrame()
 
 void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
+	
 	std::array<VkClearValue, 2> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
@@ -261,11 +308,13 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	VkRenderPassBeginInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = graphicsPipeline_->RenderPass().Handle();
-	renderPassInfo.framebuffer = swapChainFramebuffers_[imageIndex].Handle();
+	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();// swapChainFramebuffers_[imageIndex].Handle(); // here we change to another framebuffer
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = swapChain_->Extent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
+
+
 
 	// make it to generate gbuffer
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -299,7 +348,47 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	}
 	vkCmdEndRenderPass(commandBuffer);
 
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, miniGBufferImage_->Handle(), subresourceRange,
+					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_GENERAL);
+
+	// copy to sawpbuffer
+
 	// add compute deferred shading & post-processing here
+	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+							deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+	
+	// copy to sawpbuffer
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+							   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+							   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	// Copy output image into swap-chain image.
+	VkImageCopy copyRegion;
+	copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.srcOffset = {0, 0, 0};
+	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.dstOffset = {0, 0, 0};
+	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+
+	vkCmdCopyImage(commandBuffer,
+				   outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				   1, &copyRegion);
+
+	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+							   VK_ACCESS_TRANSFER_WRITE_BIT,
+							   0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 
 void Application::UpdateUniformBuffer(const uint32_t imageIndex)
