@@ -30,6 +30,7 @@ public:
 	uint32_t Samples{};
 	uint32_t Bounces{};
 	uint32_t MaxSamples{};
+	bool NoRayTracing{};
 
 	// Scene options.
 	uint32_t SceneIndex{};

@@ -21,6 +21,7 @@ Options::Options(const int argc, const char* argv[])
 		("samples", value<uint32_t>(&Samples)->default_value(1), "The number of ray samples per pixel.")
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The maximum number of bounces per ray.")
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
+		("no-trace", bool_switch(&NoRayTracing)->default_value(false), "Disable Raytracing pipeline.")
 		;
 
 	options_description scene("Scene options", lineLength);

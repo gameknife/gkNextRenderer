@@ -40,8 +40,7 @@ int main(int argc, const char* argv[]) noexcept
 		};
 
 		RayTracer application(userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
-		// force no, support tbdr
-		application.SetSupportRayTracing(false);
+		application.SetSupportRayTracing(!options.NoRayTracing);
 		
 		PrintVulkanSdkInformation();
 		PrintVulkanInstanceInformation(application, options.Benchmark);
