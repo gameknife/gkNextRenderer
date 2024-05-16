@@ -9,18 +9,21 @@ layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(binding = 3) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 4) uniform sampler2D[] TextureSamplers;
 
-
-
 //layout(push_constant) uniform PushConsts {
 //    uint pingpong;
 //    uint stepsize;
 //} pushConsts;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
-
 void main() {
-    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-
+    // checker box
+    int adder = Camera.TotalNumberOfSamples % 2 == 0 ? 1 : 0;
+    
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) * ivec2(2,1);
+    if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
+        ipos.x += 1;
+    }
+    
     vec4 miniGBuffer = imageLoad(MiniGBuffer, ipos);
     uint materialId = uint(miniGBuffer.w * 255.f);
     // fetch material by material id
