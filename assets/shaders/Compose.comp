@@ -1,0 +1,26 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "UniformBufferObject.glsl"
+
+layout(binding = 0, rgba16f) uniform image2D FinalImage;
+layout(binding = 1, rgba16f) uniform image2D AlbedoImage;
+layout(binding = 2, rgba8) uniform image2D OutImage;
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+
+//layout(push_constant) uniform PushConsts {
+//    uint pingpong;
+//    uint stepsize;
+//} pushConsts;
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+void main() {
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+
+    // simple compose together
+    vec4 final = imageLoad(FinalImage, ipos);
+    vec4 albedo = imageLoad(AlbedoImage, ipos);
+    imageStore(OutImage, ipos, sqrt(final * final * albedo));
+    //imageStore(OutImage, ipos, sqrt(albedo));
+}
