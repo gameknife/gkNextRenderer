@@ -19,7 +19,7 @@ protected:
 	const Assets::Scene& GetScene() const override { return *scene_; }
 	Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const override;
 
-	void SetPhysicalDevice(
+	void SetPhysicalDeviceImpl(
 		VkPhysicalDevice physicalDevice, 
 		std::vector<const char*>& requiredExtensions, 
 		VkPhysicalDeviceFeatures& deviceFeatures, 
@@ -35,6 +35,8 @@ protected:
 	void OnCursorPosition(double xpos, double ypos) override;
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
+
+	
 
 private:
 

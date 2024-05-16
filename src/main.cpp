@@ -20,7 +20,7 @@ namespace
 	void PrintVulkanLayersInformation(const Vulkan::Application& application, bool benchmark);
 	void PrintVulkanDevices(const Vulkan::Application& application, const std::vector<uint32_t>& visible_devices);
 	void PrintVulkanSwapChainInformation(const Vulkan::Application& application, bool benchmark);
-	void SetVulkanDevice(Vulkan::Application& application, const std::vector<uint32_t>& visible_devices);
+	void SetVulkanDevice(Vulkan::RayTracing::Application& application, const std::vector<uint32_t>& visible_devices);
 }
 
 int main(int argc, const char* argv[]) noexcept
@@ -216,7 +216,7 @@ namespace
 		std::cout << std::endl;
 	}
 
-	void SetVulkanDevice(Vulkan::Application& application, const std::vector<uint32_t>& visible_devices)
+	void SetVulkanDevice(Vulkan::RayTracing::Application& application, const std::vector<uint32_t>& visible_devices)
 	{
 		const auto& physicalDevices = application.PhysicalDevices();
 		const auto result = std::find_if(physicalDevices.begin(), physicalDevices.end(), [&](const VkPhysicalDevice& device)
@@ -249,7 +249,7 @@ namespace
 
 			if (!hasRayTracing)
 			{
-				return false;
+				application.SetSupportRayTracing(false);
 			}
 
 			// We want a device with a graphics queue.

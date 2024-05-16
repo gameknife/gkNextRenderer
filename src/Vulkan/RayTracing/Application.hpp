@@ -20,12 +20,14 @@ namespace Vulkan::RayTracing
 
 		VULKAN_NON_COPIABLE(Application);
 
+		void SetSupportRayTracing(bool supportRayTracing) { supportRayTracing_ = supportRayTracing; }
+
 	protected:
 
 		Application(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		~Application();
 
-		void SetPhysicalDevice(VkPhysicalDevice physicalDevice,
+		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,
 			VkPhysicalDeviceFeatures& deviceFeatures,
 			void* nextDeviceFeatures) override;
@@ -36,7 +38,8 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-			   
+
+		bool supportRayTracing_;
 	private:
 
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
@@ -87,6 +90,8 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<class DenoiserPipeline> denoiserPipeline_;
 		std::unique_ptr<class ComposePipeline> composePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
+
+		
 	};
 
 }

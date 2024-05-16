@@ -79,7 +79,7 @@ void Application::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	
-	SetPhysicalDevice(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
+	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 	OnDeviceSet();
 
 	// Create swap chain and command buffers.
@@ -104,7 +104,7 @@ void Application::Run()
 	device_->WaitIdle();
 }
 
-void Application::SetPhysicalDevice(
+void Application::SetPhysicalDeviceImpl(
 	VkPhysicalDevice physicalDevice, 
 	std::vector<const char*>& requiredExtensions, 
 	VkPhysicalDeviceFeatures& deviceFeatures,

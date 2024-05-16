@@ -65,7 +65,7 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	return ubo;
 }
 
-void RayTracer::SetPhysicalDevice(
+void RayTracer::SetPhysicalDeviceImpl(
 	VkPhysicalDevice physicalDevice, 
 	std::vector<const char*>& requiredExtensions,
 	VkPhysicalDeviceFeatures& deviceFeatures, 
@@ -88,7 +88,7 @@ void RayTracer::SetPhysicalDevice(
 	deviceFeatures.samplerAnisotropy = true;
 	deviceFeatures.shaderInt64 = true;
 
-	Application::SetPhysicalDevice(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
+	Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 }
 
 void RayTracer::OnDeviceSet()
@@ -96,7 +96,10 @@ void RayTracer::OnDeviceSet()
 	Application::OnDeviceSet();
 
 	LoadScene(userSettings_.SceneIndex);
-	CreateAccelerationStructures();
+	if(supportRayTracing_)
+	{
+		CreateAccelerationStructures();
+	}
 }
 
 void RayTracer::CreateSwapChain()
@@ -123,9 +126,15 @@ void RayTracer::DrawFrame()
 	{
 		Device().WaitIdle();
 		DeleteSwapChain();
-		DeleteAccelerationStructures();
+		if(supportRayTracing_)
+		{
+			DeleteAccelerationStructures();
+		}
 		LoadScene(userSettings_.SceneIndex);
-		CreateAccelerationStructures();
+		if(supportRayTracing_)
+		{
+			CreateAccelerationStructures();
+		}
 		CreateSwapChain();
 		return;
 	}
@@ -164,7 +173,7 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	denoiseIteration = userSettings_.DenoiseIteration;
 	
 	// Render the scene
-	userSettings_.IsRayTraced
+	userSettings_.IsRayTraced && supportRayTracing_
 		? Vulkan::RayTracing::Application::Render(commandBuffer, imageIndex)
 		: Vulkan::Application::Render(commandBuffer, imageIndex);
 

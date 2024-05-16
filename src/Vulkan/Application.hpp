@@ -49,7 +49,7 @@ namespace Vulkan
 		virtual const Assets::Scene& GetScene() const = 0;
 		virtual Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const = 0;
 
-		virtual void SetPhysicalDevice(
+		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
 			std::vector<const char*>& requiredExtensions, 
 			VkPhysicalDeviceFeatures& deviceFeatures,
