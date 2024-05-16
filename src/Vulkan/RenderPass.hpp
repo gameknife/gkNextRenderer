@@ -14,6 +14,7 @@ namespace Vulkan
 		VULKAN_NON_COPIABLE(RenderPass)
 
 		RenderPass(const SwapChain& swapChain, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+		RenderPass(const SwapChain& swapChain, VkFormat format, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
 		~RenderPass();
 
 		const class SwapChain& SwapChain() const { return swapChain_; }

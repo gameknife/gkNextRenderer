@@ -151,18 +151,18 @@ void Application::CreateSwapChain()
 
 	for (const auto& imageView : swapChain_->ImageViews())
 	{
-		swapChainFramebuffers_.emplace_back(*imageView, graphicsPipeline_->RenderPass());
+		swapChainFramebuffers_.emplace_back(*imageView, graphicsPipeline_->SwapRenderPass());
 	}
 
 	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 	
-	miniGBufferImage_.reset(new Image(Device(), extent, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+	miniGBufferImage_.reset(new Image(Device(), extent, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
 									   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	miniGBufferImageMemory_.reset(
 		new DeviceMemory(miniGBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	miniGBufferImageView_.reset(new ImageView(Device(), miniGBufferImage_->Handle(),
-											   VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT));
+											   VK_FORMAT_R32_UINT, VK_IMAGE_ASPECT_COLOR_BIT));
 
 	outputImage_.reset(new Image(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
 								   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
@@ -362,7 +362,7 @@ void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageInde
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / 2, SwapChain().Extent().height / 4, 1);
+	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
 	
 	// copy to sawpbuffer
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,

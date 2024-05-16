@@ -13,8 +13,10 @@ layout(location = 2) in vec2 InTexCoord;
 layout(location = 3) in int InMaterialIndex;
 
 // just like visibility buffer, save the material index, and a normal, totally 32bit mini-gbuffer for bandwidth saving, after impl, switch to full visibility buffer
-layout(location = 0) out vec3 FragNormal;
-layout(location = 1) out flat int FragMaterialIndex;
+//layout(location = 0) out vec3 FragNormal;
+//layout(location = 1) out flat int FragMaterialIndex;
+
+layout(location = 0) out flat uint g_out_primitive_index;
 
 out gl_PerVertex
 {
@@ -24,6 +26,7 @@ out gl_PerVertex
 void main() 
 {
     gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
-	FragNormal = InNormal;
-	FragMaterialIndex = InMaterialIndex;
+	//FragNormal = InNormal;
+	//FragMaterialIndex = InMaterialIndex;
+	g_out_primitive_index = gl_VertexIndex / 3;
 }

@@ -36,6 +36,7 @@ namespace Vulkan
 		bool IsWireFrame() const { return isWireFrame_; }
 		const class PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
 		const class RenderPass& RenderPass() const { return *renderPass_; }
+		const class RenderPass& SwapRenderPass() const { return *swapRenderPass_; }
 
 	private:
 
@@ -47,6 +48,7 @@ namespace Vulkan
 		std::unique_ptr<class DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<class PipelineLayout> pipelineLayout_;
 		std::unique_ptr<class RenderPass> renderPass_;
+		std::unique_ptr<class RenderPass> swapRenderPass_;
 	};
 
 	class ShadingPipeline final
