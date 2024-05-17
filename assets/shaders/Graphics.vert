@@ -28,5 +28,11 @@ void main()
     gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
 	//FragNormal = InNormal;
 	//FragMaterialIndex = InMaterialIndex;
+	// the index of the vertex currently being processed. 
+	// When using non-indexed rendering, it is the effective index of the current vertex (the number of vertices processed + the first value). 
+	// For indexed rendering, it is the index used to fetch this vertex from the buffer. <- this is what we want
+	
+	// here may be with some issue here, vertice may share from indice, the primitive id shoud be the triangle count, cannot just use the vertice index / 3
+	// maybe 
 	g_out_primitive_index = gl_VertexIndex / 3;
 }
