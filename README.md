@@ -8,9 +8,16 @@
 
 通过本项目，旨在补上在现代渲染上缺的课，同时更加深入的理解GPU光线跟踪，争取在下一个时代来临前做好准备。
 
-是的，我认为将来光线跟踪一定会成为主流。
+> 是的，我认为将来光线跟踪一定会成为主流。
+
+同时，基于vulkan维护一个尽量简洁的渲染流水线，快速的实现多种现代渲染管线，并方便的部署于多个平台，调式性能。
 
 ## 图库
+
+![Alt text](gallery/luxball.jpg?raw=true "luxball")
+![Alt text](gallery/kitchen.jpg?raw=true "kitchen")
+![Alt text](gallery/livingroom.jpg?raw=true "livingroom")
+![Alt text](gallery/still.jpg?raw=true "still")
 
 
 
@@ -24,9 +31,11 @@
 
 ## 性能
 
-Using a GeForce RTX 2080 Ti, the rendering speed is obscenely faster than using the CPU renderer. Obviously both implementations are still quite naive in some places, but I'm really impressed by the performance. The cover scene of the first book reaches ~140fps at 1280x720 using 8 rays per pixel and up to 16 bounces.
+在我的RTX4070上，1920x1080下，1spp + 多帧降噪的情况下，图库内的场景基本都能跑出400-500fps的帧率。并且在后期完成reproject后，这个帧率是有可能在真实渲染环境内达到的。rtx的性能出乎了我的意料
 
-I suspect performance could be improved further. I have created each object in the scene as a separate instance in the top level acceleration structure, which is probably not the best for data locality. The same goes for displaying multiple [Lucy statues](http://graphics.stanford.edu/data/3Dscanrep/), where I have naively duplicated the geometry rather than instancing it multiple times.
+目前很多实现的细节还没有深究，应该还有一定的优化空间
+
+原作者在benchmark方面做了一些框架型的工作，我引入了libcurl来上传benchmark分数，后期可以针对固定版本，作一些benchmark收集，也许做成一个光追性能的标准测试程序也有可能
 
 ## Benchmarking
 
@@ -49,9 +58,11 @@ Here are my results with the command above on a few different computers.
     - Temporal Reprojection
 - Non-RayTracing Pipeline
     - Modern Deferred Shading
+    - Hybrid Rendering
+    - Reference Legacy Lighting
 - Platform
     - MacOS moltenVK
-    - Android Vulkan ( RayTracing on 8Gen2)
+    - Android Vulkan ( RayTracing on 8Gen2 )
 
 ## Building
 
@@ -77,6 +88,13 @@ Fedora Installation
 sudo dnf install libXinerama-devel libXcursor-devel libX11-devel libXrandr-devel mesa-libGLU-devel pkgconfig ninja-build cmake gcc gcc-c++ vulkan-validation-layers-devel vulkan-headers vulkan-tools vulkan-loader-devel vulkan-loader glslang glslc
 ./vcpkg_linux.sh
 ./build_linux.sh
+```
+
+SteamDeck Archlinux
+
+```
+sudo steamos-readonly disable
+sudo pacman devel-base
 ```
 
 ## References
