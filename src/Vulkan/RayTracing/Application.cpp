@@ -48,21 +48,16 @@ namespace Vulkan::RayTracing
 
     Application::Application(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
-        Vulkan::Application(windowConfig, presentMode, enableValidationLayers), supportRayTracing_(true)
+        Vulkan::Application(windowConfig, presentMode, enableValidationLayers)
     {
     }
 
     Application::~Application()
     {
         Application::DeleteSwapChain();
-
-        if(supportRayTracing_)
-        {
-            DeleteAccelerationStructures();
-
-            rayTracingProperties_.reset();
-            deviceProcedures_.reset();         
-        }
+        DeleteAccelerationStructures();
+        rayTracingProperties_.reset();
+        deviceProcedures_.reset();         
     }
 
     void Application::SetPhysicalDeviceImpl(
@@ -72,16 +67,12 @@ namespace Vulkan::RayTracing
         void* nextDeviceFeatures)
     {
         // Required extensions.
-        if (supportRayTracing_)
-        {
-            requiredExtensions.insert(requiredExtensions.end(),
-                                      {
-                                          VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                                          VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                                          VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME
-                                      });
-        }
-
+        requiredExtensions.insert(requiredExtensions.end(),
+                                  {
+                                      VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                                      VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                                      VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME
+                                  });
 
         // Required device features.
         VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
@@ -105,18 +96,15 @@ namespace Vulkan::RayTracing
         rayTracingFeatures.pNext = &accelerationStructureFeatures;
         rayTracingFeatures.rayTracingPipeline = true;
 
-        Vulkan::Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, supportRayTracing_ ? &rayTracingFeatures : nextDeviceFeatures);
+        Vulkan::Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayTracingFeatures);
     }
 
     void Application::OnDeviceSet()
     {
         Vulkan::Application::OnDeviceSet();
-
-        if(supportRayTracing_)
-        {
-            deviceProcedures_.reset(new DeviceProcedures(Device()));
-            rayTracingProperties_.reset(new RayTracingProperties(Device()));       
-        }
+        
+        deviceProcedures_.reset(new DeviceProcedures(Device()));
+        rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
     void Application::CreateAccelerationStructures()
@@ -159,55 +147,51 @@ namespace Vulkan::RayTracing
     void Application::CreateSwapChain()
     {
         Vulkan::Application::CreateSwapChain();
-        if(supportRayTracing_)
-        {
-            CreateOutputImage();
 
-            rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
-                                                             *accumulationImageView_, *pingpongImage0View_,
-                                                             *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
-                                                             UniformBuffers(), GetScene()));
-            denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
+        CreateOutputImage();
+
+        rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
+                                                         *accumulationImageView_, *pingpongImage0View_,
                                                          *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
                                                          UniformBuffers(), GetScene()));
-            composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_,
-                                                       *albedoImageView_, *outputImageView_, UniformBuffers()));
-            const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
-            const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
-            const std::vector<ShaderBindingTable::Entry> hitGroups = {
-                {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}}
-            };
+        denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
+                                                     *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
+                                                     UniformBuffers(), GetScene()));
+        composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_,
+                                                   *albedoImageView_, *outputImageView_, UniformBuffers()));
+        const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
+        const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
+        const std::vector<ShaderBindingTable::Entry> hitGroups = {
+            {rayTracingPipeline_->TriangleHitGroupIndex(), {}}, {rayTracingPipeline_->ProceduralHitGroupIndex(), {}}
+        };
 
-            shaderBindingTable_.reset(new ShaderBindingTable(*deviceProcedures_, *rayTracingPipeline_,
-                                                             *rayTracingProperties_, rayGenPrograms, missPrograms,
-                                                             hitGroups));     
-        }
+        shaderBindingTable_.reset(new ShaderBindingTable(*deviceProcedures_, *rayTracingPipeline_,
+                                                         *rayTracingProperties_, rayGenPrograms, missPrograms,
+                                                         hitGroups));     
+        
     }
 
     void Application::DeleteSwapChain()
     {
-        if(supportRayTracing_)
-        {
-            shaderBindingTable_.reset();
-            rayTracingPipeline_.reset();
-            denoiserPipeline_.reset();
-            composePipeline_.reset();
-            outputImageView_.reset();
-            outputImage_.reset();
-            pingpongImage0_.reset();
-            pingpongImage1_.reset();
-            outputImageMemory_.reset();
-            accumulationImageView_.reset();
-            accumulationImage_.reset();
-            accumulationImageMemory_.reset();
-            gbufferImage_.reset();
-            gbufferImageMemory_.reset();
-            gbufferImageView_.reset();
-            albedoImage_.reset();
-            albedoImageView_.reset();
-            albedoImageMemory_.reset();
-        }
-
+        shaderBindingTable_.reset();
+        rayTracingPipeline_.reset();
+        denoiserPipeline_.reset();
+        composePipeline_.reset();
+        outputImageView_.reset();
+        outputImage_.reset();
+        pingpongImage0_.reset();
+        pingpongImage1_.reset();
+        outputImageMemory_.reset();
+        accumulationImageView_.reset();
+        accumulationImage_.reset();
+        accumulationImageMemory_.reset();
+        gbufferImage_.reset();
+        gbufferImageMemory_.reset();
+        gbufferImageView_.reset();
+        albedoImage_.reset();
+        albedoImageView_.reset();
+        albedoImageMemory_.reset();
+        
         Vulkan::Application::DeleteSwapChain();
     }
 
@@ -353,6 +337,18 @@ namespace Vulkan::RayTracing
         ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
                                    VK_ACCESS_TRANSFER_WRITE_BIT,
                                    0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    }
+
+    void Application::OnPreLoadScene()
+    {
+        Vulkan::Application::OnPreLoadScene();
+        DeleteAccelerationStructures();
+    }
+
+    void Application::OnPostLoadScene()
+    {
+        Vulkan::Application::OnPostLoadScene();
+        CreateAccelerationStructures();
     }
 
     void Application::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

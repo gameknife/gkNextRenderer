@@ -24,19 +24,22 @@ namespace
 #endif
 }
 
-RayTracer::RayTracer(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, const VkPresentModeKHR presentMode) :
-	Application(windowConfig, presentMode, EnableValidationLayers),
+template <typename Renderer>
+NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, const VkPresentModeKHR presentMode) :
+	Renderer(windowConfig, presentMode, EnableValidationLayers),
 	userSettings_(userSettings)
 {
 	CheckFramebufferSize();
 }
 
-RayTracer::~RayTracer()
+template <typename Renderer>
+NextRendererApplication<Renderer>::~NextRendererApplication()
 {
 	scene_.reset();
 }
 
-Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D extent) const
+template <typename Renderer>
+Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkExtent2D extent) const
 {
 	const auto& init = cameraInitialSate_;
 
@@ -66,7 +69,8 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	return ubo;
 }
 
-void RayTracer::SetPhysicalDeviceImpl(
+template <typename Renderer>
+void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 	VkPhysicalDevice physicalDevice, 
 	std::vector<const char*>& requiredExtensions,
 	VkPhysicalDeviceFeatures& deviceFeatures, 
@@ -92,20 +96,20 @@ void RayTracer::SetPhysicalDeviceImpl(
 	Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 }
 
-void RayTracer::OnDeviceSet()
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnDeviceSet()
 {
-	Application::OnDeviceSet();
+	Renderer::OnDeviceSet();
 
 	LoadScene(userSettings_.SceneIndex);
-	if(supportRayTracing_)
-	{
-		CreateAccelerationStructures();
-	}
+
+	Renderer::OnPostLoadScene();
 }
 
-void RayTracer::CreateSwapChain()
+template <typename Renderer>
+void NextRendererApplication<Renderer>::CreateSwapChain()
 {
-	Application::CreateSwapChain();
+	Renderer::CreateSwapChain();
 
 	userInterface_.reset(new UserInterface(CommandPool(), SwapChain(), DepthBuffer(), userSettings_));
 	resetAccumulation_ = true;
@@ -113,29 +117,25 @@ void RayTracer::CreateSwapChain()
 	CheckFramebufferSize();
 }
 
-void RayTracer::DeleteSwapChain()
+template <typename Renderer>
+void NextRendererApplication<Renderer>::DeleteSwapChain()
 {
 	userInterface_.reset();
 
-	Application::DeleteSwapChain();
+	Renderer::DeleteSwapChain();
 }
 
-void RayTracer::DrawFrame()
+template <typename Renderer>
+void NextRendererApplication<Renderer>::DrawFrame()
 {
 	// Check if the scene has been changed by the user.
 	if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
 	{
 		Device().WaitIdle();
 		DeleteSwapChain();
-		if(supportRayTracing_)
-		{
-			DeleteAccelerationStructures();
-		}
+		Renderer::OnPreLoadScene();
 		LoadScene(userSettings_.SceneIndex);
-		if(supportRayTracing_)
-		{
-			CreateAccelerationStructures();
-		}
+		Renderer::OnPostLoadScene();
 		CreateSwapChain();
 		return;
 	}
@@ -159,7 +159,8 @@ void RayTracer::DrawFrame()
 	Application::DrawFrame();
 }
 
-void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
 	// Record delta time between calls to Render.
 	const auto prevTime = time_;
@@ -175,9 +176,7 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	denoiseIteration = userSettings_.DenoiseIteration;
 	
 	// Render the scene
-	userSettings_.IsRayTraced && supportRayTracing_
-		? Vulkan::RayTracing::Application::Render(commandBuffer, imageIndex)
-		: Vulkan::Application::Render(commandBuffer, imageIndex);
+	Renderer::Render(commandBuffer, imageIndex);
 
 	// Render the UI
 	Statistics stats = {};
@@ -202,7 +201,8 @@ void RayTracer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 	userInterface_->Render(commandBuffer, SwapChainFrameBuffer(imageIndex), stats);
 }
 
-void RayTracer::OnKey(int key, int scancode, int action, int mods)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action, int mods)
 {
 	if (userInterface_->WantsToCaptureKeyboard())
 	{
@@ -239,7 +239,8 @@ void RayTracer::OnKey(int key, int scancode, int action, int mods)
 	}
 }
 
-void RayTracer::OnCursorPosition(const double xpos, const double ypos)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, const double ypos)
 {
 	if (!HasSwapChain() ||
 		userSettings_.Benchmark ||
@@ -253,7 +254,8 @@ void RayTracer::OnCursorPosition(const double xpos, const double ypos)
 	resetAccumulation_ |= modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
-void RayTracer::OnMouseButton(const int button, const int action, const int mods)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnMouseButton(const int button, const int action, const int mods)
 {
 	if (!HasSwapChain() || 
 		userSettings_.Benchmark ||
@@ -266,7 +268,8 @@ void RayTracer::OnMouseButton(const int button, const int action, const int mods
 	resetAccumulation_ |= modelViewController_.OnMouseButton(button, action, mods);
 }
 
-void RayTracer::OnScroll(const double xoffset, const double yoffset)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const double yoffset)
 {
 	if (!HasSwapChain() ||
 		userSettings_.Benchmark ||
@@ -284,7 +287,8 @@ void RayTracer::OnScroll(const double xoffset, const double yoffset)
 	resetAccumulation_ = prevFov != userSettings_.FieldOfView;
 }
 
-void RayTracer::LoadScene(const uint32_t sceneIndex)
+template <typename Renderer>
+void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
 	auto [models, textures] = SceneList::AllScenes[sceneIndex].second(cameraInitialSate_);
 
@@ -294,7 +298,7 @@ void RayTracer::LoadScene(const uint32_t sceneIndex)
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), supportRayTracing_));
+	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), false));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -307,7 +311,32 @@ void RayTracer::LoadScene(const uint32_t sceneIndex)
 	resetAccumulation_ = true;
 }
 
-void RayTracer::CheckAndUpdateBenchmarkState(double prevTime)
+template <>
+void NextRendererApplication<Vulkan::RayTracing::Application>::LoadScene(const uint32_t sceneIndex)
+{
+	auto [models, textures] = SceneList::AllScenes[sceneIndex].second(cameraInitialSate_);
+
+	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
+	if (textures.empty())
+	{
+		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
+	}
+	
+	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), true));
+	sceneIndex_ = sceneIndex;
+
+	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
+	userSettings_.Aperture = cameraInitialSate_.Aperture;
+	userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+
+	modelViewController_.Reset(cameraInitialSate_.ModelView);
+
+	periodTotalFrames_ = 0;
+	resetAccumulation_ = true;
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prevTime)
 {
 	if (!userSettings_.Benchmark)
 	{
@@ -379,7 +408,8 @@ void RayTracer::CheckAndUpdateBenchmarkState(double prevTime)
 	}
 }
 
-void RayTracer::CheckFramebufferSize() const
+template <typename Renderer>
+void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 {
 	// Check the framebuffer size when requesting a fullscreen window, as it's not guaranteed to match.
 	const auto& cfg = Window().Config();
@@ -396,3 +426,7 @@ void RayTracer::CheckFramebufferSize() const
 		Throw(std::runtime_error(out.str()));
 	}
 }
+
+// export it 
+template class NextRendererApplication<Vulkan::RayTracing::Application>;
+template class NextRendererApplication<Vulkan::Application>;

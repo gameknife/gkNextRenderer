@@ -63,6 +63,9 @@ namespace Vulkan
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
+		virtual void OnPreLoadScene() {}
+		virtual void OnPostLoadScene() {}
+
 		virtual void OnKey(int key, int scancode, int action, int mods) { }
 		virtual void OnCursorPosition(double xpos, double ypos) { }
 		virtual void OnMouseButton(int button, int action, int mods) { }

@@ -5,14 +5,15 @@
 #include "UserSettings.hpp"
 #include "Vulkan/RayTracing/Application.hpp"
 
-class RayTracer final : public Vulkan::RayTracing::Application
+template <typename Renderer>
+class NextRendererApplication final : public Renderer
 {
 public:
 
-	VULKAN_NON_COPIABLE(RayTracer)
+	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	RayTracer(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
-	~RayTracer();
+	NextRendererApplication(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
+	~NextRendererApplication();
 
 protected:
 

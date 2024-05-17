@@ -19,9 +19,7 @@ namespace Vulkan::RayTracing
 	public:
 
 		VULKAN_NON_COPIABLE(Application);
-
-		void SetSupportRayTracing(bool supportRayTracing) { supportRayTracing_ = supportRayTracing; }
-
+	
 	protected:
 
 		Application(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
@@ -39,7 +37,9 @@ namespace Vulkan::RayTracing
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
-		bool supportRayTracing_;
+		virtual void OnPreLoadScene() override;
+		virtual void OnPostLoadScene() override;
+
 	private:
 
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
