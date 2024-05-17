@@ -23,6 +23,8 @@
 
 #include "Texture.hpp"
 
+#define FLATTEN_VERTICE 1
+
 using namespace glm;
 
 namespace std
@@ -89,6 +91,22 @@ namespace Assets
         }
 
         return Model(std::move(vertices), std::move(indices), std::move(materials), nullptr);
+    }
+
+    void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
+    {
+        std::vector<Vertex> vertices_flatten;
+        std::vector<uint32_t> indices_flatten;
+
+        uint32_t idx_counter = 0;
+        for ( uint32_t index : indices )
+        {
+            vertices_flatten.push_back( vertices[index] );
+            indices_flatten.push_back(idx_counter++);
+        }
+
+        vertices = std::move(vertices_flatten);
+        indices = std::move(indices_flatten);
     }
 
     Model Model::LoadObjModel(const std::string& filename, std::vector<Texture>& textures)
@@ -269,6 +287,11 @@ namespace Assets
             << materials.size() << " materials) ";
         std::cout << elapsed << "s" << std::endl;
 
+        // flatten the vertice and indices, individual vertice
+#if FLATTEN_VERTICE
+        FlattenVertices(vertices, indices);
+#endif
+        
         return Model(std::move(vertices), std::move(indices), std::move(materials), nullptr);
     }
 
@@ -280,6 +303,10 @@ namespace Assets
 
         CornellBox::Create(scale, vertices, indices, materials);
 
+#if FLATTEN_VERTICE
+        FlattenVertices(vertices, indices);
+#endif
+        
         return Model(
             std::move(vertices),
             std::move(indices),
@@ -332,6 +359,10 @@ namespace Assets
             16, 17, 18, 16, 18, 19,
             20, 21, 22, 20, 22, 23
         };
+
+#if FLATTEN_VERTICE
+        FlattenVertices(vertices, indices);
+#endif
 
         return Model(
             std::move(vertices),
@@ -402,7 +433,12 @@ namespace Assets
                 indices.push_back(j0 + i1);
             }
         }
-
+        
+        
+#if FLATTEN_VERTICE
+        FlattenVertices(vertices, indices);
+#endif
+        
         return Model(
             std::move(vertices),
             std::move(indices),

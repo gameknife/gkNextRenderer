@@ -23,7 +23,7 @@ void main()
 {
 	// use checkerbord to skip sample
 	bool bCheckerBoard = Camera.UseCheckerBoard && Camera.NumberOfSamples == 1;
-	int adder = Camera.TotalNumberOfSamples % 2 == 0 ? 1 : 0;
+	int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
     
 	const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
 

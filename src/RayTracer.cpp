@@ -49,6 +49,7 @@ Assets::UniformBufferObject RayTracer::GetUniformBufferObject(const VkExtent2D e
 	ubo.Aperture = userSettings_.Aperture;
 	ubo.FocusDistance = userSettings_.FocusDistance;
 	ubo.TotalNumberOfSamples = totalNumberOfSamples_;
+	ubo.TotalFrames = totalFrames_;
 	ubo.NumberOfSamples = numberOfSamples_;
 	ubo.NumberOfBounces = userSettings_.NumberOfBounces;
 	ubo.RandomSeed = rand();
@@ -153,6 +154,7 @@ void RayTracer::DrawFrame()
 	// Keep track of our sample count.
 	numberOfSamples_ = glm::clamp(userSettings_.MaxNumberOfSamples - totalNumberOfSamples_, 0u, userSettings_.NumberOfSamples);
 	totalNumberOfSamples_ += numberOfSamples_;
+	totalFrames_ += 1;
 
 	Application::DrawFrame();
 }

@@ -11,6 +11,7 @@ struct UniformBufferObject
 	float ColorPhi;
 	float DepthPhi;
 	float NormalPhi;
+	uint TotalFrames;
 	uint TotalNumberOfSamples;
 	uint NumberOfSamples;
 	uint NumberOfBounces;

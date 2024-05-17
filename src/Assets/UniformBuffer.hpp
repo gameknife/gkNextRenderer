@@ -26,6 +26,7 @@ namespace Assets
 		float ColorPhi;
 		float DepthPhi;
 		float NormalPhi;
+		uint32_t TotalFrames;
 		uint32_t TotalNumberOfSamples;
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;

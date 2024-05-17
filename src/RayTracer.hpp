@@ -55,6 +55,7 @@ private:
 
 	double time_{};
 
+	uint32_t totalFrames_{};
 	uint32_t totalNumberOfSamples_{};
 	uint32_t numberOfSamples_{};
 	bool resetAccumulation_{};

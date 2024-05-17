@@ -66,14 +66,14 @@ Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , ve
 void main() {
 
     // checker box
-    //int adder = Camera.TotalNumberOfSamples % 2 == 0 ? 1 : 0;
+    int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
     
-    //ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) * ivec2(2,1);
-    //if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
-    //    ipos.x += 1;
-    //}
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) * ivec2(2,1);
+    if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
+        ipos.x += 1;
+    }
     
-    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    //ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
 
     uint primitive_index = imageLoad(MiniGBuffer, ipos).r;
     vec2 uv = vec2(ipos) / vec2(1920,1080) * 2.0 - 1.0;
@@ -95,6 +95,6 @@ void main() {
     const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)), 0.2);
     
-    vec4 outColor = vec4(v.Normal.rgb * 0.5 + 0.5, 1.0);//albedo * d;
+    vec4 outColor = sqrt(albedo * d);
     imageStore(OutImage, ipos, outColor);
 }

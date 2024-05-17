@@ -14,6 +14,7 @@ namespace Assets
 	{
 	public:
 		static Model LoadGltfModel(const std::string& filename, std::vector<Texture> &textures);
+		static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 		static Model LoadObjModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model LoadModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model CreateCornellBox(const float scale);
