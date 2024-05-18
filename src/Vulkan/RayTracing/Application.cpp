@@ -80,15 +80,9 @@ namespace Vulkan::RayTracing
         bufferDeviceAddressFeatures.pNext = nextDeviceFeatures;
         bufferDeviceAddressFeatures.bufferDeviceAddress = true;
 
-        VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
-        indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-        indexingFeatures.pNext = &bufferDeviceAddressFeatures;
-        indexingFeatures.runtimeDescriptorArray = true;
-        indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
         accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-        accelerationStructureFeatures.pNext = &indexingFeatures;
+        accelerationStructureFeatures.pNext = &bufferDeviceAddressFeatures;
         accelerationStructureFeatures.accelerationStructure = true;
 
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {};

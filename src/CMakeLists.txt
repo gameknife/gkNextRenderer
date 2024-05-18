@@ -157,7 +157,7 @@ add_executable(${exe_name}
 	${src_files}
 )
 
-if (UNIX)
+if (UNIX AND NOT APPLE)
 	# GCC8 needs an extra lib for <filesystem>.
 	# This is not needed with GCC9 or higher.
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
@@ -168,6 +168,10 @@ set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX
 target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
+
+if ( APPLE )
+target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+endif()
 
 if (VCPKG_TARGET_ANDROID)
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader ${Vulkan_LIBRARIES} ${extra_libs})

@@ -26,7 +26,7 @@ VisibilityPipeline::VisibilityPipeline(
 {
 	const auto& device = swapChain.Device();
 	const auto bindingDescription = Assets::Vertex::GetBindingDescription();
-	const auto attributeDescriptions = Assets::Vertex::GetAttributeDescriptions();
+	const auto attributeDescriptions = Assets::Vertex::GetFastAttributeDescriptions();
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
