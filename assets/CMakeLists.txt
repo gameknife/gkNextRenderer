@@ -45,7 +45,7 @@ macro(copy_assets asset_files dir_name copied_files)
 		else()
 			add_custom_command(
 				OUTPUT ${output_file}
-				COMMAND mkdir --parents ${output_dir} && cp --force --link \"${full_path}\" \"${output_file}\"
+				COMMAND mkdir -p ${output_dir} && cp -f -L \"${full_path}\" \"${output_file}\"
 				DEPENDS ${full_path}
 			)
 		endif()
