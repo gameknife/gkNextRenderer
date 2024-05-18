@@ -118,6 +118,13 @@ set(src_files_vulkan_raytracing
 	Vulkan/RayTracing/TopLevelAccelerationStructure.hpp
 )
 
+set(src_files_vulkan_moderndeferred
+	Vulkan/ModernDeferred/Application.cpp
+	Vulkan/ModernDeferred/Application.hpp
+	Vulkan/ModernDeferred/ModernDeferredPipeline.cpp
+	Vulkan/ModernDeferred/ModernDeferredPipeline.hpp
+)
+
 set(src_files
 	main.cpp
 	ModelViewController.cpp
@@ -137,13 +144,16 @@ source_group("Assets" FILES ${src_files_assets})
 source_group("Utilities" FILES ${src_files_utilities})
 source_group("Vulkan" FILES ${src_files_vulkan})
 source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
+source_group("Vulkan.ModernDeferred" FILES ${src_files_vulkan_moderndeferred})
 source_group("Main" FILES ${src_files})
+
 
 add_executable(${exe_name} 
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_moderndeferred} 
 	${src_files}
 )
 
