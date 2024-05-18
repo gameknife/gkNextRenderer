@@ -1,20 +1,21 @@
-#include "GraphicsPipeline.hpp"
-#include "Buffer.hpp"
-#include "DescriptorSetManager.hpp"
-#include "DescriptorPool.hpp"
-#include "DescriptorSets.hpp"
-#include "Device.hpp"
-#include "PipelineLayout.hpp"
-#include "RenderPass.hpp"
-#include "ShaderModule.hpp"
-#include "SwapChain.hpp"
+#include "ModernDeferredPipeline.hpp"
+#include "Vulkan/Buffer.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 
-namespace Vulkan {
+namespace Vulkan::ModernDeferred {
 
-GraphicsPipeline::GraphicsPipeline(
+VisibilityPipeline::VisibilityPipeline(
 	const SwapChain& swapChain, 
 	const DepthBuffer& depthBuffer,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
@@ -117,8 +118,6 @@ GraphicsPipeline::GraphicsPipeline(
 	std::vector<DescriptorBinding> descriptorBindings =
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT},
-		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-		{2, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -131,28 +130,10 @@ GraphicsPipeline::GraphicsPipeline(
 		VkDescriptorBufferInfo uniformBufferInfo = {};
 		uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
 		uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-		// Material buffer
-		VkDescriptorBufferInfo materialBufferInfo = {};
-		materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
-		materialBufferInfo.range = VK_WHOLE_SIZE;
-
-		// Image and texture samplers
-		std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
-
-		for (size_t t = 0; t != imageInfos.size(); ++t)
-		{
-			auto& imageInfo = imageInfos[t];
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = scene.TextureImageViews()[t];
-			imageInfo.sampler = scene.TextureSamplers()[t];
-		}
-
+		
 		const std::vector<VkWriteDescriptorSet> descriptorWrites =
 		{
 			descriptorSets.Bind(i, 0, uniformBufferInfo),
-			descriptorSets.Bind(i, 1, materialBufferInfo),
-			descriptorSets.Bind(i, 2, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
 		};
 
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -160,12 +141,12 @@ GraphicsPipeline::GraphicsPipeline(
 
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-	renderPass_.reset(new class RenderPass(swapChain, swapChain.Format(), depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.
-	const ShaderModule vertShader(device, "../assets/shaders/Graphics.vert.spv");
-	const ShaderModule fragShader(device, "../assets/shaders/Graphics.frag.spv");
+	const ShaderModule vertShader(device, "../assets/shaders/VisibilityPass.vert.spv");
+	const ShaderModule fragShader(device, "../assets/shaders/VisibilityPass.frag.spv");
 
 	VkPipelineShaderStageCreateInfo shaderStages[] =
 	{
@@ -196,7 +177,7 @@ GraphicsPipeline::GraphicsPipeline(
 		"create graphics pipeline");
 }
 
-GraphicsPipeline::~GraphicsPipeline()
+VisibilityPipeline::~VisibilityPipeline()
 {
 	if (pipeline_ != nullptr)
 	{
@@ -210,9 +191,122 @@ GraphicsPipeline::~GraphicsPipeline()
 	descriptorSetManager_.reset();
 }
 
-VkDescriptorSet GraphicsPipeline::DescriptorSet(const uint32_t index) const
+VkDescriptorSet VisibilityPipeline::DescriptorSet(const uint32_t index) const
 {
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
+ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene, bool isWireFrame):swapChain_(swapChain)
+{
+	 // Create descriptor pool/sets.
+        const auto& device = swapChain.Device();
+        const std::vector<DescriptorBinding> descriptorBindings =
+        {
+            // MiniGbuffer and output
+            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+        	
+        	// Others like in frag
+			{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{3, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+        	// all buffer here
+				{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+				{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+				{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+				{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+        };
+
+        descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
+        {
+            VkDescriptorImageInfo Info0 = {NULL,  miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	
+        	// Uniform buffer
+        	VkDescriptorBufferInfo uniformBufferInfo = {};
+        	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+        	uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Image and texture samplers
+        	std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
+
+        	for (size_t t = 0; t != imageInfos.size(); ++t)
+        	{
+        		auto& imageInfo = imageInfos[t];
+        		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        		imageInfo.imageView = scene.TextureImageViews()[t];
+        		imageInfo.sampler = scene.TextureSamplers()[t];
+        	}
+
+
+        	// Vertex buffer
+        	VkDescriptorBufferInfo vertexBufferInfo = {};
+        	vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+        	vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Index buffer
+        	VkDescriptorBufferInfo indexBufferInfo = {};
+        	indexBufferInfo.buffer = scene.IndexBuffer().Handle();
+        	indexBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Material buffer
+        	VkDescriptorBufferInfo materialBufferInfo = {};
+        	materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+        	materialBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Offsets buffer
+        	VkDescriptorBufferInfo offsetsBufferInfo = {};
+        	offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
+        	offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(i, 0, Info0),
+                descriptorSets.Bind(i, 1, Info1),
+                descriptorSets.Bind(i, 2, uniformBufferInfo),
+        		descriptorSets.Bind(i, 3, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
+            	descriptorSets.Bind(i, 4, vertexBufferInfo),
+			   descriptorSets.Bind(i, 5, indexBufferInfo),
+			   descriptorSets.Bind(i, 6, materialBufferInfo),
+			   descriptorSets.Bind(i, 7, offsetsBufferInfo),
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
+
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        const ShaderModule denoiseShader(device, "../assets/shaders/DeferredShading.comp.spv");
+
+        VkComputePipelineCreateInfo pipelineCreateInfo = {};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+        pipelineCreateInfo.layout = pipelineLayout_->Handle();
+	
+        Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+                                       1, &pipelineCreateInfo,
+                                       NULL, &pipeline_),
+              "create deferred shading pipeline");
+}
+
+ShadingPipeline::~ShadingPipeline()
+{
+	if (pipeline_ != nullptr)
+	{
+		vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+		pipeline_ = nullptr;
+	}
+
+	pipelineLayout_.reset();
+	descriptorSetManager_.reset();
+}
+
+VkDescriptorSet ShadingPipeline::DescriptorSet(uint32_t index) const
+{
+	return descriptorSetManager_->DescriptorSets().Handle(index);
+}
 }

@@ -7,9 +7,9 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/Glm.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
+#include "Vulkan/SwapChain.hpp"
+#include "Vulkan/Device.hpp"
 #include <iostream>
 #include <sstream>
 #include "curl/curl.h"
@@ -93,7 +93,7 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 	deviceFeatures.samplerAnisotropy = true;
 	deviceFeatures.shaderInt64 = true;
 
-	Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
+	Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 }
 
 template <typename Renderer>
@@ -156,7 +156,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
 	totalNumberOfSamples_ += numberOfSamples_;
 	totalFrames_ += 1;
 
-	Application::DrawFrame();
+	Renderer::DrawFrame();
 }
 
 template <typename Renderer>
@@ -312,7 +312,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 }
 
 template <>
-void NextRendererApplication<Vulkan::RayTracing::Application>::LoadScene(const uint32_t sceneIndex)
+void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(const uint32_t sceneIndex)
 {
 	auto [models, textures] = SceneList::AllScenes[sceneIndex].second(cameraInitialSate_);
 
@@ -347,6 +347,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 	if (periodTotalFrames_ == 0)
 	{
 		std::cout << std::endl;
+		std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
 		std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'" << std::endl;
 		sceneInitialTime_ = time_;
 		periodInitialTime_ = time_;
@@ -428,5 +429,6 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 }
 
 // export it 
-template class NextRendererApplication<Vulkan::RayTracing::Application>;
-template class NextRendererApplication<Vulkan::Application>;
+template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
+template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
+template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;

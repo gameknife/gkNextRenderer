@@ -72,11 +72,10 @@ void main() {
     if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
         ipos.x += 1;
     }
-    
-    //ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-
+	
+	ivec2 size = imageSize(MiniGBuffer);
     uint primitive_index = imageLoad(MiniGBuffer, ipos).r;
-    vec2 uv = vec2(ipos) / vec2(1920,1080) * 2.0 - 1.0;
+    vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
 	vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
@@ -90,8 +89,7 @@ void main() {
         vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
         albedo *= tex * tex;
     }
-    
-    
+	
     const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)), 0.2);
     

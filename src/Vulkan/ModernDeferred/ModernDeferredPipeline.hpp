@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Vulkan.hpp"
-#include "ImageView.hpp"
+#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/ImageView.hpp"
 #include <memory>
 #include <vector>
 
@@ -17,20 +17,25 @@ namespace Vulkan
 	class PipelineLayout;
 	class RenderPass;
 	class SwapChain;
+	class DescriptorSetManager;
+}
 
-	class GraphicsPipeline final
+namespace Vulkan::ModernDeferred
+{
+
+	class VisibilityPipeline final
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(GraphicsPipeline)
+		VULKAN_NON_COPIABLE(VisibilityPipeline)
 
-		GraphicsPipeline(
+		VisibilityPipeline(
 			const SwapChain& swapChain, 
 			const DepthBuffer& depthBuffer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene,
 			bool isWireFrame);
-		~GraphicsPipeline();
+		~VisibilityPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		bool IsWireFrame() const { return isWireFrame_; }
@@ -45,10 +50,34 @@ namespace Vulkan
 
 		VULKAN_HANDLE(VkPipeline, pipeline_)
 
-		std::unique_ptr<class DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<class PipelineLayout> pipelineLayout_;
 		std::unique_ptr<class RenderPass> renderPass_;
 		std::unique_ptr<class RenderPass> swapRenderPass_;
+	};
+
+	class ShadingPipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(ShadingPipeline)
+	
+		ShadingPipeline(
+			const SwapChain& swapChain, 
+			const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
+			const Assets::Scene& scene,
+			bool isWireFrame);
+		~ShadingPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const class PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const SwapChain& swapChain_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<class DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<class PipelineLayout> pipelineLayout_;
 	};
 
 }

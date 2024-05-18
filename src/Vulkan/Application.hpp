@@ -16,13 +16,13 @@ namespace Assets
 
 namespace Vulkan 
 {
-	class Application
+	class VulkanBaseRenderer
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(Application)
+		VULKAN_NON_COPIABLE(VulkanBaseRenderer)
 
-		virtual ~Application();
+		virtual ~VulkanBaseRenderer();
 
 		const std::vector<VkExtensionProperties>& Extensions() const;
 		const std::vector<VkLayerProperties>& Layers() const;
@@ -39,7 +39,7 @@ namespace Vulkan
 
 	protected:
 
-		Application(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		VulkanBaseRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }
@@ -95,17 +95,6 @@ namespace Vulkan
 		std::vector<class Semaphore> imageAvailableSemaphores_;
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
-
-		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
-		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
-
-		std::unique_ptr<Image> miniGBufferImage_;
-		std::unique_ptr<DeviceMemory> miniGBufferImageMemory_;
-		std::unique_ptr<ImageView> miniGBufferImageView_;
-
-		std::unique_ptr<Image> outputImage_;
-		std::unique_ptr<DeviceMemory> outputImageMemory_;
-		std::unique_ptr<ImageView> outputImageView_;
 		
 		size_t currentFrame_{};
 

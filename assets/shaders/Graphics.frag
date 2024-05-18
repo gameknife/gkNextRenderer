@@ -7,17 +7,25 @@
 layout(binding = 1) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 2) uniform sampler2D[] TextureSamplers;
 
-//layout(location = 0) in vec3 FragNormal;
-//layout(location = 1) in flat int FragMaterialIndex;
-layout (location = 0) flat in uint g_primitive_index;
+layout(location = 0) in vec3 FragColor;
+layout(location = 1) in vec3 FragNormal;
+layout(location = 2) in vec2 FragTexCoord;
+layout(location = 3) in flat int FragMaterialIndex;
 
-//layout(location = 0) out vec4 OutColor;
-layout(location = 0) out uint g_out_color;
+layout(location = 0) out vec4 OutColor;
 
-void main() 
+void main()
 {
-	// mini-gbuffer output
-	//OutColor = vec4(normalize(FragNormal) * 0.5 + 0.5, FragMaterialIndex / 255.0);
-	
-	g_out_color = g_primitive_index;
+	const int textureId = Materials[FragMaterialIndex].DiffuseTextureId;
+	const vec3 lightVector = normalize(vec3(5, 4, 3));
+	const float d = max(dot(lightVector, normalize(FragNormal)), 0.2);
+
+	vec3 c = FragColor * d;
+	if (textureId >= 0)
+	{
+		vec3 albedo = texture(TextureSamplers[textureId], FragTexCoord).rgb;
+		c *= albedo * albedo;
+	}
+
+	OutColor = vec4(sqrt(c), 1);
 }

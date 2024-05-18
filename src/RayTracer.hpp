@@ -4,6 +4,7 @@
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
 #include "Vulkan/RayTracing/Application.hpp"
+#include "Vulkan/ModernDeferred/Application.hpp"
 
 template <typename Renderer>
 class NextRendererApplication final : public Renderer

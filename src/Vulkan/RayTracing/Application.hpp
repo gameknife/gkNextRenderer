@@ -14,16 +14,16 @@ namespace Vulkan
 
 namespace Vulkan::RayTracing
 {
-	class Application : public Vulkan::Application
+	class RayTracingRenderer : public Vulkan::VulkanBaseRenderer
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(Application);
+		VULKAN_NON_COPIABLE(RayTracingRenderer);
 	
 	protected:
 
-		Application(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
-		~Application();
+		RayTracingRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		~RayTracingRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,

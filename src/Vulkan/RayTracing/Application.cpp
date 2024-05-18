@@ -46,21 +46,21 @@ namespace Vulkan::RayTracing
         }
     }
 
-    Application::Application(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
+    RayTracingRenderer::RayTracingRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
-        Vulkan::Application(windowConfig, presentMode, enableValidationLayers)
+        Vulkan::VulkanBaseRenderer(windowConfig, presentMode, enableValidationLayers)
     {
     }
 
-    Application::~Application()
+    RayTracingRenderer::~RayTracingRenderer()
     {
-        Application::DeleteSwapChain();
+        RayTracingRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
         deviceProcedures_.reset();         
     }
 
-    void Application::SetPhysicalDeviceImpl(
+    void RayTracingRenderer::SetPhysicalDeviceImpl(
         VkPhysicalDevice physicalDevice,
         std::vector<const char*>& requiredExtensions,
         VkPhysicalDeviceFeatures& deviceFeatures,
@@ -96,18 +96,18 @@ namespace Vulkan::RayTracing
         rayTracingFeatures.pNext = &accelerationStructureFeatures;
         rayTracingFeatures.rayTracingPipeline = true;
 
-        Vulkan::Application::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayTracingFeatures);
+        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayTracingFeatures);
     }
 
-    void Application::OnDeviceSet()
+    void RayTracingRenderer::OnDeviceSet()
     {
-        Vulkan::Application::OnDeviceSet();
+        Vulkan::VulkanBaseRenderer::OnDeviceSet();
         
         deviceProcedures_.reset(new DeviceProcedures(Device()));
         rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
-    void Application::CreateAccelerationStructures()
+    void RayTracingRenderer::CreateAccelerationStructures()
     {
         const auto timer = std::chrono::high_resolution_clock::now();
 
@@ -127,7 +127,7 @@ namespace Vulkan::RayTracing
         std::cout << "- built acceleration structures in " << elapsed << "s" << std::endl;
     }
 
-    void Application::DeleteAccelerationStructures()
+    void RayTracingRenderer::DeleteAccelerationStructures()
     {
         topAs_.clear();
         instancesBuffer_.reset();
@@ -144,9 +144,9 @@ namespace Vulkan::RayTracing
         bottomBufferMemory_.reset();
     }
 
-    void Application::CreateSwapChain()
+    void RayTracingRenderer::CreateSwapChain()
     {
-        Vulkan::Application::CreateSwapChain();
+        Vulkan::VulkanBaseRenderer::CreateSwapChain();
 
         CreateOutputImage();
 
@@ -171,7 +171,7 @@ namespace Vulkan::RayTracing
         
     }
 
-    void Application::DeleteSwapChain()
+    void RayTracingRenderer::DeleteSwapChain()
     {
         shaderBindingTable_.reset();
         rayTracingPipeline_.reset();
@@ -192,10 +192,10 @@ namespace Vulkan::RayTracing
         albedoImageView_.reset();
         albedoImageMemory_.reset();
         
-        Vulkan::Application::DeleteSwapChain();
+        Vulkan::VulkanBaseRenderer::DeleteSwapChain();
     }
 
-    void Application::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    void RayTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         const auto extent = SwapChain().Extent();
 
@@ -339,19 +339,19 @@ namespace Vulkan::RayTracing
                                    0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     }
 
-    void Application::OnPreLoadScene()
+    void RayTracingRenderer::OnPreLoadScene()
     {
-        Vulkan::Application::OnPreLoadScene();
+        Vulkan::VulkanBaseRenderer::OnPreLoadScene();
         DeleteAccelerationStructures();
     }
 
-    void Application::OnPostLoadScene()
+    void RayTracingRenderer::OnPostLoadScene()
     {
-        Vulkan::Application::OnPostLoadScene();
+        Vulkan::VulkanBaseRenderer::OnPostLoadScene();
         CreateAccelerationStructures();
     }
 
-    void Application::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
+    void RayTracingRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
@@ -415,7 +415,7 @@ namespace Vulkan::RayTracing
         }
     }
 
-    void Application::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
+    void RayTracingRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
@@ -475,7 +475,7 @@ namespace Vulkan::RayTracing
         debugUtils.SetObjectName(topAs_[0].Handle(), "TLAS");
     }
 
-    void Application::CreateOutputImage()
+    void RayTracingRenderer::CreateOutputImage()
     {
         const auto extent = SwapChain().Extent();
         const auto format = SwapChain().Format();

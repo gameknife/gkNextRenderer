@@ -10,7 +10,8 @@
 	ClassName(const ClassName&) = delete; \
 	ClassName(ClassName&&) = delete; \
 	ClassName& operator = (const ClassName&) = delete; \
-	ClassName& operator = (ClassName&&) = delete;
+	ClassName& operator = (ClassName&&) = delete; \
+	static const char* StaticClass() {return #ClassName;}
 
 #define VULKAN_HANDLE(VulkanHandleType, name) \
 public: \
