@@ -76,12 +76,14 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 	VkPhysicalDeviceFeatures& deviceFeatures, 
 	void* nextDeviceFeatures)
 {
-	// Required extensions.
+	// Required extensions. windows only
+#if WIN32
 	requiredExtensions.insert(requiredExtensions.end(),
 		{
 			// VK_KHR_SHADER_CLOCK is required for heatmap
 			VK_KHR_SHADER_CLOCK_EXTENSION_NAME
 		});
+#endif
 	
 	// Opt-in into mandatory device features.
 	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures = {};
