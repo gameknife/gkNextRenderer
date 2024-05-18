@@ -1,8 +1,8 @@
 # gkNextRenderer
 
-2024主题：补课
+**2024主题：补课**
 
-实现基于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)fork而来，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。
+实现基于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) fork而来，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。
 
 基于其版本，修改了采样算法，Shading模型，Model的加载方案，以及降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
 
@@ -25,9 +25,11 @@
 
 * Vulkan Raytracing pipeline
 * Ground Truth Path Tracing
+* Compute Checkerbox Rendering
 * Non-Raytracing pipeline
 * Visibiliy Buffer Rendering
 * obj / gltf PBR Scene Support
+* CrossPlatform support for Windows/Linux/MacOS
 
 ## 性能
 
@@ -54,15 +56,26 @@ Here are my results with the command above on a few different computers.
 
 - Scene Management
     - Element Instancing
+
 - RayTracing Pipeline
     - Temporal Reprojection
+    - Ray Query Pipeline
+
 - Non-RayTracing Pipeline
     - Modern Deferred Shading
     - Hybrid Rendering
     - Reference Legacy Lighting
+
 - Platform
-    - MacOS moltenVK
+    - ~~MacOS moltenVK~~
     - Android Vulkan ( RayTracing on 8Gen2 )
+
+
+## 随感
+
+- vcpkg是一个好东西，2024年我才“了解”到，真的是相见恨晚。这是一个类似于npm / pip的针对cpp的包管理库，由微软维护，但支持的平台有win/linux/osx/android/ios甚至主机。通过vcpkg，很方便的就做到了windows, linux, macOS的跨平台。目前我的steamdeck和apple m3的mbp，均可以正常的跑起来. steamdeck在打开棋盘格渲染后甚至有40+的fps
+
+- 因为一开始是接触的metal3的hardware raytracing，当时的写法是在一个compute shader里调用rayquery的接口。而此demo使用的是khr_raytracing_pipeline，更加类似dx12的写法。而ray query其实也是可以用的。我在8gen2上写了一个vulkan初始化程序，他的光追也是只支持到ray query，因此感觉这个才是一个真正的跨平台方案。
 
 ## Building
 
@@ -95,6 +108,14 @@ SteamDeck Archlinux
 ```
 sudo steamos-readonly disable
 sudo pacman devel-base
+```
+
+**MacOS**
+
+macOS using moltenVK, you should install it. then just
+```
+./vcpkg_macos.sh
+./build_macos.sh
 ```
 
 ## References
