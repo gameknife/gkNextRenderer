@@ -173,7 +173,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 	// Check the current state of the benchmark, update it for the new frame.
 	CheckAndUpdateBenchmarkState(prevTime);
 
-	denoiseIteration = userSettings_.DenoiseIteration;
+	denoiseIteration_ = userSettings_.DenoiseIteration;
+	checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 	
 	// Render the scene
 	Renderer::Render(commandBuffer, imageIndex);

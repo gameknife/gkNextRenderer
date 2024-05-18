@@ -54,6 +54,7 @@ struct UserSettings final
 			NumberOfBounces != prev.NumberOfBounces ||
 			FieldOfView != prev.FieldOfView ||
 			Aperture != prev.Aperture ||
-			FocusDistance != prev.FocusDistance;
+			FocusDistance != prev.FocusDistance ||
+			TemporalFrames != prev.TemporalFrames;
 	}
 };

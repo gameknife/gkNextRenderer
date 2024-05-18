@@ -47,6 +47,7 @@ namespace Vulkan
 		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return uniformBuffers_; }
 		const class GraphicsPipeline& GraphicsPipeline() const { return *graphicsPipeline_; }
 		const class FrameBuffer& SwapChainFrameBuffer(const size_t i) const { return swapChainFramebuffers_[i]; }
+		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		
 		virtual const Assets::Scene& GetScene() const = 0;
 		virtual Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const = 0;
@@ -72,7 +73,8 @@ namespace Vulkan
 		virtual void OnScroll(double xoffset, double yoffset) { }
 
 		bool isWireFrame_{};
-		int denoiseIteration;
+		bool checkerboxRendering_{};
+		int denoiseIteration_{};
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);

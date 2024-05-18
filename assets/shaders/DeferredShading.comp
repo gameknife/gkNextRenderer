@@ -68,10 +68,15 @@ void main() {
     // checker box
     int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
     
-    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) * ivec2(2,1);
-    if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
-        ipos.x += 1;
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    if(Camera.UseCheckerBoard)
+    {
+        ipos = ipos * ivec2(2,1);
+        if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
+            ipos.x += 1;
+        }
     }
+
 	
 	ivec2 size = imageSize(MiniGBuffer);
     uint primitive_index = imageLoad(MiniGBuffer, ipos).r;

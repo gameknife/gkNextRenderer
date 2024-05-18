@@ -22,8 +22,20 @@ layout(location = 0) rayPayloadEXT RayPayload Ray;
 void main() 
 {
 	// use checkerbord to skip sample
-	bool bCheckerBoard = Camera.UseCheckerBoard && Camera.NumberOfSamples == 1;
 	int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
+	
+	ivec2 ipos = ivec2(gl_LaunchIDEXT.xy);
+	vec2 isize = vec2(gl_LaunchSizeEXT.xy);
+
+	if(Camera.UseCheckerBoard)
+	{
+		ipos = ipos * ivec2(2,1);
+		isize = isize * vec2(2,1);
+		if((gl_LaunchIDEXT.y + adder) % 2 == 0) 
+		{
+			ipos.x += 1;
+		}
+	}
     
 	const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
 
@@ -31,8 +43,8 @@ void main()
 	// - pixel: we want the same random seed for each pixel to get a homogeneous anti-aliasing.
 	// - ray: we want a noisy random seed, different for each pixel.
 	uint pixelRandomSeed = Camera.RandomSeed;
-    vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / gl_LaunchSizeEXT.xy;
-	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y), Camera.TotalNumberOfSamples);
+    vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / isize;
+	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
 
 	vec3 pixelColor = vec3(0);
 	
@@ -40,10 +52,8 @@ void main()
 	
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
 	{
-	    if (bCheckerBoard && (int(gl_LaunchIDEXT.x) + int(gl_LaunchIDEXT.y) + adder) % 2 == 0) break;
-		//if (Camera.NumberOfSamples != Camera.TotalNumberOfSamples) break;
-		const vec2 pixel = vec2(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y);
-		vec2 uv = (pixel / gl_LaunchSizeEXT.xy) * 2.0 - 1.0;
+		const vec2 pixel = vec2(ipos);
+		vec2 uv = (pixel / isize) * 2.0 - 1.0;
 		
 		// anti aliasing
         {
@@ -87,11 +97,11 @@ void main()
             if(b == 0)
             {
                 // output gbuffer
-                imageStore(GBufferImage, ivec2(gl_LaunchIDEXT.xy), vec4(Ray.GBuffer.xyz, t) );
-				vec3 history = imageLoad(AlbedoImage, ivec2(gl_LaunchIDEXT.xy)).rgb;
+                imageStore(GBufferImage, ipos, vec4(Ray.GBuffer.xyz, t) );
+				vec3 history = imageLoad(AlbedoImage, ipos).rgb;
 				// the first albedo, pbr with monte carlo, so still noisy, this can be use appoximate algo to disable it
 				// but the problem is, who to let the hit shader to know this is the first bounce
-				imageStore(AlbedoImage, ivec2(gl_LaunchIDEXT.xy), vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
+				imageStore(AlbedoImage, ipos, vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
             }
 			else
 			{
@@ -114,21 +124,18 @@ void main()
 		pixelColor += rayColor;
 	}
 
-	
-	
-    const float checkerboardIncreaser = bCheckerBoard ? 2.0f : 1.0f;
     
     vec3 accumulatedColor = vec3(0);
 	
 	if( Camera.TotalNumberOfSamples >  Camera.NumberOfSamples )
 	{
-		accumulatedColor = imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)).xyz;
+		accumulatedColor = imageLoad(AccumulationImage, ipos).xyz;
 	}
 	
     if(Camera.TemporalFrames == 0)
     {
 		// offline render style
-	    accumulatedColor = accumulatedColor + pixelColor * checkerboardIncreaser;
+	    accumulatedColor = accumulatedColor + pixelColor * (Camera.UseCheckerBoard ? 2.0 : 1.0);
 	    pixelColor = accumulatedColor / Camera.TotalNumberOfSamples;
     }
     else
@@ -136,7 +143,7 @@ void main()
         // realtime game style
         float currKeep = 1.0 / Camera.TemporalFrames;
         pixelColor = pixelColor / Camera.NumberOfSamples;
-        accumulatedColor = accumulatedColor * (1.0 - currKeep) + pixelColor * checkerboardIncreaser *currKeep;
+        accumulatedColor = accumulatedColor * (1.0 - currKeep) + pixelColor * currKeep;
         pixelColor = accumulatedColor;
     }
 
@@ -155,10 +162,10 @@ void main()
 		pixelColor = heatmap(deltaTimeScaled);
 	}
 
-	imageStore(AccumulationImage, ivec2(gl_LaunchIDEXT.xy), vec4(accumulatedColor, 0));
-    imageStore(OutputImage, ivec2(gl_LaunchIDEXT.xy), vec4(pixelColor, 0));
+	imageStore(AccumulationImage, ipos, vec4(accumulatedColor, 0));
+    imageStore(OutputImage, ipos, vec4(pixelColor, 0));
 	if(Camera.TotalNumberOfSamples < 2)
 	{
-		imageStore(Output1Image, ivec2(gl_LaunchIDEXT.xy), vec4(pixelColor, 0));
+		imageStore(Output1Image, ipos, vec4(pixelColor, 0));
 	}
 }

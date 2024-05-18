@@ -254,7 +254,7 @@ namespace Vulkan::RayTracing
         deviceProcedures_->vkCmdTraceRaysKHR(commandBuffer,
                                              &raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
                                              &callableShaderBindingTable,
-                                             extent.width, extent.height, 1);
+                                             CheckerboxRendering() ? extent.width / 2 : extent.width, extent.height, 1);
 
 
         ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
@@ -269,7 +269,7 @@ namespace Vulkan::RayTracing
                                    VK_IMAGE_LAYOUT_GENERAL);
 
         // ping & pong
-        for (int i = 0; i < denoiseIteration; i++)
+        for (int i = 0; i < denoiseIteration_; i++)
         {
             // pingpong & stepsize via push constants
             DenoiserPushConstantData pushData;
