@@ -80,7 +80,7 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 	requiredExtensions.insert(requiredExtensions.end(),
 		{
 			// VK_KHR_SHADER_CLOCK is required for heatmap
-			VK_KHR_SHADER_CLOCK_EXTENSION_NAME
+			//VK_KHR_SHADER_CLOCK_EXTENSION_NAME
 		});
 	
 	// Opt-in into mandatory device features.
@@ -111,7 +111,7 @@ void NextRendererApplication<Renderer>::CreateSwapChain()
 {
 	Renderer::CreateSwapChain();
 
-	userInterface_.reset(new UserInterface(CommandPool(), SwapChain(), DepthBuffer(), userSettings_));
+	userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(), userSettings_));
 	resetAccumulation_ = true;
 
 	CheckFramebufferSize();
@@ -131,7 +131,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
 	// Check if the scene has been changed by the user.
 	if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
 	{
-		Device().WaitIdle();
+		Renderer::Device().WaitIdle();
 		DeleteSwapChain();
 		Renderer::OnPreLoadScene();
 		LoadScene(userSettings_.SceneIndex);
@@ -164,7 +164,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 {
 	// Record delta time between calls to Render.
 	const auto prevTime = time_;
-	time_ = Window().GetTime();
+	time_ = Renderer::Window().GetTime();
 	const auto timeDelta = time_ - prevTime;
 
 	// Update the camera position / angle.
@@ -173,14 +173,14 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 	// Check the current state of the benchmark, update it for the new frame.
 	CheckAndUpdateBenchmarkState(prevTime);
 
-	denoiseIteration = userSettings_.DenoiseIteration;
+	Renderer::denoiseIteration = userSettings_.DenoiseIteration;
 	
 	// Render the scene
 	Renderer::Render(commandBuffer, imageIndex);
 
 	// Render the UI
 	Statistics stats = {};
-	stats.FramebufferSize = Window().FramebufferSize();
+	stats.FramebufferSize = Renderer::Window().FramebufferSize();
 	stats.FrameRate = static_cast<float>(1 / timeDelta);
 
 	stats.CamPosX = modelViewController_.Position()[0];
@@ -189,7 +189,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
 	if (userSettings_.IsRayTraced)
 	{
-		const auto extent = SwapChain().Extent();
+		const auto extent = Renderer::SwapChain().Extent();
 
 		stats.RayRate = static_cast<float>(
 			double(extent.width*extent.height)*numberOfSamples_
@@ -198,7 +198,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 		stats.TotalSamples = totalNumberOfSamples_;
 	}
 
-	userInterface_->Render(commandBuffer, SwapChainFrameBuffer(imageIndex), stats);
+	userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats);
 }
 
 template <typename Renderer>
@@ -213,7 +213,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
 	{		
 		switch (key)
 		{
-		case GLFW_KEY_ESCAPE: Window().Close(); break;
+		case GLFW_KEY_ESCAPE: Renderer::Window().Close(); break;
 		default: break;
 		}
 
@@ -226,7 +226,6 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
 			case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay; break;
 			case GLFW_KEY_R: userSettings_.IsRayTraced = !userSettings_.IsRayTraced; break;
 			case GLFW_KEY_H: userSettings_.ShowHeatmap = !userSettings_.ShowHeatmap; break;
-			case GLFW_KEY_P: isWireFrame_ = !isWireFrame_; break;
 			default: break;
 			}
 		}
@@ -242,7 +241,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
 template <typename Renderer>
 void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, const double ypos)
 {
-	if (!HasSwapChain() ||
+	if (!Renderer::HasSwapChain() ||
 		userSettings_.Benchmark ||
 		userInterface_->WantsToCaptureKeyboard() || 
 		userInterface_->WantsToCaptureMouse())
@@ -257,7 +256,7 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
 template <typename Renderer>
 void NextRendererApplication<Renderer>::OnMouseButton(const int button, const int action, const int mods)
 {
-	if (!HasSwapChain() || 
+	if (!Renderer::HasSwapChain() || 
 		userSettings_.Benchmark ||
 		userInterface_->WantsToCaptureMouse())
 	{
@@ -271,7 +270,7 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
 template <typename Renderer>
 void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const double yoffset)
 {
-	if (!HasSwapChain() ||
+	if (!Renderer::HasSwapChain() ||
 		userSettings_.Benchmark ||
 		userInterface_->WantsToCaptureMouse())
 	{
@@ -298,7 +297,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), false));
+	scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(models), std::move(textures), false));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -371,7 +370,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 
 	// If in benchmark mode, bail out from the scene if we've reached the time or sample limit.
 	{
-		const bool timeLimitReached = periodTotalFrames_ != 0 && Window().GetTime() - sceneInitialTime_ > userSettings_.BenchmarkMaxTime;
+		const bool timeLimitReached = periodTotalFrames_ != 0 && Renderer::Window().GetTime() - sceneInitialTime_ > userSettings_.BenchmarkMaxTime;
 		const bool sampleLimitReached = numberOfSamples_ == 0;
 
 		if (timeLimitReached || sampleLimitReached)
@@ -400,7 +399,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 					curl_easy_cleanup(curl);
 				}
 				
-				Window().Close();
+				Renderer::Window().Close();
 			}
 
 			std::cout << std::endl;
@@ -413,8 +412,8 @@ template <typename Renderer>
 void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 {
 	// Check the framebuffer size when requesting a fullscreen window, as it's not guaranteed to match.
-	const auto& cfg = Window().Config();
-	const auto fbSize = Window().FramebufferSize();
+	const auto& cfg = Renderer::Window().Config();
+	const auto fbSize = Renderer::Window().FramebufferSize();
 	
 	if (userSettings_.Benchmark && cfg.Fullscreen && (fbSize.width != cfg.Width || fbSize.height != cfg.Height))
 	{

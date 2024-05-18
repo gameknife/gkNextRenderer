@@ -49,7 +49,7 @@ Device::Device(
 
 	// Find the graphics queue.
 	const auto graphicsFamily = FindQueue(queueFamilies, "graphics", VK_QUEUE_GRAPHICS_BIT, 0);
-	const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
+	//const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
 
 	//Commented out the dedicated transfer queue, as it's never used (relic from Vulkan tutorial) 
 	//and causes problems with RADV (see https://github.com/NVIDIA/Q2RTX/issues/147).
@@ -70,7 +70,7 @@ Device::Device(
 	}
 
 	graphicsFamilyIndex_ = static_cast<uint32_t>(graphicsFamily - queueFamilies.begin());
-	computeFamilyIndex_ = static_cast<uint32_t>(computeFamily - queueFamilies.begin());
+	//computeFamilyIndex_ = static_cast<uint32_t>(computeFamily - queueFamilies.begin());
 	presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
 	//transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
 
@@ -78,7 +78,7 @@ Device::Device(
 	const std::set<uint32_t> uniqueQueueFamilies =
 	{
 		graphicsFamilyIndex_,
-		computeFamilyIndex_,
+		//computeFamilyIndex_,
 		presentFamilyIndex_,
 		//transferFamilyIndex_
 	};
@@ -116,7 +116,7 @@ Device::Device(
 	debugUtils_.SetDevice(device_);
 
 	vkGetDeviceQueue(device_, graphicsFamilyIndex_, 0, &graphicsQueue_);
-	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
+	//vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	//vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
 }

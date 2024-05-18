@@ -257,7 +257,7 @@ namespace
 
                                              if (!deviceFeatures.geometryShader)
                                              {
-                                                 return false;
+                                                 //return false;
                                              }
 
                                              // We want a device that supports the ray tracing extension.
@@ -274,7 +274,7 @@ namespace
 
                                              if (!hasRayTracing)
                                              {
-                                                 return false;
+                                                 //return false;
                                                  //application.SetSupportRayTracing(false);
                                              }
 
