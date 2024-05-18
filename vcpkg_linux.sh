@@ -23,4 +23,5 @@ fi
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-linux \
 	stb:x64-linux \
 	tinyobjloader:x64-linux \
-	curl:x64-linux
+	curl:x64-linux \
+	tinygltf:x64-linux
