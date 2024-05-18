@@ -151,9 +151,10 @@ void main() {
         }
     }
 
-    sumColor = sumColor / vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor);
-    vec4 outColor = sumColor;// / Camera.TotalNumberOfSamples;
-        
+    sumColor = sumColor / max( vec4(.01), vec4(vec3(sumWeightColor), sumWeightColor *sumWeightColor) );
+    vec4 outColor = sumColor;
+    
+    
     if(pingpong == 1)
     {
         imageStore(PongImage, ipos, outColor ); 

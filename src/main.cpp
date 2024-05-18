@@ -132,7 +132,7 @@ namespace
         userSettings.DenoiseIteration = 3;
         userSettings.DepthPhi = 0.5f;
         userSettings.NormalPhi = 90.f;
-        userSettings.ColorPhi = 10.f;
+        userSettings.ColorPhi = 5.f;
 
         return userSettings;
     }

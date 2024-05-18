@@ -16,8 +16,8 @@ layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(binding = 10, rgba32f) uniform image2D GBufferImage;
 layout(binding = 11, rgba16f) uniform image2D Output1Image;
 layout(binding = 12, rgba16f) uniform image2D AlbedoImage;
-layout(location = 0) rayPayloadEXT RayPayload Ray;
 
+layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 void main() 
 {
@@ -119,11 +119,16 @@ void main()
     const float checkerboardIncreaser = bCheckerBoard ? 2.0f : 1.0f;
     
     vec3 accumulatedColor = vec3(0);
+	
+	if( Camera.TotalNumberOfSamples >  Camera.NumberOfSamples )
+	{
+		accumulatedColor = imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)).xyz;
+	}
+	
     if(Camera.TemporalFrames == 0)
     {
-         // offline render style
-        const bool accumulate = Camera.NumberOfSamples != Camera.TotalNumberOfSamples;
-	    accumulatedColor = ((accumulate ? imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)) : vec4(0)).rgb) + pixelColor * checkerboardIncreaser;
+		// offline render style
+	    accumulatedColor = accumulatedColor + pixelColor * checkerboardIncreaser;
 	    pixelColor = accumulatedColor / Camera.TotalNumberOfSamples;
     }
     else
@@ -131,8 +136,8 @@ void main()
         // realtime game style
         float currKeep = 1.0 / Camera.TemporalFrames;
         pixelColor = pixelColor / Camera.NumberOfSamples;
-        accumulatedColor = imageLoad(AccumulationImage, ivec2(gl_LaunchIDEXT.xy)).rgb * (1.0 - currKeep) + pixelColor * checkerboardIncreaser *currKeep;
-        pixelColor = accumulatedColor;// / Camera.TotalNumberOfSamples;
+        accumulatedColor = accumulatedColor * (1.0 - currKeep) + pixelColor * checkerboardIncreaser *currKeep;
+        pixelColor = accumulatedColor;
     }
 
 
