@@ -107,6 +107,11 @@ void main()
 			{
 				rayColor *= hitColor;
 			}
+			
+			if(!isScattered)
+			{
+				rayColor = vec3(0);
+			}
 
 			// Trace missed, or end of trace.
 			if (t < 0 || !isScattered)

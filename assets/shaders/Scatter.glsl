@@ -112,8 +112,9 @@ RayPayload ScatterIsotropic(const Material m, const vec3 direction, const vec3 n
 RayPayload ScatterDiffuseLight(const Material m, const vec3 direction, const vec3 normal, const float t, inout uint seed, in uint bounce)
 {
 	const float dot = dot(direction, normal);
-	const vec4 colorAndDistance = vec4(m.Diffuse.rgb, -1);//dot > 0  ? vec4(m.Diffuse.rgb, -1) : vec4(0,0,0, -1);
-	const vec4 scatter = vec4(1, 0, 0, 0);
+	const vec4 colorAndDistance = vec4(m.Diffuse.rgb, -1);
+	//const vec4 scatter = vec4(1, 1, 1, dot > 0  ? 1 : 0); consider light normal
+	const vec4 scatter = vec4(1, 1, 1, 1);
 
 	return RayPayload(colorAndDistance, scatter, vec4(1,0,0,0), seed,0,bounce);
 }
