@@ -2,21 +2,14 @@
 #include "ModernDeferredPipeline.hpp"
 
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/CommandPool.hpp"
-#include "Vulkan/CommandBuffers.hpp"
-#include "Vulkan/DebugUtilsMessenger.hpp"
-#include "Vulkan/DepthBuffer.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/Fence.hpp"
 #include "Vulkan/FrameBuffer.hpp"
-#include "Vulkan/Instance.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/Semaphore.hpp"
-#include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
@@ -56,25 +49,38 @@ void ModernDeferredRenderer::CreateSwapChain()
 
 	outputImage_.reset(new Image(Device(), extent, format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+		VK_IMAGE_USAGE_STORAGE_BIT));
 	outputImageMemory_.reset(
 		new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(),
 		format,
 		VK_IMAGE_ASPECT_COLOR_BIT));
+
+	accumulateImage_.reset(new Image(Device(), extent, format,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	accumulateImageMemory_.reset(
+		new DeviceMemory(accumulateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	accumulateImageView_.reset(new ImageView(Device(), accumulateImage_->Handle(),
+		format,
+		VK_IMAGE_ASPECT_COLOR_BIT));
 	
 	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, UniformBuffers(), GetScene()));
+	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
 	debugUtils.SetObjectName(visibilityBufferImage_->Handle(), "Visibility Image");
+	debugUtils.SetObjectName(accumulateImage_->Handle(), "Accumulate Image");
 }
 
 void ModernDeferredRenderer::DeleteSwapChain()
 {
 	visibilityPipeline_.reset();
 	deferredShadingPipeline_.reset();
+	accumulatePipeline_.reset();
+	
 	deferredFrameBuffer_.reset();
 
 	visibilityBufferImage_.reset();
@@ -84,6 +90,10 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	outputImage_.reset();
 	outputImageMemory_.reset();
 	outputImageView_.reset();
+
+	accumulateImage_.reset();
+	accumulateImageMemory_.reset();
+	accumulateImageView_.reset();
 
 	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 }
@@ -142,22 +152,37 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
 
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
 	
 	// cs shading pass
-	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-							deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);
+	{
+		VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
+	}
+
+
+	// cs shading pass
+	{
+		VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+	}
 	
 	// copy to swap-buffer
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
 						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
@@ -174,7 +199,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
-				   outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   accumulateImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				   1, &copyRegion);
 

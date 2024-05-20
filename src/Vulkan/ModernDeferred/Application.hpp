@@ -8,7 +8,10 @@
 #include <vector>
 #include <memory>
 
-
+namespace Vulkan::PipelineCommon
+{
+	class AccumulatePipeline;
+}
 
 namespace Assets
 {
@@ -41,6 +44,7 @@ namespace Vulkan::ModernDeferred
 	private:
 		std::unique_ptr<class VisibilityPipeline> visibilityPipeline_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
+		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 
 		std::unique_ptr<Image> visibilityBufferImage_;
@@ -50,6 +54,10 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<Image> outputImage_;
 		std::unique_ptr<DeviceMemory> outputImageMemory_;
 		std::unique_ptr<ImageView> outputImageView_;
+
+		std::unique_ptr<Image> accumulateImage_;
+		std::unique_ptr<DeviceMemory> accumulateImageMemory_;
+		std::unique_ptr<ImageView> accumulateImageView_;
 	};
 
 }

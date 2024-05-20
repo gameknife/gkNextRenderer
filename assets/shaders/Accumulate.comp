@@ -1,0 +1,26 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "UniformBufferObject.glsl"
+
+layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
+layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
+layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+
+layout(push_constant) uniform PushConsts {
+    uint pingpong;
+    uint stepsize;
+} pushConsts;
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+// a simple accumulation shader, reproject can impl here later.
+void main() {
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    
+    vec4 src = imageLoad(NewSourceImage, ipos);
+    vec4 history = (Camera.TotalNumberOfSamples == Camera.NumberOfSamples) ? vec4(0) : imageLoad(AccumulateImage, ipos);
+    float currKeep = 1.0 / max(1, Camera.TemporalFrames);
+    //imageStore(AccumulateImage, ipos, sqrt(mix(history * history, src * src, currKeep)));
+    imageStore(AccumulateImage, ipos, mix(history , src, currKeep));
+}

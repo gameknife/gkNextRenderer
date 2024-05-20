@@ -133,7 +133,7 @@ void main() {
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
 	
 	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
-	int numSamples = 64;
+	int numSamples = 2;
 	vec3 skyColor = vec3(0);
 	for( int i = 0; i < numSamples; i++ )
 	{
