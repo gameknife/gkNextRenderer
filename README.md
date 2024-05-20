@@ -62,13 +62,21 @@ Here are my results with the command above on a few different computers.
     - Ray Query Pipeline
 
 - Non-RayTracing Pipeline
-    - Modern Deferred Shading
+    - ~~Modern Deferred Shading~~
     - Hybrid Rendering
-    - Reference Legacy Lighting
+    - ~~Reference Legacy Lighting~~
 
 - Platform
     - ~~MacOS moltenVK~~
     - Android Vulkan ( RayTracing on 8Gen2 )
+
+- Benchmark
+    - Online benchmark chart
+    - Version Management
+
+- Others
+    - HDR display support
+    - HDR Env loading & apply to skylight (both RT & non-RT pipeline)
 
 
 ## 随感
