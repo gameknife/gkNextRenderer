@@ -63,6 +63,35 @@ Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , ve
 	return result;
 }
 
+vec3 get_position(ivec2 pixel, uint primitive_index, vec3 ray_origin , vec3 ray_direction)
+{
+	vec3 positions[3];
+	
+	for (int i = 0; i != 3; ++i) {
+		uint vertex_index = primitive_index * 3 + i;
+		const Vertex v = UnpackVertex(vertex_index);
+		positions[i] = v.Position;
+	}
+
+	vec3 barycentrics;
+	vec3 edges[2] = {
+	positions[1] - positions[0],
+	positions[2] - positions[0]
+	};
+
+	vec3 ray_cross_edge_1 = cross(ray_direction, edges[1]);
+	float rcp_det_edges_direction = 1.0f / dot(edges[0], ray_cross_edge_1);
+	vec3 ray_to_0 = ray_origin - positions[0];
+	float det_0_dir_edge_1 = dot(ray_to_0, ray_cross_edge_1);
+	barycentrics.y = rcp_det_edges_direction * det_0_dir_edge_1;
+	vec3 edge_0_cross_0 = cross(edges[0], ray_to_0);
+	float det_dir_edge_0_0 = dot(ray_direction, edge_0_cross_0);
+	barycentrics.z = -rcp_det_edges_direction * det_dir_edge_0_0;
+	barycentrics.x = 1.0f - (barycentrics.y + barycentrics.z);
+
+	return fma(vec3(barycentrics[0]), positions[0], fma(vec3(barycentrics[1]), positions[1], barycentrics[2] * positions[2]));
+}
+
 // The helper for the equirectangular textures.
 vec4 equirectangularSample(vec3 direction, float rotate)
 {
@@ -80,16 +109,55 @@ float Schlick(const float cosine, const float refractionIndex)
 	return r0 + (1 - r0) * pow(1 - cosine, 5);
 }
 
-bool TraceRay(vec3 origin, vec3 direction)
+vec3 TraceRay(vec3 origin, vec3 direction)
 {
+    // screen space ray-marching
+    // if we hit light material, light-it
+	const vec4 campos = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
+	const ivec2 size = imageSize(MiniGBuffer);
+	const float stepLength = 0.06;
 	// brute force by step
+	for(int i = 0; i < 10; ++i)
+	{
+		origin += direction * (stepLength * i);
+		float rayDist = length(origin - campos.xyz);
+		vec4 hpos =  Camera.Projection * Camera.ModelView * vec4(origin, 1);
+		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
+		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y)
+		{
+			return vec3(1);
+		}
+		vec2 uv = vec2(ipos_new) / vec2(size) * 2.0 - 1.0;
+		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
+		vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+		uint primitive_index = imageLoad(MiniGBuffer, ipos_new).r;
+		
+		// fast hit
+		vec3 hitpos = get_position(ipos_new, primitive_index, campos.xyz, dir.xyz);
+		if(rayDist > length(hitpos - campos.xyz) + 0.2)
+		{
+			return vec3(0);
+		}
+		
+		// hit with mat
+		//Vertex v = get_material_data(ipos_new, primitive_index, campos.xyz, dir.xyz);
+		//if(rayDist > length(v.Position - campos.xyz) + 0.2)
+		{
+		//    Material mat = Materials[v.MaterialIndex];
+		//    if(mat.MaterialModel == MaterialDiffuseLight)
+		    {
+		//        return vec3(20);
+		    }
+		//    return vec3(0);
+		}
+	}
 	
 	// accleration by scene distance field
 	
 	// accleration by rayquery
 	
 	
-	return false;
+	return vec3(1);
 }
 
 void main() {
@@ -129,28 +197,32 @@ void main() {
 	vec3 normal = normalize( v.Normal.rgb);
 	// ibl
 	const float dotValue = dot(ray_dir, normal);
+	const vec3 outwardNormal = dotValue > 0 ? -normal : normal;
 	const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
 	
 	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
 	int numSamples = 2;
 	vec3 skyColor = vec3(0);
+	
 	for( int i = 0; i < numSamples; i++ )
 	{
-		vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ? AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, normal) ) : AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
-			
+		vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ? AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) : AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
+		//vec3 trace_dir = AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
+		
 		// screen space ray query
-		if( !TraceRay(v.Position, trace_dir) )
+		//if( !TraceRay(v.Position, trace_dir) )
 		{
 			// if miss, sample the sky	
-			
+			vec3 hitColor = TraceRay(v.Position, trace_dir);
 			const float t = 0.5*(trace_dir.y + 1);
 			//const float t = step(0, trace_dir.y);
-			skyColor += mix(vec3(0.0, 0.0, 0.0), equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 4.0, t);
+			skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 8.0 * hitColor;
 		}
 	}
 	skyColor = skyColor / float(numSamples);
-
+    
+    albedo = mix(albedo, vec4(1,1,1,1), reflectProb);
 
 	const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)), 0.2);
