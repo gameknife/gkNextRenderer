@@ -50,6 +50,10 @@ int main(int argc, const char* argv[]) noexcept
             applicationPtr = new NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>(
                 userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
             break;
+        case 2:
+            applicationPtr = new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
+                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
+            break;
         default:
             applicationPtr = new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
                 userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));

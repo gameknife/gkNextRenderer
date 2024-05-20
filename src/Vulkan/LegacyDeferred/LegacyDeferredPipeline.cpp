@@ -1,4 +1,4 @@
-#include "ModernDeferredPipeline.hpp"
+#include "LegacyDeferredPipeline.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorPool.hpp"
@@ -13,9 +13,9 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 
-namespace Vulkan::ModernDeferred {
+namespace Vulkan::LegacyDeferred {
 
-VisibilityPipeline::VisibilityPipeline(
+GBufferPipeline::GBufferPipeline(
 	const SwapChain& swapChain, 
 	const DepthBuffer& depthBuffer,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
@@ -24,7 +24,7 @@ VisibilityPipeline::VisibilityPipeline(
 {
 	const auto& device = swapChain.Device();
 	const auto bindingDescription = Assets::Vertex::GetBindingDescription();
-	const auto attributeDescriptions = Assets::Vertex::GetFastAttributeDescriptions();
+	const auto attributeDescriptions = Assets::Vertex::GetAttributeDescriptions();
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -91,22 +91,29 @@ VisibilityPipeline::VisibilityPipeline(
 	depthStencil.front = {}; // Optional
 	depthStencil.back = {}; // Optional
 
-	VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorBlendAttachment.blendEnable = VK_FALSE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+	std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
+	for( int i = 0; i < 3; ++i)
+	{
+		VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		colorBlendAttachment.blendEnable = VK_FALSE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+		colorBlendAttachments.push_back(colorBlendAttachment);
+	}
+
 
 	VkPipelineColorBlendStateCreateInfo colorBlending = {};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colorBlending.logicOpEnable = VK_FALSE;
 	colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size());
+	colorBlending.pAttachments = colorBlendAttachments.data();
 	colorBlending.blendConstants[0] = 0.0f; // Optional
 	colorBlending.blendConstants[1] = 0.0f; // Optional
 	colorBlending.blendConstants[2] = 0.0f; // Optional
@@ -116,6 +123,8 @@ VisibilityPipeline::VisibilityPipeline(
 	std::vector<DescriptorBinding> descriptorBindings =
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT},
+		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+		{2, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -128,10 +137,28 @@ VisibilityPipeline::VisibilityPipeline(
 		VkDescriptorBufferInfo uniformBufferInfo = {};
 		uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
 		uniformBufferInfo.range = VK_WHOLE_SIZE;
-		
+
+		// Material buffer
+		VkDescriptorBufferInfo materialBufferInfo = {};
+		materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+		materialBufferInfo.range = VK_WHOLE_SIZE;
+
+		// Image and texture samplers
+		std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
+
+		for (size_t t = 0; t != imageInfos.size(); ++t)
+		{
+			auto& imageInfo = imageInfos[t];
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = scene.TextureImageViews()[t];
+			imageInfo.sampler = scene.TextureSamplers()[t];
+		}
+
 		const std::vector<VkWriteDescriptorSet> descriptorWrites =
 		{
 			descriptorSets.Bind(i, 0, uniformBufferInfo),
+			descriptorSets.Bind(i, 1, materialBufferInfo),
+			descriptorSets.Bind(i, 2, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
 		};
 
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -139,11 +166,12 @@ VisibilityPipeline::VisibilityPipeline(
 
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_B8G8R8A8_UNORM, depthBuffer,
+		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.
-	const ShaderModule vertShader(device, "../assets/shaders/VisibilityPass.vert.spv");
-	const ShaderModule fragShader(device, "../assets/shaders/VisibilityPass.frag.spv");
+	const ShaderModule vertShader(device, "../assets/shaders/GBufferPass.vert.spv");
+	const ShaderModule fragShader(device, "../assets/shaders/GBufferPass.frag.spv");
 
 	VkPipelineShaderStageCreateInfo shaderStages[] =
 	{
@@ -174,7 +202,7 @@ VisibilityPipeline::VisibilityPipeline(
 		"create graphics pipeline");
 }
 
-VisibilityPipeline::~VisibilityPipeline()
+GBufferPipeline::~GBufferPipeline()
 {
 	if (pipeline_ != nullptr)
 	{
@@ -187,12 +215,15 @@ VisibilityPipeline::~VisibilityPipeline()
 	descriptorSetManager_.reset();
 }
 
-VkDescriptorSet VisibilityPipeline::DescriptorSet(const uint32_t index) const
+VkDescriptorSet GBufferPipeline::DescriptorSet(const uint32_t index) const
 {
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
-ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gbuffer0ImageView,
+	const ImageView& gbuffer1ImageView,
+	const ImageView& gbuffer2ImageView,
+	const ImageView& finalImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
 {
 	 // Create descriptor pool/sets.
@@ -201,17 +232,13 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
         {
             // MiniGbuffer and output
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+        		
+            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         	
         	// Others like in frag
-			{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{3, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-        	// all buffer here
-			{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -220,63 +247,30 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info0 = {NULL,  miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info0 = {NULL,  gbuffer0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info1 = {NULL,  gbuffer1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info2 = {NULL,  gbuffer2ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info3 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
         	// Uniform buffer
         	VkDescriptorBufferInfo uniformBufferInfo = {};
         	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
         	uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-        	// Image and texture samplers
-        	std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
-
-        	for (size_t t = 0; t != imageInfos.size(); ++t)
-        	{
-        		auto& imageInfo = imageInfos[t];
-        		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        		imageInfo.imageView = scene.TextureImageViews()[t];
-        		imageInfo.sampler = scene.TextureSamplers()[t];
-        	}
-
-
-        	// Vertex buffer
-        	VkDescriptorBufferInfo vertexBufferInfo = {};
-        	vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
-        	vertexBufferInfo.range = VK_WHOLE_SIZE;
-
-        	// Index buffer
-        	VkDescriptorBufferInfo indexBufferInfo = {};
-        	indexBufferInfo.buffer = scene.IndexBuffer().Handle();
-        	indexBufferInfo.range = VK_WHOLE_SIZE;
-
-        	// Material buffer
-        	VkDescriptorBufferInfo materialBufferInfo = {};
-        	materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
-        	materialBufferInfo.range = VK_WHOLE_SIZE;
-
-        	// Offsets buffer
-        	VkDescriptorBufferInfo offsetsBufferInfo = {};
-        	offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
-        	offsetsBufferInfo.range = VK_WHOLE_SIZE;
-
+        	
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-				descriptorSets.Bind(i, 0, Info0),
-				descriptorSets.Bind(i, 1, Info1),
-				descriptorSets.Bind(i, 2, uniformBufferInfo),
-				descriptorSets.Bind(i, 3, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
-				descriptorSets.Bind(i, 4, vertexBufferInfo),
-				descriptorSets.Bind(i, 5, indexBufferInfo),
-				descriptorSets.Bind(i, 6, materialBufferInfo),
-				descriptorSets.Bind(i, 7, offsetsBufferInfo),
+                descriptorSets.Bind(i, 0, Info0),
+                descriptorSets.Bind(i, 1, Info1),
+            	descriptorSets.Bind(i, 2, Info2),
+            	descriptorSets.Bind(i, 3, Info3),
+                descriptorSets.Bind(i, 4, uniformBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "../assets/shaders/ModernDeferredShading.comp.spv");
+        const ShaderModule denoiseShader(device, "../assets/shaders/LegacyDeferredShading.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

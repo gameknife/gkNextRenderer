@@ -433,4 +433,5 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 // export it 
 template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
 template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
+template class NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>;
 template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;
