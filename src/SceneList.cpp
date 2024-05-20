@@ -52,7 +52,8 @@ namespace
 					}
 					else // Glass
 					{
-						models.push_back(Model::CreateSphere(center, 0.2f, Material::Dielectric(1.5f), isProc));
+						const float fuzziness = 0.5f * random();
+						models.push_back(Model::CreateSphere(center, 0.2f, Material::Dielectric(1.45f, fuzziness), isProc));
 					}
 				}
 			}
@@ -89,7 +90,7 @@ void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Mo
 	
 	models.push_back(Model::LoadModel("../assets/models/cube_multi.obj", textures));
 	models.push_back(Model::CreateSphere(vec3(1, 0, 0), 0.5, Material::Metallic(vec3(0.7f, 0.5f, 0.8f), 0.2f), true));
-	models.push_back(Model::CreateSphere(vec3(-1, 0, 0), 0.5, Material::Dielectric(1.5f), true));
+	models.push_back(Model::CreateSphere(vec3(-1, 0, 0), 0.5, Material::Dielectric(1.5f, 0.5f), true));
 	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 0.5, Material::Lambertian(vec3(1.0f), 0), true));
 
 	textures.push_back(Texture::LoadTexture("../assets/textures/land_ocean_ice_cloud_2048.png", Vulkan::SamplerConfig()));
@@ -114,9 +115,9 @@ void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<As
 
 	AddRayTracingInOneWeekendCommonScene(models, isProc, random);
 
-	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, Material::Dielectric(1.5f), isProc));
+	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, Material::Dielectric(1.5f, 0.5f), isProc));
 	models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, Material::Lambertian(vec3(0.4f, 0.2f, 0.1f)), isProc));
-	models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.0f), isProc));
+	models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.3f), isProc));
 }
 
 void SceneList::PlanetsInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
@@ -194,7 +195,7 @@ void SceneList::LucyInOneWeekend(CameraInitialSate& camera, std::vector<Assets::
 				vec3(scaleFactor)),
 			radians(90.0f), vec3(0, 1, 0)));
 
-	lucy0.SetMaterial(Material::Dielectric(1.5f));
+	lucy0.SetMaterial(Material::Dielectric(1.5f, 0.5f));
 	lucy1.SetMaterial(Material::Lambertian(vec3(0.4f, 0.2f, 0.1f)));
 	lucy2.SetMaterial(Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.05f));
 
@@ -268,7 +269,7 @@ void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,30));
 	auto box0 = Model::CreateBox(vec3(-2, 0.5, -1), vec3(2, 3, -0.5), arealight);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+
 	auto lucy0 = Model::LoadModel("../assets/models/livingroom.obj", textures);
 
 	lucy0.Transform(
@@ -296,7 +297,7 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
 	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
+
 	auto lucy0 = Model::LoadModel("../assets/models/kitchen.obj", textures);
 
 	lucy0.Transform(
@@ -307,7 +308,6 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 			radians(0.0f), vec3(0, 1, 0)));
 
 	
-	//models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);
 	models.push_back(lucy0);
 }
@@ -324,10 +324,6 @@ void SceneList::LuxBall(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
-	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
-	//auto lucy0 = Model::LoadModel("../assets/models/luxball.glb", textures);
 	auto lucy0 = Model::LoadModel("../assets/models/luxball.obj", textures);
 	lucy0.Transform(
 		rotate(
@@ -351,9 +347,6 @@ void SceneList::Still(CameraInitialSate& camera, std::vector<Assets::Model>& mod
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
-	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.5f), true);
 	auto lucy0 = Model::LoadModel("../assets/models/still1.obj", textures);
 
 	lucy0.Transform(
