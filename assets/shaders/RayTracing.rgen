@@ -83,6 +83,8 @@ void main()
 			}
 
 			Ray.BounceCount = b;
+			Ray.GBuffer = vec4(0,1,0,0);
+			Ray.ScatterDirection = vec4(0,1,0,1);
 			traceRayEXT(
 				Scene, gl_RayFlagsOpaqueEXT, 0xff, 
 				0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, 
@@ -101,7 +103,8 @@ void main()
 				vec3 history = imageLoad(AlbedoImage, ipos).rgb;
 				// the first albedo, pbr with monte carlo, so still noisy, this can be use appoximate algo to disable it
 				// but the problem is, who to let the hit shader to know this is the first bounce
-				imageStore(AlbedoImage, ipos, vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
+				//imageStore(AlbedoImage, ipos, vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
+				imageStore(AlbedoImage, ipos, vec4(Ray.ColorAndDistance.rgb, 1));
             }
 			else
 			{

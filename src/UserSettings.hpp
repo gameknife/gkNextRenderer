@@ -24,6 +24,8 @@ struct UserSettings final
 	float Aperture;
 	float FocusDistance;
 
+	float SkyRotation;
+
 	// Profiler
 	bool ShowHeatmap;
 	float HeatmapScale;
@@ -55,6 +57,7 @@ struct UserSettings final
 			FieldOfView != prev.FieldOfView ||
 			Aperture != prev.Aperture ||
 			FocusDistance != prev.FocusDistance ||
+				SkyRotation != prev.SkyRotation ||
 			TemporalFrames != prev.TemporalFrames;
 	}
 };

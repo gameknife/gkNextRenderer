@@ -104,7 +104,8 @@ namespace Vulkan::RayTracing
 		ComposePipeline(
 			const DeviceProcedures& deviceProcedures,
 			const SwapChain& swapChain,
-			const ImageView& finalImageView,
+			const ImageView& final0ImageView,
+			const ImageView& final1ImageView,
 			const ImageView& albedoImageView,
 			const ImageView& outImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers);

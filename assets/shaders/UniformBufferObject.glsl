@@ -7,6 +7,7 @@ struct UniformBufferObject
 	mat4 ProjectionInverse;
 	float Aperture;
 	float FocusDistance;
+	float SkyRotation;
 	float HeatmapScale;
 	float ColorPhi;
 	float DepthPhi;

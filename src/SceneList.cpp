@@ -125,7 +125,7 @@ void SceneList::PlanetsInOneWeekend(CameraInitialSate& camera, std::vector<Asset
 	
 	camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
-	camera.Aperture = 0.1f;
+	camera.Aperture = 0.0f;
 	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 5.0f;
 	camera.GammaCorrection = true;

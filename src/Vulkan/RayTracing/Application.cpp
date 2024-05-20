@@ -151,7 +151,7 @@ namespace Vulkan::RayTracing
         denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
                                                      *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
                                                      UniformBuffers(), GetScene()));
-        composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage1View_,
+        composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage0View_, *pingpongImage1View_,
                                                    *albedoImageView_, *outputImageView_, UniformBuffers()));
         const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
         const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
@@ -292,6 +292,13 @@ namespace Vulkan::RayTracing
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
+        DenoiserPushConstantData pushData;
+        pushData.pingpong = denoiseIteration_ % 2;
+        pushData.stepsize = 1;
+        
+        vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(DenoiserPushConstantData), &pushData);
+        
         VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,

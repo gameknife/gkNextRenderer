@@ -45,7 +45,7 @@ Texture Texture::LoadHDRTexture(const std::string& filename, const Vulkan::Sampl
 	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
-	return Texture(filename, width, height, channels, 1, static_cast<unsigned char*>(pixels));
+	return Texture(filename, width, height, channels, 1, static_cast<unsigned char*>((void*)pixels));
 }
 
 Texture::Texture(std::string loadname, int width, int height, int channels, int hdr, unsigned char* const pixels) :

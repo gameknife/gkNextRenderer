@@ -52,7 +52,7 @@ namespace Vulkan::RayTracing
             // Textures and image samplers
             {
                 8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+                VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR
             },
 
             // The Procedural buffer.
@@ -379,7 +379,7 @@ namespace Vulkan::RayTracing
     }
 
     ComposePipeline::ComposePipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
-        const ImageView& finalImageView, const ImageView& albedoImageView, const ImageView& outImageView,
+        const ImageView& final0ImageView, const ImageView& final1ImageView, const ImageView& albedoImageView, const ImageView& outImageView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers):swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
@@ -388,10 +388,11 @@ namespace Vulkan::RayTracing
         {
             // Image accumulation & output & GBuffer.
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             // Camera information & co
-            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -400,11 +401,11 @@ namespace Vulkan::RayTracing
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info0 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL,  albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info2 = {NULL,  outImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            
-            VkDescriptorBufferInfo Info3 = {uniformBuffers[i].Buffer().Handle(), 0, VK_WHOLE_SIZE};
+            VkDescriptorImageInfo Info0 = {NULL,  final0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL,  final1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info2 = {NULL,  albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info3 = {NULL,  outImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorBufferInfo Info4 = {uniformBuffers[i].Buffer().Handle(), 0, VK_WHOLE_SIZE};
 
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -412,12 +413,19 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 1, Info1),
                 descriptorSets.Bind(i, 2, Info2),
                 descriptorSets.Bind(i, 3, Info3),
+                descriptorSets.Bind(i, 4, Info4),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        VkPushConstantRange pushConstantRange{};
+        // Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = 8;
+        
+        PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "../assets/shaders/Compose.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

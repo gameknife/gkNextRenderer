@@ -51,6 +51,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 	ubo.ProjectionInverse = glm::inverse(ubo.Projection);
 	ubo.Aperture = userSettings_.Aperture;
 	ubo.FocusDistance = userSettings_.FocusDistance;
+	ubo.SkyRotation = userSettings_.SkyRotation;
 	ubo.TotalNumberOfSamples = totalNumberOfSamples_;
 	ubo.TotalFrames = totalFrames_;
 	ubo.NumberOfSamples = numberOfSamples_;
@@ -296,7 +297,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 	std::vector<Assets::Texture> textures;
 
 	// texture id 0: global sky
-	textures.push_back(Assets::Texture::LoadTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
+	textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
 	
 	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
 
@@ -324,6 +325,10 @@ void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(
 {
 	std::vector<Assets::Model> models;
 	std::vector<Assets::Texture> textures;
+
+	// texture id 0: global sky
+	textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
+	
 	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
 
 	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
