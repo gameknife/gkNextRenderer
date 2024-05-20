@@ -4,6 +4,7 @@
 
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
+#include "Random.glsl"
 
 layout(binding = 0, r32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 1, rgba8) uniform image2D OutImage;
@@ -62,6 +63,27 @@ Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , ve
 	return result;
 }
 
+// The helper for the equirectangular textures.
+vec4 equirectangularSample(vec3 direction, float rotate)
+{
+	const float pi = 3.1415926535897932384626433832795;
+	vec3 d = normalize(direction);
+	vec2 t = vec2((atan(d.x, d.z) + pi * rotate) / (2.f * pi), acos(d.y) / pi);
+
+	return min( vec4(20,20,20,1), texture(TextureSamplers[0], t));
+}
+
+bool TraceRay(vec3 origin, vec3 direction)
+{
+	// brute force by step
+	
+	// accleration by scene distance field
+	
+	// accleration by rayquery
+	
+	
+	return false;
+}
 
 void main() {
 
@@ -95,9 +117,27 @@ void main() {
         albedo *= tex * tex;
     }
 	
-    const vec3 lightVector = normalize(vec3(5, 4, 3));
+	// ibl
+	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
+	int numSamples = 16;
+	vec3 skyColor = vec3(0);
+	for( int i = 0; i < numSamples; i++ )
+	{
+		vec3 trace_dir = AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
+		
+		// screen space ray query
+		if( !TraceRay(v.Position, trace_dir) )
+		{
+			// if miss, sample the sky	
+			skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 4.0;
+		}
+	}
+	skyColor = skyColor / float(numSamples);
+
+
+	const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)), 0.2);
     
-    vec4 outColor = sqrt(albedo * d);
+    vec4 outColor = sqrt(albedo * vec4(skyColor,1));
     imageStore(OutImage, ipos, outColor);
 }
