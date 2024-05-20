@@ -132,6 +132,11 @@ set(src_files_vulkan_moderndeferred
 	Vulkan/ModernDeferred/ModernDeferredPipeline.hpp
 )
 
+set(src_files_common_compute_pipeline
+	Vulkan/PipelineCommon/CommonComputePipeline.cpp
+	Vulkan/PipelineCommon/CommonComputePipeline.hpp
+)
+
 set(src_files
 	main.cpp
 	ModelViewController.cpp
@@ -153,6 +158,7 @@ source_group("Vulkan" FILES ${src_files_vulkan})
 source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
 source_group("Vulkan.ModernDeferred" FILES ${src_files_vulkan_moderndeferred})
 source_group("Vulkan.LegacyDeferred" FILES ${src_files_vulkan_legacydeferred})
+source_group("Vulkan.PipelineCommon" FILES ${src_files_common_compute_pipeline})
 source_group("Main" FILES ${src_files})
 
 
@@ -163,6 +169,7 @@ add_executable(${exe_name}
 	${src_files_vulkan_raytracing} 
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
+	${src_files_common_compute_pipeline}
 	${src_files}
 )
 
