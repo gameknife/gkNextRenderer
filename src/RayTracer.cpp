@@ -292,7 +292,13 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
 template <typename Renderer>
 void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
-	auto [models, textures] = SceneList::AllScenes[sceneIndex].second(cameraInitialSate_);
+	std::vector<Assets::Model> models;
+	std::vector<Assets::Texture> textures;
+
+	// texture id 0: global sky
+	textures.push_back(Assets::Texture::LoadTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
+	
+	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
 
 	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
 	if (textures.empty())
@@ -316,7 +322,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 template <>
 void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(const uint32_t sceneIndex)
 {
-	auto [models, textures] = SceneList::AllScenes[sceneIndex].second(cameraInitialSate_);
+	std::vector<Assets::Model> models;
+	std::vector<Assets::Texture> textures;
+	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
 
 	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
 	if (textures.empty())

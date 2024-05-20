@@ -6,6 +6,7 @@
 #include <random>
 
 using namespace glm;
+
 using Assets::Material;
 using Assets::Model;
 using Assets::Texture;
@@ -60,7 +61,7 @@ namespace
 
 }
 
-const std::vector<std::pair<std::string, std::function<SceneAssets (SceneList::CameraInitialSate&)>>> SceneList::AllScenes =
+const std::vector<std::pair<std::string, std::function<void (SceneList::CameraInitialSate&, std::vector<Assets::Model>&, std::vector<Assets::Texture>&)>>> SceneList::AllScenes =
 {
 	{"Cube And Spheres", CubeAndSpheres},
 	{"Ray Tracing In One Weekend", RayTracingInOneWeekend},
@@ -74,7 +75,7 @@ const std::vector<std::pair<std::string, std::function<SceneAssets (SceneList::C
 	{"Still", Still},
 };
 
-SceneAssets SceneList::CubeAndSpheres(CameraInitialSate& camera)
+void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	// Basic test scene.
 	
@@ -85,21 +86,16 @@ SceneAssets SceneList::CubeAndSpheres(CameraInitialSate& camera)
 	camera.ControlSpeed = 2.0f;
 	camera.GammaCorrection = false;
 	camera.HasSky = true;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
-
+	
 	models.push_back(Model::LoadModel("../assets/models/cube_multi.obj", textures));
 	models.push_back(Model::CreateSphere(vec3(1, 0, 0), 0.5, Material::Metallic(vec3(0.7f, 0.5f, 0.8f), 0.2f), true));
 	models.push_back(Model::CreateSphere(vec3(-1, 0, 0), 0.5, Material::Dielectric(1.5f), true));
 	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 0.5, Material::Lambertian(vec3(1.0f), 0), true));
 
 	textures.push_back(Texture::LoadTexture("../assets/textures/land_ocean_ice_cloud_2048.png", Vulkan::SamplerConfig()));
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::RayTracingInOneWeekend(CameraInitialSate& camera)
+void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	// Final scene from Ray Tracing In One Weekend book.
 	
@@ -116,18 +112,14 @@ SceneAssets SceneList::RayTracingInOneWeekend(CameraInitialSate& camera)
 	std::mt19937 engine(42);
 	std::function<float ()> random = std::bind(std::uniform_real_distribution<float>(), engine);
 
-	std::vector<Model> models;
-
 	AddRayTracingInOneWeekendCommonScene(models, isProc, random);
 
 	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, Material::Dielectric(1.5f), isProc));
 	models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, Material::Lambertian(vec3(0.4f, 0.2f, 0.1f)), isProc));
 	models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.0f), isProc));
-
-	return std::forward_as_tuple(std::move(models), std::vector<Texture>());
 }
 
-SceneAssets SceneList::PlanetsInOneWeekend(CameraInitialSate& camera)
+void SceneList::PlanetsInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	// Same as RayTracingInOneWeekend but using textures.
 	
@@ -144,23 +136,18 @@ SceneAssets SceneList::PlanetsInOneWeekend(CameraInitialSate& camera)
 	std::mt19937 engine(42);
 	std::function<float()> random = std::bind(std::uniform_real_distribution<float>(), engine);
 
-	std::vector<Model> models;
-	std::vector<Texture> textures;
-
 	AddRayTracingInOneWeekendCommonScene(models, isProc, random);
 
-	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, Material::Metallic(vec3(1.0f), 0.1f, 2), isProc));
-	models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, Material::Lambertian(vec3(1.0f), 0), isProc));
-	models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, Material::Metallic(vec3(1.0f), 0.0f, 1), isProc));
+	models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, Material::Metallic(vec3(1.0f), 0.1f, 3), isProc));
+	models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, Material::Lambertian(vec3(1.0f), 1), isProc));
+	models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, Material::Metallic(vec3(1.0f), 0.0f, 2), isProc));
 
 	textures.push_back(Texture::LoadTexture("../assets/textures/2k_mars.jpg", Vulkan::SamplerConfig()));
 	textures.push_back(Texture::LoadTexture("../assets/textures/2k_moon.jpg", Vulkan::SamplerConfig()));
 	textures.push_back(Texture::LoadTexture("../assets/textures/land_ocean_ice_cloud_2048.png", Vulkan::SamplerConfig()));
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::LucyInOneWeekend(CameraInitialSate& camera)
+void SceneList::LucyInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	// Same as RayTracingInOneWeekend but using the Lucy 3D model.
 	
@@ -176,9 +163,6 @@ SceneAssets SceneList::LucyInOneWeekend(CameraInitialSate& camera)
 
 	std::mt19937 engine(42);
 	std::function<float()> random = std::bind(std::uniform_real_distribution<float>(), engine);
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
 	
 	AddRayTracingInOneWeekendCommonScene(models, isProc, random);
 
@@ -217,11 +201,9 @@ SceneAssets SceneList::LucyInOneWeekend(CameraInitialSate& camera)
 	models.push_back(std::move(lucy0));
 	models.push_back(std::move(lucy1));
 	models.push_back(std::move(lucy2));
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::CornellBox(CameraInitialSate& camera)
+void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
@@ -239,16 +221,13 @@ SceneAssets SceneList::CornellBox(CameraInitialSate& camera)
 
 	box0.Transform(rotate(translate(i, vec3(555 - 130 - 165, 0, -65)), radians(-18.0f), vec3(0, 1, 0)));
 	box1.Transform(rotate(translate(i, vec3(555 - 265 - 165, 0, -295)), radians(15.0f), vec3(0, 1, 0)));
-
-	std::vector<Model> models;
+	
 	models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);
 	models.push_back(box1);
-
-	return std::make_tuple(std::move(models), std::vector<Texture>());
 }
 
-SceneAssets SceneList::CornellBoxLucy(CameraInitialSate& camera)
+void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
@@ -257,9 +236,6 @@ SceneAssets SceneList::CornellBoxLucy(CameraInitialSate& camera)
 	camera.ControlSpeed = 500.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
 	
 	const auto i = mat4(1);
 	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Isotropic(vec3(0.7,1.0,0.65), 1.5f, 0.5f), true);
@@ -276,11 +252,9 @@ SceneAssets SceneList::CornellBoxLucy(CameraInitialSate& camera)
 	models.push_back(Model::CreateCornellBox(555));
 	models.push_back(sphere);
 	models.push_back(lucy0);
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
+void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(0, 1.5, 8), vec3(0, 1.5, 4.5), vec3(0, 1, 0));
 	camera.FieldOfView = 45;
@@ -289,9 +263,7 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
+	
 	const auto i = mat4(1);
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,30));
@@ -305,16 +277,12 @@ SceneAssets SceneList::LivingRoom(CameraInitialSate& camera)
 				translate(i, vec3(0, 0, 0)),
 				vec3(1.0)),
 			radians(0.0f), vec3(0, 1, 0)));
-
 	
-	//models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);
 	models.push_back(lucy0);
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
+void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(2, 1.5, 3), vec3(-4, 1.5, -4), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
@@ -323,9 +291,7 @@ SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
+	
 	const auto i = mat4(1);
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
@@ -344,11 +310,9 @@ SceneAssets SceneList::Kitchen(CameraInitialSate& camera)
 	//models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);
 	models.push_back(lucy0);
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
+void SceneList::LuxBall(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(0.168, 0.375, 0.487), vec3(0, 0.05, 0.0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
@@ -357,9 +321,7 @@ SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
 	camera.ControlSpeed = 0.2f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
+	
 	const auto i = mat4(1);
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
@@ -373,16 +335,11 @@ SceneAssets SceneList::LuxBall(CameraInitialSate& camera)
 				translate(i, vec3(0, 0, 0)),
 				vec3(1.0)),
 			radians(0.0f), vec3(0, 1, 0)));
-
 	
-	//models.push_back(Model::CreateCornellBox(555));
-	//models.push_back(box0);
 	models.push_back(lucy0);
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }
 
-SceneAssets SceneList::Still(CameraInitialSate& camera)
+void SceneList::Still(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
 	camera.ModelView = lookAt(vec3(0.031, 0.26, 2.454), vec3(0.031, 0.26, 2), vec3(0, 1, 0));
 	camera.FieldOfView = 16;
@@ -391,9 +348,7 @@ SceneAssets SceneList::Still(CameraInitialSate& camera)
 	camera.ControlSpeed = 0.2f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
-
-	std::vector<Model> models;
-	std::vector<Texture> textures;
+	
 	const auto i = mat4(1);
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
@@ -407,11 +362,6 @@ SceneAssets SceneList::Still(CameraInitialSate& camera)
 				translate(i, vec3(0, 0, 0)),
 				vec3(1.0)),
 			radians(0.0f), vec3(0, 1, 0)));
-
 	
-	//models.push_back(Model::CreateCornellBox(555));
-	//models.push_back(box0);
 	models.push_back(lucy0);
-
-	return std::forward_as_tuple(std::move(models), std::move(textures));
 }

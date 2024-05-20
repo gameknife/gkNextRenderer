@@ -11,8 +11,6 @@ namespace Assets
 	class Texture;
 }
 
-typedef std::tuple<std::vector<Assets::Model>, std::vector<Assets::Texture>> SceneAssets;
-
 class SceneList final
 {
 public:
@@ -28,16 +26,16 @@ public:
 		bool HasSky;
 	};
 
-	static SceneAssets CubeAndSpheres(CameraInitialSate& camera);
-	static SceneAssets RayTracingInOneWeekend(CameraInitialSate& camera);
-	static SceneAssets PlanetsInOneWeekend(CameraInitialSate& camera);
-	static SceneAssets LucyInOneWeekend(CameraInitialSate& camera);
-	static SceneAssets CornellBox(CameraInitialSate& camera);
-	static SceneAssets CornellBoxLucy(CameraInitialSate& camera);
-	static SceneAssets LivingRoom(CameraInitialSate& camera);
-	static SceneAssets Kitchen(CameraInitialSate& camera);
-	static SceneAssets LuxBall(CameraInitialSate& camera);
-	static SceneAssets Still(CameraInitialSate& camera);
+	static void CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void PlanetsInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void LucyInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void LuxBall(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+	static void Still(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
 
-	static const std::vector<std::pair<std::string, std::function<SceneAssets (CameraInitialSate&)>>> AllScenes;
+	static const std::vector<std::pair<std::string, std::function<void (CameraInitialSate&, std::vector<Assets::Model>&, std::vector<Assets::Texture>&)>>> AllScenes;
 };

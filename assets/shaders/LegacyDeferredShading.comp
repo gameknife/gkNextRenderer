@@ -6,7 +6,7 @@
 #include "UniformBufferObject.glsl"
 
 layout(binding = 0, rgba8) uniform image2D GBuffer0Image;
-layout(binding = 1, rgba8) uniform image2D GBuffer1Image;
+layout(binding = 1, rgba16f) uniform image2D GBuffer1Image;
 layout(binding = 2, rgba8) uniform image2D GBuffer2Image;
 layout(binding = 3, rgba8) uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
@@ -34,11 +34,12 @@ void main() {
 	
     vec4 albedo = imageLoad(GBuffer0Image, ipos);
     vec4 normal = imageLoad(GBuffer1Image, ipos);
+    vec4 pbr_param = imageLoad(GBuffer2Image, ipos);
     
     const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(normal.rgb)), 0.2);
 
-    vec4 outColor = sqrt(albedo * d);
+    vec4 outColor = sqrt(albedo * d + (pbr_param.r * 0.000001));
     
     imageStore(OutImage, ipos, outColor);
 }

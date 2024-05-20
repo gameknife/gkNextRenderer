@@ -2,7 +2,7 @@
 file(GLOB font_files fonts/*.ttf)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
-file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt)
+file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
 
 file(GLOB shader_extra_files shaders/*.glsl)
 set_source_files_properties(${shader_extra_files} PROPERTIES HEADER_FILE_ONLY TRUE)
