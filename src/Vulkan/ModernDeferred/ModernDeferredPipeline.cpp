@@ -19,10 +19,8 @@ VisibilityPipeline::VisibilityPipeline(
 	const SwapChain& swapChain, 
 	const DepthBuffer& depthBuffer,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
-	const Assets::Scene& scene,
-	const bool isWireFrame) :
-	swapChain_(swapChain),
-	isWireFrame_(isWireFrame)
+	const Assets::Scene& scene) :
+	swapChain_(swapChain)
 {
 	const auto& device = swapChain.Device();
 	const auto bindingDescription = Assets::Vertex::GetBindingDescription();
@@ -63,7 +61,7 @@ VisibilityPipeline::VisibilityPipeline(
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.depthClampEnable = VK_FALSE;
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
-	rasterizer.polygonMode = isWireFrame ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -142,7 +140,6 @@ VisibilityPipeline::VisibilityPipeline(
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
 	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
-	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.
 	const ShaderModule vertShader(device, "../assets/shaders/VisibilityPass.vert.spv");
@@ -184,8 +181,7 @@ VisibilityPipeline::~VisibilityPipeline()
 		vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
 		pipeline_ = nullptr;
 	}
-
-	swapRenderPass_.reset();
+	
 	renderPass_.reset();
 	pipelineLayout_.reset();
 	descriptorSetManager_.reset();
@@ -197,7 +193,7 @@ VkDescriptorSet VisibilityPipeline::DescriptorSet(const uint32_t index) const
 }
 
 ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
-	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene, bool isWireFrame):swapChain_(swapChain)
+	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
 {
 	 // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -212,10 +208,10 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
 			{3, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
 
         	// all buffer here
-				{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-				{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-				{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-				{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));

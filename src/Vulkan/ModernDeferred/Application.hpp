@@ -43,9 +43,9 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 
-		std::unique_ptr<Image> miniGBufferImage_;
-		std::unique_ptr<DeviceMemory> miniGBufferImageMemory_;
-		std::unique_ptr<ImageView> miniGBufferImageView_;
+		std::unique_ptr<Image> visibilityBufferImage_;
+		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
+		std::unique_ptr<ImageView> visibilityBufferImageView_;
 
 		std::unique_ptr<Image> outputImage_;
 		std::unique_ptr<DeviceMemory> outputImageMemory_;

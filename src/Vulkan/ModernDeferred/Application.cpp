@@ -43,16 +43,14 @@ void ModernDeferredRenderer::CreateSwapChain()
 	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
-	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), isWireFrame_));
+	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 	
-	miniGBufferImage_.reset(new Image(Device(), extent,
+	visibilityBufferImage_.reset(new Image(Device(), extent,
 		VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	
-	miniGBufferImageMemory_.reset(
-		new DeviceMemory(miniGBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	
-	miniGBufferImageView_.reset(new ImageView(Device(), miniGBufferImage_->Handle(),
+	visibilityBufferImageMemory_.reset(
+		new DeviceMemory(visibilityBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	visibilityBufferImageView_.reset(new ImageView(Device(), visibilityBufferImage_->Handle(),
 		VK_FORMAT_R32_UINT,
 		VK_IMAGE_ASPECT_COLOR_BIT));
 
@@ -65,12 +63,12 @@ void ModernDeferredRenderer::CreateSwapChain()
 		format,
 		VK_IMAGE_ASPECT_COLOR_BIT));
 	
-	deferredFrameBuffer_.reset(new FrameBuffer(*miniGBufferImageView_, visibilityPipeline_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *miniGBufferImageView_, *outputImageView_, UniformBuffers(), GetScene(), isWireFrame_));
+	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
-	debugUtils.SetObjectName(miniGBufferImage_->Handle(), "Mini GBuffer Image");
+	debugUtils.SetObjectName(visibilityBufferImage_->Handle(), "Visibility Image");
 }
 
 void ModernDeferredRenderer::DeleteSwapChain()
@@ -79,9 +77,9 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	deferredShadingPipeline_.reset();
 	deferredFrameBuffer_.reset();
 
-	miniGBufferImage_.reset();
-	miniGBufferImageMemory_.reset();
-	miniGBufferImageView_.reset();
+	visibilityBufferImage_.reset();
+	visibilityBufferImageMemory_.reset();
+	visibilityBufferImageView_.reset();
 
 	outputImage_.reset();
 	outputImageMemory_.reset();
@@ -92,13 +90,6 @@ void ModernDeferredRenderer::DeleteSwapChain()
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	VkImageSubresourceRange subresourceRange = {};
-	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	subresourceRange.baseMipLevel = 0;
-	subresourceRange.levelCount = 1;
-	subresourceRange.baseArrayLayer = 0;
-	subresourceRange.layerCount = 1;
-	
 	std::array<VkClearValue, 2> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
@@ -106,13 +97,11 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	VkRenderPassBeginInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
-	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();// swapChainFramebuffers_[imageIndex].Handle(); // here we change to another framebuffer
+	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = SwapChain().Extent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
-
-
 
 	// make it to generate gbuffer
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -146,23 +135,28 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	}
 	vkCmdEndRenderPass(commandBuffer);
 
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
+
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, miniGBufferImage_->Handle(), subresourceRange,
+	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
-
-	// copy to sawpbuffer
-
-	// add compute deferred shading & post-processing here
+	
+	// cs shading pass
 	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 							deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
 	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);
 	
-	// copy to sawpbuffer
+	// copy to swap-buffer
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
