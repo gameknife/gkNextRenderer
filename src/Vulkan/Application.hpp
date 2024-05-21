@@ -75,6 +75,7 @@ namespace Vulkan
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		int denoiseIteration_{};
+		int frameCount_{};
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);

@@ -13,7 +13,7 @@
 
 namespace Vulkan::PipelineCommon {
 	
-AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageView& sourceImageView, const ImageView& accumulateImageView,
+AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageView& sourceImageView, const ImageView& accumulateImageView,  const ImageView& accumulateImage1View, const ImageView& motionVectorImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
 {
 	 // Create descriptor pool/sets.
@@ -21,8 +21,10 @@ AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageVi
         const std::vector<DescriptorBinding> descriptorBindings =
         {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-			{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_SHADER_STAGE_COMPUTE_BIT},
+				{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_SHADER_STAGE_COMPUTE_BIT},
+{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -33,6 +35,8 @@ AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageVi
         {
             VkDescriptorImageInfo Info0 = {NULL,  sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL,  accumulateImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info2 = {NULL,  accumulateImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info3 = {NULL,  motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
         	// Uniform buffer
         	VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -43,7 +47,10 @@ AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageVi
             {
 				descriptorSets.Bind(i, 0, Info0),
 				descriptorSets.Bind(i, 1, Info1),
-				descriptorSets.Bind(i, 2, uniformBufferInfo),
+            	descriptorSets.Bind(i, 2, Info2),
+            	descriptorSets.Bind(i, 3, Info3),
+				descriptorSets.Bind(i, 4, uniformBufferInfo),
+            	
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

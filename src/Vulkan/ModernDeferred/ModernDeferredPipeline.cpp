@@ -192,7 +192,7 @@ VkDescriptorSet VisibilityPipeline::DescriptorSet(const uint32_t index) const
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
-ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
 {
 	 // Create descriptor pool/sets.
@@ -212,6 +212,8 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
 			{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+		{8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -222,6 +224,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
         {
             VkDescriptorImageInfo Info0 = {NULL,  miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info8 = {NULL,  motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
         	// Uniform buffer
         	VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -270,6 +273,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& mi
 				descriptorSets.Bind(i, 5, indexBufferInfo),
 				descriptorSets.Bind(i, 6, materialBufferInfo),
 				descriptorSets.Bind(i, 7, offsetsBufferInfo),
+            	descriptorSets.Bind(i, 8, Info8),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

@@ -58,6 +58,15 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<Image> accumulateImage_;
 		std::unique_ptr<DeviceMemory> accumulateImageMemory_;
 		std::unique_ptr<ImageView> accumulateImageView_;
+
+		std::unique_ptr<Image> accumulateImage1_;
+		std::unique_ptr<DeviceMemory> accumulateImage1Memory_;
+		std::unique_ptr<ImageView> accumulateImage1View_;
+		
+		std::unique_ptr<Image> motionVectorImage_;
+		std::unique_ptr<DeviceMemory> motionVectorImageMemory_;
+		std::unique_ptr<ImageView> motionVectorImageView_;
+		
 	};
 
 }

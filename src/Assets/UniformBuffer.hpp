@@ -20,6 +20,8 @@ namespace Assets
 		glm::mat4 Projection;
 		glm::mat4 ModelViewInverse;
 		glm::mat4 ProjectionInverse;
+		glm::mat4 ViewProjection;
+		glm::mat4 PrevViewProjection;
 		float Aperture;
 		float FocusDistance;
 		float SkyRotation;

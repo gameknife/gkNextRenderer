@@ -58,7 +58,7 @@ namespace Vulkan::ModernDeferred
 	
 		ShadingPipeline(
 			const SwapChain& swapChain, 
-			const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+			const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~ShadingPipeline();
