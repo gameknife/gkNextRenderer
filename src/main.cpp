@@ -130,7 +130,7 @@ namespace
         userSettings.ShowHeatmap = false;
         userSettings.HeatmapScale = 1.5f;
 
-        userSettings.UseCheckerBoardRendering = true;
+        userSettings.UseCheckerBoardRendering = false;
         userSettings.TemporalFrames = 0;
 
         userSettings.DenoiseIteration = 3;

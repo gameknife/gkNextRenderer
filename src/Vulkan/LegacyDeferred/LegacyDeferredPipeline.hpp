@@ -37,18 +37,18 @@ namespace Vulkan::LegacyDeferred
 		~GBufferPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
-		const RenderPass& RenderPass() const { return *renderPass_; }
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+		const Vulkan::RenderPass& RenderPass() const { return *renderPass_; }
 
 	private:
 		const SwapChain& swapChain_;
 
 		VULKAN_HANDLE(VkPipeline, pipeline_)
 
-		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<class PipelineLayout> pipelineLayout_;
-		std::unique_ptr<class RenderPass> renderPass_;
-		std::unique_ptr<class RenderPass> swapRenderPass_;
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+		std::unique_ptr<Vulkan::RenderPass> renderPass_;
+		std::unique_ptr<Vulkan::RenderPass> swapRenderPass_;
 	};
 
 	class ShadingPipeline final
@@ -67,14 +67,14 @@ namespace Vulkan::LegacyDeferred
 		~ShadingPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
 	private:
 		const SwapChain& swapChain_;
 		
 		VULKAN_HANDLE(VkPipeline, pipeline_)
 
-		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<class PipelineLayout> pipelineLayout_;
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
 
 }
