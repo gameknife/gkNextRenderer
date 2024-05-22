@@ -1,0 +1,6 @@
+[
+    {
+        "name": "macos-vcpkg-toolchain",
+        "toolchainFile": "./build/vcpkg.macos/scripts/buildsystems/vcpkg.cmake"
+    }
+]

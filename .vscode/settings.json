@@ -5,5 +5,8 @@
         "list": "cpp",
         "string": "cpp",
         "vector": "cpp"
-    }
+    },
+    "cmake.debugConfig": {
+        "MIMode": "lldb"
+    },  
 }
