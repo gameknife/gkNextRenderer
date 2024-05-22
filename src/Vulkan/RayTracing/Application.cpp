@@ -303,7 +303,7 @@ namespace Vulkan::RayTracing
             // pingpong & stepsize via push constants
             DenoiserPushConstantData pushData;
             pushData.pingpong = (frameCount_ + i) % 2;
-            pushData.stepsize = 1 << i;
+            pushData.stepsize = i;
 
             vkCmdPushConstants(commandBuffer, denoiserPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
                                0, sizeof(DenoiserPushConstantData), &pushData);

@@ -44,8 +44,9 @@ void main()
 	// - ray: we want a noisy random seed, different for each pixel.
 	uint pixelRandomSeed = Camera.RandomSeed;
     vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / isize;
-	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
-
+	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
+    
+    const vec3 exitColor = vec3(0.01);
 	vec3 pixelColor = vec3(0);
 	
 	// Accumulate all the rays for this pixels.
@@ -78,7 +79,7 @@ void main()
 			// Light emitting materials never scatter in this implementation, allowing us to make this logical shortcut.
 			if (b == initialRayCount) 
 			{
-				rayColor = vec3(0, 0, 0);
+				rayColor = exitColor;
 				break;
 			}
 
@@ -127,7 +128,7 @@ void main()
 			
 			if(!isScattered)
 			{
-				rayColor = vec3(0);
+				rayColor = exitColor;
 			}
 
 			// Trace missed, or end of trace.
