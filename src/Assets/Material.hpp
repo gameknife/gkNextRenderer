@@ -9,17 +9,17 @@ namespace Assets
 	{
 		static Material Lambertian(const glm::vec3& diffuse, const int32_t textureId = -1)
 		{
-			return Material{ glm::vec4(diffuse, 1), textureId, 1.0f, 1.45f, Enum::Lambertian };
+			return Material{ glm::vec4(diffuse, 1), textureId, 1.0f, 1.45f, Enum::Lambertian, 0 };
 		}
 
 		static Material Metallic(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)
 		{
-			return Material{ glm::vec4(diffuse, 1), textureId, fuzziness, 1.45f, Enum::Metallic };
+			return Material{ glm::vec4(diffuse, 1), textureId, fuzziness, 1.45f, Enum::Metallic, 1 };
 		}
 
 		static Material Dielectric(const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
 		{
-			return Material{ glm::vec4(0.7f, 0.7f, 1.0f, 1), textureId,  fuzziness, refractionIndex, Enum::Dielectric };
+			return Material{ glm::vec4(0.7f, 0.7f, 1.0f, 1), textureId,  fuzziness, refractionIndex, Enum::Dielectric, 0 };
 		}
 
 		static Material Isotropic(const glm::vec3& diffuse, const float refractionIndex, const float fuzziness, const int32_t textureId = -1)

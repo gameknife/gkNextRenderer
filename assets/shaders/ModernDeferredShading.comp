@@ -200,6 +200,7 @@ void main() {
 	const vec3 outwardNormal = dotValue > 0 ? -normal : normal;
 	const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
+	const float metalProb = mat.Metalness;
 	
 	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
 	int numSamples = 2;
@@ -207,7 +208,13 @@ void main() {
 	
 	for( int i = 0; i < numSamples; i++ )
 	{
-		vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ? AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) : AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
+		vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ? 
+		    AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) : 
+		    ( RandomFloat(RandomSeed) < metalProb ? 
+		    AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
+		    AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) 
+		    );
+		
 		//vec3 trace_dir = AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
 		
 		// screen space ray query
