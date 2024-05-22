@@ -252,6 +252,8 @@ void VulkanBaseRenderer::DrawFrame()
 	}
 
 	currentFrame_ = (currentFrame_ + 1) % inFlightFences_.size();
+
+	frameCount_++;
 }
 
 void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)

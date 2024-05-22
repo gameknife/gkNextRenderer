@@ -15,6 +15,8 @@ layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 
+layout(binding = 8, rg16f) uniform image2D OutMotionVector;
+
 #include "Vertex.glsl"
 //layout(push_constant) uniform PushConsts {
 //    uint pingpong;
@@ -117,11 +119,11 @@ vec3 TraceRay(vec3 origin, vec3 direction)
 	const ivec2 size = imageSize(MiniGBuffer);
 	const float stepLength = 0.06;
 	// brute force by step
-	for(int i = 0; i < 10; ++i)
+	for(int i = 0; i < 6; ++i)
 	{
 		origin += direction * (stepLength * i);
 		float rayDist = length(origin - campos.xyz);
-		vec4 hpos =  Camera.Projection * Camera.ModelView * vec4(origin, 1);
+		vec4 hpos =  Camera.ViewProjection * vec4(origin, 1);
 		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
 		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y)
 		{
@@ -202,7 +204,7 @@ void main() {
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
 	const float metalProb = mat.Metalness;
 	
-	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
+	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
 	int numSamples = 2;
 	vec3 skyColor = vec3(0);
 	
@@ -236,4 +238,14 @@ void main() {
     
     vec4 outColor = sqrt(albedo * vec4(skyColor,1));
     imageStore(OutImage, ipos, outColor);
+	
+	
+	// calculate the motion vector
+	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 motion = prevfpos - currfpos;
+	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 }

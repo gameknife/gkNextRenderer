@@ -64,10 +64,29 @@ void ModernDeferredRenderer::CreateSwapChain()
 	accumulateImageView_.reset(new ImageView(Device(), accumulateImage_->Handle(),
 		format,
 		VK_IMAGE_ASPECT_COLOR_BIT));
+
+	accumulateImage1_.reset(new Image(Device(), extent, format,
+	VK_IMAGE_TILING_OPTIMAL,
+	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+	accumulateImage1Memory_.reset(
+		new DeviceMemory(accumulateImage1_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	accumulateImage1View_.reset(new ImageView(Device(), accumulateImage1_->Handle(),
+		format,
+		VK_IMAGE_ASPECT_COLOR_BIT));
+
+	motionVectorImage_.reset(new Image(Device(), extent, VK_FORMAT_R32G32_SFLOAT,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_STORAGE_BIT));
+	motionVectorImageMemory_.reset(
+		new DeviceMemory(motionVectorImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	motionVectorImageView_.reset(new ImageView(Device(), motionVectorImage_->Handle(),
+		VK_FORMAT_R32G32_SFLOAT,
+		VK_IMAGE_ASPECT_COLOR_BIT));
+	
 	
 	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, UniformBuffers(), GetScene()));
-	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, UniformBuffers(), GetScene()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers(), GetScene()));
+	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, *accumulateImage1View_, *motionVectorImageView_, UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
@@ -94,6 +113,14 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	accumulateImage_.reset();
 	accumulateImageMemory_.reset();
 	accumulateImageView_.reset();
+
+	accumulateImage1_.reset();
+	accumulateImage1Memory_.reset();
+	accumulateImage1View_.reset();
+	
+	motionVectorImage_.reset();
+	motionVectorImageMemory_.reset();
+	motionVectorImageView_.reset();
 
 	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 }
@@ -155,12 +182,19 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage1_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
 	
 	// cs shading pass
 	{
@@ -171,8 +205,12 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
 	}
 
+	ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
+			   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+			   VK_IMAGE_LAYOUT_GENERAL);
 
 	// cs shading pass
+	// ping pong
 	{
 		VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
@@ -182,7 +220,9 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	}
 	
 	// copy to swap-buffer
-	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
+	VkImage srcAccumulateImage = frameCount_ % 2 == 0 ? accumulateImage1_->Handle() : accumulateImage_->Handle();
+	
+	ImageMemoryBarrier::Insert(commandBuffer, srcAccumulateImage, subresourceRange,
 						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
@@ -199,7 +239,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
-				   accumulateImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   srcAccumulateImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				   1, &copyRegion);
 

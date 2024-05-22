@@ -6,6 +6,7 @@
 #include "Vulkan/RayTracing/Application.hpp"
 #include "Vulkan/ModernDeferred/Application.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Assets/UniformBuffer.hpp"
 
 template <typename Renderer>
 class NextRendererApplication final : public Renderer
@@ -52,6 +53,8 @@ private:
 	UserSettings previousSettings_{};
 	SceneList::CameraInitialSate cameraInitialSate_{};
 	ModelViewController modelViewController_{};
+
+	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::unique_ptr<const Assets::Scene> scene_;
 	std::unique_ptr<class UserInterface> userInterface_;

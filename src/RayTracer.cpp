@@ -49,6 +49,9 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 	ubo.Projection[1][1] *= -1; // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
 	ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
 	ubo.ProjectionInverse = glm::inverse(ubo.Projection);
+	ubo.ViewProjection = ubo.Projection * ubo.ModelView;
+	ubo.PrevViewProjection = prevUBO_.RandomSeed != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
+	
 	ubo.Aperture = userSettings_.Aperture;
 	ubo.FocusDistance = userSettings_.FocusDistance;
 	ubo.SkyRotation = userSettings_.SkyRotation;
@@ -66,6 +69,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 	ubo.ColorPhi = userSettings_.ColorPhi;
 	ubo.DepthPhi = userSettings_.DepthPhi;
 	ubo.NormalPhi = userSettings_.NormalPhi;
+
+	prevUBO_ = ubo;
 
 	return ubo;
 }
@@ -157,9 +162,10 @@ void NextRendererApplication<Renderer>::DrawFrame()
 	// Keep track of our sample count.
 	numberOfSamples_ = glm::clamp(userSettings_.MaxNumberOfSamples - totalNumberOfSamples_, 0u, userSettings_.NumberOfSamples);
 	totalNumberOfSamples_ += numberOfSamples_;
-	totalFrames_ += 1;
-
+	
 	Renderer::DrawFrame();
+
+	totalFrames_ += 1;
 }
 
 template <typename Renderer>
