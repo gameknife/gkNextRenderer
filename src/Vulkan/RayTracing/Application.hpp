@@ -5,6 +5,11 @@
 
 namespace Vulkan
 {
+	namespace PipelineCommon
+	{
+		class AccumulatePipeline;
+	}
+
 	class CommandBuffers;
 	class Buffer;
 	class DeviceMemory;
@@ -85,8 +90,13 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Image> albedoImage_;
 		std::unique_ptr<DeviceMemory> albedoImageMemory_;
 		std::unique_ptr<ImageView> albedoImageView_;
+
+		std::unique_ptr<Image> motionVectorImage_;
+		std::unique_ptr<DeviceMemory> motionVectorImageMemory_;
+		std::unique_ptr<ImageView> motionVectorImageView_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
+		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class DenoiserPipeline> denoiserPipeline_;
 		std::unique_ptr<class ComposePipeline> composePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;

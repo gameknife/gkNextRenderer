@@ -19,6 +19,8 @@
 #include <iostream>
 #include <numeric>
 
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
+
 namespace Vulkan::RayTracing
 {
     struct DenoiserPushConstantData
@@ -145,7 +147,7 @@ namespace Vulkan::RayTracing
         CreateOutputImage();
 
         rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
-                                                         *accumulationImageView_, *pingpongImage0View_,
+                                                         *accumulationImageView_, *motionVectorImageView_,
                                                          *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
                                                          UniformBuffers(), GetScene()));
         denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
@@ -153,6 +155,15 @@ namespace Vulkan::RayTracing
                                                      UniformBuffers(), GetScene()));
         composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage0View_, *pingpongImage1View_,
                                                    *albedoImageView_, *outputImageView_, UniformBuffers()));
+
+        accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
+            *accumulationImageView_,
+            *pingpongImage0View_,
+            *pingpongImage1View_,
+            *motionVectorImageView_,
+            UniformBuffers(), GetScene()));
+    
+        
         const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
         const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};
         const std::vector<ShaderBindingTable::Entry> hitGroups = {
@@ -168,6 +179,7 @@ namespace Vulkan::RayTracing
     void RayTracingRenderer::DeleteSwapChain()
     {
         shaderBindingTable_.reset();
+        accumulatePipeline_.reset();
         rayTracingPipeline_.reset();
         denoiserPipeline_.reset();
         composePipeline_.reset();
@@ -185,6 +197,10 @@ namespace Vulkan::RayTracing
         albedoImage_.reset();
         albedoImageView_.reset();
         albedoImageMemory_.reset();
+
+        motionVectorImage_.reset();
+        motionVectorImageView_.reset();
+        motionVectorImageMemory_.reset();
         
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
     }
@@ -220,7 +236,8 @@ namespace Vulkan::RayTracing
 
         ImageMemoryBarrier::Insert(commandBuffer, pingpongImage1_->Handle(), subresourceRange, 0,
                                    VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
+        ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
+               0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         // Bind ray tracing pipeline.
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
@@ -262,14 +279,31 @@ namespace Vulkan::RayTracing
                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                    VK_IMAGE_LAYOUT_GENERAL);
 
-        // ping & pong
-        for (int i = 0; i < denoiseIteration_; i++)
+        // accumulate with reproject
+        ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
+               VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+               VK_IMAGE_LAYOUT_GENERAL);
+
+        // accumulate with reproject
+        // frame0: new + image 0 -> image 1
+        // frame1: new + image 1 -> image 0
+        {
+            VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+        }
+
+        // ping & pong denoise
+        // frame0: image 1 -> image 0 -> image 1 -> image 0 -> image 1
+        // frame1: image 0 -> image 1 -> image 0 -> image 1 -> image 0
+        for (int i = 0; i < denoiseIteration_ * 2; i++)
         {
             // pingpong & stepsize via push constants
             DenoiserPushConstantData pushData;
-            pushData.pingpong = (i + 1) % 2;
+            pushData.pingpong = (frameCount_ + i) % 2;
             pushData.stepsize = 1 << i;
-
 
             vkCmdPushConstants(commandBuffer, denoiserPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
                                0, sizeof(DenoiserPushConstantData), &pushData);
@@ -292,26 +326,21 @@ namespace Vulkan::RayTracing
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
-        DenoiserPushConstantData pushData;
-        pushData.pingpong = denoiseIteration_ % 2;
-        pushData.stepsize = 1;
+        // compose with first bounce
+        {
+            DenoiserPushConstantData pushData;
+            pushData.pingpong = frameCount_ % 2;
+            pushData.stepsize = 1;
         
-        vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(DenoiserPushConstantData), &pushData);
+            vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(DenoiserPushConstantData), &pushData);
         
-        VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-        vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
-
-        //Image* outputImage = pingpongImage0_.get();
-        // if(denoiseIteration % 2 == 0)
-        // {
-        // 	outputImage = pingpongImage0_.get();
-        // }
-        //
-        // outputImage= albedoImage_.get();
+            VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+        }
 
         // Acquire output image and swap-chain image for copying.
         ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
@@ -519,6 +548,12 @@ namespace Vulkan::RayTracing
         albedoImageMemory_.reset(new DeviceMemory(albedoImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
         albedoImageView_.reset(new ImageView(Device(), albedoImage_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT,
                                              VK_IMAGE_ASPECT_COLOR_BIT));
+
+        motionVectorImage_.reset(new Image(Device(), extent, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+                                           VK_IMAGE_USAGE_STORAGE_BIT));
+        motionVectorImageMemory_.reset(new DeviceMemory(motionVectorImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        motionVectorImageView_.reset( new ImageView(Device(), motionVectorImage_->Handle(), VK_FORMAT_R16G16_SFLOAT,
+                                                   VK_IMAGE_ASPECT_COLOR_BIT) );
 
         const auto& debugUtils = Device().DebugUtils();
 

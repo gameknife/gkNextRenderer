@@ -133,7 +133,7 @@ namespace
         userSettings.UseCheckerBoardRendering = false;
         userSettings.TemporalFrames = 16;
 
-        userSettings.DenoiseIteration = 3;
+        userSettings.DenoiseIteration = 1;
         userSettings.DepthPhi = 0.5f;
         userSettings.NormalPhi = 90.f;
         userSettings.ColorPhi = 5.f;

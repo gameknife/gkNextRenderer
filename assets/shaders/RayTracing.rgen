@@ -11,7 +11,7 @@
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
-layout(binding = 2, rgba16f) uniform image2D OutputImage;
+layout(binding = 2, rg16f) uniform image2D MotionVectorImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 10, rgba32f) uniform image2D GBufferImage;
 layout(binding = 11, rgba16f) uniform image2D Output1Image;
@@ -105,6 +105,20 @@ void main()
 				// but the problem is, who to let the hit shader to know this is the first bounce
 				//imageStore(AlbedoImage, ipos, vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
 				imageStore(AlbedoImage, ipos, vec4(Ray.ColorAndDistance.rgb, 1));
+				
+				
+				// output motion vector
+				// calculate the motion vector
+				vec2 size = imageSize(MotionVectorImage);
+				vec4 WorldPos = origin + t * direction;
+                vec4 currFrameHPos = Camera.ViewProjection * vec4(WorldPos.xyz, 1);
+                vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+                
+                vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(WorldPos.xyz, 1);
+                vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+                vec2 motion = prevfpos - currfpos;
+                imageStore(MotionVectorImage, ipos, vec4(motion,0,0));
+	            //MotionVectorImage
             }
 			else
 			{
@@ -131,8 +145,9 @@ void main()
 
 		pixelColor += rayColor;
 	}
-
     
+    pixelColor = pixelColor / Camera.NumberOfSamples;
+    /*
     vec3 accumulatedColor = vec3(0);
 	
 	if( Camera.TotalNumberOfSamples >  Camera.NumberOfSamples )
@@ -154,12 +169,10 @@ void main()
         accumulatedColor = accumulatedColor * (1.0 - currKeep) + pixelColor * currKeep;
         pixelColor = accumulatedColor;
     }
-
-
-
+	*/
 
 	// Apply raytracing-in-one-weekend gamma correction.
-	pixelColor = sqrt(pixelColor);
+	//pixelColor = sqrt(pixelColor);
 
 	if (Camera.ShowHeatmap)
 	{
@@ -170,10 +183,6 @@ void main()
 		pixelColor = heatmap(deltaTimeScaled);
 	}
 
-	imageStore(AccumulationImage, ipos, vec4(accumulatedColor, 0));
-    imageStore(OutputImage, ipos, vec4(pixelColor, 0));
-	if(Camera.TotalNumberOfSamples < 2)
-	{
-		imageStore(Output1Image, ipos, vec4(pixelColor, 0));
-	}
+	// output to accumulation directly
+	imageStore(AccumulationImage, ipos, vec4(pixelColor, 0));
 }

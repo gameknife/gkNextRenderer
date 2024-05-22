@@ -7,7 +7,6 @@
 layout(binding = 0, rgba16f) uniform image2D PingImage;
 layout(binding = 1, rgba16f) uniform image2D PongImage;
 layout(binding = 2, rgba32f) uniform image2D GBufferImage; // xyz normal, w depth
-layout(binding = 3, rgba16f) uniform image2D AlbedoImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(push_constant) uniform PushConsts {
@@ -82,6 +81,8 @@ float computeVarianceCenter(ivec2 ipos)
 }
 
 void main() {
+
+    //image2D images[3] = {InputImage, PingImage, PongImage};
     // ping pong logic, select input & output bettwen Image0 & 1
     //int pingpong = gl_NumWorkGroups.x % 2 == 0 ? 1 : 0;
     int pingpong = int(pushConsts.pingpong);

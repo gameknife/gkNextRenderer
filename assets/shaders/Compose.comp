@@ -20,8 +20,8 @@ void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
 
     // simple compose together
-    vec4 final = pushConsts.pingpong == 0 ? imageLoad(Final0Image, ipos) : imageLoad(Final1Image, ipos);
+    vec4 final = pushConsts.pingpong == 0 ? imageLoad(Final1Image, ipos) : imageLoad(Final0Image, ipos);
     vec4 albedo = imageLoad(AlbedoImage, ipos);
-    imageStore(OutImage, ipos, sqrt(final * final * albedo));
+    imageStore(OutImage, ipos, sqrt(final * albedo));
     //imageStore(OutImage, ipos, sqrt(albedo));
 }
