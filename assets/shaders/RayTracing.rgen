@@ -19,6 +19,65 @@ layout(binding = 12, rgba16f) uniform image2D AlbedoImage;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
+
+#define GetRayColorGen(name,name0) \
+vec3 name(vec3 origin, vec3 scatterDir){ \
+	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,origin.xyz, 0.001, scatterDir, 10000.0, 0);\
+	vec3 atten = Ray.ColorAndDistance.rgb;\
+	vec3 emit = Ray.EmitColor.rgb;\
+	if(Ray.ColorAndDistance.w < 0)\
+	{\
+		return emit;\
+	}\
+	origin = origin + scatterDir * Ray.ColorAndDistance.w;;\
+	return emit + atten * name0(origin, Ray.ScatterDirection.xyz);\
+}
+
+vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
+{
+	return vec3(0);
+}
+
+GetRayColorGen(GetRayColor4,GetRayColorEnd)
+GetRayColorGen(GetRayColor3,GetRayColor4)
+GetRayColorGen(GetRayColor2,GetRayColor3)
+GetRayColorGen(GetRayColor1,GetRayColor2)
+
+vec3 GetRayColor(vec3 origin, vec3 scatterDir, ivec2 ipos)
+{
+	// trace ray
+	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, 
+		origin.xyz, 0.001, scatterDir, 10000.0, 0);
+
+	origin = origin + scatterDir * Ray.ColorAndDistance.w;;
+	
+	// fetch
+	vec3 atten = Ray.ColorAndDistance.rgb;
+	vec3 emit = Ray.EmitColor.rgb;
+
+	// output gbuffer
+	imageStore(GBufferImage, ipos, vec4(Ray.GBuffer.xyz, Ray.ColorAndDistance.w) );
+	vec3 history = imageLoad(AlbedoImage, ipos).rgb;
+	imageStore(AlbedoImage, ipos, vec4(Ray.ColorAndDistance.rgb, 1));
+
+	//MotionVectorImage
+	vec2 size = imageSize(MotionVectorImage);
+	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 motion = prevfpos - currfpos;
+	imageStore(MotionVectorImage, ipos, vec4(motion,0,0));
+	
+	if(Ray.ColorAndDistance.w < 0)
+	{
+		return emit;
+	}
+	
+	return emit + atten * GetRayColor1(origin, Ray.ScatterDirection.xyz);
+}
+
 void main() 
 {
 	// use checkerbord to skip sample
@@ -42,145 +101,39 @@ void main()
 	// Initialise separate random seeds for the pixel and the rays.
 	// - pixel: we want the same random seed for each pixel to get a homogeneous anti-aliasing.
 	// - ray: we want a noisy random seed, different for each pixel.
-	uint pixelRandomSeed = Camera.RandomSeed;
+	uint pixelRandomSeed = 0;//Camera.RandomSeed;
     vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / isize;
-	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
+	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
     
     const vec3 exitColor = vec3(0.0);
 	vec3 pixelColor = vec3(0);
 	
 	// Accumulate all the rays for this pixels.
-	
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
 	{
 		const vec2 pixel = vec2(ipos);
 		vec2 uv = (pixel / isize) * 2.0 - 1.0;
-		
 		// anti aliasing
-        {
-            uv += uvOffset;
-        }
-
+        uv += uvOffset;
+       
 		vec2 offset = Camera.Aperture / 2 * RandomInUnitDisk(Ray.RandomSeed);
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
 		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
         // physical camera
 		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
-		vec3 rayColor = vec3(1);
-
-		uint initialRayCount = Camera.NumberOfBounces;
-		// Ray scatters are handled in this loop. There are no recursive traceRayEXT() calls in other shaders.
-		for (uint b = 0; b <= initialRayCount; ++b)
-		{
-			const float tMin = 0.001;
-			const float tMax = 10000.0;
-
-			// If we've exceeded the ray bounce limit without hitting a light source, no light is gathered.
-			// Light emitting materials never scatter in this implementation, allowing us to make this logical shortcut.
-			if (b == initialRayCount) 
-			{
-				rayColor = exitColor;
-				break;
-			}
-
-			Ray.BounceCount = b;
-			Ray.GBuffer = vec4(0,1,0,0);
-			Ray.ScatterDirection = vec4(0,1,0,1);
-			traceRayEXT(
-				Scene, gl_RayFlagsOpaqueEXT, 0xff, 
-				0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, 
-				origin.xyz, tMin, direction.xyz, tMax, 0 /*payload*/);
-			
-			const vec3 hitColor = Ray.ColorAndDistance.rgb;
-			const float t = Ray.ColorAndDistance.w;
-			const bool isScattered = Ray.ScatterDirection.w > 0;
-
-			
-
-            if(b == 0)
-            {
-                // output gbuffer
-                imageStore(GBufferImage, ipos, vec4(Ray.GBuffer.xyz, t) );
-				vec3 history = imageLoad(AlbedoImage, ipos).rgb;
-				// the first albedo, pbr with monte carlo, so still noisy, this can be use appoximate algo to disable it
-				// but the problem is, who to let the hit shader to know this is the first bounce
-				//imageStore(AlbedoImage, ipos, vec4(mix(Ray.ColorAndDistance.rgb, history, 0.95), 1));
-				imageStore(AlbedoImage, ipos, vec4(Ray.ColorAndDistance.rgb, 1));
-				
-				
-				// output motion vector
-				// calculate the motion vector
-				vec2 size = imageSize(MotionVectorImage);
-				vec4 WorldPos = origin + t * direction;
-                vec4 currFrameHPos = Camera.ViewProjection * vec4(WorldPos.xyz, 1);
-                vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-                
-                vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(WorldPos.xyz, 1);
-                vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-                vec2 motion = prevfpos - currfpos;
-                imageStore(MotionVectorImage, ipos, vec4(motion,0,0));
-	            //MotionVectorImage
-            }
-			else
-			{
-				rayColor *= hitColor;
-			}
-			
-			if(!isScattered)
-			{
-				rayColor = exitColor;
-			}
-
-			// Trace missed, or end of trace.
-			if (t < 0 || !isScattered)
-			{				
-				break;
-			}
-
-			initialRayCount += Ray.AdaptiveRay;
-			initialRayCount = min(16, initialRayCount);
-			// Trace hit.
-			origin = origin + t * direction;
-			direction = vec4(Ray.ScatterDirection.xyz, 0);
-		}
+		// accumulate the raycolor
+		vec3 rayColor = GetRayColor(origin.xyz, direction.xyz, ipos);
 
 		pixelColor += rayColor;
 	}
     
     pixelColor = pixelColor / Camera.NumberOfSamples;
-    /*
-    vec3 accumulatedColor = vec3(0);
 	
-	if( Camera.TotalNumberOfSamples >  Camera.NumberOfSamples )
-	{
-		accumulatedColor = imageLoad(AccumulationImage, ipos).xyz;
-	}
-	
-    if(Camera.TemporalFrames == 0)
-    {
-		// offline render style
-	    accumulatedColor = accumulatedColor + pixelColor * (Camera.UseCheckerBoard ? 2.0 : 1.0);
-	    pixelColor = accumulatedColor / Camera.TotalNumberOfSamples;
-    }
-    else
-    {
-        // realtime game style
-        float currKeep = 1.0 / Camera.TemporalFrames;
-        pixelColor = pixelColor / Camera.NumberOfSamples;
-        accumulatedColor = accumulatedColor * (1.0 - currKeep) + pixelColor * currKeep;
-        pixelColor = accumulatedColor;
-    }
-	*/
-
-	// Apply raytracing-in-one-weekend gamma correction.
-	//pixelColor = sqrt(pixelColor);
-
 	if (Camera.ShowHeatmap)
 	{
 		const uint64_t deltaTime = clockARB() - clock;
 		const float heatmapScale = 1000000.0f * Camera.HeatmapScale * Camera.HeatmapScale;
 		const float deltaTimeScaled = clamp(float(deltaTime) / heatmapScale, 0.0f, 1.0f);
-
 		pixelColor = heatmap(deltaTimeScaled);
 	}
 

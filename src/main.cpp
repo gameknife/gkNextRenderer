@@ -119,7 +119,7 @@ namespace
         userSettings.SceneIndex = options.SceneIndex;
 
         userSettings.IsRayTraced = true;
-        userSettings.AccumulateRays = true;
+        userSettings.AccumulateRays = false;
         userSettings.NumberOfSamples = options.Samples;
         userSettings.NumberOfBounces = options.Bounces;
         userSettings.MaxNumberOfSamples = options.MaxSamples;
@@ -131,7 +131,7 @@ namespace
         userSettings.HeatmapScale = 1.5f;
 
         userSettings.UseCheckerBoardRendering = false;
-        userSettings.TemporalFrames = 16;
+        userSettings.TemporalFrames = 0;
 
         userSettings.DenoiseIteration = 0;
         userSettings.DepthPhi = 0.5f;

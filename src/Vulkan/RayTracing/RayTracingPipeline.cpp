@@ -248,7 +248,7 @@ namespace Vulkan::RayTracing
         pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
         pipelineInfo.pGroups = groups.data();
-        pipelineInfo.maxPipelineRayRecursionDepth = 1;
+        pipelineInfo.maxPipelineRayRecursionDepth = 10;
         pipelineInfo.layout = rayTracePipelineLayout_->Handle();
         pipelineInfo.basePipelineHandle = nullptr;
         pipelineInfo.basePipelineIndex = 0;

@@ -30,9 +30,11 @@ void main()
 		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 4.0;
 
 		Ray.ColorAndDistance = vec4(skyColor, -1);
+		Ray.EmitColor = vec4(skyColor, -1);
 	}
 	else
 	{
 		Ray.ColorAndDistance = vec4(0, 0, 0, -1);
+		Ray.EmitColor = vec4(0,0,0, -1);
 	}
 }
