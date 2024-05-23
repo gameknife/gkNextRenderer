@@ -83,6 +83,20 @@ vec3 RandomInHemiSphere(inout uint seed)
     return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
 }
 
+vec3 RandomInHemiSphere1(inout uint seed) 
+{
+	const float pi = 3.1415926535897932384626433832795;
+    float r1 = RandomFloat(seed);
+    float r2 = RandomFloat(seed);
+
+    float phi = 2.0*pi*r1;
+    float x = cos(phi)*sqrt(r2);
+    float y = sin(phi)*sqrt(r2);
+    float z = sqrt(1.0-r2);
+
+    return vec3(x, z, y);
+}
+
 vec3 AlignWithNormal(vec3 ray, vec3 normal)
 {
     vec3 up = normal;

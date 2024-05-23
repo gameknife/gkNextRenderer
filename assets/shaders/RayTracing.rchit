@@ -13,6 +13,8 @@ layout(binding = 8) uniform sampler2D[] TextureSamplers;
 #include "Scatter.glsl"
 #include "Vertex.glsl"
 
+const float pi = 3.1415926535897932384626433832795;
+
 hitAttributeEXT vec2 HitAttributes;
 rayPayloadInEXT RayPayload Ray;
 
@@ -30,15 +32,38 @@ RayPayload ScatterSimple(const Material m, const vec3 direction, const vec3 norm
 {
 	const bool isScattered = dot(direction, normal) < 0;
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-	const vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
-	const vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere(seed), normal), isScattered ? 1 : 0);
+	vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
+	vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere1(seed), normal), isScattered ? 1 : 0);
 	
 	vec4 emitColor = vec4(0);
 	if( m.MaterialModel == MaterialDiffuseLight )
 	{
-		emitColor = vec4(15);
+	    if(isScattered)
+		    emitColor = vec4(15);
 	}
-
+	
+	// scatter to light
+	vec3 lightpos = vec3( mix( 213, 343, RandomFloat(seed)) ,555, mix( -213, -343, RandomFloat(seed)) );
+	vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+	vec3 tolight = lightpos - worldPos;
+	float dist = length(tolight);
+	tolight = normalize(tolight);
+	
+	
+	if( true )
+	{
+		if( RandomFloat(seed) < 0.5 )
+        {
+            scatter.xyz = tolight;
+            float light_pdf = dist * dist / (abs(scatter.y) * 130 * 130);
+            colorAndDistance.rgb = colorAndDistance.rgb / light_pdf;
+        }
+        else
+        {
+             //colorAndDistance.rgb =  colorAndDistance.rgb * 0.5;
+        }
+	}
+	
 	return RayPayload(colorAndDistance, emitColor, scatter, vec4(normal, m.Fuzziness), seed,0,bounce);
 }
 
