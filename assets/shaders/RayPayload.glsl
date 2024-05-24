@@ -12,3 +12,12 @@ struct RayPayload
 	uint BounceCount;
 	float pdf;
 };
+
+// a simple box light may enough now
+struct HittableLight
+{
+	vec3 WorldPosMin;
+	vec3 WorldPosMax;
+	vec3 WorldDirection;
+	float area;
+};

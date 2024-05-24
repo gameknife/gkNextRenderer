@@ -44,8 +44,8 @@ void main()
 	const vec3 center = sphere.xyz;
 	const float radius = sphere.w;
 	const vec3 point = gl_WorldRayOriginEXT + gl_HitTEXT * gl_WorldRayDirectionEXT;
-	const vec3 normal = (point - center) / radius;
+	const vec3 normal = normalize( (point - center) / radius );
 	const vec2 texCoord = GetSphereTexCoord(normal);
 
-	//Ray = Scatter(material, gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, Ray.RandomSeed, Ray.BounceCount);
+	Scatter(Ray, material, gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }

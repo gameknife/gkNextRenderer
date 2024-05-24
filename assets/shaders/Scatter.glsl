@@ -119,24 +119,68 @@
 //	return RayPayload(colorAndDistance, scatter, vec4(1,0,0,0), seed,0,bounce);
 //}
 //
-//RayPayload Scatter(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed, in uint bounce)
-//{
-//	const vec3 normDirection = normalize(direction);
-//
-//	switch (m.MaterialModel)
-//	{
-//	case MaterialLambertian:
-//		return ScatterLambertian(m, normDirection, normal, texCoord, t, seed, bounce);
-//	case MaterialMetallic:
-//		return ScatterMetallic(m, normDirection, normal, texCoord, t, seed, bounce);
-//	case MaterialDielectric:
-//		return ScatterDieletric(m, normDirection, normal, texCoord, t, seed, bounce);
-//	case MaterialDiffuseLight:
-//		return ScatterDiffuseLight(m, normDirection, normal, t, seed, bounce);
-//	case MaterialMixture:
-//	    return ScatterMixture(m, normDirection, normal, texCoord, t, seed, bounce);
-//	case MaterialIsotropic:
-//	    return ScatterIsotropic(m, normDirection, normal, texCoord, t, seed, bounce);
-//	}
-//}
+
+void ScatterDiffuseLight(inout RayPayload ray, const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+    if(ray.FrontFace > 0)
+    {
+        ray.Attenuation = m.Diffuse.rgb;
+        ray.EmitColor = vec4(m.Diffuse.rgb, 1.0);
+        ray.Distance = -1;
+    }
+}
+
+void ScatterLambertian(inout RayPayload ray, const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+
+	ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
+	ray.ScatterDirection = AlignWithNormal( RandomInHemiSphere1(ray.RandomSeed), normal);
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
+	
+	if( RandomFloat(ray.RandomSeed) < 0.5 )
+	{
+		// scatter to light
+		vec3 lightpos = vec3( mix( 213, 343, RandomFloat(ray.RandomSeed)) ,555, mix( -213, -343, RandomFloat(ray.RandomSeed)) );
+		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+		vec3 tolight = lightpos - worldPos;
+		float dist = length(tolight);
+		tolight = tolight / dist;
+
+		ray.ScatterDirection = tolight;
+		float light_pdf = dist * dist / (abs(ray.ScatterDirection.y) * 130 * 130);
+		ray.pdf = 1.0f / light_pdf;
+	}
+}
+
+void Scatter(inout RayPayload ray, const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t)
+{
+    ray.Distance = t;
+
+	switch (m.MaterialModel)
+	{
+	case MaterialLambertian:
+		ScatterLambertian(ray, m, direction, normal, texCoord);
+		break;
+	case MaterialMetallic:
+		ScatterLambertian(ray, m, direction, normal, texCoord);
+		break;
+	case MaterialDielectric:
+		ScatterLambertian(ray, m, direction, normal, texCoord);
+		break;
+	case MaterialDiffuseLight:
+		ScatterDiffuseLight(ray, m, direction, normal, texCoord);
+		break;
+	case MaterialMixture:
+	    ScatterLambertian(ray, m, direction, normal, texCoord);
+	    break;
+	case MaterialIsotropic:
+	    ScatterLambertian(ray, m, direction, normal, texCoord);
+	    break;
+	}
+}
 

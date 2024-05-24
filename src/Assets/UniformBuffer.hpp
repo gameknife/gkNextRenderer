@@ -40,6 +40,16 @@ namespace Assets
 		uint32_t TemporalFrames;
 	};
 
+	class LightBufferObject
+	{
+	public:
+
+		glm::vec3 WorldPosMin;
+		glm::vec3 WorldPosMax;
+		glm::vec3 WorldDirection;
+		float area;
+	};
+
 	class UniformBuffer
 	{
 	public:
