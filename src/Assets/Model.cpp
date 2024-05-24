@@ -59,21 +59,22 @@ namespace Assets
         // load obj file
         if (filename.find(".glb") != std::string::npos)
         {
-            return std::move(LoadGltfModel(filename, textures));
+            return LoadGltfModel(filename, textures);
         }
         else
         {
-            return std::move(LoadObjModel(filename, textures));
+            return LoadObjModel(filename, textures);
         }
     }
-    
+
     Model Model::LoadGltfModel(const std::string& filename, std::vector<Texture>& textures)
     {
+        std::vector<LightObject> lights;
         std::vector<Material> materials;
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         //std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
-        
+
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
         std::string err;
@@ -90,7 +91,7 @@ namespace Assets
             }
         }
 
-        return Model(std::move(vertices), std::move(indices), std::move(materials), nullptr);
+        return Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr);
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
@@ -99,9 +100,9 @@ namespace Assets
         std::vector<uint32_t> indices_flatten;
 
         uint32_t idx_counter = 0;
-        for ( uint32_t index : indices )
+        for (uint32_t index : indices)
         {
-            vertices_flatten.push_back( vertices[index] );
+            vertices_flatten.push_back(vertices[index]);
             indices_flatten.push_back(idx_counter++);
         }
 
@@ -130,7 +131,9 @@ namespace Assets
                 std::cout << "\nWARNING: " << objReader.Warning() << std::flush;
             });
         }
-
+        // Lights
+        std::vector<LightObject> lights;
+        
         // Materials
         std::vector<Material> materials;
 
@@ -182,6 +185,7 @@ namespace Assets
             if (material.emission[0] > 0)
             {
                 m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]));
+                // add to lights
             }
 
             if (material.metallic > .99f)
@@ -291,8 +295,8 @@ namespace Assets
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-        
-        return Model(std::move(vertices), std::move(indices), std::move(materials), nullptr);
+
+        return Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr);
     }
 
     Model Model::CreateCornellBox(const float scale)
@@ -300,17 +304,19 @@ namespace Assets
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         std::vector<Material> materials;
+        std::vector<LightObject> lights;
 
-        CornellBox::Create(scale, vertices, indices, materials);
+        CornellBox::Create(scale, vertices, indices, materials, lights);
 
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-        
+
         return Model(
             std::move(vertices),
             std::move(indices),
             std::move(materials),
+            std::move(lights),
             nullptr
         );
     }
@@ -368,6 +374,7 @@ namespace Assets
             std::move(vertices),
             std::move(indices),
             std::vector<Material>{material},
+            std::vector<LightObject>{},
             nullptr);
     }
 
@@ -433,16 +440,17 @@ namespace Assets
                 indices.push_back(j0 + i1);
             }
         }
-        
-        
+
+
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-        
+
         return Model(
             std::move(vertices),
             std::move(indices),
             std::vector<Material>{material},
+            std::vector<LightObject>{},
             isProcedural ? new Sphere(center, radius) : nullptr);
     }
 
@@ -468,10 +476,12 @@ namespace Assets
     }
 
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials,
+                 std::vector<LightObject>&& lights,
                  const class Procedural* procedural) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
         materials_(std::move(materials)),
+        lights_(std::move(lights)),
         procedural_(procedural)
     {
     }

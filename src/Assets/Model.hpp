@@ -4,6 +4,8 @@
 #include "Procedural.hpp"
 #include "Vertex.hpp"
 #include "Texture.hpp"
+#include "UniformBuffer.hpp"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,6 +37,7 @@ namespace Assets
 		const std::vector<Vertex>& Vertices() const { return vertices_; }
 		const std::vector<uint32_t>& Indices() const { return indices_; }
 		const std::vector<Material>& Materials() const { return materials_; }
+		const std::vector<LightObject>& Lights() const { return lights_; }
 
 		const class Procedural* Procedural() const { return procedural_.get(); }
 
@@ -44,12 +47,14 @@ namespace Assets
 
 	private:
 
-		Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials, const class Procedural* procedural);
+		Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials, std::vector<LightObject>&& lights, const class Procedural* procedural);
 
 		std::vector<Vertex> vertices_;
 		std::vector<uint32_t> indices_;
 		std::vector<Material> materials_;
 		std::shared_ptr<const class Procedural> procedural_;
+
+		std::vector<LightObject> lights_;
 	};
 
 }

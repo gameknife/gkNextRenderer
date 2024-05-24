@@ -1,4 +1,6 @@
 #include "CornellBox.hpp"
+
+#include "UniformBuffer.hpp"
 using namespace glm;
 
 namespace Assets {
@@ -17,7 +19,8 @@ void CornellBox::Create(
 	const float scale,
 	std::vector<Vertex>& vertices,
 	std::vector<uint32_t>& indices,
-	std::vector<Material>& materials)
+	std::vector<Material>& materials,
+	std::vector<LightObject>& lights)
 {
 	materials.push_back(Material::Lambertian(vec3(0.65f, 0.05f, 0.05f))); // red
 	materials.push_back(Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))); // green
@@ -102,6 +105,14 @@ void CornellBox::Create(
 
 	AddTriangle(indices, i, 0, 1, 2);
 	AddTriangle(indices, i, 0, 2, 3);
+
+	LightObject light {};
+	light.WorldPosMin = vec4(x0, y1, z1, 1);
+	light.WorldPosMax = vec4(x1, y1, z0, 1);
+	light.WorldDirection = vec4(0, -1, 0, 0);
+	light.area = (x1 - x0) * (z0 - z1);
+
+	lights.push_back(light);
 }
 
 }

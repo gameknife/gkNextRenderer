@@ -3,6 +3,7 @@
 #include "Sphere.hpp"
 #include "Texture.hpp"
 #include "TextureImage.hpp"
+#include "UniformBuffer.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
@@ -23,6 +24,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std:
 	std::vector<glm::vec4> procedurals;
 	std::vector<VkAabbPositionsKHR> aabbs;
 	std::vector<glm::uvec2> offsets;
+	std::vector<LightObject> lights;
 
 	for (const auto& model : models_)
 	{
@@ -37,6 +39,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std:
 		vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
 		indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
 		materials.insert(materials.end(), model.Materials().begin(), model.Materials().end());
+		lights.insert(lights.end(), model.Lights().begin(), model.Lights().end());
 
 		// Adjust the material id.
 		for (size_t i = vertexOffset; i != vertices.size(); ++i)
@@ -70,6 +73,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std:
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "AABBs", rtxFlags | flags, aabbs, aabbBuffer_, aabbBufferMemory_);
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Procedurals", flags, procedurals, proceduralBuffer_, proceduralBufferMemory_);
 
+	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
 	
 	// Upload all textures
 	textureImages_.reserve(textures_.size());
@@ -101,6 +105,8 @@ Scene::~Scene()
 	indexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 	vertexBuffer_.reset();
 	vertexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+	lightBuffer_.reset();
+	lightBufferMemory_.reset();
 }
 
 }

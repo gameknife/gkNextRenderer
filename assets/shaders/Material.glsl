@@ -19,3 +19,15 @@ struct Material
 	float Reserverd1;
 	float Reserverd2;
 };
+
+
+struct LightObject
+{
+	vec4 WorldPosMin;
+	vec4 WorldPosMax;
+	vec4 WorldDirection;
+	float area;
+	float Reserverd0;
+	float Reserverd1;
+	float Reserverd2;
+};

@@ -40,14 +40,15 @@ namespace Assets
 		uint32_t TemporalFrames;
 	};
 
-	class LightBufferObject
+	struct alignas(16) LightObject final
 	{
-	public:
-
-		glm::vec3 WorldPosMin;
-		glm::vec3 WorldPosMax;
-		glm::vec3 WorldDirection;
+		glm::vec4 WorldPosMin;
+		glm::vec4 WorldPosMax;
+		glm::vec4 WorldDirection;
 		float area;
+		float Reserverd0;
+		float Reserverd1;
+		float Reserverd2;
 	};
 
 	class UniformBuffer

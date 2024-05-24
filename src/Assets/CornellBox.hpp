@@ -2,6 +2,7 @@
 
 #include "Material.hpp"
 #include "Vertex.hpp"
+#include "UniformBuffer.hpp"
 #include <vector>
 
 namespace Assets
@@ -15,7 +16,8 @@ namespace Assets
 			float scale,
 			std::vector<Vertex>& vertices,
 			std::vector<uint32_t>& indices,
-			std::vector<Material>& materials);
+			std::vector<Material>& materials,
+			std::vector<LightObject>& lights);
 	};
 
 }

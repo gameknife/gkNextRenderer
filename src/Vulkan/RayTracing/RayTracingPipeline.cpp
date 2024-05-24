@@ -65,6 +65,8 @@ namespace Vulkan::RayTracing
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+            // Light buffer
+            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -131,6 +133,11 @@ namespace Vulkan::RayTracing
             offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
             offsetsBufferInfo.range = VK_WHOLE_SIZE;
 
+            // Light buffer
+            VkDescriptorBufferInfo lightBufferInfo = {};
+            lightBufferInfo.buffer = scene.LightBuffer().Handle();
+            lightBufferInfo.range = VK_WHOLE_SIZE;
+
             // Image and texture samplers.
             std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
 
@@ -156,6 +163,7 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 10, gbufferImageInfo),
                 descriptorSets.Bind(i, 11, output1ImageInfo),
                 descriptorSets.Bind(i, 12, albedoImageInfo),
+                descriptorSets.Bind(i, 13, lightBufferInfo),
             };
 
             // Procedural buffer (optional)
@@ -248,7 +256,7 @@ namespace Vulkan::RayTracing
         pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
         pipelineInfo.pGroups = groups.data();
-        pipelineInfo.maxPipelineRayRecursionDepth = 10;
+        pipelineInfo.maxPipelineRayRecursionDepth = 1;
         pipelineInfo.layout = rayTracePipelineLayout_->Handle();
         pipelineInfo.basePipelineHandle = nullptr;
         pipelineInfo.basePipelineIndex = 0;

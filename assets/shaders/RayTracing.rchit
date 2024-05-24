@@ -10,6 +10,8 @@ layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
+layout(binding = 13) readonly buffer LightObjectArray { LightObject[] Lights; };
+
 #include "Scatter.glsl"
 #include "Vertex.glsl"
 
@@ -55,14 +57,10 @@ void ScatterSimple(inout RayPayload ray, const Material m, const vec3 direction,
 	// half probability to scatter to light
 	if( RandomFloat(ray.RandomSeed) < 0.5 )
 	{
-	    HittableLight lightDemo;
-	    lightDemo.WorldPosMin = vec3(213,555,-213);
-	    lightDemo.WorldPosMax = vec3(343,555,-343);
-	    lightDemo.WorldDirection = vec3(0,-1,0);
-	    lightDemo.area = 16900;
-	
+		LightObject lightDemo = Lights[0];
+
 		// scatter to light
-		vec3 lightpos = mix(lightDemo.WorldPosMin, lightDemo.WorldPosMax, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));
+		vec3 lightpos = mix(lightDemo.WorldPosMin.xyz, lightDemo.WorldPosMax.xyz, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
 		float dist = length(tolight);
@@ -70,7 +68,7 @@ void ScatterSimple(inout RayPayload ray, const Material m, const vec3 direction,
 
 		ray.ScatterDirection = tolight;
 		
-		float cosine = dot(lightDemo.WorldDirection, -tolight);
+		float cosine = dot(lightDemo.WorldDirection.xyz, -tolight);
 		
 		float light_pdf = dist * dist / (cosine * lightDemo.area);
 		ray.pdf = 1.0f / light_pdf;
