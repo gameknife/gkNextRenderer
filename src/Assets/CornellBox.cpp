@@ -91,8 +91,8 @@ void CornellBox::Create(
 
 	const float x0 = s * (213.0f / 555.0f);
 	const float x1 = s * (343.0f / 555.0f);
-	const float z0 = s * (-555.0f + 332.0f) / 555.0f;
-	const float z1 = s * (-555.0f + 227.0f) / 555.0f;
+	const float z0 = s * (-555.0f + 342.0f) / 555.0f;
+	const float z1 = s * (-555.0f + 212.0f) / 555.0f;
 	const float y1 = s * 0.998f;
 
 	vertices.push_back(Vertex{ vec3(x0, y1, z1), vec3(0, -1, 0), vec2(0, 1), 3 });

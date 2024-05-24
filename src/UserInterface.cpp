@@ -236,7 +236,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
 		{
-			uint32_t min = 0, max = 64;
+			uint32_t min = 0, max = 128;
 			ImGui::SliderScalar("Temporal Frames", ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
 		}
 		ImGui::NewLine();

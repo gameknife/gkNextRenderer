@@ -30,7 +30,7 @@ vec3 name(vec3 origin, vec3 scatterDir){ \
 		return emit;\
 	}\
 	origin = origin + scatterDir * Ray.ColorAndDistance.w;;\
-	return emit + atten * name0(origin, Ray.ScatterDirection.xyz);\
+	return emit + atten * Ray.pdf * name0(origin, Ray.ScatterDirection.xyz);\
 }
 
 vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
@@ -43,7 +43,7 @@ GetRayColorGen(GetRayColor3,GetRayColor4)
 GetRayColorGen(GetRayColor2,GetRayColor3)
 GetRayColorGen(GetRayColor1,GetRayColor2)
 
-vec3 GetRayColor(vec3 origin, vec3 scatterDir, ivec2 ipos)
+vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4 albedo, out vec4 motionVector)
 {
 	// trace ray
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, 
@@ -51,31 +51,27 @@ vec3 GetRayColor(vec3 origin, vec3 scatterDir, ivec2 ipos)
 
 	origin = origin + scatterDir * Ray.ColorAndDistance.w;;
 	
-	// fetch
-	vec3 atten = Ray.ColorAndDistance.rgb;
+	
+	vec3 atten = vec3(1.0);//Ray.ColorAndDistance.rgb; albedo later compose
 	vec3 emit = Ray.EmitColor.rgb;
 
-	// output gbuffer
-	imageStore(GBufferImage, ipos, vec4(Ray.GBuffer.xyz, Ray.ColorAndDistance.w) );
-	vec3 history = imageLoad(AlbedoImage, ipos).rgb;
-	imageStore(AlbedoImage, ipos, vec4(Ray.ColorAndDistance.rgb, 1));
-
-	//MotionVectorImage
+	// fetch albedo
+	gbuffer = vec4(Ray.GBuffer.xyz, Ray.ColorAndDistance.w);
+	albedo = vec4(Ray.ColorAndDistance.rgb, Ray.GBuffer.w);
+		
 	vec2 size = imageSize(MotionVectorImage);
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
 	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-
 	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin, 1);
 	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	vec2 motion = prevfpos - currfpos;
-	imageStore(MotionVectorImage, ipos, vec4(motion,0,0));
+	motionVector = vec4(prevfpos - currfpos,0,0);
 	
 	if(Ray.ColorAndDistance.w < 0)
 	{
 		return emit;
 	}
 	
-	return emit + atten * GetRayColor1(origin, Ray.ScatterDirection.xyz);
+	return emit + atten * Ray.pdf * GetRayColor1(origin, Ray.ScatterDirection.xyz);
 }
 
 void main() 
@@ -107,6 +103,10 @@ void main()
     
     const vec3 exitColor = vec3(0.0);
 	vec3 pixelColor = vec3(0);
+			
+	vec4 gbuffer = vec4(0);
+	vec4 albedo = vec4(0);
+	vec4 motionvector = vec4(0);
 	
 	// Accumulate all the rays for this pixels.
 	for (uint s = 0; s < Camera.NumberOfSamples; ++s)
@@ -122,8 +122,15 @@ void main()
         // physical camera
 		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
 		// accumulate the raycolor
-		vec3 rayColor = GetRayColor(origin.xyz, direction.xyz, ipos);
-
+		vec3 rayColor = GetPrimaryRayColor(origin.xyz, direction.xyz, gbuffer, albedo, motionvector);
+		// if s == 0, store
+		if( s == 0 )
+		{
+			imageStore(GBufferImage, ipos, gbuffer);
+			imageStore(AlbedoImage, ipos, albedo);
+			imageStore(MotionVectorImage, ipos, motionvector);
+		}
+			
 		pixelColor += rayColor;
 	}
     

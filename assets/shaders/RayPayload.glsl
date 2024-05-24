@@ -8,4 +8,5 @@ struct RayPayload
 	uint RandomSeed;
 	uint AdaptiveRay;
 	uint BounceCount;
+	float pdf;
 };

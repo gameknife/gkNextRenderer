@@ -34,37 +34,34 @@ RayPayload ScatterSimple(const Material m, const vec3 direction, const vec3 norm
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
 	vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
 	vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere1(seed), normal), isScattered ? 1 : 0);
-	
+	float pdf = 1.0;
 	vec4 emitColor = vec4(0);
+	
 	if( m.MaterialModel == MaterialDiffuseLight )
 	{
 	    if(isScattered)
-		    emitColor = vec4(15);
+		{
+			emitColor = vec4(15);
+			colorAndDistance.w = -1;
+		}
 	}
 	
-	// scatter to light
-	vec3 lightpos = vec3( mix( 213, 343, RandomFloat(seed)) ,555, mix( -213, -343, RandomFloat(seed)) );
-	vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
-	vec3 tolight = lightpos - worldPos;
-	float dist = length(tolight);
-	tolight = normalize(tolight);
-	
-	
-	if( true )
+	// half probability to scatter to light
+	if( RandomFloat(seed) < 0.5 )
 	{
-		if( RandomFloat(seed) < 0.5 )
-        {
-            scatter.xyz = tolight;
-            float light_pdf = dist * dist / (abs(scatter.y) * 130 * 130);
-            colorAndDistance.rgb = colorAndDistance.rgb / light_pdf;
-        }
-        else
-        {
-             //colorAndDistance.rgb =  colorAndDistance.rgb * 0.5;
-        }
+		// scatter to light
+		vec3 lightpos = vec3( mix( 213, 343, RandomFloat(seed)) ,555, mix( -213, -343, RandomFloat(seed)) );
+		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+		vec3 tolight = lightpos - worldPos;
+		float dist = length(tolight);
+		tolight = tolight / dist;
+		
+		scatter.xyz = tolight;
+		float light_pdf = dist * dist / (abs(scatter.y) * 130 * 130);
+		pdf = 1.0f / light_pdf;
 	}
 	
-	return RayPayload(colorAndDistance, emitColor, scatter, vec4(normal, m.Fuzziness), seed,0,bounce);
+	return RayPayload(colorAndDistance, emitColor, scatter, vec4(normal, m.Fuzziness), seed,0,bounce,pdf);
 }
 
 void main()

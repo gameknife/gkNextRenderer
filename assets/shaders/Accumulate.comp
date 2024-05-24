@@ -22,16 +22,17 @@ void main() {
     
 
     vec4 history = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
+    
+    // judge current gbuffer / object id with prev frame, to deghosting
+    
     float currKeep = 1.0 / max(1, Camera.TemporalFrames);
 
     if(Camera.TotalFrames % 2 == 0 )
     {
         imageStore(Accumulate1Image, ipos, mix(history , src, currKeep));
-        //imageStore(Accumulate1Image, ipos, vec4(motion, 0, 0));
     }
     else
     {
         imageStore(AccumulateImage, ipos, mix(history , src, currKeep));
-        //imageStore(AccumulateImage, ipos, vec4(motion, 0, 0));
     }
 }

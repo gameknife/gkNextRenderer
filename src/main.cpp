@@ -131,7 +131,7 @@ namespace
         userSettings.HeatmapScale = 1.5f;
 
         userSettings.UseCheckerBoardRendering = false;
-        userSettings.TemporalFrames = 0;
+        userSettings.TemporalFrames = options.Temporal;
 
         userSettings.DenoiseIteration = 0;
         userSettings.DepthPhi = 0.5f;

@@ -31,7 +31,8 @@ public:
 	uint32_t Bounces{};
 	uint32_t MaxSamples{};
 	uint32_t RendererType{};
-
+	uint32_t Temporal{};
+	
 	// Scene options.
 	uint32_t SceneIndex{};
 
