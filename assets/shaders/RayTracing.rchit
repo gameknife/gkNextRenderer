@@ -28,40 +28,44 @@ vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics)
     return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
 }
 
-RayPayload ScatterSimple(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed, in uint bounce)
+void ScatterSimple(inout RayPayload ray, const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t)
 {
-	const bool isScattered = dot(direction, normal) < 0;
+	// flip check
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	// texture fetch
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-	vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb, t);
-	vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere1(seed), normal), isScattered ? 1 : 0);
-	float pdf = 1.0;
-	vec4 emitColor = vec4(0);
+
+	ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
+	ray.Distance = t;
+	ray.ScatterDirection = AlignWithNormal( RandomInHemiSphere1(ray.RandomSeed), normal);
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
 	
+	// if hit light
 	if( m.MaterialModel == MaterialDiffuseLight )
 	{
-	    if(isScattered)
+	    if(ray.FrontFace > 0)
 		{
-			emitColor = vec4(15);
-			colorAndDistance.w = -1;
+			ray.EmitColor = vec4(15);
+			ray.Distance = -1;
 		}
 	}
 	
 	// half probability to scatter to light
-	if( RandomFloat(seed) < 0.5 )
+	if( RandomFloat(ray.RandomSeed) < 0.5 )
 	{
 		// scatter to light
-		vec3 lightpos = vec3( mix( 213, 343, RandomFloat(seed)) ,555, mix( -213, -343, RandomFloat(seed)) );
+		vec3 lightpos = vec3( mix( 213, 343, RandomFloat(ray.RandomSeed)) ,555, mix( -213, -343, RandomFloat(ray.RandomSeed)) );
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
 		float dist = length(tolight);
 		tolight = tolight / dist;
-		
-		scatter.xyz = tolight;
-		float light_pdf = dist * dist / (abs(scatter.y) * 130 * 130);
-		pdf = 1.0f / light_pdf;
+
+		ray.ScatterDirection = tolight;
+		float light_pdf = dist * dist / (abs(ray.ScatterDirection.y) * 130 * 130);
+		ray.pdf = 1.0f / light_pdf;
 	}
-	
-	return RayPayload(colorAndDistance, emitColor, scatter, vec4(normal, m.Fuzziness), seed,0,bounce,pdf);
 }
 
 void main()
@@ -79,6 +83,6 @@ void main()
 	const vec3 barycentrics = vec3(1.0 - HitAttributes.x - HitAttributes.y, HitAttributes.x, HitAttributes.y);
 	const vec3 normal = normalize(Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics));
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
-
-	Ray = ScatterSimple(material, gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, Ray.RandomSeed, Ray.BounceCount);
+	
+	ScatterSimple(Ray, material, gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }

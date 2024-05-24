@@ -29,12 +29,16 @@ void main()
         //const vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), t);
 		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 4.0;
 
-		Ray.ColorAndDistance = vec4(skyColor, -1);
+        Ray.Attenuation = skyColor;
+		Ray.Distance = -1;
 		Ray.EmitColor = vec4(skyColor, -1);
+		Ray.pdf = 1.0;
 	}
 	else
 	{
-		Ray.ColorAndDistance = vec4(0, 0, 0, -1);
-		Ray.EmitColor = vec4(0,0,0, -1);
+		Ray.Attenuation = vec3(0);
+		Ray.Distance = -1;
+		Ray.EmitColor = vec4(0);
+		Ray.pdf = 1.0;
 	}
 }

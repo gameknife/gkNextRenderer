@@ -250,8 +250,8 @@ void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>
 	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
-	camera.FocusDistance = 100.0f;
-	camera.ControlSpeed = 500.0f;
+	camera.FocusDistance = 778.0f;
+	camera.ControlSpeed = 200.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
 
