@@ -213,9 +213,14 @@ namespace Assets
         std::vector<uint32_t> indices;
         std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
 
+        
 
         for (const auto& shape : objReader.GetShapes())
         {
+            glm::vec3 aabb_min(999999,999999,999999);
+            glm::vec3 aabb_max(-999999,-999999,-999999);
+            glm::vec3 direction(0,0,0);
+
             const auto& mesh = shape.mesh;
             size_t faceId = 0;
             for (const auto& index : mesh.indices)
@@ -229,6 +234,9 @@ namespace Assets
                     objAttrib.vertices[3 * index.vertex_index + 2],
                 };
 
+                aabb_min = glm::min( aabb_min, vertex.Position);
+                aabb_max = glm::max( aabb_max, vertex.Position);
+
                 if (!objAttrib.normals.empty())
                 {
                     vertex.Normal =
@@ -237,6 +245,8 @@ namespace Assets
                         objAttrib.normals[3 * index.normal_index + 1],
                         objAttrib.normals[3 * index.normal_index + 2]
                     };
+
+                    direction = vertex.Normal;
                 }
 
                 if (!objAttrib.texcoords.empty())
@@ -257,6 +267,20 @@ namespace Assets
                 }
 
                 indices.push_back(uniqueVertices[vertex]);
+            }
+
+            if(shape.name.find("lightquad") != std::string::npos)
+            {
+                // use the aabb to build a light, using the average normals and area
+                LightObject light;
+                light.WorldPosMin = glm::vec4(aabb_min,1.0);
+                light.WorldPosMax = glm::vec4(aabb_max, 1.0);
+                light.WorldDirection = glm::vec4(direction, 0.0);
+
+                float radius_big = glm::distance(aabb_max, aabb_min);
+                light.area = radius_big * radius_big * 0.5;
+
+                lights.push_back(light);
             }
         }
 
@@ -290,6 +314,8 @@ namespace Assets
         std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
             << materials.size() << " materials) ";
         std::cout << elapsed << "s" << std::endl;
+
+        
 
         // flatten the vertice and indices, individual vertice
 #if FLATTEN_VERTICE
