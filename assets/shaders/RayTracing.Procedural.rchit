@@ -11,6 +11,8 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 layout(binding = 9) readonly buffer SphereArray { vec4[] Spheres; };
 
+layout(binding = 13) readonly buffer LightObjectArray { LightObject[] Lights; };
+
 #include "Scatter.glsl"
 #include "Vertex.glsl"
 
@@ -47,5 +49,7 @@ void main()
 	const vec3 normal = normalize( (point - center) / radius );
 	const vec2 texCoord = GetSphereTexCoord(normal);
 
-	Scatter(Ray, material, gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
+    int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
+
+	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }
