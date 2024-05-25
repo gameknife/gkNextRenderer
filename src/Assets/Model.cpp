@@ -278,7 +278,7 @@ namespace Assets
                 light.WorldDirection = glm::vec4(direction, 0.0);
 
                 float radius_big = glm::distance(aabb_max, aabb_min);
-                light.area = radius_big * radius_big * 0.5;
+                light.area = radius_big * radius_big * 0.25;
 
                 lights.push_back(light);
             }
@@ -312,7 +312,7 @@ namespace Assets
             std::chrono::high_resolution_clock::now() - timer).count();
 
         std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
-            << materials.size() << " materials) ";
+            << materials.size() << " materials, " << lights.size() << " lights";
         std::cout << elapsed << "s" << std::endl;
 
         
@@ -478,6 +478,63 @@ namespace Assets
             std::vector<Material>{material},
             std::vector<LightObject>{},
             isProcedural ? new Sphere(center, radius) : nullptr);
+    }
+
+    Model Model::CreateQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, const glm::vec3& dir, const Material& material)
+    {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        std::vector<LightObject> lights;
+
+        glm::vec3 aabb_min(999999,999999,999999);
+        glm::vec3 aabb_max(-999999,-999999,-999999);
+
+        aabb_min = glm::min(p0, aabb_min);
+        aabb_min = glm::min(p1, aabb_min);
+        aabb_min = glm::min(p2, aabb_min);
+        aabb_min = glm::min(p3, aabb_min);
+
+        aabb_max = glm::min(p0, aabb_max);
+        aabb_max = glm::min(p1, aabb_max);
+        aabb_max = glm::min(p2, aabb_max);
+        aabb_max = glm::min(p3, aabb_max);
+        
+        vertices.push_back(Vertex{ p0, dir, vec2(0, 1), 0 });
+        vertices.push_back(Vertex{ p1, dir, vec2(1, 1), 0 });
+        vertices.push_back(Vertex{ p2, dir, vec2(1, 0), 0 });
+        vertices.push_back(Vertex{ p3, dir, vec2(0, 0), 0 });
+
+        indices.push_back(0);
+        indices.push_back(1);
+        indices.push_back(2);
+
+        indices.push_back(0);
+        indices.push_back(2);
+        indices.push_back(3);
+
+        if(material.MaterialModel == Material::Enum::DiffuseLight)
+        {
+            LightObject light;
+            light.WorldPosMin = vec4(aabb_min, 1.0);
+            light.WorldPosMax = vec4(aabb_max, 1.0);
+            light.WorldDirection = vec4(dir, 0.0);
+
+            float radius_big = glm::distance(aabb_max, aabb_min);
+            light.area = radius_big * radius_big * 0.25;
+
+            lights.push_back(light);
+        }
+        
+#if FLATTEN_VERTICE
+        FlattenVertices(vertices, indices);
+#endif
+
+        return Model(
+            std::move(vertices),
+            std::move(indices),
+            std::vector<Material>{material},
+            std::move(lights),
+            nullptr);
     }
 
     void Model::SetMaterial(const Material& material)

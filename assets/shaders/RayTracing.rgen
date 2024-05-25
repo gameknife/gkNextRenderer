@@ -38,7 +38,10 @@ vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
 	return vec3(0);
 }
 
-GetRayColorGen(GetRayColor4,GetRayColorEnd)
+GetRayColorGen(GetRayColor7,GetRayColorEnd)
+GetRayColorGen(GetRayColor6,GetRayColor7)
+GetRayColorGen(GetRayColor5,GetRayColor6)
+GetRayColorGen(GetRayColor4,GetRayColor5)
 GetRayColorGen(GetRayColor3,GetRayColor4)
 GetRayColorGen(GetRayColor2,GetRayColor3)
 GetRayColorGen(GetRayColor1,GetRayColor2)
@@ -52,7 +55,8 @@ vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4
 	origin = origin + scatterDir * Ray.Distance;
 	
 	
-	vec3 atten = vec3(1.0);//Ray.ColorAndDistance.rgb; albedo later compose
+	//vec3 atten = vec3(1.0);//Ray.ColorAndDistance.rgb; albedo later compose
+	vec3 atten = Ray.Attenuation;
 	vec3 emit = Ray.EmitColor.rgb;
 
 	// fetch albedo

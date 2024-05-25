@@ -3,41 +3,140 @@
 #include "Random.glsl"
 #include "RayPayload.glsl"
 
-//
-//// Polynomial approximation by Christophe Schlick
-//float Schlick(const float cosine, const float refractionIndex)
-//{
-//	float r0 = (1 - refractionIndex) / (1 + refractionIndex);
-//	r0 *= r0;
-//	return r0 + (1 - r0) * pow(1 - cosine, 5);
-//}
-//
-//// Mixture
-//RayPayload ScatterMixture(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed, in uint bounce)
-//{
-//    const float dot = dot(direction, normal);
-//	const vec3 outwardNormal = dot > 0 ? -normal : normal;
-//	const float cosine = dot > 0 ? m.RefractionIndex * dot : -dot;
-//	const float reflectProb = Schlick(cosine, m.RefractionIndex);
-//	
-//	const bool isScattered = dot < 0;
-//	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-//	const vec4 colorAndDistance = vec4(m.Diffuse.rgb * texColor.rgb * texColor.rgb, t);
-//	const vec4 scatter = vec4( AlignWithNormal( RandomInHemiSphere(seed), outwardNormal), isScattered ? 1 : 0);
-//	
-//    return RandomFloat(seed) < reflectProb
-//		? RayPayload( bounce == 0 ? mix(colorAndDistance, vec4(1.0,1.0,1.0,t), reflectProb) : vec4(1.0,1.0,1.0,t), 
-//		vec4( AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, outwardNormal)), isScattered ? 1 : 0), 
-//		vec4(outwardNormal, m.Fuzziness),
-//		seed,0,bounce)
-//	: (
-//		RandomFloat(seed) < m.Metalness ? RayPayload(colorAndDistance,
-//		vec4( AlignWithNormal( RandomInCone(seed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, outwardNormal)), isScattered ? 1 : 0),
-//		vec4(outwardNormal, m.Fuzziness),
-//		seed,0,bounce) :
-//		RayPayload(colorAndDistance, scatter, vec4(outwardNormal, m.Fuzziness), seed,0,bounce)
-//	);
-//}
+
+// Polynomial approximation by Christophe Schlick
+float Schlick(const float cosine, const float refractionIndex)
+{
+	float r0 = (1 - refractionIndex) / (1 + refractionIndex);
+	r0 *= r0;
+	return r0 + (1 - r0) * pow(1 - cosine, 5);
+}
+
+void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	if(ray.FrontFace > 0)
+	{
+		ray.Attenuation = m.Diffuse.rgb;
+		ray.EmitColor = vec4(m.Diffuse.rgb, 1.0);
+		ray.Distance = -1;
+	}
+}
+
+void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+
+	ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
+	ray.ScatterDirection = AlignWithNormal( RandomInHemiSphere1(ray.RandomSeed), normal);
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
+
+	if( light.area > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
+	{
+		// scatter to light
+		vec3 lightpos = mix(light.WorldPosMin.xyz, light.WorldPosMax.xyz, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));
+		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+		vec3 tolight = lightpos - worldPos;
+		float dist = length(tolight);
+		tolight = tolight / dist;
+
+		
+
+		float cosine = dot(light.WorldDirection.xyz, -tolight);
+
+		float light_pdf = dist * dist / (cosine * light.area);
+
+		float ndotl = dot(tolight, normal);
+		
+		if(ndotl > 0)
+		{
+			ray.ScatterDirection = tolight;
+			ray.pdf = 1.0f / light_pdf;
+		}
+	}
+}
+
+void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+
+	ray.Attenuation = vec3(1.0);
+	ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal));
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
+}
+
+void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+
+	ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
+	ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal));
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
+}
+
+void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+	const float dot = dot(direction, normal);
+	ray.FrontFace = dot < 0 ? 1 : 0;
+
+	const vec3 outwardNormal = dot > 0 ? -normal : normal;
+	const float niOverNt = dot > 0 ? m.RefractionIndex : 1 / m.RefractionIndex;
+	const float cosine = dot > 0 ? m.RefractionIndex * dot : -dot;
+
+	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
+	const float reflectProb = refracted != vec3(0) ? Schlick(cosine, m.RefractionIndex) : 1;
+
+	const vec3 reflected = reflect(direction, outwardNormal);
+	
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+
+	if( RandomFloat(ray.RandomSeed) < reflectProb )
+	{
+		// reflect
+		ray.Attenuation = vec3(1.0);
+		ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflected);
+	}
+	else
+	{
+		// refract
+		ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
+		ray.ScatterDirection = refracted;
+	}
+	
+	ray.pdf = 1.0;
+	ray.EmitColor = vec4(0);
+	ray.GBuffer = vec4(normal, m.Fuzziness);
+}
+
+// Mixture
+void ScatterMixture(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
+{
+    const float dot = dot(direction, normal);
+	const float cosine = dot > 0 ? m.RefractionIndex * dot : -dot;
+	const float reflectProb = Schlick(cosine, m.RefractionIndex);
+	
+    if( RandomFloat(ray.RandomSeed) < reflectProb )
+	{
+		ScatterDieletricOpaque(ray,m,light,direction,normal,texCoord);
+	}
+	else if( RandomFloat(ray.RandomSeed) < m.Metalness)
+	{
+		ScatterMetallic(ray,m,light,direction,normal,texCoord);
+	}
+	else
+	{
+		ScatterLambertian(ray,m,light,direction,normal,texCoord);
+	}
+}
 //
 //// Lambertian
 //RayPayload ScatterLambertian(const Material m, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, inout uint seed, in uint bounce)
@@ -121,46 +220,6 @@
 //}
 //
 
-void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
-{
-	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
-    if(ray.FrontFace > 0)
-    {
-        ray.Attenuation = m.Diffuse.rgb;
-        ray.EmitColor = vec4(m.Diffuse.rgb, 1.0);
-        ray.Distance = -1;
-    }
-}
-
-void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
-{
-	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
-	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-
-	ray.Attenuation = m.Diffuse.rgb * texColor.rgb;
-	ray.ScatterDirection = AlignWithNormal( RandomInHemiSphere1(ray.RandomSeed), normal);
-	ray.pdf = 1.0;
-	ray.EmitColor = vec4(0);
-	ray.GBuffer = vec4(normal, m.Fuzziness);
-	
-	if( light.area > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
-	{
-		// scatter to light
-		vec3 lightpos = mix(light.WorldPosMin.xyz, light.WorldPosMax.xyz, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));
-		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
-		vec3 tolight = lightpos - worldPos;
-		float dist = length(tolight);
-		tolight = tolight / dist;
-
-		ray.ScatterDirection = tolight;
-		
-		float cosine = dot(light.WorldDirection.xyz, -tolight);
-		
-		float light_pdf = dist * dist / (cosine * light.area);
-		ray.pdf = 1.0f / light_pdf;
-	}
-}
-
 void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t)
 {
     ray.Distance = t;
@@ -171,16 +230,16 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 		ScatterLambertian(ray, m, light, direction, normal, texCoord);
 		break;
 	case MaterialMetallic:
-		ScatterLambertian(ray, m, light, direction, normal, texCoord);
+		ScatterMetallic(ray, m, light, direction, normal, texCoord);
 		break;
 	case MaterialDielectric:
-		ScatterLambertian(ray, m, light, direction, normal, texCoord);
+		ScatterDieletric(ray, m, light, direction, normal, texCoord);
 		break;
 	case MaterialDiffuseLight:
 		ScatterDiffuseLight(ray, m, light, direction, normal, texCoord);
 		break;
 	case MaterialMixture:
-	    ScatterLambertian(ray, m, light, direction, normal, texCoord);
+		ScatterMixture(ray, m, light, direction, normal, texCoord);
 	    break;
 	case MaterialIsotropic:
 	    ScatterLambertian(ray, m, light, direction, normal, texCoord);

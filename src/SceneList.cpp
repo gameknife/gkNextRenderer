@@ -332,13 +332,14 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	camera.FocusDistance = 100.0f;
 	camera.ControlSpeed = 1.0f;
 	camera.GammaCorrection = true;
-	camera.HasSky = true;
+	camera.HasSky = false;
 	
 	const auto i = mat4(1);
 	
 	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
-	auto box0 = Model::CreateBox(vec3(-2, 0.5, -5), vec3(2, 5, -4.5), arealight);
-
+	auto box0 = Model::CreateBox(vec3(-2, 1, -5), vec3(2, 3, -4.5), arealight);
+	auto light = Model::CreateQuad( vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
+		vec3(0,0,1), arealight );
 	auto lucy0 = Model::LoadModel("../assets/models/kitchen.obj", textures);
 
 	lucy0.Transform(
@@ -349,7 +350,7 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 			radians(0.0f), vec3(0, 1, 0)));
 
 	
-	models.push_back(box0);
+	models.push_back(light);
 	models.push_back(lucy0);
 }
 
