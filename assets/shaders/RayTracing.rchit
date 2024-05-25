@@ -3,7 +3,9 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
 #include "Material.glsl"
+#include "UniformBufferObject.glsl"
 
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
@@ -55,9 +57,10 @@ void ScatterSimple(inout RayPayload ray, const Material m, const vec3 direction,
 	}
 	
 	// half probability to scatter to light
-	if( RandomFloat(ray.RandomSeed) < 0.5 )
+	if( Camera.LightCount > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
 	{
-		LightObject lightDemo = Lights[0];
+		int lightIdx = int(floor(RandomFloat(ray.RandomSeed) * .99999 * Lights.length()));
+		LightObject lightDemo = Lights[lightIdx];
 
 		// scatter to light
 		vec3 lightpos = mix(lightDemo.WorldPosMin.xyz, lightDemo.WorldPosMax.xyz, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));

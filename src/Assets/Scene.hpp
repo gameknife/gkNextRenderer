@@ -43,6 +43,8 @@ namespace Assets
 		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
 		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
 
+		const uint32_t GetLightCount() const {return lightCount_;}
+
 	private:
 
 		const std::vector<Model> models_;
@@ -72,6 +74,8 @@ namespace Assets
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 		std::vector<VkImageView> textureImageViewHandles_;
 		std::vector<VkSampler> textureSamplerHandles_;
+
+		uint32_t lightCount_ {};
 	};
 
 }

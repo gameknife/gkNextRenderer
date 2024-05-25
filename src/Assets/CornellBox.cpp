@@ -26,6 +26,7 @@ void CornellBox::Create(
 	materials.push_back(Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))); // green
 	materials.push_back(Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))); // white
 	materials.push_back(Material::DiffuseLight(vec3(15.0f))); // light
+	materials.push_back(Material::DiffuseLight(vec3(2.0f))); // light
 
 	const float s = scale;
 
@@ -91,28 +92,57 @@ void CornellBox::Create(
 
 	// Light
 	i = static_cast<uint32_t>(vertices.size());
+	{
+		const float x0 = s * (213.0f / 555.0f);
+		const float x1 = s * (343.0f / 555.0f);
+		const float z0 = s * (-555.0f + 342.0f) / 555.0f;
+		const float z1 = s * (-555.0f + 212.0f) / 555.0f;
+		const float y1 = s * 0.999f;
+	
+		vertices.push_back(Vertex{ vec3(x0, y1, z1), vec3(0, -1, 0), vec2(0, 1), 3 });
+		vertices.push_back(Vertex{ vec3(x1, y1, z1), vec3(0, -1, 0), vec2(1, 1), 3 });
+		vertices.push_back(Vertex{ vec3(x1, y1, z0), vec3(0, -1, 0), vec2(1, 0), 3 });
+		vertices.push_back(Vertex{ vec3(x0, y1, z0), vec3(0, -1, 0), vec2(0, 0), 3 });
+	
+		AddTriangle(indices, i, 0, 1, 2);
+		AddTriangle(indices, i, 0, 2, 3);
+	
+		LightObject light {};
+		light.WorldPosMin = vec4(x0, y1, z1, 1);
+		light.WorldPosMax = vec4(x1, y1, z0, 1);
+		light.WorldDirection = vec4(0, -1, 0, 0);
+		light.area = (x1 - x0) * (z0 - z1);
+	
+		lights.push_back(light);
+	}
 
-	const float x0 = s * (213.0f / 555.0f);
-	const float x1 = s * (343.0f / 555.0f);
-	const float z0 = s * (-555.0f + 342.0f) / 555.0f;
-	const float z1 = s * (-555.0f + 212.0f) / 555.0f;
-	const float y1 = s * 0.998f;
+	
+	// Second Light
+	i = static_cast<uint32_t>(vertices.size());
+	{
+		const float x0 = s * (13.0f / 555.0f);
+		const float x1 = s * (143.0f / 555.0f);
+		const float z0 = s * (-555.0f + 442.0f) / 555.0f;
+		const float z1 = s * (-555.0f + 312.0f) / 555.0f;
+		const float y1 = s * 0.001f;
 
-	vertices.push_back(Vertex{ vec3(x0, y1, z1), vec3(0, -1, 0), vec2(0, 1), 3 });
-	vertices.push_back(Vertex{ vec3(x1, y1, z1), vec3(0, -1, 0), vec2(1, 1), 3 });
-	vertices.push_back(Vertex{ vec3(x1, y1, z0), vec3(0, -1, 0), vec2(1, 0), 3 });
-	vertices.push_back(Vertex{ vec3(x0, y1, z0), vec3(0, -1, 0), vec2(0, 0), 3 });
+		vertices.push_back(Vertex{ vec3(x0, y1, z1), vec3(0, 1, 0), vec2(0, 1), 4 });
+		vertices.push_back(Vertex{ vec3(x1, y1, z1), vec3(0, 1, 0), vec2(1, 1), 4 });
+		vertices.push_back(Vertex{ vec3(x1, y1, z0), vec3(0, 1, 0), vec2(1, 0), 4 });
+		vertices.push_back(Vertex{ vec3(x0, y1, z0), vec3(0, 1, 0), vec2(0, 0), 4 });
 
-	AddTriangle(indices, i, 0, 1, 2);
-	AddTriangle(indices, i, 0, 2, 3);
+		AddTriangle(indices, i, 0, 2, 1);
+		AddTriangle(indices, i, 0, 3, 2);
 
-	LightObject light {};
-	light.WorldPosMin = vec4(x0, y1, z1, 1);
-	light.WorldPosMax = vec4(x1, y1, z0, 1);
-	light.WorldDirection = vec4(0, -1, 0, 0);
-	light.area = (x1 - x0) * (z0 - z1);
+		LightObject light {};
+		light.WorldPosMin = vec4(x0, y1, z1, 1);
+		light.WorldPosMax = vec4(x1, y1, z0, 1);
+		light.WorldDirection = vec4(0, 1, 0, 0);
+		light.area = (x1 - x0) * (z0 - z1);
 
-	lights.push_back(light);
+		lights.push_back(light);
+	}
+	
 }
 
 }

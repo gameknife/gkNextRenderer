@@ -70,6 +70,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 	ubo.DepthPhi = userSettings_.DepthPhi;
 	ubo.NormalPhi = userSettings_.NormalPhi;
 
+	ubo.LightCount = scene_->GetLightCount();
+
 	prevUBO_ = ubo;
 
 	return ubo;

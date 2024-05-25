@@ -74,6 +74,8 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std:
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Procedurals", flags, procedurals, proceduralBuffer_, proceduralBufferMemory_);
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
+
+	lightCount_ = lights.size();
 	
 	// Upload all textures
 	textureImages_.reserve(textures_.size());

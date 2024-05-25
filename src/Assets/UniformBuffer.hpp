@@ -34,6 +34,7 @@ namespace Assets
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;
 		uint32_t RandomSeed;
+		uint32_t LightCount;
 		uint32_t HasSky; // bool
 		uint32_t ShowHeatmap; // bool
 		uint32_t UseCheckerBoard; // bool

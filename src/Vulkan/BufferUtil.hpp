@@ -62,17 +62,20 @@ namespace Vulkan
 	{
 		const auto& device = commandPool.Device();
 		const auto& debugUtils = device.DebugUtils();
-		const auto contentSize = sizeof(content[0]) * content.size();
+		const auto contentSize = sizeof(T) * (content.size() == 0 ? 1 : content.size()); // judge if contentSize == 0
 		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
 			: 0;
-
+		
 		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage));
 		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 
 		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
 		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());
 
-		CopyFromStagingBuffer(commandPool, *buffer, content);
+		if(content.size() > 0)
+		{
+			CopyFromStagingBuffer(commandPool, *buffer, content);
+		}
 	}
 }
