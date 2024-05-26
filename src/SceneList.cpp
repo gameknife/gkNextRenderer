@@ -280,7 +280,7 @@ void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Mo
 	camera.HasSky = false;
 	
 	const auto i = mat4(1);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Isotropic(vec3(0.7,1.0,0.65), 1.5f, 0.5f), true);
+	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.45f, 0.0f), true);
 	auto lucy0 = Model::LoadModel("../assets/models/lucy.obj", textures);
 
 	lucy0.Transform(

@@ -148,7 +148,7 @@ namespace Vulkan::RayTracing
 
         rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
                                                          *accumulationImageView_, *motionVectorImageView_,
-                                                         *pingpongImage1View_, *gbufferImageView_, *albedoImageView_, *visibilityBufferImageView_, *validateImageView_,
+                                                         *pingpongImage1View_, *gbufferImageView_, *albedoImageView_, *visibilityBufferImageView_, *visibility1BufferImageView_,
                                                          UniformBuffers(), GetScene()));
         denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
                                                      *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,

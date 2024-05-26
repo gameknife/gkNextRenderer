@@ -18,7 +18,7 @@ layout(binding = 11, rgba16f) uniform image2D Output1Image;
 layout(binding = 12, rgba16f) uniform image2D AlbedoImage;
 
 layout(binding = 14, r32ui) uniform uimage2D VisibilityBuffer;
-layout(binding = 15, r8ui) uniform uimage2D ValidateBuffer;
+layout(binding = 15, r32ui) uniform uimage2D Visibility1Buffer;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
@@ -121,8 +121,9 @@ void main()
 			
 	// Adaptive Sampling
 	// this can be judge by current frame, first sample we can determin if we dismiss the cache, and catch up samples
-	uint dismiss = imageLoad(ValidateBuffer, ipos).r;
-	uint sampleTimes = dismiss != 0 ? 32u : Camera.NumberOfSamples;
+	uint sampleTimes = Camera.NumberOfSamples;
+	
+	ivec2 imgSize = imageSize(Visibility1Buffer);
 			
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
@@ -142,15 +143,32 @@ void main()
 		uint primitiveId = 0;
 		vec3 rayColor = GetPrimaryRayColor(origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
 		albedo += s_albedo;
-		// if s == 0, store
+		
+		pixelColor += rayColor;
+		
 		if( s == 0 )
 		{
 			imageStore(GBufferImage, ipos, gbuffer);
 			imageStore(MotionVectorImage, ipos, motionvector);
 			imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0,0,0));
-		}
+
+		    // after the first spp, we could judge if reproject miss with previous primitive buffer
+		
+			vec2 prevfpos = vec2(ipos) + motionvector.rg;
+			ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
 			
-		pixelColor += rayColor;
+			uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
+			uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r;
+			uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
+			uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
+
+			bool dismiss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId) ));
+			
+			if(dismiss)
+			{
+				sampleTimes = 48u;
+			}
+		}
 	}
     
     pixelColor = pixelColor / sampleTimes;

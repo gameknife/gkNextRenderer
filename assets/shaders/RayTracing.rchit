@@ -46,6 +46,6 @@ void main()
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
-	Ray.primitiveId = gl_PrimitiveID;
+	Ray.primitiveId = v0.MaterialIndex + 1;
 	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }

@@ -39,6 +39,9 @@ void main() {
         subpixel.y
     );
     
+    // clamp the history color
+    history = clamp(history, vec4(0.0), vec4(1.25));
+    
     // fetch visibility to validate the history
     uint current_primitive_index = imageLoad(VisibilityBuffer, ipos).r;
     uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
@@ -47,18 +50,10 @@ void main() {
     uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
     
     bool dismiss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
-
-    bool dismissLast = imageLoad(ValidateBuffer, ipos).r != 0;
-    
-    // dismiss at the target pixel
-    if( dismissLast )
-    {
-        history = src;
-    }
     
     if( dismiss )
     {
-        //history = src;
+        history = src;
     }
 
     // save to 

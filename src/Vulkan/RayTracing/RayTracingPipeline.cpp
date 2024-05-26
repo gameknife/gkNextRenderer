@@ -26,7 +26,7 @@ namespace Vulkan::RayTracing
         const ImageView& gbufferImageView,
         const ImageView& albedoImageView,
         const ImageView& visibilityBufferImageView,
-        const ImageView& validateImageView,
+        const ImageView& visibility1BufferImageView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers,
         const Assets::Scene& scene) :
         swapChain_(swapChain)
@@ -112,14 +112,15 @@ namespace Vulkan::RayTracing
             albedoImageInfo.imageView = albedoImageView.Handle();
             albedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-            VkDescriptorImageInfo validateImageInfo = {};
-            validateImageInfo.imageView = validateImageView.Handle();
-            validateImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
 
             VkDescriptorImageInfo visibilityBufferImageInfo = {};
             visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
             visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-         
+            
+            VkDescriptorImageInfo visibility1BufferImageInfo = {};
+            visibility1BufferImageInfo.imageView = visibility1BufferImageView.Handle();
+            visibility1BufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -177,7 +178,7 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 12, albedoImageInfo),
                 descriptorSets.Bind(i, 13, lightBufferInfo),
                 descriptorSets.Bind(i, 14, visibilityBufferImageInfo),
-                descriptorSets.Bind(i, 15, validateImageInfo),
+                descriptorSets.Bind(i, 15, visibility1BufferImageInfo),
                 
             };
 
