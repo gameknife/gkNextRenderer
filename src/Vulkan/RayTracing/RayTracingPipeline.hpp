@@ -38,6 +38,8 @@ namespace Vulkan::RayTracing
 			const ImageView& output1ImageView,
 			const ImageView& gbufferImageView,
 			const ImageView& albedoImageView,
+			const ImageView& visibilityBufferImageView,
+			const ImageView& validateImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayTracingPipeline();
@@ -108,6 +110,7 @@ namespace Vulkan::RayTracing
 			const ImageView& final1ImageView,
 			const ImageView& albedoImageView,
 			const ImageView& outImageView,
+			const ImageView& motionVectorView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers);
 		~ComposePipeline();
 

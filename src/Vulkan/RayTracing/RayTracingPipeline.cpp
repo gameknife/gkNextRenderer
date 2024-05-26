@@ -25,6 +25,8 @@ namespace Vulkan::RayTracing
         const ImageView& output1ImageView,
         const ImageView& gbufferImageView,
         const ImageView& albedoImageView,
+        const ImageView& visibilityBufferImageView,
+        const ImageView& validateImageView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers,
         const Assets::Scene& scene) :
         swapChain_(swapChain)
@@ -67,6 +69,8 @@ namespace Vulkan::RayTracing
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             // Light buffer
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+                {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -108,6 +112,14 @@ namespace Vulkan::RayTracing
             albedoImageInfo.imageView = albedoImageView.Handle();
             albedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+            VkDescriptorImageInfo validateImageInfo = {};
+            validateImageInfo.imageView = validateImageView.Handle();
+            validateImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorImageInfo visibilityBufferImageInfo = {};
+            visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
+            visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+         
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -164,6 +176,9 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 11, output1ImageInfo),
                 descriptorSets.Bind(i, 12, albedoImageInfo),
                 descriptorSets.Bind(i, 13, lightBufferInfo),
+                descriptorSets.Bind(i, 14, visibilityBufferImageInfo),
+                descriptorSets.Bind(i, 15, validateImageInfo),
+                
             };
 
             // Procedural buffer (optional)
@@ -387,7 +402,7 @@ namespace Vulkan::RayTracing
     }
 
     ComposePipeline::ComposePipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
-        const ImageView& final0ImageView, const ImageView& final1ImageView, const ImageView& albedoImageView, const ImageView& outImageView,
+        const ImageView& final0ImageView, const ImageView& final1ImageView, const ImageView& albedoImageView, const ImageView& outImageView, const ImageView& motionVectorView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers):swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
@@ -401,6 +416,7 @@ namespace Vulkan::RayTracing
             {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             // Camera information & co
             {4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -414,7 +430,7 @@ namespace Vulkan::RayTracing
             VkDescriptorImageInfo Info2 = {NULL,  albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info3 = {NULL,  outImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorBufferInfo Info4 = {uniformBuffers[i].Buffer().Handle(), 0, VK_WHOLE_SIZE};
-
+            VkDescriptorImageInfo Info5 = {NULL,  motionVectorView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -422,6 +438,7 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 2, Info2),
                 descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, Info4),
+                descriptorSets.Bind(i, 5, Info5),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

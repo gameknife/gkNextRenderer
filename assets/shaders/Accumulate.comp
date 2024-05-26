@@ -9,6 +9,10 @@ layout(binding = 2, rgba16f) uniform image2D Accumulate1Image;
 layout(binding = 3, rg16f) uniform image2D MotionVectorImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
+layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
+layout(binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
+layout(binding = 7, r8ui) uniform uimage2D ValidateBuffer;
+
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 // a simple accumulation shader, reproject can impl here later.
@@ -18,15 +22,56 @@ void main() {
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
     vec4 src = imageLoad(NewSourceImage, ipos);
     
-    ivec2 previpos = clamp(ivec2( floor(ipos + motion + vec2(0.5)) ), ivec2(0), ivec2(imageSize(AccumulateImage) - ivec2(1)));
+    //ivec2 previpos = clamp(ivec2( floor(ipos + motion + vec2(0.5) ) ), ivec2(0), ivec2(imageSize(AccumulateImage) - ivec2(1)));
     
+    vec2 prevfpos = vec2(ipos) + motion;
+    ivec2 previpos = ivec2( floor(ipos + motion) );
+    vec2 subpixel = fract(prevfpos);
 
-    vec4 history = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
+    vec4 history0 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
+    vec4 history1 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(1,0)) : imageLoad(Accumulate1Image, previpos + ivec2(1,0));
+    vec4 history2 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
+    vec4 history3 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
+    
+    vec4 history = mix(
+        mix(history0, history1, subpixel.x),
+        mix(history2, history3, subpixel.x),
+        subpixel.y
+    );
+    
+    // fetch visibility to validate the history
+    uint current_primitive_index = imageLoad(VisibilityBuffer, ipos).r;
+    uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
+    uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r;
+    uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r;
+    uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
+    
+    bool dismiss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
+
+    bool dismissLast = imageLoad(ValidateBuffer, ipos).r != 0;
+    
+    // dismiss at the target pixel
+    if( dismissLast )
+    {
+        history = src;
+    }
+    
+    if( dismiss )
+    {
+        //history = src;
+    }
+
+    // save to 
+    uint primitive_index = imageLoad(VisibilityBuffer, ipos).r;
+    imageStore(Visibility1Buffer, ipos, ivec4(primitive_index,0,0,0));
+    imageStore(ValidateBuffer, ipos, ivec4(dismiss ? 1 : 0,0,0,0));
+    // the prev pos should bilinear sample cause it may int subpixel
+    
     
     // judge current gbuffer / object id with prev frame, to deghosting
     
     float currKeep = 1.0 / max(1, Camera.TemporalFrames);
-
+    
     if(Camera.TotalFrames % 2 == 0 )
     {
         imageStore(Accumulate1Image, ipos, mix(history , src, currKeep));

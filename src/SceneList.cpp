@@ -308,9 +308,11 @@ void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(30,30,30));
+	const auto arealight = Material::DiffuseLight(vec3(10,10,10));
 	auto box0 = Model::CreateBox(vec3(-2, 0.5, -1), vec3(2, 3, -0.5), arealight);
-
+	auto light = Model::CreateQuad( vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
+		vec3(0,0,1), arealight );
+	
 	auto lucy0 = Model::LoadModel("../assets/models/livingroom.obj", textures);
 
 	lucy0.Transform(
@@ -320,7 +322,7 @@ void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>
 				vec3(1.0)),
 			radians(0.0f), vec3(0, 1, 0)));
 	
-	models.push_back(box0);
+	models.push_back(light);
 	models.push_back(lucy0);
 }
 
@@ -336,10 +338,10 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(30,30,25));
-	auto box0 = Model::CreateBox(vec3(-2, 1, -5), vec3(2, 3, -4.5), arealight);
+	const auto arealight = Material::DiffuseLight(vec3(10,10,10));
 	auto light = Model::CreateQuad( vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
 		vec3(0,0,1), arealight );
+	
 	auto lucy0 = Model::LoadModel("../assets/models/kitchen.obj", textures);
 
 	lucy0.Transform(
@@ -360,7 +362,7 @@ void SceneList::LuxBall(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	camera.FieldOfView = 20;
 	camera.Aperture = 0.00f;
 	camera.FocusDistance = 55.0f;
-	camera.ControlSpeed = 0.2f;
+	camera.ControlSpeed = 0.1f;
 	camera.GammaCorrection = true;
 	camera.HasSky = false;
 	

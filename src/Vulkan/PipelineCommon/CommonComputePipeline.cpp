@@ -11,20 +11,29 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 
-namespace Vulkan::PipelineCommon {
-	
-AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageView& sourceImageView, const ImageView& accumulateImageView,  const ImageView& accumulateImage1View, const ImageView& motionVectorImageView,
-	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
+namespace Vulkan::PipelineCommon
 {
-	 // Create descriptor pool/sets.
+    AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageView& sourceImageView,
+                                           const ImageView& accumulateImageView, const ImageView& accumulateImage1View,
+                                           const ImageView& motionVectorImageView,
+                                           const ImageView& visibilityBufferImageView,
+                                           const ImageView& prevVisibilityBufferImageView,
+                                           const ImageView& validateImage1View,
+                                           const std::vector<Assets::UniformBuffer>& uniformBuffers,
+                                           const Assets::Scene& scene): swapChain_(swapChain)
+    {
+        // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
         const std::vector<DescriptorBinding> descriptorBindings =
         {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_SHADER_STAGE_COMPUTE_BIT},
-				{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE , VK_SHADER_STAGE_COMPUTE_BIT},
-{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -33,24 +42,28 @@ AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageVi
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info0 = {NULL,  sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL,  accumulateImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-        	VkDescriptorImageInfo Info2 = {NULL,  accumulateImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-        	VkDescriptorImageInfo Info3 = {NULL,  motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-        	
-        	// Uniform buffer
-        	VkDescriptorBufferInfo uniformBufferInfo = {};
-        	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
-        	uniformBufferInfo.range = VK_WHOLE_SIZE;
+            VkDescriptorImageInfo Info0 = {NULL, sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL, accumulateImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info2 = {NULL, accumulateImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info3 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info5 = {NULL, visibilityBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info6 = {NULL, prevVisibilityBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info7 = {NULL, validateImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            // Uniform buffer
+            VkDescriptorBufferInfo uniformBufferInfo = {};
+            uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+            uniformBufferInfo.range = VK_WHOLE_SIZE;
 
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-				descriptorSets.Bind(i, 0, Info0),
-				descriptorSets.Bind(i, 1, Info1),
-            	descriptorSets.Bind(i, 2, Info2),
-            	descriptorSets.Bind(i, 3, Info3),
-				descriptorSets.Bind(i, 4, uniformBufferInfo),
-            	
+                descriptorSets.Bind(i, 0, Info0),
+                descriptorSets.Bind(i, 1, Info1),
+                descriptorSets.Bind(i, 2, Info2),
+                descriptorSets.Bind(i, 3, Info3),
+                descriptorSets.Bind(i, 4, uniformBufferInfo),
+                descriptorSets.Bind(i, 5, Info5),
+                descriptorSets.Bind(i, 6, Info6),
+                descriptorSets.Bind(i,7, Info7),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -63,27 +76,27 @@ AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageVi
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
         pipelineCreateInfo.layout = pipelineLayout_->Handle();
-	
+
         Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
                                        1, &pipelineCreateInfo,
                                        NULL, &pipeline_),
               "create deferred shading pipeline");
-}
+    }
 
-AccumulatePipeline::~AccumulatePipeline()
-{
-	if (pipeline_ != nullptr)
-	{
-		vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
-		pipeline_ = nullptr;
-	}
+    AccumulatePipeline::~AccumulatePipeline()
+    {
+        if (pipeline_ != nullptr)
+        {
+            vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+            pipeline_ = nullptr;
+        }
 
-	pipelineLayout_.reset();
-	descriptorSetManager_.reset();
-}
+        pipelineLayout_.reset();
+        descriptorSetManager_.reset();
+    }
 
-VkDescriptorSet AccumulatePipeline::DescriptorSet(uint32_t index) const
-{
-	return descriptorSetManager_->DescriptorSets().Handle(index);
-}
+    VkDescriptorSet AccumulatePipeline::DescriptorSet(uint32_t index) const
+    {
+        return descriptorSetManager_->DescriptorSets().Handle(index);
+    }
 }

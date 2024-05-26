@@ -51,6 +51,14 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
 		std::unique_ptr<ImageView> visibilityBufferImageView_;
 
+		std::unique_ptr<Image> visibilityBuffer1Image_;
+		std::unique_ptr<DeviceMemory> visibilityBuffer1ImageMemory_;
+		std::unique_ptr<ImageView> visibilityBuffer1ImageView_;
+
+		std::unique_ptr<Image> validateImage_;
+		std::unique_ptr<DeviceMemory> validateImageMemory_;
+		std::unique_ptr<ImageView> validateImageView_;
+
 		std::unique_ptr<Image> outputImage_;
 		std::unique_ptr<DeviceMemory> outputImageMemory_;
 		std::unique_ptr<ImageView> outputImageView_;

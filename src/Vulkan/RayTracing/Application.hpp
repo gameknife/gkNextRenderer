@@ -94,6 +94,18 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Image> motionVectorImage_;
 		std::unique_ptr<DeviceMemory> motionVectorImageMemory_;
 		std::unique_ptr<ImageView> motionVectorImageView_;
+
+		std::unique_ptr<Image> visibilityBufferImage_;
+		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
+		std::unique_ptr<ImageView> visibilityBufferImageView_;
+
+		std::unique_ptr<Image> visibility1BufferImage_;
+		std::unique_ptr<DeviceMemory> visibility1BufferImageMemory_;
+		std::unique_ptr<ImageView> visibility1BufferImageView_;
+
+		std::unique_ptr<Image> validateImage_;
+		std::unique_ptr<DeviceMemory> validateImageMemory_;
+		std::unique_ptr<ImageView> validateImageView_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;

@@ -148,19 +148,22 @@ namespace Vulkan::RayTracing
 
         rayTracingPipeline_.reset(new RayTracingPipeline(*deviceProcedures_, SwapChain(), topAs_[0],
                                                          *accumulationImageView_, *motionVectorImageView_,
-                                                         *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
+                                                         *pingpongImage1View_, *gbufferImageView_, *albedoImageView_, *visibilityBufferImageView_, *validateImageView_,
                                                          UniformBuffers(), GetScene()));
         denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
                                                      *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
                                                      UniformBuffers(), GetScene()));
         composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage0View_, *pingpongImage1View_,
-                                                   *albedoImageView_, *outputImageView_, UniformBuffers()));
+                                                   *albedoImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers()));
 
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
             *accumulationImageView_,
             *pingpongImage0View_,
             *pingpongImage1View_,
             *motionVectorImageView_,
+            *visibilityBufferImageView_,
+            *visibility1BufferImageView_,
+            *validateImageView_,
             UniformBuffers(), GetScene()));
     
         
@@ -197,6 +200,18 @@ namespace Vulkan::RayTracing
         albedoImage_.reset();
         albedoImageView_.reset();
         albedoImageMemory_.reset();
+
+        visibilityBufferImage_.reset();
+        visibilityBufferImageMemory_.reset();
+        visibilityBufferImageView_.reset();
+
+        visibility1BufferImage_.reset();
+        visibility1BufferImageMemory_.reset();
+        visibility1BufferImageView_.reset();
+
+        validateImage_.reset(0);
+        validateImageMemory_.reset(0);
+        validateImageView_.reset(0);
 
         motionVectorImage_.reset();
         motionVectorImageView_.reset();
@@ -238,6 +253,14 @@ namespace Vulkan::RayTracing
                                    VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+
+        ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
+       0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+        ImageMemoryBarrier::Insert(commandBuffer, visibility1BufferImage_->Handle(), subresourceRange,
+0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+        ImageMemoryBarrier::Insert(commandBuffer, validateImage_->Handle(), subresourceRange,
+0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+        
         // Bind ray tracing pipeline.
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
@@ -555,6 +578,33 @@ namespace Vulkan::RayTracing
         motionVectorImageView_.reset( new ImageView(Device(), motionVectorImage_->Handle(), VK_FORMAT_R16G16_SFLOAT,
                                                    VK_IMAGE_ASPECT_COLOR_BIT) );
 
+        visibilityBufferImage_.reset(new Image(Device(), extent,
+        VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+        visibilityBufferImageMemory_.reset(
+            new DeviceMemory(visibilityBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        visibilityBufferImageView_.reset(new ImageView(Device(), visibilityBufferImage_->Handle(),
+            VK_FORMAT_R32_UINT,
+            VK_IMAGE_ASPECT_COLOR_BIT));
+
+        visibility1BufferImage_.reset(new Image(Device(), extent,
+        VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+        visibility1BufferImageMemory_.reset(
+            new DeviceMemory(visibility1BufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        visibility1BufferImageView_.reset(new ImageView(Device(), visibility1BufferImage_->Handle(),
+            VK_FORMAT_R32_UINT,
+            VK_IMAGE_ASPECT_COLOR_BIT));
+
+        validateImage_.reset(new Image(Device(), extent,
+                                       VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL,
+                                       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+        validateImageMemory_.reset(
+            new DeviceMemory(validateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        validateImageView_.reset(new ImageView(Device(), validateImage_->Handle(),
+            VK_FORMAT_R8_UINT,
+            VK_IMAGE_ASPECT_COLOR_BIT));
+        
         const auto& debugUtils = Device().DebugUtils();
 
         debugUtils.SetObjectName(accumulationImage_->Handle(), "Accumulation Image");

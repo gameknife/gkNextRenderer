@@ -11,6 +11,7 @@ struct RayPayload
 	uint AdaptiveRay;
 	uint BounceCount;
 	float pdf;
+	uint primitiveId;
 };
 
 // a simple box light may enough now

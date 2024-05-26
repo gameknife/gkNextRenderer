@@ -25,8 +25,7 @@ glm::mat4 ModelViewController::ModelView() const
 	const auto cameraRotY = static_cast<float>(modelRotX_ / 300.0);
 	
 	const auto model =
-		glm::rotate(glm::mat4(1.0f), cameraRotY * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
-		glm::rotate(glm::mat4(1.0f), cameraRotX * glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		glm::rotate(glm::mat4(1.0f), cameraRotY * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	
 	const auto view = orientation_ * glm::translate(glm::mat4(1), -glm::vec3(position_));
 
@@ -96,7 +95,7 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 	if (cameraMovingDown_) MoveUp(-d);
 	if (cameraMovingUp_) MoveUp(d);
 
-	const float rotationDiv = 300;
+	const float rotationDiv = 1200;
 	Rotate(cameraRotX_ / rotationDiv, cameraRotY_ / rotationDiv);
 
 	const bool updated =

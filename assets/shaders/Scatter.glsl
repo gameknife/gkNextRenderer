@@ -15,11 +15,16 @@ float Schlick(const float cosine, const float refractionIndex)
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
+	ray.Distance = -1;
 	if(ray.FrontFace > 0)
 	{
 		ray.Attenuation = m.Diffuse.rgb;
 		ray.EmitColor = vec4(m.Diffuse.rgb, 1.0);
-		ray.Distance = -1;
+	}
+	else
+	{
+		ray.Attenuation = vec3(0);
+		ray.EmitColor = vec4(0);
 	}
 }
 

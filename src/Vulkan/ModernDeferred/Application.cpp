@@ -47,6 +47,24 @@ void ModernDeferredRenderer::CreateSwapChain()
 		VK_FORMAT_R32_UINT,
 		VK_IMAGE_ASPECT_COLOR_BIT));
 
+	visibilityBuffer1Image_.reset(new Image(Device(), extent,
+	VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
+	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	visibilityBuffer1ImageMemory_.reset(
+		new DeviceMemory(visibilityBuffer1Image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	visibilityBuffer1ImageView_.reset(new ImageView(Device(), visibilityBuffer1Image_->Handle(),
+		VK_FORMAT_R32_UINT,
+		VK_IMAGE_ASPECT_COLOR_BIT));
+
+	validateImage_.reset(new Image(Device(), extent,
+VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL,
+VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	validateImageMemory_.reset(
+		new DeviceMemory(validateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	validateImageView_.reset(new ImageView(Device(), validateImage_->Handle(),
+		VK_FORMAT_R8_UINT,
+		VK_IMAGE_ASPECT_COLOR_BIT));
+
 	outputImage_.reset(new Image(Device(), extent, format,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT));
@@ -86,7 +104,9 @@ void ModernDeferredRenderer::CreateSwapChain()
 	
 	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers(), GetScene()));
-	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, *accumulateImage1View_, *motionVectorImageView_, UniformBuffers(), GetScene()));
+	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, *accumulateImage1View_, *motionVectorImageView_,
+	*visibilityBufferImageView_,*visibilityBuffer1ImageView_, *validateImageView_,
+	UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
@@ -105,6 +125,14 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	visibilityBufferImage_.reset();
 	visibilityBufferImageMemory_.reset();
 	visibilityBufferImageView_.reset();
+
+	visibilityBuffer1Image_.reset();
+	visibilityBuffer1ImageMemory_.reset();
+	visibilityBuffer1ImageView_.reset();
+
+	validateImage_.reset();
+	validateImageMemory_.reset();
+	validateImageView_.reset();
 
 	outputImage_.reset();
 	outputImageMemory_.reset();
