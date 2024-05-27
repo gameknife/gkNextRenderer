@@ -156,7 +156,7 @@ void main()
 		
 		if( s == 0 )
 		{
-			imageStore(GBufferImage, ipos, gbuffer);
+			//imageStore(GBufferImage, ipos, gbuffer);
 			imageStore(MotionVectorImage, ipos, motionvector);
 			imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0,0,0));
 
@@ -174,14 +174,14 @@ void main()
 			
 			if(dismiss)
 			{
-				sampleTimes = 32u;
+				sampleTimes = 16u;
 			}
 		}
 	}
     
     pixelColor = pixelColor / sampleTimes;
 
-	imageStore(AlbedoImage, ipos, albedo / sampleTimes);
+	//imageStore(AlbedoImage, ipos, albedo / sampleTimes);
 		
 	if (Camera.ShowHeatmap)
 	{
