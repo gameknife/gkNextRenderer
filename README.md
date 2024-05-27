@@ -24,16 +24,20 @@
 ## 特性
 
 * Vulkan Raytracing pipeline
-* Ground Truth Path Tracing
-* Compute Checkerbox Rendering
-* Non-Raytracing pipeline
-* Visibiliy Buffer Rendering
+    * Importance Sampling
+    * Ground Truth Path Tracing
+* Non-Raytracing Pipeline
+    * Visibiliy Buffer Rendering
+    * Legacy Rendering
+* Common Rendering Feature
+    * Compute Checkerbox Rendering
+    * Temporal Reproject
 * obj / gltf PBR Scene Support
 * CrossPlatform support for Windows/Linux/MacOS
 
 ## 性能
 
-在我的RTX4070上，1920x1080下，1spp + 多帧降噪的情况下，图库内的场景基本都能跑出400-500fps的帧率。并且在后期完成reproject后，这个帧率是有可能在真实渲染环境内达到的。rtx的性能出乎了我的意料
+在我的RTX4070上，1920x1080下，1spp + 多帧sample的情况下，图库内的场景基本都能跑出400-500fps的帧率。并且在后期完成reproject后，这个帧率是有可能在真实渲染环境内达到的。rtx的性能出乎了我的意料
 
 目前很多实现的细节还没有深究，应该还有一定的优化空间
 
@@ -58,13 +62,16 @@ Here are my results with the command above on a few different computers.
     - Element Instancing
 
 - RayTracing Pipeline
-    - Temporal Reprojection
+    - ~~Temporal Reprojection~~
     - Ray Query Pipeline
 
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
     - Hybrid Rendering
     - ~~Reference Legacy Lighting~~
+
+- Common Rendering Feature
+    - SVGF Denoise
 
 - Platform
     - ~~MacOS moltenVK~~
@@ -76,7 +83,7 @@ Here are my results with the command above on a few different computers.
 
 - Others
     - HDR display support
-    - HDR Env loading & apply to skylight (both RT & non-RT pipeline)
+    - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
 
 
 ## 随感
