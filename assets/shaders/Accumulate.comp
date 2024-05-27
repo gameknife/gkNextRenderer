@@ -40,7 +40,7 @@ void main() {
     );
     
     // clamp the history color
-    history = clamp(history, vec4(0.0), vec4(1.25));
+    //history = clamp(history, vec4(0.0), vec4(1.25));
     
     // fetch visibility to validate the history
     uint current_primitive_index = imageLoad(VisibilityBuffer, ipos).r;

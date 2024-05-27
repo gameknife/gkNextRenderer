@@ -50,5 +50,7 @@ void main()
 
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
 
+    Ray.primitiveId = v0.MaterialIndex + 1;
+
 	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }

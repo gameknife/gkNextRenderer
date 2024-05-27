@@ -7,6 +7,7 @@ struct RayPayload
 	vec3 ScatterDirection;
 	uint FrontFace;
 	vec4 GBuffer; // normal + roughness
+	vec4 Albedo;
 	uint RandomSeed;
 	uint AdaptiveRay;
 	uint BounceCount;

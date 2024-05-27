@@ -21,6 +21,10 @@ vec4 equirectangularSample(vec3 direction, float rotate)
 
 void main()
 {
+	Ray.GBuffer = vec4(0,1,0,0);
+	Ray.Albedo = vec4(1,1,1,1);
+	Ray.primitiveId = 999;
+	
 	if (Camera.HasSky)
 	{
 		// Sky color

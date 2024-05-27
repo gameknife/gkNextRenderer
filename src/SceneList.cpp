@@ -247,7 +247,7 @@ void SceneList::LucyInOneWeekend(CameraInitialSate& camera, std::vector<Assets::
 
 void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
-	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
+	camera.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
 	camera.FocusDistance = 778.0f;
@@ -261,8 +261,8 @@ void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>
 	auto box0 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), white);
 	auto box1 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 330, 0), white);
 
-	box0.Transform(rotate(translate(i, vec3(555 - 130 - 165, 0, -65)), radians(-18.0f), vec3(0, 1, 0)));
-	box1.Transform(rotate(translate(i, vec3(555 - 265 - 165, 0, -295)), radians(15.0f), vec3(0, 1, 0)));
+	box0.Transform(rotate(translate(i, vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
+	box1.Transform(rotate(translate(i, vec3(278 - 265 - 165, 0, 17)), radians(15.0f), vec3(0, 1, 0)));
 	
 	models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);
@@ -271,7 +271,7 @@ void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>
 
 void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
 {
-	camera.ModelView = lookAt(vec3(278, 278, 800), vec3(278, 278, 0), vec3(0, 1, 0));
+	camera.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 40;
 	camera.Aperture = 0.0f;
 	camera.FocusDistance = 100.0f;
@@ -280,13 +280,13 @@ void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Mo
 	camera.HasSky = false;
 	
 	const auto i = mat4(1);
-	const auto sphere = Model::CreateSphere(vec3(555 - 130, 165.0f, -165.0f / 2 - 65), 80.0f, Material::Dielectric(1.45f, 0.0f), true);
+	const auto sphere = Model::CreateSphere(vec3(278 - 130, 165.0f, -165.0f / 2 + 213), 80.0f, Material::Dielectric(1.45f, 0.0f), true);
 	auto lucy0 = Model::LoadModel("../assets/models/lucy.obj", textures);
 
 	lucy0.Transform(
 		rotate(
 			scale(
-				translate(i, vec3(555 - 300 - 165/2, -9, -295 - 165/2)),
+				translate(i, vec3(278 - 300 - 165/2, -9, 17 - 165/2)),
 				vec3(0.6f)),
 			radians(75.0f), vec3(0, 1, 0)));
 
