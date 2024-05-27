@@ -114,8 +114,8 @@ void main()
 	// Initialise separate random seeds for the pixel and the rays.
 	// - pixel: we want the same random seed for each pixel to get a homogeneous anti-aliasing.
 	// - ray: we want a noisy random seed, different for each pixel.
-	uint pixelRandomSeed = 0;//Camera.RandomSeed;
-    vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / isize;
+	//uint pixelRandomSeed = 0;//Camera.RandomSeed;
+    //vec2 uvOffset = vec2(RandomFloat(pixelRandomSeed), RandomFloat(pixelRandomSeed)) / isize;
 	Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
 	//Ray.RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalNumberOfSamples);
     const vec3 exitColor = vec3(0.0);
@@ -138,7 +138,7 @@ void main()
 		const vec2 pixel = vec2(ipos);
 		vec2 uv = (pixel / isize) * 2.0 - 1.0;
 		// anti aliasing
-        uv += uvOffset;
+        //uv += uvOffset;
        
 		vec2 offset = vec2(0);//Camera.Aperture / 2 * RandomInUnitDisk(Ray.RandomSeed);
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
