@@ -76,7 +76,7 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	std::vector<const char*> requiredExtensions = 
 	{
 		// VK_KHR_swapchain
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
