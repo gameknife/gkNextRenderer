@@ -21,8 +21,7 @@ namespace Vulkan::RayTracing
         const SwapChain& swapChain,
         const TopLevelAccelerationStructure& accelerationStructure,
         const ImageView& accumulationImageView,
-        const ImageView& outputImageView,
-        const ImageView& output1ImageView,
+        const ImageView& motionVectorImageView,
         const ImageView& gbufferImageView,
         const ImageView& albedoImageView,
         const ImageView& visibilityBufferImageView,
@@ -37,13 +36,13 @@ namespace Vulkan::RayTracing
         {
             // Top level acceleration structure.
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-
-            // Image accumulation & output
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-
+            // Light buffer
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
             // Camera information & co
-            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+            {
+                3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },
 
             // Vertex buffer, Index buffer, Material buffer, Offset buffer
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
@@ -63,14 +62,13 @@ namespace Vulkan::RayTracing
                 VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR
             },
 
-            // GBuffer.
+            // Images, 6 image, output, motion, gbuffer, albedo, visibility, visibility1
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-            // Light buffer
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-                {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -93,14 +91,9 @@ namespace Vulkan::RayTracing
             accumulationImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             // Output image
-            VkDescriptorImageInfo outputImageInfo = {};
-            outputImageInfo.imageView = outputImageView.Handle();
-            outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            // Output1 image
-            VkDescriptorImageInfo output1ImageInfo = {};
-            output1ImageInfo.imageView = output1ImageView.Handle();
-            output1ImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            VkDescriptorImageInfo motionVectorImageInfo = {};
+            motionVectorImageInfo.imageView = motionVectorImageView.Handle();
+            motionVectorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             // Gbuffer image
             VkDescriptorImageInfo gbufferImageInfo = {};
@@ -113,11 +106,10 @@ namespace Vulkan::RayTracing
             albedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 
-
             VkDescriptorImageInfo visibilityBufferImageInfo = {};
             visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
             visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            
+
             VkDescriptorImageInfo visibility1BufferImageInfo = {};
             visibility1BufferImageInfo.imageView = visibility1BufferImageView.Handle();
             visibility1BufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -165,21 +157,19 @@ namespace Vulkan::RayTracing
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, structureInfo),
-                descriptorSets.Bind(i, 1, accumulationImageInfo),
-                descriptorSets.Bind(i, 2, outputImageInfo),
+                descriptorSets.Bind(i, 1, lightBufferInfo),
                 descriptorSets.Bind(i, 3, uniformBufferInfo),
                 descriptorSets.Bind(i, 4, vertexBufferInfo),
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
                 descriptorSets.Bind(i, 7, offsetsBufferInfo),
                 descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
-                descriptorSets.Bind(i, 10, gbufferImageInfo),
-                descriptorSets.Bind(i, 11, output1ImageInfo),
-                descriptorSets.Bind(i, 12, albedoImageInfo),
-                descriptorSets.Bind(i, 13, lightBufferInfo),
+                descriptorSets.Bind(i, 10, accumulationImageInfo),
+                descriptorSets.Bind(i, 11, motionVectorImageInfo),
+                descriptorSets.Bind(i, 12, gbufferImageInfo),
+                descriptorSets.Bind(i, 13, albedoImageInfo),
                 descriptorSets.Bind(i, 14, visibilityBufferImageInfo),
                 descriptorSets.Bind(i, 15, visibility1BufferImageInfo),
-                
             };
 
             // Procedural buffer (optional)
@@ -403,8 +393,10 @@ namespace Vulkan::RayTracing
     }
 
     ComposePipeline::ComposePipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
-        const ImageView& final0ImageView, const ImageView& final1ImageView, const ImageView& albedoImageView, const ImageView& outImageView, const ImageView& motionVectorView,
-        const std::vector<Assets::UniformBuffer>& uniformBuffers):swapChain_(swapChain)
+                                     const ImageView& final0ImageView, const ImageView& final1ImageView,
+                                     const ImageView& albedoImageView, const ImageView& outImageView,
+                                     const ImageView& motionVectorView,
+                                     const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -412,12 +404,12 @@ namespace Vulkan::RayTracing
         {
             // Image accumulation & output & GBuffer.
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             // Camera information & co
             {4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -426,12 +418,12 @@ namespace Vulkan::RayTracing
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info0 = {NULL,  final0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL,  final1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info2 = {NULL,  albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info3 = {NULL,  outImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info0 = {NULL, final0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL, final1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info2 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info3 = {NULL, outImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorBufferInfo Info4 = {uniformBuffers[i].Buffer().Handle(), 0, VK_WHOLE_SIZE};
-            VkDescriptorImageInfo Info5 = {NULL,  motionVectorView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info5 = {NULL, motionVectorView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -450,8 +442,9 @@ namespace Vulkan::RayTracing
         pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
         pushConstantRange.offset = 0;
         pushConstantRange.size = 8;
-        
-        PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
+
+        PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
+                                                       &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "../assets/shaders/Compose.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

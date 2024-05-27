@@ -10,13 +10,12 @@
 #include "UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
-layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
-layout(binding = 2, rg16f) uniform image2D MotionVectorImage;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-layout(binding = 10, rgba32f) uniform image2D GBufferImage;
-layout(binding = 11, rgba16f) uniform image2D Output1Image;
-layout(binding = 12, rgba16f) uniform image2D AlbedoImage;
 
+layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
+layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
+layout(binding = 12, rgba32f) uniform image2D GBufferImage;
+layout(binding = 13, rgba16f) uniform image2D AlbedoImage;
 layout(binding = 14, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 15, r32ui) uniform uimage2D Visibility1Buffer;
 
