@@ -44,12 +44,13 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		vec3 tolight = lightpos - worldPos;
 		float dist = length(tolight);
 		tolight = tolight / dist;
-		
-		float cosine = dot(light.WorldDirection.xyz, -tolight);
+
+		const float epsVariance      = .01;
+		float cosine = max(dot(light.WorldDirection.xyz, -tolight), epsVariance);
 		float light_pdf = dist * dist / (cosine * light.area);
 		float ndotl = dot(tolight, normal);
 		
-		if(ndotl > 0)
+		if(ndotl >= 0)
 		{
 			ray.ScatterDirection = tolight;
 			ray.pdf = 1.0f / light_pdf;
@@ -100,11 +101,11 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		// refract
 		ray.Attenuation = ray.Albedo.rgb;
 		ray.ScatterDirection = refracted;
+		ray.BounceCount--;
 	}
 	
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
-	ray.GBuffer = vec4(normal, m.Fuzziness);
 }
 
 // Mixture

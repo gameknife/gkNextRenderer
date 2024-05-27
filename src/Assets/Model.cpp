@@ -494,10 +494,10 @@ namespace Assets
         aabb_min = glm::min(p2, aabb_min);
         aabb_min = glm::min(p3, aabb_min);
 
-        aabb_max = glm::min(p0, aabb_max);
-        aabb_max = glm::min(p1, aabb_max);
-        aabb_max = glm::min(p2, aabb_max);
-        aabb_max = glm::min(p3, aabb_max);
+        aabb_max = glm::max(p0, aabb_max);
+        aabb_max = glm::max(p1, aabb_max);
+        aabb_max = glm::max(p2, aabb_max);
+        aabb_max = glm::max(p3, aabb_max);
         
         vertices.push_back(Vertex{ p0, dir, vec2(0, 1), 0 });
         vertices.push_back(Vertex{ p1, dir, vec2(1, 1), 0 });

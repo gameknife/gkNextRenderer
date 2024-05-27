@@ -23,7 +23,7 @@ void main() {
     // simple compose together
     vec4 final = pushConsts.pingpong == 0 ? imageLoad(Final1Image, ipos) : imageLoad(Final0Image, ipos);
     vec4 albedo = imageLoad(AlbedoImage, ipos);
-    imageStore(OutImage, ipos, sqrt(final * albedo));
+    imageStore(OutImage, ipos, sqrt(final));
 
     //vec4 motion = clamp(imageLoad(MotionVectorImage, ipos) / 1.f, -1.0f, 1.0f);// * 0.5f + 0.5f;
     //imageStore(OutImage, ipos, vec4(motion.rg,0,0));

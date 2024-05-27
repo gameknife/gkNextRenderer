@@ -27,7 +27,7 @@ vec3 name(vec3 origin, vec3 scatterDir){ \
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,origin.xyz, 0.001, scatterDir, 10000.0, 0);\
 	vec3 atten = Ray.Attenuation;\
 	vec3 emit = Ray.EmitColor.rgb;\
-	if(Ray.Distance < 0)\
+	if(Ray.Distance < 0 || Ray.BounceCount == Camera.NumberOfBounces)\
 	{\
 		return emit;\
 	}\
@@ -40,7 +40,15 @@ vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
 	return vec3(0);
 }
 
-GetRayColorGen(GetRayColor7,GetRayColorEnd)
+GetRayColorGen(GetRayColor15,GetRayColorEnd)
+GetRayColorGen(GetRayColor14,GetRayColor15)
+GetRayColorGen(GetRayColor13,GetRayColor14)
+GetRayColorGen(GetRayColor12,GetRayColor13)
+GetRayColorGen(GetRayColor11,GetRayColor12)
+GetRayColorGen(GetRayColor10,GetRayColor11)
+GetRayColorGen(GetRayColor9,GetRayColor10)
+GetRayColorGen(GetRayColor8,GetRayColor9)
+GetRayColorGen(GetRayColor7,GetRayColor8)
 GetRayColorGen(GetRayColor6,GetRayColor7)
 GetRayColorGen(GetRayColor5,GetRayColor6)
 GetRayColorGen(GetRayColor4,GetRayColor5)
@@ -50,14 +58,16 @@ GetRayColorGen(GetRayColor1,GetRayColor2)
 
 vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4 albedo, out vec4 motionVector, out uint primitiveId)
 {
+	// Start
+	Ray.BounceCount = 0;
 	// trace ray
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, 
 		origin.xyz, 0.001, scatterDir, 10000.0, 0);
 
 	origin = origin + scatterDir * Ray.Distance;
 
-	Ray.Albedo.rgb = clamp(Ray.Albedo.rgb, 0.01, 1);
-	vec3 atten = Ray.Attenuation / Ray.Albedo.rgb;
+	//Ray.Albedo.rgb = clamp(Ray.Albedo.rgb, 0.01, 1);
+	vec3 atten = Ray.Attenuation;// / Ray.Albedo.rgb;
 	vec3 emit = Ray.EmitColor.rgb;
 
 	// fetch albedo
@@ -130,7 +140,7 @@ void main()
 		// anti aliasing
         uv += uvOffset;
        
-		vec2 offset = Camera.Aperture / 2 * RandomInUnitDisk(Ray.RandomSeed);
+		vec2 offset = vec2(0);//Camera.Aperture / 2 * RandomInUnitDisk(Ray.RandomSeed);
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
 		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
         // physical camera
