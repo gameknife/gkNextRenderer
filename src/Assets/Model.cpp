@@ -8,6 +8,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/hash.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <tiny_obj_loader.h>
 #include <chrono>
@@ -51,28 +52,11 @@ namespace std
 
 namespace Assets
 {
-    Model Model::LoadModel(const std::string& filename, std::vector<Texture>& textures)
-    {
-        // if filename endwith .glb
-        // load glb file
-        // else
-        // load obj file
-        if (filename.find(".glb") != std::string::npos)
-        {
-            return LoadGltfModel(filename, textures);
-        }
-        else
-        {
-            return LoadObjModel(filename, textures);
-        }
-    }
-
-    Model Model::LoadGltfModel(const std::string& filename, std::vector<Texture>& textures)
+    void Model::LoadGLTFScene(const std::string& filename, std::vector<Assets::Node>& nodes,
+        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
     {
         std::vector<LightObject> lights;
-        std::vector<Material> materials;
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
+        
 
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
@@ -80,19 +64,22 @@ namespace Assets
         std::string warn;
 
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
-
-        materials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
-
-        int32_t indice_count = 0;
+        
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
+            std::vector<Material> materials;
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+
+            materials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
+            
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
-                tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["POSITION"]];
-                tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["POSITION"]];
+                tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
+                tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
                 
                 tinygltf::BufferView positionView = model.bufferViews[positionAccessor.bufferView];
                 tinygltf::BufferView normalView = model.bufferViews[normalAccessor.bufferView];
@@ -132,13 +119,23 @@ namespace Assets
                 for(size_t i = 0; i < indexAccessor.count; ++i)
                 {
                     uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
-                    indices.push_back(*data + indice_count);
+                    indices.push_back(*data);
                 }
-                indice_count += vertices.size();
             }
+
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr));
         }
 
-        return Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr);
+        for (tinygltf::Node& node : model.nodes)
+        {
+            glm::vec3 translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+            glm::vec3 scaling = vec3(1);
+            glm::quat quaternion = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
+            glm::mat4 rotation = glm::toMat4(quaternion);
+            glm::mat4 transform = glm::transpose( (scale(translate(glm::mat4(1), translation), scaling)) * rotation);
+            
+            nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+        }
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
@@ -157,7 +154,7 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
-    Model Model::LoadObjModel(const std::string& filename, std::vector<Texture>& textures)
+    Model Model::LoadModel(const std::string& filename, std::vector<Texture>& textures)
     {
         std::cout << "- loading '" << filename << "'... " << std::flush;
 

@@ -15,15 +15,15 @@ namespace Assets
 	class Model final
 	{
 	public:
-		static Model LoadGltfModel(const std::string& filename, std::vector<Texture> &textures);
+		
 		static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
-		static Model LoadObjModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model LoadModel(const std::string& filename, std::vector<Texture> &textures);
 		static Model CreateCornellBox(const float scale);
 		static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, const Material& material);
 		static Model CreateSphere(const glm::vec3& center, float radius, const Material& material, bool isProcedural);
 		static Model CreateQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, const glm::vec3& dir, const Material& material);
-
+		static void LoadGLTFScene(const std::string& filename, std::vector<class Node>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+		
 		Model& operator = (const Model&) = delete;
 		Model& operator = (Model&&) = delete;
 
@@ -82,4 +82,6 @@ namespace Assets
 		int modelId_;
 		bool procedural_;
 	};
+
+	
 }

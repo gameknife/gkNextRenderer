@@ -82,8 +82,7 @@ void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::No
 
 	const auto i = mat4(1);
 	
-	auto scene = Model::LoadModel("../assets/models/simple.glb", textures);
-	models.push_back(scene);
+	Model::LoadGLTFScene("../assets/models/simple.glb", nodes, models, textures);
 }
 
 void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
