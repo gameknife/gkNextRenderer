@@ -73,7 +73,6 @@ namespace Assets
         std::vector<Material> materials;
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        //std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
 
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
@@ -82,7 +81,9 @@ namespace Assets
 
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
 
-        materials.push_back( Material::Lambertian(vec3(1, 1, 1)));
+        materials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
+
+        int32_t indice_count = 0;
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
@@ -90,32 +91,50 @@ namespace Assets
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
-
-                int stride = positionAccessor.ByteStride(model.bufferViews[positionAccessor.bufferView]);
+                tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["POSITION"]];
+                tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["POSITION"]];
+                
+                tinygltf::BufferView positionView = model.bufferViews[positionAccessor.bufferView];
+                tinygltf::BufferView normalView = model.bufferViews[normalAccessor.bufferView];
+                tinygltf::BufferView texcoordView = model.bufferViews[texcoordAccessor.bufferView];
+                
+                int positionStride = positionAccessor.ByteStride(positionView);
+                int normalStride = normalAccessor.ByteStride(normalView);
+                int texcoordStride = texcoordAccessor.ByteStride(texcoordView);
+                
                 for(size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = (float*)&model.buffers[model.bufferViews[positionAccessor.bufferView].buffer].data[positionAccessor.byteOffset + i * stride];
+                    float* position = (float*)&model.buffers[positionView.buffer].data[positionView.byteOffset + i * positionStride];
                     vertex.Position = vec3(
                     position[0],
                     position[1],
                     position[2]
                     );
-
+                    float* normal = (float*)&model.buffers[normalView.buffer].data[normalView.byteOffset + i * normalStride];
+                    vertex.Normal = vec3(
+                        normal[0],
+                        normal[1],
+                        normal[2]
+                    );
+                    float* texcoord = (float*)&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i * texcoordStride];
+                    vertex.TexCoord = vec2(
+                        texcoord[0],
+                        texcoord[1]
+                    );
+                    
                     vertex.MaterialIndex = 0;
-
                     vertices.push_back(vertex);
                 }
 
-                int strideIndex = indexAccessor.ByteStride(model.bufferViews[indexAccessor.bufferView]);
+                tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
+                int strideIndex = indexAccessor.ByteStride(indexView);
                 for(size_t i = 0; i < indexAccessor.count; ++i)
                 {
-                    uint8* data = &model.buffers[model.bufferViews[indexAccessor.bufferView].buffer].data[indexAccessor.byteOffset + i * strideIndex];
-                    // big endian to uint16
-                    uint16 index = (data[1] << 8) + data[0];
-                    
-                    indices.push_back(index);
+                    uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                    indices.push_back(*data + indice_count);
                 }
+                indice_count += vertices.size();
             }
         }
 

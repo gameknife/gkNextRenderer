@@ -23,7 +23,7 @@ namespace Assets
 		static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, const Material& material);
 		static Model CreateSphere(const glm::vec3& center, float radius, const Material& material, bool isProcedural);
 		static Model CreateQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, const glm::vec3& dir, const Material& material);
-		
+
 		Model& operator = (const Model&) = delete;
 		Model& operator = (Model&&) = delete;
 
