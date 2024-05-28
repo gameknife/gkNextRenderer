@@ -338,7 +338,7 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Model>& m
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(10,10,10));
+	const auto arealight = Material::DiffuseLight(vec3(1000,1000,1000));
 	auto light = Model::CreateQuad( vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
 		vec3(0,0,1), arealight );
 	

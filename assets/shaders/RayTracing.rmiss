@@ -31,7 +31,8 @@ void main()
         const vec3 rayDirection = normalize(gl_WorldRayDirectionEXT);
 		const float t = 0.5*(rayDirection.y + 1);
         //const vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), t);
-		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 4.0;
+		// max value is 1000.0nit
+		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 1000.0;
 
         Ray.Attenuation = skyColor;
 		Ray.Distance = -1;
