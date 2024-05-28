@@ -64,6 +64,7 @@ Here are my results with the command above on a few different computers.
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
     - Ray Query Pipeline
+    - MIS
 
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
@@ -91,6 +92,7 @@ Here are my results with the command above on a few different computers.
 - [ ] GLTF format load
 - [ ] Hybrid rendering with ray query
 - [ ] Android Hybrid Rendering
+- [ ] Full scope refactor
 
 ## 随感
 
