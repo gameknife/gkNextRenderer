@@ -82,12 +82,40 @@ namespace Assets
 
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
 
+        materials.push_back( Material::Lambertian(vec3(1, 1, 1)));
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
-                // pos normal texcoord material
+                tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
+                tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
+
+                int stride = positionAccessor.ByteStride(model.bufferViews[positionAccessor.bufferView]);
+                for(size_t i = 0; i < positionAccessor.count; ++i)
+                {
+                    Vertex vertex;
+                    float* position = (float*)&model.buffers[model.bufferViews[positionAccessor.bufferView].buffer].data[positionAccessor.byteOffset + i * stride];
+                    vertex.Position = vec3(
+                    position[0],
+                    position[1],
+                    position[2]
+                    );
+
+                    vertex.MaterialIndex = 0;
+
+                    vertices.push_back(vertex);
+                }
+
+                int strideIndex = indexAccessor.ByteStride(model.bufferViews[indexAccessor.bufferView]);
+                for(size_t i = 0; i < indexAccessor.count; ++i)
+                {
+                    uint8* data = &model.buffers[model.bufferViews[indexAccessor.bufferView].buffer].data[indexAccessor.byteOffset + i * strideIndex];
+                    // big endian to uint16
+                    uint16 index = (data[1] << 8) + data[0];
+                    
+                    indices.push_back(index);
+                }
             }
         }
 

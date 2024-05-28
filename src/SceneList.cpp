@@ -122,18 +122,24 @@ void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Mo
 {
 	camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
 	camera.FieldOfView = 20;
-	camera.Aperture = 0.1f;
+	camera.Aperture = 0.0f;
 	camera.FocusDistance = 1000.0f;
 	camera.ControlSpeed = 5.0f;
 	camera.GammaCorrection = true;
 	camera.HasSky = true;
 
-	const bool isProc = true;
+	const auto i = mat4(1);
+	
+	auto scene = Model::LoadModel("../assets/models/simple.glb", textures);
 
-	std::mt19937 engine(42);
-	std::function<float ()> random = std::bind(std::uniform_real_distribution<float>(), engine);
-
-	AddRayTracingInOneWeekendCommonSceneBox(models, isProc, random);
+	scene.Transform(
+		rotate(
+			scale(
+				translate(i, vec3(0, 0, 0)),
+				vec3(1.0)),
+			radians(0.0f), vec3(0, 1, 0)));
+	
+	models.push_back(scene);
 }
 
 void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
