@@ -30,7 +30,7 @@
 * Common Rendering Feature
     * Compute Checkerbox Rendering
     * Temporal Reproject
-* obj / gltf PBR Scene Support
+* Wavefront OBJ File PBR Scene Support
 * CrossPlatform support for Windows/Linux/MacOS
 * HDR Display Support
 * Phsyical Light Unit
@@ -64,6 +64,7 @@ Here are my results with the command above on a few different computers.
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
     - Ray Query Pipeline
+    - MIS
 
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
@@ -84,13 +85,26 @@ Here are my results with the command above on a few different computers.
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
+    - GLTF Scene Support, with real scene management.
 
+## Next Todolist
+
+- [ ] GLTF format load
+- [ ] Hybrid rendering with ray query
+- [ ] Android Hybrid Rendering
+- [ ] Full scope refactor
 
 ## 随感
 
 - vcpkg是一个好东西，2024年我才“了解”到，真的是相见恨晚。这是一个类似于npm / pip的针对cpp的包管理库，由微软维护，但支持的平台有win/linux/osx/android/ios甚至主机。通过vcpkg，很方便的就做到了windows, linux, macOS的跨平台。目前我的steamdeck和apple m3的mbp，均可以正常的跑起来. steamdeck在打开棋盘格渲染后甚至有40+的fps
 
 - 因为一开始是接触的metal3的hardware raytracing，当时的写法是在一个compute shader里调用rayquery的接口。而此demo使用的是khr_raytracing_pipeline，更加类似dx12的写法。而ray query其实也是可以用的。我在8gen2上写了一个vulkan初始化程序，他的光追也是只支持到ray query，因此感觉这个才是一个真正的跨平台方案。
+
+- SmallPT的思路是非常直观的，就是“模拟”真实世界。肆无忌惮的朝球面的各个方向发射射线，然后模拟光线的反弹。蒙特卡洛方法，通过无数多的样本，最终收敛到一个真实的结果。
+所以基础的PT代码，是非常好看的，一个递归算法就解决了。
+而PT之所以有这么多人研究，就是希望他能够更快，能够不发射这么多的样本，就可以得到一个真实的结果。
+
+- 
 
 ## Building
 
@@ -139,3 +153,4 @@ macOS using moltenVK, you should install it. then just
 
 * [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
+
