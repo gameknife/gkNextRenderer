@@ -483,7 +483,7 @@ namespace Vulkan::RayTracing
         for (const auto& model : scene.Models())
         {
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[instanceId], glm::mat4(1), instanceId, model.Procedural() ? 1 : 0));
+                bottomAs_[instanceId], model.WorldTransform(), instanceId, model.Procedural() ? 1 : 0));
             instanceId++;
         }
 

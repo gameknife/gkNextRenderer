@@ -39,6 +39,7 @@ namespace Assets
 		const std::vector<uint32_t>& Indices() const { return indices_; }
 		const std::vector<Material>& Materials() const { return materials_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
+		const glm::mat4& const WorldTransform() const {return transform_; }
 
 		const class Procedural* Procedural() const { return procedural_.get(); }
 
@@ -56,6 +57,8 @@ namespace Assets
 		std::shared_ptr<const class Procedural> procedural_;
 
 		std::vector<LightObject> lights_;
+
+		glm::mat4 transform_;
 	};
 
 }

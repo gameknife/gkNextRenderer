@@ -314,7 +314,7 @@ void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Model>
 	
 	const auto i = mat4(1);
 	
-	const auto arealight = Material::DiffuseLight(vec3(10,10,10));
+	const auto arealight = Material::DiffuseLight(vec3(1000,1000,1000));
 	auto box0 = Model::CreateBox(vec3(-2, 0.5, -1), vec3(2, 3, -0.5), arealight);
 	auto light = Model::CreateQuad( vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
 		vec3(0,0,1), arealight );

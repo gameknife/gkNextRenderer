@@ -596,13 +596,15 @@ namespace Assets
 
     void Model::Transform(const mat4& transform)
     {
-        const auto transformIT = inverseTranspose(transform);
+        // const auto transformIT = inverseTranspose(transform);
+        //
+        // for (auto& vertex : vertices_)
+        // {
+        //     vertex.Position = transform * vec4(vertex.Position, 1);
+        //     vertex.Normal = transformIT * vec4(vertex.Normal, 0);
+        // }
 
-        for (auto& vertex : vertices_)
-        {
-            vertex.Position = transform * vec4(vertex.Position, 1);
-            vertex.Normal = transformIT * vec4(vertex.Normal, 0);
-        }
+        transform_ = glm::transpose(transform);
     }
 
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials,
@@ -614,5 +616,6 @@ namespace Assets
         lights_(std::move(lights)),
         procedural_(procedural)
     {
+        transform_ = glm::mat4(1);
     }
 }
