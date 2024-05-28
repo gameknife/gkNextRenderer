@@ -4,7 +4,7 @@
 
 实现基于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) fork而来，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。
 
-基于其版本，修改了采样算法，Shading模型，Model的加载方案，以及降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
+基于其版本，修改了采样算法，Shading模型，Model的加载方案，以及Reproject和降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
 
 通过本项目，旨在补上在现代渲染上缺的课，同时更加深入的理解GPU光线跟踪，争取在下一个时代来临前做好准备。
 
@@ -19,8 +19,6 @@
 ![Alt text](gallery/livingroom.jpg?raw=true "livingroom")
 ![Alt text](gallery/still.jpg?raw=true "still")
 
-
-
 ## 特性
 
 * Vulkan Raytracing pipeline
@@ -34,10 +32,12 @@
     * Temporal Reproject
 * obj / gltf PBR Scene Support
 * CrossPlatform support for Windows/Linux/MacOS
+* HDR Display Support
+* Phsyical Light Unit
 
 ## 性能
 
-在我的RTX4070上，1920x1080下，1spp + 多帧sample的情况下，图库内的场景基本都能跑出400-500fps的帧率。并且在后期完成reproject后，这个帧率是有可能在真实渲染环境内达到的。rtx的性能出乎了我的意料
+在我的RTX4070上，1920x1080下，1spp + 多帧sample的情况下，图库内的场景基本都能跑出400-500fps的帧率。并且在后期完成reproject后，这个帧率是有可能在真实的实时渲染环境内达到的。rtx的性能出乎了我的意料
 
 目前很多实现的细节还没有深究，应该还有一定的优化空间
 
@@ -82,7 +82,7 @@ Here are my results with the command above on a few different computers.
     - Version Management
 
 - Others
-    - HDR display support
+    - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
 
 
