@@ -138,6 +138,8 @@ namespace
         userSettings.NormalPhi = 90.f;
         userSettings.ColorPhi = 5.f;
 
+        userSettings.PaperWhiteNit = 600.f;
+
         return userSettings;
     }
 

@@ -69,6 +69,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 	ubo.ColorPhi = userSettings_.ColorPhi;
 	ubo.DepthPhi = userSettings_.DepthPhi;
 	ubo.NormalPhi = userSettings_.NormalPhi;
+	ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 
 	ubo.LightCount = scene_->GetLightCount();
 

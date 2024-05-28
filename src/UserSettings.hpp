@@ -43,6 +43,8 @@ struct UserSettings final
 	float ColorPhi;
 	float DepthPhi;
 	float NormalPhi;
+
+	float PaperWhiteNit;
 	
 	inline const static float FieldOfViewMinValue = 10.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;

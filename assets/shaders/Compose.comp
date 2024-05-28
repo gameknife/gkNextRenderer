@@ -84,7 +84,7 @@ void main() {
 
     //final = final * 60;
     
-    imageStore(OutImage, ipos, vec4( LinearToST2084UE(final.rgb), 1.0));
+    imageStore(OutImage, ipos, vec4( LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
 
     //vec4 motion = clamp(imageLoad(MotionVectorImage, ipos) / 1.f, -1.0f, 1.0f);// * 0.5f + 0.5f;
     //imageStore(OutImage, ipos, vec4(motion.rg,0,0));
