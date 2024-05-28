@@ -14,6 +14,7 @@ namespace Vulkan
 
 namespace Assets
 {
+	class Node;
 	class Model;
 	class Texture;
 	class TextureImage;
@@ -27,9 +28,10 @@ namespace Assets
 		Scene& operator = (const Scene&) = delete;
 		Scene& operator = (Scene&&) = delete;
 
-		Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing);
+		Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes,std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing);
 		~Scene();
 
+		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		bool HasProcedurals() const { return static_cast<bool>(proceduralBuffer_); }
 
@@ -49,6 +51,7 @@ namespace Assets
 
 		const std::vector<Model> models_;
 		const std::vector<Texture> textures_;
+		const std::vector<Node> nodes_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;

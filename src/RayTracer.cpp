@@ -304,11 +304,11 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
 	std::vector<Assets::Model> models;
 	std::vector<Assets::Texture> textures;
-
+	std::vector<Assets::Node> nodes;
 	// texture id 0: global sky
 	textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
 	
-	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
+	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures);
 
 	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
 	if (textures.empty())
@@ -316,7 +316,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(models), std::move(textures), false));
+	scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures), false));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -334,11 +334,11 @@ void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(
 {
 	std::vector<Assets::Model> models;
 	std::vector<Assets::Texture> textures;
-
+	std::vector<Assets::Node> nodes;
 	// texture id 0: global sky
 	textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
 	
-	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, models, textures);
+	SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures);
 
 	// If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
 	if (textures.empty())
@@ -346,7 +346,7 @@ void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(models), std::move(textures), true));
+	scene_.reset(new Assets::Scene(CommandPool(), std::move(nodes), std::move(models), std::move(textures), true));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;

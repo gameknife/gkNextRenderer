@@ -33,20 +33,18 @@ namespace Assets
 		~Model() = default;
 
 		void SetMaterial(const Material& material);
-		void Transform(const glm::mat4& transform);
-
+		
 		const std::vector<Vertex>& Vertices() const { return vertices_; }
 		const std::vector<uint32_t>& Indices() const { return indices_; }
 		const std::vector<Material>& Materials() const { return materials_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
-		const glm::mat4& const WorldTransform() const {return transform_; }
+		
 
 		const class Procedural* Procedural() const { return procedural_.get(); }
 
 		uint32_t NumberOfVertices() const { return static_cast<uint32_t>(vertices_.size()); }
 		uint32_t NumberOfIndices() const { return static_cast<uint32_t>(indices_.size()); }
 		uint32_t NumberOfMaterials() const { return static_cast<uint32_t>(materials_.size()); }
-
 	private:
 
 		Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials, std::vector<LightObject>&& lights, const class Procedural* procedural);
@@ -57,8 +55,31 @@ namespace Assets
 		std::shared_ptr<const class Procedural> procedural_;
 
 		std::vector<LightObject> lights_;
-
-		glm::mat4 transform_;
 	};
 
+	class Node final
+	{
+	public:
+
+		static Node CreateNode(glm::mat4 transform, int id, bool procedural);
+		Node& operator = (const Node&) = delete;
+		Node& operator = (Node&&) = delete;
+
+		Node() = default;
+		Node(const Node&) = default;
+		Node(Node&&) = default;
+		~Node() = default;
+		
+		void Transform(const glm::mat4& transform) {transform_ = transform;}
+		const glm::mat4& const WorldTransform() const {return transform_; }
+		int GetModel() const {return modelId_;}
+		bool IsProcedural() const {return procedural_;}
+	private:
+
+		Node(glm::mat4 transform, int id, bool procedural);
+		
+		glm::mat4 transform_;
+		int modelId_;
+		bool procedural_;
+	};
 }

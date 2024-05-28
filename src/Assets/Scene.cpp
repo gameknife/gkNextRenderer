@@ -13,9 +13,10 @@
 
 namespace Assets {
 
-Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing) :
+Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes, std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing) :
 	models_(std::move(models)),
-	textures_(std::move(textures))
+	textures_(std::move(textures)),
+	nodes_(std::move(nodes))
 {
 	// Concatenate all the models
 	std::vector<Vertex> vertices;

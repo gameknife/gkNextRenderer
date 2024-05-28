@@ -415,7 +415,7 @@ namespace Vulkan::RayTracing
         uint32_t indexOffset = 0;
         uint32_t aabbOffset = 0;
 
-        for (const auto& model : scene.Models())
+        for (auto& model : scene.Models())
         {
             const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
             const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
@@ -480,10 +480,10 @@ namespace Vulkan::RayTracing
         // Hit group 1: procedurals
         uint32_t instanceId = 0;
 
-        for (const auto& model : scene.Models())
+        for (const auto& node : scene.Nodes())
         {
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[instanceId], model.WorldTransform(), instanceId, model.Procedural() ? 1 : 0));
+                bottomAs_[node.GetModel()], node.WorldTransform(), instanceId,  node.IsProcedural() ? 1 : 0));
             instanceId++;
         }
 
