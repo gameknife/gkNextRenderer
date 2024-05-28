@@ -265,10 +265,10 @@ void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Model>
 	const auto white = Material::Lambertian(vec3(0.73f, 0.73f, 0.73f));
 
 	auto box0 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), white);
-	auto box1 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 330, 0), white);
+	auto box1 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), white);
 
 	box0.Transform(rotate(translate(i, vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
-	box1.Transform(rotate(translate(i, vec3(278 - 265 - 165, 0, 17)), radians(15.0f), vec3(0, 1, 0)));
+	box1.Transform(rotate(scale(translate(i, vec3(278 - 265 - 165, 0, 17)), vec3(1,2,1)), radians(15.0f), vec3(0, 1, 0)));
 	
 	models.push_back(Model::CreateCornellBox(555));
 	models.push_back(box0);

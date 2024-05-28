@@ -42,7 +42,7 @@ void main()
 
 	// Compute the ray hit point properties.
 	const vec3 barycentrics = vec3(1.0 - HitAttributes.x - HitAttributes.y, HitAttributes.x, HitAttributes.y);
-	const vec3 normal = normalize(Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics));
+	const vec3 normal = normalize(vec3(Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics) * gl_WorldToObjectEXT));
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
