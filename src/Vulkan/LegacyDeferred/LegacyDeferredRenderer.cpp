@@ -179,7 +179,12 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
-	
+	ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
 	// cs shading pass
 	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
