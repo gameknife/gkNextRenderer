@@ -12,6 +12,17 @@
 
 namespace Assets
 {
+    struct CameraInitialSate
+    {
+        glm::mat4 ModelView;
+        float FieldOfView;
+        float Aperture;
+        float FocusDistance;
+        float ControlSpeed;
+        bool GammaCorrection;
+        bool HasSky;
+    };
+    
     class Model final
     {
     public:
@@ -29,8 +40,8 @@ namespace Assets
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static void LoadGLTFScene(const std::string& filename, std::vector<class Node>& nodes,
-                                  std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures);
+        static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<class Node>& nodes,
+                                  std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
 
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, int materialIdx);
@@ -52,12 +63,18 @@ namespace Assets
         uint32_t NumberOfVertices() const { return static_cast<uint32_t>(vertices_.size()); }
         uint32_t NumberOfIndices() const { return static_cast<uint32_t>(indices_.size()); }
 
+        glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
+        glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
+
     private:
         Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, const class Procedural* procedural);
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
         std::shared_ptr<const class Procedural> procedural_;
+
+        glm::vec3 local_aabb_min;
+        glm::vec3 local_aabb_max;
     };
 
     class Node final

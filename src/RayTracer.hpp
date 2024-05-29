@@ -7,6 +7,7 @@
 #include "Vulkan/ModernDeferred/Application.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Assets/UniformBuffer.hpp"
+#include "Assets/Model.hpp"
 
 template <typename Renderer>
 class NextRendererApplication final : public Renderer
@@ -51,7 +52,7 @@ private:
 	uint32_t sceneIndex_{};
 	UserSettings userSettings_{};
 	UserSettings previousSettings_{};
-	SceneList::CameraInitialSate cameraInitialSate_{};
+	Assets::CameraInitialSate cameraInitialSate_{};
 	ModelViewController modelViewController_{};
 
 	mutable Assets::UniformBufferObject prevUBO_ {};

@@ -112,11 +112,10 @@ void CornellBox::Create(
 		AddTriangle(indices, i, 0, 2, 3);
 	
 		LightObject light {};
-		light.WorldPosMin = vec4(vec3(x0, y1, z1) - offset, 1);
-		light.WorldPosMax = vec4(vec3(x1, y1, z0) - offset, 1);
-		light.WorldDirection = vec4(0, -1, 0, 0);
-		light.area = (x1 - x0) * (z0 - z1);
-	
+		light.p0 = vec4(vec3(x0, y1, z1) - offset, 1);
+		light.p1 = vec4(vec3(x0, y1, z0) - offset, 1);
+		light.p3 = vec4(vec3(x1, y1, z1) - offset, 1);
+		light.normal_area = vec4(0, -1, 0, (x1 - x0) * (z0 - z1));
 		lights.push_back(light);
 	}
 

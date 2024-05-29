@@ -12,49 +12,40 @@ namespace Assets
     class Texture;
     struct Material;
     struct LightObject;
+    struct CameraInitialSate;
 }
 
 class SceneList final
 {
 public:
-    struct CameraInitialSate
-    {
-        glm::mat4 ModelView;
-        float FieldOfView;
-        float Aperture;
-        float FocusDistance;
-        float ControlSpeed;
-        bool GammaCorrection;
-        bool HasSky;
-    };
-
-    static void CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+  
+    static void CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
-    static void RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+    static void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                        std::vector<Assets::Material>& materials,
                                        std::vector<Assets::LightObject>& lights);
-    static void CornellBox(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+    static void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                            std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                            std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
-    static void CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+    static void CornellBoxLucy(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
-    static void LivingRoom(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+    static void LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                            std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                            std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
-    static void Kitchen(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+    static void Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                         std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                         std::vector<Assets::LightObject>& lights);
-    static void LuxBall(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+    static void LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                         std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                         std::vector<Assets::LightObject>& lights);
-    static void Still(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+    static void Still(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                       std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                       std::vector<Assets::LightObject>& lights);
 
-    static const std::vector<std::pair<std::string, std::function<void (CameraInitialSate&,
+    static const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
                                                                         std::vector<Assets::Node>& nodes,
                                                                         std::vector<Assets::Model>&,
                                                                         std::vector<Assets::Texture>&,

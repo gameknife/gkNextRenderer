@@ -36,18 +36,18 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 
-	if( light.area > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
+	if( light.normal_area.w > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
 	{
 		// scatter to light
-		vec3 lightpos = mix(light.WorldPosMin.xyz, light.WorldPosMax.xyz, vec3(RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed), RandomFloat(ray.RandomSeed)));
+		vec3 lightpos = light.p0.xyz + (light.p1.xyz - light.p0.xyz) * RandomFloat(ray.RandomSeed) + (light.p3.xyz - light.p0.xyz) *  RandomFloat(ray.RandomSeed);
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
 		float dist = length(tolight);
 		tolight = tolight / dist;
 
 		const float epsVariance      = .01;
-		float cosine = max(dot(light.WorldDirection.xyz, -tolight), epsVariance);
-		float light_pdf = dist * dist / (cosine * light.area);
+		float cosine = max(dot(light.normal_area.xyz, -tolight), epsVariance);
+		float light_pdf = dist * dist / (cosine * light.normal_area.w);
 		float ndotl = dot(tolight, normal);
 		
 		if(ndotl >= 0)

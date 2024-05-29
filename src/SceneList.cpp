@@ -70,7 +70,7 @@ namespace
     }
 }
 
-const std::vector<std::pair<std::string, std::function<void (SceneList::CameraInitialSate&,
+const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
                                                              std::vector<Assets::Node>& nodes,
                                                              std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
                                                              std::vector<Assets::Material>&,
@@ -87,7 +87,7 @@ const std::vector<std::pair<std::string, std::function<void (SceneList::CameraIn
         {"Still", Still},
     };
 
-void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
@@ -97,14 +97,14 @@ void SceneList::CubeAndSpheres(CameraInitialSate& camera, std::vector<Assets::No
     camera.FocusDistance = 1000.0f;
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
-    camera.HasSky = true;
+    camera.HasSky = false;
 
     const auto i = mat4(1);
 
-    Model::LoadGLTFScene("../assets/models/simple.glb", nodes, models, textures);
+    Model::LoadGLTFScene("../assets/models/simple.glb", camera, nodes, models, textures, materials, lights);
 }
 
-void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                        std::vector<Assets::Material>& materials,
                                        std::vector<Assets::LightObject>& lights)
@@ -140,7 +140,7 @@ void SceneList::RayTracingInOneWeekend(CameraInitialSate& camera, std::vector<As
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
 }
 
-void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                            std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                            std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
@@ -170,7 +170,7 @@ void SceneList::CornellBox(CameraInitialSate& camera, std::vector<Assets::Node>&
     nodes.push_back(Assets::Node::CreateNode(ts1, 1, false));
 }
 
-void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::CornellBoxLucy(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
@@ -207,7 +207,7 @@ void SceneList::CornellBoxLucy(CameraInitialSate& camera, std::vector<Assets::No
     nodes.push_back(Assets::Node::CreateNode(ts2, lucy0, false));
 }
 
-void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                            std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                            std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
@@ -226,7 +226,7 @@ void SceneList::LivingRoom(CameraInitialSate& camera, std::vector<Assets::Node>&
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), livingroom, false));
 }
 
-void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                         std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                         std::vector<Assets::LightObject>& lights)
 {
@@ -247,7 +247,7 @@ void SceneList::Kitchen(CameraInitialSate& camera, std::vector<Assets::Node>& no
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), objfile, false));
 }
 
-void SceneList::LuxBall(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                         std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                         std::vector<Assets::LightObject>& lights)
 {
@@ -263,7 +263,7 @@ void SceneList::LuxBall(CameraInitialSate& camera, std::vector<Assets::Node>& no
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), objfile, false));
 }
 
-void SceneList::Still(CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+void SceneList::Still(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                       std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                       std::vector<Assets::LightObject>& lights)
 {

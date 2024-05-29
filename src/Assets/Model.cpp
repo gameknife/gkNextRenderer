@@ -52,18 +52,32 @@ namespace std
 
 namespace Assets
 {
-    void Model::LoadGLTFScene(const std::string& filename, std::vector<Assets::Node>& nodes,
-                              std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
+    void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
+                              std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                              std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
     {
-        std::vector<LightObject> lights;
-        std::vector<Assets::Material> materials;
-
+        int matieralIdx = materials.size();
+        int textureIdx = textures.size();
+        int modelIdx = models.size();
+        
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
         std::string err;
         std::string warn;
 
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
+
+        // load all lights
+        for (tinygltf::Camera& cam : model.cameras)
+        {
+            //cameraInit.ModelView = lookAt( c )
+            cameraInit.FieldOfView = cam.perspective.yfov * 180 / 3.14159;
+            cameraInit.Aperture = 0.0f;
+            cameraInit.FocusDistance = 100.0f;
+            cameraInit.ControlSpeed = 500.0f;
+            cameraInit.GammaCorrection = true;
+            cameraInit.HasSky = false;
+        }
 
         // load all textures
         for (tinygltf::Image& image : model.images)
@@ -79,7 +93,7 @@ namespace Assets
         {
             Material m{};
 
-            m.DiffuseTextureId = mat.pbrMetallicRoughness.baseColorTexture.index;
+            m.DiffuseTextureId = mat.pbrMetallicRoughness.baseColorTexture.index == -1 ? -1 : mat.pbrMetallicRoughness.baseColorTexture.index + textureIdx;
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
             m.RefractionIndex = 1.46f;
@@ -95,11 +109,6 @@ namespace Assets
 
             m.Diffuse = glm::vec4(diffuseColor, 1.0);
 
-            if (emissiveColor.r > 0 || emissiveColor.g > 0 || emissiveColor.b > 0)
-            {
-                m = Material::DiffuseLight(emissiveColor);
-            }
-
             if (m.Metalness > .95)
             {
                 m.MaterialModel = Material::Enum::Metallic;
@@ -110,18 +119,21 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Lambertian;
             }
 
+            auto emissive = mat.extensions.find("KHR_materials_emissive_strength");
+            if (emissive != mat.extensions.end())
+            {
+                float power = static_cast<float>(emissive->second.Get("emissiveStrength").GetNumberAsDouble());
+                m = Material::DiffuseLight(emissiveColor * power);
+            }
+
             materials.push_back(m);
         }
 
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
-            std::vector<Material> inmaterials;
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
-
-            inmaterials.push_back(Material::Lambertian(vec3(.5, .5, .5)));
-
 
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
@@ -162,7 +174,7 @@ namespace Assets
                         texcoord[1]
                     );
 
-                    vertex.MaterialIndex = 0;
+                    vertex.MaterialIndex = primtive.material + matieralIdx;
                     vertices.push_back(vertex);
                 }
 
@@ -195,7 +207,40 @@ namespace Assets
             glm::mat4 rotation = glm::toMat4(quaternion);
             glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation);
 
-            nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+            if(node.mesh != -1)
+            {
+                if( node.extras.Has("arealight") )
+                {
+                    nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+                    
+                    // use the aabb to build a light, using the average normals and area
+                    // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
+                    glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
+                    glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
+                    glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
+                    
+                    LightObject light;
+                    light.p0 = local_p0 * transform;
+                    light.p1 = local_p1 * transform;
+                    light.p3 = local_p3 * transform;
+                    light.normal_area = glm::vec4(0,1,0,0) * transform;
+                    light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+                    
+                    lights.push_back(light);
+                }
+                else
+                {
+                    nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+                }
+            }
+            else
+            {
+                if(node.camera == 0)
+                {
+                    vec4 camFwd = glm::vec4(0,0,-1,0) * transform;
+                    cameraInit.ModelView = lookAt( translation,  translation + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0,1,0) );
+                }
+            }
         }
     }
 
@@ -377,16 +422,17 @@ namespace Assets
 
             if (shape.name.find("lightquad") != std::string::npos)
             {
-                // use the aabb to build a light, using the average normals and area
-                LightObject light;
-                light.WorldPosMin = glm::vec4(aabb_min, 1.0);
-                light.WorldPosMax = glm::vec4(aabb_max, 1.0);
-                light.WorldDirection = glm::vec4(direction, 0.0);
-
-                float radius_big = glm::distance(aabb_max, aabb_min);
-                light.area = radius_big * radius_big * 0.25f;
-
-                lights.push_back(light);
+                // objfile  lightquad cannot recognize
+                // // use the aabb to build a light, using the average normals and area
+                // float radius_big = glm::distance(aabb_max, aabb_min);
+                //
+                // LightObject light;
+                // light.p0 = glm::vec4(aabb_min, 1.0);
+                // light.p1 = glm::vec4(aabb_min.x, aabb_max.y, 1.0);
+                // light.p3 = glm::vec4(aabb_max, 1.0);
+                // light.normal_area = glm::vec4(direction, radius_big);
+                //
+                // lights.push_back(light);
             }
         }
 
@@ -594,20 +640,7 @@ namespace Assets
         
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-
-        glm::vec3 aabb_min(999999, 999999, 999999);
-        glm::vec3 aabb_max(-999999, -999999, -999999);
-
-        aabb_min = glm::min(p0, aabb_min);
-        aabb_min = glm::min(p1, aabb_min);
-        aabb_min = glm::min(p2, aabb_min);
-        aabb_min = glm::min(p3, aabb_min);
-
-        aabb_max = glm::max(p0, aabb_max);
-        aabb_max = glm::max(p1, aabb_max);
-        aabb_max = glm::max(p2, aabb_max);
-        aabb_max = glm::max(p3, aabb_max);
-
+        
         vertices.push_back(Vertex{p0, dir, vec2(0, 1), materialIdx});
         vertices.push_back(Vertex{p1, dir, vec2(1, 1), materialIdx});
         vertices.push_back(Vertex{p2, dir, vec2(1, 0), materialIdx});
@@ -622,13 +655,12 @@ namespace Assets
         indices.push_back(3);
         
         LightObject light;
-        light.WorldPosMin = vec4(aabb_min, 1.0);
-        light.WorldPosMax = vec4(aabb_max, 1.0);
-        light.WorldDirection = vec4(dir, 0.0);
-
-        float radius_big = glm::distance(aabb_max, aabb_min);
-        light.area = radius_big * radius_big * 0.25f;
-
+        light.p0 = vec4(p0,1);
+        light.p1 = vec4(p1,1);
+        light.p3 = vec4(p3,1);
+        light.normal_area = vec4(dir, 0);
+        light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+        
         lights.push_back(light);
 
 #if FLATTEN_VERTICE
@@ -649,6 +681,15 @@ namespace Assets
         indices_(std::move(indices)),
         procedural_(procedural)
     {
+        // calculate local aabb
+        local_aabb_min = glm::vec3(999999, 999999, 999999);
+        local_aabb_max = glm::vec3(-999999, -999999, -999999);
+
+        for( const auto& vertex : vertices_ )
+        {
+            local_aabb_min = glm::min(local_aabb_min, vertex.Position);
+            local_aabb_max = glm::max(local_aabb_max, vertex.Position);
+        }
     }
 
     Node Node::CreateNode(glm::mat4 transform, int id, bool procedural)

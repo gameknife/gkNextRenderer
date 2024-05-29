@@ -23,11 +23,8 @@ struct Material
 
 struct LightObject
 {
-	vec4 WorldPosMin;
-	vec4 WorldPosMax;
-	vec4 WorldDirection;
-	float area;
-	float Reserverd0;
-	float Reserverd1;
-	float Reserverd2;
+	vec4 p0;
+	vec4 p1;
+	vec4 p3;
+	vec4 normal_area;
 };

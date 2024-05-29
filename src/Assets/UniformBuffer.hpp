@@ -42,15 +42,25 @@ namespace Assets
 		uint32_t TemporalFrames;
 	};
 
+	// lightquad can represent by 4 points
+	// p1 +-------------------+ p2
+	//    |                   |
+	//    |                   |
+	//    |                   |
+	// p0 +-------------------+ p3
+
+	// when calculating the random point inside quad
+	// we can generate two random number r1 and r2
+	// then the random point is p0 + r1 * (p1 - p0) + r2 * (p3 - p0)
+	// the normal of the quad is (p1 - p0) x (p3 - p0)
+	// the area of the quad is |(p1 - p0) x (p3 - p0)| / 2
+	
 	struct alignas(16) LightObject final
 	{
-		glm::vec4 WorldPosMin;
-		glm::vec4 WorldPosMax;
-		glm::vec4 WorldDirection;
-		float area;
-		float Reserverd0;
-		float Reserverd1;
-		float Reserverd2;
+		glm::vec4 p0;
+		glm::vec4 p1;
+		glm::vec4 p3;
+		glm::vec4 normal_area;
 	};
 
 	class UniformBuffer
