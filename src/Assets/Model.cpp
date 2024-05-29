@@ -56,7 +56,7 @@ namespace Assets
         std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
     {
         std::vector<LightObject> lights;
-        
+        std::vector<Assets::Material> materials;
 
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
@@ -64,15 +64,56 @@ namespace Assets
         std::string warn;
 
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
+
+        // load all textures
+        for( tinygltf::Image& image : model.images)
+        {
+            // 假设，这里的image id和外面的textures id是一样的
+            textures.push_back(Texture::LoadTexture(image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset, model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig()));
+        }
+
+        // load all materials
+        for (tinygltf::Material& mat: model.materials)
+        {
+            Material m{};
+
+            m.DiffuseTextureId = mat.pbrMetallicRoughness.baseColorTexture.index;
+            m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
+            m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
+            m.RefractionIndex = 1.46f;
+            glm::vec3 emissiveColor = mat.emissiveFactor.empty() ? glm::vec3(0) : glm::vec3(mat.emissiveFactor[0], mat.emissiveFactor[1], mat.emissiveFactor[2]);
+            glm::vec3 diffuseColor = mat.pbrMetallicRoughness.baseColorFactor.empty() ? glm::vec3(1) : glm::vec3(mat.pbrMetallicRoughness.baseColorFactor[0], mat.pbrMetallicRoughness.baseColorFactor[1], mat.pbrMetallicRoughness.baseColorFactor[2]);
+
+            m.Diffuse = glm::vec4(diffuseColor, 1.0);
+            
+            if(emissiveColor.r > 0 || emissiveColor.g > 0 || emissiveColor.b > 0)
+            {
+                m = Material::DiffuseLight(emissiveColor);
+            }
+            
+            if(m.Metalness > .95)
+            {
+                m.MaterialModel = Material::Enum::Metallic;
+            }
+
+            if(m.Fuzziness > .95)
+            {
+                m.MaterialModel = Material::Enum::Lambertian;
+            }
+
+            materials.push_back(m);
+        }
         
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
-            std::vector<Material> materials;
+            std::vector<Material> inmaterials;
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
 
-            materials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
+            inmaterials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
+
+            
             
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
@@ -123,14 +164,18 @@ namespace Assets
                 }
             }
 
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(inmaterials), std::move(lights), nullptr));
         }
 
         for (tinygltf::Node& node : model.nodes)
         {
             glm::vec3 translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
             glm::vec3 scaling = vec3(1);
-            glm::quat quaternion = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
+            glm::quat quaternion = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(
+                static_cast<float>(node.rotation[3]),
+                static_cast<float>(node.rotation[0]),
+                static_cast<float>(node.rotation[1]),
+                static_cast<float>(node.rotation[2]));
             glm::mat4 rotation = glm::toMat4(quaternion);
             glm::mat4 transform = glm::transpose( (scale(translate(glm::mat4(1), translation), scaling)) * rotation);
             
@@ -200,7 +245,7 @@ namespace Assets
                 {
                     if (textures[i].Loadname() == loadname)
                     {
-                        m.DiffuseTextureId = i;
+                        m.DiffuseTextureId = static_cast<int32_t>(i);
                         break;
                     }
                 }
@@ -208,7 +253,7 @@ namespace Assets
                 if (m.DiffuseTextureId == -1)
                 {
                     textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
-                    m.DiffuseTextureId = textures.size() - 1;
+                    m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
                 }
             }
 
@@ -322,7 +367,7 @@ namespace Assets
                 light.WorldDirection = glm::vec4(direction, 0.0);
 
                 float radius_big = glm::distance(aabb_max, aabb_min);
-                light.area = radius_big * radius_big * 0.25;
+                light.area = radius_big * radius_big * 0.25f;
 
                 lights.push_back(light);
             }
@@ -564,7 +609,7 @@ namespace Assets
             light.WorldDirection = vec4(dir, 0.0);
 
             float radius_big = glm::distance(aabb_max, aabb_min);
-            light.area = radius_big * radius_big * 0.25;
+            light.area = radius_big * radius_big * 0.25f;
 
             lights.push_back(light);
         }

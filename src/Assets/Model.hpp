@@ -71,7 +71,7 @@ namespace Assets
 		~Node() = default;
 		
 		void Transform(const glm::mat4& transform) {transform_ = transform;}
-		const glm::mat4& const WorldTransform() const {return transform_; }
+		const glm::mat4& WorldTransform() const {return transform_; }
 		int GetModel() const {return modelId_;}
 		bool IsProcedural() const {return procedural_;}
 	private:

@@ -27,6 +27,26 @@ Texture Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerC
 	return Texture(filename, width, height, channels, 0, pixels);
 }
 
+Texture Texture::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
+{
+	const auto timer = std::chrono::high_resolution_clock::now();
+
+	// Load the texture in normal host memory.
+	int width, height, channels;
+	const auto pixels = stbi_load_from_memory(data, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+
+	if (!pixels)
+	{
+		Throw(std::runtime_error("failed to load texture image "));
+	}
+
+	const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
+	std::cout << elapsed << "s" << std::endl;
+
+	return Texture(texname, width, height, channels, 0, pixels);
+}
+
 Texture Texture::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
 {
 	std::cout << "- loading hdr '" << filename << "'... " << std::flush;

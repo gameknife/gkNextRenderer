@@ -10,6 +10,7 @@ namespace Assets
 	{
 	public:
 
+		static Texture LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig);
 		static Texture LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 		static Texture LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
