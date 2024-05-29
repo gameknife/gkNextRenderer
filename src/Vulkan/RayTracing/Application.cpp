@@ -478,13 +478,10 @@ namespace Vulkan::RayTracing
 
         // Hit group 0: triangles
         // Hit group 1: procedurals
-        uint32_t instanceId = 0;
-
         for (const auto& node : scene.Nodes())
         {
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], node.WorldTransform(), instanceId,  node.IsProcedural() ? 1 : 0));
-            instanceId++;
+                bottomAs_[node.GetModel()], node.WorldTransform(), node.GetModel(),  node.IsProcedural() ? 1 : 0));
         }
 
         // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).

@@ -111,24 +111,27 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 	{
 		return { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
 	}
-	
+
+	// hdr first
 	for (const auto& format : formats)
 	{
-		// hdr
+		
 		if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || format.colorSpace == VK_COLOR_SPACE_HDR10_HLG_EXT)
 		{
 			return format;
 		}
-		else
+	}
+
+	// sdr fallback
+	for (const auto& format : formats)
+	{
+		if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
 		{
-			// general sdr
-			if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-			{
-				return format;
-			}
+			return format;
 		}
 	}
 
+	// bad driver
 	Throw(std::runtime_error("found no suitable surface format"));
 }
 
