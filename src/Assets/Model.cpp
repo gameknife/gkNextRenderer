@@ -53,7 +53,7 @@ namespace std
 namespace Assets
 {
     void Model::LoadGLTFScene(const std::string& filename, std::vector<Assets::Node>& nodes,
-        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
+                              std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures)
     {
         std::vector<LightObject> lights;
         std::vector<Assets::Material> materials;
@@ -66,14 +66,16 @@ namespace Assets
         bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
 
         // load all textures
-        for( tinygltf::Image& image : model.images)
+        for (tinygltf::Image& image : model.images)
         {
             // 假设，这里的image id和外面的textures id是一样的
-            textures.push_back(Texture::LoadTexture(image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset, model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig()));
+            textures.push_back(Texture::LoadTexture(
+                image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+                model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig()));
         }
 
         // load all materials
-        for (tinygltf::Material& mat: model.materials)
+        for (tinygltf::Material& mat : model.materials)
         {
             Material m{};
 
@@ -81,29 +83,36 @@ namespace Assets
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
             m.RefractionIndex = 1.46f;
-            glm::vec3 emissiveColor = mat.emissiveFactor.empty() ? glm::vec3(0) : glm::vec3(mat.emissiveFactor[0], mat.emissiveFactor[1], mat.emissiveFactor[2]);
-            glm::vec3 diffuseColor = mat.pbrMetallicRoughness.baseColorFactor.empty() ? glm::vec3(1) : glm::vec3(mat.pbrMetallicRoughness.baseColorFactor[0], mat.pbrMetallicRoughness.baseColorFactor[1], mat.pbrMetallicRoughness.baseColorFactor[2]);
+            glm::vec3 emissiveColor = mat.emissiveFactor.empty()
+                                          ? glm::vec3(0)
+                                          : glm::vec3(mat.emissiveFactor[0], mat.emissiveFactor[1],
+                                                      mat.emissiveFactor[2]);
+            glm::vec3 diffuseColor = mat.pbrMetallicRoughness.baseColorFactor.empty()
+                                         ? glm::vec3(1)
+                                         : glm::vec3(mat.pbrMetallicRoughness.baseColorFactor[0],
+                                                     mat.pbrMetallicRoughness.baseColorFactor[1],
+                                                     mat.pbrMetallicRoughness.baseColorFactor[2]);
 
             m.Diffuse = glm::vec4(diffuseColor, 1.0);
-            
-            if(emissiveColor.r > 0 || emissiveColor.g > 0 || emissiveColor.b > 0)
+
+            if (emissiveColor.r > 0 || emissiveColor.g > 0 || emissiveColor.b > 0)
             {
                 m = Material::DiffuseLight(emissiveColor);
             }
-            
-            if(m.Metalness > .95)
+
+            if (m.Metalness > .95)
             {
                 m.MaterialModel = Material::Enum::Metallic;
             }
 
-            if(m.Fuzziness > .95)
+            if (m.Fuzziness > .95)
             {
                 m.MaterialModel = Material::Enum::Lambertian;
             }
 
             materials.push_back(m);
         }
-        
+
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
@@ -111,74 +120,81 @@ namespace Assets
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
 
-            inmaterials.push_back( Material::Lambertian(vec3(.5, .5, .5)));
+            inmaterials.push_back(Material::Lambertian(vec3(.5, .5, .5)));
 
-            
-            
+
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
                 tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
                 tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
-                
+
                 tinygltf::BufferView positionView = model.bufferViews[positionAccessor.bufferView];
                 tinygltf::BufferView normalView = model.bufferViews[normalAccessor.bufferView];
                 tinygltf::BufferView texcoordView = model.bufferViews[texcoordAccessor.bufferView];
-                
+
                 int positionStride = positionAccessor.ByteStride(positionView);
                 int normalStride = normalAccessor.ByteStride(normalView);
                 int texcoordStride = texcoordAccessor.ByteStride(texcoordView);
-                
-                for(size_t i = 0; i < positionAccessor.count; ++i)
+
+                for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = (float*)&model.buffers[positionView.buffer].data[positionView.byteOffset + i * positionStride];
+                    float* position = (float*)&model.buffers[positionView.buffer].data[positionView.byteOffset + i *
+                        positionStride];
                     vertex.Position = vec3(
-                    position[0],
-                    position[1],
-                    position[2]
+                        position[0],
+                        position[1],
+                        position[2]
                     );
-                    float* normal = (float*)&model.buffers[normalView.buffer].data[normalView.byteOffset + i * normalStride];
+                    float* normal = (float*)&model.buffers[normalView.buffer].data[normalView.byteOffset + i *
+                        normalStride];
                     vertex.Normal = vec3(
                         normal[0],
                         normal[1],
                         normal[2]
                     );
-                    float* texcoord = (float*)&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i * texcoordStride];
+                    float* texcoord = (float*)&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
+                        texcoordStride];
                     vertex.TexCoord = vec2(
                         texcoord[0],
                         texcoord[1]
                     );
-                    
+
                     vertex.MaterialIndex = 0;
                     vertices.push_back(vertex);
                 }
 
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
-                for(size_t i = 0; i < indexAccessor.count; ++i)
+                for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
-                    uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                    uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i *
+                        strideIndex];
                     indices.push_back(*data);
                 }
             }
 
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(inmaterials), std::move(lights), nullptr));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
         for (tinygltf::Node& node : model.nodes)
         {
-            glm::vec3 translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+            glm::vec3 translation = node.translation.empty()
+                                        ? glm::vec3(0)
+                                        : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
             glm::vec3 scaling = vec3(1);
-            glm::quat quaternion = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(
-                static_cast<float>(node.rotation[3]),
-                static_cast<float>(node.rotation[0]),
-                static_cast<float>(node.rotation[1]),
-                static_cast<float>(node.rotation[2]));
+            glm::quat quaternion = node.rotation.empty()
+                                       ? glm::quat(1, 0, 0, 0)
+                                       : glm::quat(
+                                           static_cast<float>(node.rotation[3]),
+                                           static_cast<float>(node.rotation[0]),
+                                           static_cast<float>(node.rotation[1]),
+                                           static_cast<float>(node.rotation[2]));
             glm::mat4 rotation = glm::toMat4(quaternion);
-            glm::mat4 transform = glm::transpose( (scale(translate(glm::mat4(1), translation), scaling)) * rotation);
-            
+            glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation);
+
             nodes.push_back(Node::CreateNode(transform, node.mesh, false));
         }
     }
@@ -199,8 +215,13 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
-    Model Model::LoadModel(const std::string& filename, std::vector<Texture>& textures)
+    int Model::LoadModel(const std::string& filename, std::vector<Model>& models,
+                                        std::vector<Texture>& textures,
+                                     std::vector<Material>& materials,
+                                     std::vector<LightObject>& lights)
     {
+        int materialIdxOffset = materials.size();
+        
         std::cout << "- loading '" << filename << "'... " << std::flush;
 
         const auto timer = std::chrono::high_resolution_clock::now();
@@ -220,11 +241,6 @@ namespace Assets
                 std::cout << "\nWARNING: " << objReader.Warning() << std::flush;
             });
         }
-        // Lights
-        std::vector<LightObject> lights;
-        
-        // Materials
-        std::vector<Material> materials;
 
         for (const auto& _material : objReader.GetMaterials())
         {
@@ -285,7 +301,7 @@ namespace Assets
             materials.emplace_back(m);
         }
 
-        if (materials.empty())
+        if (materialIdxOffset == materials.size())
         {
             Material m{};
 
@@ -293,6 +309,8 @@ namespace Assets
             m.DiffuseTextureId = -1;
 
             materials.emplace_back(m);
+
+            materialIdxOffset = materials.size();
         }
 
         // Geometry
@@ -302,13 +320,12 @@ namespace Assets
         std::vector<uint32_t> indices;
         std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
 
-        
 
         for (const auto& shape : objReader.GetShapes())
         {
-            glm::vec3 aabb_min(999999,999999,999999);
-            glm::vec3 aabb_max(-999999,-999999,-999999);
-            glm::vec3 direction(0,0,0);
+            glm::vec3 aabb_min(999999, 999999, 999999);
+            glm::vec3 aabb_max(-999999, -999999, -999999);
+            glm::vec3 direction(0, 0, 0);
 
             const auto& mesh = shape.mesh;
             size_t faceId = 0;
@@ -323,8 +340,8 @@ namespace Assets
                     objAttrib.vertices[3 * index.vertex_index + 2],
                 };
 
-                aabb_min = glm::min( aabb_min, vertex.Position);
-                aabb_max = glm::max( aabb_max, vertex.Position);
+                aabb_min = glm::min(aabb_min, vertex.Position);
+                aabb_max = glm::max(aabb_max, vertex.Position);
 
                 if (!objAttrib.normals.empty())
                 {
@@ -347,7 +364,7 @@ namespace Assets
                     };
                 }
 
-                vertex.MaterialIndex = std::max(0, mesh.material_ids[faceId++ / 3]);
+                vertex.MaterialIndex = std::max(0, mesh.material_ids[faceId++ / 3] + materialIdxOffset);
 
                 if (uniqueVertices.count(vertex) == 0)
                 {
@@ -358,11 +375,11 @@ namespace Assets
                 indices.push_back(uniqueVertices[vertex]);
             }
 
-            if(shape.name.find("lightquad") != std::string::npos)
+            if (shape.name.find("lightquad") != std::string::npos)
             {
                 // use the aabb to build a light, using the average normals and area
                 LightObject light;
-                light.WorldPosMin = glm::vec4(aabb_min,1.0);
+                light.WorldPosMin = glm::vec4(aabb_min, 1.0);
                 light.WorldPosMax = glm::vec4(aabb_max, 1.0);
                 light.WorldDirection = glm::vec4(direction, 0.0);
 
@@ -404,22 +421,23 @@ namespace Assets
             << materials.size() << " materials, " << lights.size() << " lights";
         std::cout << elapsed << "s" << std::endl;
 
-        
 
         // flatten the vertice and indices, individual vertice
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(std::move(vertices), std::move(indices), std::move(materials), std::move(lights), nullptr);
+        models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
+        return models.size() - 1;
     }
 
-    Model Model::CreateCornellBox(const float scale)
+    int Model::CreateCornellBox(const float scale,
+                                 std::vector<Model>& models,
+                                 std::vector<Material>& materials,
+                                 std::vector<LightObject>& lights)
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        std::vector<Material> materials;
-        std::vector<LightObject> lights;
 
         CornellBox::Create(scale, vertices, indices, materials, lights);
 
@@ -427,48 +445,48 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(
+        models.push_back(Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materials),
-            std::move(lights),
             nullptr
-        );
+        ));
+
+        return  models.size() - 1;
     }
 
-    Model Model::CreateBox(const vec3& p0, const vec3& p1, const Material& material)
+    Model Model::CreateBox(const vec3& p0, const vec3& p1, int materialIdx)
     {
         std::vector<Vertex> vertices =
         {
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), 0},
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), 0},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
 
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), 0},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), 0},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
 
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), 0},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), 0},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), materialIdx},
         };
 
         std::vector<uint32_t> indices =
@@ -488,12 +506,10 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::vector<Material>{material},
-            std::vector<LightObject>{},
             nullptr);
     }
 
-    Model Model::CreateSphere(const vec3& center, float radius, const Material& material, const bool isProcedural)
+    Model Model::CreateSphere(const vec3& center, float radius, int materialIdx, const bool isProcedural)
     {
         const int slices = 32;
         const int stacks = 16;
@@ -533,7 +549,7 @@ namespace Assets
                     static_cast<float>(i) / slices,
                     static_cast<float>(j) / stacks);
 
-                vertices.push_back(Vertex{position, normal, texCoord, 0});
+                vertices.push_back(Vertex{position, normal, texCoord, materialIdx});
             }
         }
 
@@ -564,19 +580,23 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::vector<Material>{material},
-            std::vector<LightObject>{},
             isProcedural ? new Sphere(center, radius) : nullptr);
     }
 
-    Model Model::CreateQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3, const glm::vec3& dir, const Material& material)
+    int Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
+                                const glm::vec3& dir, const glm::vec3& lightColor,
+                                std::vector<Model>& models,
+                                std::vector<Material>& materials,
+                                std::vector<LightObject>& lights)
     {
+        materials.push_back(Material::DiffuseLight(lightColor));
+        int materialIdx = materials.size() - 1;
+        
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        std::vector<LightObject> lights;
 
-        glm::vec3 aabb_min(999999,999999,999999);
-        glm::vec3 aabb_max(-999999,-999999,-999999);
+        glm::vec3 aabb_min(999999, 999999, 999999);
+        glm::vec3 aabb_max(-999999, -999999, -999999);
 
         aabb_min = glm::min(p0, aabb_min);
         aabb_min = glm::min(p1, aabb_min);
@@ -587,11 +607,11 @@ namespace Assets
         aabb_max = glm::max(p1, aabb_max);
         aabb_max = glm::max(p2, aabb_max);
         aabb_max = glm::max(p3, aabb_max);
-        
-        vertices.push_back(Vertex{ p0, dir, vec2(0, 1), 0 });
-        vertices.push_back(Vertex{ p1, dir, vec2(1, 1), 0 });
-        vertices.push_back(Vertex{ p2, dir, vec2(1, 0), 0 });
-        vertices.push_back(Vertex{ p3, dir, vec2(0, 0), 0 });
+
+        vertices.push_back(Vertex{p0, dir, vec2(0, 1), materialIdx});
+        vertices.push_back(Vertex{p1, dir, vec2(1, 1), materialIdx});
+        vertices.push_back(Vertex{p2, dir, vec2(1, 0), materialIdx});
+        vertices.push_back(Vertex{p3, dir, vec2(0, 0), materialIdx});
 
         indices.push_back(0);
         indices.push_back(1);
@@ -600,49 +620,33 @@ namespace Assets
         indices.push_back(0);
         indices.push_back(2);
         indices.push_back(3);
-
-        if(material.MaterialModel == Material::Enum::DiffuseLight)
-        {
-            LightObject light;
-            light.WorldPosMin = vec4(aabb_min, 1.0);
-            light.WorldPosMax = vec4(aabb_max, 1.0);
-            light.WorldDirection = vec4(dir, 0.0);
-
-            float radius_big = glm::distance(aabb_max, aabb_min);
-            light.area = radius_big * radius_big * 0.25f;
-
-            lights.push_back(light);
-        }
         
+        LightObject light;
+        light.WorldPosMin = vec4(aabb_min, 1.0);
+        light.WorldPosMax = vec4(aabb_max, 1.0);
+        light.WorldDirection = vec4(dir, 0.0);
+
+        float radius_big = glm::distance(aabb_max, aabb_min);
+        light.area = radius_big * radius_big * 0.25f;
+
+        lights.push_back(light);
+
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(
+        models.push_back( Model(
             std::move(vertices),
             std::move(indices),
-            std::vector<Material>{material},
-            std::move(lights),
-            nullptr);
+            nullptr));
+
+        return  models.size() - 1;
     }
 
-    void Model::SetMaterial(const Material& material)
-    {
-        if (materials_.size() != 1)
-        {
-            Throw(std::runtime_error("cannot change material on a multi-material model"));
-        }
-
-        materials_[0] = material;
-    }
-
-    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Material>&& materials,
-                 std::vector<LightObject>&& lights,
+    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices,
                  const class Procedural* procedural) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
-        materials_(std::move(materials)),
-        lights_(std::move(lights)),
         procedural_(procedural)
     {
     }
@@ -652,8 +656,8 @@ namespace Assets
         return Node(transform, id, procedural);
     }
 
-    Node::Node(glm::mat4 transform, int id, bool procedural):transform_(transform), modelId_(id), procedural_(procedural)
+    Node::Node(glm::mat4 transform, int id, bool procedural): transform_(transform), modelId_(id),
+                                                              procedural_(procedural)
     {
-        
     }
 }

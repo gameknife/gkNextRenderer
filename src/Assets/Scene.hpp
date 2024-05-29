@@ -18,6 +18,8 @@ namespace Assets
 	class Model;
 	class Texture;
 	class TextureImage;
+	struct Material;
+	struct LightObject;
 
 	class Scene final
 	{
@@ -28,7 +30,13 @@ namespace Assets
 		Scene& operator = (const Scene&) = delete;
 		Scene& operator = (Scene&&) = delete;
 
-		Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes,std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing);
+		Scene(Vulkan::CommandPool& commandPool,
+			std::vector<Node>&& nodes,
+			std::vector<Model>&& models,
+			std::vector<Texture>&& textures,
+			std::vector<Material>&& materials,
+			std::vector<LightObject>&& lights,
+			bool supportRayTracing);
 		~Scene();
 
 		const std::vector<Node>& Nodes() const { return nodes_; }

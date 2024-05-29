@@ -13,7 +13,13 @@
 
 namespace Assets {
 
-Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes, std::vector<Model>&& models, std::vector<Texture>&& textures, bool supportRayTracing) :
+Scene::Scene(Vulkan::CommandPool& commandPool,
+	std::vector<Node>&& nodes,
+	std::vector<Model>&& models,
+	std::vector<Texture>&& textures,
+	std::vector<Material>&& materials,
+	std::vector<LightObject>&& lights,
+	bool supportRayTracing) :
 	models_(std::move(models)),
 	textures_(std::move(textures)),
 	nodes_(std::move(nodes))
@@ -21,12 +27,11 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes, std::v
 	// Concatenate all the models
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	std::vector<Material> materials;
+	
 	std::vector<glm::vec4> procedurals;
 	std::vector<VkAabbPositionsKHR> aabbs;
 	std::vector<glm::uvec2> offsets;
-	std::vector<LightObject> lights;
-
+	
 	for (const auto& model : models_)
 	{
 		// Remember the index, vertex offsets.
@@ -39,14 +44,12 @@ Scene::Scene(Vulkan::CommandPool& commandPool, std::vector<Node>&& nodes, std::v
 		// Copy model data one after the other.
 		vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
 		indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
-		materials.insert(materials.end(), model.Materials().begin(), model.Materials().end());
-		lights.insert(lights.end(), model.Lights().begin(), model.Lights().end());
 
 		// Adjust the material id.
-		for (size_t i = vertexOffset; i != vertices.size(); ++i)
-		{
-			vertices[i].MaterialIndex += materialOffset;
-		}
+		// for (size_t i = vertexOffset; i != vertices.size(); ++i)
+		// {
+		// 	vertices[i].MaterialIndex += materialOffset;
+		// }
 
 		// Add optional procedurals.
 		const auto* const sphere = dynamic_cast<const Sphere*>(model.Procedural());
