@@ -90,6 +90,8 @@ Here are my results with the command above on a few different computers.
 ## Next Todolist
 
 - [ ] GLTF format load
+- [ ] HDR AVIF write
+- [ ] Benchmark Website & Ranking
 - [ ] Hybrid rendering with ray query
 - [ ] Android Hybrid Rendering
 - [ ] Full scope refactor
