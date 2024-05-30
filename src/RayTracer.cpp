@@ -192,6 +192,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 	// Render the scene
 	Renderer::Render(commandBuffer, imageIndex);
 
+	ScreenShot(imageIndex);
+
 	// Render the UI
 	Statistics stats = {};
 	stats.FramebufferSize = Renderer::Window().FramebufferSize();
@@ -468,6 +470,29 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				
 				// Fill your RGB(A) data here
 				//memset(rgb.pixels, 128, rgb.rowBytes * image->height);
+
+				// from steamdeck screenshot logic
+				
+				// if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+				// {
+				// 	// Make our own copy of the image to remove the alpha channel.
+				// 	constexpr uint32_t kCompCnt = 3;
+				// 	auto imageData = std::vector<uint16_t>( g_nOutputWidth * g_nOutputHeight * kCompCnt );
+				//
+				// 	for (uint32_t y = 0; y < g_nOutputHeight; y++)
+				// 	{
+				// 		for (uint32_t x = 0; x < g_nOutputWidth; x++)
+				// 		{
+				// 			uint32_t *pInPixel = (uint32_t *)&mappedData[(y * pScreenshotTexture->rowPitch()) + x * (32 / 8)];
+				// 			uint32_t uInPixel = *pInPixel;
+				//
+				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >> 20;
+				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0))  >> 0;
+				// 		}
+				// 	}
+				// }
+					
 				uint16_t* data = new uint16_t[rgbAvifImage.width * rgbAvifImage.height * 3];
 				for ( int i = 0; i < rgbAvifImage.width * rgbAvifImage.height; ++i)
 				{
@@ -551,6 +576,25 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 		
 		Throw(std::runtime_error(out.str()));
 	}
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::ScreenShot(const uint32_t imageIndex)
+{
+	// Source for the copy is the last rendered swapchain image
+	const Vulkan::SwapChain& swap_chain = Renderer::SwapChain();
+
+	// create a mapable image and fetch from gpu
+	std::unique_ptr<Vulkan::Image> image_;
+	image_.reset(new Vulkan::Image(Renderer::Device(), swap_chain.Extent(), swap_chain.Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+	
+	std::unique_ptr<Vulkan::DeviceMemory> imageMemory_;
+	imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+
+	
+
+	image_.reset();
+	imageMemory_.reset();
 }
 
 // export it 

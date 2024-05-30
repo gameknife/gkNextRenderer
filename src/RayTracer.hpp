@@ -41,13 +41,13 @@ protected:
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
 
-	
-
 private:
 
 	void LoadScene(uint32_t sceneIndex);
 	void CheckAndUpdateBenchmarkState(double prevTime);
 	void CheckFramebufferSize() const;
+
+	void ScreenShot(const uint32_t imageIndex);
 
 	uint32_t sceneIndex_{};
 	UserSettings userSettings_{};
