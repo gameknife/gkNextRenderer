@@ -178,6 +178,11 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Lambertian;
             }
 
+            if( mat.extras.Has("glass") )
+            {
+                m.MaterialModel = Material::Enum::Dielectric;
+            }
+
             auto emissive = mat.extensions.find("KHR_materials_emissive_strength");
             if (emissive != mat.extensions.end())
             {
@@ -272,10 +277,10 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
-    int Model::LoadModel(const std::string& filename, std::vector<Model>& models,
+    int Model::LoadModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
                                         std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
-                                     std::vector<LightObject>& lights)
+                                     std::vector<LightObject>& lights, bool autoNode)
     {
         int materialIdxOffset = materials.size();
         
@@ -372,13 +377,14 @@ namespace Assets
 
         // Geometry
         const auto& objAttrib = objReader.GetAttrib();
-
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
         std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
-        
+
+        // add Geometry one by one
         for (const auto& shape : objReader.GetShapes())
         {
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+            
             glm::vec3 aabb_min(999999, 999999, 999999);
             glm::vec3 aabb_max(-999999, -999999, -999999);
             glm::vec3 direction(0, 0, 0);
@@ -430,32 +436,47 @@ namespace Assets
 
                 indices.push_back(uniqueVertices[vertex]);
             }
-        }
 
-        // If the model did not specify normals, then create smooth normals that conserve the same number of vertices.
-        // Using flat normals would mean creating more vertices than we currently have, so for simplicity and better visuals we don't do it.
-        // See https://stackoverflow.com/questions/12139840/obj-file-averaging-normals.
-        if (objAttrib.normals.empty())
-        {
-            std::vector<vec3> normals(vertices.size());
-
-            for (size_t i = 0; i < indices.size(); i += 3)
+            // If the model did not specify normals, then create smooth normals that conserve the same number of vertices.
+            // Using flat normals would mean creating more vertices than we currently have, so for simplicity and better visuals we don't do it.
+            // See https://stackoverflow.com/questions/12139840/obj-file-averaging-normals.
+            if (objAttrib.normals.empty())
             {
-                const auto normal = normalize(cross(
-                    vec3(vertices[indices[i + 1]].Position) - vec3(vertices[indices[i]].Position),
-                    vec3(vertices[indices[i + 2]].Position) - vec3(vertices[indices[i]].Position)));
+                std::vector<vec3> normals(vertices.size());
 
-                vertices[indices[i + 0]].Normal += normal;
-                vertices[indices[i + 1]].Normal += normal;
-                vertices[indices[i + 2]].Normal += normal;
+                for (size_t i = 0; i < indices.size(); i += 3)
+                {
+                    const auto normal = normalize(cross(
+                        vec3(vertices[indices[i + 1]].Position) - vec3(vertices[indices[i]].Position),
+                        vec3(vertices[indices[i + 2]].Position) - vec3(vertices[indices[i]].Position)));
+
+                    vertices[indices[i + 0]].Normal += normal;
+                    vertices[indices[i + 1]].Normal += normal;
+                    vertices[indices[i + 2]].Normal += normal;
+                }
+
+                for (auto& vertex : vertices)
+                {
+                    vertex.Normal = normalize(vertex.Normal);
+                }
             }
 
-            for (auto& vertex : vertices)
+            if(vertices.size() == 0)
             {
-                vertex.Normal = normalize(vertex.Normal);
+                continue;
+            }
+            // flatten the vertice and indices, individual vertice
+#if FLATTEN_VERTICE
+            FlattenVertices(vertices, indices);
+#endif
+
+            models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
+            if(autoNode)
+            {
+                nodes.push_back(Node::CreateNode(mat4(1), models.size() - 1, false));
             }
         }
-
+        
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -463,13 +484,6 @@ namespace Assets
             << materials.size() << " materials, " << lights.size() << " lights";
         std::cout << elapsed << "s" << std::endl;
 
-
-        // flatten the vertice and indices, individual vertice
-#if FLATTEN_VERTICE
-        FlattenVertices(vertices, indices);
-#endif
-
-        models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
         return models.size() - 1;
     }
 

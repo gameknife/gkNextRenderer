@@ -22,15 +22,40 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
     };
+
+    class Node final
+    {
+    public:
+        static Node CreateNode(glm::mat4 transform, int id, bool procedural);
+        Node& operator =(const Node&) = delete;
+        Node& operator =(Node&&) = delete;
+
+        Node() = default;
+        Node(const Node&) = default;
+        Node(Node&&) = default;
+        ~Node() = default;
+
+        void Transform(const glm::mat4& transform) { transform_ = transform; }
+        const glm::mat4& WorldTransform() const { return transform_; }
+        int GetModel() const { return modelId_; }
+        bool IsProcedural() const { return procedural_; }
+
+    private:
+        Node(glm::mat4 transform, int id, bool procedural);
+
+        glm::mat4 transform_;
+        int modelId_;
+        bool procedural_;
+    };
     
     class Model final
     {
     public:
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
-        static int LoadModel(const std::string& filename, std::vector<Model>& models,
+        static int LoadModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
                                         std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
-                                     std::vector<LightObject>& lights );
+                                     std::vector<LightObject>& lights, bool autoNode = true);
         static int CreateCornellBox(const float scale,
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
@@ -75,30 +100,5 @@ namespace Assets
 
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
-    };
-
-    class Node final
-    {
-    public:
-        static Node CreateNode(glm::mat4 transform, int id, bool procedural);
-        Node& operator =(const Node&) = delete;
-        Node& operator =(Node&&) = delete;
-
-        Node() = default;
-        Node(const Node&) = default;
-        Node(Node&&) = default;
-        ~Node() = default;
-
-        void Transform(const glm::mat4& transform) { transform_ = transform; }
-        const glm::mat4& WorldTransform() const { return transform_; }
-        int GetModel() const { return modelId_; }
-        bool IsProcedural() const { return procedural_; }
-
-    private:
-        Node(glm::mat4 transform, int id, bool procedural);
-
-        glm::mat4 transform_;
-        int modelId_;
-        bool procedural_;
     };
 }

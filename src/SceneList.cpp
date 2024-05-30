@@ -185,7 +185,7 @@ void SceneList::CornellBoxLucy(Assets::CameraInitialSate& camera, std::vector<As
     const auto sphere = Model::CreateSphere(vec3(278 - 130, 165.0f, -165.0f / 2 + 213), 80.0f,
                                             CreateMaterial(materials, Material::Dielectric(1.45f, 0.0f)), true);
     
-    auto lucy0 = Model::LoadModel("../assets/models/lucy.obj", models, textures, materials, lights);
+    auto lucy0 = Model::LoadModel("../assets/models/lucy.obj", nodes, models, textures, materials, lights, false);
 
     glm::mat4 ts1 = glm::transpose(rotate(
         scale(
@@ -221,9 +221,9 @@ void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets
     
     int lightModel = Model::CreateLightQuad(vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
-    auto livingroom = Model::LoadModel("../assets/models/livingroom.obj", models, textures, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), livingroom, false));
+
+    Model::LoadModel("../assets/models/livingroom.obj", nodes, models, textures, materials, lights);
 }
 
 void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -243,8 +243,7 @@ void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::N
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
     
-    auto objfile = Model::LoadModel("../assets/models/kitchen.obj", models, textures, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), objfile, false));
+    Model::LoadModel("../assets/models/kitchen.obj", nodes, models, textures, materials, lights);
 }
 
 void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -274,6 +273,5 @@ void SceneList::Still(Assets::CameraInitialSate& camera, std::vector<Assets::Nod
     camera.GammaCorrection = true;
     camera.HasSky = false;
 
-    auto objfile = Model::LoadModel("../assets/models/still1.obj", models, textures, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), objfile, false));
+    Model::LoadModel("../assets/models/still1.obj", nodes, models, textures, materials, lights);
 }
