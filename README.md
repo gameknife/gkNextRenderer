@@ -31,6 +31,7 @@
     * Compute Checkerbox Rendering
     * Temporal Reproject
 * Wavefront OBJ File PBR Scene Support
+* GLTF Scene File Support
 * CrossPlatform support for Windows/Linux/MacOS
 * HDR Display Support
 * Phsyical Light Unit
@@ -59,7 +60,7 @@ Here are my results with the command above on a few different computers.
 ## 后续计划
 
 - Scene Management
-    - Element Instancing
+    - ~~Element Instancing~~
 
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
@@ -85,11 +86,11 @@ Here are my results with the command above on a few different computers.
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
-    - GLTF Scene Support, with real scene management.
+    - ~~GLTF Scene Support, with real scene management.~~
 
 ## Next Todolist
 
-- [ ] GLTF format load
+- [x] GLTF format load
 - [ ] HDR AVIF write
 - [ ] Benchmark Website & Ranking
 - [ ] Hybrid rendering with ray query
