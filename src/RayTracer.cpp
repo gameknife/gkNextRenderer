@@ -319,7 +319,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(nodes), std::move(models), std::move(textures), std::move(materials), std::move(lights) ,true));
+	scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures), std::move(materials), std::move(lights) ,true));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -352,7 +352,7 @@ void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(
 		textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
 	}
 	
-	scene_.reset(new Assets::Scene(CommandPool(), std::move(nodes), std::move(models), std::move(textures), std::move(materials), std::move(lights) ,true));
+	scene_.reset(new Assets::Scene(Vulkan::RayTracing::RayTracingRenderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures), std::move(materials), std::move(lights) ,true));
 	sceneIndex_ = sceneIndex;
 
 	userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
