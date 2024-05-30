@@ -431,35 +431,56 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 					curl_easy_cleanup(curl);
 				}
 
-				avifImage * image = avifImageCreate(128, 128, 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+				avifImage * image = avifImageCreate(128, 128, 10, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
 				if (!image) {
 					fprintf(stderr, "Out of memory\n");
 				}
-
+				image->yuvRange = AVIF_RANGE_FULL;
+				image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
+				image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
+				// We are not actually using YUV, but storing raw GBR (yes not RGB) data
+				// This does not compress as well, but is always lossless!
+				image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
+				//image->clli.maxCLL = maxCLLNits;
+				//image->clli.maxPALL = maxFALLNits;
+				
 				// rgb encode
 				// If you have RGB(A) data you want to encode, use this path
 				printf("Encoding from converted RGBA\n");
 				
 				avifEncoder * encoder = NULL;
 				avifRWData avifOutput = AVIF_DATA_EMPTY;
-				avifRGBImage rgb;
-				memset(&rgb, 0, sizeof(rgb));
+
 				
-				avifRGBImageSetDefaults(&rgb, image);
+				avifRGBImage rgbAvifImage{};
+				avifRGBImageSetDefaults( &rgbAvifImage, image );
+				rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
+				rgbAvifImage.ignoreAlpha = AVIF_TRUE;
+
+
+				
+			
 				// Override RGB(A)->YUV(A) defaults here:
 				//   depth, format, chromaDownsampling, avoidLibYUV, ignoreAlpha, alphaPremultiplied, etc.
 
 				// Alternative: set rgb.pixels and rgb.rowBytes yourself, which should match your chosen rgb.format
 				// Be sure to use uint16_t* instead of uint8_t* for rgb.pixels/rgb.rowBytes if (rgb.depth > 8)
-				avifResult allocationResult = avifRGBImageAllocatePixels(&rgb);
-				if (allocationResult != AVIF_RESULT_OK) {
-					fprintf(stderr, "Allocation of RGB samples failed: %s\n", avifResultToString(allocationResult));
+				
+				// Fill your RGB(A) data here
+				//memset(rgb.pixels, 128, rgb.rowBytes * image->height);
+				uint16_t* data = new uint16_t[rgbAvifImage.width * rgbAvifImage.height * 3];
+				for ( int i = 0; i < rgbAvifImage.width * rgbAvifImage.height; ++i)
+				{
+					// pass the nits directly
+					data[i*3 + 0] = static_cast<uint16_t>(600);
+					data[i*3 + 1] = static_cast<uint16_t>(600);
+					data[i*3 + 2] = static_cast<uint16_t>(300);
 				}
 
-				// Fill your RGB(A) data here
-				memset(rgb.pixels, 255, rgb.rowBytes * image->height);
-
-				avifResult convertResult = avifImageRGBToYUV(image, &rgb);
+				rgbAvifImage.pixels = (uint8_t *)data;
+				rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof( uint16_t );
+				
+				avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
 				if (convertResult != AVIF_RESULT_OK) {
 					fprintf(stderr, "Failed to convert to YUV(A): %s\n", avifResultToString(convertResult));
 				}
@@ -494,6 +515,15 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				}
 
 				printf("Encode success: %zu total bytes\n", avifOutput.size);
+
+				FILE * f = fopen("avif.avif", "wb");
+				size_t bytesWritten = fwrite(avifOutput.data, 1, avifOutput.size, f);
+				fclose(f);
+				if (bytesWritten != avifOutput.size) {
+					fprintf(stderr, "Failed to write %zu bytes\n", avifOutput.size);
+				}
+
+				delete[] data;
 				
 				Renderer::Window().Close();
 			}
