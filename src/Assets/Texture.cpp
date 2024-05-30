@@ -41,7 +41,7 @@ Texture Texture::LoadTexture(const std::string& texname, const unsigned char* da
 	}
 
 	const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
+	std::cout << texname << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
 	return Texture(texname, width, height, channels, 0, pixels);

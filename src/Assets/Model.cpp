@@ -70,7 +70,6 @@ namespace Assets
                                        static_cast<float>(node.rotation[2]));
         glm::mat4 rotation = glm::toMat4(quaternion);
         glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation) * parentTransform;
-
         
         if(node.mesh != -1)
         {
@@ -78,8 +77,6 @@ namespace Assets
             {
                 out_nodes.push_back(Node::CreateNode(transform, node.mesh, false));
 
-                
-                
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
                 glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
@@ -138,9 +135,6 @@ namespace Assets
              cameraInit.FieldOfView = cam.perspective.yfov * 180 / 3.14159;
              cameraInit.Aperture = 0.0f;
              cameraInit.FocusDistance = 100.0f;
-             cameraInit.ControlSpeed = 500.0f;
-             cameraInit.GammaCorrection = true;
-             cameraInit.HasSky = false;
         }
 
         // load all textures
@@ -188,7 +182,7 @@ namespace Assets
             if (emissive != mat.extensions.end())
             {
                 float power = static_cast<float>(emissive->second.Get("emissiveStrength").GetNumberAsDouble());
-                m = Material::DiffuseLight(emissiveColor * power);
+                m = Material::DiffuseLight(emissiveColor * power * 100.0f);
             }
 
             materials.push_back(m);
@@ -352,7 +346,7 @@ namespace Assets
 
             if (material.emission[0] > 0)
             {
-                m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]));
+                m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]) * 100.f);
                 // add to lights
             }
 
@@ -382,8 +376,7 @@ namespace Assets
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
-
-
+        
         for (const auto& shape : objReader.GetShapes())
         {
             glm::vec3 aabb_min(999999, 999999, 999999);
@@ -436,21 +429,6 @@ namespace Assets
                 }
 
                 indices.push_back(uniqueVertices[vertex]);
-            }
-
-            if (shape.name.find("lightquad") != std::string::npos)
-            {
-                // objfile  lightquad cannot recognize
-                // // use the aabb to build a light, using the average normals and area
-                // float radius_big = glm::distance(aabb_max, aabb_min);
-                //
-                // LightObject light;
-                // light.p0 = glm::vec4(aabb_min, 1.0);
-                // light.p1 = glm::vec4(aabb_min.x, aabb_max.y, 1.0);
-                // light.p3 = glm::vec4(aabb_max, 1.0);
-                // light.normal_area = glm::vec4(direction, radius_big);
-                //
-                // lights.push_back(light);
             }
         }
 

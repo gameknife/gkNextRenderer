@@ -33,11 +33,20 @@ void main() {
     vec4 history2 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
     vec4 history3 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
     
+    
     vec4 history = mix(
         mix(history0, history1, subpixel.x),
         mix(history2, history3, subpixel.x),
         subpixel.y
     );
+    
+    // find the min color of 4 history
+    vec4 history_min = min(history, min(history0, min(history1, min(history2, history3))));
+    // then the max
+    vec4 history_max = max(history, max(history0, max(history1, max(history2, history3))));
+    
+    // that may bilinear to peak value, try to clamp it the color clampbox
+    history = clamp(history, history_min, history_max);
     
     // clamp the history color
     //history = clamp(history, vec4(0.0), vec4(1.25));
@@ -49,9 +58,9 @@ void main() {
     uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r;
     uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
     
-    bool dismiss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
+    bool hit = all( equal( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
     
-    if( dismiss )
+    if( !hit )
     {
         history = src;
     }
@@ -59,7 +68,7 @@ void main() {
     // save to 
     uint primitive_index = imageLoad(VisibilityBuffer, ipos).r;
     imageStore(Visibility1Buffer, ipos, ivec4(primitive_index,0,0,0));
-    imageStore(ValidateBuffer, ipos, ivec4(dismiss ? 1 : 0,0,0,0));
+   
     // the prev pos should bilinear sample cause it may int subpixel
     
     

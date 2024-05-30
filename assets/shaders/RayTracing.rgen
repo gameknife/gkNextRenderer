@@ -170,9 +170,9 @@ void main()
 			uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
 			uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
 
-			bool dismiss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId) ));
+			bool hit = all( equal( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId) ));
 			
-			if(dismiss)
+			if(!hit)
 			{
 				sampleTimes = 16u;
 			}
