@@ -259,8 +259,7 @@ void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.GammaCorrection = true;
     camera.HasSky = false;
 
-    auto objfile = Model::LoadModel("../assets/models/luxball.obj", models, textures, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), objfile, false));
+    Model::LoadGLTFScene("../assets/models/luxball.glb",camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::Still(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,

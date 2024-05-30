@@ -52,6 +52,71 @@ namespace std
 
 namespace Assets
 {
+    void ParseGltfNode(std::vector<Assets::Node>& out_nodes, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
+        glm::mat4 parentTransform, tinygltf::Model& model, int node_idx)
+    {
+        tinygltf::Node& node = model.nodes[node_idx];
+            
+        glm::vec3 translation = node.translation.empty()
+                                    ? glm::vec3(0)
+                                    : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+        glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+        glm::quat quaternion = node.rotation.empty()
+                                   ? glm::quat(1, 0, 0, 0)
+                                   : glm::quat(
+                                       static_cast<float>(node.rotation[3]),
+                                       static_cast<float>(node.rotation[0]),
+                                       static_cast<float>(node.rotation[1]),
+                                       static_cast<float>(node.rotation[2]));
+        glm::mat4 rotation = glm::toMat4(quaternion);
+        glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation) * parentTransform;
+
+        
+        if(node.mesh != -1)
+        {
+            if( node.extras.Has("arealight") )
+            {
+                out_nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+
+                
+                
+                // use the aabb to build a light, using the average normals and area
+                // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
+                glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
+                glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
+                glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
+                
+                LightObject light;
+                light.p0 = local_p0 * transform;
+                light.p1 = local_p1 * transform;
+                light.p3 = local_p3 * transform;
+                vec3 dir = vec3(glm::vec4(0,1,0,0) * transform);
+                light.normal_area = glm::vec4(glm::normalize(dir),0);
+                light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+                
+                out_lights.push_back(light);
+            }
+            else
+            {
+                out_nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+            }
+        }
+        else
+        {
+            if(node.camera == 0)
+            {
+                vec4 camEye = glm::vec4(0,0,0,1) * transform;
+                vec4 camFwd = glm::vec4(0,0,-1,0) * transform;
+                out_camera.ModelView = lookAt( vec3(camEye),  vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0,1,0) );
+            }
+        }
+
+        for ( int child : node.children )
+        {
+            ParseGltfNode(out_nodes, out_camera, out_lights, transform, model, child);
+        }
+    }
+    
     void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
@@ -70,13 +135,12 @@ namespace Assets
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)
         {
-            //cameraInit.ModelView = lookAt( c )
-            cameraInit.FieldOfView = cam.perspective.yfov * 180 / 3.14159;
-            cameraInit.Aperture = 0.0f;
-            cameraInit.FocusDistance = 100.0f;
-            cameraInit.ControlSpeed = 500.0f;
-            cameraInit.GammaCorrection = true;
-            cameraInit.HasSky = false;
+             cameraInit.FieldOfView = cam.perspective.yfov * 180 / 3.14159;
+             cameraInit.Aperture = 0.0f;
+             cameraInit.FocusDistance = 100.0f;
+             cameraInit.ControlSpeed = 500.0f;
+             cameraInit.GammaCorrection = true;
+             cameraInit.HasSky = false;
         }
 
         // load all textures
@@ -93,6 +157,7 @@ namespace Assets
         {
             Material m{};
 
+            m.MaterialModel = Material::Enum::Mixture;
             m.DiffuseTextureId = mat.pbrMetallicRoughness.baseColorTexture.index == -1 ? -1 : mat.pbrMetallicRoughness.baseColorTexture.index + textureIdx;
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
@@ -191,56 +256,9 @@ namespace Assets
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
-        for (tinygltf::Node& node : model.nodes)
+        for (int nodeIdx : model.scenes[0].nodes)
         {
-            glm::vec3 translation = node.translation.empty()
-                                        ? glm::vec3(0)
-                                        : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-            glm::vec3 scaling = vec3(1);
-            glm::quat quaternion = node.rotation.empty()
-                                       ? glm::quat(1, 0, 0, 0)
-                                       : glm::quat(
-                                           static_cast<float>(node.rotation[3]),
-                                           static_cast<float>(node.rotation[0]),
-                                           static_cast<float>(node.rotation[1]),
-                                           static_cast<float>(node.rotation[2]));
-            glm::mat4 rotation = glm::toMat4(quaternion);
-            glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation);
-
-            if(node.mesh != -1)
-            {
-                if( node.extras.Has("arealight") )
-                {
-                    nodes.push_back(Node::CreateNode(transform, node.mesh, false));
-                    
-                    // use the aabb to build a light, using the average normals and area
-                    // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
-                    glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
-                    glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
-                    glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
-                    
-                    LightObject light;
-                    light.p0 = local_p0 * transform;
-                    light.p1 = local_p1 * transform;
-                    light.p3 = local_p3 * transform;
-                    light.normal_area = glm::vec4(0,1,0,0) * transform;
-                    light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
-                    
-                    lights.push_back(light);
-                }
-                else
-                {
-                    nodes.push_back(Node::CreateNode(transform, node.mesh, false));
-                }
-            }
-            else
-            {
-                if(node.camera == 0)
-                {
-                    vec4 camFwd = glm::vec4(0,0,-1,0) * transform;
-                    cameraInit.ModelView = lookAt( translation,  translation + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0,1,0) );
-                }
-            }
+            ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx);
         }
     }
 
