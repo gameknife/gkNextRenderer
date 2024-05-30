@@ -59,6 +59,7 @@ find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(CURL REQUIRED)
+find_package(libavif CONFIG REQUIRED)
 #add_definitions(-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
 #add_definitions(-DDIMGUI_DISABLE_OBSOLETE_KEYIO)
 

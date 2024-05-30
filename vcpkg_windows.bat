@@ -13,7 +13,7 @@ IF EXIST vcpkg.windows (
 	call bootstrap-vcpkg.bat || goto :error
 )
 
-vcpkg.exe install ^
+vcpkg.exe install --recurse ^
 	boost-exception:x64-windows-static ^
 	boost-program-options:x64-windows-static ^
 	boost-stacktrace:x64-windows-static ^
@@ -24,6 +24,7 @@ vcpkg.exe install ^
 	tinyobjloader:x64-windows-static ^
 	curl:x64-windows-static ^
 	tinygltf:x64-windows-static ^
+	libavif[aom]:x64-windows-static ^
 	|| goto :error
 
 cd ..
