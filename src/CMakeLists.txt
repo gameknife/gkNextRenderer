@@ -157,6 +157,12 @@ set(src_files
 	UserSettings.hpp
 )
 
+set_source_files_properties(
+  ${src_files_thirdparty_json11}
+  PROPERTIES
+  COMPILE_FLAGS "-w"
+)
+
 source_group("Assets" FILES ${src_files_assets})
 source_group("Utilities" FILES ${src_files_utilities})
 source_group("Vulkan" FILES ${src_files_vulkan})
