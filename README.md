@@ -14,6 +14,8 @@
 
 ## 图库
 
+
+![Alt text](gallery/luxball_hdr.avif?raw=true "luxball")
 ![Alt text](gallery/luxball.jpg?raw=true "luxball")
 ![Alt text](gallery/kitchen.jpg?raw=true "kitchen")
 ![Alt text](gallery/livingroom.jpg?raw=true "livingroom")
@@ -24,17 +26,19 @@
 * Vulkan Raytracing pipeline
     * Importance Sampling
     * Ground Truth Path Tracing
+    * Phsyical Light Unit
 * Non-Raytracing Pipeline
     * Visibiliy Buffer Rendering
     * Legacy Rendering
 * Common Rendering Feature
     * Compute Checkerbox Rendering
     * Temporal Reproject
-* Wavefront OBJ File PBR Scene Support
-* GLTF Scene File Support
+* File Format support
+    * Wavefront OBJ File PBR Scene Support
+    * GLTF Scene File Support
 * CrossPlatform support for Windows/Linux/MacOS
 * HDR Display Support
-* Phsyical Light Unit
+* Screenshot HDR and encode to avif
 
 ## 性能
 
@@ -46,16 +50,9 @@
 
 ## Benchmarking
 
-Command line arguments can be used to control various aspects of the application. Use `--help` to see all modes and arguments. For example, to run the ray tracer in benchmark mode in 2560x1440 fullscreen for scene #1 with vsync off:
 ```
-RayTracer.exe --benchmark --width 2560 --height 1440 --fullscreen --scene 1 --present-mode 0
+RayTracer.exe --width=1920 --height=1080 --scene=6 --present-mode=0 --temporal=128 --benchmark
 ```
-To benchmark all the scenes, starting from scene #1:
-```
-RayTracer.exe --benchmark --width 2560 --height 1440 --fullscreen --scene 1 --next-scenes --present-mode 0
-```
-Here are my results with the command above on a few different computers.
-
 
 ## 后续计划
 
@@ -87,11 +84,12 @@ Here are my results with the command above on a few different computers.
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
     - ~~GLTF Scene Support, with real scene management.~~
+    - ~~Screenshot and save to avif hdr format~~
 
 ## Next Todolist
 
 - [x] GLTF format load
-- [ ] HDR AVIF write
+- [x] HDR AVIF write
 - [ ] Benchmark Website & Ranking
 - [ ] Hybrid rendering with ray query
 - [ ] Android Hybrid Rendering
