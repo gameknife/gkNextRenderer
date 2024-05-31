@@ -16,8 +16,7 @@
 
 
 ![Alt text](gallery/luxball_hdr.avif?raw=true "luxball")
-![Alt text](gallery/luxball.jpg?raw=true "luxball")
-![Alt text](gallery/kitchen.jpg?raw=true "kitchen")
+![Alt text](gallery/kitchen_hdr.avif?raw=true "kitchen")
 ![Alt text](gallery/livingroom.jpg?raw=true "livingroom")
 ![Alt text](gallery/still.jpg?raw=true "still")
 
