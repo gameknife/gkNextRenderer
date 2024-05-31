@@ -17,11 +17,10 @@ namespace Vulkan
 
 		const class Device& Device() const { return device_; }
 
+
 	private:
 
 		const class Device& device_;
-		const VkImage image_;
-		const VkFormat format_;
 
 		VULKAN_HANDLE(VkImageView, imageView_)
 	};

@@ -120,14 +120,17 @@ namespace Assets
     {
         int matieralIdx = materials.size();
         int textureIdx = textures.size();
-        int modelIdx = models.size();
         
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
         std::string err;
         std::string warn;
 
-        bool ret = gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename);
+        if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
+        {
+            return;
+        }
+
 
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)

@@ -4,9 +4,7 @@
 namespace Vulkan {
 
 ImageView::ImageView(const class Device& device, const VkImage image, const VkFormat format, const VkImageAspectFlags aspectFlags) :
-	device_(device),
-	image_(image),
-	format_(format)
+	device_(device)
 {
 	VkImageViewCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

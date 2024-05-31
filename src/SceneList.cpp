@@ -98,8 +98,6 @@ void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<As
     camera.GammaCorrection = true;
     camera.HasSky = false;
 
-    const auto i = mat4(1);
-
     Model::LoadGLTFScene("../assets/models/simple.glb", camera, nodes, models, textures, materials, lights);
 }
 

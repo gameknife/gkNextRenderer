@@ -37,7 +37,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		// Remember the index, vertex offsets.
 		const auto indexOffset = static_cast<uint32_t>(indices.size());
 		const auto vertexOffset = static_cast<uint32_t>(vertices.size());
-		const auto materialOffset = static_cast<uint32_t>(materials.size());
 
 		offsets.emplace_back(indexOffset, vertexOffset);
 
