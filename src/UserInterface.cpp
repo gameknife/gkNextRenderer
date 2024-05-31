@@ -179,13 +179,6 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::BulletText("F1: toggle Settings.");
 		ImGui::BulletText("F2: toggle Statistics.");
-		ImGui::BulletText(
-			"%c%c%c%c/SHIFT/CTRL: move camera.", 
-			std::toupper(window.GetKeyName(GLFW_KEY_W, 0)[0]),
-			std::toupper(window.GetKeyName(GLFW_KEY_A, 0)[0]),
-			std::toupper(window.GetKeyName(GLFW_KEY_S, 0)[0]),
-			std::toupper(window.GetKeyName(GLFW_KEY_D, 0)[0]));
-		ImGui::BulletText("L/R Mouse: rotate camera/scene.");
 		ImGui::NewLine();
 
 		ImGui::Text("Scene");
@@ -197,8 +190,6 @@ void UserInterface::DrawSettings()
 
 		ImGui::Text("Ray Tracing");
 		ImGui::Separator();
-		ImGui::Checkbox("Enable ray tracing", &Settings().IsRayTraced);
-		ImGui::Checkbox("Accumulate rays between frames", &Settings().AccumulateRays);
 		uint32_t min = 1, max = 128;
 		ImGui::SliderScalar("Samples", ImGuiDataType_U32, &Settings().NumberOfSamples, &min, &max);
 		min = 1, max = 32;
@@ -210,9 +201,9 @@ void UserInterface::DrawSettings()
 			ImGui::Separator();
 			uint32_t min = 0, max = 10;
 			ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
-			ImGui::SliderFloat("ColorPhi", &Settings().ColorPhi, 0.01f, 20.0f, "%.1f");
-			ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 2000.0f, "%.1f");
-			ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 180.0f, "%.1f");
+			// ImGui::SliderFloat("ColorPhi", &Settings().ColorPhi, 0.01f, 20.0f, "%.1f");
+			// ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 2000.0f, "%.1f");
+			// ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 180.0f, "%.1f");
 			ImGui::NewLine();
 		}
 		

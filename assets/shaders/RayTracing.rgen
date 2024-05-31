@@ -164,17 +164,20 @@ void main()
 		
 			vec2 prevfpos = vec2(ipos) + motionvector.rg;
 			ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
-			
-			uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
-			uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r;
-			uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
-			uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
 
-			bool miss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId) ));
-			
-			if(miss)
+			if( length(motionvector.xy) > 0.5 )
 			{
+				uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
+				uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r;
+				uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
+				uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
+		
+				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId)));
+		
+				if (miss)
+				{
 				sampleTimes = 16u;
+				}
 			}
 		}
 	}

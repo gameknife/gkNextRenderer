@@ -47,7 +47,7 @@ private:
 	void CheckAndUpdateBenchmarkState(double prevTime);
 	void CheckFramebufferSize() const;
 
-	void ScreenShot(const uint32_t imageIndex);
+	void Report(int fps, bool upload_screen, bool save_screen);
 
 	uint32_t sceneIndex_{};
 	UserSettings userSettings_{};

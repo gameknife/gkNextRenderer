@@ -183,7 +183,10 @@ add_dependencies(${exe_name} Assets)
 set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
+target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
+target_link_directories(${exe_name} PRIVATE ${JSON11_LIB_DIRS})
+
 
 target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
 
@@ -195,4 +198,12 @@ if (VCPKG_TARGET_ANDROID)
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader ${Vulkan_LIBRARIES} ${extra_libs})
 else()
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader avif ${Vulkan_LIBRARIES} ${extra_libs})
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	message("Debug")
+	target_link_libraries(${exe_name} PRIVATE ../../debug/lib/json11)
+else()
+	message("Release")
+	target_link_libraries(${exe_name} PRIVATE ../lib/json11)
 endif()

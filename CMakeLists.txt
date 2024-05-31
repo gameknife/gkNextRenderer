@@ -60,10 +60,10 @@ find_package(tinyobjloader CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(CURL REQUIRED)
 find_package(libavif CONFIG REQUIRED)
-#add_definitions(-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
-#add_definitions(-DDIMGUI_DISABLE_OBSOLETE_KEYIO)
+find_package(json11 CONFIG REQUIRED)
 
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+find_path(CPP_BASE64_INCLUDE_DIRS "cpp-base64/base64.cpp")
 
 IF (NOT Vulkan_FOUND)
     message(FATAL_ERROR "Could not find Vulkan library!")

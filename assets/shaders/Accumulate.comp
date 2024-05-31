@@ -52,17 +52,20 @@ void main() {
     //history = clamp(history, vec4(0.0), vec4(1.25));
     
     // fetch visibility to validate the history
-    uint current_primitive_index = imageLoad(VisibilityBuffer, ipos).r;
-    uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
-    uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r;
-    uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r;
-    uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
-    
-    bool miss = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
-    
-    if( miss )
+    if( length(motion) > 0.5 )
     {
-        history = src;
+        uint current_primitive_index = imageLoad(VisibilityBuffer, ipos).r;
+        uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
+        uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r;
+        uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r;
+        uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
+
+        bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
+
+        if( miss )
+        {
+            history = src;
+        } 
     }
 
     // save to 
