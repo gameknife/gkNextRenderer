@@ -445,8 +445,8 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				// We are not actually using YUV, but storing raw GBR (yes not RGB) data
 				// This does not compress as well, but is always lossless!
 				image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
-				//image->clli.maxCLL = maxCLLNits;
-				//image->clli.maxPALL = maxFALLNits;
+				image->clli.maxCLL = 600;//maxCLLNits;
+				image->clli.maxPALL = 600;//maxFALLNits;
 				
 				// rgb encode
 				// If you have RGB(A) data you want to encode, use this path
@@ -537,7 +537,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				// * speed
 				// * keyframeInterval
 				// * timescale
-				encoder->quality = AVIF_QUALITY_LOSSLESS;
+				encoder->quality = 60;
 				encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
 				encoder->speed = AVIF_SPEED_FASTEST;
 
