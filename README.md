@@ -60,7 +60,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark --next-scene
 ```
 目前benchmark结果会上传我的个人网站，进行信息统计
 
-http://gameknife.site:60010/gpubenchmark?category=Kitchen
+https://gameknife.site:60011/gpubenchmark?category=Kitchen
 
 ## 后续计划
 
