@@ -15,10 +15,11 @@
 ## 图库
 
 
-![Alt text](gallery/luxball_hdr.avif?raw=true "luxball")
-![Alt text](gallery/kitchen_hdr.avif?raw=true "kitchen")
-![Alt text](gallery/livingroom.jpg?raw=true "livingroom")
-![Alt text](gallery/still.jpg?raw=true "still")
+![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")
+![Alt text](gallery/Kitchen.avif?raw=true "Kitchen")
+![Alt text](gallery/LivingRoom.avif?raw=true "LivingRoom")
+![Alt text](gallery/Still.avif?raw=true "still")
+![Alt text](gallery/CornellBox.avif?raw=true "Cornell Box")
 
 ## 特性
 
@@ -49,9 +50,17 @@
 
 ## Benchmarking
 
+使用下列指令可以对单场景进行benchmark
 ```
-RayTracer.exe --width=1920 --height=1080 --scene=6 --present-mode=0 --temporal=128 --benchmark
+gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark
 ```
+下列指令可以进行所有场景遍历benchmark
+```
+gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark --next-scenes
+```
+目前benchmark结果会上传我的个人网站，进行信息统计
+
+http://gameknife.site:60010/gpubenchmark?category=Kitchen
 
 ## 后续计划
 
@@ -89,7 +98,7 @@ RayTracer.exe --width=1920 --height=1080 --scene=6 --present-mode=0 --temporal=1
 
 - [x] GLTF format load
 - [x] HDR AVIF write
-- [ ] Benchmark Website & Ranking
+- [x] Benchmark Website & Ranking
 - [ ] Hybrid rendering with ray query
 - [ ] Android Hybrid Rendering
 - [ ] Full scope refactor
