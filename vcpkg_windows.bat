@@ -25,8 +25,7 @@ vcpkg.exe install --recurse ^
 	curl:x64-windows-static ^
 	tinygltf:x64-windows-static ^
 	libavif[aom]:x64-windows-static ^
-	cpp-base64:x64-windows-static ^
-	json11:x64-windows-static ^
+	cpp-base64:x64-windows-static
 	|| goto :error
 
 cd ..

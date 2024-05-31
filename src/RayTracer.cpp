@@ -15,7 +15,7 @@
 #include "curl/curl.h"
 #include "avif/avif.h"
 #include "cpp-base64/base64.cpp"
-#include "json11.hpp"
+#include "ThirdParty/json11/json11.hpp"
 
 namespace
 {
