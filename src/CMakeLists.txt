@@ -137,6 +137,11 @@ set(src_files_common_compute_pipeline
 	Vulkan/PipelineCommon/CommonComputePipeline.hpp
 )
 
+set(src_files_thirdparty_json11
+	ThirdParty/json11/json11.cpp
+	ThirdParty/json11/json11.hpp
+)
+
 set(src_files
 	main.cpp
 	ModelViewController.cpp
@@ -159,6 +164,7 @@ source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
 source_group("Vulkan.ModernDeferred" FILES ${src_files_vulkan_moderndeferred})
 source_group("Vulkan.LegacyDeferred" FILES ${src_files_vulkan_legacydeferred})
 source_group("Vulkan.PipelineCommon" FILES ${src_files_common_compute_pipeline})
+source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Main" FILES ${src_files})
 
 
@@ -170,6 +176,7 @@ add_executable(${exe_name}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
 	${src_files}
 )
 
@@ -185,8 +192,6 @@ target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_IN
 target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
-target_link_directories(${exe_name} PRIVATE ${JSON11_LIB_DIRS})
-
 
 target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
 
@@ -198,12 +203,4 @@ if (VCPKG_TARGET_ANDROID)
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader ${Vulkan_LIBRARIES} ${extra_libs})
 else()
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader avif ${Vulkan_LIBRARIES} ${extra_libs})
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	message("Debug")
-	target_link_libraries(${exe_name} PRIVATE ../../debug/lib/json11)
-else()
-	message("Release")
-	target_link_libraries(${exe_name} PRIVATE ../lib/json11)
 endif()

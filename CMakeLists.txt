@@ -60,7 +60,6 @@ find_package(tinyobjloader CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(CURL REQUIRED)
 find_package(libavif CONFIG REQUIRED)
-find_package(json11 CONFIG REQUIRED)
 
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_path(CPP_BASE64_INCLUDE_DIRS "cpp-base64/base64.cpp")
