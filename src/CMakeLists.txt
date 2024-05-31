@@ -186,7 +186,7 @@ target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
 
 target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-target_compile_definitions(${exe_name} PUBLIC AVIF_BUILD_APPS=ON)
+
 if ( APPLE )
 target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 endif()
