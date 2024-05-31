@@ -21,6 +21,7 @@ public:
 
 	// Application options.
 	bool Benchmark{};
+	bool SaveFile{};
 	
 	// Benchmark options.
 	bool BenchmarkNextScenes{};
@@ -45,3 +46,5 @@ public:
 	uint32_t PresentMode{};
 	bool Fullscreen{};
 };
+
+inline const Options* GOption = nullptr;

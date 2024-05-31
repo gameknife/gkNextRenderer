@@ -13,7 +13,7 @@ Options::Options(const int argc, const char* argv[])
 	options_description benchmark("Benchmark options", lineLength);
 	benchmark.add_options()
 		("next-scenes", bool_switch(&BenchmarkNextScenes)->default_value(false), "Load the next scene once the sample or time limit is reached.")
-		("max-time", value<uint32_t>(&BenchmarkMaxTime)->default_value(60), "The benchmark time limit per scene (in seconds).")
+		("max-time", value<uint32_t>(&BenchmarkMaxTime)->default_value(10), "The benchmark time limit per scene (in seconds).")
 		;
 
 	options_description renderer("Renderer options", lineLength);
@@ -22,12 +22,12 @@ Options::Options(const int argc, const char* argv[])
 		("samples", value<uint32_t>(&Samples)->default_value(1), "The number of ray samples per pixel.")
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The maximum number of bounces per ray.")
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
-		("temporal", value<uint32_t>(&Temporal)->default_value(0), "The number of temporal frames.")
+		("temporal", value<uint32_t>(&Temporal)->default_value(256), "The number of temporal frames.")
 		;
 
 	options_description scene("Scene options", lineLength);
 	scene.add_options()
-		("scene", value<uint32_t>(&SceneIndex)->default_value(1), "The scene to start with.")
+		("scene", value<uint32_t>(&SceneIndex)->default_value(0), "The scene to start with.")
 		;
 
 	options_description vulkan("Vulkan options", lineLength);
@@ -47,6 +47,7 @@ Options::Options(const int argc, const char* argv[])
 	desc.add_options()
 		("help", "Display help message.")
 		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
+		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
 		;
 
 	desc.add(benchmark);

@@ -27,36 +27,37 @@ int main(int argc, const char* argv[]) noexcept
     try
     {
         const Options options(argc, argv);
+        GOption = &options;
         const UserSettings userSettings = CreateUserSettings(options);
         const Vulkan::WindowConfig windowConfig
         {
-            "RayTracer",
+            "gkNextRenderer",
             options.Width,
             options.Height,
             options.Benchmark && options.Fullscreen,
             options.Fullscreen,
             !options.Fullscreen
         };
-
+        
         Vulkan::VulkanBaseRenderer* applicationPtr = nullptr;
 
         switch (options.RendererType)
         {
         case 0:
             applicationPtr = new NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
+                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
             break;
         case 1:
             applicationPtr = new NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
+                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
             break;
         case 2:
             applicationPtr = new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
+                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
             break;
         default:
             applicationPtr = new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.PresentMode));
+                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
         }
 
         PrintVulkanSdkInformation();
@@ -120,8 +121,8 @@ namespace
 
         userSettings.IsRayTraced = true;
         userSettings.AccumulateRays = false;
-        userSettings.NumberOfSamples = options.Samples;
-        userSettings.NumberOfBounces = options.Bounces;
+        userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
+        userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
         userSettings.MaxNumberOfSamples = options.MaxSamples;
 
         userSettings.ShowSettings = !options.Benchmark;
@@ -131,7 +132,7 @@ namespace
         userSettings.HeatmapScale = 1.5f;
 
         userSettings.UseCheckerBoardRendering = false;
-        userSettings.TemporalFrames = options.Temporal;
+        userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
         userSettings.DenoiseIteration = 0;
         userSettings.DepthPhi = 0.5f;

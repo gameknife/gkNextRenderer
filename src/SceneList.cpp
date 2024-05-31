@@ -80,7 +80,6 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
         {"Cube And Spheres", CubeAndSpheres},
         {"Ray Tracing In One Weekend", RayTracingInOneWeekend},
         {"Cornell Box", CornellBox},
-        {"Cornell Box & Lucy", CornellBoxLucy},
         {"LivingRoom", LivingRoom},
         {"Kitchen", Kitchen},
         {"LuxBall", LuxBall},
@@ -168,43 +167,6 @@ void SceneList::CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets
    
     nodes.push_back(Assets::Node::CreateNode(ts0, 1, false));
     nodes.push_back(Assets::Node::CreateNode(ts1, 1, false));
-}
-
-void SceneList::CornellBoxLucy(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    camera.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
-    camera.FieldOfView = 40;
-    camera.Aperture = 0.0f;
-    camera.FocusDistance = 100.0f;
-    camera.ControlSpeed = 500.0f;
-    camera.GammaCorrection = true;
-    camera.HasSky = false;
-    
-    const auto sphere = Model::CreateSphere(vec3(278 - 130, 165.0f, -165.0f / 2 + 213), 80.0f,
-                                            CreateMaterial(materials, Material::Dielectric(1.45f, 0.0f)), true);
-    
-    auto lucy0 = Model::LoadModel("../assets/models/lucy.obj", nodes, models, textures, materials, lights, false);
-
-    glm::mat4 ts1 = glm::transpose(rotate(
-        scale(
-            translate(glm::mat4(1), vec3(165 / 2, -9, 17 - 165 / 2)),
-            vec3(0.6f)),
-        radians(75.0f), vec3(0, 1, 0)));
-    glm::mat4 ts2 = glm::transpose(rotate(
-        scale(
-            translate(glm::mat4(1), vec3(278 - 300 - 165 / 2, -9, 17 - 165 / 2)),
-            vec3(0.6f)),
-        radians(75.0f), vec3(0, 1, 0)));
-
-
-    auto cbox = Model::CreateCornellBox(555, models, materials, lights);
-    models.push_back(sphere);
-
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), cbox, false));
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), 2, true));
-    nodes.push_back(Assets::Node::CreateNode(ts2, lucy0, false));
 }
 
 void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,

@@ -12,6 +12,8 @@
 #include "Vulkan/Device.hpp"
 #include <iostream>
 #include <sstream>
+
+#include "Options.hpp"
 #include "curl/curl.h"
 #include "avif/avif.h"
 #include "cpp-base64/base64.cpp"
@@ -23,7 +25,7 @@ namespace
 #ifdef NDEBUG
         false;
 #else
-		true;
+        true;
 #endif
 }
 
@@ -379,7 +381,9 @@ void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 
     periodTotalFrames_ = 0;
+    benchmarkTotalFrames_ = 0;
     resetAccumulation_ = true;
+    sceneInitialTime_ = time_;
 }
 
 template <typename Renderer>
@@ -397,7 +401,6 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
         std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'"
             << std::endl;
-        sceneInitialTime_ = time_;
         periodInitialTime_ = time_;
     }
 
@@ -416,6 +419,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         }
 
         periodTotalFrames_++;
+        benchmarkTotalFrames_++;
     }
 
     // If in benchmark mode, bail out from the scene if we've reached the time or sample limit.
@@ -426,15 +430,17 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 
         if (timeLimitReached || sampleLimitReached)
         {
+            {
+                const double totalTime = time_ - sceneInitialTime_;
+                std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
+                double fps = benchmarkTotalFrames_ / totalTime;
+                Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
+                
+            }
+
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
                 SceneList::AllScenes.size() - 1)
             {
-                const double period = 5;
-                const double prevTotalTime = prevTime - periodInitialTime_;
-                const double totalTime = time_ - periodInitialTime_;
-
-                Report(periodTotalFrames_ / totalTime, true, false);
-
                 Renderer::Window().Close();
             }
 
@@ -464,7 +470,7 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 }
 
 template <typename Renderer>
-void NextRendererApplication<Renderer>::Report(int fps, bool upload_screen, bool save_screen)
+void NextRendererApplication<Renderer>::Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
 {
     VkPhysicalDeviceDriverProperties driverProp{};
     driverProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
@@ -472,105 +478,115 @@ void NextRendererApplication<Renderer>::Report(int fps, bool upload_screen, bool
     VkPhysicalDeviceProperties2 deviceProp{};
     deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     deviceProp.pNext = &driverProp;
-    
+
     vkGetPhysicalDeviceProperties2(Renderer::Device().PhysicalDevice(), &deviceProp);
 
-    // screenshot stuffs
-    const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
-
-    avifImage* image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10,
-                                       AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
-    if (!image)
+    std::string img_encoded = "";
+    if (upload_screen || save_screen)
     {
-        Throw(std::runtime_error("avif image creation failed"));
-    }
-    image->yuvRange = AVIF_RANGE_FULL;
-    image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
-    image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
-    image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
-    image->clli.maxCLL = userSettings_.PaperWhiteNit; //maxCLLNits;
-    image->clli.maxPALL = 0; //maxFALLNits;
+        // screenshot stuffs
+        const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
 
-    avifEncoder* encoder = NULL;
-    avifRWData avifOutput = AVIF_DATA_EMPTY;
-
-    avifRGBImage rgbAvifImage{};
-    avifRGBImageSetDefaults(&rgbAvifImage, image);
-    rgbAvifImage.format = AVIF_RGB_FORMAT_BGR;
-    rgbAvifImage.ignoreAlpha = AVIF_TRUE;
-
-    //if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
-    uint16_t* data = (uint16_t*)malloc(rgbAvifImage.width * rgbAvifImage.height * 3 * 2);
-    {
-        Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
-
-        constexpr uint32_t kCompCnt = 3;
-        int imageSize = swapChain.Extent().width * swapChain.Extent().height * kCompCnt;
-
-        uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
-
-        for (uint32_t y = 0; y < swapChain.Extent().height; y++)
+        avifImage* image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10,
+                                           AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+        if (!image)
         {
-            for (uint32_t x = 0; x < swapChain.Extent().width; x++)
-            {
-                uint32_t* pInPixel = (uint32_t*)&mappedData[(y * swapChain.Extent().width * 4) + x * 4];
-                uint32_t uInPixel = *pInPixel;
-
-                data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >>
-                    20;
-                data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >>
-                    10;
-                data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0)) >>
-                    0;
-            }
+            Throw(std::runtime_error("avif image creation failed"));
         }
-        vkMemory->Unmap();
+        image->yuvRange = AVIF_RANGE_FULL;
+        image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
+        image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
+        image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
+        image->clli.maxCLL = userSettings_.PaperWhiteNit; //maxCLLNits;
+        image->clli.maxPALL = 0; //maxFALLNits;
+
+        avifEncoder* encoder = NULL;
+        avifRWData avifOutput = AVIF_DATA_EMPTY;
+
+        avifRGBImage rgbAvifImage{};
+        avifRGBImageSetDefaults(&rgbAvifImage, image);
+        rgbAvifImage.format = AVIF_RGB_FORMAT_BGR;
+        rgbAvifImage.ignoreAlpha = AVIF_TRUE;
+
+        //if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+        uint16_t* data = (uint16_t*)malloc(rgbAvifImage.width * rgbAvifImage.height * 3 * 2);
+        {
+            Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+            constexpr uint32_t kCompCnt = 3;
+            int imageSize = swapChain.Extent().width * swapChain.Extent().height * kCompCnt;
+
+            uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
+
+            for (uint32_t y = 0; y < swapChain.Extent().height; y++)
+            {
+                for (uint32_t x = 0; x < swapChain.Extent().width; x++)
+                {
+                    uint32_t* pInPixel = (uint32_t*)&mappedData[(y * swapChain.Extent().width * 4) + x * 4];
+                    uint32_t uInPixel = *pInPixel;
+
+                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >> 20;
+                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                }
+            }
+            vkMemory->Unmap();
+        }
+
+        rgbAvifImage.pixels = (uint8_t*)data;
+        rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
+
+        avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
+        if (convertResult != AVIF_RESULT_OK)
+        {
+            Throw(std::runtime_error("Failed to convert RGB to YUV: " + std::string(avifResultToString(convertResult))));
+        }
+        encoder = avifEncoderCreate();
+        if (!encoder)
+        {
+            Throw(std::runtime_error("Failed to create encoder"));
+        }
+        encoder->quality = 80;
+        encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
+        encoder->speed = AVIF_SPEED_FASTEST;
+
+        avifResult addImageResult = avifEncoderAddImage(encoder, image, 1, AVIF_ADD_IMAGE_FLAG_SINGLE);
+        if (addImageResult != AVIF_RESULT_OK)
+        {
+            Throw(std::runtime_error("Failed to add image: " + std::string(avifResultToString(addImageResult))));
+        }
+        avifResult finishResult = avifEncoderFinish(encoder, &avifOutput);
+        if (finishResult != AVIF_RESULT_OK)
+        {
+            Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
+        }
+        free(data);
+
+        // save to file with scenename
+        std::string filename = sceneName + ".avif";
+        FILE* f = fopen(filename.c_str(), "wb");
+        if (!f)
+        {
+            Throw(std::runtime_error("Failed to open file for writing"));
+        }
+        fwrite(avifOutput.data, 1, avifOutput.size, f);
+        fclose(f);
+        
+        
+        // send to server
+        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
     }
 
-    rgbAvifImage.pixels = (uint8_t*)data;
-    rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
 
-    avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
-    if (convertResult != AVIF_RESULT_OK)
-    {
-        Throw(std::runtime_error("Failed to convert RGB to YUV: " + std::string(avifResultToString(convertResult))));
-    }
-
-    encoder = avifEncoderCreate();
-    if (!encoder)
-    {
-        Throw(std::runtime_error("Failed to create encoder"));
-    }
-
-    encoder->quality = 60;
-    encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
-    encoder->speed = AVIF_SPEED_FASTEST;
-
-    avifResult addImageResult = avifEncoderAddImage(encoder, image, 1, AVIF_ADD_IMAGE_FLAG_SINGLE);
-    if (addImageResult != AVIF_RESULT_OK)
-    {
-        Throw(std::runtime_error("Failed to add image: " + std::string(avifResultToString(addImageResult))));
-    }
-
-    avifResult finishResult = avifEncoderFinish(encoder, &avifOutput);
-    if (finishResult != AVIF_RESULT_OK)
-    {
-        Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
-    }
-
-    free(data);
-
-    // send to server
-    std::string encoded = base64_encode(avifOutput.data, avifOutput.size, false);
-    encoded = "{\"img\":\"" + encoded + "\"}";
-
-    json11::Json my_json = json11::Json::object {
-        { "gpu", std::string(deviceProp.properties.deviceName) },
-        { "driver", std::string(driverProp.driverInfo) },
-        { "fps", fps },
+    json11::Json my_json = json11::Json::object{
+        {"renderer", Renderer::StaticClass()},
+        {"scene", sceneName},
+        {"gpu", std::string(deviceProp.properties.deviceName)},
+        {"driver", std::string(driverProp.driverInfo)},
+        {"fps", fps},
     };
     std::string json_str = my_json.dump();
-    
+
     std::cout << "Sending benchmark to perf server..." << std::endl;
     // upload from curl
     CURL* curl;

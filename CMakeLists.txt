@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(RayTracingInVulkan)
+project(gkNextRenderer)
 
 set(CMAKE_DEBUG_POSTFIX d)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
@@ -79,7 +79,7 @@ if (NOT Vulkan_GLSLANG_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
 endif()
 
-set(MAIN_PROJECT "RayTracer")
+set(MAIN_PROJECT "gkNextRenderer")
 add_subdirectory(assets)
 add_subdirectory(src)
 set_property (DIRECTORY PROPERTY VS_STARTUP_PROJECT ${MAIN_PROJECT})

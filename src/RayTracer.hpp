@@ -47,7 +47,7 @@ private:
 	void CheckAndUpdateBenchmarkState(double prevTime);
 	void CheckFramebufferSize() const;
 
-	void Report(int fps, bool upload_screen, bool save_screen);
+	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
 
 	uint32_t sceneIndex_{};
 	UserSettings userSettings_{};
@@ -71,4 +71,5 @@ private:
 	double sceneInitialTime_{};
 	double periodInitialTime_{};
 	uint32_t periodTotalFrames_{};
+	uint32_t benchmarkTotalFrames_{};
 };
