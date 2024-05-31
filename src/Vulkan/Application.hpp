@@ -76,6 +76,8 @@ namespace Vulkan
 		bool checkerboxRendering_{};
 		int denoiseIteration_{};
 		int frameCount_{};
+
+		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);
@@ -98,6 +100,10 @@ namespace Vulkan
 		std::vector<class Semaphore> imageAvailableSemaphores_;
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
+
+		std::unique_ptr<Image> screenShotImage_;
+		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
+		std::unique_ptr<ImageView> screenShotImageView_;
 		
 		size_t currentFrame_{};
 

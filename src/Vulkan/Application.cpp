@@ -156,10 +156,15 @@ void VulkanBaseRenderer::CreateSwapChain()
 	commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChainFramebuffers_.size())));
 
 	fence = nullptr;
+
+	screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+	screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
 }
 
 void VulkanBaseRenderer::DeleteSwapChain()
 {
+	screenShotImageMemory_.reset();
+	screenShotImage_.reset();
 	commandBuffers_.reset();
 	swapChainFramebuffers_.clear();
 	graphicsPipeline_.reset();
@@ -203,6 +208,47 @@ void VulkanBaseRenderer::DrawFrame()
 
 	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
 	Render(commandBuffer, imageIndex);
+
+	// screenshot swapchain image
+	if (true)
+	{
+		const auto& extent = swapChain_->Extent();
+		const auto& format = swapChain_->Format();
+		const auto& image = swapChain_->Images()[imageIndex];
+
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = 1;
+		
+		ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
+					   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+		ImageMemoryBarrier::Insert(commandBuffer, screenShotImage_->Handle(), subresourceRange, 0,
+						   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		// Copy output image into swap-chain image.
+		VkImageCopy copyRegion;
+		copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		copyRegion.srcOffset = {0, 0, 0};
+		copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		copyRegion.dstOffset = {0, 0, 0};
+		copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+
+		vkCmdCopyImage(commandBuffer,
+					   image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					   screenShotImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					   1, &copyRegion);
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+							   VK_ACCESS_TRANSFER_READ_BIT,
+							   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+	
 	commandBuffers_->End(imageIndex);
 
 	UpdateUniformBuffer(imageIndex);
@@ -239,7 +285,7 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
-
+	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{
 		RecreateSwapChain();

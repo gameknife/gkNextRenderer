@@ -433,7 +433,9 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 					curl_easy_cleanup(curl);
 				}
 
-				avifImage * image = avifImageCreate(128, 128, 10, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+				const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+
+				avifImage * image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
 				if (!image) {
 					fprintf(stderr, "Out of memory\n");
 				}
@@ -460,7 +462,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				rgbAvifImage.ignoreAlpha = AVIF_TRUE;
 
 
-				
+				printf("Start to save screenshot.\n");
 			
 				// Override RGB(A)->YUV(A) defaults here:
 				//   depth, format, chromaDownsampling, avoidLibYUV, ignoreAlpha, alphaPremultiplied, etc.
@@ -473,36 +475,48 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 
 				// from steamdeck screenshot logic
 				
-				// if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
-				// {
-				// 	// Make our own copy of the image to remove the alpha channel.
-				// 	constexpr uint32_t kCompCnt = 3;
-				// 	auto imageData = std::vector<uint16_t>( g_nOutputWidth * g_nOutputHeight * kCompCnt );
-				//
-				// 	for (uint32_t y = 0; y < g_nOutputHeight; y++)
-				// 	{
-				// 		for (uint32_t x = 0; x < g_nOutputWidth; x++)
-				// 		{
-				// 			uint32_t *pInPixel = (uint32_t *)&mappedData[(y * pScreenshotTexture->rowPitch()) + x * (32 / 8)];
-				// 			uint32_t uInPixel = *pInPixel;
-				//
-				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >> 20;
-				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-				// 			imageData[y * g_nOutputWidth * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0))  >> 0;
-				// 		}
-				// 	}
-				// }
-					
-				uint16_t* data = new uint16_t[rgbAvifImage.width * rgbAvifImage.height * 3];
-				for ( int i = 0; i < rgbAvifImage.width * rgbAvifImage.height; ++i)
-				{
-					// pass the nits directly
-					data[i*3 + 0] = static_cast<uint16_t>(600);
-					data[i*3 + 1] = static_cast<uint16_t>(600);
-					data[i*3 + 2] = static_cast<uint16_t>(300);
-				}
+				Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
 
-				rgbAvifImage.pixels = (uint8_t *)data;
+				
+				//if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
+				uint16_t* data = (uint16_t*)malloc(rgbAvifImage.width * rgbAvifImage.height * 3 * 2);
+				//auto data = std::vector<uint16_t>( rgbAvifImage.width * rgbAvifImage.height * 3 );
+				if ( true )
+				{
+					constexpr uint32_t kCompCnt = 3;
+					int imageSize = swapChain.Extent().width * swapChain.Extent().height * kCompCnt;
+
+					uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
+					
+					
+					// Make our own copy of the image to remove the alpha channel.
+					for (uint32_t y = 0; y < swapChain.Extent().height; y++)
+					{
+						for (uint32_t x = 0; x < swapChain.Extent().width; x++)
+						{
+							uint32_t *pInPixel = (uint32_t *)&mappedData[(y * swapChain.Extent().width * 4) + x * 4];
+							uint32_t uInPixel = *pInPixel;
+				
+							data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 20)) >> 20;
+							data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+							data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 0))  >> 0;
+						}
+					}
+
+					vkMemory->Unmap();
+				}
+				else
+				{
+					for ( int i = 0; i < rgbAvifImage.width * rgbAvifImage.height; ++i)
+					{
+						// pass the nits directly
+						data[i*3 + 0] = static_cast<uint16_t>(600);
+						data[i*3 + 1] = static_cast<uint16_t>(600);
+						data[i*3 + 2] = static_cast<uint16_t>(300);
+					}
+				}
+				
+				rgbAvifImage.pixels = (uint8_t*)data;
 				rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof( uint16_t );
 				
 				avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
@@ -523,8 +537,9 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 				// * speed
 				// * keyframeInterval
 				// * timescale
-				encoder->quality = 60;
+				encoder->quality = AVIF_QUALITY_LOSSLESS;
 				encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
+				encoder->speed = AVIF_SPEED_FASTEST;
 
 				// Call avifEncoderAddImage() for each image in your sequence
 				// Only set AVIF_ADD_IMAGE_FLAG_SINGLE if you're not encoding a sequence
@@ -541,14 +556,14 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 
 				printf("Encode success: %zu total bytes\n", avifOutput.size);
 
-				FILE * f = fopen("avif.avif", "wb");
+				FILE * f = fopen("d:/avif.avif", "wb");
 				size_t bytesWritten = fwrite(avifOutput.data, 1, avifOutput.size, f);
 				fclose(f);
 				if (bytesWritten != avifOutput.size) {
 					fprintf(stderr, "Failed to write %zu bytes\n", avifOutput.size);
 				}
 
-				delete[] data;
+				free(data);
 				
 				Renderer::Window().Close();
 			}
