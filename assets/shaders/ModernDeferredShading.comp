@@ -14,7 +14,7 @@ layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
-
+layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 
 #include "Vertex.glsl"
@@ -27,6 +27,12 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , vec3 ray_direction)
 {
+	// fetch primitive_index high 16bit as instance index and low 16bit as triangle index
+	uint triangle_index = primitive_index & 0xFFFF;
+	uint instance_index = primitive_index >> 16;
+
+	NodeProxy proxy = NodeProxies[instance_index];
+	
     Vertex result;
     vec3 positions[3], normals[3];
 	vec2 tex_coords[3];
@@ -41,6 +47,7 @@ Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , ve
 		matid = v.MaterialIndex;
 		
 		// localspace, need transfer
+		 
 	}
 	
 	vec3 barycentrics;
@@ -235,14 +242,13 @@ void main() {
 		}
 		skyColor = skyColor / float(numSamples);
 	}
-
-    
-    albedo = mix(albedo, vec4(1,1,1,1), reflectProb);
+	
+    //albedo = mix(albedo, vec4(1,1,1,1), reflectProb);
 
 	const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)), 0.2);
     
-    vec4 outColor = albedo * vec4(skyColor,1);
+    vec4 outColor = albedo * d * vec4(skyColor,1);
     imageStore(OutImage, ipos, outColor);
 	
 	

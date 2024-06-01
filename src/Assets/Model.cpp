@@ -255,6 +255,10 @@ namespace Assets
                 }
             }
 
+            #if FLATTEN_VERTICE
+                FlattenVertices(vertices, indices);
+            #endif
+
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
