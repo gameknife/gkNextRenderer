@@ -336,7 +336,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     }
 
     scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures),
-                                   std::move(materials), std::move(lights), true));
+                                   std::move(materials), std::move(lights), Renderer::supportRayTracing_));
     sceneIndex_ = sceneIndex;
 
     userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;

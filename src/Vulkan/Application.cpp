@@ -73,6 +73,8 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 		Throw(std::logic_error("physical device has already been set"));
 	}
 
+	supportRayTracing_ = false;
+
 	std::vector<const char*> requiredExtensions = 
 	{
 		// VK_KHR_swapchain

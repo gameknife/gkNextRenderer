@@ -74,6 +74,7 @@ namespace Vulkan
 
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
+		bool supportRayTracing_ {};
 		int denoiseIteration_{};
 		int frameCount_{};
 

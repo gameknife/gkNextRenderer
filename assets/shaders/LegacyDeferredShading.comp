@@ -39,7 +39,7 @@ void main() {
     const vec3 lightVector = normalize(vec3(5, 4, 3));
     const float d = max(dot(lightVector, normalize(normal.rgb)), 0.2);
 
-    vec4 outColor = sqrt(albedo * d + (pbr_param.r * 0.000001));
+    vec4 outColor = albedo * d + (pbr_param.r * 0.000001);
     
     imageStore(OutImage, ipos, outColor);
 }

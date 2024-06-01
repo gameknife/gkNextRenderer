@@ -42,7 +42,7 @@ Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , ve
 		uint vertex_index = triangle_index * 3 + i;
 		const Vertex v = UnpackVertex(vertex_index);
 		positions[i] = (proxy.World * vec4(v.Position, 1)).xyz;
-		normals[i] = v.Normal;
+		normals[i] = (proxy.World * vec4(v.Normal, 0)).xyz;
 		tex_coords[i] = v.TexCoord;
 		matid = v.MaterialIndex;
 		
