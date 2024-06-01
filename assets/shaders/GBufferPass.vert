@@ -26,12 +26,8 @@ out gl_PerVertex
 void main()
 {
 	Material m = Materials[InMaterialIndex];
-
 	NodeProxy proxy = NodeProxies[gl_InstanceIndex];
-
-	vec4 worldPosition = proxy.World * vec4(InPosition, 1.0);
-
-	gl_Position = Camera.Projection * Camera.ModelView * worldPosition;
+	gl_Position = Camera.Projection * Camera.ModelView * proxy.World * vec4(InPosition, 1.0);
 	FragColor = m.Diffuse.xyz;
 	FragNormal = InNormal; 
 	FragTexCoord = InTexCoord;

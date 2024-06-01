@@ -1,9 +1,11 @@
 #version 460
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
+#include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
 layout(binding = 0) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 1) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 
 layout(location = 0) in vec3 InPosition;
 
@@ -16,6 +18,7 @@ out gl_PerVertex
 
 void main() 
 {
-    gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
+	NodeProxy proxy = NodeProxies[gl_InstanceIndex];
+    gl_Position = Camera.Projection * Camera.ModelView * proxy.World * vec4(InPosition, 1.0);
 	g_out_primitive_index = gl_VertexIndex / 3;
 }

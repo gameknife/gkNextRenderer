@@ -27,28 +27,7 @@ LegacyDeferredRenderer::~LegacyDeferredRenderer()
 {
 	LegacyDeferredRenderer::DeleteSwapChain();
 }
-
-void LegacyDeferredRenderer::SetPhysicalDeviceImpl(
-        VkPhysicalDevice physicalDevice,
-        std::vector<const char*>& requiredExtensions,
-        VkPhysicalDeviceFeatures& deviceFeatures,
-        void* nextDeviceFeatures)
-    {
-        // Required extensions.
-        requiredExtensions.insert(requiredExtensions.end(),
-                                  {
-                                      VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                                  });
-
-        // Required device features.
-        VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
-        bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-        bufferDeviceAddressFeatures.pNext = nextDeviceFeatures;
-        bufferDeviceAddressFeatures.bufferDeviceAddress = true;
-
-        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures);
-    }
-
+	
 void LegacyDeferredRenderer::CreateSwapChain()
 {
 	Vulkan::VulkanBaseRenderer::CreateSwapChain();

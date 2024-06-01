@@ -349,43 +349,6 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     resetAccumulation_ = true;
 }
 
-template <>
-void NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>::LoadScene(const uint32_t sceneIndex)
-{
-    std::vector<Assets::Model> models;
-    std::vector<Assets::Texture> textures;
-    std::vector<Assets::Node> nodes;
-    std::vector<Assets::Material> materials;
-    std::vector<Assets::LightObject> lights;
-
-    // texture id 0: global sky
-    textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
-
-    SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
-
-    // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
-    if (textures.empty())
-    {
-        textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
-    }
-
-    scene_.reset(new Assets::Scene(Vulkan::RayTracing::RayTracingRenderer::CommandPool(), std::move(nodes),
-                                   std::move(models), std::move(textures), std::move(materials), std::move(lights),
-                                   true));
-    sceneIndex_ = sceneIndex;
-
-    userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
-    userSettings_.Aperture = cameraInitialSate_.Aperture;
-    userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-
-    modelViewController_.Reset(cameraInitialSate_.ModelView);
-
-    periodTotalFrames_ = 0;
-    benchmarkTotalFrames_ = 0;
-    resetAccumulation_ = true;
-    sceneInitialTime_ = time_;
-}
-
 template <typename Renderer>
 void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prevTime)
 {

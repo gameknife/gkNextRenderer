@@ -118,8 +118,13 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	indexingFeatures.pNext = nextDeviceFeatures;
 	indexingFeatures.runtimeDescriptorArray = true;
 	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
+	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	bufferDeviceAddressFeatures.pNext = &indexingFeatures;
+	bufferDeviceAddressFeatures.bufferDeviceAddress = true;
 	
-	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &indexingFeatures));
+	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
 }
 

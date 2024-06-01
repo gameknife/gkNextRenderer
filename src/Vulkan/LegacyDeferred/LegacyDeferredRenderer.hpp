@@ -27,11 +27,6 @@ namespace Vulkan::LegacyDeferred
 		
 		LegacyDeferredRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		~LegacyDeferredRenderer();
-		
-		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
-			std::vector<const char*>& requiredExtensions,
-			VkPhysicalDeviceFeatures& deviceFeatures,
-			void* nextDeviceFeatures) override;
 
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;

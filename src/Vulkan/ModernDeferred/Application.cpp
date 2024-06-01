@@ -111,6 +111,7 @@ VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
 	debugUtils.SetObjectName(visibilityBufferImage_->Handle(), "Visibility Image");
+	debugUtils.SetObjectName(visibilityBuffer1Image_->Handle(), "Visibility1 Image");
 	debugUtils.SetObjectName(accumulateImage_->Handle(), "Accumulate Image");
 }
 
@@ -154,7 +155,7 @@ void ModernDeferredRenderer::DeleteSwapChain()
 }
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-{
+{	
 	std::array<VkClearValue, 2> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
@@ -185,17 +186,21 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
+		uint32_t instanceOffset = 0;
 
 		// drawcall
-		for (const auto& model : scene.Models())
+		for (uint32_t m = 0; m < scene.Models().size(); m++)
 		{
+			const auto& model = scene.Models()[m];
 			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
 			const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
-
-			vkCmdDrawIndexed(commandBuffer, indexCount, 1, indexOffset, vertexOffset, 0);
+			const auto instanceCount = static_cast<uint32_t>(scene.ModelInstanceCount()[m]);
+			
+			vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, indexOffset, vertexOffset, instanceOffset);
 
 			vertexOffset += vertexCount;
 			indexOffset += indexCount;
+			instanceOffset += instanceCount;
 		}
 	}
 	vkCmdEndRenderPass(commandBuffer);
@@ -206,7 +211,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	subresourceRange.levelCount = 1;
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
-
+	
 	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
@@ -216,13 +221,15 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 				   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
-					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-					   VK_IMAGE_LAYOUT_GENERAL);
-
 	ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
 				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 				   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
+			   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+			   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, visibilityBuffer1Image_->Handle(), subresourceRange,
+		   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+		   VK_IMAGE_LAYOUT_GENERAL);
 	
 	// cs shading pass
 	{

@@ -77,14 +77,9 @@ namespace Vulkan::RayTracing
                                   });
 
         // Required device features.
-        VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
-        bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-        bufferDeviceAddressFeatures.pNext = nextDeviceFeatures;
-        bufferDeviceAddressFeatures.bufferDeviceAddress = true;
-
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
         accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-        accelerationStructureFeatures.pNext = &nextDeviceFeatures;
+        accelerationStructureFeatures.pNext = nextDeviceFeatures;
         accelerationStructureFeatures.accelerationStructure = true;
 
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {};
@@ -481,7 +476,7 @@ namespace Vulkan::RayTracing
         for (const auto& node : scene.Nodes())
         {
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], node.WorldTransform(), node.GetModel(),  node.IsProcedural() ? 1 : 0));
+                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
         }
 
         // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).

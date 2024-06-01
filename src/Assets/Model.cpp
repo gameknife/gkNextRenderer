@@ -69,7 +69,7 @@ namespace Assets
                                        static_cast<float>(node.rotation[1]),
                                        static_cast<float>(node.rotation[2]));
         glm::mat4 rotation = glm::toMat4(quaternion);
-        glm::mat4 transform = glm::transpose((scale(translate(glm::mat4(1), translation), scaling)) * rotation) * parentTransform;
+        glm::mat4 transform = parentTransform * ((scale(translate(glm::mat4(1), translation), scaling)) * rotation);
         
         if(node.mesh != -1)
         {
@@ -84,10 +84,10 @@ namespace Assets
                 glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
                 
                 LightObject light;
-                light.p0 = local_p0 * transform;
-                light.p1 = local_p1 * transform;
-                light.p3 = local_p3 * transform;
-                vec3 dir = vec3(glm::vec4(0,1,0,0) * transform);
+                light.p0 = transform * local_p0;
+                light.p1 = transform * local_p1;
+                light.p3 = transform * local_p3;
+                vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
                 light.normal_area = glm::vec4(glm::normalize(dir),0);
                 light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
                 
@@ -102,8 +102,8 @@ namespace Assets
         {
             if(node.camera == 0)
             {
-                vec4 camEye = glm::vec4(0,0,0,1) * transform;
-                vec4 camFwd = glm::vec4(0,0,-1,0) * transform;
+                vec4 camEye = transform * glm::vec4(0,0,0,1);
+                vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 out_camera.ModelView = lookAt( vec3(camEye),  vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0,1,0) );
             }
         }
