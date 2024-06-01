@@ -5,7 +5,7 @@
 #include "Material.glsl"
 
 layout(binding = 1) readonly buffer MaterialArray { Material[] Materials; };
-layout(binding = 2) uniform sampler2D[] TextureSamplers;
+layout(binding = 3) uniform sampler2D[] TextureSamplers;
 
 layout(location = 0) in vec3 FragColor;
 layout(location = 1) in vec3 FragNormal;

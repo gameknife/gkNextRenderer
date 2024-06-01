@@ -158,8 +158,8 @@ void SceneList::CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets
     auto box0 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), static_cast<int>(materials.size() - 1) );
     models.push_back(box0);
     
-    glm::mat4 ts0 = glm::transpose(rotate(translate(mat4(1), vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
-    glm::mat4 ts1 = glm::transpose(rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
+    glm::mat4 ts0 = (rotate(translate(mat4(1), vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
+    glm::mat4 ts1 = (rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
                                           radians(15.0f), vec3(0, 1, 0)));
    
     nodes.push_back(Assets::Node::CreateNode(ts0, 1, false));

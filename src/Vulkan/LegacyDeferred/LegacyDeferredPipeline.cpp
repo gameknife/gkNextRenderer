@@ -124,7 +124,8 @@ GBufferPipeline::GBufferPipeline(
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT},
 		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-		{2, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
+		{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+		{3, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
 	};
 
 	descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -143,6 +144,11 @@ GBufferPipeline::GBufferPipeline(
 		materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
 		materialBufferInfo.range = VK_WHOLE_SIZE;
 
+		// Nodes buffer
+		VkDescriptorBufferInfo nodesBufferInfo = {};
+		nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
+		nodesBufferInfo.range = VK_WHOLE_SIZE;
+
 		// Image and texture samplers
 		std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
 
@@ -158,7 +164,8 @@ GBufferPipeline::GBufferPipeline(
 		{
 			descriptorSets.Bind(i, 0, uniformBufferInfo),
 			descriptorSets.Bind(i, 1, materialBufferInfo),
-			descriptorSets.Bind(i, 2, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
+			descriptorSets.Bind(i, 2, nodesBufferInfo),
+			descriptorSets.Bind(i, 3, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size()))
 		};
 
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
