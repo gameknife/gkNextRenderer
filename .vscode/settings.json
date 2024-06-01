@@ -6,7 +6,4 @@
         "string": "cpp",
         "vector": "cpp"
     },
-    "cmake.debugConfig": {
-        "MIMode": "lldb"
-    },  
 }
