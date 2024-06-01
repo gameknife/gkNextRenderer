@@ -2,5 +2,9 @@
     {
         "name": "macos-vcpkg-toolchain",
         "toolchainFile": "./build/vcpkg.macos/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+        "name": "linux-vcpkg-toolchain",
+        "toolchainFile": "./build/vcpkg.linux/scripts/buildsystems/vcpkg.cmake"
     }
 ]
