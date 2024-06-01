@@ -83,7 +83,6 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
         {"LivingRoom", LivingRoom},
         {"Kitchen", Kitchen},
         {"LuxBall", LuxBall},
-        {"Still", Still},
     };
 
 void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
@@ -97,8 +96,6 @@ void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<As
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
     camera.HasSky = false;
-
-    const auto i = mat4(1);
 
     Model::LoadGLTFScene("../assets/models/simple.glb", camera, nodes, models, textures, materials, lights);
 }
@@ -161,8 +158,8 @@ void SceneList::CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets
     auto box0 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), static_cast<int>(materials.size() - 1) );
     models.push_back(box0);
     
-    glm::mat4 ts0 = glm::transpose(rotate(translate(mat4(1), vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
-    glm::mat4 ts1 = glm::transpose(rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
+    glm::mat4 ts0 = (rotate(translate(mat4(1), vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
+    glm::mat4 ts1 = (rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
                                           radians(15.0f), vec3(0, 1, 0)));
    
     nodes.push_back(Assets::Node::CreateNode(ts0, 1, false));
@@ -221,19 +218,4 @@ void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.HasSky = false;
 
     Model::LoadGLTFScene("../assets/models/luxball.glb",camera, nodes, models, textures, materials, lights);
-}
-
-void SceneList::Still(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                      std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
-                      std::vector<Assets::LightObject>& lights)
-{
-    camera.ModelView = lookAt(vec3(0.031, 0.26, 2.454), vec3(0.031, 0.26, 2), vec3(0, 1, 0));
-    camera.FieldOfView = 16;
-    camera.Aperture = 0.0f;
-    camera.FocusDistance = 100.0f;
-    camera.ControlSpeed = 0.2f;
-    camera.GammaCorrection = true;
-    camera.HasSky = false;
-
-    Model::LoadModel("../assets/models/still1.obj", nodes, models, textures, materials, lights);
 }

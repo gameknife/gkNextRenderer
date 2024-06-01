@@ -28,3 +28,8 @@ struct LightObject
 	vec4 p3;
 	vec4 normal_area;
 };
+
+struct NodeProxy
+{
+	mat4 World;
+};

@@ -40,8 +40,11 @@ int main(int argc, const char* argv[]) noexcept
         };
         
         Vulkan::VulkanBaseRenderer* applicationPtr = nullptr;
-
-        switch (options.RendererType)
+        uint32_t rendererType = options.RendererType;
+#if __APPLE__
+        if( rendererType == 0 ) rendererType = 2;
+#endif
+        switch (rendererType)
         {
         case 0:
             applicationPtr = new NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>(

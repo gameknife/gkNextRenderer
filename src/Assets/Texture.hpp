@@ -17,8 +17,8 @@ namespace Assets
 		Texture& operator = (const Texture&) = delete;
 		Texture& operator = (Texture&&) = delete;
 
-		Texture() = default;
-		Texture(const Texture&) = default;
+		Texture() = delete;
+		Texture(const Texture&) = delete;
 		Texture(Texture&&) = default;
 		~Texture() = default;
 
@@ -26,6 +26,7 @@ namespace Assets
 		int Width() const { return width_; }
 		int Height() const { return height_; }
 		bool Hdr() const {return hdr_ != 0; }
+		int Channels() const { return channels_; }
 		const std::string& Loadname() const { return loadname_; }
 
 	private:

@@ -173,8 +173,6 @@ void UserInterface::DrawSettings()
 			scenes.push_back(scene.first.c_str());
 		}
 
-		const auto& window = descriptorPool_->Device().Surface().Instance().Window();
-
 		ImGui::Text("Help");
 		ImGui::Separator();
 		ImGui::BulletText("F1: toggle Settings.");

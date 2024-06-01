@@ -23,6 +23,11 @@ namespace Assets
         bool HasSky;
     };
 
+    struct alignas(16) NodeProxy final
+	{
+        glm::mat4 transform;
+    };
+
     class Node final
     {
     public:

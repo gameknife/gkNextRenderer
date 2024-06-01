@@ -212,8 +212,6 @@ void VulkanBaseRenderer::DrawFrame()
 	// screenshot swapchain image
 	if (true)
 	{
-		const auto& extent = swapChain_->Extent();
-		const auto& format = swapChain_->Format();
 		const auto& image = swapChain_->Images()[imageIndex];
 
 		VkImageSubresourceRange subresourceRange = {};

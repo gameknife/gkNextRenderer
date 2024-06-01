@@ -84,7 +84,7 @@ namespace Vulkan::RayTracing
 
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
         accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-        accelerationStructureFeatures.pNext = &bufferDeviceAddressFeatures;
+        accelerationStructureFeatures.pNext = &nextDeviceFeatures;
         accelerationStructureFeatures.accelerationStructure = true;
 
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {};

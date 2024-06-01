@@ -28,6 +28,27 @@ LegacyDeferredRenderer::~LegacyDeferredRenderer()
 	LegacyDeferredRenderer::DeleteSwapChain();
 }
 
+void LegacyDeferredRenderer::SetPhysicalDeviceImpl(
+        VkPhysicalDevice physicalDevice,
+        std::vector<const char*>& requiredExtensions,
+        VkPhysicalDeviceFeatures& deviceFeatures,
+        void* nextDeviceFeatures)
+    {
+        // Required extensions.
+        requiredExtensions.insert(requiredExtensions.end(),
+                                  {
+                                      VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                                  });
+
+        // Required device features.
+        VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
+        bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        bufferDeviceAddressFeatures.pNext = nextDeviceFeatures;
+        bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+
+        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures);
+    }
+
 void LegacyDeferredRenderer::CreateSwapChain()
 {
 	Vulkan::VulkanBaseRenderer::CreateSwapChain();
@@ -151,17 +172,22 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
+		uint32_t instanceOffset = 0;
 
 		// drawcall
-		for (const auto& model : scene.Models())
+		for (uint32_t m = 0; m < scene.Models().size(); m++)
 		{
+			const auto& model = scene.Models()[m];
 			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
 			const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
 
-			vkCmdDrawIndexed(commandBuffer, indexCount, 1, indexOffset, vertexOffset, 0);
+			// with node as instance, offset to its idx, matrix from matrxibuffer
+			uint32_t instanceCount = scene.ModelInstanceCount()[m];
+			vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, indexOffset, vertexOffset, instanceOffset);
 
 			vertexOffset += vertexCount;
 			indexOffset += indexCount;
+			instanceOffset += instanceCount;
 		}
 	}
 	vkCmdEndRenderPass(commandBuffer);

@@ -6,6 +6,7 @@
 
 layout(binding = 0) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 1) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 2) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 
 layout(location = 0) in vec3 InPosition;
 layout(location = 1) in vec3 InNormal;
@@ -26,7 +27,11 @@ void main()
 {
 	Material m = Materials[InMaterialIndex];
 
-	gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
+	NodeProxy proxy = NodeProxies[gl_InstanceIndex];
+
+	vec4 worldPosition = proxy.World * vec4(InPosition, 1.0);
+
+	gl_Position = Camera.Projection * Camera.ModelView * worldPosition;
 	FragColor = m.Diffuse.xyz;
 	FragNormal = InNormal; 
 	FragTexCoord = InTexCoord;

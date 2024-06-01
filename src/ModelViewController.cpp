@@ -21,7 +21,6 @@ void ModelViewController::Reset(const glm::mat4& modelView)
 
 glm::mat4 ModelViewController::ModelView() const
 {
-	const auto cameraRotX = static_cast<float>(modelRotY_ / 300.0);
 	const auto cameraRotY = static_cast<float>(modelRotX_ / 300.0);
 	
 	const auto model =

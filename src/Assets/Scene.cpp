@@ -37,7 +37,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		// Remember the index, vertex offsets.
 		const auto indexOffset = static_cast<uint32_t>(indices.size());
 		const auto vertexOffset = static_cast<uint32_t>(vertices.size());
-		const auto materialOffset = static_cast<uint32_t>(materials.size());
 
 		offsets.emplace_back(indexOffset, vertexOffset);
 
@@ -66,6 +65,23 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		}
 	}
 
+	// node should sort by models, for instancing rendering
+	std::vector<NodeProxy> nodeProxys;
+	for (int i = 0; i < models_.size(); i++)
+	{	
+		uint32_t modelCount = 0;
+		for (const auto& node : nodes_)
+		{
+			if(node.GetModel() == i)
+			{
+				modelCount++;
+				nodeProxys.push_back(NodeProxy{ node.WorldTransform() });
+				//nodeProxys.push_back(NodeProxy{ glm::mat4(1) });
+			}
+		}
+		model_instance_count_.push_back(modelCount);
+	}
+
 	int flags =supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 	
@@ -78,6 +94,8 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Procedurals", flags, procedurals, proceduralBuffer_, proceduralBufferMemory_);
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
+
+	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
 
 	lightCount_ = lights.size();
 	
