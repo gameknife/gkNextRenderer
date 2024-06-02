@@ -181,8 +181,8 @@ void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets
     int lightModel = Model::CreateLightQuad(vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
-
-    Model::LoadModel("../assets/models/livingroom.obj", nodes, models, textures, materials, lights);
+    
+    Model::LoadGLTFScene("../assets/models/livingroom.glb",camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -201,7 +201,8 @@ void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::N
     int lightModel = Model::CreateLightQuad(vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
-    
+
+    //Model::LoadGLTFScene("../assets/models/kitchen.glb",camera, nodes, models, textures, materials, lights);
     Model::LoadModel("../assets/models/kitchen.obj", nodes, models, textures, materials, lights);
 }
 

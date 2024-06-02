@@ -69,7 +69,7 @@ namespace Assets
                                        static_cast<float>(node.rotation[1]),
                                        static_cast<float>(node.rotation[2]));
         glm::mat4 rotation = glm::toMat4(quaternion);
-        glm::mat4 transform = parentTransform * ((scale(translate(glm::mat4(1), translation), scaling)) * rotation);
+        glm::mat4 transform = parentTransform * scale((translate(glm::mat4(1), translation) * rotation), scaling);
         
         if(node.mesh != -1)
         {
