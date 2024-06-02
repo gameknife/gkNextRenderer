@@ -53,7 +53,7 @@ namespace std
 namespace Assets
 {
     void ParseGltfNode(std::vector<Assets::Node>& out_nodes, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
-        glm::mat4 parentTransform, tinygltf::Model& model, int node_idx)
+        glm::mat4 parentTransform, tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
             
@@ -75,7 +75,7 @@ namespace Assets
         {
             if( node.extras.Has("arealight") )
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
 
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
@@ -95,7 +95,7 @@ namespace Assets
             }
             else
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh, false));
+                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
             }
         }
         else
@@ -110,7 +110,7 @@ namespace Assets
 
         for ( int child : node.children )
         {
-            ParseGltfNode(out_nodes, out_camera, out_lights, transform, model, child);
+            ParseGltfNode(out_nodes, out_camera, out_lights, transform, model, child, modelIdx);
         }
     }
     
@@ -120,6 +120,7 @@ namespace Assets
     {
         int matieralIdx = materials.size();
         int textureIdx = textures.size();
+        int modelIdx = models.size();
         
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
@@ -130,7 +131,6 @@ namespace Assets
         {
             return;
         }
-
 
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)
@@ -154,8 +154,14 @@ namespace Assets
         {
             Material m{};
 
+            m.DiffuseTextureId = -1;
+            int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
+            if(texture != -1)
+            {
+                m.DiffuseTextureId = model.textures[texture].source + textureIdx;
+            }
+            
             m.MaterialModel = Material::Enum::Mixture;
-            m.DiffuseTextureId = mat.pbrMetallicRoughness.baseColorTexture.index == -1 ? -1 : mat.pbrMetallicRoughness.baseColorTexture.index + textureIdx;
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
             m.RefractionIndex = 1.46f;
@@ -202,6 +208,7 @@ namespace Assets
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
 
+            uint32_t vertext_offset = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
@@ -249,10 +256,19 @@ namespace Assets
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
-                    uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i *
-                        strideIndex];
-                    indices.push_back(*data);
+                    if(strideIndex == 2)
+                    {
+                        uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                        indices.push_back(*data + vertext_offset);
+                    }
+                    else
+                    {
+                        uint32* data = (uint32*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                        indices.push_back(*data + vertext_offset);
+                    }
                 }
+
+                vertext_offset += positionAccessor.count;
             }
 
             #if FLATTEN_VERTICE
@@ -264,7 +280,7 @@ namespace Assets
 
         for (int nodeIdx : model.scenes[0].nodes)
         {
-            ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx);
+            ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);
         }
     }
 
