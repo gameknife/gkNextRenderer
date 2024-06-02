@@ -37,6 +37,7 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
 	denoiseIteration_ = 1;
+	supportScreenShot_ = windowConfig.NeedScreenShot;
 }
 
 VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -217,7 +218,7 @@ void VulkanBaseRenderer::DrawFrame()
 	Render(commandBuffer, imageIndex);
 
 	// screenshot swapchain image
-	if (true)
+	if (supportScreenShot_)
 	{
 		const auto& image = swapChain_->Images()[imageIndex];
 

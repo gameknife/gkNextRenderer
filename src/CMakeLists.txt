@@ -30,8 +30,8 @@ set(src_files_utilities
 )
 
 set(src_files_vulkan
-	Vulkan/Application.cpp
-	Vulkan/Application.hpp
+	Vulkan/VulkanBaseRenderer.cpp
+	Vulkan/VulkanBaseRenderer.hpp
 	Vulkan/Buffer.cpp
 	Vulkan/Buffer.hpp
 	Vulkan/BufferUtil.hpp
@@ -100,8 +100,8 @@ set(src_files_vulkan
 set(src_files_vulkan_raytracing
 	Vulkan/RayTracing/AccelerationStructure.cpp
 	Vulkan/RayTracing/AccelerationStructure.hpp
-	Vulkan/RayTracing/Application.cpp
-	Vulkan/RayTracing/Application.hpp
+	Vulkan/RayTracing/RayTracingRenderer.cpp
+	Vulkan/RayTracing/RayTracingRenderer.hpp
 	Vulkan/RayTracing/BottomLevelAccelerationStructure.cpp
 	Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp
 	Vulkan/RayTracing/BottomLevelGeometry.cpp
@@ -126,8 +126,8 @@ set(src_files_vulkan_legacydeferred
 )
 
 set(src_files_vulkan_moderndeferred
-	Vulkan/ModernDeferred/Application.cpp
-	Vulkan/ModernDeferred/Application.hpp
+	Vulkan/ModernDeferred/ModernDeferredRenderer.cpp
+	Vulkan/ModernDeferred/ModernDeferredRenderer.hpp
 	Vulkan/ModernDeferred/ModernDeferredPipeline.cpp
 	Vulkan/ModernDeferred/ModernDeferredPipeline.hpp
 )
@@ -148,8 +148,8 @@ set(src_files
 	ModelViewController.hpp
 	Options.cpp
 	Options.hpp
-	RayTracer.cpp
-	RayTracer.hpp
+	Application.cpp
+	Application.hpp
 	SceneList.cpp
 	SceneList.hpp
 	UserInterface.cpp

@@ -1,4 +1,4 @@
-#include "RayTracer.hpp"
+#include "Application.hpp"
 #include "UserInterface.hpp"
 #include "UserSettings.hpp"
 #include "Assets/Model.hpp"
@@ -346,7 +346,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 
     periodTotalFrames_ = 0;
+    benchmarkTotalFrames_ = 0;
     resetAccumulation_ = true;
+    sceneInitialTime_ = Renderer::Window().GetTime();
 }
 
 template <typename Renderer>

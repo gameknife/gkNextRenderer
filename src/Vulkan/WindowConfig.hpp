@@ -13,5 +13,6 @@ namespace Vulkan
 		bool CursorDisabled;
 		bool Fullscreen;
 		bool Resizable;
+		bool NeedScreenShot;
 	};
 }

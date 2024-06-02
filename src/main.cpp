@@ -5,7 +5,7 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
-#include "RayTracer.hpp"
+#include "Application.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -36,7 +36,8 @@ int main(int argc, const char* argv[]) noexcept
             options.Height,
             options.Benchmark && options.Fullscreen,
             options.Fullscreen,
-            !options.Fullscreen
+            !options.Fullscreen,
+            options.SaveFile
         };
         
         Vulkan::VulkanBaseRenderer* applicationPtr = nullptr;

@@ -77,6 +77,7 @@ namespace Vulkan
 		bool supportRayTracing_ {};
 		int denoiseIteration_{};
 		int frameCount_{};
+		bool supportScreenShot_{};
 
 		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	private:
