@@ -112,6 +112,7 @@ https://gameknife.site:60011/gpubenchmark?category=Kitchen
 ## Building
 
 首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
+github action包含windows和linux的自动ci，如有问题可参阅解决。
 
 **Windows (Visual Studio 2022)** 
 ```
