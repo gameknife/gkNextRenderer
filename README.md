@@ -2,15 +2,15 @@
 
 **2024主题：补课**
 
-实现基于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) fork而来，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。
+本项目开始于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) 工程的fork，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。
 
-基于其版本，修改了采样算法，Shading模型，Model的加载方案，以及Reproject和降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
+基于其版本，增加了重要性采样，Shading模型，更全面的Model的加载，以及Reproject和降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
 
 通过本项目，旨在补上在现代渲染上缺的课，同时更加深入的理解GPU光线跟踪，争取在下一个时代来临前做好准备。
 
 > 是的，我认为将来光线跟踪一定会成为主流。
 
-同时，基于vulkan维护一个尽量简洁的渲染流水线，快速的实现多种现代渲染管线，并方便的部署于多个平台，调式性能。
+同时，基于vulkan维护一个尽量简洁的渲染流水线，快速的实现多种现代渲染管线，并方便的部署于多个平台，调试性能。
 
 ## 图库
 
@@ -66,28 +66,23 @@ https://gameknife.site:60011/gpubenchmark?category=Kitchen
 
 - Scene Management
     - ~~Element Instancing~~
-
+    - GLobal Bindless Textures
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
     - Ray Query Pipeline
     - MIS
-
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
     - Hybrid Rendering
     - ~~Reference Legacy Lighting~~
-
 - Common Rendering Feature
     - SVGF Denoise
-
 - Platform
     - ~~MacOS moltenVK~~
     - Android Vulkan ( RayTracing on 8Gen2 )
-
 - Benchmark
     - Online benchmark chart
     - Version Management
-
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
@@ -99,6 +94,7 @@ https://gameknife.site:60011/gpubenchmark?category=Kitchen
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
+- [ ] Global Bindless Textures
 - [ ] Hybrid rendering with ray query
 - [ ] Android Hybrid Rendering
 - [ ] Full scope refactor
@@ -113,44 +109,34 @@ https://gameknife.site:60011/gpubenchmark?category=Kitchen
 所以基础的PT代码，是非常好看的，一个递归算法就解决了。
 而PT之所以有这么多人研究，就是希望他能够更快，能够不发射这么多的样本，就可以得到一个真实的结果。
 
-- 
-
 ## Building
 
-First you will need to install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home). For Windows, LunarG provides installers. For Ubuntu LTS, they have native packages available. For other Linux distributions, they only provide tarballs. The rest of the third party dependencies can be built using [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) as provided by the scripts below.
+首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
 
-**Windows (Visual Studio 2022 x64 solution)** 
+**Windows (Visual Studio 2022)** 
 ```
 vcpkg_windows.bat
 build_windows.bat
 ```
-**Linux (GCC 9+ Makefile)**
+**Linux**
 
-For example, on Ubuntu 20.04 (same as the CI pipeline, build steps on other distributions may vary):
+各平台需要提前安装对应的依赖，vcpkg才可以正确运行。
+
+例如，ubuntu
 ```
 sudo apt-get install curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
 ./vcpkg_linux.sh
 ./build_linux.sh
 ```
-
-Fedora Installation
-
+SteamDeck Archlinux
 ```
-sudo dnf install libXinerama-devel libXcursor-devel libX11-devel libXrandr-devel mesa-libGLU-devel pkgconfig ninja-build cmake gcc gcc-c++ vulkan-validation-layers-devel vulkan-headers vulkan-tools vulkan-loader-devel vulkan-loader glslang glslc
+sudo steamos-readonly disable
+sudo pacman devel-base
 ./vcpkg_linux.sh
 ./build_linux.sh
 ```
 
-SteamDeck Archlinux
-
-```
-sudo steamos-readonly disable
-sudo pacman devel-base
-```
-
 **MacOS**
-
-macOS using moltenVK, you should install it. then just
 ```
 ./vcpkg_macos.sh
 ./build_macos.sh
@@ -158,8 +144,7 @@ macOS using moltenVK, you should install it. then just
 
 ## References
 
-### Initial Implementation (NVIDIA vendor specific extension)
-
 * [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
+* [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
