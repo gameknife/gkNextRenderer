@@ -1,0 +1,28 @@
+name: MacOS CI
+
+on: 
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+    env: 
+      SDK_VERSION: 1.3.280
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Ubuntu dependencies
+      run: |
+        brew install nasm
+    - name: Install Vulkan SDK
+      run: |
+        brew cask install apenngrace/vulkan/vulkan-sdk
+    - name: Compile vcpkg dependencies
+      run: ./vcpkg_macos.sh
+    - name: Compile gkNextRenderer
+      run: ./build_macos.sh
