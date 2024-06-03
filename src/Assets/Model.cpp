@@ -246,12 +246,18 @@ namespace Assets
                         normal[1],
                         normal[2]
                     );
-                    float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
-                        texcoordStride]);
-                    vertex.TexCoord = vec2(
-                        texcoord[0],
-                        texcoord[1]
-                    );
+
+                    if(texcoordView.byteOffset + i *
+                        texcoordStride < model.buffers[texcoordView.buffer].data.size())
+                    {
+                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
+                  texcoordStride]);
+                        vertex.TexCoord = vec2(
+                            texcoord[0],
+                            texcoord[1]
+                        );              
+                    }
+
 
                     vertex.MaterialIndex = primtive.material + matieralIdx;
                     vertices.push_back(vertex);
