@@ -17,12 +17,12 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    - name: Install Ubuntu dependencies
+    - name: Install macOS dependencies
       run: |
         brew install nasm
     - name: Install Vulkan SDK
       run: |
-        brew --cask install apenngrace/vulkan/vulkan-sdk
+        brew install --cask apenngrace/vulkan/vulkan-sdk
     - name: Compile vcpkg dependencies
       run: ./vcpkg_macos.sh
     - name: Compile gkNextRenderer
