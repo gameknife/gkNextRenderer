@@ -23,6 +23,7 @@ jobs:
     - name: Install Vulkan SDK
       run: |
         brew install molten-vk
+        brew install glslang
     - name: Compile vcpkg dependencies
       run: ./vcpkg_macos.sh
     - name: Compile gkNextRenderer
