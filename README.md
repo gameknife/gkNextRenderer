@@ -1,4 +1,9 @@
 # gkNextRenderer
+---
+![windows ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/windows.yml/badge.svg)
+![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)
+
+## 简介
 
 **2024主题：补课**
 
