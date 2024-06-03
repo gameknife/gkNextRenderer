@@ -22,7 +22,7 @@ jobs:
         brew install nasm
     - name: Install Vulkan SDK
       run: |
-        brew cask install apenngrace/vulkan/vulkan-sdk
+        brew --cask install apenngrace/vulkan/vulkan-sdk
     - name: Compile vcpkg dependencies
       run: ./vcpkg_macos.sh
     - name: Compile gkNextRenderer
