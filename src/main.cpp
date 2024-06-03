@@ -43,6 +43,7 @@ int main(int argc, const char* argv[]) noexcept
         Vulkan::VulkanBaseRenderer* applicationPtr = nullptr;
         uint32_t rendererType = options.RendererType;
 #if __APPLE__
+        setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
         if( rendererType == 0 ) rendererType = 2;
 #endif
         switch (rendererType)

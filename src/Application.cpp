@@ -529,8 +529,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         // save to file with scenename
         std::string filename = sceneName + ".avif";
-        FILE* f;
-        fopen_s(&f, filename.c_str(), "wb");
+        FILE* f = fopen(filename.c_str(), "wb");
         if (!f)
         {
             Throw(std::runtime_error("Failed to open file for writing"));
