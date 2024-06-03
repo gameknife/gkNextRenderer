@@ -206,7 +206,7 @@ target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_RE
 endif()
 
 if (VCPKG_TARGET_ANDROID)
-target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
-target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader avif ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader avif draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 endif()
