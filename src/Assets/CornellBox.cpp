@@ -22,7 +22,7 @@ void CornellBox::Create(
 	std::vector<Material>& materials,
 	std::vector<LightObject>& lights)
 {
-	int prev_mat_id = materials.size();
+	int32_t prev_mat_id = static_cast<int32_t>(materials.size());
 	
 	materials.push_back(Material::Lambertian(vec3(0.65f, 0.05f, 0.05f))); // red
 	materials.push_back(Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))); // green

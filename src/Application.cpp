@@ -462,7 +462,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
         image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
         image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
-        image->clli.maxCLL = userSettings_.PaperWhiteNit; //maxCLLNits;
+        image->clli.maxCLL = static_cast<uint16_t>(userSettings_.PaperWhiteNit); //maxCLLNits;
         image->clli.maxPALL = 0; //maxFALLNits;
 
         avifEncoder* encoder = NULL;
@@ -529,7 +529,8 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         // save to file with scenename
         std::string filename = sceneName + ".avif";
-        FILE* f = fopen(filename.c_str(), "wb");
+        FILE* f;
+        fopen_s(&f, filename.c_str(), "wb");
         if (!f)
         {
             Throw(std::runtime_error("Failed to open file for writing"));
@@ -537,12 +538,10 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         fwrite(avifOutput.data, 1, avifOutput.size, f);
         fclose(f);
         
-        
         // send to server
         //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
     }
-
-
+    
     json11::Json my_json = json11::Json::object{
         {"renderer", Renderer::StaticClass()},
         {"scene", sceneName},
@@ -566,9 +565,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         /* set custom headers */
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
-
         curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
-        //curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, avifOutput.size);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
 
         /* Perform the request, res gets the return code */

@@ -97,7 +97,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
 
-	lightCount_ = lights.size();
+	lightCount_ = static_cast<uint32_t>(lights.size());
 	
 	// Upload all textures
 	textureImages_.reserve(textures_.size());

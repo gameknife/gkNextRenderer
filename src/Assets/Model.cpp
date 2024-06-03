@@ -118,9 +118,9 @@ namespace Assets
                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
     {
-        int matieralIdx = materials.size();
-        int textureIdx = textures.size();
-        int modelIdx = models.size();
+        int32_t matieralIdx = static_cast<int32_t>(materials.size());
+        int32_t textureIdx = static_cast<int32_t>(textures.size());
+        int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
         tinygltf::TinyGLTF gltfLoader;
@@ -135,7 +135,7 @@ namespace Assets
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)
         {
-             cameraInit.FieldOfView = cam.perspective.yfov * 180 / 3.14159;
+             cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / 3.14159f;
              cameraInit.Aperture = 0.0f;
              cameraInit.FocusDistance = 100.0f;
         }
@@ -227,22 +227,22 @@ namespace Assets
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = (float*)&model.buffers[positionView.buffer].data[positionView.byteOffset + i *
-                        positionStride];
+                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + i *
+                        positionStride]);
                     vertex.Position = vec3(
                         position[0],
                         position[1],
                         position[2]
                     );
-                    float* normal = (float*)&model.buffers[normalView.buffer].data[normalView.byteOffset + i *
-                        normalStride];
+                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + i *
+                        normalStride]);
                     vertex.Normal = vec3(
                         normal[0],
                         normal[1],
                         normal[2]
                     );
-                    float* texcoord = (float*)&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
-                        texcoordStride];
+                    float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
+                        texcoordStride]);
                     vertex.TexCoord = vec2(
                         texcoord[0],
                         texcoord[1]
@@ -258,17 +258,17 @@ namespace Assets
                 {
                     if(strideIndex == 2)
                     {
-                        uint16* data = (uint16*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertext_offset);
                     }
                     else
                     {
-                        uint32* data = (uint32*)&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex];
+                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertext_offset);
                     }
                 }
 
-                vertext_offset += positionAccessor.count;
+                vertext_offset += static_cast<uint32_t>(positionAccessor.count);
             }
 
             #if FLATTEN_VERTICE
@@ -305,7 +305,7 @@ namespace Assets
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode)
     {
-        int materialIdxOffset = materials.size();
+        int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
         
         std::cout << "- loading '" << filename << "'... " << std::flush;
 
@@ -386,7 +386,7 @@ namespace Assets
             materials.emplace_back(m);
         }
 
-        if (materialIdxOffset == materials.size())
+        if (materialIdxOffset == static_cast<int32_t>(materials.size()))
         {
             Material m{};
 
@@ -395,7 +395,7 @@ namespace Assets
 
             materials.emplace_back(m);
 
-            materialIdxOffset = materials.size();
+            materialIdxOffset = static_cast<int32_t>(materials.size());
         }
 
         // Geometry
@@ -407,10 +407,6 @@ namespace Assets
         {
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
-            
-            glm::vec3 aabb_min(999999, 999999, 999999);
-            glm::vec3 aabb_max(-999999, -999999, -999999);
-            glm::vec3 direction(0, 0, 0);
 
             const auto& mesh = shape.mesh;
             size_t faceId = 0;
@@ -425,9 +421,6 @@ namespace Assets
                     objAttrib.vertices[3 * index.vertex_index + 2],
                 };
 
-                aabb_min = glm::min(aabb_min, vertex.Position);
-                aabb_max = glm::max(aabb_max, vertex.Position);
-
                 if (!objAttrib.normals.empty())
                 {
                     vertex.Normal =
@@ -436,8 +429,6 @@ namespace Assets
                         objAttrib.normals[3 * index.normal_index + 1],
                         objAttrib.normals[3 * index.normal_index + 2]
                     };
-
-                    direction = vertex.Normal;
                 }
 
                 if (!objAttrib.texcoords.empty())
@@ -496,7 +487,7 @@ namespace Assets
             models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
             if(autoNode)
             {
-                nodes.push_back(Node::CreateNode(mat4(1), models.size() - 1, false));
+                nodes.push_back(Node::CreateNode(mat4(1), static_cast<int>(models.size()) - 1, false));
             }
         }
         
@@ -505,9 +496,9 @@ namespace Assets
 
         std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
             << materials.size() << " materials, " << lights.size() << " lights";
-        std::cout << elapsed << "s" << std::endl;
+        std::cout << elapsed << "s" << '\n';
 
-        return models.size() - 1;
+        return static_cast<int32_t>(models.size()) - 1;
     }
 
     int Model::CreateCornellBox(const float scale,
@@ -530,7 +521,7 @@ namespace Assets
             nullptr
         ));
 
-        return  models.size() - 1;
+        return static_cast<int32_t>(models.size()) - 1;
     }
 
     Model Model::CreateBox(const vec3& p0, const vec3& p1, int materialIdx)
@@ -600,7 +591,7 @@ namespace Assets
 
         for (int j = 0; j <= stacks; ++j)
         {
-            const float j0 = pi * j / stacks;
+            const float j0 = pi * static_cast<float>(j) / static_cast<float>(stacks);
 
             // Vertex
             const float v = radius * -std::sin(j0);
@@ -612,7 +603,7 @@ namespace Assets
 
             for (int i = 0; i <= slices; ++i)
             {
-                const float i0 = 2 * pi * i / slices;
+                const float i0 = 2 * pi * static_cast<float>(i) / static_cast<float>(slices);
 
                 const vec3 position(
                     center.x + v * std::sin(i0),
@@ -669,7 +660,7 @@ namespace Assets
                                 std::vector<LightObject>& lights)
     {
         materials.push_back(Material::DiffuseLight(lightColor));
-        int materialIdx = materials.size() - 1;
+        int materialIdx = static_cast<int32_t>(materials.size()) - 1;
         
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
@@ -705,7 +696,7 @@ namespace Assets
             std::move(indices),
             nullptr));
 
-        return  models.size() - 1;
+        return static_cast<int32_t>(models.size()) - 1;
     }
 
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices,
