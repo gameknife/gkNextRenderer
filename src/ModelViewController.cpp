@@ -33,6 +33,7 @@ glm::mat4 ModelViewController::ModelView() const
 
 bool ModelViewController::OnKey(const int key, const int scancode, const int action, const int mods)
 {
+#if !ANDROID
 	switch (key)
 	{
 	case GLFW_KEY_S: cameraMovingBackward_ = action != GLFW_RELEASE; return true;
@@ -43,6 +44,7 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 	case GLFW_KEY_LEFT_SHIFT: cameraMovingUp_ = action != GLFW_RELEASE; return true;
 	default: return false;
 	}
+#endif
 }
 
 bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
@@ -70,6 +72,7 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 
 bool ModelViewController::OnMouseButton(const int button, const int action, const int mods)
 {
+#if !ANDROID
 	if (button == GLFW_MOUSE_BUTTON_LEFT)
 	{
 		mouseLeftPressed_ = action == GLFW_PRESS;
@@ -79,7 +82,7 @@ bool ModelViewController::OnMouseButton(const int button, const int action, cons
 	{
 		mouseRightPressed_ = action == GLFW_PRESS;
 	}
-
+#endif
 	return true;
 }
 

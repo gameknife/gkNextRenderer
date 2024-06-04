@@ -25,6 +25,5 @@ fi
 	tinyobjloader:x64-osx \
 	curl:x64-osx \
 	tinygltf:x64-osx \
-	libavif[aom]:x64-osx \
 	draco:x64-osx \
 	cpp-base64:x64-osx

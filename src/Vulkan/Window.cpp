@@ -7,6 +7,7 @@ namespace Vulkan {
 
 namespace
 {
+#if !ANDROID
 	void GlfwErrorCallback(const int error, const char* const description)
 	{
 		std::cerr << "ERROR: GLFW: " << description << " (code: " << error << ")" << std::endl;
@@ -47,11 +48,13 @@ namespace
 			this_->OnScroll(xoffset, yoffset);
 		}
 	}
+#endif
 }
 
 Window::Window(const WindowConfig& config) :
 	config_(config)
 {
+#if !ANDROID
 	glfwSetErrorCallback(GlfwErrorCallback);
 
 	if (!glfwInit())
@@ -95,10 +98,12 @@ Window::Window(const WindowConfig& config) :
 	glfwSetCursorPosCallback(window_, GlfwCursorPositionCallback);
 	glfwSetMouseButtonCallback(window_, GlfwMouseButtonCallback);
 	glfwSetScrollCallback(window_, GlfwScrollCallback);
+#endif
 }
 
 Window::~Window()
 {
+#if !ANDROID
 	if (window_ != nullptr)
 	{
 		glfwDestroyWindow(window_);
@@ -107,51 +112,77 @@ Window::~Window()
 
 	glfwTerminate();
 	glfwSetErrorCallback(nullptr);
+#endif
 }
 
 float Window::ContentScale() const
 {
+#if !ANDROID
 	float xscale;
 	float yscale;
 	glfwGetWindowContentScale(window_, &xscale, &yscale);
-
+#else
+	float xscale = 1;
+#endif
 	return xscale;
 }
 
 VkExtent2D Window::FramebufferSize() const
 {
+#if !ANDROID
 	int width, height;
 	glfwGetFramebufferSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+#else
+	return VkExtent2D{ 1920, 1080 };
+#endif
 }
 
 VkExtent2D Window::WindowSize() const
 {
+#if !ANDROID
 	int width, height;
 	glfwGetWindowSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+#else
+	return VkExtent2D{ 1920, 1080 };
+#endif
 }
 
 const char* Window::GetKeyName(const int key, const int scancode) const
 {
+#if !ANDROID
 	return glfwGetKeyName(key, scancode);
+#else
+	return "A";
+#endif
 }
 
 std::vector<const char*> Window::GetRequiredInstanceExtensions() const
 {
+#if !ANDROID
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	return std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
+#else
+	return std::vector<const char*>();
+#endif
 }
 
 double Window::GetTime() const
 {
+#if !ANDROID
 	return glfwGetTime();
+#else
+	return 0;
+#endif
 }
 
 void Window::Close()
 {
+#if !ANDROID
 	glfwSetWindowShouldClose(window_, 1);
+#endif
 }
 
 bool Window::IsMinimized() const
@@ -162,6 +193,7 @@ bool Window::IsMinimized() const
 
 void Window::Run()
 {
+#if !ANDROID
 	glfwSetTime(0.0);
 
 	while (!glfwWindowShouldClose(window_))
@@ -173,11 +205,14 @@ void Window::Run()
 			DrawFrame();
 		}
 	}
+#endif
 }
 
 void Window::WaitForEvents() const
 {
+#if !ANDROID
 	glfwWaitEvents();
+#endif
 }
 
 }

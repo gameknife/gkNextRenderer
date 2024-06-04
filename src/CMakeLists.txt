@@ -186,7 +186,7 @@ add_executable(${exe_name}
 	${src_files}
 )
 
-if (UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
 	# This is not needed with GCC9 or higher.
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
@@ -205,8 +205,12 @@ if ( APPLE )
 target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 endif()
 
-if (VCPKG_TARGET_ANDROID)
-target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+if ( ANDROID )
+target_link_libraries(${exe_name} PRIVATE android CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
-target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader avif draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+endif()
+
+if ( WITH_AVIF )
+target_link_libraries(${exe_name} PRIVATE avif)
 endif()

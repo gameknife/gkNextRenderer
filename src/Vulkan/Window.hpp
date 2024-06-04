@@ -19,7 +19,9 @@ namespace Vulkan
 
 		// Window instance properties.
 		const WindowConfig& Config() const { return config_; }
+
 		GLFWwindow* Handle() const { return window_; }
+
 		float ContentScale() const;
 		VkExtent2D FramebufferSize() const;
 		VkExtent2D WindowSize() const;

@@ -14,7 +14,11 @@
 
 #include <imgui.h>
 #include <imgui_freetype.h>
+#if !ANDROID
 #include <imgui_impl_glfw.h>
+#else
+#include <imgui_impl_android.h>
+#endif
 #include <imgui_impl_vulkan.h>
 
 #include <array>
@@ -53,10 +57,14 @@ UserInterface::UserInterface(
 	ImGui::CreateContext();
 
 	// Initialise ImGui GLFW adapter
+#if !ANDROID
 	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
 	{
 		Throw(std::runtime_error("failed to initialise ImGui GLFW adapter"));
 	}
+#else
+	ImGui_ImplAndroid_Init(window.Handle());
+#endif
 
 	// Initialise ImGui Vulkan adapter
 	ImGui_ImplVulkan_InitInfo vulkanInit = {};
@@ -107,13 +115,21 @@ UserInterface::UserInterface(
 UserInterface::~UserInterface()
 {
 	ImGui_ImplVulkan_Shutdown();
+#if !ANDROID
 	ImGui_ImplGlfw_Shutdown();
+#else
+	ImGui_ImplAndroid_Shutdown();
+#endif
 	ImGui::DestroyContext();
 }
 
 void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics)
 {
+#if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
+#else
+	ImGui_ImplAndroid_NewFrame();
+#endif
 	ImGui_ImplVulkan_NewFrame();
 	ImGui::NewFrame();
 

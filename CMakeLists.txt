@@ -60,7 +60,7 @@ find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 
-if (!VCPKG_TARGET_ANDROID)
+if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
 endif()
 

@@ -15,9 +15,12 @@
 
 #include "Options.hpp"
 #include "curl/curl.h"
-#include "avif/avif.h"
 #include "cpp-base64/base64.cpp"
 #include "ThirdParty/json11/json11.hpp"
+
+#if WITH_AVIF
+#include "avif/avif.h"
+#endif
 
 namespace
 {
@@ -232,7 +235,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
     {
         return;
     }
-
+#if !ANDROID
     if (action == GLFW_PRESS)
     {
         switch (key)
@@ -259,6 +262,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
             }
         }
     }
+#endif
 
     // Camera motions
     if (!userSettings_.Benchmark)
@@ -449,6 +453,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     std::string img_encoded = "";
     if (upload_screen || save_screen)
     {
+#if WITH_AVIF
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
 
@@ -539,6 +544,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         
         // send to server
         //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+#endif
     }
     
     json11::Json my_json = json11::Json::object{
