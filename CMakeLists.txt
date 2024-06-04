@@ -31,7 +31,7 @@ if (MSVC)
 	add_compile_options("/MP")
 endif()
 
-if (UNIX)
+if (UNIX AND !VCPKG_TARGET_ANDROID)
 	
 	add_definitions(-DUNIX)
 	add_compile_options("-Wall")
@@ -48,18 +48,22 @@ if (UNIX)
 endif ()
 
 find_package(Boost REQUIRED COMPONENTS exception program_options) 
-if (VCPKG_TARGET_ANDROID)
 
-else()
+if (!VCPKG_TARGET_ANDROID)
 find_package(glfw3 REQUIRED)
 endif()
+
+find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
 find_package(CURL REQUIRED)
+
+if (!VCPKG_TARGET_ANDROID)
 find_package(libavif CONFIG REQUIRED)
+endif()
+
 find_package(draco CONFIG REQUIRED)
 
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
