@@ -58,11 +58,11 @@
 
 使用下列指令可以对单场景进行benchmark
 ```
-gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark
+gkNextRenderer.exe --width=1920 --height=1080 --scene=0 --benchmark
 ```
 下列指令可以进行所有场景遍历benchmark
 ```
-gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark --next-scenes
+gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 ```
 目前benchmark结果会上传我的个人网站，进行信息统计
 
@@ -87,7 +87,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark --next-scene
     - ~~MacOS moltenVK~~
     - Android Vulkan ( RayTracing on 8Gen2 )
 - Benchmark
-    - Online benchmark chart
+    - ~~Online benchmark chart~~
     - Version Management
 - Others
     - ~~HDR display support~~
@@ -100,9 +100,9 @@ gkNextRenderer.exe --width=1920 --height=1080 --scene=6 --benchmark --next-scene
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
+- [ ] Android Hybrid Rendering
 - [ ] Global Bindless Textures
 - [ ] Hybrid rendering with ray query
-- [ ] Android Hybrid Rendering
 - [ ] Full scope refactor
 
 ## 随感
@@ -149,6 +149,9 @@ sudo pacman devel-base
 
 **MacOS**
 ```
+brew install nasm
+brew install molten-vk
+brew install glslang
 ./vcpkg_macos.sh
 ./build_macos.sh
 ```
