@@ -83,6 +83,7 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
         {"LivingRoom", LivingRoom},
         {"Kitchen", Kitchen},
         {"LuxBall", LuxBall},
+        {"ModernHouse1", ModernHouse1}
     };
 
 void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
@@ -218,4 +219,19 @@ void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.HasSky = false;
 
     Model::LoadGLTFScene("../assets/models/luxball.glb",camera, nodes, models, textures, materials, lights);
+}
+
+void SceneList::ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                        std::vector<Assets::LightObject>& lights)
+{
+    camera.ModelView = lookAt(vec3(0.168, 0.375, 0.487), vec3(0, 0.05, 0.0), vec3(0, 1, 0));
+    camera.FieldOfView = 60;
+    camera.Aperture = 0.00f;
+    camera.FocusDistance = 55.0f;
+    camera.ControlSpeed = 2.0f;
+    camera.GammaCorrection = true;
+    camera.HasSky = true;
+
+    Model::LoadGLTFScene("../assets/models/moderndepart.glb",camera, nodes, models, textures, materials, lights);
 }
