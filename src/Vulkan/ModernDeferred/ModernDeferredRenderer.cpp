@@ -246,24 +246,24 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 
 	// cs shading pass
 	// ping pong
-	{
-		VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
-	}
+	// {
+	// 	VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
+	// 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
+	// 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+	// 							accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+	// 	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+	// }
 	
 	// copy to swap-buffer
-	VkImage srcAccumulateImage = frameCount_ % 2 == 0 ? accumulateImage1_->Handle() : accumulateImage_->Handle();
-	
-	ImageMemoryBarrier::Insert(commandBuffer, srcAccumulateImage, subresourceRange,
-						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-							   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-							   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	// VkImage srcAccumulateImage = frameCount_ % 2 == 0 ? accumulateImage1_->Handle() : accumulateImage_->Handle();
+	//
+	// ImageMemoryBarrier::Insert(commandBuffer, srcAccumulateImage, subresourceRange,
+	// 					   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+	// 					   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	//
+	// ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+	// 						   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+	// 						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// Copy output image into swap-chain image.
 	VkImageCopy copyRegion;
@@ -274,7 +274,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
-				   srcAccumulateImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				   1, &copyRegion);
 

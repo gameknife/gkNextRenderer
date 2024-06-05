@@ -56,6 +56,8 @@ namespace Assets
 		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
+		const uint32_t GetIndicesCount() const {return indicesCount_;}
+		const uint32_t GetVerticeCount() const {return verticeCount_;}
 
 	private:
 
@@ -94,6 +96,8 @@ namespace Assets
 		std::vector<VkSampler> textureSamplerHandles_;
 
 		uint32_t lightCount_ {};
+		uint32_t indicesCount_ {};
+		uint32_t verticeCount_ {};
 	};
 
 }

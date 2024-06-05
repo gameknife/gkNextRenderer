@@ -29,7 +29,7 @@ void main()
 	NodeProxy proxy = NodeProxies[gl_InstanceIndex];
 	gl_Position = Camera.Projection * Camera.ModelView * proxy.World * vec4(InPosition, 1.0);
 	FragColor = m.Diffuse.xyz;
-	FragNormal = InNormal; 
+	FragNormal = (proxy.World * vec4(InNormal, 0.0)).xyz; 
 	FragTexCoord = InTexCoord;
 	FragMaterialIndex = InMaterialIndex;
 }

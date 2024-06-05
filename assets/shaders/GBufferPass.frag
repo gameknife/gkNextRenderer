@@ -19,8 +19,6 @@ layout(location = 2) out vec4 OutReserved;
 void main()
 {
 	const int textureId = Materials[FragMaterialIndex].DiffuseTextureId;
-	const vec3 lightVector = normalize(vec3(5, 4, 3));
-	const float d = max(dot(lightVector, normalize(FragNormal)), 0.2);
 
 	vec3 c = FragColor;
 	if (textureId >= 0)

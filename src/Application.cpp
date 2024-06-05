@@ -214,6 +214,11 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.CamPosY = modelViewController_.Position()[1];
     stats.CamPosZ = modelViewController_.Position()[2];
 
+    stats.InstanceCount = scene_->Nodes().size();
+    stats.TriCount = scene_->GetIndicesCount() / 3;
+    stats.TextureCount = scene_->TextureSamplers().size();
+    stats.ComputePassCount = 0;
+
     if (userSettings_.IsRayTraced)
     {
         const auto extent = Renderer::SwapChain().Extent();

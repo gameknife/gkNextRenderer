@@ -23,6 +23,10 @@ struct Statistics final
 	float CamPosX;
 	float CamPosY;
 	float CamPosZ;
+	uint32_t TriCount;
+	uint32_t InstanceCount;
+	uint32_t TextureCount;
+	uint32_t ComputePassCount;
 };
 
 class UserInterface final

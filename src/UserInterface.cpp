@@ -279,6 +279,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 		ImGui::Text("Primary ray rate: %.2f Gr/s", statistics.RayRate);
 		ImGui::Text("Accumulated samples:  %u", statistics.TotalSamples);
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
+		ImGui::Text("Tris: %d", statistics.TriCount);
+		ImGui::Text("Instance: %d", statistics.InstanceCount);
 	}
 	ImGui::End();
 }
