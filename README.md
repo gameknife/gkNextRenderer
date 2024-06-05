@@ -72,6 +72,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 - Scene Management
     - ~~Element Instancing~~
+    - Multi draw indirect
     - GLobal Bindless Textures
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
@@ -100,6 +101,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
+- [ ] Multi draw indirect
 - [ ] Android Hybrid Rendering
 - [ ] Auto release by Github action
 - [ ] Global Bindless Textures
