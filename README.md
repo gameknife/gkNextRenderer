@@ -101,6 +101,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
 - [ ] Android Hybrid Rendering
+- [ ] Auto release by Github action
 - [ ] Global Bindless Textures
 - [ ] Hybrid rendering with ray query
 - [ ] Full scope refactor
