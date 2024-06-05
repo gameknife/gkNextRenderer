@@ -109,6 +109,29 @@ void VulkanBaseRenderer::Run()
 	device_->WaitIdle();
 }
 
+void VulkanBaseRenderer::Start()
+{
+	currentFrame_ = 0;
+
+	window_->DrawFrame = [this]() { DrawFrame(); };
+	window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
+	window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
+	window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
+	window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
+}
+
+void VulkanBaseRenderer::End()
+{
+	device_->WaitIdle();
+}
+
+bool VulkanBaseRenderer::Tick()
+{
+	glfwPollEvents();
+	DrawFrame();
+	return glfwWindowShouldClose( window_->Handle() ) != 0;
+}
+
 void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	VkPhysicalDevice physicalDevice, 
 	std::vector<const char*>& requiredExtensions, 

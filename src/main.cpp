@@ -22,6 +22,39 @@ namespace
     void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices);
 }
 
+std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication = nullptr;
+
+void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowConfig, const UserSettings& userSettings, const Options& options)
+{
+    switch (rendererType)
+    {
+    case 0:
+        GApplication.reset(new NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+        break;
+    case 1:
+        GApplication.reset(new NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+        break;
+    case 2:
+        GApplication.reset(new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+        break;
+    default:
+        GApplication.reset(new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+    }
+
+    PrintVulkanSdkInformation();
+    PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
+    PrintVulkanLayersInformation(*GApplication, options.Benchmark);
+    PrintVulkanDevices(*GApplication, options.VisibleDevices);
+
+    SetVulkanDevice(*GApplication, options.VisibleDevices);
+
+    PrintVulkanSwapChainInformation(*GApplication, options.Benchmark);
+}
+
 int main(int argc, const char* argv[]) noexcept
 {
     try
@@ -40,7 +73,7 @@ int main(int argc, const char* argv[]) noexcept
             options.SaveFile
         };
         
-        Vulkan::VulkanBaseRenderer* applicationPtr = nullptr;
+        
         uint32_t rendererType = options.RendererType;
 #if __APPLE__
         setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
@@ -51,37 +84,24 @@ int main(int argc, const char* argv[]) noexcept
         setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
         if( rendererType == 0 ) rendererType = 2;
 #endif
-        switch (rendererType)
+
+        StartApplication(rendererType, windowConfig, userSettings, options);
+        
+        //applicationPtr->Run();
+
         {
-        case 0:
-            applicationPtr = new NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
-            break;
-        case 1:
-            applicationPtr = new NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
-            break;
-        case 2:
-            applicationPtr = new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
-            break;
-        default:
-            applicationPtr = new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
-                userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode));
+            GApplication->Start();
+            while (1)
+            {
+                if( GApplication->Tick() )
+                {
+                    break;
+                }
+            }
+            GApplication->End();
         }
 
-        PrintVulkanSdkInformation();
-        PrintVulkanInstanceInformation(*applicationPtr, options.Benchmark);
-        PrintVulkanLayersInformation(*applicationPtr, options.Benchmark);
-        PrintVulkanDevices(*applicationPtr, options.VisibleDevices);
-
-        SetVulkanDevice(*applicationPtr, options.VisibleDevices);
-
-        PrintVulkanSwapChainInformation(*applicationPtr, options.Benchmark);
-
-        applicationPtr->Run();
-
-        delete applicationPtr;
+        GApplication.reset();
 
         return EXIT_SUCCESS;
     }

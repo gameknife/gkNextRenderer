@@ -36,6 +36,10 @@ namespace Vulkan
 
 		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
 		void Run();
+		
+		void Start();
+		bool Tick();
+		void End();
 
 	protected:
 
