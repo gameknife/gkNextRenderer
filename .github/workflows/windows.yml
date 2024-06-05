@@ -5,9 +5,11 @@ on:
     branches:
       - main
       - 'releases/**'
-    paths-ignore:
-      - 'README.md'
-
+    paths:
+      - 'src/**'
+      - 'assets/shaders/**'
+      - '*.sh'
+      - '*.bat'
 jobs:
   build:
 
