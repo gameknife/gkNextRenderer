@@ -90,6 +90,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - Benchmark
     - ~~Online benchmark chart~~
     - Version Management
+    - Full render statstics
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
@@ -101,6 +102,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
+- [ ] Full stastics
 - [ ] Multi draw indirect
 - [ ] Android Hybrid Rendering
 - [ ] Auto release by Github action
