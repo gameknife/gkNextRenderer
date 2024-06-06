@@ -12,6 +12,7 @@
 #include "Vulkan/Device.hpp"
 #include <iostream>
 #include <sstream>
+#include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
 #include "curl/curl.h"
@@ -25,7 +26,7 @@
 namespace
 {
     const bool EnableValidationLayers =
-#ifdef NDEBUG
+#ifdef NDEBUG || ANDROID
         false;
 #else
         true;
@@ -51,6 +52,13 @@ NextRendererApplication<Renderer>::~NextRendererApplication()
 template <typename Renderer>
 Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkExtent2D extent) const
 {
+    glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
+    glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
+
+    //if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR) {
+        pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
+    //}
+
     const auto& init = cameraInitialSate_;
 
     Assets::UniformBufferObject ubo = {};
@@ -58,6 +66,9 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
+#if ANDROID
+    ubo.Projection = pre_rotate_mat * ubo.Projection;
+#endif
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
@@ -114,9 +125,12 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 
     deviceFeatures.fillModeNonSolid = true;
     deviceFeatures.samplerAnisotropy = true;
-    deviceFeatures.shaderInt64 = true;
-
+    //deviceFeatures.shaderInt64 = true;
+#if WIN32
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
+#else
+    Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
+#endif
 }
 
 template <typename Renderer>
@@ -188,7 +202,17 @@ void NextRendererApplication<Renderer>::DrawFrame()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
+    static float frameRate = 0.0;
+    static double lastTime = 0.0;
     // Record delta time between calls to Render.
+    if(totalFrames_ % 30 == 0)
+    {
+        double now = Renderer::Window().GetTime();
+        const auto timeDelta = now - lastTime;
+        lastTime = now;
+        frameRate = static_cast<float>(30 / timeDelta);
+    }
+
     const auto prevTime = time_;
     time_ = Renderer::Window().GetTime();
     const auto timeDelta = time_ - prevTime;
@@ -208,7 +232,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     // Render the UI
     Statistics stats = {};
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
-    stats.FrameRate = static_cast<float>(1 / timeDelta);
+    stats.FrameRate = frameRate;
 
     stats.CamPosX = modelViewController_.Position()[0];
     stats.CamPosY = modelViewController_.Position()[1];
@@ -334,14 +358,14 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     std::vector<Assets::LightObject> lights;
 
     // texture id 0: global sky
-    textures.push_back(Assets::Texture::LoadHDRTexture("../assets/textures/StinsonBeach.hdr", Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/StinsonBeach.hdr"), Vulkan::SamplerConfig()));
 
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
     // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
     if (textures.empty())
     {
-        textures.push_back(Assets::Texture::LoadTexture("../assets/textures/white.png", Vulkan::SamplerConfig()));
+        textures.push_back(Assets::Texture::LoadTexture("assets/textures/white.png", Vulkan::SamplerConfig()));
     }
 
     scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures),
@@ -443,9 +467,17 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
     }
 }
 
+inline const std::string versionToString(const uint32_t version)
+{
+    std::stringstream ss;
+    ss << VK_VERSION_MAJOR(version) << "." << VK_VERSION_MINOR(version) << "." << VK_VERSION_PATCH(version);
+    return ss.str();
+}
+
 template <typename Renderer>
 void NextRendererApplication<Renderer>::Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
 {
+    VkPhysicalDeviceProperties deviceProp1{};
     VkPhysicalDeviceDriverProperties driverProp{};
     driverProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
 
@@ -453,7 +485,9 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     deviceProp.pNext = &driverProp;
 
-    vkGetPhysicalDeviceProperties2(Renderer::Device().PhysicalDevice(), &deviceProp);
+//#if !ANDROID
+    vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
+//#endif
 
     std::string img_encoded = "";
     if (upload_screen || save_screen)
@@ -551,12 +585,12 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #endif
     }
-    
+
     json11::Json my_json = json11::Json::object{
         {"renderer", Renderer::StaticClass()},
         {"scene", sceneName},
-        {"gpu", std::string(deviceProp.properties.deviceName)},
-        {"driver", std::string(driverProp.driverInfo)},
+        {"gpu", std::string(deviceProp1.deviceName)},
+        {"driver", versionToString(deviceProp1.driverVersion)},
         {"fps", fps},
     };
     std::string json_str = my_json.dump();

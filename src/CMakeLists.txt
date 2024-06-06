@@ -174,7 +174,23 @@ source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Main" FILES ${src_files})
 
 
-add_executable(${exe_name} 
+
+
+if ( ANDROID )
+add_library(${exe_name} SHARED
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_vulkan} 
+	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_moderndeferred} 
+	${src_files_vulkan_legacydeferred} 
+	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
+	${src_files}
+	GameActivitySources.cpp
+)
+else()
+add_executable(${exe_name}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -185,6 +201,7 @@ add_executable(${exe_name}
 	${src_files_thirdparty_json11}
 	${src_files}
 )
+endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
@@ -199,6 +216,11 @@ target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
 
+if ( ANDROID )
+target_include_directories(${exe_name} PRIVATE
+    ${ANDROID_NDK}/sources/android/native_app_glue)
+endif()
+
 target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
 
 if ( APPLE )
@@ -206,7 +228,7 @@ target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_RE
 endif()
 
 if ( ANDROID )
-target_link_libraries(${exe_name} PRIVATE android CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE game-activity::game-activity log android CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
 target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 endif()

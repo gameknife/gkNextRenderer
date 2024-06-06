@@ -127,9 +127,14 @@ void VulkanBaseRenderer::End()
 
 bool VulkanBaseRenderer::Tick()
 {
+#if ANDROID
+	DrawFrame();
+	return false;
+#else
 	glfwPollEvents();
 	DrawFrame();
 	return glfwWindowShouldClose( window_->Handle() ) != 0;
+#endif
 }
 
 void VulkanBaseRenderer::SetPhysicalDeviceImpl(

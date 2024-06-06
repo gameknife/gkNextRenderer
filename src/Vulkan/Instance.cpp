@@ -25,9 +25,12 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	{
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
-
+#if !ANDROID
 	extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-
+#else
+  	extensions.push_back("VK_KHR_surface");
+  	extensions.push_back("VK_KHR_android_surface");
+#endif
 	// Create the Vulkan instance.
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -85,6 +88,7 @@ void Instance::GetVulkanPhysicalDevices()
 
 void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)
 {
+	#if !ANDROID
 	uint32_t version;
 	Check(vkEnumerateInstanceVersion(&version),
 		"query instance version");
@@ -97,6 +101,7 @@ void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)
 
 		Throw(std::runtime_error(out.str()));
 	}
+	#endif
 }
 
 void Instance::CheckVulkanValidationLayerSupport(const std::vector<const char*>& validationLayers)

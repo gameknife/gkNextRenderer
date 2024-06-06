@@ -11,6 +11,11 @@
 #include <cstdlib>
 #include <iostream>
 
+#if ANDROID
+#include <android/log.h>
+#include <game-activity/native_app_glue/android_native_app_glue.h>
+#endif
+
 namespace
 {
     UserSettings CreateUserSettings(const Options& options);
@@ -55,6 +60,70 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
     PrintVulkanSwapChainInformation(*GApplication, options.Benchmark);
 }
 
+#if ANDROID
+void handle_cmd(android_app* app, int32_t cmd) {
+    switch (cmd) {
+    case APP_CMD_INIT_WINDOW:
+        // The window is being shown, get it ready.
+        {
+            const char* argv[] = { "gkNextRenderer", "--benchmark", "--next-scenes" };
+            const Options options(3, argv);
+            GOption = &options;
+            const UserSettings userSettings = CreateUserSettings(options);
+            const Vulkan::WindowConfig windowConfig
+            {
+                "gkNextRenderer",
+                options.Width,
+                options.Height,
+                options.Benchmark && options.Fullscreen,
+                options.Fullscreen,
+                !options.Fullscreen,
+                options.SaveFile,
+                app->window
+            };
+            __android_log_print(ANDROID_LOG_INFO, "vkdemo",
+                            "event not handled: %d", (long long)app->window);
+            StartApplication(1, windowConfig, userSettings, options);
+            GApplication->Start();
+        }
+        break;
+    case APP_CMD_TERM_WINDOW:
+        // The window is being hidden or closed, clean it up.
+        {
+            
+        }
+        break;
+    default:
+        __android_log_print(ANDROID_LOG_INFO, "Vulkan Tutorials",
+                            "event not handled: %d", cmd);
+    }
+}
+
+void android_main(struct android_app* app)
+{
+
+
+    app->onAppCmd = handle_cmd;
+
+    // Used to poll the events in the main loop
+    int events;
+    android_poll_source* source;
+
+    // Main loop
+    do {
+        if (ALooper_pollAll(GApplication != nullptr ? 1 : 0, nullptr,
+                            &events, (void**)&source) >= 0) {
+            if (source != NULL) source->process(app, source);
+                            }
+
+        // render if vulkan is ready
+        if (GApplication != nullptr) {
+            GApplication->Tick();
+        }
+    } while (app->destroyRequested == 0);
+}
+#endif
+
 int main(int argc, const char* argv[]) noexcept
 {
     try
@@ -70,7 +139,8 @@ int main(int argc, const char* argv[]) noexcept
             options.Benchmark && options.Fullscreen,
             options.Fullscreen,
             !options.Fullscreen,
-            options.SaveFile
+            options.SaveFile,
+            nullptr
         };
         
         
@@ -230,9 +300,9 @@ namespace
             VkPhysicalDeviceProperties2 deviceProp{};
             deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             deviceProp.pNext = &driverProp;
-
+#if !ANDROID
             vkGetPhysicalDeviceProperties2(device, &deviceProp);
-
+#endif
             VkPhysicalDeviceFeatures features;
             vkGetPhysicalDeviceFeatures(device, &features);
 
@@ -272,6 +342,7 @@ namespace
 
     void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices)
     {
+#if !ANDROID
         const auto& physicalDevices = application.PhysicalDevices();
         const auto result = std::find_if(physicalDevices.begin(), physicalDevices.end(),
                                          [&](const VkPhysicalDevice& device)
@@ -334,6 +405,7 @@ namespace
             Throw(std::runtime_error("cannot find a suitable device"));
         }
 
+
         VkPhysicalDeviceProperties2 deviceProp{};
         deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         vkGetPhysicalDeviceProperties2(*result, &deviceProp);
@@ -341,7 +413,10 @@ namespace
         std::cout << "Setting Device [" << deviceProp.properties.deviceID << "]:" << std::endl;
 
         application.SetPhysicalDevice(*result);
-
+#else
+        const auto& physicalDevices = application.PhysicalDevices();
+        application.SetPhysicalDevice(physicalDevices[0]);
+#endif
         std::cout << std::endl;
     }
 }

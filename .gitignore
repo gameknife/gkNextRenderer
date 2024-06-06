@@ -331,3 +331,5 @@ ASALocalRun/
 
 # Extras
 build
+
+android/.gradle/

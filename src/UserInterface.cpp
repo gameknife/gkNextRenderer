@@ -23,6 +23,8 @@
 
 #include <array>
 
+#include "Utilities/FileHelper.hpp"
+
 namespace
 {
 	void CheckVulkanResultCallback(const VkResult err)
@@ -91,14 +93,19 @@ UserInterface::UserInterface(
 	io.IniFilename = nullptr;
 
 	// Window scaling and style.
-	const auto scaleFactor = 1.0;//window.ContentScale();
+#if ANDROID
+    const auto scaleFactor = 4.0;
+#else
+    const auto scaleFactor = 1.0;//window.ContentScale();
+#endif
+
 
 	ImGui::StyleColorsDark();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 
 	// Upload ImGui fonts (use ImGuiFreeType for better font rendering, see https://github.com/ocornut/imgui/tree/master/misc/freetype).
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
-	if (!io.Fonts->AddFontFromFileTTF("../assets/fonts/Cousine-Regular.ttf", 13 * scaleFactor))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Cousine-Regular.ttf").c_str(), 13 * scaleFactor))
 	{
 		Throw(std::runtime_error("failed to load ImGui font"));
 	}
@@ -133,7 +140,9 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	ImGui_ImplVulkan_NewFrame();
 	ImGui::NewFrame();
 
+#if !ANDROID
 	DrawSettings();
+#endif
 	DrawOverlay(statistics);
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();

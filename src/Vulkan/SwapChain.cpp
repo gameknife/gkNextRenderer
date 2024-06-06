@@ -131,6 +131,14 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 		}
 	}
 
+    for (const auto& format : formats)
+    {
+        if (format.format == VK_FORMAT_R8G8B8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            return format;
+        }
+    }
+
 	// bad driver
 	Throw(std::runtime_error("found no suitable surface format"));
 }

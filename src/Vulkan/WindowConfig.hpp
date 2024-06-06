@@ -14,5 +14,6 @@ namespace Vulkan
 		bool Fullscreen;
 		bool Resizable;
 		bool NeedScreenShot;
+		void* AndroidNativeWindow;
 	};
 }

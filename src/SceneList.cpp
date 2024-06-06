@@ -5,6 +5,8 @@
 #include <functional>
 #include <random>
 
+#include "Utilities/FileHelper.hpp"
+
 using namespace glm;
 
 using Assets::Material;
@@ -98,7 +100,7 @@ void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<As
     camera.GammaCorrection = true;
     camera.HasSky = true;
 
-    Model::LoadGLTFScene("../assets/models/simple.glb", camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/simple.glb"), camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
@@ -183,7 +185,7 @@ void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
     
-    Model::LoadGLTFScene("../assets/models/livingroom.glb",camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/livingroom.glb"),camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -203,7 +205,7 @@ void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::N
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
     nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
 
-    Model::LoadGLTFScene("../assets/models/kitchen.glb",camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/kitchen.glb"),camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -218,7 +220,7 @@ void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.GammaCorrection = true;
     camera.HasSky = false;
 
-    Model::LoadGLTFScene("../assets/models/luxball.glb",camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/luxball.glb"),camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
@@ -233,5 +235,5 @@ void SceneList::ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Asse
     camera.GammaCorrection = true;
     camera.HasSky = true;
 
-    Model::LoadGLTFScene("../assets/models/moderndepart.glb",camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/moderndepart.glb"),camera, nodes, models, textures, materials, lights);
 }

@@ -3,6 +3,17 @@
 #include "Utilities/StbImage.hpp"
 #include <iostream>
 
+#if ANDROID
+#include <time.h>
+
+static double now_ms(void) {
+
+    struct timespec res;
+    clock_gettime(CLOCK_REALTIME, &res);
+    return 1000.0 * res.tv_sec + (double) res.tv_nsec / 1e6;
+}
+#endif
+
 namespace Vulkan {
 
 namespace
@@ -98,6 +109,8 @@ Window::Window(const WindowConfig& config) :
 	glfwSetCursorPosCallback(window_, GlfwCursorPositionCallback);
 	glfwSetMouseButtonCallback(window_, GlfwMouseButtonCallback);
 	glfwSetScrollCallback(window_, GlfwScrollCallback);
+#else
+	window_ = static_cast<GLFWwindow*>(config.AndroidNativeWindow);
 #endif
 }
 
@@ -134,7 +147,7 @@ VkExtent2D Window::FramebufferSize() const
 	glfwGetFramebufferSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 #else
-	return VkExtent2D{ 1920, 1080 };
+	return VkExtent2D{ (uint32_t)ANativeWindow_getWidth(window_), (uint32_t)ANativeWindow_getHeight(window_) };
 #endif
 }
 
@@ -145,7 +158,7 @@ VkExtent2D Window::WindowSize() const
 	glfwGetWindowSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 #else
-	return VkExtent2D{ 1920, 1080 };
+    return VkExtent2D{ (uint32_t)ANativeWindow_getWidth(window_), (uint32_t)ANativeWindow_getHeight(window_) };
 #endif
 }
 
@@ -174,7 +187,7 @@ double Window::GetTime() const
 #if !ANDROID
 	return glfwGetTime();
 #else
-	return 0;
+	return now_ms() / 1000.0;
 #endif
 }
 

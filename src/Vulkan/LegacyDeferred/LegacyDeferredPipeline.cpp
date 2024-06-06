@@ -12,6 +12,7 @@
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
+#include "Utilities/FileHelper.hpp"
 
 namespace Vulkan::LegacyDeferred {
 
@@ -177,8 +178,8 @@ GBufferPipeline::GBufferPipeline(
 		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.
-	const ShaderModule vertShader(device, "../assets/shaders/GBufferPass.vert.spv");
-	const ShaderModule fragShader(device, "../assets/shaders/GBufferPass.frag.spv");
+	const ShaderModule vertShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/GBufferPass.vert.spv"));
+	const ShaderModule fragShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/GBufferPass.frag.spv"));
 
 	VkPipelineShaderStageCreateInfo shaderStages[] =
 	{
@@ -277,7 +278,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "../assets/shaders/LegacyDeferredShading.comp.spv");
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/LegacyDeferredShading.comp.spv"));
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

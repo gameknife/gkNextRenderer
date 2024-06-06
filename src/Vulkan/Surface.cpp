@@ -16,9 +16,8 @@ Surface::Surface(const class Instance& instance) :
 		.pNext = nullptr,
 		.flags = 0,
 		.window = instance.Window().Handle()};
-
-	vkCreateAndroidSurfaceKHR(instance.Handle(), &createInfo, nullptr,
-								  &surface_);
+	Check(vkCreateAndroidSurfaceKHR(instance.Handle(), &createInfo, nullptr,
+								  &surface_),"create window surface");
 #endif
 }
 
