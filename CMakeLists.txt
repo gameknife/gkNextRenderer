@@ -31,7 +31,7 @@ if (MSVC)
 	add_compile_options("/MP")
 endif()
 
-if (UNIX AND !VCPKG_TARGET_ANDROID)
+if (UNIX AND !ANDROID)
 	
 	add_definitions(-DUNIX)
 	add_compile_options("-Wall")
@@ -49,7 +49,9 @@ endif ()
 
 find_package(Boost REQUIRED COMPONENTS exception program_options) 
 
-if (!VCPKG_TARGET_ANDROID)
+if (ANDROID)
+find_package(game-activity REQUIRED CONFIG)
+else()
 find_package(glfw3 REQUIRED)
 endif()
 
