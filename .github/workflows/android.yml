@@ -1,0 +1,28 @@
+name: Windows CI
+
+on: 
+  push:
+    branches:
+      - dev
+      - 'releases/**'
+    paths:
+      - 'src/**'
+      - 'assets/shaders/**'
+      - '*.sh'
+      - '*.bat'
+jobs:
+  build:
+
+    runs-on: windows-2022
+    env:
+      SDK_VERSION: 1.3.280.0
+    steps:
+    - uses: actions/checkout@v4
+    - name: Compile vcpkg dependencies
+      run: |
+        vcpkg_android.bat
+      shell: cmd
+    - name: Compile gkNextRenderer
+      run: |
+        build_android.bat
+      shell: cmd
