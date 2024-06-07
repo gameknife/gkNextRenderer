@@ -27,7 +27,13 @@ jobs:
       run: |
         vcpkg_android.bat
       shell: cmd
+    - name: Download Vulkan SDK
+      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+    - name: Install Vulkan SDK
+      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+      shell: cmd
     - name: Compile gkNextRenderer
       run: |
+        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         build_android.bat
       shell: cmd
