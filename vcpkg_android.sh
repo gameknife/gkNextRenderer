@@ -14,6 +14,9 @@ else
 	./bootstrap-vcpkg.sh
 fi
 
+#replace the triplets/arm64-android.cmake file with ours
+cp -f ../../android/custom-triplets/arm64-android.cmake ./triplets/arm64-android.cmake
+
 ./vcpkg install \
 	boost-exception:arm64-android \
 	boost-program-options:arm64-android \
