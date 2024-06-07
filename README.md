@@ -72,6 +72,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 - Scene Management
     - ~~Element Instancing~~
+    - Multi draw indirect
     - GLobal Bindless Textures
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
@@ -89,6 +90,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - Benchmark
     - ~~Online benchmark chart~~
     - Version Management
+    - Full render statstics
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
@@ -100,7 +102,10 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
+- [ ] Full stastics
+- [ ] Multi draw indirect
 - [ ] Android Hybrid Rendering
+- [ ] Auto release by Github action
 - [ ] Global Bindless Textures
 - [ ] Hybrid rendering with ray query
 - [ ] Full scope refactor
@@ -118,6 +123,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - 一直对HDR显示挺陌生的，vulkan在swapchain创建时直接提供了可供选择的hdr surface和colorspace定义，渲染时按照PQ的定义，直接将线性颜色写入swapchain的10bit纹理即可，十分方便。对于hdr，怎么输出成纹理显示出来也是一个问题。avif可能是一个终极解决方案，现代浏览器对avif支持也很好，页面上的avif图片直接可以被hdr显示出来。因此摸索了下，通过aom库将backbuffer encode到avif输出。benchmark页面和gallery中的图片都是这样输出的。
 
 - raytracing框架下的acceleration struct是一个非常好的抽象。他对场景管理实际上是一种非常好的概括。高速的trace性能，大胆设想一下，整个渲染管线完全抛弃光栅化也不是不行。一次primary ray的对pc来说代价其实很小。考虑可以做一种实验性的renderer，尝试下性能和开销。
+
+- visibility buffer其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
 
 ## Building
 
