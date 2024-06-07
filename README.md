@@ -3,7 +3,7 @@
 ![windows ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/windows.yml/badge.svg)
 ![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)
 ![macOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/macos.yml/badge.svg)
-
+![android ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
 ## 简介
 
 **2024主题：补课**
