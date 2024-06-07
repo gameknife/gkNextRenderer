@@ -23,6 +23,10 @@ jobs:
         distribution: 'temurin'
         java-version: '11'
     - uses: actions/checkout@v4
+    - name: Download Vulkan SDK
+      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+    - name: Install Vulkan SDK
+      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
     - name: Compile vcpkg dependencies
       run: |
         vcpkg_android.bat
