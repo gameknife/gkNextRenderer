@@ -67,6 +67,10 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 
 	// node should sort by models, for instancing rendering
 	std::vector<NodeProxy> nodeProxys;
+	std::vector<VkDrawIndexedIndirectCommand> indirectDrawBuffer;
+
+	uint32_t indexOffset = 0;
+	uint32_t vertexOffset = 0;
 	for (int i = 0; i < models_.size(); i++)
 	{	
 		uint32_t modelCount = 0;
@@ -74,14 +78,26 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		{
 			if(node.GetModel() == i)
 			{
-				modelCount++;
 				nodeProxys.push_back(NodeProxy{ node.WorldTransform() });
-				//nodeProxys.push_back(NodeProxy{ glm::mat4(1) });
+
+				// draw indirect buffer
+				VkDrawIndexedIndirectCommand cmd{};
+				cmd.firstIndex    = indexOffset;
+				cmd.indexCount    = static_cast<uint32_t>(models_[i].Indices().size());
+				cmd.vertexOffset  = static_cast<int32_t>(vertexOffset);
+				cmd.firstInstance = modelCount;
+				cmd.instanceCount = 1;
+
+				indirectDrawBuffer.push_back(cmd);
+				modelCount++;
 			}
 		}
+		indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
+		vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
+		
 		model_instance_count_.push_back(modelCount);
 	}
-
+	
 	int flags =supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 	
@@ -96,7 +112,8 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
-
+	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "IndirectDraws", flags, indirectDrawBuffer, indirectDrawBuffer_, indirectDrawBufferMemory_);
+	
 	lightCount_ = static_cast<uint32_t>(lights.size());
 	indicesCount_ = static_cast<uint32_t>(indices.size());
 	verticeCount_ = static_cast<uint32_t>(vertices.size());
@@ -133,6 +150,8 @@ Scene::~Scene()
 	vertexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 	lightBuffer_.reset();
 	lightBufferMemory_.reset();
+	indirectDrawBuffer_.reset();
+	indirectDrawBufferMemory_.reset();
 }
 
 }

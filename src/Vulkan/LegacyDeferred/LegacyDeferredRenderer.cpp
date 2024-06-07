@@ -149,25 +149,29 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		uint32_t vertexOffset = 0;
-		uint32_t indexOffset = 0;
-		uint32_t instanceOffset = 0;
+		// traditional drawcall
+		
+		// uint32_t vertexOffset = 0;
+		// uint32_t indexOffset = 0;
+		// uint32_t instanceOffset = 0;
+		
+		// for (uint32_t m = 0; m < scene.Models().size(); m++)
+		// {
+		// 	const auto& model = scene.Models()[m];
+		// 	const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
+		// 	const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
+		//
+		// 	// with node as instance, offset to its idx, matrix from matrxibuffer
+		// 	uint32_t instanceCount = scene.ModelInstanceCount()[m];
+		// 	vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, indexOffset, vertexOffset, instanceOffset);
+		//
+		// 	vertexOffset += vertexCount;
+		// 	indexOffset += indexCount;
+		// 	instanceOffset += instanceCount;
+		// }
 
-		// drawcall
-		for (uint32_t m = 0; m < scene.Models().size(); m++)
-		{
-			const auto& model = scene.Models()[m];
-			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
-			const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
-
-			// with node as instance, offset to its idx, matrix from matrxibuffer
-			uint32_t instanceCount = scene.ModelInstanceCount()[m];
-			vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, indexOffset, vertexOffset, instanceOffset);
-
-			vertexOffset += vertexCount;
-			indexOffset += indexCount;
-			instanceOffset += instanceCount;
-		}
+		// indirect draw
+		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.Nodes().size(), sizeof(VkDrawIndexedIndirectCommand));
 	}
 	vkCmdEndRenderPass(commandBuffer);
 

@@ -27,9 +27,9 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , vec3 ray_direction)
 {
-	// fetch primitive_index high 12bit as instance index and low 20bit as triangle index
-	uint triangle_index = primitive_index & 0x000FFFFF;
-	uint instance_index = (primitive_index & 0xFFF00000) >> 20;
+	// fetch primitive_index high 14bit as instance index and low 18bit as triangle index
+	uint instance_index = primitive_index >> 18;
+	uint triangle_index = primitive_index & 0x0003FFFF;
 
 	NodeProxy proxy = NodeProxies[instance_index];
 	
