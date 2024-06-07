@@ -6,6 +6,7 @@ on:
       - dev
       - 'releases/**'
     paths:
+      - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
       - '*.sh'
