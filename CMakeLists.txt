@@ -77,6 +77,19 @@ ELSE()
     message(STATUS ${Vulkan_LIBRARY})
 ENDIF()
 
+if (ANDROID)
+
+find_program(Vulkan_GLSLANG_VALIDATOR 
+	NAMES glslc 
+	HINTS ENV VULKAN_SDK 
+	PATH_SUFFIXES bin)
+	
+if (NOT Vulkan_GLSLANG_VALIDATOR)
+    message(FATAL_ERROR "glslc not found!")
+endif()
+
+else()
+
 find_program(Vulkan_GLSLANG_VALIDATOR 
 	NAMES glslangValidator 
 	HINTS ENV VULKAN_SDK 
@@ -84,6 +97,8 @@ find_program(Vulkan_GLSLANG_VALIDATOR
 	
 if (NOT Vulkan_GLSLANG_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
+endif()
+
 endif()
 
 set(MAIN_PROJECT "gkNextRenderer")
