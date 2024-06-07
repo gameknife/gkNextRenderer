@@ -20,6 +20,7 @@ jobs:
     steps:
     - uses: actions/setup-java@v4
       with:
+        distribution: 'temurin'
         java-version: '11'
     - uses: actions/checkout@v4
     - name: Compile vcpkg dependencies
