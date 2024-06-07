@@ -1,8 +1,9 @@
-name: Android CI Linux
+name: Android CI
 
 on: 
   push:
     branches:
+      - main
       - dev
       - 'releases/**'
     paths:
