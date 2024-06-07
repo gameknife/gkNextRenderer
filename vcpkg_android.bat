@@ -15,6 +15,9 @@ IF EXIST vcpkg.android (
 	call bootstrap-vcpkg.bat || goto :error
 )
 
+rem replace the triplets/arm64-android.cmake file with ours
+copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm64-android.cmake
+
 vcpkg.exe install ^
 	boost-exception:arm64-android ^
 	boost-program-options:arm64-android ^
@@ -26,7 +29,7 @@ vcpkg.exe install ^
 	tinygltf:arm64-android ^
 	curl:arm64-android ^
 	draco:arm64-android ^
-	cpp-base64:arm64-android --overlay-triplets=%PROJROOT%/android/custom-triplets || goto :error
+	cpp-base64:arm64-android || goto :error
 
 cd ..
 cd ..
