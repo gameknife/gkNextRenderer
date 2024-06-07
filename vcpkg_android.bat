@@ -1,5 +1,7 @@
 @echo off
 
+set PROJROOT=%CD%
+
 mkdir build
 cd build || goto :error
 
@@ -24,7 +26,7 @@ vcpkg.exe install ^
 	tinygltf:arm64-android ^
 	curl:arm64-android ^
 	draco:arm64-android ^
-	cpp-base64:arm64-android || goto :error
+	cpp-base64:arm64-android --overlay-triplets=%PROJROOT%/android/custom-triplets || goto :error
 
 cd ..
 cd ..
