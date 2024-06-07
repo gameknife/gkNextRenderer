@@ -28,7 +28,7 @@ android {
         externalNativeBuild {
             cmake {
                 abiFilters 'arm64-v8a'
-                arguments '-DCMAKE_BUILD_TYPE=Release', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=D:/github/gkNextRenderer/build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', '-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=D:/sdk/ndk/25.1.8937393/build/cmake/android.toolchain.cmake'
+                arguments '-DCMAKE_BUILD_TYPE=Release', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
             }
         }
     }
