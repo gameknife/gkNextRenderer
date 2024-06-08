@@ -73,7 +73,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - Scene Management
     - ~~Element Instancing~~
     - Multi draw indirect
-    - GLobal Bindless Textures
+    - GLobal Dynamic Bindless Textures
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
     - Ray Query Pipeline
@@ -82,31 +82,33 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - ~~Modern Deferred Shading~~
     - Hybrid Rendering
     - ~~Reference Legacy Lighting~~
+    - Referencing Legacy Indirect Lighting (Shadowmap, SSXX, etc)
 - Common Rendering Feature
     - SVGF Denoise
 - Platform
     - ~~MacOS moltenVK~~
-    - Android Vulkan ( RayTracing on 8Gen2 )
+    - ~~Android Vulkan ( RayTracing on 8Gen2 )~~
 - Benchmark
     - ~~Online benchmark chart~~
     - Version Management
-    - Full render statstics
+    - ~~Full render statstics~~
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
     - ~~GLTF Scene Support, with real scene management.~~
     - ~~Screenshot and save to avif hdr format~~
+    - DebugViews
 
 ## Next Todolist
 
 - [x] GLTF format load
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
-- [ ] Full stastics
+- [x] Full stastics
 - [ ] Multi draw indirect
-- [ ] Android Hybrid Rendering
+- [x] Android Non-Raytracing Rendering
 - [ ] Auto release by Github action
-- [ ] Global Bindless Textures
+- [ ] Global Dynamic Bindless Textures
 - [ ] Hybrid rendering with ray query
 - [ ] Full scope refactor
 
@@ -125,6 +127,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - raytracing框架下的acceleration struct是一个非常好的抽象。他对场景管理实际上是一种非常好的概括。高速的trace性能，大胆设想一下，整个渲染管线完全抛弃光栅化也不是不行。一次primary ray的对pc来说代价其实很小。考虑可以做一种实验性的renderer，尝试下性能和开销。
 
 - visibility buffer其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
+
+- MultiDrawIndirect功能已经出来挺久了，基本上，可以将drawcall的消耗完全的在cpu释放，让drawcall的组织，通过cs移交给gpu。包括视锥裁剪，遮挡剔除，LOD切换等。这些工作，其实也非常时候GPU并行。为了验证MDI，我专门修复了baserendering，制作了一个多达2w+ instance node的场景，用于测试。目前在这个无剔除的渲染结构上，可以看出MDI相对于传统的CPU drawcall，已经快出好几倍了。帧耗时是0.7ms vs 2.5ms。后续准备把剔除和LOD也在这个场景上制作了，关注后续效果。
 
 ## Building
 
