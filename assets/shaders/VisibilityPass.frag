@@ -5,9 +5,11 @@
 #include "Material.glsl"
 
 layout (location = 0) flat in uint g_primitive_index;
-layout(location = 0) out uint g_out_color;
+layout (location = 1) flat in uint g_instance_index;
+layout(location = 0) out uvec2 g_out_visibility;
 
 void main() 
 {
-	g_out_color = g_primitive_index;
+	g_out_visibility.x = g_primitive_index;
+	g_out_visibility.y = g_instance_index;
 }

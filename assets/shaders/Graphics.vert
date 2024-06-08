@@ -17,6 +17,10 @@ layout(location = 1) out vec3 FragNormal;
 layout(location = 2) out vec2 FragTexCoord;
 layout(location = 3) out flat int FragMaterialIndex;
 
+layout(push_constant) uniform PushConsts {
+	mat4 worldMatrix;
+} pushConsts;
+
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -26,9 +30,9 @@ void main()
 {
 	Material m = Materials[InMaterialIndex];
 
-	gl_Position = Camera.Projection * Camera.ModelView * vec4(InPosition, 1.0);
+	gl_Position = Camera.Projection * Camera.ModelView * pushConsts.worldMatrix * vec4(InPosition, 1.0);
 	FragColor = m.Diffuse.xyz;
-	FragNormal = vec3(Camera.ModelView * vec4(InNormal, 0.0)); // technically not correct, should be ModelInverseTranspose
+	FragNormal = vec3(pushConsts.worldMatrix * vec4(InNormal, 0.0)); // technically not correct, should be ModelInverseTranspose
 	FragTexCoord = InTexCoord;
 	FragMaterialIndex = InMaterialIndex;
 }

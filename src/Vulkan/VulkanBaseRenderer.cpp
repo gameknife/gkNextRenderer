@@ -83,6 +83,9 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	};
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
+
+	deviceFeatures.multiDrawIndirect = true;
+	deviceFeatures.drawIndirectFirstInstance = true;
 	
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 	OnDeviceSet();
@@ -154,6 +157,8 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	bufferDeviceAddressFeatures.pNext = &indexingFeatures;
 	bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+
+	
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
@@ -368,16 +373,21 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
 
-		// drawcall
-		for (const auto& model : scene.Models())
+		// drawcall one by one
+		for (const auto& node : scene.Nodes())
 		{
+			auto& model = scene.Models()[node.GetModel()];
+			auto& offset = scene.Offsets()[node.GetModel()];
 			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
 			const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
 
-			vkCmdDrawIndexed(commandBuffer, indexCount, 1, indexOffset, vertexOffset, 0);
+			// use push constants to set world matrix
+			glm::mat4 worldMatrix = node.WorldTransform();
 
-			vertexOffset += vertexCount;
-			indexOffset += indexCount;
+			vkCmdPushConstants(commandBuffer, graphicsPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_VERTEX_BIT,
+				   0, sizeof(glm::mat4), &worldMatrix);
+			
+			vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.r, offset.g, 0);
 		}
 	}
 	vkCmdEndRenderPass(commandBuffer);

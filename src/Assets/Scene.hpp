@@ -3,6 +3,7 @@
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
 #include <vector>
+#include <glm/vec2.hpp>
 
 namespace Vulkan
 {
@@ -41,6 +42,9 @@ namespace Assets
 
 		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
+		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
+		
+		
 		bool HasProcedurals() const { return static_cast<bool>(proceduralBuffer_); }
 
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
@@ -51,6 +55,7 @@ namespace Assets
 		const Vulkan::Buffer& ProceduralBuffer() const { return *proceduralBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
+		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
 		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
 		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
 		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
@@ -64,6 +69,7 @@ namespace Assets
 		const std::vector<Model> models_;
 		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;
+		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
@@ -90,6 +96,8 @@ namespace Assets
 		std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
 		
+		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
 		
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 		std::vector<VkImageView> textureImageViewHandles_;

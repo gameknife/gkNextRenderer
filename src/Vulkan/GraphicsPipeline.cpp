@@ -117,7 +117,7 @@ GraphicsPipeline::GraphicsPipeline(
 	// Create descriptor pool/sets.
 	std::vector<DescriptorBinding> descriptorBindings =
 	{
-		{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT},
+		{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
 		{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
 		{2, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}
 	};
@@ -159,8 +159,14 @@ GraphicsPipeline::GraphicsPipeline(
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
 	}
 
+	VkPushConstantRange pushConstantRange{};
+	// Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = 4 * 16;
+	
 	// Create pipeline layout and render pass.
-	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
 	renderPass_.reset(new class RenderPass(swapChain, swapChain.Format(), depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
