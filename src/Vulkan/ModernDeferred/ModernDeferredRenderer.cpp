@@ -39,12 +39,12 @@ void ModernDeferredRenderer::CreateSwapChain()
 	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 	
 	visibilityBufferImage_.reset(new Image(Device(), extent,
-		VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
+		VK_FORMAT_R32G32_UINT, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	visibilityBufferImageMemory_.reset(
 		new DeviceMemory(visibilityBufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	visibilityBufferImageView_.reset(new ImageView(Device(), visibilityBufferImage_->Handle(),
-		VK_FORMAT_R32_UINT,
+		VK_FORMAT_R32G32_UINT,
 		VK_IMAGE_ASPECT_COLOR_BIT));
 
 	visibilityBuffer1Image_.reset(new Image(Device(), extent,
@@ -67,7 +67,7 @@ VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 
 	outputImage_.reset(new Image(Device(), extent, format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT));
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 	outputImageMemory_.reset(
 		new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(),
@@ -260,13 +260,13 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	// copy to swap-buffer
 	// VkImage srcAccumulateImage = frameCount_ % 2 == 0 ? accumulateImage1_->Handle() : accumulateImage_->Handle();
 	//
-	// ImageMemoryBarrier::Insert(commandBuffer, srcAccumulateImage, subresourceRange,
-	// 					   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-	// 					   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	//
-	// ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-	// 						   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-	// 						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	
+	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+							   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+							   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// Copy output image into swap-chain image.
 	VkImageCopy copyRegion;

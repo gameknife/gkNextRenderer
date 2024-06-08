@@ -83,6 +83,9 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	};
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
+
+	deviceFeatures.multiDrawIndirect = true;
+	deviceFeatures.drawIndirectFirstInstance = true;
 	
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 	OnDeviceSet();
@@ -154,6 +157,8 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	bufferDeviceAddressFeatures.pNext = &indexingFeatures;
 	bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+
+	
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));

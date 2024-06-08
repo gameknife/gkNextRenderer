@@ -6,7 +6,7 @@
 #include "UniformBufferObject.glsl"
 #include "Random.glsl"
 
-layout(binding = 0, r32ui) uniform uimage2D MiniGBuffer;
+layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 3) uniform sampler2D[] TextureSamplers;
@@ -25,11 +25,11 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
-Vertex get_material_data(ivec2 pixel, uint primitive_index, vec3 ray_origin , vec3 ray_direction)
+Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
 {
 	// fetch primitive_index high 14bit as instance index and low 18bit as triangle index
-	uint instance_index = primitive_index >> 18;
-	uint triangle_index = primitive_index & 0x0003FFFF;
+	uint instance_index = vBuffer.y;
+	uint triangle_index = vBuffer.x;
 
 	NodeProxy proxy = NodeProxies[instance_index];
 	
@@ -213,7 +213,7 @@ void main() {
 
 	
 	ivec2 size = imageSize(MiniGBuffer);
-    uint primitive_index = imageLoad(MiniGBuffer, ipos).r;
+    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -221,7 +221,7 @@ void main() {
 	
 	vec3 ray_dir = normalize(dir.xyz);
     
-    Vertex v = get_material_data(ipos, primitive_index, origin.xyz, ray_dir);
+    Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     
     Material mat = Materials[v.MaterialIndex];
     vec4 albedo = mat.Diffuse;
