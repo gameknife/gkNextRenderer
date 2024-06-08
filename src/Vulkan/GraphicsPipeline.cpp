@@ -159,8 +159,14 @@ GraphicsPipeline::GraphicsPipeline(
 		descriptorSets.UpdateDescriptors(i, descriptorWrites);
 	}
 
+	VkPushConstantRange pushConstantRange{};
+	// Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = 4 * 16;
+	
 	// Create pipeline layout and render pass.
-	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
 	renderPass_.reset(new class RenderPass(swapChain, swapChain.Format(), depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 

@@ -30,7 +30,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	
 	std::vector<glm::vec4> procedurals;
 	std::vector<VkAabbPositionsKHR> aabbs;
-	std::vector<glm::uvec2> offsets;
 	
 	for (const auto& model : models_)
 	{
@@ -38,7 +37,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		const auto indexOffset = static_cast<uint32_t>(indices.size());
 		const auto vertexOffset = static_cast<uint32_t>(vertices.size());
 
-		offsets.emplace_back(indexOffset, vertexOffset);
+		offsets_.emplace_back(indexOffset, vertexOffset);
 
 		// Copy model data one after the other.
 		vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
@@ -106,7 +105,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, indices, indexBuffer_, indexBufferMemory_);
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Materials", flags, materials, materialBuffer_, materialBufferMemory_);
-	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets, offsetBuffer_, offsetBufferMemory_);
+	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "AABBs", rtxFlags | flags, aabbs, aabbBuffer_, aabbBufferMemory_);
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Procedurals", flags, procedurals, proceduralBuffer_, proceduralBufferMemory_);

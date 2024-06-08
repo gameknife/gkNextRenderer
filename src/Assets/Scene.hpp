@@ -3,6 +3,7 @@
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
 #include <vector>
+#include <glm/vec2.hpp>
 
 namespace Vulkan
 {
@@ -41,6 +42,9 @@ namespace Assets
 
 		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
+		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
+		
+		
 		bool HasProcedurals() const { return static_cast<bool>(proceduralBuffer_); }
 
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
@@ -65,6 +69,7 @@ namespace Assets
 		const std::vector<Model> models_;
 		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;
+		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
