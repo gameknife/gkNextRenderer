@@ -26,7 +26,7 @@
 namespace
 {
     const bool EnableValidationLayers =
-#ifdef NDEBUG || ANDROID
+#if defined(NDEBUG) ||  defined(ANDROID)
         false;
 #else
         true;

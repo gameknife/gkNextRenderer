@@ -119,6 +119,23 @@ void LegacyDeferredRenderer::DeleteSwapChain()
 
 void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
+
+	ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
+					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
+	ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
+
 	std::array<VkClearValue, 4> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
@@ -175,24 +192,17 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	}
 	vkCmdEndRenderPass(commandBuffer);
 
-	VkImageSubresourceRange subresourceRange = {};
-	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	subresourceRange.baseMipLevel = 0;
-	subresourceRange.levelCount = 1;
-	subresourceRange.baseArrayLayer = 0;
-	subresourceRange.layerCount = 1;
-
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
-					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 					   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
-				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
-				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 				   VK_IMAGE_LAYOUT_GENERAL);
 	// cs shading pass
 	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};

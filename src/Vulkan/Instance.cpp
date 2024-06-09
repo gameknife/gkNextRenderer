@@ -25,9 +25,11 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	{
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
-#if !ANDROID
+#if __APPLE__
 	extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-#else
+#endif
+
+#if ANDROID
   	extensions.push_back("VK_KHR_surface");
   	extensions.push_back("VK_KHR_android_surface");
 #endif
@@ -47,8 +49,9 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	createInfo.ppEnabledExtensionNames = extensions.data();
 	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 	createInfo.ppEnabledLayerNames = validationLayers.data();
+#if __APPLE__	
 	createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-
+#endif
 	Check(vkCreateInstance(&createInfo, nullptr, &instance_),
 		"create instance");
 
