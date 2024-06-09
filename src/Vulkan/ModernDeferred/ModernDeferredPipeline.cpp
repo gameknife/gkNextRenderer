@@ -147,7 +147,7 @@ namespace Vulkan::ModernDeferred
 
         // Create pipeline layout and render pass.
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32G32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
         // Load shaders.
         const ShaderModule vertShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/VisibilityPass.vert.spv"));
