@@ -19,9 +19,12 @@ class SceneList final
 {
 public:
   
-    static void CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+    static void Simple(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
+    static void Complex(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+                           std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                           std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
     static void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                        std::vector<Assets::Material>& materials,

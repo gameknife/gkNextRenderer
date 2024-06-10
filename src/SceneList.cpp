@@ -79,7 +79,8 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
                                                              std::vector<Assets::LightObject>&)>>> SceneList::AllScenes
     =
     {
-        {"Cube And Spheres", CubeAndSpheres},
+        {"Simple", Simple},
+        {"Complex", Complex},
         {"Ray Tracing In One Weekend", RayTracingInOneWeekend},
         {"Cornell Box", CornellBox},
         {"LivingRoom", LivingRoom},
@@ -88,7 +89,22 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
         {"ModernHouse1", ModernHouse1}
     };
 
-void SceneList::CubeAndSpheres(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+void SceneList::Simple(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
+{
+    camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
+    camera.FieldOfView = 20;
+    camera.Aperture = 0.0f;
+    camera.FocusDistance = 1000.0f;
+    camera.ControlSpeed = 5.0f;
+    camera.GammaCorrection = true;
+    camera.HasSky = true;
+
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/simple.glb"), camera, nodes, models, textures, materials, lights);
+}
+
+void SceneList::Complex(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
