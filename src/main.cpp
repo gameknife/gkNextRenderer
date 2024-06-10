@@ -66,8 +66,8 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--benchmark", "--next-scenes" };
-            const Options options(3, argv);
+            const char* argv[] = { "gkNextRenderer", "--renderer=1", "--next-scenes" };
+            const Options options(2, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);
             const Vulkan::WindowConfig windowConfig
@@ -81,9 +81,9 @@ void handle_cmd(android_app* app, int32_t cmd) {
                 options.SaveFile,
                 app->window
             };
+            StartApplication(options.RendererType, windowConfig, userSettings, options);
             __android_log_print(ANDROID_LOG_INFO, "vkdemo",
-                            "event not handled: %d", (long long)app->window);
-            StartApplication(1, windowConfig, userSettings, options);
+                "start gknextrenderer: %d", options.RendererType);
             GApplication->Start();
         }
         break;

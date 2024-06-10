@@ -333,3 +333,6 @@ ASALocalRun/
 build
 
 android/.gradle/
+android/assets/
+
+android/local.properties
