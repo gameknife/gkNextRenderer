@@ -116,7 +116,7 @@ void SceneList::Complex(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.GammaCorrection = true;
     camera.HasSky = true;
 
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/simple.glb"), camera, nodes, models, textures, materials, lights);
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/complex.glb"), camera, nodes, models, textures, materials, lights);
 }
 
 void SceneList::RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,

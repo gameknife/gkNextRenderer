@@ -63,6 +63,7 @@ namespace Assets
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
 		const uint32_t GetVerticeCount() const {return verticeCount_;}
+		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
 
 	private:
 
@@ -106,6 +107,7 @@ namespace Assets
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};
 		uint32_t verticeCount_ {};
+		uint32_t indirectDrawBatchCount_ {};
 	};
 
 }

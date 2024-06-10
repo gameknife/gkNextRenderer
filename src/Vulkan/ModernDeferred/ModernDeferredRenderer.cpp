@@ -140,7 +140,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		// indirect draw
-		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.Nodes().size(), sizeof(VkDrawIndexedIndirectCommand));
+		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
 	}
 	vkCmdEndRenderPass(commandBuffer);
 	
