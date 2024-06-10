@@ -47,24 +47,6 @@ void ModernDeferredRenderer::CreateSwapChain()
 		VK_FORMAT_R32G32_UINT,
 		VK_IMAGE_ASPECT_COLOR_BIT));
 
-	visibilityBuffer1Image_.reset(new Image(Device(), extent,
-	VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,
-	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	visibilityBuffer1ImageMemory_.reset(
-		new DeviceMemory(visibilityBuffer1Image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	visibilityBuffer1ImageView_.reset(new ImageView(Device(), visibilityBuffer1Image_->Handle(),
-		VK_FORMAT_R32_UINT,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-
-	validateImage_.reset(new Image(Device(), extent,
-VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL,
-VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	validateImageMemory_.reset(
-		new DeviceMemory(validateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	validateImageView_.reset(new ImageView(Device(), validateImage_->Handle(),
-		VK_FORMAT_R8_UINT,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-
 	outputImage_.reset(new Image(Device(), extent, format,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
@@ -73,25 +55,7 @@ VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(),
 		format,
 		VK_IMAGE_ASPECT_COLOR_BIT));
-
-	accumulateImage_.reset(new Image(Device(), extent, format,
-		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-	accumulateImageMemory_.reset(
-		new DeviceMemory(accumulateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	accumulateImageView_.reset(new ImageView(Device(), accumulateImage_->Handle(),
-		format,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-
-	accumulateImage1_.reset(new Image(Device(), extent, format,
-	VK_IMAGE_TILING_OPTIMAL,
-	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-	accumulateImage1Memory_.reset(
-		new DeviceMemory(accumulateImage1_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	accumulateImage1View_.reset(new ImageView(Device(), accumulateImage1_->Handle(),
-		format,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-
+	
 	motionVectorImage_.reset(new Image(Device(), extent, VK_FORMAT_R32G32_SFLOAT,
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT));
@@ -104,15 +68,11 @@ VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 	
 	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers(), GetScene()));
-	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), *outputImageView_, *accumulateImageView_, *accumulateImage1View_, *motionVectorImageView_,
-	*visibilityBufferImageView_,*visibilityBuffer1ImageView_, *validateImageView_,
-	UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
 	debugUtils.SetObjectName(visibilityBufferImage_->Handle(), "Visibility Image");
-	debugUtils.SetObjectName(visibilityBuffer1Image_->Handle(), "Visibility1 Image");
-	debugUtils.SetObjectName(accumulateImage_->Handle(), "Accumulate Image");
+
 }
 
 void ModernDeferredRenderer::DeleteSwapChain()
@@ -127,25 +87,9 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	visibilityBufferImageMemory_.reset();
 	visibilityBufferImageView_.reset();
 
-	visibilityBuffer1Image_.reset();
-	visibilityBuffer1ImageMemory_.reset();
-	visibilityBuffer1ImageView_.reset();
-
-	validateImage_.reset();
-	validateImageMemory_.reset();
-	validateImageView_.reset();
-
 	outputImage_.reset();
 	outputImageMemory_.reset();
 	outputImageView_.reset();
-
-	accumulateImage_.reset();
-	accumulateImageMemory_.reset();
-	accumulateImageView_.reset();
-
-	accumulateImage1_.reset();
-	accumulateImage1Memory_.reset();
-	accumulateImage1View_.reset();
 	
 	motionVectorImage_.reset();
 	motionVectorImageMemory_.reset();
@@ -156,6 +100,17 @@ void ModernDeferredRenderer::DeleteSwapChain()
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {	
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
+
+	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
+		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			   
 	std::array<VkClearValue, 2> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
@@ -184,43 +139,11 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		// traditional drawcall
-		// uint32_t vertexOffset = 0;
-		// uint32_t indexOffset = 0;
-		// uint32_t instanceOffset = 0;
-		//
-		// for (uint32_t m = 0; m < scene.Models().size(); m++)
-		// {
-		// 	const auto& model = scene.Models()[m];
-		// 	const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
-		// 	const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
-		// 	const auto instanceCount = static_cast<uint32_t>(scene.ModelInstanceCount()[m]);
-		// 	
-		// 	vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, indexOffset, vertexOffset, instanceOffset);
-		//
-		// 	vertexOffset += vertexCount;
-		// 	indexOffset += indexCount;
-		// 	instanceOffset += instanceCount;
-		// }
-
 		// indirect draw
-		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.Nodes().size(), sizeof(VkDrawIndexedIndirectCommand));
+		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
 	}
 	vkCmdEndRenderPass(commandBuffer);
-
-	VkImageSubresourceRange subresourceRange = {};
-	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	subresourceRange.baseMipLevel = 0;
-	subresourceRange.levelCount = 1;
-	subresourceRange.baseArrayLayer = 0;
-	subresourceRange.layerCount = 1;
 	
-	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage_->Handle(), subresourceRange,
-					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-					   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, accumulateImage1_->Handle(), subresourceRange,
-				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 				   VK_IMAGE_LAYOUT_GENERAL);
@@ -228,11 +151,8 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 				   VK_IMAGE_LAYOUT_GENERAL);
 	ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
-			   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+			   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 			   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, visibilityBuffer1Image_->Handle(), subresourceRange,
-		   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-		   VK_IMAGE_LAYOUT_GENERAL);
 	
 	// cs shading pass
 	{
@@ -243,25 +163,8 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
 	}
 
-	ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
-			   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
-			   VK_IMAGE_LAYOUT_GENERAL);
-
-	// cs shading pass
-	// ping pong
-	// {
-	// 	VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
-	// 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
-	// 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-	// 							accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-	// 	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
-	// }
-	
-	// copy to swap-buffer
-	// VkImage srcAccumulateImage = frameCount_ % 2 == 0 ? accumulateImage1_->Handle() : accumulateImage_->Handle();
-	//
 	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	
 	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,

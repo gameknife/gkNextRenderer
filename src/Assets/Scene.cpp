@@ -67,10 +67,12 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	// node should sort by models, for instancing rendering
 	std::vector<NodeProxy> nodeProxys;
 	std::vector<VkDrawIndexedIndirectCommand> indirectDrawBuffer;
-
+	std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
+	
 	uint32_t indexOffset = 0;
 	uint32_t vertexOffset = 0;
 	uint32_t nodeOffset = 0;
+	uint32_t nodeOffsetBatched = 0;
 	for (int i = 0; i < models_.size(); i++)
 	{	
 		uint32_t modelCount = 0;
@@ -80,7 +82,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 			{
 				nodeProxys.push_back(NodeProxy{ node.WorldTransform() });
 
-				// draw indirect buffer
+				// draw indirect buffer, one by one
 				VkDrawIndexedIndirectCommand cmd{};
 				cmd.firstIndex    = indexOffset;
 				cmd.indexCount    = static_cast<uint32_t>(models_[i].Indices().size());
@@ -93,9 +95,19 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 				nodeOffset++;
 			}
 		}
+		// draw indirect buffer, instanced
+		VkDrawIndexedIndirectCommand cmd{};
+		cmd.firstIndex    = indexOffset;
+		cmd.indexCount    = static_cast<uint32_t>(models_[i].Indices().size());
+		cmd.vertexOffset  = static_cast<int32_t>(vertexOffset);
+		cmd.firstInstance = nodeOffsetBatched;
+		cmd.instanceCount = modelCount;
+
+		indirectDrawBufferInstanced.push_back(cmd);
+		
 		indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
 		vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
-		
+		nodeOffsetBatched += modelCount;
 		model_instance_count_.push_back(modelCount);
 	}
 	
@@ -113,11 +125,12 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
-	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectDrawBuffer, indirectDrawBuffer_, indirectDrawBufferMemory_);
+	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectDrawBufferInstanced, indirectDrawBuffer_, indirectDrawBufferMemory_);
 	
 	lightCount_ = static_cast<uint32_t>(lights.size());
 	indicesCount_ = static_cast<uint32_t>(indices.size());
 	verticeCount_ = static_cast<uint32_t>(vertices.size());
+	indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
 	
 	// Upload all textures
 	textureImages_.reserve(textures_.size());
