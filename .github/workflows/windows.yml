@@ -6,7 +6,7 @@ on:
       - main
       - 'releases/**'
     paths:
-      - '.github/workflows/**'
+      - '.github/workflows/windows.yml'
       - 'src/**'
       - 'assets/shaders/**'
       - '*.sh'
