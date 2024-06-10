@@ -5,10 +5,10 @@
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
-layout(binding = 0, rgba8) uniform image2D GBuffer0Image;
-layout(binding = 1, rgba16f) uniform image2D GBuffer1Image;
-layout(binding = 2, rgba8) uniform image2D GBuffer2Image;
-layout(binding = 3, rgba8) uniform image2D OutImage;
+layout(binding = 0, rgba8) readonly uniform image2D GBuffer0Image;
+layout(binding = 1, rgba16f) readonly uniform image2D GBuffer1Image;
+layout(binding = 2, rgba8) readonly uniform image2D GBuffer2Image;
+layout(binding = 3, rgba8) writeonly uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 vec3 LinearToST2084UE(vec3 lin)
