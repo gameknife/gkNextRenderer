@@ -6,7 +6,7 @@ on:
       - main
       - 'releases/**'
     paths:
-      - '.github/workflows/**'
+      - '.github/workflows/android.yml'
       - 'src/**'
       - 'assets/shaders/**'
       - '*.sh'
@@ -23,7 +23,7 @@ jobs:
     - uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '11'
+        java-version: '21'
     - uses: actions/checkout@v4
     - name: Compile vcpkg dependencies
       run: ./vcpkg_android.sh
