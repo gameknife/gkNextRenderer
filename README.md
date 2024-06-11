@@ -105,8 +105,11 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] HDR AVIF write
 - [x] Benchmark Website & Ranking
 - [x] Full stastics
-- [ ] Multi draw indirect
+- [x] Multi draw indirect
+- [ ] GPU Frustum / Occulusion Culling
+- [ ] GPU Lod Swtiching
 - [x] Android Non-Raytracing Rendering
+- [ ] Realtimg self statics system
 - [ ] Auto release by Github action
 - [ ] Global Dynamic Bindless Textures
 - [ ] Hybrid rendering with ray query
@@ -129,6 +132,9 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - visibility buffer其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
 
 - MultiDrawIndirect功能已经出来挺久了，基本上，可以将drawcall的消耗完全的在cpu释放，让drawcall的组织，通过cs移交给gpu。包括视锥裁剪，遮挡剔除，LOD切换等。这些工作，其实也非常时候GPU并行。为了验证MDI，我专门修复了baserendering，制作了一个多达2w+ instance node的场景，用于测试。目前在这个无剔除的渲染结构上，可以看出MDI相对于传统的CPU drawcall，已经快出好几倍了。帧耗时是0.7ms vs 2.5ms。后续准备把剔除和LOD也在这个场景上制作了，关注后续效果。
+    - 安卓下面mid虽然可以正常工作，但发现了极大问题。在pc上，2w个drawcall的调用，和组成instance调用的开销区别非常小。但是在安卓下，天差地别，mid几乎和直接cpu裸掉2w次drawcall差不多了，需要详细的profile
+
+- 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
 
 ## Building
 
