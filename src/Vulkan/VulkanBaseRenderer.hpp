@@ -8,6 +8,8 @@
 #include <cassert>
 #include "Image.hpp"
 
+#define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
+
 namespace Assets
 {
 	class Scene;
@@ -20,8 +22,10 @@ namespace Vulkan
 	class VulkanGpuTimer
 	{
 	public:
-		VulkanGpuTimer(VkDevice device, uint32_t totalCount);
-		~VulkanGpuTimer();
+		DEFAULT_NON_COPIABLE(VulkanGpuTimer)
+		
+		VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop);
+		virtual ~VulkanGpuTimer();
 
 		void Reset(VkCommandBuffer commandBuffer)
 		{
@@ -65,13 +69,13 @@ namespace Vulkan
 			std::get<1>(timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
-		uint64_t GetTime(const char* name)
+		float GetTime(const char* name)
 		{
 			if(timer_query_map.find(name) == timer_query_map.end())
 			{
 				return 0;
 			}
-			return time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])];
+			return (time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])]) * timeStampPeriod_ * 1e-6f;
 		}
 		
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
@@ -79,13 +83,25 @@ namespace Vulkan
 		std::map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint64_t queryIdx = 0;
+		float timeStampPeriod_ = 1;
 	};
 
 	class ScopedGpuTimer
 	{
 	public:
-		ScopedGpuTimer(const char* name, VulkanGpuTimer& timer);
-		~ScopedGpuTimer();
+		DEFAULT_NON_COPIABLE(ScopedGpuTimer)
+		
+		ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name ):commandBuffer_(commandBuffer),timer_(timer), name_(name)
+		{
+			timer_->Start(commandBuffer_, name_.c_str());
+		}
+		virtual ~ScopedGpuTimer()
+		{
+			timer_->End(commandBuffer_, name_.c_str());
+		}
+		VkCommandBuffer commandBuffer_;
+		VulkanGpuTimer* timer_;
+		std::string name_;
 	};
 	
 	class VulkanBaseRenderer
@@ -124,6 +140,7 @@ namespace Vulkan
 		const class GraphicsPipeline& GraphicsPipeline() const { return *graphicsPipeline_; }
 		const class FrameBuffer& SwapChainFrameBuffer(const size_t i) const { return swapChainFramebuffers_[i]; }
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
+		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
 		virtual const Assets::Scene& GetScene() const = 0;
 		virtual Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const = 0;
@@ -186,7 +203,6 @@ namespace Vulkan
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
 		
 		size_t currentFrame_{};
-
 		Fence* fence;
 	};
 

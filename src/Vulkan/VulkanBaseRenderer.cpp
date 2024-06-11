@@ -40,10 +40,11 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 	supportScreenShot_ = windowConfig.NeedScreenShot;
 }
 
-VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount)
+VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
 {
 	device_ = device;
 	time_stamps.resize(totalCount);
+	timeStampPeriod_ = prop.limits.timestampPeriod;
 	// Create the query pool object used to get the GPU time tamps
 	VkQueryPoolCreateInfo query_pool_info{};
 	query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
@@ -186,7 +187,7 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
 
-	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2));
+	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 
 void VulkanBaseRenderer::OnDeviceSet()
@@ -276,9 +277,12 @@ void VulkanBaseRenderer::DrawFrame()
 
 	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
 	gpuTimer_->Reset(commandBuffer);
-	gpuTimer_->Start(commandBuffer, "full");
-	Render(commandBuffer, imageIndex);
-	gpuTimer_->End(commandBuffer, "full");
+
+	{
+		SCOPED_GPU_TIMER("full");
+		Render(commandBuffer, imageIndex);
+	}
+	
 	// screenshot swapchain image
 	if (supportScreenShot_)
 	{

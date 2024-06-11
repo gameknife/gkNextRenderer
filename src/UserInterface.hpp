@@ -10,6 +10,7 @@ namespace Vulkan
 	class FrameBuffer;
 	class RenderPass;
 	class SwapChain;
+	class VulkanGpuTimer;
 }
 
 struct UserSettings;
@@ -42,7 +43,7 @@ public:
 		UserSettings& userSettings);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics);
+	void Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
@@ -52,7 +53,7 @@ public:
 private:
 
 	void DrawSettings();
-	void DrawOverlay(const Statistics& statistics);
+	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;

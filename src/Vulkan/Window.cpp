@@ -147,7 +147,8 @@ VkExtent2D Window::FramebufferSize() const
 	glfwGetFramebufferSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 #else
-	return VkExtent2D{ (uint32_t)ANativeWindow_getWidth(window_), (uint32_t)ANativeWindow_getHeight(window_) };
+	float aspect = ANativeWindow_getWidth(window_) / static_cast<float>(ANativeWindow_getHeight(window_));
+	return VkExtent2D{ static_cast<uint32_t>(floorf(1920 * aspect)), 1920 };
 #endif
 }
 

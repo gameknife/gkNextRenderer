@@ -38,6 +38,8 @@ namespace Vulkan
 		VkQueue PresentQueue() const { return presentQueue_; }
 		//VkQueue TransferQueue() const { return transferQueue_; }
 
+		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
+
 		void WaitIdle() const;
 
 	private:
@@ -60,6 +62,8 @@ namespace Vulkan
 		VkQueue computeQueue_{};
 		VkQueue presentQueue_{};
 		//VkQueue transferQueue_{};
+
+		VkPhysicalDeviceProperties deviceProp_;
 	};
 
 }

@@ -24,6 +24,7 @@
 #include <array>
 
 #include "Utilities/FileHelper.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
 
 namespace
 {
@@ -94,7 +95,7 @@ UserInterface::UserInterface(
 
 	// Window scaling and style.
 #if ANDROID
-    const auto scaleFactor = 4.0;
+    const auto scaleFactor = 1.5;
 #else
     const auto scaleFactor = 1.0;//window.ContentScale();
 #endif
@@ -130,7 +131,7 @@ UserInterface::~UserInterface()
 	ImGui::DestroyContext();
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics)
+void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
 #if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
@@ -143,7 +144,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 #if !ANDROID
 	DrawSettings();
 #endif
-	DrawOverlay(statistics);
+	DrawOverlay(statistics, gpuTimer);
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();
 
@@ -258,7 +259,7 @@ void UserInterface::DrawSettings()
 	ImGui::End();
 }
 
-void UserInterface::DrawOverlay(const Statistics& statistics)
+void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
 	if (!Settings().ShowOverlay)
 	{
@@ -267,8 +268,13 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 
 	const auto& io = ImGui::GetIO();
 	const float distance = 10.0f;
+#if ANDROID
+	const ImVec2 pos = ImVec2(distance, distance);
+	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
+#else
 	const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance);
 	const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
+#endif
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
 	ImGui::SetNextWindowBgAlpha(0.3f); // Transparent background
 
@@ -285,8 +291,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics)
 		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
-		ImGui::Text("Primary ray rate: %.2f Gr/s", statistics.RayRate);
-		ImGui::Text("Accumulated samples:  %u", statistics.TotalSamples);
+		ImGui::Text("Gpu Time:  %.2fms", gpuTimer->GetTime("full"));
+		ImGui::Text("DrawPass Time:  %.2fms", gpuTimer->GetTime("drawpass"));
+		ImGui::Text("Shading Time:  %.2fms", gpuTimer->GetTime("shadingpass"));
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 		ImGui::Text("Tris: %d", statistics.TriCount);
 		ImGui::Text("Instance: %d", statistics.InstanceCount);
