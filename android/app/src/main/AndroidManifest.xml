@@ -23,9 +23,10 @@
         android:theme="@style/Application.Fullscreen">
 
         <activity android:name=".MainActivity"
-                android:screenOrientation="landscape"
-                android:configChanges="orientation|keyboardHidden"
+                android:screenOrientation="portrait"
+                android:configChanges="orientation|screenSize|keyboardHidden"
                 android:exported="true"
+
             tools:ignore="DiscouragedApi">
             <!-- Tell GameActivity the name of our .so file.
                  This will be optional after the release 1.1.0 -->
