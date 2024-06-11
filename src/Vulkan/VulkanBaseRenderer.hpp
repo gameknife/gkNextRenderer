@@ -4,7 +4,8 @@
 #include "WindowConfig.hpp"
 #include <vector>
 #include <memory>
-
+#include <map>
+#include <cassert>
 #include "Image.hpp"
 
 namespace Assets
@@ -16,6 +17,77 @@ namespace Assets
 
 namespace Vulkan 
 {
+	class VulkanGpuTimer
+	{
+	public:
+		VulkanGpuTimer(VkDevice device, uint32_t totalCount);
+		~VulkanGpuTimer();
+
+		void Reset(VkCommandBuffer commandBuffer)
+		{
+			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, time_stamps.size());
+			queryIdx = 0;
+		}
+
+		void FrameEnd(VkCommandBuffer commandBuffer)
+		{
+			uint32_t count = static_cast<uint32_t>(time_stamps.size());
+
+			// Fetch the time stamp results written in the command buffer submissions
+			// A note on the flags used:
+			//	VK_QUERY_RESULT_64_BIT: Results will have 64 bits. As time stamp values are on nano-seconds, this flag should always be used to avoid 32 bit overflows
+			//  VK_QUERY_RESULT_WAIT_BIT: Since we want to immediately display the results, we use this flag to have the CPU wait until the results are available
+			vkGetQueryPoolResults(
+				device_,
+				query_pool_timestamps,
+				0,
+				queryIdx,
+				time_stamps.size() * sizeof(uint64_t),
+				time_stamps.data(),
+				sizeof(uint64_t),
+				VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+		}
+
+		void Start(VkCommandBuffer commandBuffer, const char* name)
+		{
+			if( timer_query_map.find(name) == timer_query_map.end())
+			{
+				timer_query_map[name] = std::make_tuple(0, 0);
+			}
+			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
+			std::get<0>(timer_query_map[name]) = queryIdx;
+			queryIdx++;
+		}
+		void End(VkCommandBuffer commandBuffer, const char* name)
+		{
+			assert( timer_query_map.find(name) != timer_query_map.end() );
+			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
+			std::get<1>(timer_query_map[name]) = queryIdx;
+			queryIdx++;
+		}
+		uint64_t GetTime(const char* name)
+		{
+			if(timer_query_map.find(name) == timer_query_map.end())
+			{
+				return 0;
+			}
+			return time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])];
+		}
+		
+		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
+		std::vector<uint64_t> time_stamps{};
+		std::map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
+		VkDevice device_ = VK_NULL_HANDLE;
+		uint64_t queryIdx = 0;
+	};
+
+	class ScopedGpuTimer
+	{
+	public:
+		ScopedGpuTimer(const char* name, VulkanGpuTimer& timer);
+		~ScopedGpuTimer();
+	};
+	
 	class VulkanBaseRenderer
 	{
 	public:
@@ -110,12 +182,12 @@ namespace Vulkan
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;
+
+		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
 		
 		size_t currentFrame_{};
 
 		Fence* fence;
-
-		
 	};
 
 }
