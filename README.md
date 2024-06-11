@@ -117,24 +117,24 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 ## 随感
 
-- vcpkg是一个好东西，2024年我才“了解”到，真的是相见恨晚。这是一个类似于npm / pip的针对cpp的包管理库，由微软维护，但支持的平台有win/linux/osx/android/ios甚至主机。通过vcpkg，很方便的就做到了windows, linux, macOS的跨平台。目前我的steamdeck和apple m3的mbp，均可以正常的跑起来. steamdeck在打开棋盘格渲染后甚至有40+的fps
+- **[VCPKG]** 是一个好东西，2024年我才“了解”到，真的是相见恨晚。这是一个类似于npm / pip的针对cpp的包管理库，由微软维护，但支持的平台有win/linux/osx/android/ios甚至主机。通过vcpkg，很方便的就做到了windows, linux, macOS的跨平台。目前我的steamdeck和apple m3的mbp，均可以正常的跑起来. steamdeck在打开棋盘格渲染后甚至有40+的fps
 
-- 因为一开始是接触的metal3的hardware raytracing，当时的写法是在一个compute shader里调用rayquery的接口。而此demo使用的是khr_raytracing_pipeline，更加类似dx12的写法。而ray query其实也是可以用的。我在8gen2上写了一个vulkan初始化程序，他的光追也是只支持到ray query，因此感觉这个才是一个真正的跨平台方案。
+- **[RayQuery]** 因为一开始是接触的metal3的hardware raytracing，当时的写法是在一个compute shader里调用rayquery的接口。而此demo使用的是khr_raytracing_pipeline，更加类似dx12的写法。而ray query其实也是可以用的。我在8gen2上写了一个vulkan初始化程序，他的光追也是只支持到ray query，因此感觉这个才是一个真正的跨平台方案。
 
-- SmallPT的思路是非常直观的，就是“模拟”真实世界。肆无忌惮的朝球面的各个方向发射射线，然后模拟光线的反弹。蒙特卡洛方法，通过无数多的样本，最终收敛到一个真实的结果。
+- **[PathTracing]** SmallPT的思路是非常直观的，就是“模拟”真实世界。肆无忌惮的朝球面的各个方向发射射线，然后模拟光线的反弹。蒙特卡洛方法，通过无数多的样本，最终收敛到一个真实的结果。
 所以基础的PT代码，是非常好看的，一个递归算法就解决了。
 而PT之所以有这么多人研究，就是希望他能够更快，能够不发射这么多的样本，就可以得到一个真实的结果。
 
-- 一直对HDR显示挺陌生的，vulkan在swapchain创建时直接提供了可供选择的hdr surface和colorspace定义，渲染时按照PQ的定义，直接将线性颜色写入swapchain的10bit纹理即可，十分方便。对于hdr，怎么输出成纹理显示出来也是一个问题。avif可能是一个终极解决方案，现代浏览器对avif支持也很好，页面上的avif图片直接可以被hdr显示出来。因此摸索了下，通过aom库将backbuffer encode到avif输出。benchmark页面和gallery中的图片都是这样输出的。
+- **[HDR]** 一直对HDR显示挺陌生的，vulkan在swapchain创建时直接提供了可供选择的hdr surface和colorspace定义，渲染时按照PQ的定义，直接将线性颜色写入swapchain的10bit纹理即可，十分方便。对于hdr，怎么输出成纹理显示出来也是一个问题。avif可能是一个终极解决方案，现代浏览器对avif支持也很好，页面上的avif图片直接可以被hdr显示出来。因此摸索了下，通过aom库将backbuffer encode到avif输出。benchmark页面和gallery中的图片都是这样输出的。
 
-- raytracing框架下的acceleration struct是一个非常好的抽象。他对场景管理实际上是一种非常好的概括。高速的trace性能，大胆设想一下，整个渲染管线完全抛弃光栅化也不是不行。一次primary ray的对pc来说代价其实很小。考虑可以做一种实验性的renderer，尝试下性能和开销。
+- **[光追加速结构]** raytracing框架下的acceleration struct是一个非常好的抽象。他对场景管理实际上是一种非常好的概括。高速的trace性能，大胆设想一下，整个渲染管线完全抛弃光栅化也不是不行。一次primary ray的对pc来说代价其实很小。考虑可以做一种实验性的renderer，尝试下性能和开销。
 
-- visibility buffer其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
+- **[Visbiliy Buffer]** 其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
 
-- MultiDrawIndirect功能已经出来挺久了，基本上，可以将drawcall的消耗完全的在cpu释放，让drawcall的组织，通过cs移交给gpu。包括视锥裁剪，遮挡剔除，LOD切换等。这些工作，其实也非常时候GPU并行。为了验证MDI，我专门修复了baserendering，制作了一个多达2w+ instance node的场景，用于测试。目前在这个无剔除的渲染结构上，可以看出MDI相对于传统的CPU drawcall，已经快出好几倍了。帧耗时是0.7ms vs 2.5ms。后续准备把剔除和LOD也在这个场景上制作了，关注后续效果。
+- **[Multi Draw Indirect]** 功能已经出来挺久了，基本上，可以将drawcall的消耗完全的在cpu释放，让drawcall的组织，通过cs移交给gpu。包括视锥裁剪，遮挡剔除，LOD切换等。这些工作，其实也非常时候GPU并行。为了验证MDI，我专门修复了baserendering，制作了一个多达2w+ instance node的场景，用于测试。目前在这个无剔除的渲染结构上，可以看出MDI相对于传统的CPU drawcall，已经快出好几倍了。帧耗时是0.7ms vs 2.5ms。后续准备把剔除和LOD也在这个场景上制作了，关注后续效果。
     - 安卓下面mid虽然可以正常工作，但发现了极大问题。在pc上，2w个drawcall的调用，和组成instance调用的开销区别非常小。但是在安卓下，天差地别，mid几乎和直接cpu裸掉2w次drawcall差不多了，需要详细的profile
 
-- 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
+- **[GPU Stats]** 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
 
 ## Building
 
