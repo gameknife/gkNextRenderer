@@ -33,6 +33,7 @@
     * Importance Sampling
     * Ground Truth Path Tracing
     * Phsyical Light Unit
+    * RayQuery on PC & Android
 * Non-Raytracing Pipeline
     * Visibiliy Buffer Rendering
     * Legacy Rendering
@@ -80,7 +81,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - MIS
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
-    - Hybrid Rendering
+    - Hybrid Rendering (Shadow & SkyVisibility)
     - ~~Reference Legacy Lighting~~
     - Referencing Legacy Indirect Lighting (Shadowmap, SSXX, etc)
 - Common Rendering Feature
@@ -92,6 +93,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - ~~Online benchmark chart~~
     - Version Management
     - ~~Full render statstics~~
+    - ~~GPU Timer based on Vulkan Query~~
 - Others
     - ~~HDR display support~~
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
@@ -109,7 +111,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] GPU Frustum / Occulusion Culling
 - [ ] GPU Lod Swtiching
 - [x] Android Non-Raytracing Rendering
-- [ ] Realtimg self statics system
+- [x] Android RayQuery Rendering
+- [x] Realtimg self statics system
 - [ ] Auto release by Github action
 - [ ] Global Dynamic Bindless Textures
 - [ ] Hybrid rendering with ray query
@@ -135,6 +138,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - 安卓下面mid虽然可以正常工作，但发现了极大问题。在pc上，2w个drawcall的调用，和组成instance调用的开销区别非常小。但是在安卓下，天差地别，mid几乎和直接cpu裸掉2w次drawcall差不多了，需要详细的profile
 
 - **[GPU Stats]** 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
+
+- **[Android RayTracing]** 高通和mali从上一代的旗舰开始，都配备了RayTracing架构，虽然都支持RayQuery。一开始，我觉得也就是个噱头吧，RTX都还跑不明白。结果这次在我的SG 8gen2上实现了RayQuery，性能出乎意料。PrimaryRay加上bindless的材质shading，1920分辨率下，居然能拉到100-120fps，gputimer的结果在6-8ms之间。看起来，通过ray-tracing来做间接光照的hybird管线是没有任何问题的。考虑把skyvisibility, shadow, second bounce在hybird管线实现下，争取能在安卓上跑出一个可用的效果。
 
 ## Building
 
