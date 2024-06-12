@@ -630,6 +630,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
 // export it 
 template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
+template class NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>;
 template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
 template class NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>;
 template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;

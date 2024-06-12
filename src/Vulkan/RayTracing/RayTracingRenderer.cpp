@@ -96,7 +96,7 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
         
-        deviceProcedures_.reset(new DeviceProcedures(Device()));
+        deviceProcedures_.reset(new DeviceProcedures(Device(), true, true));
         rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 

@@ -13,9 +13,7 @@ RayTracingProperties::RayTracingProperties(const class Device& device) :
 	VkPhysicalDeviceProperties2 props = {};
 	props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 	props.pNext = &pipelineProps_;
-#if !ANDROID
 	vkGetPhysicalDeviceProperties2(device.PhysicalDevice(), &props);
-#endif
 }
 
 }
