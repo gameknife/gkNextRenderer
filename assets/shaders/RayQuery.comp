@@ -2,6 +2,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
 
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
@@ -19,6 +20,29 @@ layout(binding = 9, rgba8) uniform image2D OutImage;
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {
+    
+    vec4 outColor = vec4(0,0,0,1);
+    
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(OutImage, ipos, vec4( 1.0, 0.0, 0.0, 1.0));
+    vec2 isize = vec2(imageSize(OutImage));
+    const vec2 pixel = vec2(ipos);
+    vec2 uv = (pixel / isize) * 2.0 - 1.0;
+    vec2 offset = vec2(0);
+    vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
+    vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
+    // physical camera
+    vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
+    
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin.xyz, 0.01, direction.xyz, 10000.0);
+
+    // Traverse the acceleration structure and store information about the first intersection (if any)
+    rayQueryProceedEXT(rayQuery);
+
+    // If the intersection has hit a triangle, the fragment is shadowed
+    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT ) {
+        outColor = vec4(1,1,1,1);
+    }
+    
+    imageStore(OutImage, ipos, outColor);
 }
