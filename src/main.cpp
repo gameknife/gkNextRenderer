@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <iostream>
 
+
+
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>
@@ -44,6 +46,10 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
         break;
     case 2:
         GApplication.reset(new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+        break;
+    case 3:
+        GApplication.reset(new NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>(
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     default:
