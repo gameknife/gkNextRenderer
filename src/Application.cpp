@@ -67,6 +67,9 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
 #if ANDROID
+    ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
+                                      extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
+    ubo.Projection[1][1] *= -1;
     ubo.Projection = pre_rotate_mat * ubo.Projection;
 #endif
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
@@ -233,6 +236,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     Statistics stats = {};
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
+    stats.FrameTime = static_cast<float>(timeDelta * 1000);
 
     stats.CamPosX = modelViewController_.Position()[0];
     stats.CamPosY = modelViewController_.Position()[1];
@@ -254,7 +258,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
         stats.TotalSamples = totalNumberOfSamples_;
     }
 
-    userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats);
+    userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats, Renderer::GpuTimer());
 }
 
 template <typename Renderer>

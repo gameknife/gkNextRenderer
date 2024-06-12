@@ -150,54 +150,63 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	renderPassInfo.renderArea.extent = SwapChain().Extent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
-
-	// make it to generate gbuffer
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	
 	{
-		const auto& scene = GetScene();
+		SCOPED_GPU_TIMER("drawpass");
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		{
+			const auto& scene = GetScene();
 
-		VkDescriptorSet descriptorSets[] = { gbufferPipeline_->DescriptorSet(imageIndex) };
-		VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
-		const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-		VkDeviceSize offsets[] = { 0 };
+			VkDescriptorSet descriptorSets[] = { gbufferPipeline_->DescriptorSet(imageIndex) };
+			VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
+			const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+			VkDeviceSize offsets[] = { 0 };
 
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gbufferPipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gbufferPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gbufferPipeline_->Handle());
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gbufferPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		// indirect draw
-		vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
-	}
-	vkCmdEndRenderPass(commandBuffer);
+			// indirect draw
+			vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+		}
+		vkCmdEndRenderPass(commandBuffer);
 
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-					   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-					   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
+		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+				   VK_IMAGE_LAYOUT_GENERAL);
+		ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
+						   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+						   VK_IMAGE_LAYOUT_GENERAL);
+		ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
 					   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 					   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
-				   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				   VK_IMAGE_LAYOUT_GENERAL);
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
-				   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				   VK_IMAGE_LAYOUT_GENERAL);
-	// cs shading pass
-	VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-							deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-	vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);
+		ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
+					   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					   VK_IMAGE_LAYOUT_GENERAL);
+	}
 	
-	// copy to swap-buffer
-	ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-						   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-						   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-							   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-							   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	{
+		SCOPED_GPU_TIMER("shadingpass");
+		
+		// cs shading pass
+		VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);
+
+		// copy to swap-buffer
+		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+							   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+							   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+								   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+								   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	}
+
 
 	// Copy output image into swap-chain image.
 	VkImageCopy copyRegion;

@@ -12,6 +12,7 @@
 #include <iostream>
 
 #if ANDROID
+#include <imgui_impl_android.h>
 #include <android/log.h>
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 #endif
@@ -99,12 +100,52 @@ void handle_cmd(android_app* app, int32_t cmd) {
     }
 }
 
+// static int32_t engine_handle_input(struct android_app* app) {
+//     ImGuiIO& io = ImGui::GetIO();
+//     auto* engine = (struct engine*)app->userData;
+//     auto ib = android_app_swap_input_buffers(app);
+//     if (ib && ib->motionEventsCount) {
+//         for (int i = 0; i < ib->motionEventsCount; i++) {
+//             auto *event = &ib->motionEvents[i];
+//             int32_t ptrIdx = 0;
+//             switch (event->action & AMOTION_EVENT_ACTION_MASK) {
+//             case AMOTION_EVENT_ACTION_POINTER_DOWN:
+//             case AMOTION_EVENT_ACTION_POINTER_UP:
+//                 // Retrieve the index for the starting and the ending of any secondary pointers
+//                 ptrIdx = (event->action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >>
+//                          AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+//             case AMOTION_EVENT_ACTION_DOWN:
+//             case AMOTION_EVENT_ACTION_UP:
+//                 engine->state.x = GameActivityPointerAxes_getAxisValue(
+//                     &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X);
+//                 engine->state.y = GameActivityPointerAxes_getAxisValue(
+//                     &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y);
+//                 break;
+//             case AMOTION_EVENT_ACTION_MOVE:
+//                 // Process the move action: the new coordinates for all active touch pointers
+//                 // are inside the event->pointers[]. Compare with our internally saved
+//                 // coordinates to find out which pointers are actually moved. Note that there is
+//                 // no index embedded inside event->action for AMOTION_EVENT_ACTION_MOVE (there
+//                 // might be multiple pointers moved at the same time).
+//                 //...
+//                break;
+//             }
+//         }
+//         android_app_clear_motion_events(ib);
+//     }
+//
+//     // Process the KeyEvent in a similar way.
+//     //...
+//
+// return 0;
+// }
+
 void android_main(struct android_app* app)
 {
 
 
     app->onAppCmd = handle_cmd;
-
+    //app->onInputEvent = handleInputEvent;
     // Used to poll the events in the main loop
     int events;
     android_poll_source* source;
@@ -116,6 +157,8 @@ void android_main(struct android_app* app)
             if (source != NULL) source->process(app, source);
                             }
 
+        //engine_handle_input(state);
+        
         // render if vulkan is ready
         if (GApplication != nullptr) {
             GApplication->Tick();
@@ -145,19 +188,22 @@ int main(int argc, const char* argv[]) noexcept
         
         
         uint32_t rendererType = options.RendererType;
+
+        if(options.RenderDoc)
+        {
 #if __linux__
-        setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
+            setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
 #endif
 
 #if __APPLE__
-        setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
-        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
-        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
-        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
-        setenv("MTL_CAPTURE_ENABLED", "1", 1);
-        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
-        if( rendererType == 0 ) rendererType = 2;
+            setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
+            setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
+            setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
+            setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
+            setenv("MTL_CAPTURE_ENABLED", "1", 1);
+            setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
 #endif
+        }
 
         StartApplication(rendererType, windowConfig, userSettings, options);
         

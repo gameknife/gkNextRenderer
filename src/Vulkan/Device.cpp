@@ -120,6 +120,8 @@ Device::Device(
 	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	//vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
+
+    vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
 }
 
 Device::~Device()

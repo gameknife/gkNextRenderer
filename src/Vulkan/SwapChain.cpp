@@ -30,9 +30,15 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 
 	const auto surfaceFormat = ChooseSwapSurfaceFormat(details.Formats);
 	const auto actualPresentMode = ChooseSwapPresentMode(details.PresentModes, presentMode);
-	const auto extent = ChooseSwapExtent(window, details.Capabilities);
+	auto extent = ChooseSwapExtent(window, details.Capabilities);
 	const auto imageCount = ChooseImageCount(details.Capabilities);
 
+#if ANDROID
+	float aspect = extent.width / static_cast<float>(extent.height);
+	extent.height = 1920;
+	extent.width = floorf(1920 * aspect);
+#endif
+	
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	createInfo.surface = surface.Handle();

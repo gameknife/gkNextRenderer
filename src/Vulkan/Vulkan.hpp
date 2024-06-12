@@ -13,6 +13,12 @@ typedef ANativeWindow GLFWwindow;
 #endif
 #undef APIENTRY
 
+#define DEFAULT_NON_COPIABLE(ClassName) \
+ClassName(const ClassName&) = delete; \
+ClassName(ClassName&&) = delete; \
+ClassName& operator = (const ClassName&) = delete; \
+ClassName& operator = (ClassName&&) = delete; \
+
 #define VULKAN_NON_COPIABLE(ClassName) \
 	ClassName(const ClassName&) = delete; \
 	ClassName(ClassName&&) = delete; \

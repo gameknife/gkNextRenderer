@@ -22,6 +22,7 @@ public:
 	// Application options.
 	bool Benchmark{};
 	bool SaveFile{};
+	bool RenderDoc{};
 	
 	// Benchmark options.
 	bool BenchmarkNextScenes{};

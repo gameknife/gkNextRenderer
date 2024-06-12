@@ -40,6 +40,26 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 	supportScreenShot_ = windowConfig.NeedScreenShot;
 }
 
+VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
+{
+	device_ = device;
+	time_stamps.resize(totalCount);
+	timeStampPeriod_ = prop.limits.timestampPeriod;
+	// Create the query pool object used to get the GPU time tamps
+	VkQueryPoolCreateInfo query_pool_info{};
+	query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	// We need to specify the query type for this pool, which in our case is for time stamps
+	query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	// Set the no. of queries in this pool
+	query_pool_info.queryCount = static_cast<uint32_t>(time_stamps.size());
+	Check( vkCreateQueryPool(device, &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
+}
+
+VulkanGpuTimer::~VulkanGpuTimer()
+{
+	vkDestroyQueryPool(device_, query_pool_timestamps, nullptr);
+}
+
 VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
@@ -126,6 +146,7 @@ void VulkanBaseRenderer::Start()
 void VulkanBaseRenderer::End()
 {
 	device_->WaitIdle();
+	gpuTimer_.reset();
 }
 
 bool VulkanBaseRenderer::Tick()
@@ -158,10 +179,15 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	bufferDeviceAddressFeatures.pNext = &indexingFeatures;
 	bufferDeviceAddressFeatures.bufferDeviceAddress = true;
 
+	VkPhysicalDeviceHostQueryResetFeaturesEXT hostQueryResetFeatures = {};
+	hostQueryResetFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT;
+	hostQueryResetFeatures.pNext = &bufferDeviceAddressFeatures;
+	hostQueryResetFeatures.hostQueryReset = true;
 	
-	
-	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &bufferDeviceAddressFeatures));
+	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
+
+	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 
 void VulkanBaseRenderer::OnDeviceSet()
@@ -247,9 +273,16 @@ void VulkanBaseRenderer::DrawFrame()
 		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
 	}
 
-	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
-	Render(commandBuffer, imageIndex);
+	
 
+	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
+	gpuTimer_->Reset(commandBuffer);
+
+	{
+		SCOPED_GPU_TIMER("full");
+		Render(commandBuffer, imageIndex);
+	}
+	
 	// screenshot swapchain image
 	if (supportScreenShot_)
 	{
@@ -287,7 +320,6 @@ void VulkanBaseRenderer::DrawFrame()
 							   VK_ACCESS_TRANSFER_READ_BIT,
 							   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
-	
 	commandBuffers_->End(imageIndex);
 
 	UpdateUniformBuffer(imageIndex);
@@ -324,6 +356,8 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+	
+	gpuTimer_->FrameEnd(commandBuffer);
 	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{
