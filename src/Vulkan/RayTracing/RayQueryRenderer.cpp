@@ -76,7 +76,7 @@ namespace Vulkan::RayTracing
                                   {
                                       VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
                                       VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                                      VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME
+                                      VK_KHR_RAY_QUERY_EXTENSION_NAME
                                   });
 
         // Required device features.
@@ -85,19 +85,19 @@ namespace Vulkan::RayTracing
         accelerationStructureFeatures.pNext = nextDeviceFeatures;
         accelerationStructureFeatures.accelerationStructure = true;
 
-        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {};
-        rayTracingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-        rayTracingFeatures.pNext = &accelerationStructureFeatures;
-        rayTracingFeatures.rayTracingPipeline = true;
+        VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
+        rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        rayQueryFeatures.pNext = &accelerationStructureFeatures;
+        rayQueryFeatures.rayQuery = true;
 
-        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayTracingFeatures);
+        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayQueryFeatures);
     }
 
     void RayQueryRenderer::OnDeviceSet()
     {
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
         
-        deviceProcedures_.reset(new DeviceProcedures(Device()));
+        deviceProcedures_.reset(new DeviceProcedures(Device(), false, true));
         rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 

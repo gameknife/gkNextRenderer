@@ -1,4 +1,7 @@
 #include "RayTracingPipeline.hpp"
+
+#include <Utilities/FileHelper.hpp>
+
 #include "DeviceProcedures.hpp"
 #include "TopLevelAccelerationStructure.hpp"
 #include "Assets/Scene.hpp"
@@ -189,11 +192,11 @@ namespace Vulkan::RayTracing
         rayTracePipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
 
         // Load shaders.
-        const ShaderModule rayGenShader(device, "../assets/shaders/RayTracing.rgen.spv");
-        const ShaderModule missShader(device, "../assets/shaders/RayTracing.rmiss.spv");
-        const ShaderModule closestHitShader(device, "../assets/shaders/RayTracing.rchit.spv");
-        const ShaderModule proceduralClosestHitShader(device, "../assets/shaders/RayTracing.Procedural.rchit.spv");
-        const ShaderModule proceduralIntersectionShader(device, "../assets/shaders/RayTracing.Procedural.rint.spv");
+        const ShaderModule rayGenShader(device, Utilities::FileHelper::GetPlatformFilePath("/assets/shaders/RayTracing.rgen.spv"));
+        const ShaderModule missShader(device, Utilities::FileHelper::GetPlatformFilePath("/assets/shaders/RayTracing.rmiss.spv"));
+        const ShaderModule closestHitShader(device, Utilities::FileHelper::GetPlatformFilePath("/assets/shaders/RayTracing.rchit.spv"));
+        const ShaderModule proceduralClosestHitShader(device, Utilities::FileHelper::GetPlatformFilePath("/assets/shaders/RayTracing.Procedural.rchit.spv"));
+        const ShaderModule proceduralIntersectionShader(device, Utilities::FileHelper::GetPlatformFilePath("/assets/shaders/RayTracing.Procedural.rint.spv"));
 
         std::vector<VkPipelineShaderStageCreateInfo> shaderStages =
         {
@@ -398,7 +401,7 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
                                                        &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "../assets/shaders/RayQuery.comp.spv");
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/RayQuery.comp.spv"));
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -501,7 +504,7 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
                                                        &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "../assets/shaders/Denoise.comp.spv");
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/Denoise.comp.spv"));
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -585,7 +588,7 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
                                                        &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "../assets/shaders/Compose.comp.spv");
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/Compose.comp.spv"));
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

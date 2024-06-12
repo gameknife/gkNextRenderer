@@ -15,7 +15,7 @@ namespace Vulkan
 
 			VULKAN_NON_COPIABLE(DeviceProcedures)
 
-			explicit DeviceProcedures(const Device& device);
+			explicit DeviceProcedures(const Device& device, bool raytracing, bool rayquery);
 			~DeviceProcedures();
 
 			const class Device& Device() const { return device_; }
