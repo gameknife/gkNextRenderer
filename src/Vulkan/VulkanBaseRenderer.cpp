@@ -358,8 +358,6 @@ void VulkanBaseRenderer::DrawFrame()
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
 	
 	gpuTimer_->FrameEnd(commandBuffer);
-
-	uint64_t nanosec = gpuTimer_->GetTime("full");
 	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{

@@ -295,6 +295,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Tris: %d", statistics.TriCount);
 		ImGui::Text("Instance: %d", statistics.InstanceCount);
 
+		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display
 		auto times = gpuTimer->FetchAllTimes();
 		for(auto& time : times)

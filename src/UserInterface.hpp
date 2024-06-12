@@ -19,6 +19,7 @@ struct Statistics final
 {
 	VkExtent2D FramebufferSize;
 	float FrameRate;
+	float FrameTime;
 	float RayRate;
 	uint32_t TotalSamples;
 	float CamPosX;

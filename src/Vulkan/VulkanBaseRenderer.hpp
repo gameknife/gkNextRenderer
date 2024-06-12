@@ -3,6 +3,7 @@
 #include "FrameBuffer.hpp"
 #include "WindowConfig.hpp"
 #include <vector>
+#include <list>
 #include <memory>
 #include <unordered_map>
 #include <cassert>
@@ -79,12 +80,18 @@ namespace Vulkan
 		}
 		std::vector<std::tuple<std::string, float> > FetchAllTimes()
 		{
-			std::vector<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
+			std::list<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
 			std::vector<std::tuple<std::string, float> > result;
 			for(auto& [name, query] : timer_query_map)
 			{
 				order_list.insert(order_list.begin(), (std::make_tuple(name, GetTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
 			}
+
+			// sort by tuple 2
+			order_list.sort([](const std::tuple<std::string, float, uint64_t, uint64_t>& a, const std::tuple<std::string, float, uint64_t, uint64_t>& b) -> bool
+			{
+				return std::get<2>(a) < std::get<2>(b);
+			});
 
 			int last_order = 99;
 			std::string prefix = "";

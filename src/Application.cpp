@@ -236,6 +236,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     Statistics stats = {};
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
+    stats.FrameTime = static_cast<float>(timeDelta * 1000);
 
     stats.CamPosX = modelViewController_.Position()[0];
     stats.CamPosY = modelViewController_.Position()[1];
