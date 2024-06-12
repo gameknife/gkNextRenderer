@@ -73,7 +73,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=1", "--next-scenes", "--scene=0"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--next-scenes", "--scene=1"};
             const Options options(4, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);
