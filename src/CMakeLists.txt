@@ -98,6 +98,8 @@ set(src_files_vulkan
 )
 
 set(src_files_vulkan_raytracing
+	Vulkan/RayTracing/RayQueryRenderer.cpp
+	Vulkan/RayTracing/RayQueryRenderer.hpp
 	Vulkan/RayTracing/AccelerationStructure.cpp
 	Vulkan/RayTracing/AccelerationStructure.hpp
 	Vulkan/RayTracing/RayTracingRenderer.cpp
