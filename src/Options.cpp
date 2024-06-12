@@ -48,6 +48,7 @@ Options::Options(const int argc, const char* argv[])
 		("help", "Display help message.")
 		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
 		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
+		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
 		;
 
 	desc.add(benchmark);

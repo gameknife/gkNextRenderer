@@ -291,12 +291,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
-		ImGui::Text("Gpu Time:  %.2fms", gpuTimer->GetTime("full"));
-		ImGui::Text("DrawPass Time:  %.2fms", gpuTimer->GetTime("drawpass"));
-		ImGui::Text("Shading Time:  %.2fms", gpuTimer->GetTime("shadingpass"));
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 		ImGui::Text("Tris: %d", statistics.TriCount);
 		ImGui::Text("Instance: %d", statistics.InstanceCount);
+
+		// auto fetch timer & display
+		auto times = gpuTimer->FetchAllTimes();
+		for(auto& time : times)
+		{
+			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
+		}
 	}
 	ImGui::End();
 }

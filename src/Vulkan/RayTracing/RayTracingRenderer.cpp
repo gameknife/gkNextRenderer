@@ -252,11 +252,11 @@ namespace Vulkan::RayTracing
                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
 
         ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
-       0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         ImageMemoryBarrier::Insert(commandBuffer, visibility1BufferImage_->Handle(), subresourceRange,
-0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         ImageMemoryBarrier::Insert(commandBuffer, validateImage_->Handle(), subresourceRange,
-0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         
         // Bind ray tracing pipeline.
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
@@ -282,32 +282,35 @@ namespace Vulkan::RayTracing
         VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {};
 
         // Execute ray tracing shaders.
-        deviceProcedures_->vkCmdTraceRaysKHR(commandBuffer,
-                                             &raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
-                                             &callableShaderBindingTable,
-                                             CheckerboxRendering() ? extent.width / 2 : extent.width, extent.height, 1);
+        {
+            SCOPED_GPU_TIMER("rt pass");
+            deviceProcedures_->vkCmdTraceRaysKHR(commandBuffer,
+                                                &raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable,
+                                                &callableShaderBindingTable,
+                                                CheckerboxRendering() ? extent.width / 2 : extent.width, extent.height, 1);
 
+            ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
+                                    VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
-        ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
-                                   VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange,
+                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                    VK_IMAGE_LAYOUT_GENERAL);
 
-        ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange,
-                                   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                   VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, albedoImage_->Handle(), subresourceRange,
+                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                    VK_IMAGE_LAYOUT_GENERAL);
 
-        ImageMemoryBarrier::Insert(commandBuffer, albedoImage_->Handle(), subresourceRange,
-                                   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                   VK_IMAGE_LAYOUT_GENERAL);
-
-        // accumulate with reproject
-        ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
-               VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
-               VK_IMAGE_LAYOUT_GENERAL);
+            // accumulate with reproject
+            ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
+                VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_LAYOUT_GENERAL);
+        }
 
         // accumulate with reproject
         // frame0: new + image 0 -> image 1
         // frame1: new + image 1 -> image 0
         {
+            SCOPED_GPU_TIMER("reproject pass");
             VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -348,6 +351,8 @@ namespace Vulkan::RayTracing
 
         // compose with first bounce
         {
+            SCOPED_GPU_TIMER("compose pass");
+
             DenoiserPushConstantData pushData;
             pushData.pingpong = frameCount_ % 2;
             pushData.stepsize = 1;
@@ -360,16 +365,17 @@ namespace Vulkan::RayTracing
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+        
+
+            // Acquire output image and swap-chain image for copying.
+            ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
+                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+                                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         }
-
-        // Acquire output image and swap-chain image for copying.
-        ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-                                   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-        ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-                                   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         // Copy output image into swap-chain image.
         VkImageCopy copyRegion;

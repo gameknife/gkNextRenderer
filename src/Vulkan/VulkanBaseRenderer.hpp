@@ -4,7 +4,7 @@
 #include "WindowConfig.hpp"
 #include <vector>
 #include <memory>
-#include <map>
+#include <unordered_map>
 #include <cassert>
 #include "Image.hpp"
 
@@ -77,10 +77,33 @@ namespace Vulkan
 			}
 			return (time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])]) * timeStampPeriod_ * 1e-6f;
 		}
+		std::vector<std::tuple<std::string, float> > FetchAllTimes()
+		{
+			std::vector<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
+			std::vector<std::tuple<std::string, float> > result;
+			for(auto& [name, query] : timer_query_map)
+			{
+				order_list.insert(order_list.begin(), (std::make_tuple(name, GetTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
+			}
+
+			int last_order = 99;
+			std::string prefix = "";
+			for(auto& [name, time, startIdx, endIdx] : order_list)
+			{
+				if( startIdx < last_order)
+				{
+					prefix += " ";
+					last_order = endIdx;
+				}
+				result.push_back(std::make_tuple(prefix + name, time));
+			}
+
+			return result;
+		}
 		
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
-		std::map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
+		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint64_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
