@@ -109,7 +109,7 @@ namespace Vulkan::RayTracing
             *motionVectorImageView_,
             *visibilityBufferImageView_,
             *visibility1BufferImageView_,
-            *validateImageView_,
+            *outputImageView_,
             UniformBuffers(), GetScene()));
     
         
@@ -155,10 +155,6 @@ namespace Vulkan::RayTracing
         visibility1BufferImageMemory_.reset();
         visibility1BufferImageView_.reset();
 
-        validateImage_.reset(0);
-        validateImageMemory_.reset(0);
-        validateImageView_.reset(0);
-
         motionVectorImage_.reset();
         motionVectorImageView_.reset();
         motionVectorImageMemory_.reset();
@@ -203,8 +199,6 @@ namespace Vulkan::RayTracing
         ImageMemoryBarrier::Insert(commandBuffer, visibilityBufferImage_->Handle(), subresourceRange,
                 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         ImageMemoryBarrier::Insert(commandBuffer, visibility1BufferImage_->Handle(), subresourceRange,
-                0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
-        ImageMemoryBarrier::Insert(commandBuffer, validateImage_->Handle(), subresourceRange,
                 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
         
         // Bind ray tracing pipeline.
@@ -302,18 +296,18 @@ namespace Vulkan::RayTracing
         {
             SCOPED_GPU_TIMER("compose pass");
 
-            DenoiserPushConstantData pushData;
-            pushData.pingpong = frameCount_ % 2;
-            pushData.stepsize = 1;
-        
-            vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(DenoiserPushConstantData), &pushData);
-        
-            VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
+            // DenoiserPushConstantData pushData;
+            // pushData.pingpong = frameCount_ % 2;
+            // pushData.stepsize = 1;
+            //
+            // vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+            //                    0, sizeof(DenoiserPushConstantData), &pushData);
+            //
+            // VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
+            // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
+            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+            //                         composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
+            // vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
         
 
             // Acquire output image and swap-chain image for copying.
@@ -410,15 +404,6 @@ namespace Vulkan::RayTracing
             new DeviceMemory(visibility1BufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
         visibility1BufferImageView_.reset(new ImageView(Device(), visibility1BufferImage_->Handle(),
             VK_FORMAT_R32_UINT,
-            VK_IMAGE_ASPECT_COLOR_BIT));
-
-        validateImage_.reset(new Image(Device(), extent,
-                                       VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL,
-                                       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-        validateImageMemory_.reset(
-            new DeviceMemory(validateImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-        validateImageView_.reset(new ImageView(Device(), validateImage_->Handle(),
-            VK_FORMAT_R8_UINT,
             VK_IMAGE_ASPECT_COLOR_BIT));
         
         const auto& debugUtils = Device().DebugUtils();

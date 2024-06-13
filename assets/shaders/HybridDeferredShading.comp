@@ -30,8 +30,8 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
 {
-	uint instance_index = vBuffer.y;
-	uint triangle_index = vBuffer.x;
+	uint instance_index = vBuffer.x;
+	uint triangle_index = vBuffer.y;
 
 	NodeProxy proxy = NodeProxies[instance_index];
 	
@@ -75,8 +75,8 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_
 
 vec3 get_position(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
 {
-	uint instance_index = vBuffer.y;
-	uint triangle_index = vBuffer.x;
+	uint instance_index = vBuffer.x;
+	uint triangle_index = vBuffer.y;
 
 	NodeProxy proxy = NodeProxies[instance_index];
 	
@@ -240,7 +240,7 @@ void main() {
     if(true)
     {
     	const vec3 lightVector = normalize(vec3(5, 4, 3));
-        float d = max(dot(lightVector, normalize(v.Normal.rgb)),0.0) * 300.0;
+        float d = max(dot(lightVector, normalize(v.Normal.rgb)),0.0) * 100.0;
         
         d = mix(d, 0.0, metalProb);
     
@@ -255,20 +255,20 @@ void main() {
         outColor += albedo * d;
     }
 
-	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 50.0);
+//	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 50.0);
 //  visibiliy visualizer	
 //	uint triangle_index = primitive_index & 0x000FFFFF;
 //	outColor.rgb = hsv2rgb(vec3(RandomFloat(triangle_index),0.2,0.5));
 	
     imageStore(OutImage, ipos, outColor);
-	
+
 	// disable for benchmark now
 	// calculate the motion vector
-//	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
-//	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	
-//	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
-//	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	vec2 motion = prevfpos - currfpos;
-//	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
+	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 motion = prevfpos - currfpos;
+	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 }

@@ -46,9 +46,25 @@ namespace Vulkan::HybridDeferred
 		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 
+		std::unique_ptr<Image> accumulationImage_;
+		std::unique_ptr<DeviceMemory> accumulationImageMemory_;
+		std::unique_ptr<ImageView> accumulationImageView_;
+		
+		std::unique_ptr<Image> pingpongImage0_;
+		std::unique_ptr<DeviceMemory> pingpongImage0Memory_;
+		std::unique_ptr<ImageView> pingpongImage0View_;
+
+		std::unique_ptr<Image> pingpongImage1_;
+		std::unique_ptr<DeviceMemory> pingpongImage1Memory_;
+		std::unique_ptr<ImageView> pingpongImage1View_;
+		
 		std::unique_ptr<Image> visibilityBufferImage_;
 		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
 		std::unique_ptr<ImageView> visibilityBufferImageView_;
+
+		std::unique_ptr<Image> visibility1BufferImage_;
+		std::unique_ptr<DeviceMemory> visibility1BufferImageMemory_;
+		std::unique_ptr<ImageView> visibility1BufferImageView_;
 		
 		std::unique_ptr<Image> outputImage_;
 		std::unique_ptr<DeviceMemory> outputImageMemory_;
