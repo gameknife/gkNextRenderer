@@ -30,7 +30,7 @@ namespace Vulkan
 
 		void Reset(VkCommandBuffer commandBuffer)
 		{
-			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, time_stamps.size());
+			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 		}
 
@@ -93,7 +93,7 @@ namespace Vulkan
 				return std::get<2>(a) < std::get<2>(b);
 			});
 
-			int last_order = 99;
+			uint64_t last_order = 99;
 			std::string prefix = "";
 			for(auto& [name, time, startIdx, endIdx] : order_list)
 			{
@@ -112,7 +112,7 @@ namespace Vulkan
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
-		uint64_t queryIdx = 0;
+		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
 	};
 

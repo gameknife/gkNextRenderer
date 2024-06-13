@@ -1,6 +1,5 @@
 #include "ShaderBindingTable.hpp"
 #include "DeviceProcedures.hpp"
-#include "RayTracingPipeline.hpp"
 #include "RayTracingProperties.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/Buffer.hpp"
@@ -60,7 +59,7 @@ namespace
 
 ShaderBindingTable::ShaderBindingTable(
 	const DeviceProcedures& deviceProcedures, 
-	const RayTracingPipeline& rayTracingPipeline,
+	VkPipeline rayTracingPipeline,
 	const RayTracingProperties& rayTracingProperties,
 	const std::vector<Entry>& rayGenPrograms,
 	const std::vector<Entry>& missPrograms, 
@@ -97,7 +96,7 @@ ShaderBindingTable::ShaderBindingTable(
 
 	Check(deviceProcedures.vkGetRayTracingShaderGroupHandlesKHR(
 		device.Handle(), 
-		rayTracingPipeline.Handle(), 
+		rayTracingPipeline, 
 		0, static_cast<uint32_t>(groupCount),
 		shaderHandleStorage.size(),
 		shaderHandleStorage.data()), 

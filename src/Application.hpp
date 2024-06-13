@@ -3,10 +3,10 @@
 #include "ModelViewController.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
-#include "Vulkan/RayTracing/RayTracingRenderer.hpp"
+#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/RayTracing/RayQueryRenderer.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 
