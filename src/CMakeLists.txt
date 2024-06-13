@@ -98,26 +98,36 @@ set(src_files_vulkan
 )
 
 set(src_files_vulkan_raytracing
-	Vulkan/RayTracing/RayQueryRenderer.cpp
-	Vulkan/RayTracing/RayQueryRenderer.hpp
+	Vulkan/RayTracing/RayTraceBaseRenderer.cpp
+	Vulkan/RayTracing/RayTraceBaseRenderer.hpp
 	Vulkan/RayTracing/AccelerationStructure.cpp
 	Vulkan/RayTracing/AccelerationStructure.hpp
-	Vulkan/RayTracing/RayTracingRenderer.cpp
-	Vulkan/RayTracing/RayTracingRenderer.hpp
 	Vulkan/RayTracing/BottomLevelAccelerationStructure.cpp
 	Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp
 	Vulkan/RayTracing/BottomLevelGeometry.cpp
 	Vulkan/RayTracing/BottomLevelGeometry.hpp
 	Vulkan/RayTracing/DeviceProcedures.cpp
 	Vulkan/RayTracing/DeviceProcedures.hpp
-	Vulkan/RayTracing/RayTracingPipeline.cpp
-	Vulkan/RayTracing/RayTracingPipeline.hpp
 	Vulkan/RayTracing/RayTracingProperties.cpp
 	Vulkan/RayTracing/RayTracingProperties.hpp
 	Vulkan/RayTracing/ShaderBindingTable.cpp
 	Vulkan/RayTracing/ShaderBindingTable.hpp
 	Vulkan/RayTracing/TopLevelAccelerationStructure.cpp
 	Vulkan/RayTracing/TopLevelAccelerationStructure.hpp
+)
+
+set(src_files_vulkan_rayquery
+	Vulkan/RayQuery/RayQueryRenderer.cpp
+	Vulkan/RayQuery/RayQueryRenderer.hpp
+	Vulkan/RayQuery/RayQueryPipeline.cpp
+	Vulkan/RayQuery/RayQueryPipeline.hpp
+)
+
+set(src_files_vulkan_raytrace
+	Vulkan/RayTrace/RayTracingRenderer.cpp
+	Vulkan/RayTrace/RayTracingRenderer.hpp
+	Vulkan/RayTrace/RayTracingPipeline.cpp
+	Vulkan/RayTrace/RayTracingPipeline.hpp
 )
 
 set(src_files_vulkan_legacydeferred
@@ -172,6 +182,8 @@ source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
 source_group("Vulkan.ModernDeferred" FILES ${src_files_vulkan_moderndeferred})
 source_group("Vulkan.LegacyDeferred" FILES ${src_files_vulkan_legacydeferred})
 source_group("Vulkan.PipelineCommon" FILES ${src_files_common_compute_pipeline})
+source_group("Vulkan.RayQuery" FILES ${src_files_vulkan_rayquery})
+source_group("Vulkan.RayTrace" FILES ${src_files_vulkan_raytrace})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Main" FILES ${src_files})
 
@@ -184,6 +196,8 @@ add_library(${exe_name} SHARED
 	${src_files_utilities} 
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_common_compute_pipeline}
@@ -197,6 +211,8 @@ add_executable(${exe_name}
 	${src_files_utilities} 
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_common_compute_pipeline}
