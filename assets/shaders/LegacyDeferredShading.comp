@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
 
+#include "Platform.glsl"
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
@@ -35,7 +36,11 @@ vec3 LinearToST2084UE(vec3 lin)
 //    uint stepsize;
 //} pushConsts;
 
+#if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+#else
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+#endif
 
 void main() {
 

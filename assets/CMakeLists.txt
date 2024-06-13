@@ -3,7 +3,6 @@ file(GLOB font_files fonts/*.ttf)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
-
 file(GLOB shader_extra_files shaders/*.glsl)
 set_source_files_properties(${shader_extra_files} PROPERTIES HEADER_FILE_ONLY TRUE)
 
@@ -70,3 +69,30 @@ add_custom_target(
 	Assets 
 	DEPENDS ${copied_fonts} ${copied_models} ${compiled_shaders} ${copied_textures} 
 	SOURCES ${font_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files})
+
+#copy_platform_define by platform
+if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
+if ( ANDROID )
+add_custom_command(
+    TARGET Assets PRE_BUILD
+	COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F /-I
+)
+else()
+add_custom_command(
+    TARGET Assets PRE_BUILD
+    COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F /-I
+)
+endif()
+else()
+if ( ANDROID )
+add_custom_command(
+	TARGET Assets PRE_BUILD
+	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
+)
+else()
+add_custom_command(
+	TARGET Assets PRE_BUILD
+	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
+)
+endif()
+endif()

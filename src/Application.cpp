@@ -633,4 +633,5 @@ template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
 template class NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>;
 template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
 template class NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>;
+template class NextRendererApplication<Vulkan::HybridDeferred::HybridDeferredRenderer>;
 template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;

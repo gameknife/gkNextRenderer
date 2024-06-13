@@ -7,6 +7,7 @@
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 

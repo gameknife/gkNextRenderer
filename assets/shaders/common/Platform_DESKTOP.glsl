@@ -1,0 +1,1 @@
+#define DESKTOP 1

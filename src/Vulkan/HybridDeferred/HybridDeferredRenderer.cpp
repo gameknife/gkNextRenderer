@@ -1,5 +1,5 @@
-#include "ModernDeferredRenderer.hpp"
-#include "ModernDeferredPipeline.hpp"
+#include "HybridDeferredRenderer.hpp"
+#include "HybridDeferredPipeline.hpp"
 
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/Device.hpp"
@@ -16,27 +16,29 @@
 #include "Utilities/Exception.hpp"
 #include <array>
 
-namespace Vulkan::ModernDeferred {
+#include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
 
-ModernDeferredRenderer::ModernDeferredRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	Vulkan::VulkanBaseRenderer(windowConfig, presentMode, enableValidationLayers)
+namespace Vulkan::HybridDeferred {
+
+HybridDeferredRenderer::HybridDeferredRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+	RayTracing::RayTraceBaseRenderer(windowConfig, presentMode, enableValidationLayers)
 {
 	
 }
 
-ModernDeferredRenderer::~ModernDeferredRenderer()
+HybridDeferredRenderer::~HybridDeferredRenderer()
 {
-	ModernDeferredRenderer::DeleteSwapChain();
+	HybridDeferredRenderer::DeleteSwapChain();
 }
 
-void ModernDeferredRenderer::CreateSwapChain()
+void HybridDeferredRenderer::CreateSwapChain()
 {
-	Vulkan::VulkanBaseRenderer::CreateSwapChain();
+	RayTracing::RayTraceBaseRenderer::CreateSwapChain();
 	
 	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
-	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+	visibilityPipeline_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 	
 	visibilityBufferImage_.reset(new Image(Device(), extent,
 		VK_FORMAT_R32G32_UINT, VK_IMAGE_TILING_OPTIMAL,
@@ -67,7 +69,7 @@ void ModernDeferredRenderer::CreateSwapChain()
 	
 	
 	deferredFrameBuffer_.reset(new FrameBuffer(*visibilityBufferImageView_, visibilityPipeline_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *visibilityBufferImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers(), GetScene()));
+	deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), topAs_[0], *visibilityBufferImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers(), GetScene()));
 
 	const auto& debugUtils = Device().DebugUtils();
 	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
@@ -75,7 +77,7 @@ void ModernDeferredRenderer::CreateSwapChain()
 
 }
 
-void ModernDeferredRenderer::DeleteSwapChain()
+void HybridDeferredRenderer::DeleteSwapChain()
 {
 	visibilityPipeline_.reset();
 	deferredShadingPipeline_.reset();
@@ -95,12 +97,11 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	motionVectorImageMemory_.reset();
 	motionVectorImageView_.reset();
 
-	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
+	RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
 }
 
-void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void HybridDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	
 	VkImageSubresourceRange subresourceRange = {};
 	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	subresourceRange.baseMipLevel = 0;
@@ -171,6 +172,9 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 #else
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
 #endif
+		
+	
+
 		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
 							   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 							   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

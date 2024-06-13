@@ -52,6 +52,10 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
         GApplication.reset(new NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>(
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
+    case 4:
+        GApplication.reset(new NextRendererApplication<Vulkan::HybridDeferred::HybridDeferredRenderer>(
+            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+        break;
     default:
         GApplication.reset(new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
@@ -73,7 +77,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--next-scenes", "--scene=5"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--next-scenes", "--scene=1"};
             const Options options(4, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);

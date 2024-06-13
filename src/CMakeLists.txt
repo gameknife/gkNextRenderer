@@ -144,6 +144,14 @@ set(src_files_vulkan_moderndeferred
 	Vulkan/ModernDeferred/ModernDeferredPipeline.hpp
 )
 
+set(src_files_vulkan_hybriddeferred
+	Vulkan/HybridDeferred/HybridDeferredRenderer.cpp
+	Vulkan/HybridDeferred/HybridDeferredRenderer.hpp
+	Vulkan/HybridDeferred/HybridDeferredPipeline.cpp
+	Vulkan/HybridDeferred/HybridDeferredPipeline.hpp
+)
+
+
 set(src_files_common_compute_pipeline
 	Vulkan/PipelineCommon/CommonComputePipeline.cpp
 	Vulkan/PipelineCommon/CommonComputePipeline.hpp
@@ -184,6 +192,7 @@ source_group("Vulkan.LegacyDeferred" FILES ${src_files_vulkan_legacydeferred})
 source_group("Vulkan.PipelineCommon" FILES ${src_files_common_compute_pipeline})
 source_group("Vulkan.RayQuery" FILES ${src_files_vulkan_rayquery})
 source_group("Vulkan.RayTrace" FILES ${src_files_vulkan_raytrace})
+source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Main" FILES ${src_files})
 
@@ -200,6 +209,7 @@ add_library(${exe_name} SHARED
 	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files}
@@ -215,6 +225,7 @@ add_executable(${exe_name}
 	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files}
