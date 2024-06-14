@@ -11,7 +11,7 @@ on:
       - 'assets/shaders/**'
       - '*.sh'
       - '*.bat'
-
+      - '**/CMakeLists.txt'
 jobs:
   build:
 
