@@ -124,6 +124,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] Hybrid rendering with ray query
 - [ ] Full scope refactor
 - [ ] Dynamic Scene Management
+- [ ] Multi Material Execution
+- [ ] Huge Landscape
 
 ## 随感
 
