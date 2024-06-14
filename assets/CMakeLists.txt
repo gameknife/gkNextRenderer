@@ -77,12 +77,12 @@ if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
 if ( ANDROID )
 add_custom_command(
     TARGET Assets PRE_BUILD
-	COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F /-I
+	COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F
 )
 else()
 add_custom_command(
     TARGET Assets PRE_BUILD
-    COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F /-I
+    COMMAND xcopy \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\" /Y /Q /F
 )
 endif()
 else()
