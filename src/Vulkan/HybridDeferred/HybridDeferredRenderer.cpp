@@ -16,6 +16,8 @@
 #include "Utilities/Exception.hpp"
 #include <array>
 
+#include "Utilities/Console.hpp"
+#include "Utilities/Math.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
 
 namespace Vulkan::HybridDeferred
@@ -230,12 +232,15 @@ VK_IMAGE_LAYOUT_GENERAL);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-#if ANDROID
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 32, 1);	
-#else
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / (CheckerboxRendering() ? 2 : 1), SwapChain().Extent().height / 4, 1);
-#endif
 
+            uint32_t workGroupSizeXDivider = 8 * (CheckerboxRendering() ? 2 : 1);
+            uint32_t workGroupSizeYDivider = 4;
+#if ANDROID
+            workGroupSizeXDivider = 32 * (CheckerboxRendering() ? 2 : 1);
+            workGroupSizeYDivider = 32;
+#endif
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, workGroupSizeXDivider), Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, workGroupSizeYDivider), 1);
+            
             ImageMemoryBarrier::Insert(commandBuffer, accumulationImage_->Handle(), subresourceRange,
    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
    VK_IMAGE_LAYOUT_GENERAL);
@@ -247,7 +252,7 @@ VK_IMAGE_LAYOUT_GENERAL);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 4), 1);
 
             ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
                            VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
