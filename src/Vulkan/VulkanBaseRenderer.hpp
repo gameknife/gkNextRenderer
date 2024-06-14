@@ -7,6 +7,8 @@
 #include <memory>
 #include <unordered_map>
 #include <cassert>
+#include <glm/vec2.hpp>
+
 #include "Image.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
@@ -159,6 +161,8 @@ namespace Vulkan
 		bool Tick();
 		void End();
 
+		virtual void OnTouch(bool down, double xpos, double ypos) {}
+		virtual void OnTouchMove(double xpos, double ypos) {}
 	protected:
 
 		VulkanBaseRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
@@ -194,7 +198,7 @@ namespace Vulkan
 		virtual void OnCursorPosition(double xpos, double ypos) { }
 		virtual void OnMouseButton(int button, int action, int mods) { }
 		virtual void OnScroll(double xoffset, double yoffset) { }
-
+		
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};

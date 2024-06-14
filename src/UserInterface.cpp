@@ -141,9 +141,9 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	ImGui_ImplVulkan_NewFrame();
 	ImGui::NewFrame();
 
-#if !ANDROID
+//#if !ANDROID
 	DrawSettings();
-#endif
+//#endif
 	DrawOverlay(statistics, gpuTimer);
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();
@@ -186,7 +186,6 @@ void UserInterface::DrawSettings()
 
 	const auto flags =
 		ImGuiWindowFlags_AlwaysAutoResize |
-		ImGuiWindowFlags_NoCollapse |
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoSavedSettings;
@@ -212,24 +211,24 @@ void UserInterface::DrawSettings()
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
 
-		ImGui::Text("Ray Tracing");
-		ImGui::Separator();
-		uint32_t min = 1, max = 128;
-		ImGui::SliderScalar("Samples", ImGuiDataType_U32, &Settings().NumberOfSamples, &min, &max);
-		min = 1, max = 32;
-		ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);
-		ImGui::NewLine();
+		// ImGui::Text("Ray Tracing");
+		// ImGui::Separator();
+		// uint32_t min = 1, max = 128;
+		// ImGui::SliderScalar("Samples", ImGuiDataType_U32, &Settings().NumberOfSamples, &min, &max);
+		// min = 1, max = 32;
+		// ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);
+		// ImGui::NewLine();
 
-		{
-			ImGui::Text("Denoiser");
-			ImGui::Separator();
-			uint32_t min = 0, max = 10;
-			ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
-			// ImGui::SliderFloat("ColorPhi", &Settings().ColorPhi, 0.01f, 20.0f, "%.1f");
-			// ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 2000.0f, "%.1f");
-			// ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 180.0f, "%.1f");
-			ImGui::NewLine();
-		}
+		// {
+		// 	ImGui::Text("Denoiser");
+		// 	ImGui::Separator();
+		// 	uint32_t min = 0, max = 10;
+		// 	ImGui::SliderScalar("Denoise Iteration", ImGuiDataType_U32, &Settings().DenoiseIteration, &min, &max);
+		// 	// ImGui::SliderFloat("ColorPhi", &Settings().ColorPhi, 0.01f, 20.0f, "%.1f");
+		// 	// ImGui::SliderFloat("DepthPhi", &Settings().DepthPhi, 1.0f, 2000.0f, "%.1f");
+		// 	// ImGui::SliderFloat("NormalPhi", &Settings().NormalPhi, 1.0f, 180.0f, "%.1f");
+		// 	ImGui::NewLine();
+		// }
 		
 		ImGui::Text("Camera");
 		ImGui::Separator();
@@ -269,8 +268,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 	const auto& io = ImGui::GetIO();
 	const float distance = 10.0f;
 #if ANDROID
-	const ImVec2 pos = ImVec2(distance, distance);
-	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
+	const ImVec2 pos = ImVec2(io.DisplaySize.x * 0.75 - distance, distance);
+	const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
 #else
 	const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance);
 	const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
