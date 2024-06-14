@@ -24,6 +24,8 @@ set(src_files_utilities
 	Utilities/Console.cpp
 	Utilities/Console.hpp
 	Utilities/Exception.hpp
+	Utilities/FileHelper.hpp
+	Utilities/Math.hpp
 	Utilities/Glm.hpp
 	Utilities/StbImage.cpp
 	Utilities/StbImage.hpp
