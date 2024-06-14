@@ -33,10 +33,15 @@
     * Importance Sampling
     * Ground Truth Path Tracing
     * Phsyical Light Unit
+    * Sample Reproject
     * RayQuery on PC & Android
 * Non-Raytracing Pipeline
     * Visibiliy Buffer Rendering
     * Legacy Rendering
+* Hybird Pipeline
+    * Visibility Buffer
+    * Indirect Hybird Shading
+    * Sample Reproject
 * Common Rendering Feature
     * Compute Checkerbox Rendering
     * Temporal Reproject
@@ -81,7 +86,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - MIS
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
-    - Hybrid Rendering (Shadow & SkyVisibility)
+    - ~~Hybrid Rendering (Shadow & SkyVisibility)~~
     - ~~Reference Legacy Lighting~~
     - Referencing Legacy Indirect Lighting (Shadowmap, SSXX, etc)
 - Common Rendering Feature
@@ -112,11 +117,13 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] GPU Lod Swtiching
 - [x] Android Non-Raytracing Rendering
 - [x] Android RayQuery Rendering
+- [ ] Android Input Handling
 - [x] Realtimg self statics system
 - [ ] Auto release by Github action
 - [ ] Global Dynamic Bindless Textures
-- [ ] Hybrid rendering with ray query
+- [x] Hybrid rendering with ray query
 - [ ] Full scope refactor
+- [ ] Dynamic Scene Management
 
 ## 随感
 
@@ -140,6 +147,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - **[GPU Stats]** 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
 
 - **[Android RayTracing]** 高通和mali从上一代的旗舰开始，都配备了RayTracing架构，虽然都支持RayQuery。一开始，我觉得也就是个噱头吧，RTX都还跑不明白。结果这次在我的SG 8gen2上实现了RayQuery，性能出乎意料。PrimaryRay加上bindless的材质shading，1920分辨率下，居然能拉到100-120fps，gputimer的结果在6-8ms之间。看起来，通过ray-tracing来做间接光照的hybird管线是没有任何问题的。考虑把skyvisibility, shadow, second bounce在hybird管线实现下，争取能在安卓上跑出一个可用的效果。
+    - 初步实现了一个Hybird Rendering管线，Direction Light和Indirect light分别两条ray，通过32帧的reproject temporal sample，得到了一个较好的groundtruth效果。Indirect打到物件，目前是magic了一个0.2的能量衰减，改进可考虑reproject到上一帧的结果，有值的话直接复用。
 
 ## Building
 

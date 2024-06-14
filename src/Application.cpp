@@ -242,9 +242,9 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.CamPosY = modelViewController_.Position()[1];
     stats.CamPosZ = modelViewController_.Position()[2];
 
-    stats.InstanceCount = scene_->Nodes().size();
+    stats.InstanceCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
-    stats.TextureCount = scene_->TextureSamplers().size();
+    stats.TextureCount = static_cast<uint32_t>(scene_->TextureSamplers().size());
     stats.ComputePassCount = 0;
 
     if (userSettings_.IsRayTraced)
@@ -310,7 +310,8 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
     if (!Renderer::HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse())
+        userInterface_->WantsToCaptureMouse()
+        )
     {
         return;
     }
@@ -342,7 +343,6 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
     {
         return;
     }
-
     const auto prevFov = userSettings_.FieldOfView;
     userSettings_.FieldOfView = std::clamp(
         static_cast<float>(prevFov - yoffset),
@@ -350,6 +350,18 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
         UserSettings::FieldOfViewMaxValue);
 
     resetAccumulation_ = prevFov != userSettings_.FieldOfView;
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnTouch(bool down, double xpos, double ypos)
+{
+    modelViewController_.OnTouch(down, xpos, ypos);
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
+{
+    modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
 template <typename Renderer>
@@ -633,4 +645,5 @@ template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
 template class NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>;
 template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
 template class NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>;
+template class NextRendererApplication<Vulkan::HybridDeferred::HybridDeferredRenderer>;
 template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;

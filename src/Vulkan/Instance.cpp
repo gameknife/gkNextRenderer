@@ -32,6 +32,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 #if ANDROID
   	extensions.push_back("VK_KHR_surface");
   	extensions.push_back("VK_KHR_android_surface");
+	extensions.push_back("VK_EXT_swapchain_colorspace");
 #endif
 	// Create the Vulkan instance.
 	VkApplicationInfo appInfo = {};

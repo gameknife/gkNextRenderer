@@ -16,6 +16,8 @@ void ModelViewController::Reset(const glm::mat4& modelView)
 	mouseLeftPressed_ = false;
 	mouseRightPressed_ = false;
 
+	mouseSensitive_ = 0.5;
+
 	UpdateVectors();
 }
 
@@ -49,8 +51,8 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 
 bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 {
-	const auto deltaX = static_cast<float>(xpos - mousePosX_);
-	const auto deltaY = static_cast<float>(ypos - mousePosY_);
+	const auto deltaX = static_cast<float>(xpos - mousePosX_) * mouseSensitive_;
+	const auto deltaY = static_cast<float>(ypos - mousePosY_) * mouseSensitive_;
 
 	if (mouseLeftPressed_)
 	{
@@ -83,6 +85,16 @@ bool ModelViewController::OnMouseButton(const int button, const int action, cons
 		mouseRightPressed_ = action == GLFW_PRESS;
 	}
 #endif
+	return true;
+}
+
+bool ModelViewController::OnTouch(bool down, double xpos, double ypos)
+{
+	mouseRightPressed_ = down;
+
+	mousePosX_ = xpos;
+	mousePosY_ = ypos;
+
 	return true;
 }
 

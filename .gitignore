@@ -332,7 +332,8 @@ ASALocalRun/
 # Extras
 build
 
+assets/shaders/Platform.glsl
+
 android/.gradle/
 android/assets/
-
 android/local.properties

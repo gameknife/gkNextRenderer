@@ -1,7 +1,7 @@
-#include "Application.hpp"
+#include "RayTraceBaseRenderer.hpp"
 #include "BottomLevelAccelerationStructure.hpp"
 #include "DeviceProcedures.hpp"
-#include "RayQueryRenderer.hpp"
+#include "RayTraceBaseRenderer.hpp"
 #include "ShaderBindingTable.hpp"
 #include "TopLevelAccelerationStructure.hpp"
 #include "Assets/Model.hpp"
@@ -19,17 +19,8 @@
 #include <iostream>
 #include <numeric>
 
-#include "RayTracingPipeline.hpp"
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
-
 namespace Vulkan::RayTracing
 {
-    struct DenoiserPushConstantData
-    {
-        uint32_t pingpong;
-        uint32_t stepsize;
-    };
-
     namespace
     {
         template <class TAccelerationStructure>
@@ -49,21 +40,21 @@ namespace Vulkan::RayTracing
         }
     }
 
-    RayQueryRenderer::RayQueryRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
+    RayTraceBaseRenderer::RayTraceBaseRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(windowConfig, presentMode, enableValidationLayers)
     {
     }
 
-    RayQueryRenderer::~RayQueryRenderer()
+    RayTraceBaseRenderer::~RayTraceBaseRenderer()
     {
-        RayQueryRenderer::DeleteSwapChain();
+        RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
         deviceProcedures_.reset();         
     }
 
-    void RayQueryRenderer::SetPhysicalDeviceImpl(
+    void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
         VkPhysicalDevice physicalDevice,
         std::vector<const char*>& requiredExtensions,
         VkPhysicalDeviceFeatures& deviceFeatures,
@@ -93,15 +84,15 @@ namespace Vulkan::RayTracing
         Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayQueryFeatures);
     }
 
-    void RayQueryRenderer::OnDeviceSet()
+    void RayTraceBaseRenderer::OnDeviceSet()
     {
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
         
-        deviceProcedures_.reset(new DeviceProcedures(Device(), false, true));
+        deviceProcedures_.reset(new DeviceProcedures(Device(), true, true));
         rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
-    void RayQueryRenderer::CreateAccelerationStructures()
+    void RayTraceBaseRenderer::CreateAccelerationStructures()
     {
         const auto timer = std::chrono::high_resolution_clock::now();
 
@@ -121,7 +112,7 @@ namespace Vulkan::RayTracing
         std::cout << "- built acceleration structures in " << elapsed << "s" << std::endl;
     }
 
-    void RayQueryRenderer::DeleteAccelerationStructures()
+    void RayTraceBaseRenderer::DeleteAccelerationStructures()
     {
         topAs_.clear();
         instancesBuffer_.reset();
@@ -138,185 +129,29 @@ namespace Vulkan::RayTracing
         bottomBufferMemory_.reset();
     }
 
-    void RayQueryRenderer::CreateSwapChain()
+    void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-
-        CreateOutputImage();
-
-        rayTracingPipeline_.reset(new RayQueryPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *outputImageView_, UniformBuffers(), GetScene()));
-        // denoiserPipeline_.reset(new DenoiserPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *pingpongImage0View_,
-        //                                              *pingpongImage1View_, *gbufferImageView_, *albedoImageView_,
-        //                                              UniformBuffers(), GetScene()));
-        // composePipeline_.reset(new ComposePipeline(*deviceProcedures_, SwapChain(), *pingpongImage0View_, *pingpongImage1View_,
-        //                                            *albedoImageView_, *outputImageView_, *motionVectorImageView_, UniformBuffers()));
-        //
-        // accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
-        //     *accumulationImageView_,
-        //     *pingpongImage0View_,
-        //     *pingpongImage1View_,
-        //     *motionVectorImageView_,
-        //     *visibilityBufferImageView_,
-        //     *visibility1BufferImageView_,
-        //     *validateImageView_,
-        //     UniformBuffers(), GetScene()));
     }
 
-    void RayQueryRenderer::DeleteSwapChain()
+    void RayTraceBaseRenderer::DeleteSwapChain()
     {
-        //accumulatePipeline_.reset();
-        rayTracingPipeline_.reset();
-        //denoiserPipeline_.reset();
-        //composePipeline_.reset();
-        outputImageView_.reset();
-        outputImage_.reset();
-        //pingpongImage0_.reset();
-        //pingpongImage1_.reset();
-        outputImageMemory_.reset();
-        // accumulationImageView_.reset();
-        // accumulationImage_.reset();
-        // accumulationImageMemory_.reset();
-        // gbufferImage_.reset();
-        // gbufferImageMemory_.reset();
-        // gbufferImageView_.reset();
-        // albedoImage_.reset();
-        // albedoImageView_.reset();
-        // albedoImageMemory_.reset();
-        //
-        // visibilityBufferImage_.reset();
-        // visibilityBufferImageMemory_.reset();
-        // visibilityBufferImageView_.reset();
-        //
-        // visibility1BufferImage_.reset();
-        // visibility1BufferImageMemory_.reset();
-        // visibility1BufferImageView_.reset();
-        //
-        // validateImage_.reset(0);
-        // validateImageMemory_.reset(0);
-        // validateImageView_.reset(0);
-        //
-        // motionVectorImage_.reset();
-        // motionVectorImageView_.reset();
-        // motionVectorImageMemory_.reset();
-        
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
     }
 
-    void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        const auto extent = SwapChain().Extent();
-
-        VkDescriptorSet descriptorSets[] = {rayTracingPipeline_->DescriptorSet(imageIndex)};
-
-        VkImageSubresourceRange subresourceRange = {};
-        subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        subresourceRange.baseMipLevel = 0;
-        subresourceRange.levelCount = 1;
-        subresourceRange.baseArrayLayer = 0;
-        subresourceRange.layerCount = 1;
-
-        // Acquire destination images for rendering.
-        ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange, 0,
-                                   VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        
-        
-        // Execute ray tracing shaders.
-        {
-            SCOPED_GPU_TIMER("rt pass");
-            VkDescriptorSet DescriptorSets[] = {rayTracingPipeline_->DescriptorSet(imageIndex)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    rayTracingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
-
-            // ImageMemoryBarrier::Insert(commandBuffer, pingpongImage0_->Handle(), subresourceRange, 0,
-            //                         VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            //
-            // ImageMemoryBarrier::Insert(commandBuffer, gbufferImage_->Handle(), subresourceRange,
-            //                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-            //                         VK_IMAGE_LAYOUT_GENERAL);
-            //
-            // ImageMemoryBarrier::Insert(commandBuffer, albedoImage_->Handle(), subresourceRange,
-            //                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-            //                         VK_IMAGE_LAYOUT_GENERAL);
-            //
-            // // accumulate with reproject
-            // ImageMemoryBarrier::Insert(commandBuffer, motionVectorImage_->Handle(), subresourceRange,
-            //     VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
-            //     VK_IMAGE_LAYOUT_GENERAL);
-        }
-
-        // accumulate with reproject
-        // frame0: new + image 0 -> image 1
-        // frame1: new + image 1 -> image 0
-        {
-            // SCOPED_GPU_TIMER("reproject pass");
-            // VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
-            // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
-            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            //                         accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            // vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
-        }
-        
-        // compose with first bounce
-        {
-            SCOPED_GPU_TIMER("compose pass");
-
-            // DenoiserPushConstantData pushData;
-            // pushData.pingpong = frameCount_ % 2;
-            // pushData.stepsize = 1;
-            //
-            // vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-            //                    0, sizeof(DenoiserPushConstantData), &pushData);
-            //
-            // VkDescriptorSet denoiserDescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
-            // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
-            // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            //                         composePipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-            // vkCmdDispatch(commandBuffer, extent.width / 8, extent.height / 4, 1);
-        
-
-            // Acquire output image and swap-chain image for copying.
-            ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-                                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        }
-
-        // Copy output image into swap-chain image.
-        VkImageCopy copyRegion;
-        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.srcOffset = {0, 0, 0};
-        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.dstOffset = {0, 0, 0};
-        copyRegion.extent = {extent.width, extent.height, 1};
-
-        vkCmdCopyImage(commandBuffer,
-                       outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &copyRegion);
-
-        ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
-                                   VK_ACCESS_TRANSFER_WRITE_BIT,
-                                   0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-    }
-
-    void RayQueryRenderer::OnPreLoadScene()
+    void RayTraceBaseRenderer::OnPreLoadScene()
     {
         Vulkan::VulkanBaseRenderer::OnPreLoadScene();
         DeleteAccelerationStructures();
     }
 
-    void RayQueryRenderer::OnPostLoadScene()
+    void RayTraceBaseRenderer::OnPostLoadScene()
     {
         Vulkan::VulkanBaseRenderer::OnPostLoadScene();
         CreateAccelerationStructures();
     }
 
-    void RayQueryRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
+    void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
@@ -380,7 +215,7 @@ namespace Vulkan::RayTracing
         }
     }
 
-    void RayQueryRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
+    void RayTraceBaseRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
@@ -435,23 +270,5 @@ namespace Vulkan::RayTracing
         topAs_[0].Generate(commandBuffer, *topScratchBuffer_, 0, *topBuffer_, 0);
 
         debugUtils.SetObjectName(topAs_[0].Handle(), "TLAS");
-    }
-
-    void RayQueryRenderer::CreateOutputImage()
-    {
-        const auto extent = SwapChain().Extent();
-        const auto format = SwapChain().Format();
-        const auto tiling = VK_IMAGE_TILING_OPTIMAL;
-        
-        outputImage_.reset(new Image(Device(), extent, format, tiling,
-                                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-        outputImageMemory_.reset(new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-        outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
-        
-        const auto& debugUtils = Device().DebugUtils();
-        
-        debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
-        debugUtils.SetObjectName(outputImageMemory_->Handle(), "Output Image Memory");
-        debugUtils.SetObjectName(outputImageView_->Handle(), "Output ImageView");
     }
 }

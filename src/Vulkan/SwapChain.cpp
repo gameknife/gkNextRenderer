@@ -132,6 +132,16 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 		}
 	}
 
+	// display p3 for android
+	for (const auto& format : formats)
+	{
+		
+		if (format.colorSpace == VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT)
+		{
+			return format;
+		}
+	}
+	
 	// sdr fallback
 	for (const auto& format : formats)
 	{

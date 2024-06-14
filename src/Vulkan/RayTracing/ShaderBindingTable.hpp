@@ -33,7 +33,7 @@ namespace Vulkan::RayTracing
 
 		ShaderBindingTable(
 			const DeviceProcedures& deviceProcedures,
-			const RayTracingPipeline& rayTracingPipeline,
+			VkPipeline rayTracingPipeline,
 			const RayTracingProperties& rayTracingProperties,
 			const std::vector<Entry>& rayGenPrograms,
 			const std::vector<Entry>& missPrograms,

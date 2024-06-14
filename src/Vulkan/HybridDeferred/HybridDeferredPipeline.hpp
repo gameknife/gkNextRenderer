@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 
+
+
 namespace Assets
 {
 	class Scene;
@@ -18,23 +20,28 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class DescriptorSetManager;
+
+	namespace RayTracing
+	{
+		class TopLevelAccelerationStructure;
+	}
 }
 
-namespace Vulkan::PipelineCommon
+
+
+namespace Vulkan::HybridDeferred
 {
-	class AccumulatePipeline final
+	class HybridShadingPipeline final
 	{
 	public:
-		VULKAN_NON_COPIABLE(AccumulatePipeline)
+		VULKAN_NON_COPIABLE(HybridShadingPipeline)
 	
-		AccumulatePipeline(
-			const SwapChain& swapChain, 
-			const ImageView& sourceImageView, const ImageView& accumulateImageView, const ImageView& prevAccumulateImageView, const ImageView& motionVectorImageView,
-			const ImageView& visibilityBufferImageView,const ImageView& prevVisibilityBufferImageView,
-			const ImageView& outputImage1View,
+		HybridShadingPipeline(
+			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
-		~AccumulatePipeline();
+		~HybridShadingPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }

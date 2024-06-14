@@ -14,6 +14,7 @@ public:
 	bool OnKey(int key, int scancode, int action, int mods);
 	bool OnCursorPosition(double xpos, double ypos);
 	bool OnMouseButton(int button, int action, int mods);
+	bool OnTouch(bool down, double xpos, double ypos);
 	bool UpdateCamera(double speed, double timeDelta);
 
 private:
@@ -50,4 +51,6 @@ private:
 	
 	bool mouseLeftPressed_{};
 	bool mouseRightPressed_{};
+
+	double mouseSensitive_ {};
 };

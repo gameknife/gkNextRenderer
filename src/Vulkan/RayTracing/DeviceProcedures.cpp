@@ -14,7 +14,8 @@ namespace
 		const auto func = reinterpret_cast<Func>(vkGetDeviceProcAddr(device.Handle(), name));
 		if (func == nullptr)
 		{
-			Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
+			// dont throw
+			//Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
 		}
 
 		return func;

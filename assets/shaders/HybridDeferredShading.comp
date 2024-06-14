@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_ray_query : require
 
 #include "Platform.glsl"
 #include "Material.glsl"
@@ -17,12 +18,9 @@ layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
+layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
 
 #include "Vertex.glsl"
-//layout(push_constant) uniform PushConsts {
-//    uint pingpong;
-//    uint stepsize;
-//} pushConsts;
 
 #if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -30,9 +28,43 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
+//-----------------------------------------------------------------------------
+struct RayPayload
+	//-----------------------------------------------------------------------------
+{
+	// Flag for hit or miss
+	uint    IsHit;
+
+	// Geometry instance ids
+	int     PrimitiveIndex;
+	int     InstanceID;
+	int     InstCustIndex;
+	// in     int   gl_GeometryIndexEXT;
+
+	// World space parameters
+	vec3   RayOrigin;
+	vec3   RayDirection;
+
+	// Ray hit info
+	float  HitDist;
+	uint   IsFrontFacing;
+
+	// Barycentric Coordinates
+	vec3    BaryCoords;
+};
+
+vec2 Mix(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
+{
+	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
+}
+
+vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics)
+{
+	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
+}
+
 Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
 {
-	// fetch primitive_index high 14bit as instance index and low 18bit as triangle index
 	uint instance_index = vBuffer.x;
 	uint triangle_index = vBuffer.y;
 
@@ -50,9 +82,6 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_
 		normals[i] = (proxy.World * vec4(v.Normal, 0)).xyz;
 		tex_coords[i] = v.TexCoord;
 		matid = v.MaterialIndex;
-		
-		// localspace, need transfer
-		 
 	}
 	
 	vec3 barycentrics;
@@ -132,54 +161,61 @@ float Schlick(const float cosine, const float refractionIndex)
 
 vec3 TraceRay(vec3 origin, vec3 direction)
 {
-    // screen space ray-marching
-    // if we hit light material, light-it
-	const vec4 campos = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
-	const ivec2 size = imageSize(MiniGBuffer);
-	const float stepLength = 0.06;
-	// brute force by step
-	for(int i = 0; i < 6; ++i)
-	{
-		origin += direction * (stepLength * i);
-		float rayDist = length(origin - campos.xyz);
-		vec4 hpos =  Camera.ViewProjection * vec4(origin, 1);
-		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
-		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y)
-		{
-			return vec3(1);
-		}
-		vec2 uv = vec2(ipos_new) / vec2(size) * 2.0 - 1.0;
-		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-		vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
-		uvec2 vbuffer = imageLoad(MiniGBuffer, ipos_new).rg;
+	rayQueryEXT rayQuery;
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, 0.01, direction, 100.0);
+	rayQueryProceedEXT(rayQuery);
+	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
+		RayPayload PayloadData;
+
+		const bool IsCommitted = true;
+
+		PayloadData.PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
+		PayloadData.InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
+		PayloadData.InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
+		// in     int   gl_GeometryIndexEXT;
+
+		// World space parameters
+		PayloadData.RayOrigin  = rayQueryGetWorldRayOriginEXT(rayQuery);
+		PayloadData.RayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
+
+		// Ray hit info
+		// const uint gl_HitKindFrontFacingTriangleEXT = 0xFEU;
+		// const uint gl_HitKindBackFacingTriangleEXT = 0xFFU;
+		PayloadData.HitDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
+		PayloadData.IsFrontFacing = 1;
+		bool IsFrontFacing = rayQueryGetIntersectionFrontFaceEXT(rayQuery, IsCommitted);
+		if(!IsFrontFacing)
+		PayloadData.IsFrontFacing = 0;
+
+		mat4x3 worldtoobject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
+
+		// Barycentric Coordinates
+		// Floating point barycentric coordinates of current intersection of ray.
+		// Three Barycentric coordinates are such that their sum is 1.
+		// This gives only two and expects us to calculate the third
+		vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
+		PayloadData.BaryCoords = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
+
+		const uvec2 offsets = Offsets[PayloadData.InstCustIndex];
+		const uint indexOffset = offsets.x;
+		const uint vertexOffset = offsets.y;
+		const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 0]);
+		const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 1]);
+		const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 2]);
+		const Material material = Materials[v0.MaterialIndex];
+
+		const vec3 localNormal = Mix(v0.Normal, v1.Normal, v2.Normal, PayloadData.BaryCoords);
+		const vec3 normal = normalize((localNormal * worldtoobject).xyz);
+		const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
+
+		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
 		
-		// fast hit
-		vec3 hitpos = get_position(ipos_new, vbuffer, campos.xyz, dir.xyz);
-		if(rayDist > length(hitpos - campos.xyz) + 0.2)
-		{
-			return vec3(0);
-		}
-		
-		// hit with mat
-		//Vertex v = get_material_data(ipos_new, primitive_index, campos.xyz, dir.xyz);
-		//if(rayDist > length(v.Position - campos.xyz) + 0.2)
-		{
-		//    Material mat = Materials[v.MaterialIndex];
-		//    if(mat.MaterialModel == MaterialDiffuseLight)
-		    {
-		//        return vec3(20);
-		    }
-		//    return vec3(0);
-		}
+		// may get from previous frame, if not, use the albedo and force lose a magic energy
+		return vec3(material.Diffuse * texColor * 0.2);
 	}
-	
-	// accleration by scene distance field
-	
-	// accleration by rayquery
-	
-	
 	return vec3(1);
 }
+
 
 // hsv to rgb
 vec3 hsv2rgb(vec3 c) {
@@ -250,11 +286,10 @@ void main() {
 	const float metalProb = mat.Metalness;
 	
 	vec3 skyColor = vec3(1);
-	
-	if(false)
+	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
+	if(true)
 	{
-		uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
-		int numSamples = 2;
+		int numSamples = 1;
 		
 		for( int i = 0; i < numSamples; i++ )
 		{
@@ -264,17 +299,13 @@ void main() {
 			AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
 			AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal )
 			);
-
-			//vec3 trace_dir = AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
-
-			// screen space ray query
-			//if( !TraceRay(v.Position, trace_dir) )
+			
 			{
 				// if miss, sample the sky	
 				vec3 hitColor = TraceRay(v.Position, trace_dir);
 				const float t = 0.5*(trace_dir.y + 1);
 				//const float t = step(0, trace_dir.y);
-				skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 8.0 * hitColor;
+				skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 1000.0 * hitColor;
 			}
 		}
 		skyColor = skyColor / float(numSamples);
@@ -284,29 +315,41 @@ void main() {
 		const float t = 0.5*(v.Normal.y + 1);
 		skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0) * 20, t);
 	}
-	
-    //albedo = mix(albedo, vec4(1,1,1,1), reflectProb);
 
-	const vec3 lightVector = normalize(vec3(5, 4, 3));
-    const float d = max(dot(lightVector, normalize(v.Normal.rgb)) * 30.0, 0.5);
+    vec4 outColor = albedo * vec4(skyColor,1);
     
-    vec4 outColor = albedo * d + albedo * vec4(skyColor,1);
+    if(true)
+    {
+    	const vec3 lightVector = normalize(vec3(5, 4, 3));
+        float d = max(dot(lightVector, normalize(v.Normal.rgb)),0.0) * 100.0;
+        
+        d = mix(d, 0.0, metalProb);
+    
+        const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(1.0f / 180.f * 3.14159f)), lightVector);
+        
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, 0.01, lightVectorCone, 10000.0);
+        rayQueryProceedEXT(rayQuery);
+        if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
+            d = 0.0;
+        }
+        outColor += albedo * d;
+    }
 
-	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
-
+//	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 50.0);
 //  visibiliy visualizer	
 //	uint triangle_index = primitive_index & 0x000FFFFF;
 //	outColor.rgb = hsv2rgb(vec3(RandomFloat(triangle_index),0.2,0.5));
 	
     imageStore(OutImage, ipos, outColor);
-	
+
 	// disable for benchmark now
 	// calculate the motion vector
-//	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
-//	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	
-//	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
-//	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	vec2 motion = prevfpos - currfpos;
-//	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
+	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 motion = prevfpos - currfpos;
+	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 }
