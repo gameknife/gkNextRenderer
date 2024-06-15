@@ -78,6 +78,8 @@ set(src_files_vulkan
 	Vulkan/PipelineLayout.hpp
 	Vulkan/RenderPass.cpp
 	Vulkan/RenderPass.hpp
+	Vulkan/RenderImage.cpp
+	Vulkan/RenderImage.hpp
 	Vulkan/Sampler.cpp
 	Vulkan/Sampler.hpp
 	Vulkan/Semaphore.cpp
