@@ -186,7 +186,6 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
-
 	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 

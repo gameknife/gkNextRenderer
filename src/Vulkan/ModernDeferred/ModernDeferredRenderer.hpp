@@ -8,6 +8,11 @@
 #include <vector>
 #include <memory>
 
+namespace Vulkan
+{
+	class RenderImage;
+}
+
 namespace Vulkan::PipelineCommon
 {
 	class AccumulatePipeline;
@@ -38,21 +43,11 @@ namespace Vulkan::ModernDeferred
 	private:
 		std::unique_ptr<class VisibilityPipeline> visibilityPipeline_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
-		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 
-		std::unique_ptr<Image> visibilityBufferImage_;
-		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
-		std::unique_ptr<ImageView> visibilityBufferImageView_;
-		
-		std::unique_ptr<Image> outputImage_;
-		std::unique_ptr<DeviceMemory> outputImageMemory_;
-		std::unique_ptr<ImageView> outputImageView_;
-		
-		std::unique_ptr<Image> motionVectorImage_;
-		std::unique_ptr<DeviceMemory> motionVectorImageMemory_;
-		std::unique_ptr<ImageView> motionVectorImageView_;
-		
+		std::unique_ptr<RenderImage> rtVisibilityBuffer_;
+		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<RenderImage> rtMotionVector_;
 	};
 
 }

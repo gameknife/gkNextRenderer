@@ -8,7 +8,10 @@
 #include <vector>
 #include <memory>
 
-
+namespace Vulkan
+{
+	class RenderImage;
+}
 
 namespace Assets
 {
@@ -40,21 +43,10 @@ namespace Vulkan::LegacyDeferred
 		// simple gbuffer, shading mode may increase
 		// gbuffer0 albedo, gbuffer1 normal+roughness. gbuffer2 reserved
 		// simulating total size of 32 + 128 + 32 = 192 bits
-		std::unique_ptr<Image> gbuffer0BufferImage_;
-		std::unique_ptr<DeviceMemory> gbufferBuffer0ImageMemory_;
-		std::unique_ptr<ImageView> gbufferBuffer0ImageView_;
-		
-		std::unique_ptr<Image> gbuffer1BufferImage_;
-		std::unique_ptr<DeviceMemory> gbufferBuffer1ImageMemory_;
-		std::unique_ptr<ImageView> gbufferBuffer1ImageView_;
-
-		std::unique_ptr<Image> gbuffer2BufferImage_;
-		std::unique_ptr<DeviceMemory> gbufferBuffer2ImageMemory_;
-		std::unique_ptr<ImageView> gbufferBuffer2ImageView_;
-		
-		std::unique_ptr<Image> outputImage_;
-		std::unique_ptr<DeviceMemory> outputImageMemory_;
-		std::unique_ptr<ImageView> outputImageView_;
+		std::unique_ptr<RenderImage> rtGBuffer0_;
+		std::unique_ptr<RenderImage> rtGBuffer1_;
+		std::unique_ptr<RenderImage> rtGBuffer2_;
+		std::unique_ptr<RenderImage> rtOutput_;
 	};
 
 }

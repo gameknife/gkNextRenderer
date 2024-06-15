@@ -9,6 +9,7 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
+#include "Vulkan/RenderImage.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
@@ -37,59 +38,21 @@ void LegacyDeferredRenderer::CreateSwapChain()
 
 	gbufferPipeline_.reset(new GBufferPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 
-	gbuffer0BufferImage_.reset(new Image(Device(), extent,
-	VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	gbufferBuffer0ImageMemory_.reset(
-		new DeviceMemory(gbuffer0BufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	gbufferBuffer0ImageView_.reset(new ImageView(Device(), gbuffer0BufferImage_->Handle(),
-		VK_FORMAT_B8G8R8A8_UNORM,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-	
-	gbuffer1BufferImage_.reset(new Image(Device(), extent,
-		VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+	rtGBuffer0_.reset(new RenderImage(Device(), extent, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	gbufferBuffer1ImageMemory_.reset(
-		new DeviceMemory(gbuffer1BufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	gbufferBuffer1ImageView_.reset(new ImageView(Device(), gbuffer1BufferImage_->Handle(),
-		VK_FORMAT_R16G16B16A16_SFLOAT,
-		VK_IMAGE_ASPECT_COLOR_BIT));
 
-	gbuffer2BufferImage_.reset(new Image(Device(), extent,
-	VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-	VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
-	gbufferBuffer2ImageMemory_.reset(
-		new DeviceMemory(gbuffer2BufferImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	gbufferBuffer2ImageView_.reset(new ImageView(Device(), gbuffer2BufferImage_->Handle(),
-		VK_FORMAT_B8G8R8A8_UNORM,
-		VK_IMAGE_ASPECT_COLOR_BIT));
-	
-	outputImage_.reset(new Image(Device(), extent, format,
-		VK_IMAGE_TILING_OPTIMAL,
+	rtGBuffer1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+
+	rtGBuffer2_.reset(new RenderImage(Device(), extent, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+
+	rtOutput_.reset(new RenderImage(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-	outputImageMemory_.reset(
-		new DeviceMemory(outputImage_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	outputImageView_.reset(new ImageView(Device(), outputImage_->Handle(),
-		format,
-		VK_IMAGE_ASPECT_COLOR_BIT));
 
 	// MRT
-	deferredFrameBuffer_.reset(new FrameBuffer(*gbufferBuffer0ImageView_, *gbufferBuffer1ImageView_, *gbufferBuffer2ImageView_, gbufferPipeline_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), *gbufferBuffer0ImageView_,
-		*gbufferBuffer1ImageView_,
-		*gbufferBuffer2ImageView_,
-		*outputImageView_, UniformBuffers(), GetScene()));
-
-	const auto& debugUtils = Device().DebugUtils();
-	debugUtils.SetObjectName(outputImage_->Handle(), "Output Image");
-	
-	debugUtils.SetObjectName(gbuffer0BufferImage_->Handle(), "GBuffer0 Image");
-	debugUtils.SetObjectName(gbuffer1BufferImage_->Handle(), "GBuffer1 Image");
-	debugUtils.SetObjectName(gbuffer2BufferImage_->Handle(), "GBuffer2 Image");
-
-	debugUtils.SetObjectName(gbufferBuffer0ImageView_->Handle(), "GBuffer0 Image View");
-	debugUtils.SetObjectName(gbufferBuffer1ImageView_->Handle(), "GBuffer1 Image View");
-	debugUtils.SetObjectName(gbufferBuffer2ImageView_->Handle(), "GBuffer2 Image View");
+	deferredFrameBuffer_.reset(new FrameBuffer(rtGBuffer0_->GetImageView(), rtGBuffer1_->GetImageView(), rtGBuffer2_->GetImageView(), gbufferPipeline_->RenderPass()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), rtGBuffer0_->GetImageView(), rtGBuffer1_->GetImageView(), rtGBuffer2_->GetImageView(), rtOutput_->GetImageView(), UniformBuffers(), GetScene()));
 }
 
 void LegacyDeferredRenderer::DeleteSwapChain()
@@ -98,21 +61,10 @@ void LegacyDeferredRenderer::DeleteSwapChain()
 	deferredShadingPipeline_.reset();
 	deferredFrameBuffer_.reset();
 
-	gbuffer0BufferImage_.reset();
-	gbufferBuffer0ImageMemory_.reset();
-	gbufferBuffer0ImageView_.reset();
-	
-	gbuffer1BufferImage_.reset();
-	gbufferBuffer1ImageMemory_.reset();
-	gbufferBuffer1ImageView_.reset();
-	
-	gbuffer2BufferImage_.reset();
-	gbufferBuffer2ImageMemory_.reset();
-	gbufferBuffer2ImageView_.reset();
-
-	outputImage_.reset();
-	outputImageMemory_.reset();
-	outputImageView_.reset();
+	rtGBuffer0_.reset();
+	rtGBuffer1_.reset();
+	rtGBuffer2_.reset();
+	rtOutput_.reset();
 
 	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 }
@@ -126,15 +78,12 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
 
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
-					   0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-					   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
-				   0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-				   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
-				   0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-				   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	rtGBuffer0_->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+							   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	rtGBuffer1_->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+							   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	rtGBuffer2_->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+							   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);	
 
 	std::array<VkClearValue, 4> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
@@ -172,18 +121,16 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		}
 		vkCmdEndRenderPass(commandBuffer);
 
-		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-				   0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-				   VK_IMAGE_LAYOUT_GENERAL);
-		ImageMemoryBarrier::Insert(commandBuffer, gbuffer0BufferImage_->Handle(), subresourceRange,
-						   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-						   VK_IMAGE_LAYOUT_GENERAL);
-		ImageMemoryBarrier::Insert(commandBuffer, gbuffer1BufferImage_->Handle(), subresourceRange,
-					   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-					   VK_IMAGE_LAYOUT_GENERAL);
-		ImageMemoryBarrier::Insert(commandBuffer, gbuffer2BufferImage_->Handle(), subresourceRange,
-					   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-					   VK_IMAGE_LAYOUT_GENERAL);
+		rtOutput_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+								 VK_IMAGE_LAYOUT_GENERAL);
+		rtGBuffer0_->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+
+		rtGBuffer1_->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+
+		rtGBuffer2_->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
 	}
 	
 
@@ -201,9 +148,8 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
 #endif
 		// copy to swap-buffer
-		ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
-							   VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-							   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
 								   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -220,7 +166,7 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
-				   outputImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				   1, &copyRegion);
 
