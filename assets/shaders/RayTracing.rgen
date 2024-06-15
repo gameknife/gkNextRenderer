@@ -14,10 +14,8 @@ layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 
 layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
-layout(binding = 12, rgba32f) uniform image2D GBufferImage;
-layout(binding = 13, rgba16f) uniform image2D AlbedoImage;
-layout(binding = 14, r32ui) uniform uimage2D VisibilityBuffer;
-layout(binding = 15, r32ui) uniform uimage2D Visibility1Buffer;
+layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
+layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
@@ -39,17 +37,8 @@ vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
 {
 	return vec3(0);
 }
-
-GetRayColorGen(GetRayColor15,GetRayColorEnd)
-GetRayColorGen(GetRayColor14,GetRayColor15)
-GetRayColorGen(GetRayColor13,GetRayColor14)
-GetRayColorGen(GetRayColor12,GetRayColor13)
-GetRayColorGen(GetRayColor11,GetRayColor12)
-GetRayColorGen(GetRayColor10,GetRayColor11)
-GetRayColorGen(GetRayColor9,GetRayColor10)
-GetRayColorGen(GetRayColor8,GetRayColor9)
-GetRayColorGen(GetRayColor7,GetRayColor8)
-GetRayColorGen(GetRayColor6,GetRayColor7)
+		
+GetRayColorGen(GetRayColor6,GetRayColorEnd)
 GetRayColorGen(GetRayColor5,GetRayColor6)
 GetRayColorGen(GetRayColor4,GetRayColor5)
 GetRayColorGen(GetRayColor3,GetRayColor4)
@@ -144,7 +133,7 @@ void main()
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
 		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
         // physical camera
-		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
+		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
 		// accumulate the raycolor
 
 		vec4 s_albedo = vec4(0);
@@ -183,6 +172,7 @@ void main()
 	}
     
     pixelColor = pixelColor / sampleTimes;
+	//pixelColor = clamp(pixelColor, 0.0, 1000.0);
 
 	//imageStore(AlbedoImage, ipos, albedo / sampleTimes);
 		
@@ -191,7 +181,7 @@ void main()
 		const uint64_t deltaTime = clockARB() - clock;
 		const float heatmapScale = 1000000.0f * Camera.HeatmapScale * Camera.HeatmapScale;
 		const float deltaTimeScaled = clamp(float(deltaTime) / heatmapScale, 0.0f, 1.0f);
-		pixelColor = heatmap(deltaTimeScaled);
+		pixelColor = heatmap(deltaTimeScaled) * 50.0;
 	}
 
 	// output to accumulation directly

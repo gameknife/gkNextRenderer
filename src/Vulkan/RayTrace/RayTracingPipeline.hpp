@@ -35,8 +35,6 @@ namespace Vulkan::RayTracing
 			const TopLevelAccelerationStructure& accelerationStructure,
 			const ImageView& accumulationImageView,
 			const ImageView& motionVectorImageView,
-			const ImageView& gbufferImageView,
-			const ImageView& albedoImageView,
 			const ImageView& visibilityBufferImageView,
 			const ImageView& visibility1BufferImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,

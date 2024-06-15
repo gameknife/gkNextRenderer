@@ -272,13 +272,11 @@ void VulkanBaseRenderer::DrawFrame()
 		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
 	}
 
-	
-
 	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
 	gpuTimer_->Reset(commandBuffer);
 
 	{
-		SCOPED_GPU_TIMER("full");
+		SCOPED_GPU_TIMER("gpu time");
 		Render(commandBuffer, imageIndex);
 	}
 	

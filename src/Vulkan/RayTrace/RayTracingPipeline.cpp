@@ -25,8 +25,6 @@ namespace Vulkan::RayTracing
         const TopLevelAccelerationStructure& accelerationStructure,
         const ImageView& accumulationImageView,
         const ImageView& motionVectorImageView,
-        const ImageView& gbufferImageView,
-        const ImageView& albedoImageView,
         const ImageView& visibilityBufferImageView,
         const ImageView& visibility1BufferImageView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers,
@@ -70,8 +68,6 @@ namespace Vulkan::RayTracing
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -97,18 +93,7 @@ namespace Vulkan::RayTracing
             VkDescriptorImageInfo motionVectorImageInfo = {};
             motionVectorImageInfo.imageView = motionVectorImageView.Handle();
             motionVectorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            // Gbuffer image
-            VkDescriptorImageInfo gbufferImageInfo = {};
-            gbufferImageInfo.imageView = gbufferImageView.Handle();
-            gbufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            // albedo
-            VkDescriptorImageInfo albedoImageInfo = {};
-            albedoImageInfo.imageView = albedoImageView.Handle();
-            albedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-
+            
             VkDescriptorImageInfo visibilityBufferImageInfo = {};
             visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
             visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -169,10 +154,8 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
                 descriptorSets.Bind(i, 10, accumulationImageInfo),
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
-                descriptorSets.Bind(i, 12, gbufferImageInfo),
-                descriptorSets.Bind(i, 13, albedoImageInfo),
-                descriptorSets.Bind(i, 14, visibilityBufferImageInfo),
-                descriptorSets.Bind(i, 15, visibility1BufferImageInfo),
+                descriptorSets.Bind(i, 12, visibilityBufferImageInfo),
+                descriptorSets.Bind(i, 13, visibility1BufferImageInfo),
             };
 
             // Procedural buffer (optional)
