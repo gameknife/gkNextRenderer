@@ -36,6 +36,7 @@ void main()
 
         Ray.Attenuation = vec3(1);
 		Ray.Distance = -10;
+		Ray.Exit = 1;
 		Ray.EmitColor = vec4(skyColor, -1);
 		Ray.pdf = 1.0;
 	}
@@ -43,6 +44,7 @@ void main()
 	{
 		Ray.Attenuation = vec3(0);
 		Ray.Distance = -10;
+		Ray.Exit = 1;
 		Ray.EmitColor = vec4(0);
 		Ray.pdf = 1.0;
 	}

@@ -76,7 +76,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
-    ubo.PrevViewProjection = prevUBO_.RandomSeed != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
+    ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
