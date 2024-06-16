@@ -180,7 +180,7 @@ namespace Assets
                                                      mat.pbrMetallicRoughness.baseColorFactor[1],
                                                      mat.pbrMetallicRoughness.baseColorFactor[2]);
 
-            m.Diffuse = glm::vec4(diffuseColor, 1.0);
+            m.Diffuse = glm::vec4(sqrt(diffuseColor), 1.0);
 
             if (m.Metalness > .95)
             {

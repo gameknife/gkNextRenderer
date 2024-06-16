@@ -32,7 +32,7 @@ void main()
 		const float t = 0.5*(rayDirection.y + 1);
         //const vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), t);
 		// max value is 1000.0nit
-		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 1000.0;
+		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
 
         Ray.Attenuation = vec3(1);
 		Ray.Distance = -10;

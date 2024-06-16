@@ -88,8 +88,10 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159), 0.75, cosf(userSettings_.SunRotation * 3.14159) )), 0.0 );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
+    ubo.SkyIntensity = userSettings_.SkyIntensity;
+    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
     ubo.HasSky = init.HasSky;
-    ubo.HasSun = init.HasSun;
+    ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
     ubo.ShowHeatmap = userSettings_.ShowHeatmap;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -377,7 +379,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     std::vector<Assets::LightObject> lights;
 
     // texture id 0: global sky
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/StinsonBeach.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/HDR_112_River_Road_2_Env.hdr"), Vulkan::SamplerConfig()));
 
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 

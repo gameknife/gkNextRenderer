@@ -32,9 +32,11 @@ namespace Assets
 		float DepthPhi;
 		float NormalPhi;
 		float PaperWhiteNit;
-		
+
 		glm::vec4 SunDirection;
 		glm::vec4 SunColor;
+		glm::vec4 BackGroundColor;
+		float SkyIntensity;
 		
 		uint32_t TotalFrames;
 		uint32_t TotalNumberOfSamples;
