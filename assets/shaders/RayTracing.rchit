@@ -2,9 +2,12 @@
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
+
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
+layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
@@ -45,9 +48,10 @@ void main()
 	const vec3 localNormal = Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics);
 	const vec3 normal = normalize((localNormal * gl_WorldToObjectEXT).xyz);
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
-
+	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
-	Ray.primitiveId = gl_InstanceID << 16 | v0.MaterialIndex;
+	Ray.primitiveId = (gl_InstanceID + 1) << 16 | v0.MaterialIndex;
 	Ray.BounceCount++;
+	Ray.Exit = 0;
 	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }

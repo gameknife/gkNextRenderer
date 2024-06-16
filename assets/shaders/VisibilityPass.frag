@@ -11,5 +11,5 @@ layout(location = 0) out uvec2 g_out_visibility;
 void main() 
 {
 	g_out_visibility.y = g_primitive_index;
-	g_out_visibility.x = g_instance_index;
+	g_out_visibility.x = g_instance_index + 1;
 }

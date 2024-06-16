@@ -21,6 +21,7 @@ namespace Assets
         float ControlSpeed;
         bool GammaCorrection;
         bool HasSky;
+        bool HasSun;
     };
 
     struct alignas(16) NodeProxy final

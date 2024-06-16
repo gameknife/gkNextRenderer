@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
-#include "Vulkan/RayTracing/RayTracingProperties.hpp"
 
 namespace Vulkan
 {
@@ -11,6 +9,7 @@ namespace Vulkan
 		class AccumulatePipeline;
 	}
 
+	class RenderImage;
 	class CommandBuffers;
 	class Buffer;
 	class DeviceMemory;
@@ -45,49 +44,17 @@ namespace Vulkan::RayTracing
 		
 		void CreateOutputImage();
 
-		std::unique_ptr<Image> accumulationImage_;
-		std::unique_ptr<DeviceMemory> accumulationImageMemory_;
-		std::unique_ptr<ImageView> accumulationImageView_;
+		std::unique_ptr<RenderImage> rtAccumulation_;
+		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<RenderImage> rtMotionVector_;
+		std::unique_ptr<RenderImage> rtPingPong0;
+		std::unique_ptr<RenderImage> rtPingPong1;
+		std::unique_ptr<RenderImage> rtVisibility0_;
+		std::unique_ptr<RenderImage> rtVisibility1_;
 
-		std::unique_ptr<Image> outputImage_;
-		std::unique_ptr<DeviceMemory> outputImageMemory_;
-		std::unique_ptr<ImageView> outputImageView_;
-
-		std::unique_ptr<Image> pingpongImage0_;
-		std::unique_ptr<DeviceMemory> pingpongImage0Memory_;
-		std::unique_ptr<ImageView> pingpongImage0View_;
-
-		std::unique_ptr<Image> pingpongImage1_;
-		std::unique_ptr<DeviceMemory> pingpongImage1Memory_;
-		std::unique_ptr<ImageView> pingpongImage1View_;
-		
-		std::unique_ptr<Image> gbufferImage_;
-		std::unique_ptr<DeviceMemory> gbufferImageMemory_;
-		std::unique_ptr<ImageView> gbufferImageView_;
-
-		std::unique_ptr<Image> albedoImage_;
-		std::unique_ptr<DeviceMemory> albedoImageMemory_;
-		std::unique_ptr<ImageView> albedoImageView_;
-
-		std::unique_ptr<Image> motionVectorImage_;
-		std::unique_ptr<DeviceMemory> motionVectorImageMemory_;
-		std::unique_ptr<ImageView> motionVectorImageView_;
-
-		std::unique_ptr<Image> visibilityBufferImage_;
-		std::unique_ptr<DeviceMemory> visibilityBufferImageMemory_;
-		std::unique_ptr<ImageView> visibilityBufferImageView_;
-
-		std::unique_ptr<Image> visibility1BufferImage_;
-		std::unique_ptr<DeviceMemory> visibility1BufferImageMemory_;
-		std::unique_ptr<ImageView> visibility1BufferImageView_;
-		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
-		std::unique_ptr<class DenoiserPipeline> denoiserPipeline_;
-		std::unique_ptr<class ComposePipeline> composePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
-
-		
 	};
 
 }

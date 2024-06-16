@@ -100,6 +100,7 @@ void SceneList::Simple(Assets::CameraInitialSate& camera, std::vector<Assets::No
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
+    camera.HasSun = true;
 
     Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/simple.glb"), camera, nodes, models, textures, materials, lights);
 }
@@ -115,7 +116,8 @@ void SceneList::Complex(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
-
+    camera.HasSun = true;
+    
     Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/complex.glb"), camera, nodes, models, textures, materials, lights);
 }
 
@@ -133,7 +135,8 @@ void SceneList::RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::v
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
-
+    camera.HasSun = true;
+    
     const bool isProc = true;
 
     std::mt19937 engine(42);
@@ -166,7 +169,7 @@ void SceneList::CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets
     camera.ControlSpeed = 200.0f;
     camera.GammaCorrection = true;
     camera.HasSky = false;
-    
+    camera.HasSun = false;
 
 
     int cbox_model = Model::CreateCornellBox(555, models, materials, lights);
@@ -196,6 +199,7 @@ void SceneList::LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets
     camera.ControlSpeed = 1.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
+    camera.HasSun = false;
     
     int lightModel = Model::CreateLightQuad(vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
@@ -215,7 +219,7 @@ void SceneList::Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.ControlSpeed = 1.0f;
     camera.GammaCorrection = true;
     camera.HasSky = false;
-
+    camera.HasSun = false;
 
     int lightModel = Model::CreateLightQuad(vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
                                    vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
@@ -235,7 +239,8 @@ void SceneList::LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::N
     camera.ControlSpeed = 0.1f;
     camera.GammaCorrection = true;
     camera.HasSky = false;
-
+    camera.HasSun = false;
+    
     Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/luxball.glb"),camera, nodes, models, textures, materials, lights);
 }
 
@@ -250,6 +255,7 @@ void SceneList::ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Asse
     camera.ControlSpeed = 2.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
-
+    camera.HasSun = true;
+    
     Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/moderndepart.glb"),camera, nodes, models, textures, materials, lights);
 }

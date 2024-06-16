@@ -23,7 +23,7 @@ void main()
 {
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
-	Ray.primitiveId = 999;
+	Ray.primitiveId = 0;
 	
 	if (Camera.HasSky)
 	{
@@ -32,17 +32,19 @@ void main()
 		const float t = 0.5*(rayDirection.y + 1);
         //const vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), t);
 		// max value is 1000.0nit
-		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * 1000.0;
+		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
 
-        Ray.Attenuation = skyColor;
-		Ray.Distance = -1;
+        Ray.Attenuation = vec3(1);
+		Ray.Distance = -10;
+		Ray.Exit = 1;
 		Ray.EmitColor = vec4(skyColor, -1);
 		Ray.pdf = 1.0;
 	}
 	else
 	{
 		Ray.Attenuation = vec3(0);
-		Ray.Distance = -1;
+		Ray.Distance = -10;
+		Ray.Exit = 1;
 		Ray.EmitColor = vec4(0);
 		Ray.pdf = 1.0;
 	}

@@ -15,10 +15,10 @@ float Schlick(const float cosine, const float refractionIndex)
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.FrontFace = dot(direction, normal) < 0 ? 1 : 0;
-	ray.Distance = -1;
+	ray.Exit = 1;
 	if(ray.FrontFace > 0)
 	{
-		ray.Attenuation = m.Diffuse.rgb;
+		ray.Attenuation = vec3(1.0);
 		ray.EmitColor = vec4(m.Diffuse.rgb, 1.0);
 	}
 	else
@@ -36,6 +36,25 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 
+	// Global Sun Check
+	if(Camera.HasSun)
+	{
+		const vec3 hitpos = gl_WorldRayOriginEXT + gl_HitTEXT * gl_WorldRayDirectionEXT;
+		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(0.5f / 180.f * 3.14159f)), Camera.SunDirection.xyz);
+		if(RandomFloat(ray.RandomSeed) < 0.33) {
+			rayQueryEXT rayQuery;
+			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, 0.01, lightVector, 10000.0);
+			rayQueryProceedEXT(rayQuery);
+			if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
+				// sun
+				float ndotl = clamp(dot(lightVector, normal), 0, 1);
+				ray.Exit = 1;
+				ray.EmitColor = vec4(Camera.SunColor.xyz, 1.0) * ndotl;
+			}
+			return;
+		}
+	}
+	
 	if( light.normal_area.w > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
 	{
 		// scatter to light
@@ -45,7 +64,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		float dist = length(tolight);
 		tolight = tolight / dist;
 
-		const float epsVariance      = .01;
+		const float epsVariance = .01;
 		float cosine = max(dot(light.normal_area.xyz, -tolight), epsVariance);
 		float light_pdf = dist * dist / (cosine * light.normal_area.w);
 		float ndotl = dot(tolight, normal);

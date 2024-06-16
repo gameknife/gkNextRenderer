@@ -19,6 +19,8 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
+layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
+layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
 
 #include "Vertex.glsl"
 
@@ -159,7 +161,7 @@ float Schlick(const float cosine, const float refractionIndex)
 	return r0 + (1 - r0) * pow(1 - cosine, 5);
 }
 
-vec3 TraceRay(vec3 origin, vec3 direction)
+vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor)
 {
 	rayQueryEXT rayQuery;
 	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, 0.01, direction, 100.0);
@@ -211,7 +213,25 @@ vec3 TraceRay(vec3 origin, vec3 direction)
 		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
 		
 		// may get from previous frame, if not, use the albedo and force lose a magic energy
-		return vec3(material.Diffuse * texColor * 0.2);
+		bounceColor = texColor.rgb * texColor.rgb * material.Diffuse.rgb * iblColor * 0.5;
+		
+		vec3 hitPos = origin + direction * PayloadData.HitDist;
+		vec4 hpos =  Camera.PrevViewProjection * vec4(hitPos, 1);
+		ivec2 size = imageSize(MiniGBuffer);
+		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
+		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
+		{
+			return vec3(0);
+		}
+		if(Camera.TotalFrames % 2 == 0 )
+		{
+			bounceColor = imageLoad(InOutDirectLight1, ipos_new).rgb;// * 0.5;
+		}
+		else
+		{
+			bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;// * 0.5;
+		}
+		return vec3(0);
 	}
 	return vec3(1);
 }
@@ -256,7 +276,6 @@ void main() {
             ipos.x += 1;
         }
     }
-
 	
 	ivec2 size = imageSize(MiniGBuffer);
     uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
@@ -264,6 +283,16 @@ void main() {
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
 	vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+	
+	// x == y == 0, hit the sky, quick go
+	if(vBuffer.x == 0)
+	{
+		imageStore(OutImage, ipos, Camera.BackGroundColor);
+		imageStore(OutMotionVector, ipos, vec4(0));
+		return;
+	}
+	
+	vBuffer.x = vBuffer.x - 1;
 	
 	vec3 ray_dir = normalize(dir.xyz);
     
@@ -278,6 +307,7 @@ void main() {
     }
 	
 	vec3 normal = normalize( v.Normal.rgb);
+	
 	// ibl
 	const float dotValue = dot(ray_dir, normal);
 	const vec3 outwardNormal = dotValue > 0 ? -normal : normal;
@@ -285,30 +315,30 @@ void main() {
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
 	const float metalProb = mat.Metalness;
 	
+	
 	vec3 skyColor = vec3(1);
+	vec3 bounceColor = vec3(0);
+	
 	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
 	if(true)
 	{
-		int numSamples = 1;
+	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
+		vec3 trace_dir = chanceReflect ?
+		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
+		( RandomFloat(RandomSeed) < metalProb ?
+		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
+		AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal )
+		);
 		
-		for( int i = 0; i < numSamples; i++ )
+		if(chanceReflect)
 		{
-			vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ?
-			AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
-			( RandomFloat(RandomSeed) < metalProb ?
-			AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
-			AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal )
-			);
-			
-			{
-				// if miss, sample the sky	
-				vec3 hitColor = TraceRay(v.Position, trace_dir);
-				const float t = 0.5*(trace_dir.y + 1);
-				//const float t = step(0, trace_dir.y);
-				skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 1000.0 * hitColor;
-			}
+		    albedo = vec4(1);
 		}
-		skyColor = skyColor / float(numSamples);
+		
+		// if miss, sample the sky
+		vec3 iblColor = equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+		vec3 hitColor = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceColor);
+		skyColor = iblColor * hitColor;
 	}
 	else
 	{
@@ -318,33 +348,41 @@ void main() {
 
     vec4 outColor = albedo * vec4(skyColor,1);
     
-    if(true)
+    if(Camera.HasSun)
     {
-    	const vec3 lightVector = normalize(vec3(5, 4, 3));
-        float d = max(dot(lightVector, normalize(v.Normal.rgb)),0.0) * 100.0;
+    	const vec3 lightVector = Camera.SunDirection.xyz;
+		vec3 d = max(dot(lightVector, normalize(v.Normal.rgb)),0.0) * Camera.SunColor.xyz * 0.25;
         
-        d = mix(d, 0.0, metalProb);
+        d = mix(d, vec3(0.0), vec3(metalProb));
     
-        const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(1.0f / 180.f * 3.14159f)), lightVector);
+        const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * 3.14159f)), lightVector);
         
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, 0.01, lightVectorCone, 10000.0);
         rayQueryProceedEXT(rayQuery);
         if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
-            d = 0.0;
+            d = vec3(0.0);
         }
-        outColor += albedo * d;
+        outColor.rgb += albedo.rgb * d;
     }
+	
+	vec4 directLight = vec4(outColor.rgb, 1);
 
-//	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 50.0);
-//  visibiliy visualizer	
-//	uint triangle_index = primitive_index & 0x000FFFFF;
-//	outColor.rgb = hsv2rgb(vec3(RandomFloat(triangle_index),0.2,0.5));
+	if(Camera.TotalFrames % 2 == 0 )
+	{
+		imageStore(InOutDirectLight0, ipos, directLight);
+	}
+	else
+	{
+		imageStore(InOutDirectLight1, ipos, directLight);
+	}
+	
+	
+	outColor.rgb += albedo.rgb * bounceColor.rgb;
 	
     imageStore(OutImage, ipos, outColor);
-
-	// disable for benchmark now
-	// calculate the motion vector
+    
+    	// calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
 	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
 

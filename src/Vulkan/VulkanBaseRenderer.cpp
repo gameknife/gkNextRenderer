@@ -186,7 +186,6 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
 	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
-
 	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 
@@ -273,13 +272,11 @@ void VulkanBaseRenderer::DrawFrame()
 		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
 	}
 
-	
-
 	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
 	gpuTimer_->Reset(commandBuffer);
 
 	{
-		SCOPED_GPU_TIMER("full");
+		SCOPED_GPU_TIMER("gpu time");
 		Render(commandBuffer, imageIndex);
 	}
 	

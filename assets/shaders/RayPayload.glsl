@@ -13,6 +13,7 @@ struct RayPayload
 	uint BounceCount;
 	float pdf;
 	uint primitiveId;
+	uint Exit;
 };
 
 // a simple box light may enough now

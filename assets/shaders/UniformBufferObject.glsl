@@ -15,6 +15,10 @@ struct UniformBufferObject
 	float DepthPhi;
 	float NormalPhi;
 	float PaperWhiteNit;
+	vec4 SunDirection;
+	vec4 SunColor;
+	vec4 BackGroundColor;
+	float SkyIntensity;
 	uint TotalFrames;
 	uint TotalNumberOfSamples;
 	uint NumberOfSamples;
@@ -25,4 +29,5 @@ struct UniformBufferObject
 	bool ShowHeatmap;
 	bool UseCheckerBoard;
 	uint TemporalFrames;
+	bool HasSun;
 };

@@ -180,7 +180,7 @@ namespace Assets
                                                      mat.pbrMetallicRoughness.baseColorFactor[1],
                                                      mat.pbrMetallicRoughness.baseColorFactor[2]);
 
-            m.Diffuse = glm::vec4(diffuseColor, 1.0);
+            m.Diffuse = glm::vec4(sqrt(diffuseColor), 1.0);
 
             if (m.Metalness > .95)
             {
@@ -259,7 +259,7 @@ namespace Assets
                     }
 
 
-                    vertex.MaterialIndex = primtive.material + matieralIdx;
+                    vertex.MaterialIndex = max(0, primtive.material) + matieralIdx;
                     vertices.push_back(vertex);
                 }
 

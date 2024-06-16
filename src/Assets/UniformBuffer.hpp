@@ -22,14 +22,22 @@ namespace Assets
 		glm::mat4 ProjectionInverse;
 		glm::mat4 ViewProjection;
 		glm::mat4 PrevViewProjection;
+		
 		float Aperture;
 		float FocusDistance;
 		float SkyRotation;
 		float HeatmapScale;
+		
 		float ColorPhi;
 		float DepthPhi;
 		float NormalPhi;
 		float PaperWhiteNit;
+
+		glm::vec4 SunDirection;
+		glm::vec4 SunColor;
+		glm::vec4 BackGroundColor;
+		float SkyIntensity;
+		
 		uint32_t TotalFrames;
 		uint32_t TotalNumberOfSamples;
 		uint32_t NumberOfSamples;
@@ -40,6 +48,7 @@ namespace Assets
 		uint32_t ShowHeatmap; // bool
 		uint32_t UseCheckerBoard; // bool
 		uint32_t TemporalFrames;
+		uint32_t HasSun; // bool
 	};
 
 	// lightquad can represent by 4 points
