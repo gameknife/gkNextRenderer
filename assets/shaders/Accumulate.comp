@@ -42,8 +42,6 @@ void main() {
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
     vec4 src = imageLoad(NewSourceImage, ipos);
     
-    //ivec2 previpos = clamp(ivec2( floor(ipos + motion + vec2(0.5) ) ), ivec2(0), ivec2(imageSize(AccumulateImage) - ivec2(1)));
-    
     vec2 prevfpos = vec2(ipos) + motion;
     ivec2 previpos = ivec2( floor(ipos + motion) );
     vec2 subpixel = fract(prevfpos);
@@ -85,11 +83,15 @@ void main() {
         if( miss )
         {
             history = src;
-        } 
+        }
     }
 
     // save to 
     uint primitive_index = imageLoad(VisibilityBuffer, ipos).r;
+    if(primitive_index == 0)
+    {
+        history = src;
+    }
     imageStore(Visibility1Buffer, ipos, ivec4(primitive_index,0,0,0));
    
     // the prev pos should bilinear sample cause it may int subpixel

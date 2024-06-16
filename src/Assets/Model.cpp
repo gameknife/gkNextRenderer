@@ -259,7 +259,7 @@ namespace Assets
                     }
 
 
-                    vertex.MaterialIndex = primtive.material + matieralIdx;
+                    vertex.MaterialIndex = max(0, primtive.material) + matieralIdx;
                     vertices.push_back(vertex);
                 }
 

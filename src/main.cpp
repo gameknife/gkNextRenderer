@@ -316,6 +316,9 @@ namespace
 
         userSettings.PaperWhiteNit = 600.f;
 
+        userSettings.SunRotation = 0.5f;
+        userSettings.SunLuminance = 500.f;
+
         return userSettings;
     }
 

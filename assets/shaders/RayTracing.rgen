@@ -53,6 +53,7 @@ vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, 
 		origin.xyz, 0.001, scatterDir, 10000.0, 0);
 
+	// here may miss
 	origin = origin + scatterDir * Ray.Distance;
 
 	//Ray.Albedo.rgb = clamp(Ray.Albedo.rgb, 0.01, 1);
@@ -72,10 +73,17 @@ vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4
 	
 	primitiveId = Ray.primitiveId;
 		
+	if(Ray.Distance < -5)
+	{
+		motionVector = vec4(0);
+	}
+	
 	if(Ray.Distance < 0)
 	{
-		return emit;
+		return emit * atten;
 	}
+	
+	
 	
 	return emit + atten * Ray.pdf * GetRayColor1(origin, Ray.ScatterDirection);
 }

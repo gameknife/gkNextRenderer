@@ -48,25 +48,9 @@ void main()
 	const vec3 localNormal = Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics);
 	const vec3 normal = normalize((localNormal * gl_WorldToObjectEXT).xyz);
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
-
-	const vec3 hitpos = gl_WorldRayOriginEXT + gl_HitTEXT * gl_WorldRayDirectionEXT;
-	const vec3 lightVector = normalize(vec3(5, 4, 3));
-	
-	// Global Sun Check
-//	if(RandomFloat(Ray.RandomSeed) < 0.05) {
-//		rayQueryEXT rayQuery;
-//		rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, 0.01, lightVector, 10000.0);
-//		rayQueryProceedEXT(rayQuery);
-//		if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
-//			// sun
-//			Ray.Distance = -1;
-//			Ray.EmitColor = vec4(500,500,500, 1.0);
-//			return;
-//		}
-//	}
 	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
-	Ray.primitiveId = gl_InstanceID << 16 | v0.MaterialIndex;
+	Ray.primitiveId = (gl_InstanceID + 1) << 16 | v0.MaterialIndex;
 	Ray.BounceCount++;
 	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
 }
