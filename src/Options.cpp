@@ -32,7 +32,7 @@ Options::Options(const int argc, const char* argv[])
 
 	options_description vulkan("Vulkan options", lineLength);
 	vulkan.add_options()
-		("visible-device", value<std::vector<uint32_t>>(&VisibleDevices), "Explicitly set which Vulkan device ID is visible (can be repeated for multiple devices). If unspecified, all devices are visible.")
+		("gpu", value<uint32_t>(&GpuIdx)->default_value(0), "Explicitly set the usage gpu idx.")
 		;
 
 	options_description window("Window options", lineLength);
