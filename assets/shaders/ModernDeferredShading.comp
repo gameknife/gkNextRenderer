@@ -19,10 +19,6 @@ layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 
 #include "Vertex.glsl"
-//layout(push_constant) uniform PushConsts {
-//    uint pingpong;
-//    uint stepsize;
-//} pushConsts;
 
 #if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -33,7 +29,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
 {
 	// fetch primitive_index high 14bit as instance index and low 18bit as triangle index
-	uint instance_index = vBuffer.x;
+	uint instance_index = vBuffer.x - 1;
 	uint triangle_index = vBuffer.y;
 
 	NodeProxy proxy = NodeProxies[instance_index];
@@ -50,9 +46,6 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_
 		normals[i] = (proxy.World * vec4(v.Normal, 0)).xyz;
 		tex_coords[i] = v.TexCoord;
 		matid = v.MaterialIndex;
-		
-		// localspace, need transfer
-		 
 	}
 	
 	vec3 barycentrics;
@@ -79,40 +72,6 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_
 	return result;
 }
 
-vec3 get_position(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin , vec3 ray_direction)
-{
-	uint instance_index = vBuffer.x;
-	uint triangle_index = vBuffer.y;
-
-	NodeProxy proxy = NodeProxies[instance_index];
-	
-	vec3 positions[3];
-	
-	for (int i = 0; i != 3; ++i) {
-		uint vertex_index = triangle_index * 3 + i;
-		const Vertex v = UnpackVertex(vertex_index);
-		positions[i] = (proxy.World * vec4(v.Position, 1.0)).xyz;
-	}
-
-	vec3 barycentrics;
-	vec3 edges[2] = {
-	positions[1] - positions[0],
-	positions[2] - positions[0]
-	};
-
-	vec3 ray_cross_edge_1 = cross(ray_direction, edges[1]);
-	float rcp_det_edges_direction = 1.0f / dot(edges[0], ray_cross_edge_1);
-	vec3 ray_to_0 = ray_origin - positions[0];
-	float det_0_dir_edge_1 = dot(ray_to_0, ray_cross_edge_1);
-	barycentrics.y = rcp_det_edges_direction * det_0_dir_edge_1;
-	vec3 edge_0_cross_0 = cross(edges[0], ray_to_0);
-	float det_dir_edge_0_0 = dot(ray_direction, edge_0_cross_0);
-	barycentrics.z = -rcp_det_edges_direction * det_dir_edge_0_0;
-	barycentrics.x = 1.0f - (barycentrics.y + barycentrics.z);
-
-	return fma(vec3(barycentrics[0]), positions[0], fma(vec3(barycentrics[1]), positions[1], barycentrics[2] * positions[2]));
-}
-
 // The helper for the equirectangular textures.
 vec4 equirectangularSample(vec3 direction, float rotate)
 {
@@ -128,57 +87,6 @@ float Schlick(const float cosine, const float refractionIndex)
 	float r0 = (1 - refractionIndex) / (1 + refractionIndex);
 	r0 *= r0;
 	return r0 + (1 - r0) * pow(1 - cosine, 5);
-}
-
-vec3 TraceRay(vec3 origin, vec3 direction)
-{
-    // screen space ray-marching
-    // if we hit light material, light-it
-	const vec4 campos = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
-	const ivec2 size = imageSize(MiniGBuffer);
-	const float stepLength = 0.06;
-	// brute force by step
-	for(int i = 0; i < 6; ++i)
-	{
-		origin += direction * (stepLength * i);
-		float rayDist = length(origin - campos.xyz);
-		vec4 hpos =  Camera.ViewProjection * vec4(origin, 1);
-		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
-		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y)
-		{
-			return vec3(1);
-		}
-		vec2 uv = vec2(ipos_new) / vec2(size) * 2.0 - 1.0;
-		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-		vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
-		uvec2 vbuffer = imageLoad(MiniGBuffer, ipos_new).rg;
-		
-		// fast hit
-		vec3 hitpos = get_position(ipos_new, vbuffer, campos.xyz, dir.xyz);
-		if(rayDist > length(hitpos - campos.xyz) + 0.2)
-		{
-			return vec3(0);
-		}
-		
-		// hit with mat
-		//Vertex v = get_material_data(ipos_new, primitive_index, campos.xyz, dir.xyz);
-		//if(rayDist > length(v.Position - campos.xyz) + 0.2)
-		{
-		//    Material mat = Materials[v.MaterialIndex];
-		//    if(mat.MaterialModel == MaterialDiffuseLight)
-		    {
-		//        return vec3(20);
-		    }
-		//    return vec3(0);
-		}
-	}
-	
-	// accleration by scene distance field
-	
-	// accleration by rayquery
-	
-	
-	return vec3(1);
 }
 
 // hsv to rgb
@@ -251,62 +159,14 @@ void main() {
 	
 	vec3 skyColor = vec3(1);
 	
-	if(false)
-	{
-		uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
-		int numSamples = 2;
-		
-		for( int i = 0; i < numSamples; i++ )
-		{
-			vec3 trace_dir = RandomFloat(RandomSeed) < reflectProb ?
-			AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
-			( RandomFloat(RandomSeed) < metalProb ?
-			AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
-			AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal )
-			);
-
-			//vec3 trace_dir = AlignWithNormal( RandomInHemiSphere(RandomSeed), normalize( v.Normal.rgb) );
-
-			// screen space ray query
-			//if( !TraceRay(v.Position, trace_dir) )
-			{
-				// if miss, sample the sky	
-				vec3 hitColor = TraceRay(v.Position, trace_dir);
-				const float t = 0.5*(trace_dir.y + 1);
-				//const float t = step(0, trace_dir.y);
-				skyColor += equirectangularSample(trace_dir, Camera.SkyRotation).rgb * 8.0 * hitColor;
-			}
-		}
-		skyColor = skyColor / float(numSamples);
-	}
-	else
-	{
-		const float t = 0.5*(v.Normal.y + 1);
-		skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0) * 20, t);
-	}
+	const float t = 0.5*(v.Normal.y + 1);
+	skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0) * 20, t);
 	
-    //albedo = mix(albedo, vec4(1,1,1,1), reflectProb);
-
-	const vec3 lightVector = normalize(vec3(5, 4, 3));
+	const vec3 lightVector = Camera.SunDirection.xyz;
     const float d = max(dot(lightVector, normalize(v.Normal.rgb)) * 30.0, 0.5);
     
     vec4 outColor = albedo * d + albedo * vec4(skyColor,1);
 
 	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
-
-//  visibiliy visualizer	
-//	uint triangle_index = primitive_index & 0x000FFFFF;
-//	outColor.rgb = hsv2rgb(vec3(RandomFloat(triangle_index),0.2,0.5));
-	
     imageStore(OutImage, ipos, outColor);
-	
-	// disable for benchmark now
-	// calculate the motion vector
-//	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
-//	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	
-//	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
-//	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-//	vec2 motion = prevfpos - currfpos;
-//	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 }

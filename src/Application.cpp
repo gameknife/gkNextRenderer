@@ -227,15 +227,15 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     // Update the camera position / angle.
     resetAccumulation_ = modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
-
-    // Check the current state of the benchmark, update it for the new frame.
-    CheckAndUpdateBenchmarkState(prevTime);
-
+    
     Renderer::denoiseIteration_ = userSettings_.DenoiseIteration;
     Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
     // Render the scene
     Renderer::Render(commandBuffer, imageIndex);
+
+    // Check the current state of the benchmark, update it for the new frame.
+    CheckAndUpdateBenchmarkState(prevTime);
 
     // Render the UI
     Statistics stats = {};
@@ -505,10 +505,8 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     VkPhysicalDeviceProperties2 deviceProp{};
     deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     deviceProp.pNext = &driverProp;
-
-//#if !ANDROID
+    
     vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
-//#endif
 
     std::string img_encoded = "";
     if (upload_screen || save_screen)
@@ -516,6 +514,9 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 #if WITH_AVIF
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+
+        // capture and export
+        Renderer::CaptureScreenShot();
 
         avifImage* image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10,
                                            AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
@@ -591,16 +592,6 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
         }
         free(data);
-
-        // save to file with scenename
-        // std::string filename = sceneName + ".avif";
-        // FILE* f = fopen(filename.c_str(), "wb");
-        // if (!f)
-        // {
-        //     Throw(std::runtime_error("Failed to open file for writing"));
-        // }
-        // fwrite(avifOutput.data, 1, avifOutput.size, f);
-        // fclose(f);
         
         // send to server
         img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);

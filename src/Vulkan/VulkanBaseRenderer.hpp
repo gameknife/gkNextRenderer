@@ -163,6 +163,9 @@ namespace Vulkan
 
 		virtual void OnTouch(bool down, double xpos, double ypos) {}
 		virtual void OnTouchMove(double xpos, double ypos) {}
+
+		void CaptureScreenShot();
+		
 	protected:
 
 		VulkanBaseRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
@@ -235,7 +238,8 @@ namespace Vulkan
 		std::unique_ptr<ImageView> screenShotImageView_;
 
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
-		
+
+		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};
 		Fence* fence;
 	};
