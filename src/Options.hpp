@@ -39,7 +39,7 @@ public:
 	uint32_t SceneIndex{};
 
 	// Vulkan options
-	std::vector<uint32_t> VisibleDevices{};
+	uint32_t GpuIdx{};
 
 	// Window options
 	uint32_t Width{};

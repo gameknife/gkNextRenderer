@@ -25,9 +25,9 @@ namespace
     void PrintVulkanSdkInformation();
     void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
     void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
-    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices);
+    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application);
     void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
-    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices);
+    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx);
 }
 
 std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication = nullptr;
@@ -64,9 +64,9 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
     PrintVulkanSdkInformation();
     PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
     PrintVulkanLayersInformation(*GApplication, options.Benchmark);
-    PrintVulkanDevices(*GApplication, options.VisibleDevices);
+    PrintVulkanDevices(*GApplication);
 
-    SetVulkanDevice(*GApplication, options.VisibleDevices);
+    SetVulkanDevice(*GApplication, options.GpuIdx);
 
     PrintVulkanSwapChainInformation(*GApplication, options.Benchmark);
 }
@@ -214,6 +214,10 @@ int main(int argc, const char* argv[]) noexcept
         
         uint32_t rendererType = options.RendererType;
 
+#if WIN32
+        SetEnvironmentVariable(L"VK_SCREENSHOT_FRAMES", L"255");
+#endif
+        
         if(options.RenderDoc)
         {
 #if __linux__
@@ -367,7 +371,7 @@ namespace
         std::cout << std::endl;
     }
 
-    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices)
+    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application)
     {
         std::cout << "Vulkan Devices: " << std::endl;
 
@@ -379,21 +383,12 @@ namespace
             VkPhysicalDeviceProperties2 deviceProp{};
             deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             deviceProp.pNext = &driverProp;
-#if !ANDROID
             vkGetPhysicalDeviceProperties2(device, &deviceProp);
-#endif
             VkPhysicalDeviceFeatures features;
             vkGetPhysicalDeviceFeatures(device, &features);
 
             const auto& prop = deviceProp.properties;
-
-            // Check whether device has been explicitly filtered out.
-            if (!visible_devices.empty() && std::find(visible_devices.begin(), visible_devices.end(), prop.deviceID) ==
-                visible_devices.end())
-            {
-                break;
-            }
-
+            
             const Vulkan::Version vulkanVersion(prop.apiVersion);
             const Vulkan::Version driverVersion(prop.driverVersion, prop.vendorID);
 
@@ -419,83 +414,17 @@ namespace
         std::cout << std::endl;
     }
 
-    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, const std::vector<uint32_t>& visible_devices)
+    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
     {
-#if !ANDROID
         const auto& physicalDevices = application.PhysicalDevices();
-        const auto result = std::find_if(physicalDevices.begin(), physicalDevices.end(),
-                                         [&](const VkPhysicalDevice& device)
-                                         {
-                                             VkPhysicalDeviceProperties2 prop{};
-                                             prop.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-                                             vkGetPhysicalDeviceProperties2(device, &prop);
-
-                                             // Check whether device has been explicitly filtered out.
-                                             if (!visible_devices.empty() && std::find(
-                                                 visible_devices.begin(), visible_devices.end(),
-                                                 prop.properties.deviceID) == visible_devices.end())
-                                             {
-                                                 return false;
-                                             }
-
-                                             // We want a device with geometry shader support.
-                                             VkPhysicalDeviceFeatures deviceFeatures;
-                                             vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-                                             if (!deviceFeatures.geometryShader)
-                                             {
-                                                 //return false;
-                                             }
-
-                                             // We want a device that supports the ray tracing extension.
-                                             const auto extensions = Vulkan::GetEnumerateVector(
-                                                 device, static_cast<const char*>(nullptr),
-                                                 vkEnumerateDeviceExtensionProperties);
-                                             const auto hasRayTracing = std::any_of(
-                                                 extensions.begin(), extensions.end(),
-                                                 [](const VkExtensionProperties& extension)
-                                                 {
-                                                     return strcmp(extension.extensionName,
-                                                                   VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0;
-                                                 });
-
-                                             if (!hasRayTracing)
-                                             {
-                                                 //return false;
-                                                 //application.SetSupportRayTracing(false);
-                                             }
-
-                                             // We want a device with a graphics queue.
-                                             const auto queueFamilies = Vulkan::GetEnumerateVector(
-                                                 device, vkGetPhysicalDeviceQueueFamilyProperties);
-                                             const auto hasGraphicsQueue = std::any_of(
-                                                 queueFamilies.begin(), queueFamilies.end(),
-                                                 [](const VkQueueFamilyProperties& queueFamily)
-                                                 {
-                                                     return queueFamily.queueCount > 0 && queueFamily.queueFlags &
-                                                         VK_QUEUE_GRAPHICS_BIT;
-                                                 });
-
-                                             return hasGraphicsQueue;
-                                         });
-
-        if (result == physicalDevices.end())
-        {
-            Throw(std::runtime_error("cannot find a suitable device"));
-        }
-
-
+        VkPhysicalDevice pDevice = physicalDevices[gpuIdx <= physicalDevices.size() ? gpuIdx : 0 ];
         VkPhysicalDeviceProperties2 deviceProp{};
         deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-        vkGetPhysicalDeviceProperties2(*result, &deviceProp);
+        vkGetPhysicalDeviceProperties2(pDevice, &deviceProp);
 
-        std::cout << "Setting Device [" << deviceProp.properties.deviceID << "]:" << std::endl;
+        std::cout << "Setting Device [" << deviceProp.properties.deviceName << "]:" << std::endl;
+        application.SetPhysicalDevice(pDevice);
 
-        application.SetPhysicalDevice(*result);
-#else
-        const auto& physicalDevices = application.PhysicalDevices();
-        application.SetPhysicalDevice(physicalDevices[0]);
-#endif
         std::cout << std::endl;
     }
 }
