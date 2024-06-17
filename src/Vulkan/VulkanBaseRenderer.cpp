@@ -30,7 +30,7 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 {
 	const auto validationLayers = enableValidationLayers
 		? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
-		: std::vector<const char*>{"VK_LAYER_LUNARG_screenshot"};
+		: std::vector<const char*>{};
 
 	window_.reset(new class Window(windowConfig));
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));

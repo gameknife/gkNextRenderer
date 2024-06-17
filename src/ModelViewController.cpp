@@ -109,8 +109,8 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 	if (cameraMovingDown_) MoveUp(-d);
 	if (cameraMovingUp_) MoveUp(d);
 
-	const float rotationDiv = 1200;
-	Rotate(cameraRotX_ / rotationDiv, cameraRotY_ / rotationDiv);
+	const double rotationDiv = 1200;
+	Rotate(static_cast<float>(cameraRotX_ / rotationDiv), static_cast<float>(cameraRotY_ / rotationDiv) );
 
 	const bool updated =
 		cameraMovingLeft_ ||
@@ -119,8 +119,8 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 		cameraMovingForward_ ||
 		cameraMovingDown_ ||
 		cameraMovingUp_ ||
-		cameraRotY_ != 0 ||
-		cameraRotX_ != 0;
+		cameraRotY_ != 0.0 ||
+		cameraRotX_ != 0.0;
 
 	cameraRotY_ = 0;
 	cameraRotX_ = 0;

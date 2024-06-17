@@ -213,10 +213,6 @@ int main(int argc, const char* argv[]) noexcept
         
         
         uint32_t rendererType = options.RendererType;
-
-#if WIN32
-        SetEnvironmentVariable(L"VK_SCREENSHOT_FRAMES", L"255");
-#endif
         
         if(options.RenderDoc)
         {

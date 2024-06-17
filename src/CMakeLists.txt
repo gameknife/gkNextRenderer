@@ -254,8 +254,6 @@ target_include_directories(${exe_name} PRIVATE
     ${ANDROID_NDK}/sources/android/native_app_glue)
 endif()
 
-target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-
 if ( APPLE )
 target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 endif()
@@ -267,5 +265,7 @@ target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boo
 endif()
 
 if ( WITH_AVIF )
+target_compile_definitions(${exe_name} PUBLIC WITH_AVIF=1)
+target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
 target_link_libraries(${exe_name} PRIVATE avif)
 endif()
