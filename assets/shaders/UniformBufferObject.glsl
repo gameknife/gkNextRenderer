@@ -19,6 +19,7 @@ struct UniformBufferObject
 	vec4 SunColor;
 	vec4 BackGroundColor;
 	float SkyIntensity;
+	uint SkyIdx;
 	uint TotalFrames;
 	uint TotalNumberOfSamples;
 	uint NumberOfSamples;

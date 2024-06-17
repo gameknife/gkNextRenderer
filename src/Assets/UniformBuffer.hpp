@@ -37,6 +37,7 @@ namespace Assets
 		glm::vec4 SunColor;
 		glm::vec4 BackGroundColor;
 		float SkyIntensity;
+		uint32_t SkyIdx;
 		
 		uint32_t TotalFrames;
 		uint32_t TotalNumberOfSamples;

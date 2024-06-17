@@ -137,6 +137,17 @@ namespace Assets
             return;
         }
 
+        // default camera
+        cameraInit.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
+        cameraInit.FieldOfView = 20;
+        cameraInit.Aperture = 0.0f;
+        cameraInit.FocusDistance = 1000.0f;
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = false;
+        cameraInit.SkyIdx = 0;
+        
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)
         {
@@ -289,6 +300,20 @@ namespace Assets
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
+        auto& root = model.scenes[0];
+        if(root.extras.Has("SkyIdx"))
+        {
+            cameraInit.HasSky = true;
+            cameraInit.SkyIdx = root.extras.Get("SkyIdx").GetNumberAsInt();
+        }
+        if(root.extras.Has("CamSpeed"))
+        {
+            cameraInit.ControlSpeed = root.extras.Get("CamSpeed").GetNumberAsDouble();
+        }
+        if(root.extras.Has("WithSun"))
+        {
+            cameraInit.HasSun = root.extras.Get("WithSun").GetNumberAsInt() != 0;
+        }      
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);

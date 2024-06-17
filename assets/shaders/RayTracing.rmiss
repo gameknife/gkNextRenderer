@@ -1,6 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_nonuniform_qualifier : require
+
 #include "RayPayload.glsl"
 #include "UniformBufferObject.glsl"
 
@@ -16,7 +18,7 @@ vec4 equirectangularSample(vec3 direction, float rotate)
     vec3 d = normalize(direction);
     vec2 t = vec2((atan(d.x, d.z) + pi * rotate) / (2.f * pi), acos(d.y) / pi);
 
-    return min( vec4(10,10,10,1), texture(TextureSamplers[0], t));
+    return min( vec4(10,10,10,1), texture(TextureSamplers[Camera.SkyIdx], t));
 }
 
 void main()

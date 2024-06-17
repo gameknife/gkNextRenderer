@@ -22,6 +22,7 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
+        uint32_t SkyIdx;
     };
 
     struct alignas(16) NodeProxy final

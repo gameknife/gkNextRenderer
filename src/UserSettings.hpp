@@ -28,6 +28,7 @@ struct UserSettings final
 	float SunRotation;
 	float SunLuminance;
 	float SkyIntensity;
+	int SkyIdx;
 
 	// Profiler
 	bool ShowHeatmap;
