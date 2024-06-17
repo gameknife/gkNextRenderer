@@ -12,11 +12,13 @@
 
 基于其版本，增加了重要性采样，Shading模型，更全面的Model的加载，以及Reproject和降噪处理。使之更加走向标准的离线渲染器效果（Blender Cycles GPU）。
 
+抽象了Renderer的概念，可以方便的改造多种渲染管线，配合扩展的benchmark系统，方便测试和对比各管线性能。
+
+针对Vulkan的各种新特性，进行了大量学习，实现**Visibility Buffer**，**GPU Indirect Draw**等等，同时测试新特性在移动平台（Android）的兼容性与性能。结合传统渲染，实现了一个效果接近PathTracing的HybridRenderer，接近游戏运行时可用状态，并在支持光追的Android真机上流畅运行(30-60fps)
+
 通过本项目，旨在补上在现代渲染上缺的课，同时更加深入的理解GPU光线跟踪，争取在下一个时代来临前做好准备。
 
 > 是的，我认为将来光线跟踪一定会成为主流。
-
-同时，基于vulkan维护一个尽量简洁的渲染流水线，快速的实现多种现代渲染管线，并方便的部署于多个平台，调试性能。
 
 ## 图库
 
@@ -78,11 +80,11 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 - Scene Management
     - ~~Element Instancing~~
-    - Multi draw indirect
+    - ~~Multi draw indirect~~
     - GLobal Dynamic Bindless Textures
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
-    - Ray Query Pipeline
+    - ~~Ray Query Pipeline~~
     - MIS
 - Non-RayTracing Pipeline
     - ~~Modern Deferred Shading~~
@@ -125,6 +127,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] Full scope refactor
 - [ ] Dynamic Scene Management
 - [ ] Multi Material Execution
+- [ ] ImGUI Editor Mode
+- [ ] Material Node-based Edit
 - [ ] Huge Landscape
 
 ## 随感
@@ -149,7 +153,10 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - **[GPU Stats]** 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
 
 - **[Android RayTracing]** 高通和mali从上一代的旗舰开始，都配备了RayTracing架构，虽然都支持RayQuery。一开始，我觉得也就是个噱头吧，RTX都还跑不明白。结果这次在我的SG 8gen2上实现了RayQuery，性能出乎意料。PrimaryRay加上bindless的材质shading，1920分辨率下，居然能拉到100-120fps，gputimer的结果在6-8ms之间。看起来，通过ray-tracing来做间接光照的hybird管线是没有任何问题的。考虑把skyvisibility, shadow, second bounce在hybird管线实现下，争取能在安卓上跑出一个可用的效果。
-    - 初步实现了一个Hybird Rendering管线，Direction Light和Indirect light分别两条ray，通过32帧的reproject temporal sample，得到了一个较好的groundtruth效果。Indirect打到物件，目前是magic了一个0.2的能量衰减，改进可考虑reproject到上一帧的结果，有值的话直接复用。
+    - 初步实现了一个Hybird Rendering管线，Direction Light和Indirect light分别两条ray，通过32帧的reproject temporal sample，得到了一个较好的groundtruth效果。Indirect打到物件，会尝试reproject到上一帧的结果，有值的话直接复用，实现二次反弹。
+    - 最终这个每像素2ray的管线，在android上也有较为良好的性能，同时间接光照的渲染效果接近PathTracing的Renderer
+
+- **[ImGUI]** 对ImGUI一直有一些偏见，可能是因为Unity PTSD。但其实ImGUI的设计真的十分精妙，之前确实没有看过他的实现。同时，Dear ImGUI的页面上，有大量的扩展作品，基本上，涵盖了编辑器的所有了。渲染器初步feature做差不多之后，考虑用ImGUI再搭建一个Editor的Application，用来搞一些材质编辑之类的事情，更好的测试渲染器在真实生产环境下的适应能力。
 
 ## Building
 
