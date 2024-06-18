@@ -20,7 +20,7 @@
 
 > 是的，我认为将来光线跟踪一定会成为主流。
 
-## 图库
+## 图库 (TrueHDR)
 
 ![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 *RayTracing Renderer - QX50*
@@ -28,10 +28,10 @@
 ![Alt text](gallery/LowpolyTrack.avif?raw=true "LowpolyTrack")
 *Hybrid Renderer - Lowpoly Track*
 
-![Alt text](gallery/Qx50_Android.jpg?raw=true "Qx50Android")
+![Alt text](gallery/Qx50_Android.avif?raw=true "Qx50Android")
 *Hybrid Renderer (Android) - QX50*
 
-![Alt text](gallery/Complex_Android.jpg?raw=true "ComplexAndroid")
+![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
 *Hybrid Renderer (Android) - Complex Cubes*
 
 ![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")
@@ -45,8 +45,6 @@
 
 ![Alt text](gallery/CornellBox.avif?raw=true "Cornell Box")
 *RayTracing Renderer - Cornell Box*
-
-LowpolyTrack
 
 ## 特性
 
