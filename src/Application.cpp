@@ -86,9 +86,10 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.NumberOfSamples = numberOfSamples_;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159), 0.75, cosf(userSettings_.SunRotation * 3.14159) )), 0.0 );
+    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159f), 0.75, cosf(userSettings_.SunRotation * 3.14159f) )), 0.0 );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
     ubo.SkyIntensity = userSettings_.SkyIntensity;
+    ubo.SkyIdx = userSettings_.SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
     ubo.HasSky = init.HasSky;
     ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
@@ -227,15 +228,15 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     // Update the camera position / angle.
     resetAccumulation_ = modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
-
-    // Check the current state of the benchmark, update it for the new frame.
-    CheckAndUpdateBenchmarkState(prevTime);
-
+    
     Renderer::denoiseIteration_ = userSettings_.DenoiseIteration;
     Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
     // Render the scene
     Renderer::Render(commandBuffer, imageIndex);
+
+    // Check the current state of the benchmark, update it for the new frame.
+    CheckAndUpdateBenchmarkState(prevTime);
 
     // Render the UI
     Statistics stats = {};
@@ -379,7 +380,17 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     std::vector<Assets::LightObject> lights;
 
     // texture id 0: global sky
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/HDR_112_River_Road_2_Env.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig()));
+
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig()));
+    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig()));
 
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
@@ -396,6 +407,8 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
     userSettings_.Aperture = cameraInitialSate_.Aperture;
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+    userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
+    userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 
@@ -505,10 +518,8 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     VkPhysicalDeviceProperties2 deviceProp{};
     deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     deviceProp.pNext = &driverProp;
-
-//#if !ANDROID
+    
     vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
-//#endif
 
     std::string img_encoded = "";
     if (upload_screen || save_screen)
@@ -516,6 +527,9 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 #if WITH_AVIF
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+
+        // capture and export
+        Renderer::CaptureScreenShot();
 
         avifImage* image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10,
                                            AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
@@ -591,19 +605,9 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
         }
         free(data);
-
-        // save to file with scenename
-        std::string filename = sceneName + ".avif";
-        FILE* f = fopen(filename.c_str(), "wb");
-        if (!f)
-        {
-            Throw(std::runtime_error("Failed to open file for writing"));
-        }
-        fwrite(avifOutput.data, 1, avifOutput.size, f);
-        fclose(f);
         
         // send to server
-        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #endif
     }
 
@@ -613,6 +617,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         {"gpu", std::string(deviceProp1.deviceName)},
         {"driver", versionToString(deviceProp1.driverVersion)},
         {"fps", fps},
+        {"screenshot", img_encoded}
     };
     std::string json_str = my_json.dump();
 

@@ -41,10 +41,10 @@ private:
 	bool cameraMovingDown_{};
 	bool cameraMovingUp_{};
 
-	float cameraRotX_{};
-	float cameraRotY_{};
-	float modelRotX_{};
-	float modelRotY_{};
+	double cameraRotX_{};
+	double cameraRotY_{};
+	double modelRotX_{};
+	double modelRotY_{};
 	
 	double mousePosX_{};
 	double mousePosY_{};

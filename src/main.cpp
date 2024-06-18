@@ -77,7 +77,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--temporal=32", "--scene=1"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--next-scenes", "--temporal=16"};
             const Options options(4, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);
@@ -213,10 +213,6 @@ int main(int argc, const char* argv[]) noexcept
         
         
         uint32_t rendererType = options.RendererType;
-
-#if WIN32
-        SetEnvironmentVariable(L"VK_SCREENSHOT_FRAMES", L"255");
-#endif
         
         if(options.RenderDoc)
         {

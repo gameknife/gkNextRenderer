@@ -151,7 +151,7 @@ vec4 equirectangularSample(vec3 direction, float rotate)
 	vec3 d = normalize(direction);
 	vec2 t = vec2((atan(d.x, d.z) + pi * rotate) / (2.f * pi), acos(d.y) / pi);
 
-	return min( vec4(10,10,10,1), texture(TextureSamplers[0], t));
+	return min( vec4(10,10,10,1), texture(TextureSamplers[Camera.SkyIdx], t));
 }
 
 float Schlick(const float cosine, const float refractionIndex)
@@ -283,18 +283,22 @@ void main() {
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
 	vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+	vec3 ray_dir = normalize(dir.xyz);
+	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
 	
 	// x == y == 0, hit the sky, quick go
 	if(vBuffer.x == 0)
 	{
-		imageStore(OutImage, ipos, Camera.BackGroundColor);
+		const vec3 blurRay = AlignWithNormal( RandomInCone(RandomSeed, cos(0.2 / 180.f * 3.14159f)), ray_dir );
+		vec3 iblColor = equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		return;
 	}
 	
 	vBuffer.x = vBuffer.x - 1;
 	
-	vec3 ray_dir = normalize(dir.xyz);
+	
     
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     
@@ -319,15 +323,15 @@ void main() {
 	vec3 skyColor = vec3(1);
 	vec3 bounceColor = vec3(0);
 	
-	uint RandomSeed = InitRandomSeed(InitRandomSeed(ipos.x, ipos.y), Camera.TotalFrames);
-	if(true)
+	
+
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		vec3 trace_dir = chanceReflect ?
 		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
 		( RandomFloat(RandomSeed) < metalProb ?
 		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
-		AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal )
+		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
 		);
 		
 		if(chanceReflect)
@@ -340,11 +344,7 @@ void main() {
 		vec3 hitColor = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceColor);
 		skyColor = iblColor * hitColor;
 	}
-	else
-	{
-		const float t = 0.5*(v.Normal.y + 1);
-		skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0) * 20, t);
-	}
+
 
     vec4 outColor = albedo * vec4(skyColor,1);
     

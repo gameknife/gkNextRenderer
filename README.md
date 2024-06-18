@@ -22,12 +22,31 @@
 
 ## 图库
 
+![Alt text](gallery/Qx50.avif?raw=true "Qx50")
+*RayTracing Renderer - QX50*
+
+![Alt text](gallery/LowpolyTrack.avif?raw=true "LowpolyTrack")
+*Hybrid Renderer - Lowpoly Track*
+
+![Alt text](gallery/Qx50_Android.jpg?raw=true "Qx50Android")
+*Hybrid Renderer (Android) - QX50*
+
+![Alt text](gallery/Complex_Android.jpg?raw=true "ComplexAndroid")
+*Hybrid Renderer (Android) - Complex Cubes*
 
 ![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")
+*RayTracing Renderer - LuxBall*
+
 ![Alt text](gallery/Kitchen.avif?raw=true "Kitchen")
-![Alt text](gallery/LivingRoom.avif?raw=true "LivingRoom")
+*RayTracing Renderer - Kitchen*
+
 ![Alt text](gallery/Still.avif?raw=true "still")
+*RayTracing Renderer - Still*
+
 ![Alt text](gallery/CornellBox.avif?raw=true "Cornell Box")
+*RayTracing Renderer - Cornell Box*
+
+LowpolyTrack
 
 ## 特性
 
@@ -124,6 +143,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] Auto release by Github action
 - [ ] Global Dynamic Bindless Textures
 - [x] Hybrid rendering with ray query
+- [ ] Blender Export Property as CustomProperty to glb
 - [ ] Full scope refactor
 - [ ] Dynamic Scene Management
 - [ ] Multi Material Execution

@@ -22,15 +22,16 @@
 #include <array>
 
 #include "ImageMemoryBarrier.hpp"
+#include "SingleTimeCommands.hpp"
 
 namespace Vulkan {
-
+	
 VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
 	presentMode_(presentMode)
 {
 	const auto validationLayers = enableValidationLayers
 		? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
-		: std::vector<const char*>{"VK_LAYER_LUNARG_screenshot"};
+		: std::vector<const char*>{};
 
 	window_.reset(new class Window(windowConfig));
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
@@ -243,47 +244,11 @@ void VulkanBaseRenderer::DeleteSwapChain()
 	fence = nullptr;
 }
 
-void VulkanBaseRenderer::DrawFrame()
+void VulkanBaseRenderer::CaptureScreenShot()
 {
-	const auto noTimeout = std::numeric_limits<uint64_t>::max();
-
-	// wait the last frame command buffer to complete
-	if(fence)
+	SingleTimeCommands::Submit(CommandPool(), [&](VkCommandBuffer commandBuffer)
 	{
-		fence->Wait(noTimeout);
-	}
-
-	// next frame synchronization objects
-	fence = &(inFlightFences_[currentFrame_]);
-	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
-	const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
-
-	uint32_t imageIndex;
-	auto result = vkAcquireNextImageKHR(device_->Handle(), swapChain_->Handle(), noTimeout, imageAvailableSemaphore, nullptr, &imageIndex);
-
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || isWireFrame_ != graphicsPipeline_->IsWireFrame())
-	{
-		RecreateSwapChain();
-		return;
-	}
-
-	if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-	{
-		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
-	}
-
-	const auto commandBuffer = commandBuffers_->Begin(imageIndex);
-	gpuTimer_->Reset(commandBuffer);
-
-	{
-		SCOPED_GPU_TIMER("gpu time");
-		Render(commandBuffer, imageIndex);
-	}
-	
-	// screenshot swapchain image
-	if (supportScreenShot_)
-	{
-		const auto& image = swapChain_->Images()[imageIndex];
+		const auto& image = swapChain_->Images()[currentImageIndex_];
 
 		VkImageSubresourceRange subresourceRange = {};
 		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -291,7 +256,7 @@ void VulkanBaseRenderer::DrawFrame()
 		subresourceRange.levelCount = 1;
 		subresourceRange.baseArrayLayer = 0;
 		subresourceRange.layerCount = 1;
-		
+	
 		ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
 					   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 					   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -313,13 +278,51 @@ void VulkanBaseRenderer::DrawFrame()
 					   screenShotImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 					   1, &copyRegion);
 
-		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[currentImageIndex_], subresourceRange,
 							   VK_ACCESS_TRANSFER_READ_BIT,
 							   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-	}
-	commandBuffers_->End(imageIndex);
+	});
+}
+	
+void VulkanBaseRenderer::DrawFrame()
+{
+	const auto noTimeout = std::numeric_limits<uint64_t>::max();
 
-	UpdateUniformBuffer(imageIndex);
+	// wait the last frame command buffer to complete
+	if(fence)
+	{
+		fence->Wait(noTimeout);
+	}
+
+	// next frame synchronization objects
+	fence = &(inFlightFences_[currentFrame_]);
+	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
+	const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
+	
+	auto result = vkAcquireNextImageKHR(device_->Handle(), swapChain_->Handle(), noTimeout, imageAvailableSemaphore, nullptr, &currentImageIndex_);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || isWireFrame_ != graphicsPipeline_->IsWireFrame())
+	{
+		RecreateSwapChain();
+		return;
+	}
+
+	if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+	{
+		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
+	}
+
+	const auto commandBuffer = commandBuffers_->Begin(currentImageIndex_);
+	gpuTimer_->Reset(commandBuffer);
+
+	{
+		SCOPED_GPU_TIMER("gpu time");
+		Render(commandBuffer, currentImageIndex_);
+	}
+	
+	commandBuffers_->End(currentImageIndex_);
+
+	UpdateUniformBuffer(currentImageIndex_);
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -349,7 +352,7 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pWaitSemaphores = signalSemaphores;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pImageIndices = &currentImageIndex_;
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
