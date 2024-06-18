@@ -408,6 +408,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     userSettings_.Aperture = cameraInitialSate_.Aperture;
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
     userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
+    userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 

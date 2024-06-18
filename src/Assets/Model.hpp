@@ -23,6 +23,7 @@ namespace Assets
         bool HasSky;
         bool HasSun;
         uint32_t SkyIdx;
+        float SunRotation;
     };
 
     struct alignas(16) NodeProxy final

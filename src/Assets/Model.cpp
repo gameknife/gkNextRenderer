@@ -308,12 +308,16 @@ namespace Assets
         }
         if(root.extras.Has("CamSpeed"))
         {
-            cameraInit.ControlSpeed = root.extras.Get("CamSpeed").GetNumberAsDouble();
+            cameraInit.ControlSpeed = static_cast<float>(root.extras.Get("CamSpeed").GetNumberAsDouble());
         }
         if(root.extras.Has("WithSun"))
         {
             cameraInit.HasSun = root.extras.Get("WithSun").GetNumberAsInt() != 0;
-        }      
+        }
+        if(root.extras.Has("SunRotation"))
+        {
+            cameraInit.SunRotation = static_cast<float>(root.extras.Get("SunRotation").GetNumberAsDouble());
+        }  
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);

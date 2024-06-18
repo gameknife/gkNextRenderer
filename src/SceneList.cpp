@@ -72,6 +72,20 @@ namespace
     }
 }
 
+void Qx50(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
+{
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/qx50.glb"), camera, nodes, models, textures, materials, lights);
+}
+
+void Track(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
+                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
+{
+    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/track.glb"), camera, nodes, models, textures, materials, lights);
+}
+
 void Simple(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
@@ -197,6 +211,8 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
                                                              std::vector<Assets::LightObject>&)>>> SceneList::AllScenes
     =
     {
+      {"Qx50", Qx50},
+    {"LowpolyTrack", Track},
     {"Simple", Simple},
     {"Complex", Complex},
     {"Ray Tracing In One Weekend", RayTracingInOneWeekend},
