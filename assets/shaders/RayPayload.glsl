@@ -5,7 +5,7 @@ struct RayPayload
 	float Distance;
 	vec4 EmitColor;
 	vec3 ScatterDirection;
-	uint FrontFace;
+	bool FrontFace;
 	vec4 GBuffer; // normal + roughness
 	vec4 Albedo;
 	uint RandomSeed;
