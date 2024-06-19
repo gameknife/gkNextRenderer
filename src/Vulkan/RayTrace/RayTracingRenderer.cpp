@@ -14,9 +14,16 @@
 
 #include "Vulkan/RenderImage.hpp"
 
+#if WITH_OIDN
+#include "ThirdParty/oidn/include/oidn.hpp"
+#endif
 
 namespace Vulkan::RayTracing
 {
+#if WITH_OIDN
+    oidn::DeviceRef device;
+#endif
+    
     struct DenoiserPushConstantData
     {
         uint32_t pingpong;
@@ -46,6 +53,11 @@ namespace Vulkan::RayTracing
                              const bool enableValidationLayers) :
         RayTraceBaseRenderer(windowConfig, presentMode, enableValidationLayers)
     {
+        // try use amd gpu as denoise device
+#if WITH_OIDN
+        device = oidn::newDevice(oidn::DeviceType::CUDA); // CPU or GPU if available
+        device.commit();
+#endif
     }
 
     RayTracingRenderer::~RayTracingRenderer()
@@ -202,6 +214,50 @@ namespace Vulkan::RayTracing
             vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
         }
 
+        {
+#if WITH_OIDN
+            auto Extent = SwapChain().Extent();
+            size_t SourceImageSize = Extent.width * Extent.height * 2 * sizeof(float);
+            size_t ImageSize = Extent.width * Extent.height * 3 * sizeof(float);
+            static oidn::BufferRef colorBuf  = device.newBuffer(ImageSize);
+
+            // Create a filter for denoising a beauty (color) image using optional auxiliary images too
+            // This can be an expensive operation, so try no to create a new filter for every image!
+            oidn::FilterRef filter = device.newFilter("RT"); // generic ray tracing filter
+            filter.setImage("color",  colorBuf,  oidn::Format::Float3, Extent.width, Extent.height); // beauty
+            //filter.setImage("albedo", albedoBuf, oidn::Format::Float3, width, height); // auxiliary
+            //filter.setImage("normal", normalBuf, oidn::Format::Float3, width, height); // auxiliary
+            filter.setImage("output", colorBuf,  oidn::Format::Float3, Extent.width, Extent.height); // denoised beauty
+            filter.set("hdr", true); // beauty image is HDR
+            filter.set("quality", oidn::Quality::Fast); // beauty image is HDR
+            filter.commit();
+	
+            // fill it from float3 buffer, frame x
+            float* colorPtr = (float*)colorBuf.getData();
+            {
+                uint8_t* mappedData = (uint8_t*)GetScreenShotMemory()->Map(0, VK_WHOLE_SIZE );
+                //memcpy(colorPtr, mappedData, ImageSize);
+                GetScreenShotMemory()->Unmap();
+	
+            }
+
+            // Filter the beauty image
+            filter.execute();
+
+            // write back to present buffer. frame x + 1
+            {
+                uint8_t* mappedData = (uint8_t*)GetScreenShotMemory()->Map(0, VK_WHOLE_SIZE );
+                //memcpy(mappedData, colorPtr, ImageSize);
+                GetScreenShotMemory()->Unmap();
+            }
+
+            // oidn error check
+            // const char* errorMessage;
+            // if (device.getError(errorMessage) != oidn::Error::None)
+            // 	std::cout << "Error: " << errorMessage << std::endl;
+#endif
+        }
+        
         {
             SCOPED_GPU_TIMER("compose");
             rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
