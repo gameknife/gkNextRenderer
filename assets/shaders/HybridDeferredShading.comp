@@ -166,8 +166,6 @@ void main() {
 		imageStore(OutMotionVector, ipos, vec4(0));
 		return;
 	}
-	
-	vBuffer.x = vBuffer.x - 1;
     
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     
