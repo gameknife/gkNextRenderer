@@ -1,4 +1,4 @@
-#include "Const_Func.glsl" //pi consts
+#include "common/Const_Func.glsl" //pi consts
 
 #extension GL_EXT_control_flow_attributes : require
 

@@ -1,8 +1,8 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "Random.glsl"
-#include "Const_Func.glsl" //pi consts, Schlick
 #include "RayPayload.glsl"
+#include "common/Const_Func.glsl" //pi consts, Schlick
 
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
