@@ -1,3 +1,5 @@
+#include "Const_Func.glsl" //pi consts
+
 #extension GL_EXT_control_flow_attributes : require
 
 // Generates a seed for a random number generator from 2 inputs plus a backoff
@@ -62,8 +64,7 @@ vec3 RandomInUnitSphere(inout uint seed)
 
 vec3 RandomInCone(inout uint seed, float cosAngle) {
     const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
-    const float pi = 3.1415926535897932384626433832795;
-    float phi = 2.0f * pi * u.x;
+    float phi = M_TWO_PI * u.x;
     float cos_phi = cos(phi);
     float sin_phi = sin(phi);
     float cos_theta = 1.0f - u.y + u.y * cosAngle;
@@ -74,8 +75,7 @@ vec3 RandomInCone(inout uint seed, float cosAngle) {
 vec3 RandomInHemiSphere(inout uint seed)
 {
     const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
-    const float pi = 3.1415926535897932384626433832795;
-    float phi = 2.0f * pi * u.x;
+    float phi = M_TWO_PI * u.x;
     float cos_phi = cos(phi);
     float sin_phi = sin(phi);
     float cos_theta = sqrt(u.y);
@@ -85,11 +85,10 @@ vec3 RandomInHemiSphere(inout uint seed)
 
 vec3 RandomInHemiSphere1(inout uint seed) 
 {
-	const float pi = 3.1415926535897932384626433832795;
     float r1 = RandomFloat(seed);
     float r2 = RandomFloat(seed);
 
-    float phi = 2.0*pi*r1;
+    float phi = M_TWO_PI * r1;
     float x = cos(phi)*sqrt(r2);
     float y = sin(phi)*sqrt(r2);
     float z = sqrt(1.0-r2);

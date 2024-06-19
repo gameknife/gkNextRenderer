@@ -11,15 +11,7 @@ layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
 layout(location = 0) rayPayloadInEXT RayPayload Ray;
 
-// The helper for the equirectangular textures.
-vec4 equirectangularSample(vec3 direction, float rotate)
-{
-    const float pi = 3.1415926535897932384626433832795;
-    vec3 d = normalize(direction);
-    vec2 t = vec2((atan(d.x, d.z) + pi * rotate) / (2.f * pi), acos(d.y) / pi);
-
-    return min( vec4(10,10,10,1), texture(TextureSamplers[Camera.SkyIdx], t));
-}
+#include "common/equirectangularSample.glsl"
 
 void main()
 {
