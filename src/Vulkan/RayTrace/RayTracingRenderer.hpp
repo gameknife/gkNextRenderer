@@ -7,6 +7,7 @@ namespace Vulkan
 	namespace PipelineCommon
 	{
 		class AccumulatePipeline;
+		class FinalComposePipeline;
 	}
 
 	class RenderImage;
@@ -39,6 +40,7 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+		void AfterPresent() override;
 
 	private:
 		
@@ -46,15 +48,21 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<RenderImage> rtOutputForOIDN_;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtPingPong0;
 		std::unique_ptr<RenderImage> rtPingPong1;
 		std::unique_ptr<RenderImage> rtVisibility0_;
 		std::unique_ptr<RenderImage> rtVisibility1_;
 
+		std::unique_ptr<Image> oidnImage_;
+		std::unique_ptr<DeviceMemory> oidnImageMemory_;
+		std::unique_ptr<ImageView> oidnImageView_;
+		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
-		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 	};
 
 }

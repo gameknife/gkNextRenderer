@@ -193,6 +193,7 @@ namespace Vulkan
 		virtual void DeleteSwapChain();
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		virtual void AfterPresent() {}
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}

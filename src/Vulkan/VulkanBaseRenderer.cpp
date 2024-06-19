@@ -358,6 +358,8 @@ void VulkanBaseRenderer::DrawFrame()
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
 	
 	gpuTimer_->FrameEnd(commandBuffer);
+
+	AfterPresent();
 	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{
