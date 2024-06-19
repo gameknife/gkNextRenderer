@@ -4,6 +4,7 @@ file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
 file(GLOB shader_extra_files shaders/*.glsl)
+file(GLOB shader_common_files shaders/common/*.glsl)
 set_source_files_properties(${shader_extra_files} PROPERTIES HEADER_FILE_ONLY TRUE)
 
 set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR})
@@ -45,12 +46,13 @@ copy_assets(texture_files textures copied_textures)
 source_group("Fonts" FILES ${font_files})
 source_group("Models" FILES ${model_files})
 source_group("Shaders" FILES ${shader_files} ${shader_extra_files})
+source_group("Shaders.Common" FILES ${shader_common_files})
 source_group("Textures" FILES ${texture_files})
 
 add_custom_target(
 	Assets 
 	DEPENDS ${copied_fonts} ${copied_models} ${compiled_shaders} ${copied_textures} 
-	SOURCES ${font_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files})
+	SOURCES ${font_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
 
 
 # Shader compilation -> POST_BUILD
