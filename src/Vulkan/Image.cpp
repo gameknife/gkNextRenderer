@@ -9,13 +9,13 @@ namespace Vulkan {
 	
 Image::Image(const Vulkan::Device& device, VkExtent2D extent, bool external):device_(device),
 	extent_(extent),
-	format_(VK_FORMAT_R32G32B32A32_SFLOAT),
+	format_(VK_FORMAT_R16G16B16A16_SFLOAT),
 	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED)
 {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType				= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType         = VK_IMAGE_TYPE_2D;
-	imageInfo.format            = VK_FORMAT_R32G32B32A32_SFLOAT;
+	imageInfo.format            = VK_FORMAT_R16G16B16A16_SFLOAT;
 	imageInfo.mipLevels         = 1;
 	imageInfo.arrayLayers       = 1;
 	imageInfo.samples           = VK_SAMPLE_COUNT_1_BIT;

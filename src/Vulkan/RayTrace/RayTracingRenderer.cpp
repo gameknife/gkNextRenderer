@@ -27,6 +27,7 @@ namespace Vulkan::RayTracing
 {
 #if WITH_OIDN
     oidn::DeviceRef device;
+    oidn::BufferRef colorBuf;
 #endif
     
     struct DenoiserPushConstantData
@@ -59,10 +60,6 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer(windowConfig, presentMode, enableValidationLayers)
     {
         // try use amd gpu as denoise device
-#if WITH_OIDN
-        device = oidn::newDevice(oidn::DeviceType::CUDA); // CPU or GPU if available
-        device.commit();
-#endif
     }
 
     RayTracingRenderer::~RayTracingRenderer()
@@ -101,6 +98,37 @@ namespace Vulkan::RayTracing
 
     void RayTracingRenderer::OnDeviceSet()
     {
+#if WITH_OIDN
+        // Query the UUID of the Vulkan physical device
+        VkPhysicalDeviceIDProperties id_properties{};
+        id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 properties{};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &id_properties;
+        vkGetPhysicalDeviceProperties2(Device().PhysicalDevice(), &properties);
+
+        oidn::UUID uuid;
+        std::memcpy(uuid.bytes, id_properties.deviceUUID, sizeof(uuid.bytes));
+        
+        device = oidn::newDevice(uuid); // CPU or GPU if available
+        if (device.getError() != oidn::Error::None)
+            throw std::runtime_error("Failed to commit OIDN device.");
+        device.commit();
+        if (device.getError() != oidn::Error::None)
+            throw std::runtime_error("Failed to commit OIDN device.");
+        const auto oidn_external_mem_types = device.get<oidn::ExternalMemoryTypeFlags>("externalMemoryTypes");
+        if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::OpaqueFD) {
+            std::cout<<"fd";
+        } else if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::DMABuf) {
+            std::cout<<"dma";
+        } else if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::OpaqueWin32) {
+            std::cout<<"handle";
+        } else {
+            throw std::runtime_error("failed to find compatible external memory type");
+        }
+#endif
+        
         RayTraceBaseRenderer::OnDeviceSet();
     }
 
@@ -167,6 +195,9 @@ namespace Vulkan::RayTracing
     {
         
 #if WITH_OIDN
+        auto Extent = SwapChain().Extent();
+        const char* errorMessage;
+
         HANDLE extHandle;
         VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
         handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
@@ -175,41 +206,28 @@ namespace Vulkan::RayTracing
         {
             return;
         }
- 
-        auto Extent = SwapChain().Extent();
+
         size_t SrcImageSize = Extent.width * Extent.height * 4 * 2;
         size_t ImageSize = Extent.width * Extent.height * 3 * 2;
-        static oidn::BufferRef colorBuf  = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, &extHandle, "", SrcImageSize );
-
+        colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, extHandle, nullptr, SrcImageSize );
+        if (device.getError(errorMessage) != oidn::Error::None)
+            std::cout << "Error: " << errorMessage << std::endl;
+       
         // Create a filter for denoising a beauty (color) image using optional auxiliary images too
         // This can be an expensive operation, so try no to create a new filter for every image!
         static oidn::FilterRef filter = device.newFilter("RT"); // generic ray tracing filter
-        filter.setImage("color",  colorBuf,  oidn::Format::Half3, Extent.width, Extent.height); // beauty
+        filter.setImage("color",  colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // beauty
         //filter.setImage("albedo", albedoBuf, oidn::Format::Float3, width, height); // auxiliary
         //filter.setImage("normal", normalBuf, oidn::Format::Float3, width, height); // auxiliary
-        filter.setImage("output", colorBuf,  oidn::Format::Half3, Extent.width, Extent.height); // denoised beauty
+        filter.setImage("output", colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // denoised beauty
         filter.set("hdr", true); // beauty image is HDR
         filter.set("quality", oidn::Quality::Fast); // beauty image is HDR
         filter.commit();
-
-        // fill it from float3 buffer, frame x
-        // uint8_t* colorPtr = (uint8_t*)colorBuf.getData();
-        // uint8_t* mappedData = (uint8_t*)oidnImageMemory_->Map(0,  SrcImageSize );
-        // for( int i = 0; i < Extent.width * Extent.height; i++)
-        // {
-        //     memcpy(colorPtr + i * 3 * 2, mappedData + i * 4 * 2, 3 * 2);
-        // }
+        
         filter.execute();
-        // for( int i = 0; i < Extent.width * Extent.height; i++)
-        // {
-        //     memcpy( mappedData + i * 4 * 2, colorPtr + i * 3 * 2, 3 * 2);
-        // }
-
-        //oidnImageMemory_->Unmap();
-        // oidn error check
-        // const char* errorMessage;
-        // if (device.getError(errorMessage) != oidn::Error::None)
-        // 	std::cout << "Error: " << errorMessage << std::endl;
+        
+        if (device.getError(errorMessage) != oidn::Error::None)
+        	std::cout << "Error: " << errorMessage << std::endl;
         #endif
     }
 
@@ -284,7 +302,7 @@ namespace Vulkan::RayTracing
         
         {
             SCOPED_GPU_TIMER("compose");
-
+            
             ImageMemoryBarrier::Insert(commandBuffer, oidnImage_->Handle(), subresourceRange, 0,
                                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                VK_IMAGE_LAYOUT_GENERAL);
@@ -380,7 +398,7 @@ namespace Vulkan::RayTracing
         rtVisibility1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,VK_IMAGE_USAGE_STORAGE_BIT));
 
         oidnImage_.reset(new Image(Device(), extent, true));
-        oidnImageMemory_.reset(new DeviceMemory(oidnImage_->AllocateExternalMemory(0)));
-        oidnImageView_.reset(new ImageView(Device(), oidnImage_->Handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
+        oidnImageMemory_.reset(new DeviceMemory(oidnImage_->AllocateExternalMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        oidnImageView_.reset(new ImageView(Device(), oidnImage_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
     }
 }
