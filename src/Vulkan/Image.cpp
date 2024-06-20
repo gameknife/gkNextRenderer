@@ -6,6 +6,32 @@
 #include "Utilities/Exception.hpp"
 
 namespace Vulkan {
+	
+Image::Image(const Vulkan::Device& device, VkExtent2D extent, bool external):device_(device),
+	extent_(extent),
+	format_(VK_FORMAT_R32G32B32A32_SFLOAT),
+	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED)
+{
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType				= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType         = VK_IMAGE_TYPE_2D;
+	imageInfo.format            = VK_FORMAT_R32G32B32A32_SFLOAT;
+	imageInfo.mipLevels         = 1;
+	imageInfo.arrayLayers       = 1;
+	imageInfo.samples           = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling            = VK_IMAGE_TILING_LINEAR;
+	imageInfo.extent            = {extent.width, extent.height, 1};
+	imageInfo.initialLayout		= imageLayout_;
+	imageInfo.usage             = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	VkExternalMemoryImageCreateInfo external_memory_image_info{};
+	external_memory_image_info.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+	external_memory_image_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+
+	imageInfo.pNext = &external_memory_image_info;
+	Check(vkCreateImage(device.Handle(), &imageInfo, nullptr, &image_),
+		"create external image");
+}
 
 Image::Image(const class Device& device, const VkExtent2D extent, const VkFormat format) :
 	Image(device, extent, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
@@ -66,6 +92,17 @@ DeviceMemory Image::AllocateMemory(const VkMemoryPropertyFlags properties) const
 {
 	const auto requirements = GetMemoryRequirements();
 	DeviceMemory memory(device_, requirements.size, requirements.memoryTypeBits, 0, properties);
+
+	Check(vkBindImageMemory(device_.Handle(), image_, memory.Handle(), 0),
+		"bind image memory");
+
+	return memory;
+}
+
+DeviceMemory Image::AllocateExternalMemory(const VkMemoryPropertyFlags properties) const
+{
+	const auto requirements = GetMemoryRequirements();
+	DeviceMemory memory(device_, requirements.size, true, requirements.memoryTypeBits, 0, properties);
 
 	Check(vkBindImageMemory(device_.Handle(), image_, memory.Handle(), 0),
 		"bind image memory");

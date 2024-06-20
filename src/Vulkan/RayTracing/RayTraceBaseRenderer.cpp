@@ -238,7 +238,7 @@ namespace Vulkan::RayTracing
                                        instancesBufferMemory_);
 
         // Memory barrier for the bottom level acceleration structure builds.
-        AccelerationStructure::MemoryBarrier(commandBuffer);
+        AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
         topAs_.emplace_back(*deviceProcedures_, *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
                             static_cast<uint32_t>(instances.size()));

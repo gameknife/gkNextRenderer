@@ -2,7 +2,33 @@
 #include "Device.hpp"
 #include "Utilities/Exception.hpp"
 
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+#	include <aclapi.h>
+#	include <dxgi1_2.h>
+#endif
+
 namespace Vulkan {
+	DeviceMemory::DeviceMemory(const Vulkan::Device& device, size_t size, bool external, uint32_t memoryTypeBits, VkMemoryAllocateFlags allocateFLags, VkMemoryPropertyFlags propertyFlags):device_(device)
+	{
+		VkExportMemoryAllocateInfoKHR export_memory_allocate_info{};
+		export_memory_allocate_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
+		export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+
+		_SECURITY_ATTRIBUTES            win_security_attributes;
+		VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};
+		export_memory_win32_handle_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
+		export_memory_win32_handle_info.pAttributes = &win_security_attributes;
+		export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
+		export_memory_allocate_info.pNext           = &export_memory_win32_handle_info;
+		
+		VkMemoryAllocateInfo memory_allocate_info = {};
+		memory_allocate_info.sType				  = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		memory_allocate_info.pNext                = &export_memory_allocate_info;
+		memory_allocate_info.allocationSize       = size;
+		memory_allocate_info.memoryTypeIndex      = FindMemoryType(memoryTypeBits, propertyFlags);
+
+		Check(vkAllocateMemory(device.Handle(), &memory_allocate_info, nullptr, &memory_), "allocate ext memory");
+	}
 
 DeviceMemory::DeviceMemory(
 	const class Device& device, 

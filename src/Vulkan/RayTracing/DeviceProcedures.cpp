@@ -15,7 +15,7 @@ namespace
 		if (func == nullptr)
 		{
 			// dont throw
-			//Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
+			Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
 		}
 
 		return func;
@@ -34,6 +34,7 @@ DeviceProcedures::DeviceProcedures(const class Device& device, bool raytracing, 
 	vkGetRayTracingShaderGroupHandlesKHR(raytracing ? GetProcedure<PFN_vkGetRayTracingShaderGroupHandlesKHR>(device, "vkGetRayTracingShaderGroupHandlesKHR"): nullptr),
 	vkGetAccelerationStructureDeviceAddressKHR(GetProcedure<PFN_vkGetAccelerationStructureDeviceAddressKHR>(device, "vkGetAccelerationStructureDeviceAddressKHR")),
 	vkCmdWriteAccelerationStructuresPropertiesKHR(GetProcedure<PFN_vkCmdWriteAccelerationStructuresPropertiesKHR>(device, "vkCmdWriteAccelerationStructuresPropertiesKHR")),
+	vkGetMemoryWin32HandleKHR(GetProcedure<PFN_vkGetMemoryWin32HandleKHR>(device, "vkGetMemoryWin32HandleKHR")),
 	device_(device)
 {
 }

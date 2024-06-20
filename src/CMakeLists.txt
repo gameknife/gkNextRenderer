@@ -275,3 +275,7 @@ target_compile_definitions(${exe_name} PUBLIC WITH_OIDN=1)
 target_link_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/lib/)
 target_link_libraries(${exe_name} PRIVATE OpenImageDenoise OpenImageDenoise_core )
 endif()
+
+if( WIN32 )
+target_compile_definitions(${exe_name} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
+endif()

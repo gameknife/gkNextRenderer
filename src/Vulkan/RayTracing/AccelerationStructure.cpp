@@ -83,7 +83,7 @@ void AccelerationStructure::CreateAccelerationStructure(Buffer& resultBuffer, co
 		"create acceleration structure");
 }
 
-void AccelerationStructure::MemoryBarrier(VkCommandBuffer commandBuffer)
+void AccelerationStructure::InsertMemoryBarrier(VkCommandBuffer commandBuffer)
 {
 	// Wait for the builder to complete by setting a barrier on the resulting buffer. This is
 	// particularly important as the construction of the top-level hierarchy may be called right

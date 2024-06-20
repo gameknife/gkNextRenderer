@@ -14,6 +14,11 @@
 
 #include "Vulkan/RenderImage.hpp"
 
+#ifdef WIN32
+#	include <aclapi.h>
+#	include <dxgi1_2.h>
+#endif
+
 #if WITH_OIDN
 #include "ThirdParty/oidn/include/oidn.hpp"
 #endif
@@ -81,6 +86,10 @@ namespace Vulkan::RayTracing
                                   {
                                       VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME
                                   });
+#if WIN32
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+#endif
         
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {};
         rayTracingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
@@ -158,10 +167,19 @@ namespace Vulkan::RayTracing
     {
         
 #if WITH_OIDN
+        HANDLE extHandle;
+        VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
+        handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+        handleInfo.memory = oidnImageMemory_->Handle();
+        if ( deviceProcedures_->vkGetMemoryWin32HandleKHR(Device().Handle(), &handleInfo, &extHandle) != VK_SUCCESS)
+        {
+            return;
+        }
+ 
         auto Extent = SwapChain().Extent();
         size_t SrcImageSize = Extent.width * Extent.height * 4 * 2;
         size_t ImageSize = Extent.width * Extent.height * 3 * 2;
-        static oidn::BufferRef colorBuf  = device.newBuffer(ImageSize);
+        static oidn::BufferRef colorBuf  = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, &extHandle, "", SrcImageSize );
 
         // Create a filter for denoising a beauty (color) image using optional auxiliary images too
         // This can be an expensive operation, so try no to create a new filter for every image!
@@ -175,19 +193,19 @@ namespace Vulkan::RayTracing
         filter.commit();
 
         // fill it from float3 buffer, frame x
-        uint8_t* colorPtr = (uint8_t*)colorBuf.getData();
-        uint8_t* mappedData = (uint8_t*)oidnImageMemory_->Map(0,  SrcImageSize );
-        for( int i = 0; i < Extent.width * Extent.height; i++)
-        {
-            memcpy(colorPtr + i * 3 * 2, mappedData + i * 4 * 2, 3 * 2);
-        }
+        // uint8_t* colorPtr = (uint8_t*)colorBuf.getData();
+        // uint8_t* mappedData = (uint8_t*)oidnImageMemory_->Map(0,  SrcImageSize );
+        // for( int i = 0; i < Extent.width * Extent.height; i++)
+        // {
+        //     memcpy(colorPtr + i * 3 * 2, mappedData + i * 4 * 2, 3 * 2);
+        // }
         filter.execute();
-        for( int i = 0; i < Extent.width * Extent.height; i++)
-        {
-            memcpy( mappedData + i * 4 * 2, colorPtr + i * 3 * 2, 3 * 2);
-        }
+        // for( int i = 0; i < Extent.width * Extent.height; i++)
+        // {
+        //     memcpy( mappedData + i * 4 * 2, colorPtr + i * 3 * 2, 3 * 2);
+        // }
 
-        oidnImageMemory_->Unmap();
+        //oidnImageMemory_->Unmap();
         // oidn error check
         // const char* errorMessage;
         // if (device.getError(errorMessage) != oidn::Error::None)
@@ -361,8 +379,8 @@ namespace Vulkan::RayTracing
         rtVisibility0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT));
         rtVisibility1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL,VK_IMAGE_USAGE_STORAGE_BIT));
 
-        oidnImage_.reset(new Image(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT));
-        oidnImageMemory_.reset(new DeviceMemory(oidnImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        oidnImageView_.reset(new ImageView(Device(), oidnImage_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
+        oidnImage_.reset(new Image(Device(), extent, true));
+        oidnImageMemory_.reset(new DeviceMemory(oidnImage_->AllocateExternalMemory(0)));
+        oidnImageView_.reset(new ImageView(Device(), oidnImage_->Handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
     }
 }

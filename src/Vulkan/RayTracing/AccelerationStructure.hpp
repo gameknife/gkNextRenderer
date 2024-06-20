@@ -28,7 +28,7 @@ namespace Vulkan::RayTracing
 		const class DeviceProcedures& DeviceProcedures() const { return deviceProcedures_; }
 		const VkAccelerationStructureBuildSizesInfoKHR BuildSizes() const { return buildSizesInfo_; }
 
-		static void MemoryBarrier(VkCommandBuffer commandBuffer);
+		static void InsertMemoryBarrier(VkCommandBuffer commandBuffer);
 	
 	protected:
 
