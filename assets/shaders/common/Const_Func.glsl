@@ -8,6 +8,13 @@
 #define M_2_PI			0.636619772367581343076	// 2/pi
 #define M_1_OVER_TWO_PI	0.159154943091895335768	// 1/ (2*pi)
 
+#define NEARzero 1e-35f
+#define isZERO(x) ((x)>-NEARzero && (x)<NEARzero)
+#define allLessThanZERO(a)	( (a).x + (a).y + (a).z < NEARzero )
+#define allGreaterZERO(a)	( (a).x + (a).y + (a).z >= NEARzero )
+#define sum_is_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) < NEARzero)
+#define sum_is_not_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) >= NEARzero)
+
 vec2 Mix(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
 {
 	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
