@@ -8,7 +8,7 @@ struct RayPayload
 	bool FrontFace;
 	vec4 GBuffer; // normal + roughness
 	vec4 Albedo;
-	uint RandomSeed;
+	uvec4 RandomSeed;
 	uint AdaptiveRay;
 	uint BounceCount;
 	float pdf;
