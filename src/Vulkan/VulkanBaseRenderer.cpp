@@ -37,7 +37,7 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
-	denoiseIteration_ = 1;
+	supportDenoiser_ = false;
 	supportScreenShot_ = windowConfig.NeedScreenShot;
 }
 
@@ -294,6 +294,8 @@ void VulkanBaseRenderer::DrawFrame()
 		fence->Wait(noTimeout);
 	}
 
+	BeforeNextFrame();
+
 	// next frame synchronization objects
 	fence = &(inFlightFences_[currentFrame_]);
 	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
@@ -344,7 +346,7 @@ void VulkanBaseRenderer::DrawFrame()
 
 	Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
 		"submit draw command buffer");
-
+	
 	VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -356,6 +358,8 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+
+	AfterPresent();
 	
 	gpuTimer_->FrameEnd(commandBuffer);
 	

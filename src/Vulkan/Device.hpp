@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "DebugUtils.hpp"
 #include "Vulkan.hpp"
 #include <vector>
@@ -7,6 +9,7 @@
 namespace Vulkan
 {
 	class Surface;
+	class DeviceProcedures;
 
 	class Device final
 	{
@@ -42,6 +45,8 @@ namespace Vulkan
 
 		void WaitIdle() const;
 
+		const DeviceProcedures& GetDeviceProcedures() const { return *deviceProcedures_; }
+
 	private:
 
 		void CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const;
@@ -62,6 +67,8 @@ namespace Vulkan
 		VkQueue computeQueue_{};
 		VkQueue presentQueue_{};
 		//VkQueue transferQueue_{};
+
+		std::unique_ptr<DeviceProcedures> deviceProcedures_;
 
 		VkPhysicalDeviceProperties deviceProp_;
 	};

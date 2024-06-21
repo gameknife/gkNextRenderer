@@ -16,6 +16,7 @@ namespace Vulkan
 namespace Vulkan::PipelineCommon
 {
 	class AccumulatePipeline;
+	class FinalComposePipeline;
 }
 
 namespace Vulkan::ModernDeferred
@@ -47,7 +48,8 @@ namespace Vulkan::HybridDeferred
 	private:
 		std::unique_ptr<ModernDeferred::VisibilityPipeline> visibilityPipeline_;
 		std::unique_ptr<class HybridShadingPipeline> deferredShadingPipeline_;
-		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 
 		std::unique_ptr<RenderImage> rtAccumlation;

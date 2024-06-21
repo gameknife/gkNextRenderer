@@ -16,11 +16,11 @@ namespace Vulkan
 	class ImageView;
 	class PipelineLayout;
 	class SwapChain;
+	class DeviceProcedures;
 }
 
 namespace Vulkan::RayTracing
 {
-	class DeviceProcedures;
 	class TopLevelAccelerationStructure;
 
 	class RayTracingPipeline final
@@ -37,6 +37,8 @@ namespace Vulkan::RayTracing
 			const ImageView& motionVectorImageView,
 			const ImageView& visibilityBufferImageView,
 			const ImageView& visibility1BufferImageView,
+			const ImageView& OutAlbedoImageView,
+			const ImageView& OutNormalImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayTracingPipeline();

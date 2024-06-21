@@ -7,6 +7,7 @@ namespace Vulkan
 	namespace PipelineCommon
 	{
 		class AccumulatePipeline;
+		class FinalComposePipeline;
 	}
 
 	class RenderImage;
@@ -15,6 +16,7 @@ namespace Vulkan
 	class DeviceMemory;
 	class Image;
 	class ImageView;
+	class DeviceProcedures;
 }
 
 namespace Vulkan::RayTracing
@@ -40,21 +42,32 @@ namespace Vulkan::RayTracing
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
+		void BeforeNextFrame() override;
+
 	private:
 		
 		void CreateOutputImage();
 
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<RenderImage> rtOutputForOIDN_;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtPingPong0;
 		std::unique_ptr<RenderImage> rtPingPong1;
 		std::unique_ptr<RenderImage> rtVisibility0_;
 		std::unique_ptr<RenderImage> rtVisibility1_;
 
+		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtNormal_;
+
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
-		std::unique_ptr<class PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 	};
 
 }

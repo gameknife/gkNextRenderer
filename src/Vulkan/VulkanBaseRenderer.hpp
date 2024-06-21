@@ -194,6 +194,9 @@ namespace Vulkan
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
+		virtual void BeforeNextFrame() {}
+		virtual void AfterPresent() {}
+
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
@@ -205,7 +208,7 @@ namespace Vulkan
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
-		int denoiseIteration_{};
+		bool supportDenoiser_ {};
 		int frameCount_{};
 		bool supportScreenShot_{};
 
