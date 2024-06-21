@@ -28,6 +28,7 @@ namespace Vulkan::RayTracing
 #if WITH_OIDN
     oidn::DeviceRef device;
     oidn::BufferRef colorBuf;
+    oidn::FilterRef filter[2];
 #endif
     
     struct DenoiserPushConstantData
@@ -112,21 +113,7 @@ namespace Vulkan::RayTracing
         std::memcpy(uuid.bytes, id_properties.deviceUUID, sizeof(uuid.bytes));
         
         device = oidn::newDevice(uuid); // CPU or GPU if available
-        if (device.getError() != oidn::Error::None)
-            throw std::runtime_error("Failed to commit OIDN device.");
         device.commit();
-        if (device.getError() != oidn::Error::None)
-            throw std::runtime_error("Failed to commit OIDN device.");
-        const auto oidn_external_mem_types = device.get<oidn::ExternalMemoryTypeFlags>("externalMemoryTypes");
-        if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::OpaqueFD) {
-            std::cout<<"fd";
-        } else if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::DMABuf) {
-            std::cout<<"dma";
-        } else if (oidn_external_mem_types & oidn::ExternalMemoryTypeFlag::OpaqueWin32) {
-            std::cout<<"handle";
-        } else {
-            throw std::runtime_error("failed to find compatible external memory type");
-        }
 #endif
         
         RayTraceBaseRenderer::OnDeviceSet();
@@ -153,7 +140,7 @@ namespace Vulkan::RayTracing
             rtOutputForOIDN_->GetImageView(),
             UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), *oidnImageView_));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), *oidnImageView_, *oidnImage1View_, UniformBuffers()));
     
         
         const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
@@ -188,47 +175,33 @@ namespace Vulkan::RayTracing
         oidnImageMemory_.reset();
         oidnImageView_.reset();
 
+        oidnImage1_.reset();
+        oidnImage1Memory_.reset();
+        oidnImage1View_.reset();
+        
         RayTraceBaseRenderer::DeleteSwapChain();
+    }
+
+    void RayTracingRenderer::BeforeNextFrame()
+    {
+#if WITH_OIDN
+        
+#endif
     }
 
     void RayTracingRenderer::AfterPresent()
     {
-        
 #if WITH_OIDN
-        auto Extent = SwapChain().Extent();
-        const char* errorMessage;
-
-        HANDLE extHandle;
-        VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
-        handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
-        handleInfo.memory = oidnImageMemory_->Handle();
-        if ( deviceProcedures_->vkGetMemoryWin32HandleKHR(Device().Handle(), &handleInfo, &extHandle) != VK_SUCCESS)
-        {
-            return;
-        }
-
-        size_t SrcImageSize = Extent.width * Extent.height * 4 * 2;
-        size_t ImageSize = Extent.width * Extent.height * 3 * 2;
-        colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, extHandle, nullptr, SrcImageSize );
-        if (device.getError(errorMessage) != oidn::Error::None)
-            std::cout << "Error: " << errorMessage << std::endl;
-       
-        // Create a filter for denoising a beauty (color) image using optional auxiliary images too
-        // This can be an expensive operation, so try no to create a new filter for every image!
-        static oidn::FilterRef filter = device.newFilter("RT"); // generic ray tracing filter
-        filter.setImage("color",  colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // beauty
-        //filter.setImage("albedo", albedoBuf, oidn::Format::Float3, width, height); // auxiliary
-        //filter.setImage("normal", normalBuf, oidn::Format::Float3, width, height); // auxiliary
-        filter.setImage("output", colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // denoised beauty
-        filter.set("hdr", true); // beauty image is HDR
-        filter.set("quality", oidn::Quality::Fast); // beauty image is HDR
-        filter.commit();
         
-        filter.execute();
-        
-        if (device.getError(errorMessage) != oidn::Error::None)
-        	std::cout << "Error: " << errorMessage << std::endl;
-        #endif
+#endif
+    }
+
+    void RayTracingRenderer::AfterQuery()
+    {
+#if WITH_OIDN
+        filter[ (frameCount_ + 1) % 2 ].executeAsync();
+        device.sync();
+#endif
     }
 
     void RayTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -302,11 +275,20 @@ namespace Vulkan::RayTracing
         
         {
             SCOPED_GPU_TIMER("compose");
-            
-            ImageMemoryBarrier::Insert(commandBuffer, oidnImage_->Handle(), subresourceRange, 0,
+
+            VkImage targetImage;
+            if( frameCount_ % 2 == 0 )
+            {
+                targetImage = oidnImage_->Handle();
+            }
+            else
+            {
+                targetImage = oidnImage1_->Handle();
+            }
+            ImageMemoryBarrier::Insert(commandBuffer, targetImage, subresourceRange, 0,
                                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                VK_IMAGE_LAYOUT_GENERAL);
-            
+
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
                                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_GENERAL);
@@ -320,28 +302,6 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
                                        VK_ACCESS_TRANSFER_WRITE_BIT,
                                        0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-            
-            // rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            // ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-            //                            VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-            //                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            //
-            // // Copy output image into swap-chain image.
-            // VkImageCopy copyRegion;
-            // copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            // copyRegion.srcOffset = {0, 0, 0};
-            // copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            // copyRegion.dstOffset = {0, 0, 0};
-            // copyRegion.extent = {extent.width, extent.height, 1};
-            //
-            // vkCmdCopyImage(commandBuffer,
-            //                rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            //                SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            //                1, &copyRegion);
-            //
-            // ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
-            //                            VK_ACCESS_TRANSFER_WRITE_BIT,
-            //                            0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);   
         }
 
         {
@@ -357,10 +317,20 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::Insert(commandBuffer, rtOutputForOIDN_->GetImage().Handle(), subresourceRange,
                            VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            
-            ImageMemoryBarrier::Insert(commandBuffer, oidnImage_->Handle(), subresourceRange, 0,
-                               VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            VkImage targetImage;
+            if( frameCount_ % 2 == 0 )
+            {
+                targetImage = oidnImage1_->Handle();
+            }
+            else
+            {
+                targetImage = oidnImage_->Handle();
+            }
+
+            ImageMemoryBarrier::Insert(commandBuffer, targetImage, subresourceRange, 0,
+   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             
             // Copy output image into swap-chain image.
             VkImageCopy copyRegion;
@@ -372,7 +342,7 @@ namespace Vulkan::RayTracing
             
             vkCmdCopyImage(commandBuffer,
                            rtOutputForOIDN_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           oidnImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           targetImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1, &copyRegion);
 
             ImageMemoryBarrier::Insert(commandBuffer, rtOutputForOIDN_->GetImage().Handle(), subresourceRange,
@@ -400,5 +370,64 @@ namespace Vulkan::RayTracing
         oidnImage_.reset(new Image(Device(), extent, true));
         oidnImageMemory_.reset(new DeviceMemory(oidnImage_->AllocateExternalMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
         oidnImageView_.reset(new ImageView(Device(), oidnImage_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
+
+        oidnImage1_.reset(new Image(Device(), extent, true));
+        oidnImage1Memory_.reset(new DeviceMemory(oidnImage1_->AllocateExternalMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        oidnImage1View_.reset(new ImageView(Device(), oidnImage1_->Handle(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT));
+
+        {
+            auto Extent = SwapChain().Extent();
+
+            HANDLE extHandle;
+            VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
+            handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+            handleInfo.memory = oidnImageMemory_->Handle();
+            if ( deviceProcedures_->vkGetMemoryWin32HandleKHR(Device().Handle(), &handleInfo, &extHandle) != VK_SUCCESS)
+            {
+                return;
+            }
+
+            size_t SrcImageSize = Extent.width * Extent.height * 4 * 2;
+            colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, extHandle, nullptr, SrcImageSize );
+       
+            // Create a filter for denoising a beauty (color) image using optional auxiliary images too
+            // This can be an expensive operation, so try no to create a new filter for every image!
+            filter[0] = device.newFilter("RT"); // generic ray tracing filter
+            filter[0].setImage("color",  colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // beauty
+            //filter.setImage("albedo", albedoBuf, oidn::Format::Float3, width, height); // auxiliary
+            //filter.setImage("normal", normalBuf, oidn::Format::Float3, width, height); // auxiliary
+            filter[0].setImage("output", colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // denoised beauty
+            filter[0].set("hdr", true); // beauty image is HDR
+            filter[0].set("quality", oidn::Quality::Fast); // beauty image is HDR
+            filter[0].set("quality", oidn::Quality::Fast); // beauty image is HDR
+            filter[0].commit();
+        }
+
+        {
+            auto Extent = SwapChain().Extent();
+
+            HANDLE extHandle;
+            VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
+            handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+            handleInfo.memory = oidnImage1Memory_->Handle();
+            if ( deviceProcedures_->vkGetMemoryWin32HandleKHR(Device().Handle(), &handleInfo, &extHandle) != VK_SUCCESS)
+            {
+                return;
+            }
+
+            size_t SrcImageSize = Extent.width * Extent.height * 4 * 2;
+            colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, extHandle, nullptr, SrcImageSize );
+       
+            // Create a filter for denoising a beauty (color) image using optional auxiliary images too
+            // This can be an expensive operation, so try no to create a new filter for every image!
+            filter[1] = device.newFilter("RT"); // generic ray tracing filter
+            filter[1].setImage("color",  colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // beauty
+            //filter.setImage("albedo", albedoBuf, oidn::Format::Float3, width, height); // auxiliary
+            //filter.setImage("normal", normalBuf, oidn::Format::Float3, width, height); // auxiliary
+            filter[1].setImage("output", colorBuf,  oidn::Format::Half3, Extent.width, Extent.height, 0, 4 * 2, 4 * 2 * Extent.width); // denoised beauty
+            filter[1].set("hdr", true); // beauty image is HDR
+            filter[1].set("quality", oidn::Quality::Fast); // beauty image is HDR
+            filter[1].commit();
+        }
     }
 }

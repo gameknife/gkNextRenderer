@@ -40,7 +40,10 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+
+		void BeforeNextFrame() override;
 		void AfterPresent() override;
+		void AfterQuery() override;
 
 	private:
 		
@@ -58,6 +61,10 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Image> oidnImage_;
 		std::unique_ptr<DeviceMemory> oidnImageMemory_;
 		std::unique_ptr<ImageView> oidnImageView_;
+
+		std::unique_ptr<Image> oidnImage1_;
+		std::unique_ptr<DeviceMemory> oidnImage1Memory_;
+		std::unique_ptr<ImageView> oidnImage1View_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;

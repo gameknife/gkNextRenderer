@@ -294,6 +294,8 @@ void VulkanBaseRenderer::DrawFrame()
 		fence->Wait(noTimeout);
 	}
 
+	BeforeNextFrame();
+
 	// next frame synchronization objects
 	fence = &(inFlightFences_[currentFrame_]);
 	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
@@ -344,7 +346,7 @@ void VulkanBaseRenderer::DrawFrame()
 
 	Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
 		"submit draw command buffer");
-
+	
 	VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -356,10 +358,12 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+
+	AfterPresent();
 	
 	gpuTimer_->FrameEnd(commandBuffer);
 
-	AfterPresent();
+	AfterQuery();
 	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{

@@ -54,7 +54,9 @@ namespace Vulkan::PipelineCommon
 	
 		FinalComposePipeline(
 			const SwapChain& swapChain, 
-			const ImageView& sourceImageView);
+			const ImageView& sourceImageView,
+			const ImageView& sourceImage1View,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers);
 		~FinalComposePipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
