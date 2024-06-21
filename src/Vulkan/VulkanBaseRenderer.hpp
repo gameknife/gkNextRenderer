@@ -196,7 +196,6 @@ namespace Vulkan
 
 		virtual void BeforeNextFrame() {}
 		virtual void AfterPresent() {}
-		virtual void AfterQuery() {}
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}

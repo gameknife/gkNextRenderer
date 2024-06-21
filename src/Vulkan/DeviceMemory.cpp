@@ -77,35 +77,14 @@ WinSecurityAttributes::~WinSecurityAttributes()
 #endif
 
 namespace Vulkan {
-	DeviceMemory::DeviceMemory(const Vulkan::Device& device, size_t size, bool external, uint32_t memoryTypeBits, VkMemoryAllocateFlags allocateFLags, VkMemoryPropertyFlags propertyFlags):device_(device)
-	{
-		VkExportMemoryAllocateInfoKHR export_memory_allocate_info{};
-		export_memory_allocate_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
-		export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
-
-		WinSecurityAttributes            win_security_attributes;
-		VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};
-		export_memory_win32_handle_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
-		export_memory_win32_handle_info.pAttributes = &win_security_attributes;
-		export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
-		
-		export_memory_allocate_info.pNext           = &export_memory_win32_handle_info;
-		
-		VkMemoryAllocateInfo memory_allocate_info = {};
-		memory_allocate_info.sType				  = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memory_allocate_info.pNext                = &export_memory_allocate_info;
-		memory_allocate_info.allocationSize       = size;
-		memory_allocate_info.memoryTypeIndex      = FindMemoryType(memoryTypeBits, propertyFlags);
-
-		Check(vkAllocateMemory(device.Handle(), &memory_allocate_info, nullptr, &memory_), "allocate ext memory");
-	}
-
+	
 DeviceMemory::DeviceMemory(
 	const class Device& device, 
 	const size_t size, 
 	const uint32_t memoryTypeBits,
 	const VkMemoryAllocateFlags allocateFLags,
-	const VkMemoryPropertyFlags propertyFlags) :
+	const VkMemoryPropertyFlags propertyFlags,
+	bool external) :
 	device_(device)
 {
 	VkMemoryAllocateFlagsInfo flagsInfo = {};
@@ -118,6 +97,22 @@ DeviceMemory::DeviceMemory(
 	allocInfo.pNext = &flagsInfo;
 	allocInfo.allocationSize = size;
 	allocInfo.memoryTypeIndex = FindMemoryType(memoryTypeBits, propertyFlags);
+
+	VkExportMemoryAllocateInfoKHR export_memory_allocate_info{};
+	export_memory_allocate_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
+	export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+
+	WinSecurityAttributes            win_security_attributes;
+	VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};
+	export_memory_win32_handle_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
+	export_memory_win32_handle_info.pAttributes = &win_security_attributes;
+	export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
+	
+	if(external)
+	{
+		export_memory_allocate_info.pNext = &export_memory_win32_handle_info;
+		allocInfo.pNext = &export_memory_allocate_info;
+	}
 
 	Check(vkAllocateMemory(device.Handle(), &allocInfo, nullptr, &memory_),
 		"allocate memory");

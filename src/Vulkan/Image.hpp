@@ -16,10 +16,9 @@ namespace Vulkan
 		Image(const Image&) = delete;
 		Image& operator = (const Image&) = delete;
 		Image& operator = (Image&&) = delete;
-
-		Image(const Device& device, VkExtent2D extent, bool external);
+		
 		Image(const Device& device, VkExtent2D extent, VkFormat format);
-		Image(const Device& device, VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage);
+		Image(const Device& device, VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, bool useForExternal = false);
 		Image(Image&& other) noexcept;
 		~Image();
 
@@ -27,8 +26,7 @@ namespace Vulkan
 		VkExtent2D Extent() const { return extent_; }
 		VkFormat Format() const { return format_; }
 
-		DeviceMemory AllocateMemory(VkMemoryPropertyFlags properties) const;
-		DeviceMemory AllocateExternalMemory(VkMemoryPropertyFlags properties) const;
+		DeviceMemory AllocateMemory(VkMemoryPropertyFlags properties, bool external = false) const;
 		VkMemoryRequirements GetMemoryRequirements() const;
 
 		void TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLayout);
@@ -40,7 +38,7 @@ namespace Vulkan
 		const VkExtent2D extent_;
 		const VkFormat format_;
 		VkImageLayout imageLayout_;
-
+		bool external_;
 		VULKAN_HANDLE(VkImage, image_)
 	};
 

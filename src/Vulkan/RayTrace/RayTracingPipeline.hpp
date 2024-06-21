@@ -16,11 +16,11 @@ namespace Vulkan
 	class ImageView;
 	class PipelineLayout;
 	class SwapChain;
+	class DeviceProcedures;
 }
 
 namespace Vulkan::RayTracing
 {
-	class DeviceProcedures;
 	class TopLevelAccelerationStructure;
 
 	class RayTracingPipeline final

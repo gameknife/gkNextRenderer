@@ -21,13 +21,13 @@ namespace Vulkan
 		RenderImage& operator = (const RenderImage&) = delete;
 		RenderImage& operator = (RenderImage&&) = delete;
 
-		RenderImage(const Device& device,VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName = nullptr);
+		RenderImage(const Device& device,VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, bool external = false, const char* debugName = nullptr);
 		~RenderImage();
 
 		const Image& GetImage() const { return *image_; }
 		const ImageView& GetImageView() const { return *imageView_; }
 		void InsertBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout) const;
-	
+		HANDLE GetExternalHandle() const;
 	private:
 		std::unique_ptr<Image> image_;
 		std::unique_ptr<DeviceMemory> imageMemory_;

@@ -3,7 +3,7 @@
 #include "Vulkan/Device.hpp"
 #include <string>
 
-namespace Vulkan::RayTracing
+namespace Vulkan
 {
 
 namespace

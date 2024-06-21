@@ -16,6 +16,7 @@ namespace Vulkan
 	class DeviceMemory;
 	class Image;
 	class ImageView;
+	class DeviceProcedures;
 }
 
 namespace Vulkan::RayTracing
@@ -43,7 +44,6 @@ namespace Vulkan::RayTracing
 
 		void BeforeNextFrame() override;
 		void AfterPresent() override;
-		void AfterQuery() override;
 
 	private:
 		
@@ -58,13 +58,16 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<RenderImage> rtVisibility0_;
 		std::unique_ptr<RenderImage> rtVisibility1_;
 
-		std::unique_ptr<Image> oidnImage_;
-		std::unique_ptr<DeviceMemory> oidnImageMemory_;
-		std::unique_ptr<ImageView> oidnImageView_;
-
-		std::unique_ptr<Image> oidnImage1_;
-		std::unique_ptr<DeviceMemory> oidnImage1Memory_;
-		std::unique_ptr<ImageView> oidnImage1View_;
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		
+		// std::unique_ptr<Image> oidnImage_;
+		// std::unique_ptr<DeviceMemory> oidnImageMemory_;
+		// std::unique_ptr<ImageView> oidnImageView_;
+		//
+		// std::unique_ptr<Image> oidnImage1_;
+		// std::unique_ptr<DeviceMemory> oidnImage1Memory_;
+		// std::unique_ptr<ImageView> oidnImage1View_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;

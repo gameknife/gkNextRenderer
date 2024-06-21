@@ -7,11 +7,12 @@ namespace Vulkan
 	class Buffer;
 	class Device;
 	class DeviceMemory;
+	class DeviceProcedures;
 }
 
 namespace Vulkan::RayTracing
 {
-	class DeviceProcedures;
+	
 
 	class AccelerationStructure
 	{

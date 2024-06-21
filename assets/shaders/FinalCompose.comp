@@ -3,15 +3,12 @@
 
 #include "UniformBufferObject.glsl"
 
-layout(binding = 0, rgba16f) uniform image2D oidn0Image;
-layout(binding = 1, rgba16f) uniform image2D oidn1Image;
-layout(binding = 2, rgba8) uniform image2D OutImage;
-layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 0, rgba16f) uniform image2D InImage;
+layout(binding = 1, rgba8) uniform image2D OutImage;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    vec4 color = Camera.TotalFrames % 2 == 0 ?  imageLoad(oidn1Image, ipos) : imageLoad(oidn0Image, ipos);
-    imageStore(OutImage, ipos, color);
+    imageStore(OutImage, ipos, imageLoad(InImage, ipos));
 }

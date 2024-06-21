@@ -7,6 +7,7 @@
 #include "ImageView.hpp"
 #include "SingleTimeCommands.hpp"
 #include "Utilities/Exception.hpp"
+#include "Vulkan/RayTracing/DeviceProcedures.hpp"
 
 namespace Vulkan {
     RenderImage::RenderImage(const Device& device,
@@ -14,11 +15,12 @@ namespace Vulkan {
         VkFormat format,
         VkImageTiling tiling,
         VkImageUsageFlags usage,
+        bool external,
         const char* debugName)
     {
-        image_.reset(new Image(device, extent, format, tiling, usage));
+        image_.reset(new Image(device, extent, format, tiling, usage, external));
         imageMemory_.reset(
-            new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+            new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, external)));
         imageView_.reset(new ImageView(device, image_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
         if(debugName)
@@ -47,5 +49,15 @@ namespace Vulkan {
         ImageMemoryBarrier::Insert(commandBuffer, GetImage().Handle(), subresourceRange,
                                   srcAccessMask, dstAccessMask, oldLayout,
                                   newLayout);
+    }
+
+    HANDLE RenderImage::GetExternalHandle() const
+    {
+        HANDLE handle;
+        VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
+        handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+        handleInfo.memory = imageMemory_->Handle();
+        image_->Device().GetDeviceProcedures().vkGetMemoryWin32HandleKHR(image_->Device().Handle(), &handleInfo, &handle);
+        return handle;
     }
 }
