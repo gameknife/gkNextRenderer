@@ -72,7 +72,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = vec3(1.0);
-	ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal));
+	ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -80,7 +80,7 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = ray.Albedo.rgb;
-	ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflect(direction, normal));
+	ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -99,7 +99,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		// reflect
 		const vec3 reflected = reflect(direction, outwardNormal);
 		ray.Attenuation = vec3(1.0);
-		ray.ScatterDirection = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * 45.f / 180.f * 3.14159f)), reflected);
+		ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflected) : reflected;
 	}
 	else
 	{

@@ -160,7 +160,7 @@ void main() {
 	// x == y == 0, hit the sky, quick go
 	if(vBuffer.x == 0)
 	{
-		const vec3 blurRay = AlignWithNormal( RandomInCone(RandomSeed, cos(0.2 / 180.f * 3.14159f)), ray_dir );
+		const vec3 blurRay = AlignWithNormal( RandomInCone(RandomSeed, cos(0.2 / 180.f * M_PI)), ray_dir );
 		vec3 iblColor = equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity;
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
@@ -195,9 +195,9 @@ void main() {
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		vec3 trace_dir = chanceReflect ?
-		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
+		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
 		( RandomFloat(RandomSeed) < metalProb ?
-		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * 45.f / 180.f * 3.14159f)), reflect( ray_dir, outwardNormal) ) :
+		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
 		);
 		
@@ -222,7 +222,7 @@ void main() {
         
         d = mix(d, vec3(0.0), vec3(metalProb));
     
-        const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * 3.14159f)), lightVector);
+        const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
         
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, 0.01, lightVectorCone, 10000.0);
