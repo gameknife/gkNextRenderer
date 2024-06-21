@@ -97,8 +97,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ShowHeatmap = userSettings_.ShowHeatmap;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
-    ubo.TemporalFrames = userSettings_.TemporalFrames;
-ubo.HDR = Renderer::SwapChain().IsHDR();
+    ubo.TemporalFrames = userSettings_.TemporalFrames;  
+    ubo.HDR = Renderer::SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 
@@ -185,6 +185,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
         CreateSwapChain();
         return;
     }
+
 
     bool isAccumReset = userSettings_.RequiresAccumulationReset(previousSettings_);
     if(resetAccumulation_ || isAccumReset) frameNum_ = 0;
@@ -311,7 +312,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
     // Camera motions
     if (!userSettings_.Benchmark)
     {
-        resetAccumulation_ |= modelViewController_.OnKey(key, scancode, action, mods);
+        resetAccumulation_ = modelViewController_.OnKey(key, scancode, action, mods);
     }
 }
 
@@ -328,7 +329,7 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
     }
 
     // Camera motions
-    resetAccumulation_ |= modelViewController_.OnCursorPosition(xpos, ypos);
+    resetAccumulation_ = modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
 template <typename Renderer>
@@ -342,7 +343,7 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
     }
 
     // Camera motions
-    resetAccumulation_ |= modelViewController_.OnMouseButton(button, action, mods);
+    resetAccumulation_ = modelViewController_.OnMouseButton(button, action, mods);
 }
 
 template <typename Renderer>

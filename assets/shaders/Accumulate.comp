@@ -98,6 +98,6 @@ void main() {
     {
         imageStore(AccumulateImage, ipos, final);
     }
-    
+
     imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
 }

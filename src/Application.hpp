@@ -73,7 +73,6 @@ private:
 	uint32_t frameNum_{};
 	uint32_t totalNumberOfSamples_{};
 	uint32_t numberOfSamples_{};
-	bool resetAccumulation_{};
 
 	// Benchmark stats
 	double sceneInitialTime_{};
