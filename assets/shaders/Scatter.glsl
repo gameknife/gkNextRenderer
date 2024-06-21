@@ -52,7 +52,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
 
-		float ndotl = ray.FrontFace ? -dot(tolight, normal) : dot(tolight, normal);
+		float ndotl = dot(tolight, normal);
 		
 		if(ndotl >= 0)
 		{
