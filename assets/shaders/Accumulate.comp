@@ -99,12 +99,5 @@ void main() {
         imageStore(AccumulateImage, ipos, final);
     }
     
-    // directly output
-    #if DESKTOP
-    imageStore(OutImage, ipos, vec4( LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
-    #else
-    vec3 c = LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0);
-    c *= c;
-    imageStore(OutImage, ipos, vec4(c + c, 1.0));
-    #endif
+    imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
 }

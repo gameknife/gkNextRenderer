@@ -68,7 +68,7 @@ namespace Vulkan::RayTracing
     {
         Vulkan::RayTracing::RayTraceBaseRenderer::CreateSwapChain();
         CreateOutputImage();
-        rayTracingPipeline_.reset(new RayQueryPipeline(*deviceProcedures_, SwapChain(), topAs_[0], *outputImageView_, UniformBuffers(), GetScene()));
+        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), topAs_[0], *outputImageView_, UniformBuffers(), GetScene()));
     }
 
     void RayQueryRenderer::DeleteSwapChain()

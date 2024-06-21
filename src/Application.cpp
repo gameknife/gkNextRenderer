@@ -98,10 +98,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
-
-    ubo.ColorPhi = userSettings_.ColorPhi;
-    ubo.DepthPhi = userSettings_.DepthPhi;
-    ubo.NormalPhi = userSettings_.NormalPhi;
+ubo.HDR = Renderer::SwapChain().IsHDR();
+    
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 
     ubo.LightCount = scene_->GetLightCount();
@@ -234,7 +232,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     // Update the camera position / angle.
     resetAccumulation_ = modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
     
-    Renderer::denoiseIteration_ = userSettings_.DenoiseIteration;
+    Renderer::supportDenoiser_ = userSettings_.Denoiser;
     Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
     // Render the scene

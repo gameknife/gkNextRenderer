@@ -3,6 +3,7 @@
 #include "Instance.hpp"
 #include "Surface.hpp"
 #include "Utilities/Exception.hpp"
+#include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include <algorithm>
 #include <set>
 
@@ -122,6 +123,8 @@ Device::Device(
 	//vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
+
+	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
 }
 
 Device::~Device()
@@ -130,6 +133,7 @@ Device::~Device()
 	{
 		vkDestroyDevice(device_, nullptr);
 		device_ = nullptr;
+		deviceProcedures_.reset();
 	}
 }
 

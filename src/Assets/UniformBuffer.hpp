@@ -51,6 +51,7 @@ namespace Assets
 		uint32_t UseCheckerBoard; // bool
 		uint32_t TemporalFrames;
 		uint32_t HasSun; // bool
+		uint32_t HDR; // bool
 	};
 
 	// lightquad can represent by 4 points

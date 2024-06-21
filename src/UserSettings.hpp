@@ -43,10 +43,8 @@ struct UserSettings final
 	int TemporalFrames;
 
 	// Denoise
-	int DenoiseIteration;
-	float ColorPhi;
-	float DepthPhi;
-	float NormalPhi;
+	bool Denoiser;
+	
 
 	float PaperWhiteNit;
 	

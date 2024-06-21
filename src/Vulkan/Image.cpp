@@ -8,7 +8,7 @@
 namespace Vulkan {
 
 Image::Image(const class Device& device, const VkExtent2D extent, const VkFormat format) :
-	Image(device, extent, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
+	Image(device, extent, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false)
 {
 }
 
@@ -17,11 +17,13 @@ Image::Image(
 	const VkExtent2D extent,
 	const VkFormat format,
 	const VkImageTiling tiling,
-	const VkImageUsageFlags usage) :
+	const VkImageUsageFlags usage,
+	bool useForExternal) :
 	device_(device),
 	extent_(extent),
 	format_(format),
-	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED)
+	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED),
+	external_(useForExternal)
 {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -38,6 +40,15 @@ Image::Image(
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.flags = 0; // Optional
+
+	VkExternalMemoryImageCreateInfo external_memory_image_info{};
+	external_memory_image_info.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+	external_memory_image_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+	
+	if(external_)
+	{
+		imageInfo.pNext = &external_memory_image_info;
+	}
 
 	Check(vkCreateImage(device.Handle(), &imageInfo, nullptr, &image_),
 		"create image");
@@ -62,10 +73,10 @@ Image::~Image()
 	}
 }
 
-DeviceMemory Image::AllocateMemory(const VkMemoryPropertyFlags properties) const
+DeviceMemory Image::AllocateMemory(const VkMemoryPropertyFlags properties, bool external) const
 {
 	const auto requirements = GetMemoryRequirements();
-	DeviceMemory memory(device_, requirements.size, requirements.memoryTypeBits, 0, properties);
+	DeviceMemory memory(device_, requirements.size, requirements.memoryTypeBits, 0, properties, external);
 
 	Check(vkBindImageMemory(device_.Handle(), image_, memory.Handle(), 0),
 		"bind image memory");

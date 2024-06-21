@@ -17,6 +17,9 @@ layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
 layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 
+layout(binding = 14, rgba16f) uniform image2D OutAlbedoBuffer;
+layout(binding = 15, rgba16f) uniform image2D OutNormalBuffer;
+
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 
@@ -156,6 +159,9 @@ void main()
 			//imageStore(GBufferImage, ipos, gbuffer);
 			imageStore(MotionVectorImage, ipos, motionvector);
 			imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0,0,0));
+				
+			imageStore(OutAlbedoBuffer, ipos, s_albedo);
+			imageStore(OutNormalBuffer, ipos, gbuffer);
 
 		    // after the first spp, we could judge if reproject miss with previous primitive buffer
 		

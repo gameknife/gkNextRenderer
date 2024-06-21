@@ -32,4 +32,5 @@ struct UniformBufferObject
 	bool UseCheckerBoard;
 	uint TemporalFrames;
 	bool HasSun;
+	bool HDR;
 };
