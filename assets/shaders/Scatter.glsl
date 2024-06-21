@@ -90,7 +90,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 	const float cosine = ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal);
 
 	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
-	const float reflectProb = refracted != vec3(0) ? Schlick(cosine, m.RefractionIndex) : 1;
+	const float reflectProb = sum_is_not_empty_abs(refracted) ? Schlick(cosine, m.RefractionIndex) : 1;
 	
 	if( RandomFloat(ray.RandomSeed) < reflectProb )
 	{
@@ -114,8 +114,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 // Mixture
 void ScatterMixture(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
-    const float dot = dot(direction, normal);
-	const float cosine = dot > 0 ? m.RefractionIndex * dot : -dot;
+	const float cosine = ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal);
 	const float reflectProb = Schlick(cosine, m.RefractionIndex);
 	
     if( RandomFloat(ray.RandomSeed) < reflectProb )
