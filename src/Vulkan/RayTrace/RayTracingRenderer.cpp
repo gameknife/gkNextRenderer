@@ -20,7 +20,7 @@
 #endif
 
 #if WITH_OIDN
-#include "ThirdParty/oidn/include/oidn.hpp"
+#include <oidn.hpp>
 #endif
 
 namespace Vulkan::RayTracing
@@ -268,7 +268,7 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
                                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_GENERAL);
-            
+#if WITH_OIDN
             if(supportDenoiser_)
             {
                 ImageMemoryBarrier::Insert(commandBuffer, rtDenoise1_->GetImage().Handle(), subresourceRange, 0,
@@ -281,6 +281,7 @@ namespace Vulkan::RayTracing
                 vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
             }
             else
+#endif
             {
                 ImageMemoryBarrier::Insert(commandBuffer, rtOutputForOIDN_->GetImage().Handle(), subresourceRange, 0,
                    VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
