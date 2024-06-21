@@ -15,7 +15,7 @@ namespace
 		if (func == nullptr)
 		{
 			// dont throw
-			Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
+			//Throw(std::runtime_error(std::string("failed to get address of '") + name + "'"));
 		}
 
 		return func;
