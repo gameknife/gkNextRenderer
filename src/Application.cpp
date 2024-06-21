@@ -97,10 +97,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
-
-    ubo.ColorPhi = userSettings_.ColorPhi;
-    ubo.DepthPhi = userSettings_.DepthPhi;
-    ubo.NormalPhi = userSettings_.NormalPhi;
+    ubo.HDR = Renderer::SwapChain().IsHDR();
+    
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 
     ubo.LightCount = scene_->GetLightCount();
@@ -159,7 +157,6 @@ void NextRendererApplication<Renderer>::CreateSwapChain()
 
     userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(),
                                            userSettings_));
-    resetAccumulation_ = true;
 
     CheckFramebufferSize();
 }
@@ -186,16 +183,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
         CreateSwapChain();
         return;
     }
-
-    // Check if the accumulation buffer needs to be reset.
-    if (resetAccumulation_ ||
-        userSettings_.RequiresAccumulationReset(previousSettings_) ||
-        !userSettings_.AccumulateRays)
-    {
-        totalNumberOfSamples_ = 0;
-        resetAccumulation_ = false;
-    }
-
+    
     previousSettings_ = userSettings_;
 
     // Keep track of our sample count.
@@ -227,9 +215,9 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     const auto timeDelta = time_ - prevTime;
 
     // Update the camera position / angle.
-    resetAccumulation_ = modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
+    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
     
-    Renderer::denoiseIteration_ = userSettings_.DenoiseIteration;
+    Renderer::supportDenoiser_ = userSettings_.Denoiser;
     Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
     // Render the scene
@@ -306,7 +294,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
     // Camera motions
     if (!userSettings_.Benchmark)
     {
-        resetAccumulation_ |= modelViewController_.OnKey(key, scancode, action, mods);
+        modelViewController_.OnKey(key, scancode, action, mods);
     }
 }
 
@@ -323,7 +311,7 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
     }
 
     // Camera motions
-    resetAccumulation_ |= modelViewController_.OnCursorPosition(xpos, ypos);
+    modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
 template <typename Renderer>
@@ -337,7 +325,7 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
     }
 
     // Camera motions
-    resetAccumulation_ |= modelViewController_.OnMouseButton(button, action, mods);
+    modelViewController_.OnMouseButton(button, action, mods);
 }
 
 template <typename Renderer>
@@ -354,8 +342,6 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
         static_cast<float>(prevFov - yoffset),
         UserSettings::FieldOfViewMinValue,
         UserSettings::FieldOfViewMaxValue);
-
-    resetAccumulation_ = prevFov != userSettings_.FieldOfView;
 }
 
 template <typename Renderer>
@@ -414,7 +400,6 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 
     periodTotalFrames_ = 0;
     benchmarkTotalFrames_ = 0;
-    resetAccumulation_ = true;
     sceneInitialTime_ = Renderer::Window().GetTime();
 }
 

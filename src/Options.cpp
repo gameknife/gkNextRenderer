@@ -22,7 +22,9 @@ Options::Options(const int argc, const char* argv[])
 		("samples", value<uint32_t>(&Samples)->default_value(1), "The number of ray samples per pixel.")
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The maximum number of bounces per ray.")
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
-		("temporal", value<uint32_t>(&Temporal)->default_value(256), "The number of temporal frames.")
+		("temporal", value<uint32_t>(&Temporal)->default_value(32), "The number of temporal frames.")
+		("denoiser", bool_switch(&Denoiser)->default_value(false), "Use Denoiser.")
+	
 		;
 
 	options_description scene("Scene options", lineLength);
@@ -49,6 +51,7 @@ Options::Options(const int argc, const char* argv[])
 		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
 		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
 		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
+	("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
 		;
 
 	desc.add(benchmark);

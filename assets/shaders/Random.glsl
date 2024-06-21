@@ -1,69 +1,60 @@
+#include "common/Const_Func.glsl" //pi consts
+
 #extension GL_EXT_control_flow_attributes : require
 
-// Generates a seed for a random number generator from 2 inputs plus a backoff
-// https://github.com/nvpro-samples/optix_prime_baking/blob/332a886f1ac46c0b3eea9e89a59593470c755a0e/random.h
-// https://github.com/nvpro-samples/vk_raytracing_tutorial_KHR/tree/master/ray_tracing_jitter_cam
-// https://en.wikipedia.org/wiki/Tiny_Encryption_Algorithm
-uint InitRandomSeed(uint val0, uint val1)
+void pcg4d(inout uvec4 v)
 {
-	uint v0 = val0, v1 = val1, s0 = 0;
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+    v = v ^ (v >> 16u);
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+}
 
-	[[unroll]] 
-	for (uint n = 0; n < 16; n++)
-	{
-		s0 += 0x9e3779b9;
-		v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
-		v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
+// Returns a float between 0 and 1
+#define uint_to_float(x) ( uintBitsToFloat(0x3f800000 | ((x) >> 9)) - 1.0f )
+
+uvec4 InitRandomSeed(uint val0, uint val1, uint frame_num)
+{
+	return uvec4(val0, val1, frame_num, 0);
+}
+
+float RandomFloat(inout uvec4 v)
+{
+	pcg4d(v);
+	return uint_to_float(v.x);
+}
+
+vec2 RandomFloat2(inout uvec4 v)
+{
+	pcg4d(v);
+	return uint_to_float(v.xy);
+}
+
+vec2 concentric_sample_disk(vec2 offset) {
+    offset += offset - vec2(1);
+    if (isZERO(offset.x) && isZERO(offset.y)) {
+		return vec2(0);
 	}
 
-	return v0;
-}
+	float theta;
 
-uint RandomInt(inout uint seed)
-{
-	// LCG values from Numerical Recipes
-    return (seed = 1664525 * seed + 1013904223);
-}
-
-float RandomFloat(inout uint seed)
-{
-	//// Float version using bitmask from Numerical Recipes
-	//const uint one = 0x3f800000;
-	//const uint msk = 0x007fffff;
-	//return uintBitsToFloat(one | (msk & (RandomInt(seed) >> 9))) - 1;
-
-	// Faster version from NVIDIA examples; quality good enough for our use case.
-	return (float(RandomInt(seed) & 0x00FFFFFF) / float(0x01000000));
-}
-
-vec2 RandomInUnitDisk(inout uint seed)
-{
-	for (;;)
-	{
-		const vec2 p = 2 * vec2(RandomFloat(seed), RandomFloat(seed)) - 1;
-		if (dot(p, p) < 1)
-		{
-			return p;
-		}
+	if (abs(offset.x) > abs(offset.y)) {
+        theta = M_PI_4 * offset.y / offset.x;
+        return offset.x * vec2(cos(theta), sin(theta));
 	}
+
+	float cos_theta = sin(M_PI_4 * offset.x / offset.y);
+	return offset.y * vec2(cos_theta, sqrt(1. - cos_theta * cos_theta));
 }
 
-vec3 RandomInUnitSphere(inout uint seed)
+vec2 RandomInUnitDisk(inout uvec4 seed)
 {
-	for (;;)
-	{
-		const vec3 p = 2 * vec3(RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)) - 1;
-		if (dot(p, p) < 1)
-		{
-			return p;
-		}
-	}
+	return concentric_sample_disk(RandomFloat2(seed));
 }
 
-vec3 RandomInCone(inout uint seed, float cosAngle) {
-    const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
-    const float pi = 3.1415926535897932384626433832795;
-    float phi = 2.0f * pi * u.x;
+vec3 RandomInCone(inout uvec4 seed, float cosAngle) {
+    const vec2 u = RandomFloat2(seed);
+    float phi = M_TWO_PI * u.x;
     float cos_phi = cos(phi);
     float sin_phi = sin(phi);
     float cos_theta = 1.0f - u.y + u.y * cosAngle;
@@ -71,11 +62,10 @@ vec3 RandomInCone(inout uint seed, float cosAngle) {
     return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
 }
 
-vec3 RandomInHemiSphere(inout uint seed)
+vec3 RandomInHemiSphere(inout uvec4 seed)
 {
-    const vec2 u = vec2(RandomFloat(seed),RandomFloat(seed));
-    const float pi = 3.1415926535897932384626433832795;
-    float phi = 2.0f * pi * u.x;
+    const vec2 u = RandomFloat2(seed);
+    float phi = M_TWO_PI * u.x;
     float cos_phi = cos(phi);
     float sin_phi = sin(phi);
     float cos_theta = sqrt(u.y);
@@ -83,13 +73,13 @@ vec3 RandomInHemiSphere(inout uint seed)
     return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
 }
 
-vec3 RandomInHemiSphere1(inout uint seed) 
+vec3 RandomInHemiSphere1(inout uvec4 seed)
 {
-	const float pi = 3.1415926535897932384626433832795;
-    float r1 = RandomFloat(seed);
-    float r2 = RandomFloat(seed);
+    const vec2 u = RandomFloat2(seed);
+    float r1 = u.x;
+    float r2 = u.y;
 
-    float phi = 2.0*pi*r1;
+    float phi = M_TWO_PI * r1;
     float x = cos(phi)*sqrt(r2);
     float y = sin(phi)*sqrt(r2);
     float z = sqrt(1.0-r2);

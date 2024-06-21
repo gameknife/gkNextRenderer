@@ -27,6 +27,8 @@ namespace Vulkan::RayTracing
         const ImageView& motionVectorImageView,
         const ImageView& visibilityBufferImageView,
         const ImageView& visibility1BufferImageView,
+        const ImageView& OutAlbedoImageView,
+        const ImageView& OutNormalImageView,
         const std::vector<Assets::UniformBuffer>& uniformBuffers,
         const Assets::Scene& scene) :
         swapChain_(swapChain)
@@ -68,6 +70,9 @@ namespace Vulkan::RayTracing
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_RAYGEN_BIT_KHR},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -101,6 +106,15 @@ namespace Vulkan::RayTracing
             VkDescriptorImageInfo visibility1BufferImageInfo = {};
             visibility1BufferImageInfo.imageView = visibility1BufferImageView.Handle();
             visibility1BufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorImageInfo outAlbedoImageInfo = {};
+            outAlbedoImageInfo.imageView = OutAlbedoImageView.Handle();
+            outAlbedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorImageInfo outNormalImageInfo = {};
+            outNormalImageInfo.imageView = OutNormalImageView.Handle();
+            outNormalImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -156,6 +170,8 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
                 descriptorSets.Bind(i, 12, visibilityBufferImageInfo),
                 descriptorSets.Bind(i, 13, visibility1BufferImageInfo),
+                descriptorSets.Bind(i, 14, outAlbedoImageInfo),
+                descriptorSets.Bind(i, 15, outNormalImageInfo),
             };
 
             // Procedural buffer (optional)

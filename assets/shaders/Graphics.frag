@@ -4,6 +4,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
+#include "common/Const_Func.glsl"
 
 layout(binding = 0) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 1) readonly buffer MaterialArray { Material[] Materials; };
@@ -15,25 +16,6 @@ layout(location = 2) in vec2 FragTexCoord;
 layout(location = 3) in flat int FragMaterialIndex;
 
 layout(location = 0) out vec4 OutColor;
-
-vec3 LinearToST2084UE(vec3 lin)
-{
-	const float m1 = 0.1593017578125; // = 2610. / 4096. * .25;
-	const float m2 = 78.84375; // = 2523. / 4096. *  128;
-	const float c1 = 0.8359375; // = 2392. / 4096. * 32 - 2413./4096.*32 + 1;
-	const float c2 = 18.8515625; // = 2413. / 4096. * 32;
-	const float c3 = 18.6875; // = 2392. / 4096. * 32;
-	const float C = 10000.;
-
-	vec3 L = lin/C;
-	vec3 Lm = pow(L, vec3(m1));
-	vec3 N1 = ( c1 + c2 * Lm );
-	vec3 N2 = ( 1.0 + c3 * Lm );
-	vec3 N = N1 * (1.0 / N2);
-	vec3 P = pow( N, vec3(m2) );
-
-	return P;
-}
 
 void main()
 {

@@ -51,7 +51,6 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
-        deviceProcedures_.reset();         
     }
 
     void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
@@ -87,8 +86,6 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::OnDeviceSet()
     {
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
-        
-        deviceProcedures_.reset(new DeviceProcedures(Device(), true, true));
         rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
@@ -172,7 +169,7 @@ namespace Vulkan::RayTracing
                 ? geometries.AddGeometryAabb(scene, aabbOffset, 1, true)
                 : geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
 
-            bottomAs_.emplace_back(*deviceProcedures_, *rayTracingProperties_, geometries);
+            bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
             vertexOffset += vertexCount * sizeof(Assets::Vertex);
             indexOffset += indexCount * sizeof(uint32_t);
@@ -238,9 +235,9 @@ namespace Vulkan::RayTracing
                                        instancesBufferMemory_);
 
         // Memory barrier for the bottom level acceleration structure builds.
-        AccelerationStructure::MemoryBarrier(commandBuffer);
+        AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
-        topAs_.emplace_back(*deviceProcedures_, *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
+        topAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
                             static_cast<uint32_t>(instances.size()));
 
         // Allocate the structure memory.

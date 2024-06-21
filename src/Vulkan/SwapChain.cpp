@@ -15,7 +15,7 @@
 
 namespace Vulkan {
 
-SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentMode) :
+SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentMode, bool forceSDR) :
 	physicalDevice_(device.PhysicalDevice()),
 	device_(device)
 {
@@ -28,7 +28,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	const auto& surface = device.Surface();
 	const auto& window = surface.Instance().Window();
 
-	const auto surfaceFormat = ChooseSwapSurfaceFormat(details.Formats);
+	const auto surfaceFormat = ChooseSwapSurfaceFormat(details.Formats, forceSDR);
 	const auto actualPresentMode = ChooseSwapPresentMode(details.PresentModes, presentMode);
 	auto extent = ChooseSwapExtent(window, details.Capabilities);
 	const auto imageCount = ChooseImageCount(details.Capabilities);
@@ -47,7 +47,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	createInfo.imageColorSpace = surfaceFormat.colorSpace;
 	createInfo.imageExtent = extent;
 	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	createInfo.preTransform = details.Capabilities.currentTransform;
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.presentMode = actualPresentMode;
@@ -115,20 +115,25 @@ SwapChain::SupportDetails SwapChain::QuerySwapChainSupport(VkPhysicalDevice phys
 	return details;
 }
 
-VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) 
+VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats, bool forceSDR) 
 {
 	if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED) 
 	{
 		return { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
 	}
-
+	hdr_ = false;
+	
 	// hdr first
-	for (const auto& format : formats)
+	if(!forceSDR)
 	{
-		
-		if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || format.colorSpace == VK_COLOR_SPACE_HDR10_HLG_EXT)
+		for (const auto& format : formats)
 		{
-			return format;
+		
+			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || format.colorSpace == VK_COLOR_SPACE_HDR10_HLG_EXT)
+			{
+				hdr_ = true;
+				return format;
+			}
 		}
 	}
 

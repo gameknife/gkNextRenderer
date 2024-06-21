@@ -16,21 +16,12 @@ layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
+#include "common/Const_Func.glsl"
 #include "Scatter.glsl"
 #include "Vertex.glsl"
 
 hitAttributeEXT vec2 HitAttributes;
 rayPayloadInEXT RayPayload Ray;
-
-vec2 Mix(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
-{
-	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
-}
-
-vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics) 
-{
-    return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
-}
 
 void main()
 {

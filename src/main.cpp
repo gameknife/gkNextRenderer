@@ -90,7 +90,8 @@ void handle_cmd(android_app* app, int32_t cmd) {
                 options.Fullscreen,
                 !options.Fullscreen,
                 options.SaveFile,
-                app->window
+                app->window,
+                options.ForceSDR
             };
             StartApplication(options.RendererType, windowConfig, userSettings, options);
             __android_log_print(ANDROID_LOG_INFO, "vkdemo",
@@ -208,7 +209,8 @@ int main(int argc, const char* argv[]) noexcept
             options.Fullscreen,
             !options.Fullscreen,
             options.SaveFile,
-            nullptr
+            nullptr,
+            options.ForceSDR
         };
         
         
@@ -309,10 +311,7 @@ namespace
         userSettings.UseCheckerBoardRendering = false;
         userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
-        userSettings.DenoiseIteration = 0;
-        userSettings.DepthPhi = 0.5f;
-        userSettings.NormalPhi = 90.f;
-        userSettings.ColorPhi = 5.f;
+        userSettings.Denoiser = options.Denoiser;
 
         userSettings.PaperWhiteNit = 600.f;
 

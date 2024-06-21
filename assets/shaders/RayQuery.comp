@@ -7,7 +7,6 @@
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
-
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
@@ -19,6 +18,7 @@ layout(binding = 8) uniform sampler2D[] TextureSamplers;
 layout(binding = 9, rgba8) uniform image2D OutImage;
 
 #include "Vertex.glsl"
+#include "common/Const_Func.glsl"
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -46,16 +46,6 @@ struct RayPayload
     // Barycentric Coordinates
     vec3    BaryCoords;
 };
-
-vec2 Mix(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
-{
-    return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
-}
-
-vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics)
-{
-    return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
-}
 
 void main() {
     

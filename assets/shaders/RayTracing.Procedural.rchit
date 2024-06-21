@@ -17,6 +17,7 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 layout(binding = 9) readonly buffer SphereArray { vec4[] Spheres; };
 
+#include "common/Const_Func.glsl"
 #include "Scatter.glsl"
 #include "Vertex.glsl"
 
@@ -27,12 +28,11 @@ vec2 GetSphereTexCoord(const vec3 point)
 {
 	const float phi = atan(point.x, point.z);
 	const float theta = asin(point.y);
-	const float pi = 3.1415926535897932384626433832795;
 
 	return vec2
 	(
-		(phi + pi) / (2* pi),
-		1 - (theta + pi /2) / pi
+		(phi + M_PI) * M_1_OVER_TWO_PI,
+		1 - (theta + M_PI_2) * M_1_PI
 	);
 }
 
