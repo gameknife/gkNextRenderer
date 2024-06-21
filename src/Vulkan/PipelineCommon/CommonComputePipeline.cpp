@@ -102,7 +102,7 @@ namespace Vulkan::PipelineCommon
     }
 
     FinalComposePipeline::FinalComposePipeline(const SwapChain& swapChain,
-        const ImageView& sourceImageView):swapChain_(swapChain)
+        const ImageView& sourceImageView,const std::vector<Assets::UniformBuffer>& uniformBuffers):swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -110,6 +110,7 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, swapChain.ImageViews().size()));
@@ -120,12 +121,15 @@ namespace Vulkan::PipelineCommon
         {
             VkDescriptorImageInfo Info0 = {NULL, sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
-
+            VkDescriptorBufferInfo uniformBufferInfo = {};
+            uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+            uniformBufferInfo.range = VK_WHOLE_SIZE;
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
                 descriptorSets.Bind(i, 1, Info1),
+                descriptorSets.Bind(i, 2, uniformBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

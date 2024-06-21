@@ -51,6 +51,7 @@ Options::Options(const int argc, const char* argv[])
 		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
 		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
 		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
+	("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
 		;
 
 	desc.add(benchmark);

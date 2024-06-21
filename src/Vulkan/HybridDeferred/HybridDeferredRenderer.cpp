@@ -104,7 +104,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtOutput->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView()));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), UniformBuffers()));
     }
 
     void HybridDeferredRenderer::DeleteSwapChain()

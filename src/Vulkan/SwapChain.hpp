@@ -16,7 +16,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(SwapChain)
 
-		SwapChain(const Device& device, VkPresentModeKHR presentMode);
+		SwapChain(const Device& device, VkPresentModeKHR presentMode, bool forceSDR);
 		~SwapChain();
 
 		VkPhysicalDevice PhysicalDevice() const { return physicalDevice_; }
@@ -27,6 +27,7 @@ namespace Vulkan
 		const VkExtent2D& Extent() const { return extent_; }
 		VkFormat Format() const { return format_; }
 		VkPresentModeKHR PresentMode() const { return presentMode_; }
+		bool IsHDR() const { return hdr_;}
 
 	private:
 
@@ -38,7 +39,7 @@ namespace Vulkan
 		};
 
 		static SupportDetails QuerySwapChainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-		static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats, bool forceSDR);
 		static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& presentModes, VkPresentModeKHR presentMode);
 		static VkExtent2D ChooseSwapExtent(const Window& window, const VkSurfaceCapabilitiesKHR& capabilities);
 		static uint32_t ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
@@ -54,6 +55,7 @@ namespace Vulkan
 		VkExtent2D extent_{};
 		std::vector<VkImage> images_;
 		std::vector<std::unique_ptr<ImageView>> imageViews_;
+		bool hdr_{};
 	};
 
 }

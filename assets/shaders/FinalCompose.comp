@@ -6,11 +6,21 @@
 
 layout(binding = 0, rgba16f) uniform image2D InImage;
 layout(binding = 1, rgba8) uniform image2D OutImage;
+layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(OutImage, ipos, vec4( LinearToST2084UE( imageLoad(InImage, ipos).rgb * 600.0 / 230.0), 1.0));
+
+    if(Camera.HDR)
+    {
+        imageStore(OutImage, ipos, vec4( LinearToST2084UE( imageLoad(InImage, ipos).rgb * Camera.PaperWhiteNit / 230.0), 1.0));
+    }
+    else
+    {
+        // manmal exposure
+        imageStore(OutImage, ipos, vec4( ACES_Tonemapping( imageLoad(InImage, ipos).rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
+    }
     //imageStore(OutImage, ipos, vec4( imageLoad(InImage, ipos).rgb, 1.0));
 }

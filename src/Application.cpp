@@ -97,6 +97,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
+    ubo.HDR = Renderer::SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 

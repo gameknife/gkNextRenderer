@@ -15,5 +15,6 @@ namespace Vulkan
 		bool Resizable;
 		bool NeedScreenShot;
 		void* AndroidNativeWindow;
+		bool ForceSDR;
 	};
 }

@@ -24,6 +24,7 @@ public:
 	bool SaveFile{};
 	bool RenderDoc{};
 	bool Denoiser{};
+	bool ForceSDR{};
 	
 	// Benchmark options.
 	bool BenchmarkNextScenes{};

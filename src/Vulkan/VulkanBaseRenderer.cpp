@@ -39,6 +39,7 @@ VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const V
 	surface_.reset(new Surface(*instance_));
 	supportDenoiser_ = false;
 	supportScreenShot_ = windowConfig.NeedScreenShot;
+	forceSDR_ = windowConfig.ForceSDR;
 }
 
 VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
@@ -202,7 +203,7 @@ void VulkanBaseRenderer::CreateSwapChain()
 		window_->WaitForEvents();
 	}
 
-	swapChain_.reset(new class SwapChain(*device_, presentMode_));
+	swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
 	depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
 
 	for (size_t i = 0; i != swapChain_->ImageViews().size(); ++i)
