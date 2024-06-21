@@ -102,15 +102,18 @@ DeviceMemory::DeviceMemory(
 	export_memory_allocate_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
 	export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
 
+#if WIN32
 	WinSecurityAttributes            win_security_attributes;
 	VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};
 	export_memory_win32_handle_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
 	export_memory_win32_handle_info.pAttributes = &win_security_attributes;
 	export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
-	
+#endif
 	if(external)
 	{
+#if WIN32
 		export_memory_allocate_info.pNext = &export_memory_win32_handle_info;
+#endif
 		allocInfo.pNext = &export_memory_allocate_info;
 	}
 

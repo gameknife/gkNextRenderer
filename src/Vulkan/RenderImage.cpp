@@ -51,13 +51,15 @@ namespace Vulkan {
                                   newLayout);
     }
 
-    HANDLE RenderImage::GetExternalHandle() const
+    ExtHandle RenderImage::GetExternalHandle() const
     {
-        HANDLE handle;
+        ExtHandle handle;
+        #if WIN32
         VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
         handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
         handleInfo.memory = imageMemory_->Handle();
         image_->Device().GetDeviceProcedures().vkGetMemoryWin32HandleKHR(image_->Device().Handle(), &handleInfo, &handle);
+        #endif
         return handle;
     }
 }
