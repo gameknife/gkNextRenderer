@@ -51,16 +51,18 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		vec3 lightpos = light.p0.xyz + (light.p1.xyz - light.p0.xyz) * RandomFloat(ray.RandomSeed) + (light.p3.xyz - light.p0.xyz) *  RandomFloat(ray.RandomSeed);
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
-		float dist = length(tolight);
-		tolight = tolight / dist;
 
-		const float epsVariance = .01;
-		float cosine = max(dot(light.normal_area.xyz, -tolight), epsVariance);
-		float light_pdf = dist * dist / (cosine * light.normal_area.w);
-		float ndotl = dot(tolight, normal);
+		float ndotl = ray.FrontFace ? -dot(tolight, normal) : dot(tolight, normal);
 		
 		if(ndotl >= 0)
 		{
+			float dist = length(tolight);
+			tolight /= dist;
+
+			const float epsVariance = .01;
+			float cosine = max(dot(light.normal_area.xyz, -tolight), epsVariance);
+			float light_pdf = dist * dist / (cosine * light.normal_area.w);
+
 			ray.ScatterDirection = tolight;
 			ray.pdf = 1.0f / light_pdf;
 		}
