@@ -64,7 +64,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 			float light_pdf = dist * dist / (cosine * light.normal_area.w);
 
 			ray.ScatterDirection = tolight;
-			ray.pdf = 1.0f / light_pdf;
+			ray.pdf = M_1_PI / light_pdf;
 		}
 	}
 }
