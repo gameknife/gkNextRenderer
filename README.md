@@ -54,6 +54,7 @@
     * Phsyical Light Unit
     * Sample Reproject
     * RayQuery on PC & Android
+    * OpenImageDenoise
 * Non-Raytracing Pipeline
     * Visibiliy Buffer Rendering
     * Legacy Rendering
@@ -142,6 +143,8 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] Global Dynamic Bindless Textures
 - [x] Hybrid rendering with ray query
 - [ ] Blender Export Property as CustomProperty to glb
+- [x] OpenImageDenoise (Only windows)
+- [X] SDR / HDR competiable
 - [ ] Full scope refactor
 - [ ] Dynamic Scene Management
 - [ ] Multi Material Execution
@@ -176,6 +179,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 - **[ImGUI]** 对ImGUI一直有一些偏见，可能是因为Unity PTSD。但其实ImGUI的设计真的十分精妙，之前确实没有看过他的实现。同时，Dear ImGUI的页面上，有大量的扩展作品，基本上，涵盖了编辑器的所有了。渲染器初步feature做差不多之后，考虑用ImGUI再搭建一个Editor的Application，用来搞一些材质编辑之类的事情，更好的测试渲染器在真实生产环境下的适应能力。
 
+- **[OpenImageDenoise]** 这是intel推出的一个专门面向RayTracing的降噪器，Blender Cycles也在使用，效果比Optix好。接进来还是花了不少功夫，主要是CUDA与VULKAN共享显存这件事。可以参考的代码不多，不过做完之后，效果非常好，FAST质量下，1080p的scene0可以跑到100fps左右，给16的temporal, 基本可以认为是Realtime PathTracing了。感觉，小拇指碰到了一下“圣杯”。cmake的时候，通过`-D WITH_OIDN=1`打开
 ## Building
 
 首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。

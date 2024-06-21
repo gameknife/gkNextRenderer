@@ -269,3 +269,20 @@ target_compile_definitions(${exe_name} PUBLIC WITH_AVIF=1)
 target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
 target_link_libraries(${exe_name} PRIVATE avif)
 endif()
+
+if ( WITH_OIDN )
+target_compile_definitions(${exe_name} PUBLIC WITH_OIDN=1)
+target_include_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/include/)
+target_link_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/lib/)
+target_link_libraries(${exe_name} PRIVATE OpenImageDenoise OpenImageDenoise_core )
+
+add_custom_command(
+            TARGET ${exe_name} POST_BUILD
+			COMMAND echo \"copy oidn dlls...\"
+            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+        )
+endif()
+
+if( WIN32 )
+target_compile_definitions(${exe_name} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
+endif()
