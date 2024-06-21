@@ -22,6 +22,7 @@ struct UniformBufferObject
 	uint SkyIdx;
 	uint TotalFrames;
 	uint TotalNumberOfSamples;
+	uint frameNum;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
 	uint RandomSeed;

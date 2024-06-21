@@ -82,6 +82,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.FocusDistance = userSettings_.FocusDistance;
     ubo.SkyRotation = userSettings_.SkyRotation;
     ubo.TotalNumberOfSamples = totalNumberOfSamples_;
+    ubo.frameNum = frameNum_;
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = numberOfSamples_;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
@@ -187,9 +188,12 @@ void NextRendererApplication<Renderer>::DrawFrame()
         return;
     }
 
+    bool isAccumReset = userSettings_.RequiresAccumulationReset(previousSettings_);
+    if(resetAccumulation_ || isAccumReset) frameNum_ = 0;
+
     // Check if the accumulation buffer needs to be reset.
     if (resetAccumulation_ ||
-        userSettings_.RequiresAccumulationReset(previousSettings_) ||
+        isAccumReset ||
         !userSettings_.AccumulateRays)
     {
         totalNumberOfSamples_ = 0;
@@ -202,6 +206,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     numberOfSamples_ = glm::clamp(userSettings_.MaxNumberOfSamples - totalNumberOfSamples_, 0u,
                                   userSettings_.NumberOfSamples);
     totalNumberOfSamples_ += numberOfSamples_;
+    frameNum_ += 1;
 
     Renderer::DrawFrame();
 
@@ -243,6 +248,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
     stats.FrameTime = static_cast<float>(timeDelta * 1000);
+
+    stats.FrameNum = frameNum_;
 
     stats.CamPosX = modelViewController_.Position()[0];
     stats.CamPosY = modelViewController_.Position()[1];

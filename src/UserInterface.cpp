@@ -307,6 +307,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
+		ImGui::Text("Pass: %zd", statistics.FrameNum);
 	}
 	ImGui::End();
 }
