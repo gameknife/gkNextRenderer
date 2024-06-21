@@ -26,11 +26,12 @@ void main() {
     vec2 prevfpos = vec2(ipos) + motion;
     ivec2 previpos = ivec2( floor(ipos + motion) );
     vec2 subpixel = fract(prevfpos);
+    bool isEvenFrame = Camera.TotalFrames % 2 == 0;
 
-    vec4 history0 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
-    vec4 history1 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(1,0)) : imageLoad(Accumulate1Image, previpos + ivec2(1,0));
-    vec4 history2 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
-    vec4 history3 = Camera.TotalFrames % 2 == 0 ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
+    vec4 history0 = isEvenFrame ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
+    vec4 history1 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,0)) : imageLoad(Accumulate1Image, previpos + ivec2(1,0));
+    vec4 history2 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
+    vec4 history3 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
     
     
     vec4 history = mix(
@@ -88,7 +89,7 @@ void main() {
     }
     
     vec4 final = mix(history, src, currKeep);
-    if(Camera.TotalFrames % 2 == 0 )
+    if(isEvenFrame)
     {
         imageStore(Accumulate1Image, ipos, final);
     }
@@ -101,6 +102,8 @@ void main() {
     #if DESKTOP
     imageStore(OutImage, ipos, vec4( LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
     #else
-    imageStore(OutImage, ipos, vec4( pow(LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0),vec3(2.0)) * 2.0, 1.0));
+    vec3 c = LinearToST2084UE(final.rgb * Camera.PaperWhiteNit / 230.0);
+    c *= c;
+    imageStore(OutImage, ipos, vec4(c + c, 1.0));
     #endif
 }
