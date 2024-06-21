@@ -208,7 +208,7 @@ namespace Vulkan
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
-		int denoiseIteration_{};
+		bool supportDenoiser_ {};
 		int frameCount_{};
 		bool supportScreenShot_{};
 

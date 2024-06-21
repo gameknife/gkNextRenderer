@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "UniformBufferObject.glsl"
+#include "common/Const_Func.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D InImage;
 layout(binding = 1, rgba8) uniform image2D OutImage;
@@ -10,5 +11,6 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(OutImage, ipos, imageLoad(InImage, ipos));
+    imageStore(OutImage, ipos, vec4( LinearToST2084UE( imageLoad(InImage, ipos).rgb * 600.0 / 230.0), 1.0));
+    //imageStore(OutImage, ipos, vec4( imageLoad(InImage, ipos).rgb, 1.0));
 }

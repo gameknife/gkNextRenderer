@@ -23,6 +23,7 @@ public:
 	bool Benchmark{};
 	bool SaveFile{};
 	bool RenderDoc{};
+	bool Denoiser{};
 	
 	// Benchmark options.
 	bool BenchmarkNextScenes{};

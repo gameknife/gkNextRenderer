@@ -309,10 +309,7 @@ namespace
         userSettings.UseCheckerBoardRendering = false;
         userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
-        userSettings.DenoiseIteration = 0;
-        userSettings.DepthPhi = 0.5f;
-        userSettings.NormalPhi = 90.f;
-        userSettings.ColorPhi = 5.f;
+        userSettings.Denoiser = 0;
 
         userSettings.PaperWhiteNit = 600.f;
 
