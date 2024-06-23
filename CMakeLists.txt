@@ -86,6 +86,10 @@ if (NOT Vulkan_GLSLANG_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
 endif()
 
+include_directories(
+  ${CMAKE_SOURCE_DIR}/src/ThirdParty/rapidjson/include/rapidjson
+)
+
 set(MAIN_PROJECT "gkNextRenderer")
 add_subdirectory(assets)
 add_subdirectory(src)
