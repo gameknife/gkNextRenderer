@@ -9,6 +9,7 @@
 #include "Random.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
+layout(binding = 13, rg32ui) uniform uimage2D MiniGBuffer1;
 layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 3) uniform sampler2D[] TextureSamplers;
@@ -149,7 +150,7 @@ void main() {
     }
 	
 	ivec2 size = imageSize(MiniGBuffer);
-    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
+    uvec2 vBuffer = Camera.TotalFrames % 2 == 0 ? imageLoad(MiniGBuffer, ipos).rg : imageLoad(MiniGBuffer1, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -190,8 +191,6 @@ void main() {
 	vec3 skyColor = vec3(1);
 	vec3 bounceColor = vec3(0);
 	
-	
-
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		vec3 trace_dir = chanceReflect ?
