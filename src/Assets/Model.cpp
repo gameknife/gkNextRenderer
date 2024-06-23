@@ -17,8 +17,12 @@
 #include <unordered_map>
 #include <vector>
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_ENABLE_DRACO
+#define TINYGLTF_USE_RAPIDJSON
 // #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -26,6 +30,25 @@
 #include "Texture.hpp"
 
 #define FLATTEN_VERTICE 1
+
+typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
+
+//map of textures names - better for fast search
+uo_map_tex_t tex_names;
+
+int32_t get_tex_id(std::string fn, bool& isNew) {
+	std::string tex_filename = std::filesystem::canonical(fn).generic_string();
+	uo_map_tex_t::const_iterator got = tex_names.find(tex_filename);
+	if (got == tex_names.end()) {
+        int32_t tex_id = static_cast<int32_t>(tex_names.size());
+		tex_names[tex_filename] = tex_id;
+		isNew = true;
+		return tex_id;
+	} else {
+		isNew = false;
+		return got->second;
+	}
+}
 
 using namespace glm;
 
@@ -151,7 +174,7 @@ namespace Assets
         // load all lights
         for (tinygltf::Camera& cam : model.cameras)
         {
-             cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / 3.14159f;
+             cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
              cameraInit.Aperture = 0.0f;
              cameraInit.FocusDistance = 100.0f;
         }
@@ -367,6 +390,15 @@ namespace Assets
             });
         }
 
+        //clear map of textures names
+        tex_names.clear();
+        bool isNew;
+        //fill with exists textures
+        for (size_t i = 0; i < textures.size(); i++)
+        {
+			get_tex_id(textures[i].Loadname(), isNew);
+        }
+
         for (const auto& _material : objReader.GetMaterials())
         {
             tinyobj::material_t material = _material;
@@ -382,6 +414,7 @@ namespace Assets
 
                 // find if textures contain texture with loadname equals diffuse_texname
                 std::string loadname = "../assets/textures/" + material.diffuse_texname;
+                m.DiffuseTextureId = get_tex_id(loadname, isNew);
                 for (size_t i = 0; i < textures.size(); i++)
                 {
                     if (textures[i].Loadname() == loadname)
@@ -391,7 +424,7 @@ namespace Assets
                     }
                 }
 
-                if (m.DiffuseTextureId == -1)
+                if (isNew)
                 {
                     textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
                     m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
@@ -454,20 +487,23 @@ namespace Assets
             {
                 Vertex vertex = {};
 
+                size_t idx = 3 * index.vertex_index;
+
                 vertex.Position =
                 {
-                    objAttrib.vertices[3 * index.vertex_index + 0],
-                    objAttrib.vertices[3 * index.vertex_index + 1],
-                    objAttrib.vertices[3 * index.vertex_index + 2],
+                    objAttrib.vertices[idx],
+                    objAttrib.vertices[idx + 1],
+                    objAttrib.vertices[idx + 2],
                 };
 
                 if (!objAttrib.normals.empty())
                 {
+                    idx = 3 * index.normal_index;
                     vertex.Normal =
                     {
-                        objAttrib.normals[3 * index.normal_index + 0],
-                        objAttrib.normals[3 * index.normal_index + 1],
-                        objAttrib.normals[3 * index.normal_index + 2]
+                        objAttrib.normals[idx],
+                        objAttrib.normals[idx + 1],
+                        objAttrib.normals[idx + 2]
                     };
                 }
 
@@ -504,7 +540,7 @@ namespace Assets
                         vec3(vertices[indices[i + 1]].Position) - vec3(vertices[indices[i]].Position),
                         vec3(vertices[indices[i + 2]].Position) - vec3(vertices[indices[i]].Position)));
 
-                    vertices[indices[i + 0]].Normal += normal;
+                    vertices[indices[i]].Normal += normal;
                     vertices[indices[i + 1]].Normal += normal;
                     vertices[indices[i + 2]].Normal += normal;
                 }
@@ -627,12 +663,14 @@ namespace Assets
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
 
-        const float pi = 3.14159265358979f;
+        const float j0_delta = M_PI / static_cast<float>(stacks);
+        float j0 = 0.f;
+
+        const float i0_delta = (M_PI + M_PI) / static_cast<float>(slices);
+        float i0;
 
         for (int j = 0; j <= stacks; ++j)
         {
-            const float j0 = pi * static_cast<float>(j) / static_cast<float>(stacks);
-
             // Vertex
             const float v = radius * -std::sin(j0);
             const float z = radius * std::cos(j0);
@@ -641,10 +679,10 @@ namespace Assets
             const float n0 = -std::sin(j0);
             const float n1 = std::cos(j0);
 
+            i0 = 0;
+
             for (int i = 0; i <= slices; ++i)
             {
-                const float i0 = 2 * pi * static_cast<float>(i) / static_cast<float>(slices);
-
                 const vec3 position(
                     center.x + v * std::sin(i0),
                     center.y + z,
@@ -660,25 +698,35 @@ namespace Assets
                     static_cast<float>(j) / stacks);
 
                 vertices.push_back(Vertex{position, normal, texCoord, materialIdx});
+
+                i0 += i0_delta;
             }
+
+            j0 += j0_delta;
         }
 
-        for (int j = 0; j < stacks; ++j)
         {
-            for (int i = 0; i < slices; ++i)
+            int slices1 = slices + 1;
+            int j0 = 0;
+            int j1 = slices1;
+            for (int j = 0; j < stacks; ++j)
             {
-                const auto j0 = (j + 0) * (slices + 1);
-                const auto j1 = (j + 1) * (slices + 1);
-                const auto i0 = i + 0;
-                const auto i1 = i + 1;
+                for (int i = 0; i < slices; ++i)
+                {
+                    const auto i0 = i;
+                    const auto i1 = i + 1;
 
-                indices.push_back(j0 + i0);
-                indices.push_back(j1 + i0);
-                indices.push_back(j1 + i1);
+                    indices.push_back(j0 + i0);
+                    indices.push_back(j1 + i0);
+                    indices.push_back(j1 + i1);
 
-                indices.push_back(j0 + i0);
-                indices.push_back(j1 + i1);
-                indices.push_back(j0 + i1);
+                    indices.push_back(j0 + i0);
+                    indices.push_back(j1 + i1);
+                    indices.push_back(j0 + i1);
+                }
+
+                j0 += slices1;
+                j1 += slices1;
             }
         }
 
