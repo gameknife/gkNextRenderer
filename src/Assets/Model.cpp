@@ -415,15 +415,6 @@ namespace Assets
                 // find if textures contain texture with loadname equals diffuse_texname
                 std::string loadname = "../assets/textures/" + material.diffuse_texname;
                 m.DiffuseTextureId = get_tex_id(loadname, isNew);
-                for (size_t i = 0; i < textures.size(); i++)
-                {
-                    if (textures[i].Loadname() == loadname)
-                    {
-                        m.DiffuseTextureId = static_cast<int32_t>(i);
-                        break;
-                    }
-                }
-
                 if (isNew)
                 {
                     textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
