@@ -36,6 +36,7 @@ public:
 	uint32_t MaxSamples{};
 	uint32_t RendererType{};
 	uint32_t Temporal{};
+	uint32_t RR_MIN_DEPTH{};
 	
 	// Scene options.
 	uint32_t SceneIndex{};

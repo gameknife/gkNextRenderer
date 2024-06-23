@@ -292,7 +292,13 @@ void VulkanBaseRenderer::DrawFrame()
 	// wait the last frame command buffer to complete
 	if(fence)
 	{
+		SCOPED_CPU_TIMER("sync-wait");
 		fence->Wait(noTimeout);
+	}
+
+	{
+		SCOPED_CPU_TIMER("query-wait");
+		gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
 	}
 
 	BeforeNextFrame();
@@ -358,11 +364,13 @@ void VulkanBaseRenderer::DrawFrame()
 	presentInfo.pImageIndices = &currentImageIndex_;
 	presentInfo.pResults = nullptr; // Optional
 
-	result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+	{
+		SCOPED_CPU_TIMER("present");
+		result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+	}
+	
 
 	AfterPresent();
-	
-	gpuTimer_->FrameEnd(commandBuffer);
 	
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 	{

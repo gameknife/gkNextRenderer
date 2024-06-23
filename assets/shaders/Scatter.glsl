@@ -133,7 +133,7 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 	}
 }
 
-void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t)
+void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
 	
@@ -141,6 +141,7 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 	ray.GBuffer = vec4(normal, m.Fuzziness);
 	ray.Albedo = texColor * texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
+	ray.MaterialIndex = MaterialIndex;
 
 	switch (m.MaterialModel)
 	{

@@ -47,10 +47,12 @@ namespace Vulkan::HybridDeferred
 
 	private:
 		std::unique_ptr<ModernDeferred::VisibilityPipeline> visibilityPipeline_;
+		std::unique_ptr<ModernDeferred::VisibilityPipeline> visibility1Pipeline_;
 		std::unique_ptr<class HybridShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
+		std::unique_ptr<class FrameBuffer> deferred1FrameBuffer_;
 
 		std::unique_ptr<RenderImage> rtAccumlation;
 		std::unique_ptr<RenderImage> rtDirectLight0;

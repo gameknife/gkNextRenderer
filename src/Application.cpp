@@ -85,6 +85,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = numberOfSamples_;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
+    ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159f), 0.75, cosf(userSettings_.SunRotation * 3.14159f) )), 0.0 );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
@@ -132,8 +133,9 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 
     deviceFeatures.fillModeNonSolid = true;
     deviceFeatures.samplerAnisotropy = true;
-    //deviceFeatures.shaderInt64 = true;
+    
 #if WIN32
+    deviceFeatures.shaderInt64 = true;
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 #else
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
@@ -228,6 +230,9 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     // Render the UI
     Statistics stats = {};
+
+    stats.Stats["gpu"] = Renderer::Device().DeviceProperties().deviceName;
+    
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
     stats.FrameTime = static_cast<float>(timeDelta * 1000);

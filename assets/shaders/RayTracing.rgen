@@ -7,13 +7,16 @@
 #include "Heatmap.glsl"
 #include "Random.glsl"
 #include "RayPayload.glsl"
+#include "Material.glsl"
 #include "UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 
 layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
+
 layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 
@@ -22,18 +25,24 @@ layout(binding = 15, rgba16f) uniform image2D OutNormalBuffer;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
-
-#define GetRayColorGen(name,name0) \
-vec3 name(vec3 origin, vec3 scatterDir){ \
+#define GetRayColorGen(FUNC,FUNC0) \
+vec3 FUNC(vec3 origin, vec3 scatterDir){ \
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,origin.xyz, 0.001, scatterDir, 10000.0, 0);\
 	vec3 atten = Ray.Attenuation;\
 	vec3 emit = Ray.EmitColor.rgb;\
 	if(Ray.Exit > 0 || Ray.BounceCount == Camera.NumberOfBounces)\
 	{\
 		return emit;\
+	} else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)\
+	{\
+		const Material material = Materials[Ray.MaterialIndex];\
+		float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;\
+        float rr_prob = min(0.95f, luminance(atten) * rr_scale);\
+        if (rr_prob < RandomFloat(Ray.RandomSeed)) return emit + atten * Ray.pdf;\
+        atten *= min( 1.f / rr_prob, 20.f );\
 	}\
 	origin = origin + scatterDir * Ray.Distance;\
-	return emit + atten * Ray.pdf * name0(origin, Ray.ScatterDirection);\
+	return emit + atten * Ray.pdf * FUNC0(origin, Ray.ScatterDirection);\
 }
 
 vec3 GetRayColorEnd(vec3 origin, vec3 scatterDir)
@@ -93,6 +102,7 @@ vec3 GetPrimaryRayColor(vec3 origin, vec3 scatterDir, out vec4 gbuffer, out vec4
 
 void main() 
 {
+	bool isEvenFrame = Camera.TotalFrames % 2 == 0;
 	// use checkerbord to skip sample
 	int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
 	
@@ -158,8 +168,14 @@ void main()
 		{
 			//imageStore(GBufferImage, ipos, gbuffer);
 			imageStore(MotionVectorImage, ipos, motionvector);
-			imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0,0,0));
-				
+			if(isEvenFrame)
+			{
+				imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
+			}
+			else
+			{
+				imageStore(Visibility1Buffer, ipos, ivec4(primitiveId,0, 0, 0));
+			}
 			imageStore(OutAlbedoBuffer, ipos, s_albedo);
 			imageStore(OutNormalBuffer, ipos, gbuffer);
 
@@ -168,18 +184,18 @@ void main()
 			vec2 prevfpos = vec2(ipos) + motionvector.rg;
 			ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
 
-			if( length(motionvector.xy) > 0.5 )
+			if( length(motionvector.xy) > 0.01 )
 			{
-				uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
-				uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r;
-				uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
-				uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
+				uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
+				uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 1)).r;
+				uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1, 0)).r;
+				uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1, 1)).r;
 		
 				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId)));
 		
 				if (miss)
 				{
-				sampleTimes = 16u;
+					sampleTimes = 16u;
 				}
 			}
 		}
@@ -187,7 +203,6 @@ void main()
     
     pixelColor = pixelColor / sampleTimes;
 	//pixelColor = clamp(pixelColor, 0.0, 1000.0);
-
 	//imageStore(AlbedoImage, ipos, albedo / sampleTimes);
 		
 	if (Camera.ShowHeatmap)

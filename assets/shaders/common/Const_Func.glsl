@@ -25,6 +25,8 @@ vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics)
 	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
 }
 
+#define luminance(rgb) (dot((rgb), vec3(0.2126f, 0.7152f, 0.0722f)))
+
 float pow5(float x) { return x*x*x*x*x; }
 
 // Polynomial approximation by Christophe Schlick
@@ -76,6 +78,23 @@ vec3 ACES_Tonemapping(vec3 color){
 	vec3 a = v * (v + 0.0245786) - 0.000090537;
 	vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
 	return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));
+}
+
+vec3 rgb2yuv(vec3 rgb) {
+    float Y = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    float U = -0.14713 * rgb.r - 0.28886 * rgb.g + 0.436 * rgb.b;
+    float V = 0.615 * rgb.r - 0.51499 * rgb.g - 0.10001 * rgb.b;
+    return vec3(Y, U, V);
+}
+
+vec3 yuv2rgb(vec3 yuv) {
+    float Y = yuv.x;
+    float U = yuv.y;
+    float V = yuv.z;
+    float R = Y + 1.13983 * V;
+    float G = Y - 0.39465 * U - 0.58060 * V;
+    float B = Y + 2.03211 * U;
+    return vec3(R, G, B);
 }
 
 #define Const_Func
