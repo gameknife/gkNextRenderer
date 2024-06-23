@@ -24,7 +24,7 @@ Options::Options(const int argc, const char* argv[])
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
 		("temporal", value<uint32_t>(&Temporal)->default_value(32), "The number of temporal frames.")
 		("denoiser", bool_switch(&Denoiser)->default_value(false), "Use Denoiser.")
-	
+		("rr", value<uint32_t>(&RR_MIN_DEPTH)->default_value(2), "Russian roulette start from bounce.")
 		;
 
 	options_description scene("Scene options", lineLength);
@@ -41,7 +41,7 @@ Options::Options(const int argc, const char* argv[])
 	window.add_options()
 		("width", value<uint32_t>(&Width)->default_value(1280), "The framebuffer width.")
 		("height", value<uint32_t>(&Height)->default_value(720), "The framebuffer height.")
-		("present-mode", value<uint32_t>(&PresentMode)->default_value(3), "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).")
+		("present-mode", value<uint32_t>(&PresentMode)->default_value(0), "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).")
 		("fullscreen", bool_switch(&Fullscreen)->default_value(false), "Toggle fullscreen vs windowed (default: windowed).")
 		;
 

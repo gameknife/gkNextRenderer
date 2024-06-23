@@ -22,7 +22,6 @@ struct Statistics final
 	float FrameTime;
 	float RayRate;
 	uint32_t TotalSamples;
-	uint32_t FrameNum;
 	float CamPosX;
 	float CamPosY;
 	float CamPosZ;

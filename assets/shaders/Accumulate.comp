@@ -80,9 +80,8 @@ void main() {
     
     
     // judge current gbuffer / object id with prev frame, to deghosting
-    float deghostingSpeed = 20.0f;
-    uint TemporalFrames = max(1, Camera.TemporalFrames);
-    float currKeep = clamp(deghostingSpeed - float(Camera.frameNum) / float(TemporalFrames), 1.0f, deghostingSpeed) / float(TemporalFrames);
+    
+    float currKeep = 1.0 / max(1, Camera.TemporalFrames);
 
     if(Camera.TotalFrames == 0)
     {
@@ -98,6 +97,6 @@ void main() {
     {
         imageStore(AccumulateImage, ipos, final);
     }
-    
+
     imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
 }

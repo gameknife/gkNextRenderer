@@ -301,6 +301,7 @@ namespace
         userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
         userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
         userSettings.MaxNumberOfSamples = options.MaxSamples;
+        userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
 
         userSettings.ShowSettings = !options.Benchmark;
         userSettings.ShowOverlay = true;

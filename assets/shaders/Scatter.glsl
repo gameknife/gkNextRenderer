@@ -52,7 +52,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		vec3 worldPos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3 tolight = lightpos - worldPos;
 
-		float ndotl = ray.FrontFace ? -dot(tolight, normal) : dot(tolight, normal);
+		float ndotl = dot(tolight, normal);
 		
 		if(ndotl >= 0)
 		{
@@ -133,7 +133,7 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 	}
 }
 
-void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t)
+void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
 	
@@ -141,6 +141,7 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 	ray.GBuffer = vec4(normal, m.Fuzziness);
 	ray.Albedo = texColor * texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
+	ray.MaterialIndex = MaterialIndex;
 
 	switch (m.MaterialModel)
 	{

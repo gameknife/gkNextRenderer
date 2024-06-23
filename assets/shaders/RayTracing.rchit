@@ -44,5 +44,5 @@ void main()
 	Ray.primitiveId = (gl_InstanceID + 1) << 16 | v0.MaterialIndex;
 	Ray.BounceCount++;
 	Ray.Exit = 0;
-	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
+	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, v0.MaterialIndex);
 }

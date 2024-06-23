@@ -41,9 +41,9 @@ namespace Assets
 		
 		uint32_t TotalFrames;
 		uint32_t TotalNumberOfSamples;
-		uint32_t frameNum;
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;
+		uint32_t RR_MIN_DEPTH;
 		uint32_t RandomSeed;
 		uint32_t LightCount;
 		uint32_t HasSky; // bool
