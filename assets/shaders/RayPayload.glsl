@@ -14,6 +14,7 @@ struct RayPayload
 	float pdf;
 	uint primitiveId;
 	uint Exit;
+	uint MaterialIndex;
 };
 
 // a simple box light may enough now

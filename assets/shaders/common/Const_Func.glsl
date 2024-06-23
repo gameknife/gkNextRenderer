@@ -25,6 +25,8 @@ vec3 Mix(vec3 a, vec3 b, vec3 c, vec3 barycentrics)
 	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
 }
 
+#define luminance(rgb) (dot((rgb), vec3(0.2126f, 0.7152f, 0.0722f)))
+
 float pow5(float x) { return x*x*x*x*x; }
 
 // Polynomial approximation by Christophe Schlick

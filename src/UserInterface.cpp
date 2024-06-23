@@ -211,9 +211,13 @@ void UserInterface::DrawSettings()
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
 
-		// ImGui::Text("Ray Tracing");
-		// ImGui::Separator();
-		// uint32_t min = 1, max = 128;
+		ImGui::Text("Ray Tracing");
+		ImGui::Separator();
+		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
+		ImGui::SliderScalar("Russian Roulette starts from", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
+		ImGui::NewLine();
+
+		// min = 1, max = 128;
 		// ImGui::SliderScalar("Samples", ImGuiDataType_U32, &Settings().NumberOfSamples, &min, &max);
 		// min = 1, max = 32;
 		// ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);

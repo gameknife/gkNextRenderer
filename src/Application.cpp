@@ -85,6 +85,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = numberOfSamples_;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
+    ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159f), 0.75, cosf(userSettings_.SunRotation * 3.14159f) )), 0.0 );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;

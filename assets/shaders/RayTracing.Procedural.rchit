@@ -58,5 +58,5 @@ void main()
     Ray.primitiveId = v0.MaterialIndex + 1;
 	Ray.BounceCount++;
 	Ray.Exit = 0;
-	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT);
+	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, v0.MaterialIndex);
 }

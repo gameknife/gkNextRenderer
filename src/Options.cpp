@@ -24,8 +24,8 @@ Options::Options(const int argc, const char* argv[])
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
 		("temporal", value<uint32_t>(&Temporal)->default_value(32), "The number of temporal frames.")
 		("denoiser", bool_switch(&Denoiser)->default_value(false), "Use Denoiser.")
-	
-		;
+		("rr", value<uint32_t>(&RR_MIN_DEPTH)->default_value(2), "Russian roulette start from bounce.")
+    ;
 
 	options_description scene("Scene options", lineLength);
 	scene.add_options()

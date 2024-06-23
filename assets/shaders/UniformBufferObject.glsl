@@ -24,6 +24,7 @@ struct UniformBufferObject
 	uint TotalNumberOfSamples;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
+	uint RR_MIN_DEPTH;
 	uint RandomSeed;
 	uint LightCount;
 	bool HasSky;
