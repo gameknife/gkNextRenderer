@@ -33,23 +33,11 @@ void main() {
     vec4 history2 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
     vec4 history3 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
     
-    
     vec4 history = mix(
         mix(history0, history1, subpixel.x),
         mix(history2, history3, subpixel.x),
         subpixel.y
     );
-    
-    // find the min color of 4 history
-    vec4 history_min = min(history, min(history0, min(history1, min(history2, history3))));
-    // then the max
-    vec4 history_max = max(history, max(history0, max(history1, max(history2, history3))));
-    
-    // that may bilinear to peak value, try to clamp it the color clampbox
-    history = clamp(history, history_min, history_max);
-    
-    // clamp the history color
-    //history = clamp(history, vec4(0.0), vec4(1.25));
     
     // fetch visibility to validate the history
     if( length(motion) > 0.5 )

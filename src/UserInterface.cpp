@@ -214,7 +214,7 @@ void UserInterface::DrawSettings()
 		ImGui::Text("Ray Tracing");
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
-		ImGui::SliderScalar("Russian Roulette starts from", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
+		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
 		ImGui::NewLine();
 
 		// min = 1, max = 128;
@@ -294,6 +294,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 	if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
 	{
 		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
+		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
@@ -307,6 +308,12 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
+		
+		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
+		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
+		//ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
+		
 	}
 	ImGui::End();
 }

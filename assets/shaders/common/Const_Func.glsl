@@ -80,5 +80,22 @@ vec3 ACES_Tonemapping(vec3 color){
 	return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));
 }
 
+vec3 rgb2yuv(vec3 rgb) {
+    float Y = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    float U = -0.14713 * rgb.r - 0.28886 * rgb.g + 0.436 * rgb.b;
+    float V = 0.615 * rgb.r - 0.51499 * rgb.g - 0.10001 * rgb.b;
+    return vec3(Y, U, V);
+}
+
+vec3 yuv2rgb(vec3 yuv) {
+    float Y = yuv.x;
+    float U = yuv.y;
+    float V = yuv.z;
+    float R = Y + 1.13983 * V;
+    float G = Y - 0.39465 * U - 0.58060 * V;
+    float B = Y + 2.03211 * U;
+    return vec3(R, G, B);
+}
+
 #define Const_Func
 #endif

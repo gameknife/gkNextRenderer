@@ -7,11 +7,13 @@
 #include <memory>
 #include <unordered_map>
 #include <cassert>
+#include <chrono>
 #include <glm/vec2.hpp>
 
 #include "Image.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
+#define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
 
 namespace Assets
 {
@@ -34,10 +36,19 @@ namespace Vulkan
 		{
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
+			started_ = true;
 		}
 
 		void FrameEnd(VkCommandBuffer commandBuffer)
 		{
+			if(started_)
+			{
+				started_ = false;
+			}
+			else
+			{
+				return;
+			}
 			uint32_t count = static_cast<uint32_t>(time_stamps.size());
 
 			// Fetch the time stamp results written in the command buffer submissions
@@ -72,6 +83,19 @@ namespace Vulkan
 			std::get<1>(timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
+		void StartCpuTimer(const char* name)
+		{
+			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
+			{
+				cpu_timer_query_map[name] = std::make_tuple(0, 0);
+			}
+			std::get<0>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+		}
+		void EndCpuTimer(const char* name)
+		{
+			assert( cpu_timer_query_map.find(name) != cpu_timer_query_map.end() );
+			std::get<1>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+		}
 		float GetTime(const char* name)
 		{
 			if(timer_query_map.find(name) == timer_query_map.end())
@@ -79,6 +103,14 @@ namespace Vulkan
 				return 0;
 			}
 			return (time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])]) * timeStampPeriod_ * 1e-6f;
+		}
+		float GetCpuTime(const char* name)
+		{
+			if(cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
+			{
+				return 0;
+			}
+			return (std::get<1>(cpu_timer_query_map[name]) - std::get<0>(cpu_timer_query_map[name])) * 1e-6f;
 		}
 		std::vector<std::tuple<std::string, float> > FetchAllTimes()
 		{
@@ -113,9 +145,11 @@ namespace Vulkan
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
+		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > cpu_timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
+		bool started_ = false;
 	};
 
 	class ScopedGpuTimer
@@ -132,6 +166,23 @@ namespace Vulkan
 			timer_->End(commandBuffer_, name_.c_str());
 		}
 		VkCommandBuffer commandBuffer_;
+		VulkanGpuTimer* timer_;
+		std::string name_;
+	};
+
+	class ScopedCpuTimer
+	{
+	public:
+		DEFAULT_NON_COPIABLE(ScopedCpuTimer)
+		
+		ScopedCpuTimer(VulkanGpuTimer* timer, const char* name ):timer_(timer), name_(name)
+		{
+			timer_->StartCpuTimer(name_.c_str());
+		}
+		virtual ~ScopedCpuTimer()
+		{
+			timer_->EndCpuTimer( name_.c_str());
+		}
 		VulkanGpuTimer* timer_;
 		std::string name_;
 	};

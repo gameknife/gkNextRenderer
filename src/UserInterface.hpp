@@ -1,6 +1,8 @@
 #pragma once
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace Vulkan
 {
@@ -29,6 +31,8 @@ struct Statistics final
 	uint32_t InstanceCount;
 	uint32_t TextureCount;
 	uint32_t ComputePassCount;
+
+	mutable std::unordered_map< std::string, std::string> Stats;
 };
 
 class UserInterface final
