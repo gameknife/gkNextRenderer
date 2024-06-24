@@ -517,11 +517,12 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 #if WITH_AVIF
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+        const auto extent = swapChain.Extent();
 
         // capture and export
         Renderer::CaptureScreenShot();
 
-        avifImage* image = avifImageCreate(swapChain.Extent().width, swapChain.Extent().height, 10,
+        avifImage* image = avifImageCreate(extent.width, extent.height, 10,
                                            AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
@@ -548,21 +549,32 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
 
             constexpr uint32_t kCompCnt = 3;
-            int imageSize = swapChain.Extent().width * swapChain.Extent().height * kCompCnt;
+            int imageSize = extent.width * extent.height * kCompCnt;
 
             uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
 
-            for (uint32_t y = 0; y < swapChain.Extent().height; y++)
+            uint32_t yDelta = extent.width * kCompCnt;
+            uint32_t xDelta = kCompCnt;
+            uint32_t idxDelta = extent.width * 4;
+            uint32_t yy = 0;
+            uint32_t xx = 0, idx = 0;
+            for (uint32_t y = 0; y < extent.height; y++)
             {
-                for (uint32_t x = 0; x < swapChain.Extent().width; x++)
+                xx = 0;
+                for (uint32_t x = 0; x < extent.width; x++)
                 {
-                    uint32_t* pInPixel = (uint32_t*)&mappedData[(y * swapChain.Extent().width * 4) + x * 4];
+                    uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
                     uint32_t uInPixel = *pInPixel;
 
-                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 0] = (uInPixel & (0b1111111111 << 20)) >> 20;
-                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-                    data[y * swapChain.Extent().width * kCompCnt + x * kCompCnt + 2] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                    data[yy + xx]     = (uInPixel & (0b1111111111 << 20)) >> 20;
+                    data[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                    data[yy + xx + 2] = (uInPixel & (0b1111111111 << 0)) >> 0;
+
+                    idx += 4;
+                    xx += xDelta;
                 }
+                idx += idxDelta;
+                yy += yDelta;
             }
             vkMemory->Unmap();
         }

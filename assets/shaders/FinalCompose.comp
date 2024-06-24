@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "UniformBufferObject.glsl"
-#include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D InImage;
 layout(binding = 1, rgba8) uniform image2D OutImage;

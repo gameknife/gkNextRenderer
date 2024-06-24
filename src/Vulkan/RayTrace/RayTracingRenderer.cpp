@@ -359,18 +359,22 @@ namespace Vulkan::RayTracing
 
 #if WITH_OIDN
         size_t SrcImageSize = extent.width * extent.height * 4 * 2;
+        size_t SrcImageW8 = 4 * 2 * extent.width;
+        size_t SrcImage8 = 4 * 2;
         oidn::BufferRef colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, SrcImageSize );
         oidn::BufferRef outBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, SrcImageSize );
         oidn::BufferRef albedoBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, SrcImageSize );
         oidn::BufferRef normalBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, SrcImageSize );
         
         filter = device.newFilter("RT"); // generic ray tracing filter
-        filter.setImage("color",  colorBuf,  oidn::Format::Half3, extent.width, extent.height, 0, 4 * 2, 4 * 2 * extent.width); // beauty
-        filter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, 4 * 2, 4 * 2 * extent.width); // aux
-        filter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, 0, 4 * 2, 4 * 2 * extent.width); // aux
-        filter.setImage("output", outBuf,  oidn::Format::Half3, extent.width, extent.height, 0, 4 * 2, 4 * 2 * extent.width); // denoised beauty
+        filter.setImage("color",  colorBuf,  oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // beauty
+        filter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        filter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        filter.setImage("output", outBuf,    oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // denoised beauty
         filter.set("hdr", true); // beauty image is HDR
         filter.set("quality", oidn::Quality::Fast);
+        //filter.set("quality", oidn::Quality::Balanced);
+        //filter.set("quality", oidn::Quality::High);
         filter.set("cleanAux", true);
         //filter.set("inputScale", 1.0f);
         filter.commit();

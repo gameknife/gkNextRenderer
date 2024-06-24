@@ -224,12 +224,12 @@ void UserInterface::DrawSettings()
 		// ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);
 		// ImGui::NewLine();
 
-		{
+		#if WITH_OIDN
 			ImGui::Text("Denoiser");
 			ImGui::Separator();
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 			ImGui::NewLine();
-		}
+		#endif
 		
 		ImGui::Text("Camera");
 		ImGui::Separator();
