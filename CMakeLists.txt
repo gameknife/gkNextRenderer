@@ -61,6 +61,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
+find_package(RapidJSON CONFIG REQUIRED)
 
 if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
@@ -85,10 +86,6 @@ find_program(Vulkan_GLSLANG_VALIDATOR
 if (NOT Vulkan_GLSLANG_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
 endif()
-
-include_directories(
-  ${CMAKE_SOURCE_DIR}/src/ThirdParty/rapidjson/include/rapidjson
-)
 
 set(MAIN_PROJECT "gkNextRenderer")
 add_subdirectory(assets)
