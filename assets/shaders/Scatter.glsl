@@ -153,6 +153,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		// reflect
 		const vec3 reflected = reflect(direction, outwardNormal);
 		ray.Attenuation = vec3(1.0);
+
 		ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflected) : reflected;
 	}
 	else
