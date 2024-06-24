@@ -247,6 +247,7 @@ set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX
 target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
+
 target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
 
 if ( ANDROID )
@@ -259,9 +260,9 @@ target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_RE
 endif()
 
 if ( ANDROID )
-target_link_libraries(${exe_name} PRIVATE game-activity::game-activity log android CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE game-activity::game-activity log android rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
-target_link_libraries(${exe_name} PRIVATE CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 endif()
 
 if ( WITH_AVIF )
