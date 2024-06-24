@@ -24,6 +24,7 @@
 #include <array>
 
 #include "Utilities/FileHelper.hpp"
+#include "Utilities/Math.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 
 namespace
@@ -298,8 +299,13 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
-		ImGui::Text("Tris: %d", statistics.TriCount);
-		ImGui::Text("Instance: %d", statistics.InstanceCount);
+
+		char buff[50];
+		Utilities::metricFormatter(static_cast<double>(statistics.TriCount), buff, sizeof(buff), (void*)"");
+		ImGui::Text("Tris: %s", buff);
+
+		Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), buff, sizeof(buff), (void*)"");
+		ImGui::Text("Instance: %s", buff);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display
