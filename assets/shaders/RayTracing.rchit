@@ -27,17 +27,16 @@ void main()
 {
 	// Get the material.
 	const uvec2 offsets = Offsets[gl_InstanceCustomIndexEXT];
-	const uint indexOffset = offsets.x;
+	const uint indexOffset = offsets.x + gl_PrimitiveID * 3;
 	const uint vertexOffset = offsets.y;
-	const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset + gl_PrimitiveID * 3 + 0]);
-	const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + gl_PrimitiveID * 3 + 1]);
-	const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + gl_PrimitiveID * 3 + 2]);
+	const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
+	const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
+	const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
 	const Material material = Materials[v0.MaterialIndex];
 
 	// Compute the ray hit point properties.
 	const vec3 barycentrics = vec3(1.0 - HitAttributes.x - HitAttributes.y, HitAttributes.x, HitAttributes.y);
-	const vec3 localNormal = Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics);
-	const vec3 normal = normalize((localNormal * gl_WorldToObjectEXT).xyz);
+	const vec3 normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * gl_WorldToObjectEXT).xyz);
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));

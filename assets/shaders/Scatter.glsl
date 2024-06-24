@@ -33,7 +33,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(0.5f / 180.f * 3.14159f)), Camera.SunDirection.xyz);
 		if(RandomFloat(ray.RandomSeed) < 0.33) {
 			rayQueryEXT rayQuery;
-			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, 0.01, lightVector, 10000.0);
+			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, EPS, lightVector, INF);
 			rayQueryProceedEXT(rayQuery);
 			if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
 				// sun
@@ -72,7 +72,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = vec3(1.0);
-	ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
+	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -80,7 +80,7 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = ray.Albedo.rgb;
-	ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
+	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -99,7 +99,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		// reflect
 		const vec3 reflected = reflect(direction, outwardNormal);
 		ray.Attenuation = vec3(1.0);
-		ray.ScatterDirection = m.Fuzziness > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(m.Fuzziness * M_PI_4)), reflected) : reflected;
+		ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflected) : reflected;
 	}
 	else
 	{
@@ -136,9 +136,10 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
-	
-    ray.Distance = t;
-	ray.GBuffer = vec4(normal, m.Fuzziness);
+	const vec4 mra = m.MRATextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.MRATextureId)], texCoord) : vec4(1);
+
+	ray.Distance = t;
+	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
 	ray.Albedo = texColor * texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;
