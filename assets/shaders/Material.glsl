@@ -10,6 +10,8 @@ struct Material
 {
 	vec4 Diffuse;
 	int DiffuseTextureId;
+	int MRATextureId;
+	int NormalTextureId;
 	float Fuzziness;
 	float RefractionIndex;
 	uint MaterialModel;

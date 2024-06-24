@@ -200,16 +200,26 @@ namespace Assets
             Material m{};
 
             m.DiffuseTextureId = -1;
+            m.MRATextureId = -1;
+            m.NormalTextureId = -1;
+
+            m.MaterialModel = Material::Enum::Mixture;
+            m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
+            m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
+            m.RefractionIndex = 1.46f;
+            
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
             {
                 m.DiffuseTextureId = model.textures[texture].source + textureIdx;
             }
+            int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            if(mraTexture != -1)
+            {
+                m.MRATextureId = model.textures[mraTexture].source + textureIdx;
+                m.Fuzziness = 1.0;
+            }
             
-            m.MaterialModel = Material::Enum::Mixture;
-            m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
-            m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
-            m.RefractionIndex = 1.46f;
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()
                                           ? glm::vec3(0)
                                           : glm::vec3(mat.emissiveFactor[0], mat.emissiveFactor[1],
@@ -227,7 +237,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Metallic;
             }
 
-            if (m.Fuzziness > .95)
+            if (m.Fuzziness > .95 && m.MRATextureId == -1)
             {
                 m.MaterialModel = Material::Enum::Lambertian;
             }
