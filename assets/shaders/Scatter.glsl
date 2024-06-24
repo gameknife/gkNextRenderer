@@ -4,6 +4,60 @@
 #include "RayPayload.glsl"
 #include "common/Const_Func.glsl" //pi consts, Schlick
 
+
+#define sample_vndf
+
+#ifdef sample_vndf
+#define saturate(x) ( clamp((x), 0.0F, 1.0F) )
+
+// Kenta Eto and Yusuke Tokuyoshi. 2023. Bounded VNDF Sampling for Smith-GGX Reflections.
+// In SIGGRAPH Asia 2023 Technical Communications (SA Technical Communications '23), December 12-15, 2023, Sydney, NSW, Australia. ACM, New York, NY, USA, 4 pages.
+// https://doi.org/10.1145/3610543.3626163
+vec3 ggx_sample_vndf(vec2 alpha, vec3 wi_, vec2 uv) {
+  vec3 wi = normalize(vec3(wi_.xy * alpha, wi_.z));
+  // Sample a spherical cap
+  //float k = (1.0f - a2) * s2 / (s2 + a2 * wi_.z * wi_.z); // Eq. 5
+
+  float b = wi.z;
+  if(wi_.z > 0.f) {
+	  float a = saturate(min(alpha.x, alpha.y)); // Eq. 6
+	  float s = 1.0f + length(wi_.xy); // Omit sgn for a <=1
+	  b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z));
+  }
+
+  float z = (1.0f - uv.y) * (1.0f + b) -b;
+  float cosPhi    = uv.x + uv.x - 1.0;
+  vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cosPhi, sqrt(1.0 - cosPhi * cosPhi)), z);
+  // Compute the microfacet normal m
+  vec3 m_std = wi + o_std;
+  return normalize(vec3(m_std.xy * alpha, m_std.z));
+}
+
+void ONBAlignWithNormal(vec3 up, out vec3 right, out vec3 forward)
+{
+    right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
+    forward = cross(right, up);
+}
+
+vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
+{
+  vec3 tangent, bitangent;
+  ONBAlignWithNormal(normal, tangent, bitangent);
+  vec3 wm_ = ggx_sample_vndf(
+                            vec2(roughness),
+                            to_local(normal, tangent, bitangent, normal),
+                            RandomFloat2(RandomSeed)
+							);
+  return to_world(wm_, tangent, bitangent, normal);
+}
+#else
+vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
+{
+  return AlignWithNormal( RandomInCone(RandomSeed, cos(roughness * M_PI_4)), normal );
+}
+#endif
+
+
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Exit = 1;
@@ -72,7 +126,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = vec3(1.0);
-	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
+	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -80,7 +134,7 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = ray.Albedo.rgb;
-	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflect(direction, normal)) : reflect(direction, normal);
+	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -99,7 +153,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		// reflect
 		const vec3 reflected = reflect(direction, outwardNormal);
 		ray.Attenuation = vec3(1.0);
-		ray.ScatterDirection = ray.GBuffer.w > NEARzero ? AlignWithNormal( RandomInCone(ray.RandomSeed, cos(ray.GBuffer.w * M_PI_4)), reflected) : reflected;
+		ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflected) : reflected;
 	}
 	else
 	{
