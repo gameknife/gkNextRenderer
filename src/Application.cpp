@@ -133,8 +133,9 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
 
     deviceFeatures.fillModeNonSolid = true;
     deviceFeatures.samplerAnisotropy = true;
-    //deviceFeatures.shaderInt64 = true;
+    
 #if WIN32
+    deviceFeatures.shaderInt64 = true;
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 #else
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
@@ -229,6 +230,9 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     // Render the UI
     Statistics stats = {};
+
+    stats.Stats["gpu"] = Renderer::Device().DeviceProperties().deviceName;
+    
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
     stats.FrameTime = static_cast<float>(timeDelta * 1000);

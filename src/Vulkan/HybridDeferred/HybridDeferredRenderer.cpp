@@ -41,16 +41,17 @@ namespace Vulkan::HybridDeferred
         const auto format = SwapChain().Format();
 
         visibilityPipeline_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+        visibility1Pipeline_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 
         rtVisibility0.reset(new RenderImage(Device(), extent,
                                             VK_FORMAT_R32G32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
-                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,false,"visibility0"));
 
         rtVisibility1.reset(new RenderImage(Device(), extent,
-                                            VK_FORMAT_R32_UINT,
+                                            VK_FORMAT_R32G32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
-                                            VK_IMAGE_USAGE_STORAGE_BIT));
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,false,"visibility1"));
 
         rtOutput.reset(new RenderImage(Device(), extent,
                                        VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -87,8 +88,11 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
         deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline_->RenderPass()));
+        deferred1FrameBuffer_.reset(new FrameBuffer(rtVisibility1->GetImageView(), visibility1Pipeline_->RenderPass()));
+        
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), topAs_[0],
                                                                  rtVisibility0->GetImageView(),
+                                                                 rtVisibility1->GetImageView(),
                                                                  rtAccumlation->GetImageView(),
                                                                  rtMotionVector->GetImageView(),
                                                                  rtDirectLight0->GetImageView(),
@@ -110,11 +114,13 @@ namespace Vulkan::HybridDeferred
     void HybridDeferredRenderer::DeleteSwapChain()
     {
         visibilityPipeline_.reset();
+        visibility1Pipeline_.reset();
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipeline_.reset();
         
         deferredFrameBuffer_.reset();
+        deferred1FrameBuffer_.reset();
 
         rtVisibility0.reset();
         rtVisibility1.reset();
@@ -138,42 +144,84 @@ namespace Vulkan::HybridDeferred
         std::array<VkClearValue, 2> clearValues = {};
         clearValues[0].color = {{0, 0, 0, 0}};
         clearValues[1].depthStencil = {1.0f, 0};
-
-        VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
-        renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = SwapChain().Extent();
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
+        
         {
             SCOPED_GPU_TIMER("drawpass");
-            // make it to generate gbuffer
-            vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            if(frameCount_ % 2 == 0)
             {
-                const auto& scene = GetScene();
+                 VkRenderPassBeginInfo renderPassInfo = {};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
+                renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = SwapChain().Extent();
+                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+                renderPassInfo.pClearValues = clearValues.data();
+                
+                // make it to generate gbuffer
+                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+                {
+                    const auto& scene = GetScene();
 
-                VkDescriptorSet descriptorSets[] = {visibilityPipeline_->DescriptorSet(imageIndex)};
-                VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
-                const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-                VkDeviceSize offsets[] = {0};
+                    VkDescriptorSet descriptorSets[] = {visibilityPipeline_->DescriptorSet(imageIndex)};
+                    VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
+                    const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+                    VkDeviceSize offsets[] = {0};
 
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // indirect draw
-                vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+                    // indirect draw
+                    vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+                }
+                vkCmdEndRenderPass(commandBuffer);
+
+                rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+                rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             }
-            vkCmdEndRenderPass(commandBuffer);
+            else
+            {
+                VkRenderPassBeginInfo renderPassInfo = {};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = visibility1Pipeline_->RenderPass().Handle();
+                renderPassInfo.framebuffer = deferred1FrameBuffer_->Handle();
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = SwapChain().Extent();
+                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+                renderPassInfo.pClearValues = clearValues.data();
+                
+                // make it to generate gbuffer
+                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+                {
+                    const auto& scene = GetScene();
 
+                    VkDescriptorSet descriptorSets[] = {visibility1Pipeline_->DescriptorSet(imageIndex)};
+                    VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
+                    const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+                    VkDeviceSize offsets[] = {0};
+
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibility1Pipeline_->Handle());
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibility1Pipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+                    // indirect draw
+                    vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+                }
+                vkCmdEndRenderPass(commandBuffer);
+
+                rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+                rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            }
+           
+        }
+
+        {
             rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtMotionVector->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-            rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

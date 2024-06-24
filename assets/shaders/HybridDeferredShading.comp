@@ -9,6 +9,7 @@
 #include "Random.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
+layout(binding = 13, rg32ui) uniform uimage2D MiniGBuffer1;
 layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 3) uniform sampler2D[] TextureSamplers;
@@ -51,7 +52,7 @@ struct RayPayload
 
 	// Ray hit info
 	float  HitDist;
-	uint   IsFrontFacing;
+	bool   IsFrontFacing;
 
 	// Barycentric Coordinates
 	vec3    BaryCoords;
@@ -60,7 +61,7 @@ struct RayPayload
 vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor)
 {
 	rayQueryEXT rayQuery;
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, 0.01, direction, 100.0);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, INF);
 	rayQueryProceedEXT(rayQuery);
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
 		RayPayload PayloadData;
@@ -80,10 +81,7 @@ vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		// const uint gl_HitKindFrontFacingTriangleEXT = 0xFEU;
 		// const uint gl_HitKindBackFacingTriangleEXT = 0xFFU;
 		PayloadData.HitDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
-		PayloadData.IsFrontFacing = 1;
-		bool IsFrontFacing = rayQueryGetIntersectionFrontFaceEXT(rayQuery, IsCommitted);
-		if(!IsFrontFacing)
-		PayloadData.IsFrontFacing = 0;
+		PayloadData.IsFrontFacing = rayQueryGetIntersectionFrontFaceEXT(rayQuery, IsCommitted);
 
 		mat4x3 worldtoobject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
 
@@ -95,15 +93,14 @@ vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		PayloadData.BaryCoords = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 
 		const uvec2 offsets = Offsets[PayloadData.InstCustIndex];
-		const uint indexOffset = offsets.x;
+		const uint indexOffset = offsets.x + PayloadData.PrimitiveIndex * 3;
 		const uint vertexOffset = offsets.y;
-		const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 0]);
-		const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 1]);
-		const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + PayloadData.PrimitiveIndex * 3 + 2]);
+		const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
+		const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
+		const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
 		const Material material = Materials[v0.MaterialIndex];
 
-		const vec3 localNormal = Mix(v0.Normal, v1.Normal, v2.Normal, PayloadData.BaryCoords);
-		const vec3 normal = normalize((localNormal * worldtoobject).xyz);
+		const vec3 normal = normalize((to_world(PayloadData.BaryCoords, v0.Normal, v1.Normal, v2.Normal) * worldtoobject).xyz);
 		const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
 
 		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
@@ -149,7 +146,7 @@ void main() {
     }
 	
 	ivec2 size = imageSize(MiniGBuffer);
-    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
+    uvec2 vBuffer = Camera.TotalFrames % 2 == 0 ? imageLoad(MiniGBuffer, ipos).rg : imageLoad(MiniGBuffer1, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -190,8 +187,6 @@ void main() {
 	vec3 skyColor = vec3(1);
 	vec3 bounceColor = vec3(0);
 	
-	
-
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		vec3 trace_dir = chanceReflect ?
@@ -225,7 +220,7 @@ void main() {
         const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
         
         rayQueryEXT rayQuery;
-        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, 0.01, lightVectorCone, 10000.0);
+        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, EPS, lightVectorCone, INF);
         rayQueryProceedEXT(rayQuery);
         if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
             d = vec3(0.0);
