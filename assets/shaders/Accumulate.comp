@@ -68,7 +68,7 @@ void main() {
 			);
 
 			// judge current gbuffer / object id with prev frame, to deghosting
-			float currKeep = 1.0 / max(1, Camera.TemporalFrames);
+			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);
 		}
     }

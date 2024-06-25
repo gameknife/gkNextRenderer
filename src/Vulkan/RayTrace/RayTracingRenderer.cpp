@@ -127,6 +127,7 @@ namespace Vulkan::RayTracing
                                                          rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
+                                                         rtAdaptiveSample_->GetImageView(),
                                                          UniformBuffers(), GetScene()));
 
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
@@ -177,6 +178,8 @@ namespace Vulkan::RayTracing
 
         rtDenoise0_.reset();
         rtDenoise1_.reset();
+
+        rtAdaptiveSample_.reset();
         
         RayTraceBaseRenderer::DeleteSwapChain();
     }
@@ -220,6 +223,7 @@ namespace Vulkan::RayTracing
         rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         
         // Bind ray tracing pipeline.
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
@@ -357,6 +361,7 @@ namespace Vulkan::RayTracing
         rtDenoise0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR,VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "denoise0"));
         rtDenoise1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR,VK_IMAGE_USAGE_STORAGE_BIT, true, "denoise1"));
 
+        rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
 #if WITH_OIDN
         size_t SrcImageSize = extent.width * extent.height * 4 * 2;
         size_t SrcImageW8 = 4 * 2 * extent.width;
