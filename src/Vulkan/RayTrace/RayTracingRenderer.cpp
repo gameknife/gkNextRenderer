@@ -138,7 +138,6 @@ namespace Vulkan::RayTracing
             rtVisibility0_->GetImageView(),
             rtVisibility1_->GetImageView(),
             rtOutputForOIDN_->GetImageView(),
-            rtAdaptiveSample_->GetImageView(),
             UniformBuffers(), GetScene()));
 
         

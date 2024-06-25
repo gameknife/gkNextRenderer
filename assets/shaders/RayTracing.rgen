@@ -150,7 +150,7 @@ void main()
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = 8u;
+		sampleTimes = Camera.NumberOfSamples * 4;
 	}
 		
 	ivec2 imgSize = imageSize(Visibility1Buffer);
@@ -208,8 +208,8 @@ void main()
 
 				if (miss)
 				{
-					sampleTimes = 8u;
-					multisamplecount = 8u;
+					sampleTimes = Camera.NumberOfSamples * 4;
+					multisamplecount = Camera.TemporalFrames / 4;
 				}
 			}
 		}
@@ -232,5 +232,5 @@ void main()
 	}
 
 	// output to accumulation directly
-	imageStore(AccumulationImage, ipos, vec4(pixelColor, 0));
+	imageStore(AccumulationImage, ipos, vec4(pixelColor, float(sampleTimes)));
 }
