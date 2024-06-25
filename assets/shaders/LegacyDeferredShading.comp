@@ -5,7 +5,7 @@
 #include "Platform.glsl"
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
-#include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba8) readonly uniform image2D GBuffer0Image;
 layout(binding = 1, rgba16f) readonly uniform image2D GBuffer1Image;

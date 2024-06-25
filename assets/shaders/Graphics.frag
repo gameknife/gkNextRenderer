@@ -4,7 +4,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "Material.glsl"
 #include "UniformBufferObject.glsl"
-#include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
 layout(binding = 0) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 1) readonly buffer MaterialArray { Material[] Materials; };

@@ -19,7 +19,7 @@ layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 
 #include "Vertex.glsl"
-#include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
 #if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -42,7 +42,6 @@ void main() {
             ipos.x += 1;
         }
     }
-
 	
 	ivec2 size = imageSize(MiniGBuffer);
     uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
