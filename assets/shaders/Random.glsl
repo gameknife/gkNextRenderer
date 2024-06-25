@@ -87,10 +87,9 @@ vec3 RandomInHemiSphere1(inout uvec4 seed)
     return vec3(x, z, y);
 }
 
-vec3 AlignWithNormal(vec3 ray, vec3 normal)
+vec3 AlignWithNormal(vec3 ray, vec3 up)
 {
-    vec3 up = normal;
-    vec3 right = normalize(cross(normal, vec3(0.0072f, 1.0f, 0.0034f)));
+    vec3 right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
     vec3 forward = cross(right, up);
-    return ray.x * right + ray.y * up + ray.z * forward;
+    return to_world(ray, right, up, forward);
 }

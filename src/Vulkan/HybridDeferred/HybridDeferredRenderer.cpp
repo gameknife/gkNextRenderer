@@ -87,6 +87,8 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_TILING_OPTIMAL,
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
+        rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
+
         deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline_->RenderPass()));
         deferred1FrameBuffer_.reset(new FrameBuffer(rtVisibility1->GetImageView(), visibility1Pipeline_->RenderPass()));
         
@@ -134,6 +136,8 @@ namespace Vulkan::HybridDeferred
         rtPingPong0.reset();
         rtPingPong1.reset();
 
+        rtAdaptiveSample_.reset();
+        
         RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
     }
 

@@ -23,6 +23,8 @@ layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 14, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 15, rgba16f) uniform image2D OutNormalBuffer;
 
+layout(binding = 16, r8ui) uniform uimage2D AdaptiveSampleBuffer;
+
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
 #define GetRayColorGen(FUNC,FUNC0) \
@@ -138,9 +140,22 @@ void main()
 	// Adaptive Sampling
 	// this can be judge by current frame, first sample we can determin if we dismiss the cache, and catch up samples
 	uint sampleTimes = Camera.NumberOfSamples;
-	
+		
+	// dynamic sampleTimes;
+	uint multisamplecount = 1;
+	if( Camera.TotalFrames > 0 )
+	{
+		multisamplecount = imageLoad(AdaptiveSampleBuffer, ipos).r;
+	}
+	bool multisample = multisamplecount > 1;
+	if(multisample)
+	{
+		sampleTimes = Camera.NumberOfSamples * 4;
+	}
+		
 	ivec2 imgSize = imageSize(Visibility1Buffer);
 			
+	
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
 		const vec2 pixel = vec2(ipos);
@@ -190,14 +205,19 @@ void main()
 				uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1, 1)).r;
 		
 				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId)));
-		
+
 				if (miss)
 				{
-					sampleTimes *= 4u;
+					sampleTimes = Camera.NumberOfSamples * 4;
+					multisamplecount = Camera.TemporalFrames / 4;
 				}
 			}
 		}
 	}
+		
+	// record adaptivesamplebuffer
+	multisamplecount = max(1, multisamplecount - 1);
+	imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
     
     pixelColor = pixelColor / sampleTimes;
 	//pixelColor = clamp(pixelColor, 0.0, 1000.0);
@@ -212,5 +232,5 @@ void main()
 	}
 
 	// output to accumulation directly
-	imageStore(AccumulationImage, ipos, vec4(pixelColor, 0));
+	imageStore(AccumulationImage, ipos, vec4(pixelColor, float(sampleTimes)));
 }
