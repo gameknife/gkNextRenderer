@@ -62,6 +62,8 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<RenderImage> rtDenoise0_;
 		std::unique_ptr<RenderImage> rtDenoise1_;
+
+		std::unique_ptr<RenderImage> rtAdaptiveSample_;
 		
 		std::unique_ptr<class RayTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
