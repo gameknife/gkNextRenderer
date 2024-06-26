@@ -108,6 +108,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtVisibility0->GetImageView(),
                                                                          rtVisibility1->GetImageView(),
                                                                          rtOutput->GetImageView(),
+                                                                         rtAdaptiveSample_->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
         composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), UniformBuffers()));

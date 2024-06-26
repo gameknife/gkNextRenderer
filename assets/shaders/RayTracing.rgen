@@ -150,7 +150,7 @@ void main()
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = Camera.NumberOfSamples * 4;
+		sampleTimes = clamp(Camera.NumberOfSamples * 4, 1, 6);
 	}
 		
 	ivec2 imgSize = imageSize(Visibility1Buffer);
