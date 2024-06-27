@@ -69,4 +69,29 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
+
+	class VisualDebuggerPipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(VisualDebuggerPipeline)
+	
+		VisualDebuggerPipeline(
+			const SwapChain& swapChain, 
+			const ImageView& debugImage1View,
+			const ImageView& debugImage2View,
+			const ImageView& debugImage3View,
+			const ImageView& debugImage4View,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers);
+		~VisualDebuggerPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const SwapChain& swapChain_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
 }
