@@ -66,6 +66,8 @@ namespace Vulkan::HybridDeferred
 		
 		std::unique_ptr<RenderImage> rtOutput;
 		std::unique_ptr<RenderImage> rtMotionVector;
+
+		std::unique_ptr<RenderImage> rtAdaptiveSample_;
 	};
 
 }
