@@ -18,6 +18,9 @@ struct UserSettings final
 	uint32_t NumberOfSamples;
 	uint32_t NumberOfBounces;
 	uint32_t MaxNumberOfSamples;
+	bool AdaptiveSample;
+	float AdaptiveVariance;
+	int MaxAdaptiveSample;
 
 	// Camera
 	float FieldOfView;

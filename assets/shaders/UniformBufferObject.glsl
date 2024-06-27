@@ -33,4 +33,7 @@ struct UniformBufferObject
 	uint TemporalFrames;
 	bool HasSun;
 	bool HDR;
+	bool AdaptiveSample;
+	float AdaptiveVariance;
+	uint MaxAdaptiveSample;
 };

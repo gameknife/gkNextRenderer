@@ -52,6 +52,9 @@ namespace Assets
 		uint32_t TemporalFrames;
 		uint32_t HasSun; // bool
 		uint32_t HDR; // bool
+		uint32_t AdaptiveSample; // bool
+		float AdaptiveVariance;
+		uint32_t MaxAdaptiveSample;
 	};
 
 	// lightquad can represent by 4 points
