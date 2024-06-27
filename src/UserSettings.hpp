@@ -34,7 +34,7 @@ struct UserSettings final
 	int SkyIdx;
 
 	// Profiler
-	bool ShowHeatmap;
+	bool ShowVisualDebug;
 	float HeatmapScale;
 
 	// UI

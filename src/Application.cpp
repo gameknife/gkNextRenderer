@@ -99,7 +99,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
     ubo.HasSky = init.HasSky;
     ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
-    ubo.ShowHeatmap = userSettings_.ShowHeatmap;
+    ubo.ShowHeatmap = false;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
@@ -262,6 +262,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
         stats.TotalSamples = totalNumberOfSamples_;
     }
 
+    Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
+
     userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats, Renderer::GpuTimer());
 }
 
@@ -290,10 +292,6 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
             case GLFW_KEY_F1: userSettings_.ShowSettings = !userSettings_.ShowSettings;
                 break;
             case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
-                break;
-            case GLFW_KEY_R: userSettings_.IsRayTraced = !userSettings_.IsRayTraced;
-                break;
-            case GLFW_KEY_H: userSettings_.ShowHeatmap = !userSettings_.ShowHeatmap;
                 break;
             default: break;
             }
