@@ -72,14 +72,17 @@ void main() {
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);
 			
-			// if history variance is too large, we should not use it.
-			const double historyVariance = 50.0;
-
-			double diff = abs( dot(final.rgb,final.rgb) - dot(history.rgb, history.rgb) );
-			if( diff > historyVariance )
+			if(Camera.AdaptiveSample)
 			{
-				// need sample
-				imageStore(AdaptiveSampleBuffer, ipos, uvec4(max(1, Camera.TemporalFrames / 8)));
+				// if history variance is too large, we should not use it.
+				const double historyVariance = Camera.AdaptiveVariance;
+
+				double diff = abs(dot(final.rgb, final.rgb) - dot(history.rgb, history.rgb));
+				if (diff > historyVariance)
+				{
+					// need sample
+					imageStore(AdaptiveSampleBuffer, ipos, uvec4(max(1, Camera.TemporalFrames / 8)));
+				}
 			}
 		}
     }
