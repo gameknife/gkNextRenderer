@@ -13,7 +13,7 @@ struct RayPayload
 	uint BounceCount;
 	float pdf;
 	uint primitiveId;
-	uint Exit;
+	bool Exit;
 	uint MaterialIndex;
 };
 

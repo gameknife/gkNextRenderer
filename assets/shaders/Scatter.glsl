@@ -60,7 +60,7 @@ vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
 
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
-	ray.Exit = 1;
+	ray.Exit = true;
 	if(ray.FrontFace)
 	{
 		ray.Attenuation = vec3(1.0);
@@ -92,7 +92,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 			if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
 				// sun
 				float ndotl = clamp(dot(lightVector, normal), 0, 1);
-				ray.Exit = 1;
+				ray.Exit = true;
 				ray.EmitColor = vec4(Camera.SunColor.xyz, 1.0) * ndotl;
 			}
 			return;
@@ -143,12 +143,13 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 {
 	const vec3 outwardNormal = ray.FrontFace ? normal : -normal;
 	const float niOverNt = ray.FrontFace ? 1 / m.RefractionIndex : m.RefractionIndex;
-	const float cosine = ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal);
 
 	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
-	const float reflectProb = sum_is_not_empty_abs(refracted) ? Schlick(cosine, m.RefractionIndex) : 1;
+	bool isReflection = sum_is_not_empty_abs(refracted) ? ( RandomFloat(ray.RandomSeed) < Schlick(
+		ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal)
+		, m.RefractionIndex) ) : true;
 	
-	if( RandomFloat(ray.RandomSeed) < reflectProb )
+	if( isReflection )
 	{
 		// reflect
 		const vec3 reflected = reflect(direction, outwardNormal);
