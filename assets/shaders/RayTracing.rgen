@@ -24,9 +24,11 @@ layout(binding = 16, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
-bool NextRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColor)
+bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColor)
 { 
 	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,origin.xyz, EPS, scatterDir, INF, 0);
+	
+	// out of limit, invalid sample, return
 	if(Ray.BounceCount == Camera.NumberOfBounces)
 	{
 		outRayColor *= vec3(0);
@@ -50,27 +52,12 @@ bool NextRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayCol
 	origin = origin + scatterDir * Ray.Distance;
 	scatterDir = Ray.ScatterDirection;
 	
-	if(Ray.Exit)
-	{
-		outRayColor *= Ray.EmitColor.rgb;
-		return true;
-	}
-	outRayColor *= Ray.Attenuation * Ray.pdf;
-	return false;
+	outRayColor *= Ray.Exit ? Ray.EmitColor.rgb : Ray.Attenuation * Ray.pdf;
+	return Ray.Exit;
 }
 		
-bool PrimaryRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColor, out vec4 gbuffer, out vec4 albedo, out vec4 motionVector, out uint primitiveId)
+void FetchPrimaryRayInfo(in vec3 origin, in vec3 scatterDir, out vec4 gbuffer, out vec4 albedo, out vec4 motionVector, out uint primitiveId)
 {
-	// Start
-	Ray.BounceCount = 0;
-	// trace ray
-	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,
-	origin.xyz, EPS, scatterDir, INF, 0);
-	
-	// here may miss
-	origin = origin + scatterDir * Ray.Distance;
-	scatterDir = Ray.ScatterDirection;
-	
 	// fetch albedo
 	gbuffer = vec4(Ray.GBuffer.xyz, Ray.Distance);
 	albedo = vec4(Ray.Albedo.rgb, Ray.GBuffer.w);
@@ -82,35 +69,16 @@ bool PrimaryRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRay
 	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
 	motionVector = Ray.Distance < -5 ? vec4(0) : vec4(prevfpos - currfpos,0,0);
 	primitiveId = Ray.primitiveId;
-	
-	if(Ray.Exit)
-	{
-		outRayColor *= Ray.EmitColor.rgb;
-		return true;
-	}
-	outRayColor *= Ray.Attenuation * Ray.pdf;
-	return false;
 }
 
 void main() 
 {
 	bool isEvenFrame = Camera.TotalFrames % 2 == 0;
 	// use checkerbord to skip sample
-	int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
-	
+
 	ivec2 ipos = ivec2(gl_LaunchIDEXT.xy);
 	vec2 isize = vec2(gl_LaunchSizeEXT.xy);
 
-	if(Camera.UseCheckerBoard)
-	{
-		ipos = ipos * ivec2(2,1);
-		isize = isize * vec2(2,1);
-		if((gl_LaunchIDEXT.y + adder) % 2 == 0) 
-		{
-			ipos.x += 1;
-		}
-	}
-    
 	const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
 
 	// Initialise separate random seeds for the pixel and the rays.
@@ -164,11 +132,14 @@ void main()
 		uint primitiveId = 0;
 		vec3 rayColor = vec3(1);
 		
-		if( !PrimaryRayColor(origin.xyz, direction.xyz, rayColor, gbuffer, s_albedo, motionvector, primitiveId) )
+		Ray.BounceCount = 0;
+		bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
+        FetchPrimaryRayInfo(origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
+        if(!exit)
         {
             for(uint b = 0; b < 10; ++b)
             {	
-                if( NextRayColor(origin.xyz, direction.xyz, rayColor) )
+                if( GetRayColor(origin.xyz, direction.xyz, rayColor) )
                 {
                     break;
                 }
