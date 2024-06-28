@@ -19,6 +19,8 @@
 #include "cpp-base64/base64.cpp"
 #include "ThirdParty/json11/json11.hpp"
 
+#include "stb_image_write.h"
+
 #if WITH_AVIF
 #include "avif/avif.h"
 #endif
@@ -523,8 +525,10 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         // capture and export
         Renderer::CaptureScreenShot();
 
-        avifImage* image = avifImageCreate(extent.width, extent.height, 10,
-                                           AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+        constexpr uint32_t kCompCnt = 3;
+        int imageSize = extent.width * extent.height * kCompCnt;
+
+        avifImage* image = avifImageCreate(extent.width, extent.height, 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
             Throw(std::runtime_error("avif image creation failed"));
@@ -541,16 +545,12 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         avifRGBImage rgbAvifImage{};
         avifRGBImageSetDefaults(&rgbAvifImage, image);
-        rgbAvifImage.format = AVIF_RGB_FORMAT_BGR;
+        rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
         rgbAvifImage.ignoreAlpha = AVIF_TRUE;
 
-        //if (  VK_FORMAT_A2R10G10B10_UNORM_PACK32 )
-        uint16_t* data = (uint16_t*)malloc(rgbAvifImage.width * rgbAvifImage.height * 3 * 2);
+        uint8_t* data = (uint8_t*)malloc(imageSize);
         {
             Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
-
-            constexpr uint32_t kCompCnt = 3;
-            int imageSize = extent.width * extent.height * kCompCnt;
 
             uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
 
@@ -567,21 +567,20 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
                     uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
                     uint32_t uInPixel = *pInPixel;
 
-                    data[yy + xx]     = (uInPixel & (0b1111111111 << 20)) >> 20;
-                    data[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-                    data[yy + xx + 2] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                    data[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                    data[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                    data[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
 
                     idx += 4;
                     xx += xDelta;
                 }
-                idx += idxDelta;
                 yy += yDelta;
             }
             vkMemory->Unmap();
         }
 
         rgbAvifImage.pixels = (uint8_t*)data;
-        rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
+        rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
 
         avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
         if (convertResult != AVIF_RESULT_OK)
@@ -607,10 +606,74 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         {
             Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
         }
+
+        // save to file with scenename
+        std::string filename = sceneName + ".avif";
+        FILE* f = fopen(filename.c_str(), "wb");
+        if (!f)
+        {
+            Throw(std::runtime_error("Failed to open file for writing"));
+        }
+        else printf("screenshot saved to %s\n", filename.c_str());
+        fwrite(avifOutput.data, 1, avifOutput.size, f);
+        fclose(f);
+		
         free(data);
-        
+
         // send to server
-        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+#else
+        // screenshot stuffs
+        const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+        const auto extent = swapChain.Extent();
+
+        // capture and export
+        Renderer::CaptureScreenShot();
+
+        constexpr uint32_t kCompCnt = 3;
+        int imageSize = extent.width * extent.height * kCompCnt;
+
+        uint8_t* data = (uint8_t*)malloc(imageSize);
+        {
+            Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+            uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
+
+            uint32_t yDelta = extent.width * kCompCnt;
+            uint32_t xDelta = kCompCnt;
+            uint32_t idxDelta = extent.width * 4;
+            uint32_t yy = 0;
+            uint32_t xx = 0, idx = 0;
+            for (uint32_t y = 0; y < extent.height; y++)
+            {
+                xx = 0;
+                for (uint32_t x = 0; x < extent.width; x++)
+                {
+                    uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                    uint32_t uInPixel = *pInPixel;
+
+                    data[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                    data[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                    data[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
+
+                    idx += 4;
+                    xx += xDelta;
+                }
+                yy += yDelta;
+            }
+            vkMemory->Unmap();
+        }
+
+        // save to file with scenename
+        /*
+        std::string filename = sceneName + ".png";
+        stbi_write_png(filename.c_str(), extent.width, extent.height, kCompCnt, (const void *) data, extent.width * kCompCnt);
+        */
+        std::string filename = sceneName + ".jpg";
+        stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
+
+        printf("screenshot saved to %s\n", filename.c_str());
+        free(data);
 #endif
     }
 
