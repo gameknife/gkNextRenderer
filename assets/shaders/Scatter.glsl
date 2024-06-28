@@ -60,7 +60,7 @@ vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
 
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
-	ray.Exit = 1;
+	ray.Exit = true;
 	if(ray.FrontFace)
 	{
 		ray.Attenuation = vec3(1.0);
@@ -92,7 +92,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 			if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
 				// sun
 				float ndotl = clamp(dot(lightVector, normal), 0, 1);
-				ray.Exit = 1;
+				ray.Exit = true;
 				ray.EmitColor = vec4(Camera.SunColor.xyz, 1.0) * ndotl;
 			}
 			return;

@@ -42,6 +42,6 @@ void main()
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
 	Ray.primitiveId = (gl_InstanceID + 1) << 16 | v0.MaterialIndex;
 	Ray.BounceCount++;
-	Ray.Exit = 0;
+	Ray.Exit = false;
 	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, v0.MaterialIndex);
 }
