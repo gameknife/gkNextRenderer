@@ -93,7 +93,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 				// sun
 				float ndotl = clamp(dot(lightVector, normal), 0, 1);
 				ray.Exit = true;
-				ray.EmitColor = vec4(Camera.SunColor.xyz, 1.0) * ndotl;
+				ray.EmitColor = vec4(Camera.SunColor.xyz * ray.Albedo.rgb, 1.0) * ndotl;
 			}
 			return;
 		}
