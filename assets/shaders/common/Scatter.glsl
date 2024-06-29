@@ -3,6 +3,7 @@
 #include "Random.glsl"
 #include "RayPayload.glsl"
 #include "common/Const_Func.glsl" //pi consts, Schlick
+#include "common/ColorFunc.glsl"
 
 #ifndef scatter_inc
 #define scatter_inc
@@ -194,12 +195,12 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 
 void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
-	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? srgbToLinear(texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord)) : vec4(1);
 	const vec4 mra = m.MRATextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.MRATextureId)], texCoord) : vec4(1);
 
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
-	ray.Albedo = texColor * texColor * m.Diffuse;
+	ray.Albedo = texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;
 

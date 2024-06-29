@@ -11,6 +11,8 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 
+#include <fstream>
+
 template <typename Renderer>
 class NextRendererApplication final : public Renderer
 {
@@ -78,4 +80,6 @@ private:
 	double periodInitialTime_{};
 	uint32_t periodTotalFrames_{};
 	uint32_t benchmarkTotalFrames_{};
+	uint32_t benchmarkNumber_{0};
+	std::ofstream benchmarkCsvReportFile;
 };
