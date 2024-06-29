@@ -3,43 +3,25 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "RayPayload.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
+layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
+layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
+layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
+layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
+
+#include "common/RayPayload.glsl"
 
 layout(location = 0) rayPayloadInEXT RayPayload Ray;
 
-#include "common/equirectangularSample.glsl"
+#include "common/RTCommon.glsl"
 
 void main()
 {
-	Ray.GBuffer = vec4(0,1,0,0);
-	Ray.Albedo = vec4(1,1,1,1);
-	Ray.primitiveId = 0;
-	
-	if (Camera.HasSky)
-	{
-		// Sky color
-        const vec3 rayDirection = normalize(gl_WorldRayDirectionEXT);
-		const float t = 0.5*(rayDirection.y + 1);
-        //const vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), t);
-		// max value is 1000.0nit
-		const vec3 skyColor = equirectangularSample(rayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-
-        Ray.Attenuation = vec3(1);
-		Ray.Distance = -10;
-		Ray.Exit = true;
-		Ray.EmitColor = vec4(skyColor, -1);
-		Ray.pdf = 1.0;
-	}
-	else
-	{
-		Ray.Attenuation = vec3(0);
-		Ray.Distance = -10;
-		Ray.Exit = true;
-		Ray.EmitColor = vec4(0);
-		Ray.pdf = 1.0;
-	}
+	ProcessMiss(gl_WorldRayDirectionEXT);
 }

@@ -4,8 +4,11 @@
 //#extension GL_EXT_ray_tracing : require
 #extension GL_EXT_ray_query : require
 
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#define RQ_PIPELINE
+
+#include "Platform.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -17,109 +20,62 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 layout(binding = 9, rgba8) uniform image2D OutImage;
 
-#include "Vertex.glsl"
 #include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
+#include "common/RayPayload.glsl"
+RayPayload Ray;
+#include "common/RTCommon.glsl"
+
+#if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
-
-//-----------------------------------------------------------------------------
-struct RayPayload
-    //-----------------------------------------------------------------------------
-{
-    // Flag for hit or miss
-    uint    IsHit;
-
-    // Geometry instance ids
-    int     PrimitiveIndex;
-    int     InstanceID;
-    int     InstCustIndex;
-    // in     int   gl_GeometryIndexEXT;
-
-    // World space parameters
-    vec3   RayOrigin;
-    vec3   RayDirection;
-
-    // Ray hit info
-    float  HitDist;
-    bool   IsFrontFacing;
-
-    // Barycentric Coordinates
-    vec3    BaryCoords;
-};
+#else
+layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+#endif
 
 void main() {
     
-    vec4 outColor = vec4(0.5,0,0,1);
+    vec3 pixelColor = vec3(0);
     
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
     vec2 isize = vec2(imageSize(OutImage));
-    const vec2 pixel = vec2(ipos);
-    vec2 uv = (pixel / isize) * 2.0 - 1.0;
-    vec2 offset = vec2(0);
-    vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
-    vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-    // physical camera
-    vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
     
-    rayQueryEXT rayQuery;
-    // gl_RayFlagsTerminateOnFirstHitEXT for fast, but hit not the closet
-    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, direction.xyz, INF);
+    // Ray Initialize
+    Ray.RandomSeed = InitRandomSeed(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, Camera.TotalFrames);
+	Ray.RandomSeed.w = Camera.RandomSeed;
+    
+    
+    for (uint s = 0; s < Camera.NumberOfSamples; ++s)
+	{
+        const vec2 pixel = vec2(ipos);
+        vec2 uv = (pixel / isize) * 2.0 - 1.0;
+        vec2 offset = vec2(0);
+        vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
+        vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
+        // physical camera
+        vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
 
-    // Traverse the acceleration structure and store information about the first intersection (if any)
-    while( rayQueryProceedEXT(rayQuery) )
-    {
+	    Ray.BounceCount = 0;
+        // Path Tracing
+        vec3 rayColor = vec3(1);
+        bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
+        //FetchPrimaryRayInfo(origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
+        if(!exit)
+        {
+            for(uint b = 0; b < 7; ++b)
+            {	
+                if( GetRayColor(origin.xyz, direction.xyz, rayColor) )
+                {
+                    break;
+                }
+            }
+        }
         
-    }
-
-    // If the intersection has hit a triangle, the fragment is shadowed
-    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
-
-        RayPayload PayloadData;
-        
-        const bool IsCommitted = true;
-        
-        PayloadData.PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
-        PayloadData.InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
-        PayloadData.InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
-        // in     int   gl_GeometryIndexEXT;
-
-        // World space parameters
-        PayloadData.RayOrigin  = rayQueryGetWorldRayOriginEXT(rayQuery);
-        PayloadData.RayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
-
-        // Ray hit info
-        // const uint gl_HitKindFrontFacingTriangleEXT = 0xFEU;
-        // const uint gl_HitKindBackFacingTriangleEXT = 0xFFU;
-        PayloadData.HitDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
-        PayloadData.IsFrontFacing = rayQueryGetIntersectionFrontFaceEXT(rayQuery, IsCommitted);
-
-        mat4x3 worldtoobject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
-
-        // Barycentric Coordinates
-        // Floating point barycentric coordinates of current intersection of ray.
-        // Three Barycentric coordinates are such that their sum is 1.
-        // This gives only two and expects us to calculate the third
-        vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
-        PayloadData.BaryCoords = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
-
-        const uvec2 offsets = Offsets[PayloadData.InstCustIndex];
-        const uint indexOffset = offsets.x + PayloadData.PrimitiveIndex * 3;
-        const uint vertexOffset = offsets.y;
-        const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
-        const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
-        const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
-        const Material material = Materials[v0.MaterialIndex];
-
-        const vec3 normal = normalize((to_world(PayloadData.BaryCoords, v0.Normal, v1.Normal, v2.Normal) * worldtoobject).xyz);
-        const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
-
-        const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
-        
-        const vec3 lightVector = normalize(vec3(5, 4, 3));
-        const float d = dot(lightVector, normal);
-        
-        outColor = material.Diffuse * texColor * d;
+        pixelColor += rayColor;
     }
     
-    imageStore(OutImage, ipos, outColor);
+    pixelColor = pixelColor / Camera.NumberOfSamples;
+    
+    // Quick Result
+    imageStore(OutImage, ipos, vec4( LinearToST2084UE( pixelColor * 600.0 / 230.0), 1.0) );
 }

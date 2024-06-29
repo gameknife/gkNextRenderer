@@ -4,8 +4,8 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_ray_query : require
 
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -18,8 +18,8 @@ layout(binding = 8) uniform sampler2D[] TextureSamplers;
 layout(binding = 9) readonly buffer SphereArray { vec4[] Spheres; };
 
 #include "common/Const_Func.glsl"
-#include "Scatter.glsl"
-#include "Vertex.glsl"
+#include "common/Scatter.glsl"
+#include "common/Vertex.glsl"
 
 hitAttributeEXT vec4 Sphere;
 rayPayloadInEXT RayPayload Ray;

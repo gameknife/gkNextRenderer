@@ -3,8 +3,8 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "Platform.glsl"
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 #include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba8) readonly uniform image2D GBuffer0Image;

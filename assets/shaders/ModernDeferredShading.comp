@@ -3,9 +3,9 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "Platform.glsl"
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
-#include "Random.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
+#include "common/Random.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 1, rgba8) uniform image2D OutImage;
@@ -18,7 +18,7 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 
-#include "Vertex.glsl"
+#include "common/Vertex.glsl"
 #include "common/ColorFunc.glsl"
 
 #if DESKTOP
