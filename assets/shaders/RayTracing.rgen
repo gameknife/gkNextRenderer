@@ -4,6 +4,8 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_tracing : require
 
+#define RT_PIPELINE
+
 #include "Heatmap.glsl"
 #include "Random.glsl"
 #include "RayPayload.glsl"
@@ -11,8 +13,13 @@
 #include "UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
+layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
 layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
+layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
+layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
 layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
 layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
@@ -24,52 +31,7 @@ layout(binding = 16, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(location = 0) rayPayloadEXT RayPayload Ray;
 
-bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColor)
-{ 
-	traceRayEXT(Scene, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0,origin.xyz, EPS, scatterDir, INF, 0);
-	
-	// out of limit, invalid sample, return
-	if(Ray.BounceCount == Camera.NumberOfBounces)
-	{
-		outRayColor *= vec3(0);
-		return true;
-	} 
-	
-// RR should apply by workgroup, for performance
-	
-//	else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)
-//	{
-//		const Material material = Materials[Ray.MaterialIndex];
-//		float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;
-//		float rr_prob = min(0.95f, luminance(atten) * rr_scale);
-//		if (rr_prob < RandomFloat(Ray.RandomSeed))
-//		{
-//			return emit + atten * Ray.pdf;
-//		}
-//		atten *= min( 1.f / rr_prob, 20.f );
-//	}
-	
-	origin = origin + scatterDir * Ray.Distance;
-	scatterDir = Ray.ScatterDirection;
-	
-	outRayColor *= Ray.Exit ? Ray.EmitColor.rgb : Ray.Attenuation * Ray.pdf;
-	return Ray.Exit;
-}
-		
-void FetchPrimaryRayInfo(in vec3 origin, in vec3 scatterDir, out vec4 gbuffer, out vec4 albedo, out vec4 motionVector, out uint primitiveId)
-{
-	// fetch albedo
-	gbuffer = vec4(Ray.GBuffer.xyz, Ray.Distance);
-	albedo = vec4(Ray.Albedo.rgb, Ray.GBuffer.w);
-	
-	vec2 size = imageSize(MotionVectorImage);
-	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
-	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin, 1);
-	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	motionVector = Ray.Distance < -5 ? vec4(0) : vec4(prevfpos - currfpos,0,0);
-	primitiveId = Ray.primitiveId;
-}
+#include "common/RTCommon.glsl"
 
 void main() 
 {
@@ -134,7 +96,7 @@ void main()
 		
 		Ray.BounceCount = 0;
 		bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
-        FetchPrimaryRayInfo(origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
+        FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
         if(!exit)
         {
             for(uint b = 0; b < 10; ++b)

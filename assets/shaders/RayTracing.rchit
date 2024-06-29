@@ -16,32 +16,24 @@ layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
-#include "common/Const_Func.glsl"
-#include "Scatter.glsl"
-#include "Vertex.glsl"
+#include "RayPayload.glsl"
 
 hitAttributeEXT vec2 HitAttributes;
 rayPayloadInEXT RayPayload Ray;
 
+#include "common/RTCommon.glsl"
+
 void main()
 {
-	// Get the material.
-	const uvec2 offsets = Offsets[gl_InstanceCustomIndexEXT];
-	const uint indexOffset = offsets.x + gl_PrimitiveID * 3;
-	const uint vertexOffset = offsets.y;
-	const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
-	const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
-	const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
-	const Material material = Materials[v0.MaterialIndex];
-
-	// Compute the ray hit point properties.
-	const vec3 barycentrics = vec3(1.0 - HitAttributes.x - HitAttributes.y, HitAttributes.x, HitAttributes.y);
-	const vec3 normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * gl_WorldToObjectEXT).xyz);
-	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
+	const int InstCustIndex = gl_InstanceCustomIndexEXT;
+	const vec3 RayOrigin = gl_WorldRayOriginEXT;
+	const vec3 RayDirection = gl_WorldRayDirectionEXT;
+	const float RayDist = gl_HitTEXT;
+	const mat4x3 WorldToObject = gl_WorldToObjectEXT;
+	const vec2 TwoBaryCoords = HitAttributes;
+	const vec3 HitPos = RayOrigin + RayDirection * RayDist;
+	const int PrimitiveIndex = gl_PrimitiveID;
+    const int InstanceID = gl_InstanceID;
 	
-    int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
-	Ray.primitiveId = (gl_InstanceID + 1) << 16 | v0.MaterialIndex;
-	Ray.BounceCount++;
-	Ray.Exit = false;
-	Scatter(Ray, material, Lights[lightIdx], gl_WorldRayDirectionEXT, normal, texCoord, gl_HitTEXT, v0.MaterialIndex);
+    ProcessHit(InstCustIndex, RayDirection, RayDist, WorldToObject, TwoBaryCoords, HitPos, PrimitiveIndex, InstanceID);
 }

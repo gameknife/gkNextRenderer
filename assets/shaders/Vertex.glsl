@@ -1,4 +1,9 @@
 
+
+#ifndef vertex_inc
+
+#define vertex_inc
+
 struct Vertex
 {
   vec3 Position;
@@ -21,3 +26,5 @@ Vertex UnpackVertex(uint index)
 
 	return v;
 }
+
+#endif
