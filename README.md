@@ -50,9 +50,11 @@
 
 * Vulkan Raytracing pipeline
     * Importance Sampling
+    * VNDF Sampling for GGX, from @tigrazone
+    * Adaptive Sampling, thanks @tigrazone
     * Ground Truth Path Tracing
     * Phsyical Light Unit
-    * Sample Reproject
+    * Samples Reproject
     * RayQuery on PC & Android
     * OpenImageDenoise
 * Non-Raytracing Pipeline
@@ -111,6 +113,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - Referencing Legacy Indirect Lighting (Shadowmap, SSXX, etc)
 - Common Rendering Feature
     - SVGF Denoise
+    - ~~OpenImageDenoiser~~
 - Platform
     - ~~MacOS moltenVK~~
     - ~~Android Vulkan ( RayTracing on 8Gen2 )~~
@@ -124,7 +127,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - ~~HDR Env loading & apply to skylight (both RT & non-RT pipeline)~~
     - ~~GLTF Scene Support, with real scene management.~~
     - ~~Screenshot and save to avif hdr format~~
-    - DebugViews
+    - ~~DebugViews~~
 
 ## Next Todolist
 
