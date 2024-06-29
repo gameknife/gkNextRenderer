@@ -11,7 +11,9 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
 #include <iostream>
+#include <fstream>
 #include <sstream>
+#include <ctime>
 #include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
@@ -419,13 +421,30 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         return;
     }
 
+    char buffer[80];
+
     // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
     {
+        if (benchmarkNumber_ == 0)
+        {
+            time_t rawtime;
+            struct tm* timeinfo;
+
+            time(&rawtime);
+            timeinfo = localtime(&rawtime);
+
+            strftime(buffer, sizeof(buffer), "%d-%m-%Y_%H-%M-%S", timeinfo);
+            std::string report_filename(buffer);
+            report_filename = "report_" + report_filename + ".csv";
+
+            benchmarkCsvReportFile.open(report_filename);
+            benchmarkCsvReportFile << "# of scene;name;FPS" << std::endl;
+        }
+	
         std::cout << std::endl;
         std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
-        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'"
-            << std::endl;
+        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'" << std::endl;
         periodInitialTime_ = time_;
     }
 
@@ -438,9 +457,14 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            std::cout << "Benchmark: " << periodTotalFrames_ / totalTime << " fps" << std::endl;
+            sprintf(buffer, "%.3f", float(periodTotalFrames_) / float(totalTime));
+
+            std::cout << "Benchmark: " << buffer << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
+
+            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << buffer << std::endl;
+            benchmarkNumber_++;
         }
 
         periodTotalFrames_++;
@@ -676,7 +700,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         free(data);
 #endif
     }
-
+	
     json11::Json my_json = json11::Json::object{
         {"renderer", Renderer::StaticClass()},
         {"scene", sceneName},
