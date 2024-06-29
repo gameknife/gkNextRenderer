@@ -18,6 +18,7 @@ struct RayPayload
 	bool Exit;
 	uint MaterialIndex;
 	vec3 HitPos;
+	uint AdaptiveSample;
 };
 
 // a simple box light may enough now
