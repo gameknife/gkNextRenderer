@@ -2,8 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 #include "common/ColorFunc.glsl"
 
 layout(binding = 0) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };

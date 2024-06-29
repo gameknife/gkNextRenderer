@@ -4,8 +4,8 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_ray_query : require
 
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -16,7 +16,7 @@ layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
 
-#include "RayPayload.glsl"
+#include "common/RayPayload.glsl"
 
 hitAttributeEXT vec2 HitAttributes;
 rayPayloadInEXT RayPayload Ray;

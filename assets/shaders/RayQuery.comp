@@ -7,8 +7,8 @@
 #define RQ_PIPELINE
 
 #include "Platform.glsl"
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -23,7 +23,7 @@ layout(binding = 9, rgba8) uniform image2D OutImage;
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
 
-#include "RayPayload.glsl"
+#include "common/RayPayload.glsl"
 RayPayload Ray;
 #include "common/RTCommon.glsl"
 
@@ -62,7 +62,7 @@ void main() {
         //FetchPrimaryRayInfo(origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
         if(!exit)
         {
-            for(uint b = 0; b < 2; ++b)
+            for(uint b = 0; b < 7; ++b)
             {	
                 if( GetRayColor(origin.xyz, direction.xyz, rayColor) )
                 {

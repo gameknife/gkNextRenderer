@@ -6,11 +6,11 @@
 
 #define RT_PIPELINE
 
-#include "Heatmap.glsl"
-#include "Random.glsl"
-#include "RayPayload.glsl"
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/Heatmap.glsl"
+#include "common/Random.glsl"
+#include "common/RayPayload.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };

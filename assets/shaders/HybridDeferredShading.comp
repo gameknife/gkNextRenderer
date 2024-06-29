@@ -4,9 +4,9 @@
 #extension GL_EXT_ray_query : require
 
 #include "Platform.glsl"
-#include "Material.glsl"
-#include "UniformBufferObject.glsl"
-#include "Random.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
+#include "common/Random.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 13, rg32ui) uniform uimage2D MiniGBuffer1;
@@ -23,7 +23,7 @@ layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
 layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
 
-#include "Vertex.glsl"
+#include "common/Vertex.glsl"
 #include "common/Const_Func.glsl"
 #include "common/equirectangularSample.glsl"
 
