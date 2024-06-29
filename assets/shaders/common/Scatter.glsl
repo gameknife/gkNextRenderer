@@ -4,6 +4,7 @@
 #include "RayPayload.glsl"
 #include "common/Const_Func.glsl" //pi consts, Schlick
 #include "common/ColorFunc.glsl"
+
 #ifndef scatter_inc
 #define scatter_inc
 
