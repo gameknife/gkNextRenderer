@@ -60,5 +60,13 @@ vec3 yuv2rgb(vec3 yuv) {
     return vec3(R, G, B);
 }
 
+// sRGB to linear approximation, see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
+vec4 srgbToLinear(in vec4 sRgb)
+{
+  //return vec4(pow(sRgb.xyz, vec3(2.2f)), sRgb.w);
+  vec3 rgb = sRgb.xyz * (sRgb.xyz * (sRgb.xyz * 0.305306011F + 0.682171111F) + 0.012522878F);
+  return vec4(rgb, sRgb.a);
+}
+
 #define ColorFunc_glsl
 #endif
