@@ -1,0 +1,60 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "common/UniformBufferObject.glsl"
+#include "common/ColorFunc.glsl"
+
+layout(binding = 0, rgba8) uniform image2D OutImage;
+layout(binding = 1, rgba16f) uniform image2D InDebugImage1;
+layout(binding = 2, rgba16f) uniform image2D InDebugImage2;
+layout(binding = 3, r8ui) uniform uimage2D InDebugImage3;
+layout(binding = 4, rgba16f) uniform image2D InDebugImage4;
+//layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+bool DrawQuad(uint quadx, uint quady, uint divider, ivec2 ipos, ivec2 isize, out ivec2 uv)
+{
+    uint elementx = isize.x / divider;
+    uint elementy = isize.y / divider;
+    
+    if(ipos.x >= elementx * quadx && ipos.x < elementx * (quadx + 1) && ipos.y > elementy * quady && ipos.y < elementy * (quady + 1))
+    {
+        uv = (ipos - ivec2(elementx * quadx, elementy * quady)) * ivec2(divider);
+        return true;
+    }
+    return false;
+}
+
+#define DRAW(IMAGE, quadx, quady, divider, ipos, isize, multipler) { \
+    ivec2 uv = ivec2(0);\
+    if(DrawQuad(quadx, quady, divider, ipos, isize, uv)){ \
+    vec4 col = imageLoad(IMAGE, uv);\
+    imageStore(OutImage,ipos,col * multipler);} \
+}
+
+#define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) { \
+    ivec2 uv = ivec2(0);\
+    if(DrawQuad(quadx, quady, divider, ipos, isize, uv)){ \
+    vec4 col = imageLoad(IMAGE, uv);\
+    imageStore(OutImage,ipos,col * 0.5 + 0.5);} \
+}
+
+#define DRAWINT(IMAGE, quadx, quady, divider, ipos, isize) { \
+    ivec2 uv = ivec2(0);\
+    if(DrawQuad(quadx, quady, divider, ipos, isize, uv)){ \
+    vec4 icol = imageLoad(IMAGE, uv);\
+    imageStore(OutImage,ipos,icol.rrrr / 8.0);} \
+}
+
+void main() {
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 isize = imageSize(OutImage);
+    
+    imageStore(OutImage, ipos, imageLoad(OutImage, ipos));
+
+    DRAW(InDebugImage1,0u,3u,4u,ipos,isize,1.0);
+    DRAWNORMAL(InDebugImage2,1u,3u,4u,ipos,isize);
+    DRAWINT(InDebugImage3,2u,3u,4u,ipos,isize);
+    DRAW(InDebugImage4,3u,3u,4u,ipos,isize,0.02);
+}

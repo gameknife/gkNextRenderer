@@ -16,6 +16,7 @@
 #include <iostream>
 #include <numeric>
 
+#include "Utilities/Math.hpp"
 #include "Vulkan/RayQuery/RayQueryPipeline.hpp"
 
 namespace Vulkan::RayTracing
@@ -103,8 +104,16 @@ namespace Vulkan::RayTracing
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     rayTracingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
 
+            uint32_t workGroupSizeXDivider = 8 * (CheckerboxRendering() ? 2 : 1);
+            uint32_t workGroupSizeYDivider = 4;
+#if ANDROID
+            workGroupSizeXDivider = 32 * (CheckerboxRendering() ? 2 : 1);
+            workGroupSizeYDivider = 32;
+#endif
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, workGroupSizeXDivider),
+                          Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, workGroupSizeYDivider), 1);
+            
             // Acquire output image and swap-chain image for copying.
             ImageMemoryBarrier::Insert(commandBuffer, outputImage_->Handle(), subresourceRange,
                                     VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,

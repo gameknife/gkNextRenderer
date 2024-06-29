@@ -263,6 +263,7 @@ namespace Vulkan
 		int frameCount_{};
 		bool supportScreenShot_{};
 		bool forceSDR_{};
+		bool visualDebug_{};
 
 		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	private:

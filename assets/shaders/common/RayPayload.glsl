@@ -1,3 +1,5 @@
+#ifndef raypayload_inc
+#define raypayload_inc
 
 struct RayPayload
 {
@@ -13,8 +15,9 @@ struct RayPayload
 	uint BounceCount;
 	float pdf;
 	uint primitiveId;
-	uint Exit;
+	bool Exit;
 	uint MaterialIndex;
+	vec3 HitPos;
 };
 
 // a simple box light may enough now
@@ -25,3 +28,5 @@ struct HittableLight
 	vec3 WorldDirection;
 	float area;
 };
+
+#endif

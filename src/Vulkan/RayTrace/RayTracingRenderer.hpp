@@ -8,6 +8,7 @@ namespace Vulkan
 	{
 		class AccumulatePipeline;
 		class FinalComposePipeline;
+		class VisualDebuggerPipeline;
 	}
 
 	class RenderImage;
@@ -70,6 +71,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<class ShaderBindingTable> shaderBindingTable_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
+		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 	};
 
 }

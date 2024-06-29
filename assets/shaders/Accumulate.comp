@@ -1,7 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "Platform.glsl"
-#include "UniformBufferObject.glsl"
+#include "common/UniformBufferObject.glsl"
 #include "common/Const_Func.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
@@ -13,6 +13,7 @@ layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 7, rgba8) uniform image2D OutImage;
+layout(binding = 8, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -70,6 +71,19 @@ void main() {
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);
+			
+			if(Camera.AdaptiveSample)
+			{
+				// if history variance is too large, we should not use it.
+				const double historyVariance = Camera.AdaptiveVariance;
+
+				double diff = abs(luminance(final.rgb) - luminance(history.rgb));
+				if (diff > historyVariance)
+				{
+					// need sample
+					imageStore(AdaptiveSampleBuffer, ipos, uvec4(max(1, Camera.TemporalFrames / 8)));
+				}
+			}
 		}
     }
 

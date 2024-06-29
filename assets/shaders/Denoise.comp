@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #define WORKGROUP_SIZE 8
 
-#include "UniformBufferObject.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D PingImage;
 layout(binding = 1, rgba16f) uniform image2D PongImage;

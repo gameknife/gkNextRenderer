@@ -216,6 +216,9 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
+		ImGui::Checkbox("AdativeSample", &Settings().AdaptiveSample);
+		ImGui::SliderFloat("AdaptiveVariance", &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
+		ImGui::SliderInt("MaxAdaptiveSample", &Settings().MaxAdaptiveSample, 3, 16);
 		ImGui::NewLine();
 
 		// min = 1, max = 128;
@@ -249,7 +252,7 @@ void UserInterface::DrawSettings()
 
 		ImGui::Text("Profiler");
 		ImGui::Separator();
-		ImGui::Checkbox("Show heatmap", &Settings().ShowHeatmap);
+		ImGui::Checkbox("VisualDebug", &Settings().ShowVisualDebug);
 		ImGui::SliderFloat("Scaling", &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
 

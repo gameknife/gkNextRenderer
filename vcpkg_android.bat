@@ -29,6 +29,7 @@ copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm
 	tinygltf:arm64-android ^
 	curl:arm64-android ^
 	draco:arm64-android ^
+	rapidjson:arm64-android ^
 	cpp-base64:arm64-android || goto :error
 
 cd ..

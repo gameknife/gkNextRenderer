@@ -1,5 +1,8 @@
 #include "common/Const_Func.glsl" //pi consts
 
+#ifndef random_inc
+#define random_inc
+
 #extension GL_EXT_control_flow_attributes : require
 
 void pcg4d(inout uvec4 v)
@@ -93,3 +96,5 @@ vec3 AlignWithNormal(vec3 ray, vec3 up)
     vec3 forward = cross(right, up);
     return to_world(ray, right, up, forward);
 }
+
+#endif
