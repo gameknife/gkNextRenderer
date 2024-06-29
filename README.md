@@ -50,8 +50,8 @@
 
 * Vulkan Raytracing pipeline
     * Importance Sampling
-    * VNDF Sampling for GGX, from @tigrazone
-    * Adaptive Sampling, thanks @tigrazone
+    * VNDF Sampling for GGX, by [tigrazone](https://github.com/tigrazone)
+    * Adaptive Sampling, thanks [tigrazone](https://github.com/tigrazone)
     * Ground Truth Path Tracing
     * Phsyical Light Unit
     * Samples Reproject
