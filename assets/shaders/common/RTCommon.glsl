@@ -35,25 +35,20 @@ void ProcessMiss(const vec3 RayDirection)
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
 	Ray.primitiveId = 0;
-	
+	Ray.Exit = true;
+	Ray.Distance = -10;
+	Ray.pdf = 1.0;
 	if (Camera.HasSky)
 	{
 		// Sky color
 		const vec3 skyColor = equirectangularSample(RayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-
         Ray.Attenuation = vec3(1);
-		Ray.Distance = -10;
-		Ray.Exit = true;
 		Ray.EmitColor = vec4(skyColor, -1);
-		Ray.pdf = 1.0;
 	}
 	else
 	{
 		Ray.Attenuation = vec3(0);
-		Ray.Distance = -10;
-		Ray.Exit = true;
 		Ray.EmitColor = vec4(0);
-		Ray.pdf = 1.0;
 	}
 }
 

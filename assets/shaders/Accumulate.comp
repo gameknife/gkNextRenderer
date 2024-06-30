@@ -81,7 +81,7 @@ void main() {
 				if (diff > historyVariance)
 				{
 					// need sample
-					imageStore(AdaptiveSampleBuffer, ipos, uvec4(max(1, Camera.TemporalFrames / 8)));
+					imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
 				}
 			}
 		}

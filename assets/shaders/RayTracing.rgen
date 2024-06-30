@@ -72,7 +72,7 @@ void main()
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = clamp(Camera.NumberOfSamples * 4, 1, Camera.MaxAdaptiveSample);
+		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
 	}
 		
 	ivec2 imgSize = imageSize(Visibility1Buffer);
@@ -94,6 +94,7 @@ void main()
 		uint primitiveId = 0;
 		vec3 rayColor = vec3(1);
 		
+		Ray.AdaptiveSample = 1;
 		Ray.BounceCount = 0;
 		bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
         FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
@@ -130,6 +131,8 @@ void main()
 			vec2 prevfpos = vec2(ipos) + motionvector.rg;
 			ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
 
+            sampleTimes = max(Ray.AdaptiveSample, sampleTimes);
+
 			if( length(motionvector.xy) > 0.01 )
 			{
 				uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
@@ -141,8 +144,8 @@ void main()
 
 				if (miss)
 				{
-					sampleTimes = Camera.NumberOfSamples * 4;
-					multisamplecount = Camera.TemporalFrames / 4;
+					sampleTimes = max(Camera.TemporalFrames / Camera.AdaptiveSteps, sampleTimes);
+					multisamplecount = Camera.AdaptiveSteps;
 				}
 			}
 		}

@@ -19,7 +19,7 @@ Options::Options(const int argc, const char* argv[])
 	options_description renderer("Renderer options", lineLength);
 	renderer.add_options()
 		("renderer", value<uint32_t>(&RendererType)->default_value(0), "Renderer Type (0 = RayTraced, 1 = ModernDeferred, 2 = LegacyDeferred, 3 = RayQuery, 4 = HybridDeferred, 5 = VulkanBase).")
-		("samples", value<uint32_t>(&Samples)->default_value(2), "The number of ray samples per pixel.")
+		("samples", value<uint32_t>(&Samples)->default_value(1), "The number of ray samples per pixel.")
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The maximum number of bounces per ray.")
 		("max-samples", value<uint32_t>(&MaxSamples)->default_value(64 * 1024), "The maximum number of accumulated ray samples per pixel.")
 		("temporal", value<uint32_t>(&Temporal)->default_value(64), "The number of temporal frames.")

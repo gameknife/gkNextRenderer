@@ -95,7 +95,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
-    ubo.MaxAdaptiveSample = userSettings_.MaxAdaptiveSample;
+    ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;

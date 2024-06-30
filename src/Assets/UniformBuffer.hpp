@@ -54,7 +54,7 @@ namespace Assets
 		uint32_t HDR; // bool
 		uint32_t AdaptiveSample; // bool
 		float AdaptiveVariance;
-		uint32_t MaxAdaptiveSample;
+		uint32_t AdaptiveSteps;
 	};
 
 	// lightquad can represent by 4 points
