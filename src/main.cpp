@@ -300,7 +300,7 @@ namespace
         userSettings.AccumulateRays = false;
         userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
         userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
-        userSettings.MaxNumberOfSamples = options.MaxSamples;
+        userSettings.MaxNumberOfBounces = options.MaxBounces;
         userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
         userSettings.AdaptiveSample = true;
         userSettings.AdaptiveVariance = 6.0f;

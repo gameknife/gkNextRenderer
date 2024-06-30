@@ -67,7 +67,7 @@ void main() {
         FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
         if(!exit)
         {
-            for(uint b = 0; b < Camera.NumberOfBounces; ++b)
+            for(uint b = 0; b < Camera.MaxNumberOfBounces; ++b)
             {	
                 if( GetRayColor(origin.xyz, direction.xyz, rayColor) )
                 {

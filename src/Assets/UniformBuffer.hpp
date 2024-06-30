@@ -40,7 +40,7 @@ namespace Assets
 		uint32_t SkyIdx;
 		
 		uint32_t TotalFrames;
-		uint32_t TotalNumberOfSamples;
+		uint32_t MaxNumberOfBounces;
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;
 		uint32_t RR_MIN_DEPTH;
