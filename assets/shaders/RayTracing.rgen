@@ -72,7 +72,7 @@ void main()
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = Camera.TemporalFrames / Camera.MaxAdaptiveSample;
+		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
 	}
 		
 	ivec2 imgSize = imageSize(Visibility1Buffer);
@@ -144,8 +144,8 @@ void main()
 
 				if (miss)
 				{
-					sampleTimes = max(Camera.TemporalFrames / Camera.MaxAdaptiveSample, sampleTimes);
-					multisamplecount = Camera.MaxAdaptiveSample;
+					sampleTimes = max(Camera.TemporalFrames / Camera.AdaptiveSteps, sampleTimes);
+					multisamplecount = Camera.AdaptiveSteps;
 				}
 			}
 		}

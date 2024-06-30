@@ -20,7 +20,7 @@ struct UserSettings final
 	uint32_t MaxNumberOfSamples;
 	bool AdaptiveSample;
 	float AdaptiveVariance;
-	int MaxAdaptiveSample;
+	int AdaptiveSteps;
 
 	// Camera
 	float FieldOfView;

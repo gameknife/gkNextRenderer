@@ -218,7 +218,7 @@ void UserInterface::DrawSettings()
 		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
 		ImGui::Checkbox("AdativeSample", &Settings().AdaptiveSample);
 		ImGui::SliderFloat("AdaptiveVariance", &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
-		ImGui::SliderInt("MaxAdaptiveSample", &Settings().MaxAdaptiveSample, 1, 8);
+		ImGui::SliderInt("AdaptiveSteps", &Settings().AdaptiveSteps, 4, 16);
 		ImGui::NewLine();
 
 		// min = 1, max = 128;

@@ -304,7 +304,7 @@ namespace
         userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
         userSettings.AdaptiveSample = true;
         userSettings.AdaptiveVariance = 6.0f;
-        userSettings.MaxAdaptiveSample = 6;
+        userSettings.AdaptiveSteps = 8;
 
         userSettings.ShowSettings = !options.Benchmark;
         userSettings.ShowOverlay = true;
