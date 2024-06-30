@@ -17,10 +17,10 @@ struct UserSettings final
 	bool AccumulateRays;
 	uint32_t NumberOfSamples;
 	uint32_t NumberOfBounces;
-	uint32_t MaxNumberOfSamples;
+	uint32_t MaxNumberOfBounces;
 	bool AdaptiveSample;
 	float AdaptiveVariance;
-	int MaxAdaptiveSample;
+	int AdaptiveSteps;
 
 	// Camera
 	float FieldOfView;

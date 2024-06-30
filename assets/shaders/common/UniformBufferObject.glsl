@@ -21,7 +21,7 @@ struct UniformBufferObject
 	float SkyIntensity;
 	uint SkyIdx;
 	uint TotalFrames;
-	uint TotalNumberOfSamples;
+	uint MaxNumberOfBounces;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
 	uint RR_MIN_DEPTH;
@@ -35,5 +35,5 @@ struct UniformBufferObject
 	bool HDR;
 	bool AdaptiveSample;
 	float AdaptiveVariance;
-	uint MaxAdaptiveSample;
+	uint AdaptiveSteps;
 };

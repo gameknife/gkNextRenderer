@@ -11,7 +11,9 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
 #include <iostream>
+#include <fstream>
 #include <sstream>
+#include <ctime>
 #include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
@@ -20,6 +22,9 @@
 #include "ThirdParty/json11/json11.hpp"
 
 #include "stb_image_write.h"
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #if WITH_AVIF
 #include "avif/avif.h"
@@ -83,16 +88,16 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
     ubo.SkyRotation = userSettings_.SkyRotation;
-    ubo.TotalNumberOfSamples = totalNumberOfSamples_;
+    ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
-    ubo.NumberOfSamples = numberOfSamples_;
+    ubo.NumberOfSamples = userSettings_.NumberOfSamples;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
     ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
-    ubo.MaxAdaptiveSample = userSettings_.MaxAdaptiveSample;
+    ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(userSettings_.SunRotation * 3.14159f), 0.75, cosf(userSettings_.SunRotation * 3.14159f) )), 0.0 );
+    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
     ubo.SkyIntensity = userSettings_.SkyIntensity;
     ubo.SkyIdx = userSettings_.SkyIdx;
@@ -193,11 +198,6 @@ void NextRendererApplication<Renderer>::DrawFrame()
     
     previousSettings_ = userSettings_;
 
-    // Keep track of our sample count.
-    numberOfSamples_ = glm::clamp(userSettings_.MaxNumberOfSamples - totalNumberOfSamples_, 0u,
-                                  userSettings_.NumberOfSamples);
-    totalNumberOfSamples_ += numberOfSamples_;
-
     Renderer::DrawFrame();
 
     totalFrames_ += 1;
@@ -250,17 +250,6 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = static_cast<uint32_t>(scene_->TextureSamplers().size());
     stats.ComputePassCount = 0;
-
-    if (userSettings_.IsRayTraced)
-    {
-        const auto extent = Renderer::SwapChain().Extent();
-
-        stats.RayRate = static_cast<float>(
-            double(extent.width * extent.height) * numberOfSamples_
-            / (timeDelta * 1000000000));
-
-        stats.TotalSamples = totalNumberOfSamples_;
-    }
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
 
@@ -419,9 +408,27 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         return;
     }
 
+    char buffer[80];
+
     // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
     {
+        if (benchmarkNumber_ == 0)
+        {
+            time_t rawtime;
+            struct tm* timeinfo;
+
+            time(&rawtime);
+            timeinfo = localtime(&rawtime);
+
+            strftime(buffer, sizeof(buffer), "%d-%m-%Y_%H-%M-%S", timeinfo);
+            std::string report_filename(buffer);
+            report_filename = "report_" + report_filename + ".csv";
+
+            benchmarkCsvReportFile.open(report_filename);
+            benchmarkCsvReportFile << "# of scene;name;FPS" << std::endl;
+        }
+
         std::cout << std::endl;
         std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
         std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'"
@@ -438,9 +445,14 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            std::cout << "Benchmark: " << periodTotalFrames_ / totalTime << " fps" << std::endl;
+            sprintf(buffer, "%.3f", float(periodTotalFrames_) / float(totalTime));
+
+            std::cout << "Benchmark: " << buffer << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
+
+            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << buffer << std::endl;
+            benchmarkNumber_++;
         }
 
         periodTotalFrames_++;
@@ -451,9 +463,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
     {
         const bool timeLimitReached = periodTotalFrames_ != 0 && Renderer::Window().GetTime() - sceneInitialTime_ >
             userSettings_.BenchmarkMaxTime;
-        const bool sampleLimitReached = numberOfSamples_ == 0;
-
-        if (timeLimitReached || sampleLimitReached)
+        if (timeLimitReached)
         {
             {
                 const double totalTime = time_ - sceneInitialTime_;

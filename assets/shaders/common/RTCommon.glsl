@@ -35,25 +35,20 @@ void ProcessMiss(const vec3 RayDirection)
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
 	Ray.primitiveId = 0;
-	
+	Ray.Exit = true;
+	Ray.Distance = -10;
+	Ray.pdf = 1.0;
 	if (Camera.HasSky)
 	{
 		// Sky color
 		const vec3 skyColor = equirectangularSample(RayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-
         Ray.Attenuation = vec3(1);
-		Ray.Distance = -10;
-		Ray.Exit = true;
 		Ray.EmitColor = vec4(skyColor, -1);
-		Ray.pdf = 1.0;
 	}
 	else
 	{
 		Ray.Attenuation = vec3(0);
-		Ray.Distance = -10;
-		Ray.Exit = true;
 		Ray.EmitColor = vec4(0);
-		Ray.pdf = 1.0;
 	}
 }
 
@@ -104,20 +99,17 @@ bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColo
         outRayColor *= vec3(0);
         return true;
     }
-
-    // RR should apply by workgroup, for performance
-
-    //	else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)
-    //	{
-    //		const Material material = Materials[Ray.MaterialIndex];
-    //		float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;
-    //		float rr_prob = min(0.95f, luminance(atten) * rr_scale);
-    //		if (rr_prob < RandomFloat(Ray.RandomSeed))
-    //		{
-    //			return emit + atten * Ray.pdf;
-    //		}
-    //		atten *= min( 1.f / rr_prob, 20.f );
-    //	}
+    else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)
+    {
+    	const Material material = Materials[Ray.MaterialIndex];
+    	float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;
+    	float rr_prob = min(0.95f, luminance(outRayColor) * rr_scale);
+    	if (rr_prob < RandomFloat(Ray.RandomSeed))
+    	{
+    		return true;
+    	}
+    	outRayColor *= min( 1.f / rr_prob, 20.f );
+    }
 
     origin = origin + scatterDir * Ray.Distance;
     scatterDir = Ray.ScatterDirection;

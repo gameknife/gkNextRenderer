@@ -3,6 +3,7 @@
 #include "Random.glsl"
 #include "RayPayload.glsl"
 #include "common/Const_Func.glsl" //pi consts, Schlick
+#include "common/ColorFunc.glsl"
 
 #ifndef scatter_inc
 #define scatter_inc
@@ -131,6 +132,7 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
+	ray.AdaptiveSample = max(4, ray.AdaptiveSample);
 }
 
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
@@ -139,12 +141,13 @@ void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject l
 	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
+	ray.AdaptiveSample = max(4, ray.AdaptiveSample);
 }
 
 void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	const vec3 outwardNormal = ray.FrontFace ? normal : -normal;
-	const float niOverNt = ray.FrontFace ? 1 / m.RefractionIndex : m.RefractionIndex;
+	const float niOverNt = ray.FrontFace ? 1 / m.RefractionIndex2 : m.RefractionIndex2;
 
 	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
 	bool isReflection = sum_is_not_empty_abs(refracted) 
@@ -171,6 +174,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 	
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
+	ray.AdaptiveSample = max(Camera.TemporalFrames / 8, ray.AdaptiveSample);
 }
 
 // Mixture
@@ -194,12 +198,12 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 
 void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
-	const vec4 texColor = m.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord) : vec4(1);
+	const vec4 texColor = m.DiffuseTextureId >= 0 ? srgbToLinear(texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord)) : vec4(1);
 	const vec4 mra = m.MRATextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.MRATextureId)], texCoord) : vec4(1);
 
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
-	ray.Albedo = texColor * texColor * m.Diffuse;
+	ray.Albedo = texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;
 
