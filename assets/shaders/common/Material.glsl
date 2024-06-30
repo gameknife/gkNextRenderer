@@ -17,7 +17,7 @@ struct Material
 	uint MaterialModel;
 	float Metalness;
 
-	float Reserverd0;
+	float RefractionIndex2;
 	float Reserverd1;
 	float Reserverd2;
 };

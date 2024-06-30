@@ -61,7 +61,8 @@ namespace Assets
         // metalness
         float Metalness;
 
-        float Reserverd0;
+        // Second IOR for calculating refraction
+        float RefractionIndex2;
         float Reserverd1;
         float Reserverd2;
     };

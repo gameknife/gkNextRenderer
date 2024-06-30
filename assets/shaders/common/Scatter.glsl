@@ -147,7 +147,7 @@ void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject l
 void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	const vec3 outwardNormal = ray.FrontFace ? normal : -normal;
-	const float niOverNt = ray.FrontFace ? 1 / m.RefractionIndex : m.RefractionIndex;
+	const float niOverNt = ray.FrontFace ? 1 / m.RefractionIndex2 : m.RefractionIndex2;
 
 	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
 	bool isReflection = sum_is_not_empty_abs(refracted) 
