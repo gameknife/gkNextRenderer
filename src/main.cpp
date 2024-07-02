@@ -302,7 +302,7 @@ namespace
         userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
         userSettings.MaxNumberOfBounces = options.MaxBounces;
         userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
-        userSettings.AdaptiveSample = true;
+        userSettings.AdaptiveSample = options.AdaptiveSample;
         userSettings.AdaptiveVariance = 6.0f;
         userSettings.AdaptiveSteps = 8;
 
