@@ -99,17 +99,18 @@ bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColo
         outRayColor *= vec3(0);
         return true;
     }
-    else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)
-    {
-    	const Material material = Materials[Ray.MaterialIndex];
-    	float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;
-    	float rr_prob = min(0.95f, luminance(outRayColor) * rr_scale);
-    	if (rr_prob < RandomFloat(Ray.RandomSeed))
-    	{
-    		return true;
-    	}
-    	outRayColor *= min( 1.f / rr_prob, 20.f );
-    }
+// no gain performance now, but loose quality, scene 5 check
+//    else if(Ray.BounceCount > Camera.RR_MIN_DEPTH)
+//    {
+//    	const Material material = Materials[Ray.MaterialIndex];
+//    	float rr_scale =  material.MaterialModel == MaterialDielectric ? (Ray.FrontFace ? 1.0 / material.RefractionIndex : material.RefractionIndex) : 1.0;
+//    	float rr_prob = min(0.95f, luminance(outRayColor) * rr_scale);
+//    	if (rr_prob < RandomFloat(Ray.RandomSeed))
+//    	{
+//    		return true;
+//    	}
+//    	outRayColor *= min( 1.f / rr_prob, 20.f );
+//    }
 
     origin = origin + scatterDir * Ray.Distance;
     scatterDir = Ray.ScatterDirection;
