@@ -217,8 +217,11 @@ void UserInterface::DrawSettings()
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
 		ImGui::Checkbox("AdativeSample", &Settings().AdaptiveSample);
+		ImGui::Checkbox("AntiAlias", &Settings().TAA);
 		ImGui::SliderFloat("AdaptiveVariance", &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
 		ImGui::SliderInt("TemporalSteps", &Settings().AdaptiveSteps, 2, 16);
+
+		
 		ImGui::NewLine();
 
 		// min = 1, max = 128;

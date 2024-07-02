@@ -81,7 +81,14 @@ void main() {
 	{
         const vec2 pixel = vec2(ipos);
         vec2 uv = (pixel / isize) * 2.0 - 1.0;
-        vec2 offset = vec2(0);
+        // anti aliasing
+		if( Camera.TAA )
+		{
+			vec2 uvOffset = RandomFloat2(Ray.RandomSeed) / isize;
+            uv += uvOffset;
+		}
+		
+		vec2 offset = vec2(0);
         vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
         vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
         // physical camera

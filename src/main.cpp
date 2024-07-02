@@ -305,6 +305,7 @@ namespace
         userSettings.AdaptiveSample = options.AdaptiveSample;
         userSettings.AdaptiveVariance = 6.0f;
         userSettings.AdaptiveSteps = 8;
+        userSettings.TAA = true;
 
         userSettings.ShowSettings = !options.Benchmark;
         userSettings.ShowOverlay = true;

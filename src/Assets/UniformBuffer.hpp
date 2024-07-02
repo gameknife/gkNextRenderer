@@ -55,6 +55,7 @@ namespace Assets
 		uint32_t AdaptiveSample; // bool
 		float AdaptiveVariance;
 		uint32_t AdaptiveSteps;
+		uint32_t TAA; // bool
 	};
 
 	// lightquad can represent by 4 points
