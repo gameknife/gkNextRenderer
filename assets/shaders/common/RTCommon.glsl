@@ -1,6 +1,7 @@
 #extension GL_EXT_ray_query : require
 #extension GL_EXT_nonuniform_qualifier : require
 
+#define USE_FIREFLY_FILTER 1
 #include "Vertex.glsl"
 #include "Random.glsl"
 #include "common/equirectangularSample.glsl"
@@ -116,6 +117,15 @@ bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColo
     scatterDir = Ray.ScatterDirection;
 
     outRayColor *= Ray.Exit ? Ray.EmitColor.rgb : Ray.Attenuation * Ray.pdf;
+    
+#if USE_FIREFLY_FILTER
+  float lum = dot(outRayColor, vec3(0.212671F, 0.715160F, 0.072169F));
+  if(lum > 1600.0F)
+  {
+    outRayColor *= 1600.0F / lum;
+  }
+#endif
+
     return Ray.Exit;
 }
 
