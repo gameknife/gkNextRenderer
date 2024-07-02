@@ -73,6 +73,10 @@ void main() {
 		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
 	}
     
+    #if MOBILE
+        sampleTimes = 1;
+    #endif
+    
     for (uint s = 0; s < sampleTimes; ++s)
 	{
         const vec2 pixel = vec2(ipos);
@@ -107,7 +111,8 @@ void main() {
         }
         
         pixelColor += rayColor;
-        
+
+        #if !MOBILE
         if(s == 0)
         {
             // after the first spp, we could judge if reproject miss with previous primitive buffer
@@ -132,6 +137,7 @@ void main() {
                 }
             }
         }
+        #endif
     }
     
     //imageStore(GBufferImage, ipos, gbuffer);
