@@ -88,12 +88,11 @@ void main() {
             uv += uvOffset;
 		}
 		
-		vec2 offset = vec2(0);
+		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
         vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
         vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-        // physical camera
-        vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
-		
+        vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance - vec3(offset, 0)), 0);
+
         // Path Tracing
 		
         vec3 rayColor = vec3(1);

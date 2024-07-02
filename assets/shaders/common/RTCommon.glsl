@@ -37,7 +37,7 @@ void ProcessMiss(const vec3 RayDirection)
 	Ray.Albedo = vec4(1,1,1,1);
 	Ray.primitiveId = 0;
 	Ray.Exit = true;
-	Ray.Distance = -10;
+	Ray.Distance = 1000.0;
 	Ray.pdf = 1.0;
 	if (Camera.HasSky)
 	{
