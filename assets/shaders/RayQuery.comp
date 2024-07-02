@@ -71,7 +71,22 @@ void main() {
 	{
 		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
 	}
-    
+
+    // Adaptive Sampling
+	uint sampleTimes = Camera.NumberOfSamples;
+		
+	// dynamic sampleTimes;
+	uint multisamplecount = 1;
+	if( Camera.TotalFrames > 0 )
+	{
+		multisamplecount = imageLoad(AdaptiveSampleBuffer, ipos).r;
+	}
+	bool multisample = multisamplecount > 1;
+	if(multisample)
+	{
+		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
+	}
+
     #if MOBILE
         sampleTimes = 1;
     #endif
@@ -166,6 +181,23 @@ void main() {
     multisamplecount = max(1, multisamplecount - 1);
     imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
     
+    //imageStore(GBufferImage, ipos, gbuffer);
+    imageStore(MotionVectorImage, ipos, motionvector);
+    if(isEvenFrame)
+    {
+        imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
+    }
+    else
+    {
+        imageStore(Visibility1Buffer, ipos, ivec4(primitiveId,0, 0, 0));
+    }
+    imageStore(OutAlbedoBuffer, ipos, albedo);
+    imageStore(OutNormalBuffer, ipos, gbuffer);
+
+    // record adaptivesamplebuffer
+    multisamplecount = max(1, multisamplecount - 1);
+    imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
+
     pixelColor = pixelColor / sampleTimes;
     
     // Quick Result
