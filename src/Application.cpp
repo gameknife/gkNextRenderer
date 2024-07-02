@@ -88,14 +88,15 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
     ubo.SkyRotation = userSettings_.SkyRotation;
-    ubo.TotalNumberOfSamples = totalNumberOfSamples_;
+    ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
-    ubo.NumberOfSamples = numberOfSamples_;
+    ubo.NumberOfSamples = userSettings_.NumberOfSamples;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
     ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
-    ubo.MaxAdaptiveSample = userSettings_.MaxAdaptiveSample;
+    ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
+    ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
@@ -198,11 +199,6 @@ void NextRendererApplication<Renderer>::DrawFrame()
     
     previousSettings_ = userSettings_;
 
-    // Keep track of our sample count.
-    numberOfSamples_ = glm::clamp(userSettings_.MaxNumberOfSamples - totalNumberOfSamples_, 0u,
-                                  userSettings_.NumberOfSamples);
-    totalNumberOfSamples_ += numberOfSamples_;
-
     Renderer::DrawFrame();
 
     totalFrames_ += 1;
@@ -255,17 +251,6 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = static_cast<uint32_t>(scene_->TextureSamplers().size());
     stats.ComputePassCount = 0;
-
-    if (userSettings_.IsRayTraced)
-    {
-        const auto extent = Renderer::SwapChain().Extent();
-
-        stats.RayRate = static_cast<float>(
-            double(extent.width * extent.height) * numberOfSamples_
-            / (timeDelta * 1000000000));
-
-        stats.TotalSamples = totalNumberOfSamples_;
-    }
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
 
@@ -479,9 +464,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
     {
         const bool timeLimitReached = periodTotalFrames_ != 0 && Renderer::Window().GetTime() - sceneInitialTime_ >
             userSettings_.BenchmarkMaxTime;
-        const bool sampleLimitReached = numberOfSamples_ == 0;
-
-        if (timeLimitReached || sampleLimitReached)
+        if (timeLimitReached)
         {
             {
                 const double totalTime = time_ - sceneInitialTime_;

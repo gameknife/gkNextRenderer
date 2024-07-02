@@ -217,8 +217,11 @@ void UserInterface::DrawSettings()
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
 		ImGui::Checkbox("AdativeSample", &Settings().AdaptiveSample);
+		ImGui::Checkbox("AntiAlias", &Settings().TAA);
 		ImGui::SliderFloat("AdaptiveVariance", &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
-		ImGui::SliderInt("MaxAdaptiveSample", &Settings().MaxAdaptiveSample, 3, 16);
+		ImGui::SliderInt("TemporalSteps", &Settings().AdaptiveSteps, 2, 16);
+
+		
 		ImGui::NewLine();
 
 		// min = 1, max = 128;
@@ -237,8 +240,8 @@ void UserInterface::DrawSettings()
 		ImGui::Text("Camera");
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
-		//ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		//ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 1000.0f, "%.1f");
+		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
+		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 1000.0f, "%.1f");
 		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, 9);
 		ImGui::SliderFloat("SkyRotation", &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
 		ImGui::SliderFloat("SkyLum", &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");

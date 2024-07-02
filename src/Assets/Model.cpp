@@ -207,6 +207,7 @@ namespace Assets
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
             m.RefractionIndex = 1.46f;
+            m.RefractionIndex2 = 1.46f;
             
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
@@ -242,9 +243,26 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Lambertian;
             }
 
-            if( mat.extras.Has("glass") )
+            auto ior = mat.extensions.find("KHR_materials_ior");
+            if( ior != mat.extensions.end())
             {
-                m.MaterialModel = Material::Enum::Dielectric;
+                m.RefractionIndex = static_cast<float>(ior->second.Get("ior").GetNumberAsDouble());
+                m.RefractionIndex2 = m.RefractionIndex;
+            }
+
+            auto transmission = mat.extensions.find("KHR_materials_transmission");
+            if( transmission != mat.extensions.end())
+            {
+                float trans = static_cast<float>(transmission->second.Get("transmissionFactor").GetNumberAsDouble());
+                if(trans > 0.8)
+                {
+                   m.MaterialModel = Material::Enum::Dielectric;
+                }
+            }
+
+            if( mat.extras.Has("ior2") )
+            {
+                m.RefractionIndex2 = mat.extras.Get("ior2").GetNumberAsDouble();
             }
 
             auto emissive = mat.extensions.find("KHR_materials_emissive_strength");

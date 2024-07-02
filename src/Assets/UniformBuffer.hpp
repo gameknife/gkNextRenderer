@@ -40,7 +40,7 @@ namespace Assets
 		uint32_t SkyIdx;
 		
 		uint32_t TotalFrames;
-		uint32_t TotalNumberOfSamples;
+		uint32_t MaxNumberOfBounces;
 		uint32_t NumberOfSamples;
 		uint32_t NumberOfBounces;
 		uint32_t RR_MIN_DEPTH;
@@ -54,7 +54,8 @@ namespace Assets
 		uint32_t HDR; // bool
 		uint32_t AdaptiveSample; // bool
 		float AdaptiveVariance;
-		uint32_t MaxAdaptiveSample;
+		uint32_t AdaptiveSteps;
+		uint32_t TAA; // bool
 	};
 
 	// lightquad can represent by 4 points

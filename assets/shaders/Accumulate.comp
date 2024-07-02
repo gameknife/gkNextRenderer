@@ -27,19 +27,19 @@ void main() {
 
     bool useHistory = true;
     vec4 final = src;
-    
+    vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
+    const bool check = length(motion) > 0.01;
     // fetch visibility to validate the history
     uint current_primitive_index = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
-    if(current_primitive_index == 0 || Camera.TotalFrames == 0)
+    if(Camera.TotalFrames == 0)
     {
-         useHistory = false;
+        useHistory = false;
     }
 
     if( useHistory )
     {
-		vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
 		ivec2 previpos = ivec2( floor(ipos + motion) );
-		if( length(motion) > 0.01 )
+		if( check )
 		{
 			uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
 			uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r;
@@ -81,7 +81,7 @@ void main() {
 				if (diff > historyVariance)
 				{
 					// need sample
-					imageStore(AdaptiveSampleBuffer, ipos, uvec4(max(1, Camera.TemporalFrames / 8)));
+					imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
 				}
 			}
 		}

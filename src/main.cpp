@@ -77,7 +77,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=5", "--samples=1"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=5", "--temporal=16"};
             const Options options(4, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);
@@ -300,11 +300,12 @@ namespace
         userSettings.AccumulateRays = false;
         userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
         userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
-        userSettings.MaxNumberOfSamples = options.MaxSamples;
+        userSettings.MaxNumberOfBounces = options.MaxBounces;
         userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
-        userSettings.AdaptiveSample = true;
+        userSettings.AdaptiveSample = options.AdaptiveSample;
         userSettings.AdaptiveVariance = 6.0f;
-        userSettings.MaxAdaptiveSample = 6;
+        userSettings.AdaptiveSteps = 8;
+        userSettings.TAA = true;
 
         userSettings.ShowSettings = !options.Benchmark;
         userSettings.ShowOverlay = true;
