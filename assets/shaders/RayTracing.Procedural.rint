@@ -6,6 +6,8 @@ layout(binding = 9) readonly buffer SphereArray { vec4[] Spheres; };
 
 hitAttributeEXT vec4 Sphere;
 
+#include "common/Const_Func.glsl"
+
 void main()
 {
 	const vec4 sphere = Spheres[gl_InstanceCustomIndexEXT];
@@ -20,15 +22,15 @@ void main()
 	// https://en.wikipedia.org/wiki/Quadratic_formula
 
 	const vec3 oc = origin - center;
-	const float a = dot(direction, direction);
-	const float b = dot(oc, direction);
-	const float c = dot(oc, oc) - radius * radius;
-	const float discriminant = b * b - a * c;
+	const vec3 oc_direction = to_local(oc, direction, oc, vec3(0));	//result same as vec3 to_local(vec3 v, vec3 T, vec3 B, vec3 N) { return vec3(dot(v, T), dot(v, B), dot(v, N)); } but faster than 3 dots
+	const float b = -oc_direction.x;
+	float discriminant = b * b - oc_direction.y + radius * radius;
 
 	if (discriminant >= 0)
 	{
-		const float t1 = (-b - sqrt(discriminant)) / a;
-		const float t2 = (-b + sqrt(discriminant)) / a;
+		discriminant = sqrt(discriminant);
+		const float t1 = b - discriminant;
+		const float t2 = b + discriminant;
 
 		if ((tMin <= t1 && t1 < tMax) || (tMin <= t2 && t2 < tMax))
 		{

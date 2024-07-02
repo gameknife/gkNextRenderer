@@ -8,10 +8,11 @@
 #ifndef scatter_inc
 #define scatter_inc
 
+#define cos_0_5degree 0.99996192306417128873735516482698
+
 #define sample_vndf
 
 #ifdef sample_vndf
-#define saturate(x) ( clamp((x), 0.0F, 1.0F) )
 
 // Kenta Eto and Yusuke Tokuyoshi. 2023. Bounded VNDF Sampling for Smith-GGX Reflections.
 // In SIGGRAPH Asia 2023 Technical Communications (SA Technical Communications '23), December 12-15, 2023, Sydney, NSW, Australia. ACM, New York, NY, USA, 4 pages.
@@ -34,12 +35,6 @@ vec3 ggx_sample_vndf(vec2 alpha, vec3 wi_, vec2 uv) {
   // Compute the microfacet normal m
   vec3 m_std = wi + o_std;
   return normalize(vec3(m_std.xy * alpha, m_std.z));
-}
-
-void ONBAlignWithNormal(vec3 up, out vec3 right, out vec3 forward)
-{
-    right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
-    forward = cross(right, up);
 }
 
 vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
@@ -87,7 +82,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	if(Camera.HasSun)
 	{
 		const vec3 hitpos = ray.HitPos;
-		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(0.5f / 180.f * 3.14159f)), Camera.SunDirection.xyz);
+		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos_0_5degree), Camera.SunDirection.xyz);
 		if(RandomFloat(ray.RandomSeed) < 0.33) {
 			rayQueryEXT rayQuery;
 			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, EPS, lightVector, INF);
