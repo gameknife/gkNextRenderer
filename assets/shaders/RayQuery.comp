@@ -119,7 +119,11 @@ void main() {
             vec2 prevfpos = vec2(ipos) + motionvector.rg;
             ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
         
-            sampleTimes = max(Ray.AdaptiveSample, sampleTimes);
+            if(Camera.AdaptiveSample)
+            {
+                sampleTimes = max(Ray.AdaptiveSample, sampleTimes);
+            }
+            
         
             if( length(motionvector.xy) > 0.01 )
             {
