@@ -97,7 +97,7 @@ void main()
 		Ray.AdaptiveSample = 1;
 		Ray.BounceCount = 0;
 		bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
-        FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
+		if( s == 0 ) FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
         if(!exit)
         {
             for(uint b = 0; b < Camera.MaxNumberOfBounces; ++b)

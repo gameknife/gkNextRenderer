@@ -18,7 +18,15 @@ layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) uniform sampler2D[] TextureSamplers;
-layout(binding = 9, rgba8) uniform image2D OutImage;
+//layout(binding = 9, rgba8) uniform image2D OutImage;
+
+layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
+layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
+layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
+layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
+layout(binding = 14, rgba16f) uniform image2D OutAlbedoBuffer;
+layout(binding = 15, rgba16f) uniform image2D OutNormalBuffer;
+layout(binding = 16, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
@@ -34,20 +42,38 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
 void main() {
+    bool isEvenFrame = Camera.TotalFrames % 2 == 0;
     
     vec3 pixelColor = vec3(0);
+    vec4 albedo = vec4(0);
 	vec4 gbuffer = vec4(0);
 	vec4 motionvector = vec4(0);
+    uint primitiveId = 0;
     
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    vec2 isize = vec2(imageSize(OutImage));
+    vec2 isize = vec2(imageSize(AccumulationImage));
     
     // Ray Initialize
     Ray.RandomSeed = InitRandomSeed(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, Camera.TotalFrames);
 	Ray.RandomSeed.w = Camera.RandomSeed;
     
     
-    for (uint s = 0; s < Camera.NumberOfSamples; ++s)
+    // Adaptive Sampling
+	uint sampleTimes = Camera.NumberOfSamples;
+		
+	// dynamic sampleTimes;
+	uint multisamplecount = 1;
+	if( Camera.TotalFrames > 0 )
+	{
+		multisamplecount = imageLoad(AdaptiveSampleBuffer, ipos).r;
+	}
+	bool multisample = multisamplecount > 1;
+	if(multisample)
+	{
+		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
+	}
+    
+    for (uint s = 0; s < sampleTimes; ++s)
 	{
         const vec2 pixel = vec2(ipos);
         vec2 uv = (pixel / isize) * 2.0 - 1.0;
@@ -58,13 +84,17 @@ void main() {
         vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance * 0.01 - vec3(offset, 0)), 0);
 		
         // Path Tracing
-		vec4 s_albedo = vec4(0);
-		uint primitiveId = 0;
+		
         vec3 rayColor = vec3(1);
 
 	    Ray.BounceCount = 0;
+        Ray.AdaptiveSample = 1;
         bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
-        FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, s_albedo, motionvector, primitiveId);
+        if(s == 0)
+        {
+            FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, albedo, motionvector, primitiveId);
+        }
+        
         if(!exit)
         {
             for(uint b = 0; b < Camera.MaxNumberOfBounces; ++b)
@@ -77,10 +107,48 @@ void main() {
         }
         
         pixelColor += rayColor;
+        
+        if(s == 0)
+        {
+            // after the first spp, we could judge if reproject miss with previous primitive buffer
+            vec2 prevfpos = vec2(ipos) + motionvector.rg;
+            ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );
+        
+            sampleTimes = max(Ray.AdaptiveSample, sampleTimes);
+        
+            if( length(motionvector.xy) > 0.01 )
+            {
+                uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
+                uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 1)).r;
+                uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1, 0)).r;
+                uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1, 1)).r;
+        
+                bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(primitiveId)));
+        
+                if (miss)
+                {
+                    sampleTimes = max(Camera.TemporalFrames / Camera.AdaptiveSteps, sampleTimes);
+                    multisamplecount = Camera.AdaptiveSteps;
+                }
+            }
+        }
     }
     
-    pixelColor = pixelColor / Camera.NumberOfSamples;
+    //imageStore(GBufferImage, ipos, gbuffer);
+    imageStore(MotionVectorImage, ipos, motionvector);
+    if(isEvenFrame)
+    {
+        imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
+    }
+    else
+    {
+        imageStore(Visibility1Buffer, ipos, ivec4(primitiveId,0, 0, 0));
+    }
+    imageStore(OutAlbedoBuffer, ipos, albedo);
+    imageStore(OutNormalBuffer, ipos, gbuffer);
+    
+    pixelColor = pixelColor / sampleTimes;
     
     // Quick Result
-    imageStore(OutImage, ipos, vec4( LinearToST2084UE( pixelColor * 600.0 / 230.0), 1.0) );
+    imageStore(AccumulationImage, ipos, vec4(pixelColor.rgb, sampleTimes) );
 }
