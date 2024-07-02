@@ -146,6 +146,10 @@ void main() {
     }
     imageStore(OutAlbedoBuffer, ipos, albedo);
     imageStore(OutNormalBuffer, ipos, gbuffer);
+
+    // record adaptivesamplebuffer
+    multisamplecount = max(1, multisamplecount - 1);
+    imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
     
     pixelColor = pixelColor / sampleTimes;
     
