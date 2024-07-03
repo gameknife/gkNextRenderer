@@ -57,7 +57,6 @@ void main() {
     Ray.RandomSeed = InitRandomSeed(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, Camera.TotalFrames);
 	Ray.RandomSeed.w = Camera.RandomSeed;
     
-    
     // Adaptive Sampling
 	uint sampleTimes = Camera.NumberOfSamples;
 		
@@ -72,7 +71,7 @@ void main() {
 	{
 		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
 	}
-    
+
     #if MOBILE
         sampleTimes = 1;
     #endif
@@ -166,7 +165,7 @@ void main() {
     // record adaptivesamplebuffer
     multisamplecount = max(1, multisamplecount - 1);
     imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
-    
+
     pixelColor = pixelColor / sampleTimes;
     
     // Quick Result

@@ -22,7 +22,9 @@
 #define sum_is_not_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) >= NEARzero)
 
 #define Mix(a, b, c, barycentrics) ( (a) * (barycentrics).x + (b) * (barycentrics).y + (c) * (barycentrics).z )
-#define luminance(rgb) (dot((rgb), vec3(0.2126f, 0.7152f, 0.0722f)))
+#define luminance(rgb) (dot((rgb), vec3(0.212671F, 0.715160F, 0.072169F)))
+
+#define saturate(x) ( clamp((x), 0.0F, 1.0F) )
 
 float pow5(float x) { return x*x*x*x*x; }
 float pow4(float x) { return x*x*x*x; }
@@ -36,6 +38,19 @@ float Schlick(const float cosine, const float refractionIndex)
 
 	// taken from https://www.photometric.io/blog/improving-schlicks-approximation/
 	return r0 + (1 - cosine - r0) * pow4(1 - cosine);
+}
+
+vec3 AlignWithNormal(vec3 ray, vec3 up)
+{
+    vec3 right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
+    vec3 forward = cross(right, up);
+    return to_world(ray, right, up, forward);
+}
+
+void ONBAlignWithNormal(vec3 up, out vec3 right, out vec3 forward)
+{
+    right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
+    forward = cross(right, up);
 }
 
 #define Const_Func
