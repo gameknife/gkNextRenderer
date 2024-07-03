@@ -25,8 +25,12 @@ vec3 ggx_sample_vndf(vec2 alpha, vec3 wi_, vec2 uv) {
   float b = wi.z;
   if(wi_.z > 0.f) {
 	  float a = saturate(min(alpha.x, alpha.y)); // Eq. 6
-	  float s = 1.0f + length(wi_.xy); // Omit sgn for a <=1
-	  b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z));
+	  //float s = 1.0f + length(wi_.xy); // Omit sgn for a <=1
+	  //b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z)); // 7* 1/
+	  //b *= ((1.0f - a * a) / (1.0f + a * a * wi_.z * wi_.z / (s * s))); // divide by s * s
+
+	  float awiz_s = a * wi_.z / (1.0f + length(wi_.xy));
+	  b *= ((1.0f - a * a) / (1.0f + awiz_s * awiz_s)); // 3* 2/
   }
 
   float z = (1.0f - uv.y) * (1.0f + b) - b;
