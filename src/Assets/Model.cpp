@@ -395,7 +395,7 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
-    int Model::LoadModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+    int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
                                         std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode)
@@ -408,6 +408,9 @@ namespace Assets
         const std::string materialPath = std::filesystem::path(filename).parent_path().string();
 
         tinyobj::ObjReader objReader;
+        std::vector<std::string> searchPaths;
+		searchPaths.push_back("../assets/textures/");
+		searchPaths.push_back(materialPath + "/");
 
         if (!objReader.ParseFromFile(filename))
         {
@@ -428,7 +431,7 @@ namespace Assets
         //fill with exists textures
         for (size_t i = 0; i < textures.size(); i++)
         {
-			get_tex_id(textures[i].Loadname(), isNew);
+			tex_names[textures[i].Loadname()] = i;
         }
 
         for (const auto& _material : objReader.GetMaterials())
@@ -444,17 +447,18 @@ namespace Assets
                 material.diffuse[1] = 1.0f;
                 material.diffuse[2] = 1.0f;
 
+				std::string loadname = "", fn;
+				file_exists = false;
                 // find if textures contain texture with loadname equals diffuse_texname
-                std::string loadname = "../assets/textures/" + material.diffuse_texname;
-                tex_filename = std::filesystem::canonical(loadname).generic_string();
-                file_exists = std::filesystem::exists(tex_filename);
-                if(!file_exists) {
-                	loadname = materialPath + "/" + material.diffuse_texname;
-                	tex_filename = std::filesystem::canonical(loadname).generic_string();
-                	file_exists = std::filesystem::exists(tex_filename);
-                }
+				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
+					fn = searchPaths[i] + material.diffuse_texname;
+					file_exists = std::filesystem::exists(fn);
+					printf("\n456 loading %s\nexists=%d\n\n", fn.c_str(), file_exists);
+					if(file_exists) loadname = fn;
+				}				
 
                 if(file_exists) {
+                	tex_filename = std::filesystem::canonical(loadname).generic_string();
                 	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
                 	if (isNew)
                 	{
@@ -469,7 +473,7 @@ namespace Assets
 
             m.MaterialModel = Material::Enum::Mixture;
             m.Fuzziness = material.roughness;
-            m.RefractionIndex = 1.46f; // plastic
+            m.RefractionIndex = material.ior;
             m.Metalness = material.metallic * material.metallic;
 
             if (material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses" || material.name.find("Water")

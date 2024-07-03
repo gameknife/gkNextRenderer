@@ -60,7 +60,7 @@ namespace Assets
     {
     public:
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
-        static int LoadModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+        static int LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
                                         std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode = true);

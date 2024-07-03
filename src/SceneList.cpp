@@ -206,6 +206,26 @@ void ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& 
 }
 
 
+void KitchenObj(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                        std::vector<Assets::LightObject>& lights)
+{
+    camera.ModelView = lookAt(vec3(2, 1.5, 3), vec3(-4, 1.5, -4), vec3(0, 1, 0));
+    camera.FieldOfView = 40;
+    camera.Aperture = 0.0f;
+    camera.FocusDistance = 100.0f;
+    camera.ControlSpeed = 1.0f;
+    camera.GammaCorrection = true;
+    camera.HasSky = true;
+
+/*
+    int lightModel = Model::CreateLightQuad(vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
+                                   vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
+    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false)); */
+
+    Model::LoadObjModel("../assets/models/kitchen.obj", nodes, models, textures, materials, lights);
+}
+
 const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
                                                              std::vector<Assets::Node>& nodes,
                                                              std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
@@ -221,6 +241,7 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
     {"Cornell Box", CornellBox},
     {"LivingRoom", LivingRoom},
     {"Kitchen", Kitchen},
+    {"KitchenObj", KitchenObj},
     {"LuxBall", LuxBall},
     {"ModernHouse1", ModernHouse1}
     };
