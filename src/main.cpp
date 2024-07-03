@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <iostream>
 
-
+uint32_t RendererType;
 
 #if ANDROID
 #include <imgui_impl_android.h>
@@ -323,6 +323,8 @@ namespace
         userSettings.SunRotation = 0.5f;
         userSettings.SunLuminance = 500.f;
         userSettings.SkyIntensity = 50.f;
+
+        RendererType = options.RendererType;
 
         return userSettings;
     }

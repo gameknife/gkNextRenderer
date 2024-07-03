@@ -13,6 +13,8 @@ using Assets::Material;
 using Assets::Model;
 using Assets::Texture;
 
+extern uint32_t RendererType;
+
 namespace
 {
     int CreateMaterial( std::vector<Assets::Material>& materials, Material mat )
@@ -116,7 +118,7 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
     camera.HasSky = true;
     camera.HasSun = true;
     
-    const bool isProc = true;
+    const bool isProc = RendererType != 3;
 
     std::mt19937 engine(42);
     std::function<float ()> random = std::bind(std::uniform_real_distribution<float>(), engine);

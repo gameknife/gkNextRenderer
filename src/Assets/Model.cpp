@@ -682,8 +682,8 @@ namespace Assets
 
     Model Model::CreateSphere(const vec3& center, float radius, int materialIdx, const bool isProcedural)
     {
-        const int slices = 32;
-        const int stacks = 16;
+        const int slices = isProcedural ? 32 : 64;
+        const int stacks = isProcedural ? 16 : 32;
 
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
