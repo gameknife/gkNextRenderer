@@ -44,8 +44,7 @@ uo_map_tex_t tex_names;
 std::string tex_filename;
 
 int32_t get_tex_id(std::string fn, bool& isNew) {
-	tex_filename = std::filesystem::canonical(fn).generic_string();
-	uo_map_tex_t::const_iterator got = tex_names.find(tex_filename);
+	uo_map_tex_t::const_iterator got = tex_names.find(fn);
 	if (got == tex_names.end()) {
 		isNew = true;
 		return -1;
@@ -425,7 +424,7 @@ namespace Assets
 
         //clear map of textures names
         tex_names.clear();
-        bool isNew;
+        bool isNew, file_exists;
         //fill with exists textures
         for (size_t i = 0; i < textures.size(); i++)
         {
@@ -447,12 +446,22 @@ namespace Assets
 
                 // find if textures contain texture with loadname equals diffuse_texname
                 std::string loadname = "../assets/textures/" + material.diffuse_texname;
-                m.DiffuseTextureId = get_tex_id(loadname, isNew);
-                if (isNew)
-                {
-                    textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
-                    m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
-                    tex_names[tex_filename] = m.DiffuseTextureId;
+                tex_filename = std::filesystem::canonical(loadname).generic_string();
+                file_exists = std::filesystem::exists(tex_filename);
+                if(!file_exists) {
+                	loadname = materialPath + "/" + material.diffuse_texname;
+                	tex_filename = std::filesystem::canonical(loadname).generic_string();
+                	file_exists = std::filesystem::exists(tex_filename);
+                }
+
+                if(file_exists) {
+                	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
+                	if (isNew)
+                	{
+                		textures.push_back(Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig()));
+                		m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
+                		tex_names[tex_filename] = m.DiffuseTextureId;
+                	}
                 }
             }
 
