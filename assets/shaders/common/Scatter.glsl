@@ -29,9 +29,9 @@ vec3 ggx_sample_vndf(vec2 alpha, vec3 wi_, vec2 uv) {
 	  b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z));
   }
 
-  float z = (1.0f - uv.y) * (1.0f + b) -b;
-  float cosPhi    = uv.x + uv.x - 1.0;
-  vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cosPhi, sqrt(1.0 - cosPhi * cosPhi)), z);
+  float z = (1.0f - uv.y) * (1.0f + b) - b;
+  float phi  = M_TWO_PI * uv.x;
+  vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cos(phi), sin(phi)), z);
   // Compute the microfacet normal m
   vec3 m_std = wi + o_std;
   return normalize(vec3(m_std.xy * alpha, m_std.z));
