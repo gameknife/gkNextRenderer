@@ -41,15 +41,14 @@ typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
 //map of textures names - better for fast search
 uo_map_tex_t tex_names;
+std::string tex_filename;
 
 int32_t get_tex_id(std::string fn, bool& isNew) {
-	std::string tex_filename = std::filesystem::canonical(fn).generic_string();
+	tex_filename = std::filesystem::canonical(fn).generic_string();
 	uo_map_tex_t::const_iterator got = tex_names.find(tex_filename);
 	if (got == tex_names.end()) {
-        int32_t tex_id = static_cast<int32_t>(tex_names.size());
-		tex_names[tex_filename] = tex_id;
 		isNew = true;
-		return tex_id;
+		return -1;
 	} else {
 		isNew = false;
 		return got->second;
@@ -453,6 +452,7 @@ namespace Assets
                 {
                     textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
                     m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
+                    tex_names[tex_filename] = m.DiffuseTextureId;
                 }
             }
 
