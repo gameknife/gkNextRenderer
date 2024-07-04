@@ -19,8 +19,8 @@
 
 namespace Vulkan::ModernDeferred {
 
-ModernDeferredRenderer::ModernDeferredRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	Vulkan::VulkanBaseRenderer(windowConfig, presentMode, enableValidationLayers)
+ModernDeferredRenderer::ModernDeferredRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+	Vulkan::VulkanBaseRenderer(rendererType, windowConfig, presentMode, enableValidationLayers)
 {
 	
 }

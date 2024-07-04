@@ -21,6 +21,7 @@ struct UserSettings final
 	bool AdaptiveSample;
 	float AdaptiveVariance;
 	int AdaptiveSteps;
+	bool TAA;
 
 	// Camera
 	float FieldOfView;

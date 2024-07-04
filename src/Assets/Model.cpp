@@ -41,15 +41,13 @@ typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
 //map of textures names - better for fast search
 uo_map_tex_t tex_names;
+std::string tex_filename;
 
 int32_t get_tex_id(std::string fn, bool& isNew) {
-	std::string tex_filename = std::filesystem::canonical(fn).generic_string();
-	uo_map_tex_t::const_iterator got = tex_names.find(tex_filename);
+	uo_map_tex_t::const_iterator got = tex_names.find(fn);
 	if (got == tex_names.end()) {
-        int32_t tex_id = static_cast<int32_t>(tex_names.size());
-		tex_names[tex_filename] = tex_id;
 		isNew = true;
-		return tex_id;
+		return -1;
 	} else {
 		isNew = false;
 		return got->second;
@@ -397,7 +395,7 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
-    int Model::LoadModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+    int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
                                         std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode)
@@ -410,6 +408,9 @@ namespace Assets
         const std::string materialPath = std::filesystem::path(filename).parent_path().string();
 
         tinyobj::ObjReader objReader;
+        std::vector<std::string> searchPaths;
+		searchPaths.push_back("../assets/textures/");
+		searchPaths.push_back(materialPath + "/");
 
         if (!objReader.ParseFromFile(filename))
         {
@@ -426,11 +427,11 @@ namespace Assets
 
         //clear map of textures names
         tex_names.clear();
-        bool isNew;
+        bool isNew, file_exists;
         //fill with exists textures
         for (size_t i = 0; i < textures.size(); i++)
         {
-			get_tex_id(textures[i].Loadname(), isNew);
+			tex_names[textures[i].Loadname()] = i;
         }
 
         for (const auto& _material : objReader.GetMaterials())
@@ -446,21 +447,34 @@ namespace Assets
                 material.diffuse[1] = 1.0f;
                 material.diffuse[2] = 1.0f;
 
+				std::string loadname = "", fn;
+				file_exists = false;
                 // find if textures contain texture with loadname equals diffuse_texname
-                std::string loadname = "../assets/textures/" + material.diffuse_texname;
-                m.DiffuseTextureId = get_tex_id(loadname, isNew);
-                if (isNew)
-                {
-                    textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
-                    m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
-                }
+				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
+					fn = searchPaths[i] + material.diffuse_texname;
+					file_exists = std::filesystem::exists(fn);
+					if(file_exists) loadname = fn;
+				}				
+
+                if(file_exists) {
+                	tex_filename = std::filesystem::canonical(loadname).generic_string();
+                	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
+                	if (isNew)
+                	{
+                		textures.push_back(Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig()));
+                		m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
+                		tex_names[tex_filename] = m.DiffuseTextureId;
+                	}
+                } else {
+                	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
+				}
             }
 
             m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
 
             m.MaterialModel = Material::Enum::Mixture;
             m.Fuzziness = material.roughness;
-            m.RefractionIndex = 1.46f; // plastic
+            m.RefractionIndex = m.RefractionIndex2 = max(material.ior, 1.43f);
             m.Metalness = material.metallic * material.metallic;
 
             if (material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses" || material.name.find("Water")
@@ -470,7 +484,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Dielectric;
             }
 
-            if (material.emission[0] > 0)
+            if (material.emission[0] + material.emission[1] + material.emission[2] > 0)
             {
                 m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]) * 100.f);
                 // add to lights
@@ -602,6 +616,7 @@ namespace Assets
         return static_cast<int32_t>(models.size()) - 1;
     }
 
+
     int Model::CreateCornellBox(const float scale,
                                  std::vector<Model>& models,
                                  std::vector<Material>& materials,
@@ -682,8 +697,8 @@ namespace Assets
 
     Model Model::CreateSphere(const vec3& center, float radius, int materialIdx, const bool isProcedural)
     {
-        const int slices = 32;
-        const int stacks = 16;
+        const int slices = isProcedural ? 32 : 64;
+        const int stacks = isProcedural ? 16 : 32;
 
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;

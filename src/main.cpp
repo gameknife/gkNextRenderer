@@ -11,8 +11,6 @@
 #include <cstdlib>
 #include <iostream>
 
-
-
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>
@@ -21,7 +19,7 @@
 
 namespace
 {
-    UserSettings CreateUserSettings(const Options& options);
+    UserSettings CreateUserSettings(Options& options);
     void PrintVulkanSdkInformation();
     void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
     void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
@@ -61,6 +59,8 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
     }
 
+    std::cout << "Renderer: " << GApplication->GetRendererType() << std::endl;
+    
     PrintVulkanSdkInformation();
     PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
     PrintVulkanLayersInformation(*GApplication, options.Benchmark);
@@ -77,7 +77,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=5", "--samples=1"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=5", "--temporal=16"};
             const Options options(4, argv);
             GOption = &options;
             const UserSettings userSettings = CreateUserSettings(options);
@@ -197,7 +197,7 @@ int main(int argc, const char* argv[]) noexcept
 {
     try
     {
-        const Options options(argc, argv);
+        Options options(argc, argv);
         GOption = &options;
         const UserSettings userSettings = CreateUserSettings(options);
         const Vulkan::WindowConfig windowConfig
@@ -286,25 +286,39 @@ int main(int argc, const char* argv[]) noexcept
 
 namespace
 {
-    UserSettings CreateUserSettings(const Options& options)
+    UserSettings CreateUserSettings(Options& options)
     {
+        SceneList::ScanScenes();
+        
         UserSettings userSettings{};
 
         userSettings.Benchmark = options.Benchmark;
         userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
         userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-
         userSettings.SceneIndex = options.SceneIndex;
 
+        if(options.SceneName != "")
+        {
+            for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
+            {
+                if( SceneList::AllScenes[i].first == options.SceneName )
+                {
+                    userSettings.SceneIndex = i;
+                    break;
+                }
+            }
+        }
+        
         userSettings.IsRayTraced = true;
         userSettings.AccumulateRays = false;
         userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
         userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
         userSettings.MaxNumberOfBounces = options.MaxBounces;
         userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
-        userSettings.AdaptiveSample = true;
+        userSettings.AdaptiveSample = options.AdaptiveSample;
         userSettings.AdaptiveVariance = 6.0f;
         userSettings.AdaptiveSteps = 8;
+        userSettings.TAA = true;
 
         userSettings.ShowSettings = !options.Benchmark;
         userSettings.ShowOverlay = true;

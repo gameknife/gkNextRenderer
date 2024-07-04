@@ -26,14 +26,13 @@ rayPayloadInEXT RayPayload Ray;
 
 vec2 GetSphereTexCoord(const vec3 point)
 {
-	const float phi = atan(point.x, point.z);
 	const float theta = asin(point.y);
 
 	return vec2
 	(
-		(phi + M_PI) * M_1_OVER_TWO_PI,
-		1 - (theta + M_PI_2) * M_1_PI
-	);
+		(atan(point.x, point.z) + M_PI),
+		2 - (theta + theta + M_PI)
+	) * M_1_OVER_TWO_PI;
 }
 
 void main()

@@ -36,4 +36,5 @@ struct UniformBufferObject
 	bool AdaptiveSample;
 	float AdaptiveVariance;
 	uint AdaptiveSteps;
+	bool TAA;
 };

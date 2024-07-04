@@ -40,9 +40,9 @@ namespace Vulkan::RayTracing
         }
     }
 
-    RayTraceBaseRenderer::RayTraceBaseRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
+    RayTraceBaseRenderer::RayTraceBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
-        Vulkan::VulkanBaseRenderer(windowConfig, presentMode, enableValidationLayers)
+        Vulkan::VulkanBaseRenderer(rendererType, windowConfig, presentMode, enableValidationLayers)
     {
     }
 

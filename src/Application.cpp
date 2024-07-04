@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <ctime>
+#include <fmt/format.h>
 #include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
@@ -44,7 +45,7 @@ template <typename Renderer>
 NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings,
                                                            const Vulkan::WindowConfig& windowConfig,
                                                            const VkPresentModeKHR presentMode) :
-    Renderer(windowConfig, presentMode, EnableValidationLayers),
+    Renderer(Renderer::StaticClass(), windowConfig, presentMode, EnableValidationLayers),
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
@@ -96,6 +97,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
+    ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
@@ -445,9 +447,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            sprintf(buffer, "%.3f", float(periodTotalFrames_) / float(totalTime));
-
-            std::cout << "Benchmark: " << buffer << " fps" << std::endl;
+            std::cout << "Benchmark: " << fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime)) << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
 

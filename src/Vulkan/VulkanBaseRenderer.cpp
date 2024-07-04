@@ -26,14 +26,18 @@
 
 namespace Vulkan {
 	
-VulkanBaseRenderer::VulkanBaseRenderer(const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+	rendererType_(rendererType),
 	presentMode_(presentMode)
 {
 	const auto validationLayers = enableValidationLayers
 		? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
 		: std::vector<const char*>{};
+	
+	WindowConfig windowConfig_ = windowConfig;
+	windowConfig_.Title = windowConfig_.Title + " - " + GetRendererType();
 
-	window_.reset(new class Window(windowConfig));
+	window_.reset(new class Window(windowConfig_));
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));

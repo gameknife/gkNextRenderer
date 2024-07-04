@@ -216,10 +216,12 @@ namespace Vulkan
 		virtual void OnTouchMove(double xpos, double ypos) {}
 
 		void CaptureScreenShot();
+
+		const std::string& GetRendererType() const {return rendererType_;}
 		
 	protected:
 
-		VulkanBaseRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		VulkanBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }
@@ -264,6 +266,8 @@ namespace Vulkan
 		bool supportScreenShot_{};
 		bool forceSDR_{};
 		bool visualDebug_{};
+
+		std::string rendererType_{};
 
 		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	private:

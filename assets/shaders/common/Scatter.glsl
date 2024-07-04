@@ -8,10 +8,11 @@
 #ifndef scatter_inc
 #define scatter_inc
 
+#define cos_0_5degree 0.99996192306417128873735516482698
+
 #define sample_vndf
 
 #ifdef sample_vndf
-#define saturate(x) ( clamp((x), 0.0F, 1.0F) )
 
 // Kenta Eto and Yusuke Tokuyoshi. 2023. Bounded VNDF Sampling for Smith-GGX Reflections.
 // In SIGGRAPH Asia 2023 Technical Communications (SA Technical Communications '23), December 12-15, 2023, Sydney, NSW, Australia. ACM, New York, NY, USA, 4 pages.
@@ -24,22 +25,20 @@ vec3 ggx_sample_vndf(vec2 alpha, vec3 wi_, vec2 uv) {
   float b = wi.z;
   if(wi_.z > 0.f) {
 	  float a = saturate(min(alpha.x, alpha.y)); // Eq. 6
-	  float s = 1.0f + length(wi_.xy); // Omit sgn for a <=1
-	  b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z));
+	  //float s = 1.0f + length(wi_.xy); // Omit sgn for a <=1
+	  //b *= ((1.0f - a * a) * s * s / (s * s + a * a * wi_.z * wi_.z)); // 7* 1/
+	  //b *= ((1.0f - a * a) / (1.0f + a * a * wi_.z * wi_.z / (s * s))); // divide by s * s
+
+	  float awiz_s = a * wi_.z / (1.0f + length(wi_.xy));
+	  b *= ((1.0f - a * a) / (1.0f + awiz_s * awiz_s)); // 3* 2/
   }
 
-  float z = (1.0f - uv.y) * (1.0f + b) -b;
-  float cosPhi    = uv.x + uv.x - 1.0;
-  vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cosPhi, sqrt(1.0 - cosPhi * cosPhi)), z);
+  float z = (1.0f - uv.y) * (1.0f + b) - b;
+  float phi  = M_TWO_PI * uv.x;
+  vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cos(phi), sin(phi)), z);
   // Compute the microfacet normal m
   vec3 m_std = wi + o_std;
   return normalize(vec3(m_std.xy * alpha, m_std.z));
-}
-
-void ONBAlignWithNormal(vec3 up, out vec3 right, out vec3 forward)
-{
-    right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
-    forward = cross(right, up);
 }
 
 vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
@@ -87,7 +86,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	if(Camera.HasSun)
 	{
 		const vec3 hitpos = ray.HitPos;
-		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos(0.5f / 180.f * 3.14159f)), Camera.SunDirection.xyz);
+		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos_0_5degree), Camera.SunDirection.xyz);
 		if(RandomFloat(ray.RandomSeed) < 0.33) {
 			rayQueryEXT rayQuery;
 			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, EPS, lightVector, INF);

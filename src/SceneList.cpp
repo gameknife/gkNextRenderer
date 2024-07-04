@@ -4,14 +4,23 @@
 #include "Assets/Texture.hpp"
 #include <functional>
 #include <random>
+#include <filesystem>
 
 #include "Utilities/FileHelper.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
+
+namespace Vulkan
+{
+    class VulkanBaseRenderer;
+}
 
 using namespace glm;
 
 using Assets::Material;
 using Assets::Model;
 using Assets::Texture;
+
+extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {
@@ -72,34 +81,6 @@ namespace
     }
 }
 
-void Qx50(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/qx50.glb"), camera, nodes, models, textures, materials, lights);
-}
-
-void Track(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/track.glb"), camera, nodes, models, textures, materials, lights);
-}
-
-void Simple(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/simple.glb"), camera, nodes, models, textures, materials, lights);
-}
-
-void Complex(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                               std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/complex.glb"), camera, nodes, models, textures, materials, lights);
-}
-
 void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
                                        std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
                                        std::vector<Assets::Material>& materials,
@@ -110,13 +91,13 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
     camera.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
     camera.FieldOfView = 20;
     camera.Aperture = 0.1f;
-    camera.FocusDistance = 1000.0f;
+    camera.FocusDistance = 8.5f;
     camera.ControlSpeed = 5.0f;
     camera.GammaCorrection = true;
     camera.HasSky = true;
-    camera.HasSun = true;
+    camera.HasSun = false;
     
-    const bool isProc = true;
+    const bool isProc = GApplication->GetRendererType() != "RayQueryRenderer";
 
     std::mt19937 engine(42);
     std::function<float ()> random = std::bind(std::uniform_real_distribution<float>(), engine);
@@ -167,58 +148,34 @@ void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& no
     nodes.push_back(Assets::Node::CreateNode(ts1, 1, false));
 }
 
-void LivingRoom(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                           std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
-                           std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
-{
-    int lightModel = Model::CreateLightQuad(vec3(-2, .8, -0.5), vec3(-2, 3, -0.5), vec3(2, 3, -0.5), vec3(2, .8, -0.5),
-                                   vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
-    
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/livingroom.glb"),camera, nodes, models, textures, materials, lights);
-}
-
-void Kitchen(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
-                        std::vector<Assets::LightObject>& lights)
-{
-    int lightModel = Model::CreateLightQuad(vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
-                                   vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false));
-
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/kitchen.glb"),camera, nodes, models, textures, materials, lights);
-}
-
-void LuxBall(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
-                        std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/luxball.glb"),camera, nodes, models, textures, materials, lights);
-}
-
-void ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
-                        std::vector<Assets::LightObject>& lights)
-{
-    Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/moderndepart.glb"),camera, nodes, models, textures, materials, lights);
-}
-
-
-const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
-                                                             std::vector<Assets::Node>& nodes,
-                                                             std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
-                                                             std::vector<Assets::Material>&,
-                                                             std::vector<Assets::LightObject>&)>>> SceneList::AllScenes
+// procedural scene without assets
+std::vector<scenes_pair> SceneList::AllScenes
     =
     {
-      {"Qx50", Qx50},
-    {"LowpolyTrack", Track},
-    {"Simple", Simple},
-    {"Complex", Complex},
     {"Ray Tracing In One Weekend", RayTracingInOneWeekend},
     {"Cornell Box", CornellBox},
-    {"LivingRoom", LivingRoom},
-    {"Kitchen", Kitchen},
-    {"LuxBall", LuxBall},
-    {"ModernHouse1", ModernHouse1}
     };
+
+// scan assets
+void SceneList::ScanScenes()
+{
+    std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/models/");
+    for (const auto & entry : std::filesystem::directory_iterator(path))
+    {
+        std::filesystem::path filename = entry.path().filename();
+        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                    std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                    std::vector<Assets::LightObject>& lights)
+        {
+            if(entry.path().extension().string() == ".glb")
+            {
+                Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, textures, materials, lights);
+            }
+            else if(entry.path().extension().string() == ".obj")
+            {
+                Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, textures, materials, lights);
+            }
+        }
+        });
+    }
+}

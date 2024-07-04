@@ -34,7 +34,13 @@ namespace Vulkan::RayTracing
 			const DeviceProcedures& deviceProcedures,
 			const SwapChain& swapChain,
 			const TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& outputImageView,
+			const ImageView& accumulationImageView,
+			const ImageView& motionVectorImageView,
+			const ImageView& visibilityBufferImageView,
+			const ImageView& visibility1BufferImageView,
+			const ImageView& OutAlbedoImageView,
+			const ImageView& OutNormalImageView,
+			const ImageView& AdaptiveSampleImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayQueryPipeline();

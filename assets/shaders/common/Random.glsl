@@ -58,43 +58,28 @@ vec2 RandomInUnitDisk(inout uvec4 seed)
 vec3 RandomInCone(inout uvec4 seed, float cosAngle) {
     const vec2 u = RandomFloat2(seed);
     float phi = M_TWO_PI * u.x;
-    float cos_phi = cos(phi);
-    float sin_phi = sin(phi);
     float cos_theta = 1.0f - u.y + u.y * cosAngle;
     float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
-    return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
+
+    vec3 ret = vec3(sin_theta * vec2(cos(phi), sin(phi)), cos_theta);
+    return ret.xzy;
 }
 
 vec3 RandomInHemiSphere(inout uvec4 seed)
 {
     const vec2 u = RandomFloat2(seed);
     float phi = M_TWO_PI * u.x;
-    float cos_phi = cos(phi);
-    float sin_phi = sin(phi);
-    float cos_theta = sqrt(u.y);
-    float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
-    return vec3(sin_theta * cos_phi, cos_theta, sin_theta * sin_phi);
+
+    vec3 ret = vec3(sqrt(1.0f - u.y) * vec2(cos(phi), sin(phi)), sqrt(u.y));
+    return ret.xzy;
 }
 
 vec3 RandomInHemiSphere1(inout uvec4 seed)
 {
     const vec2 u = RandomFloat2(seed);
-    float r1 = u.x;
-    float r2 = u.y;
+    float phi = M_TWO_PI * u.x;
 
-    float phi = M_TWO_PI * r1;
-    float x = cos(phi)*sqrt(r2);
-    float y = sin(phi)*sqrt(r2);
-    float z = sqrt(1.0-r2);
-
-    return vec3(x, z, y);
+    vec3 ret = vec3(sqrt(u.y) * vec2(cos(phi), sin(phi)), sqrt(1.0-u.y));
+    return ret.xzy;
 }
-
-vec3 AlignWithNormal(vec3 ray, vec3 up)
-{
-    vec3 right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
-    vec3 forward = cross(right, up);
-    return to_world(ray, right, up, forward);
-}
-
 #endif

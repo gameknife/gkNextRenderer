@@ -8,6 +8,7 @@ namespace Vulkan
 	namespace PipelineCommon
 	{
 		class AccumulatePipeline;
+		class FinalComposePipeline;
 	}
 
 	class CommandBuffers;
@@ -15,6 +16,7 @@ namespace Vulkan
 	class DeviceMemory;
 	class Image;
 	class ImageView;
+	class RenderImage;
 }
 
 namespace Vulkan::RayTracing
@@ -29,7 +31,7 @@ namespace Vulkan::RayTracing
 	
 	protected:
 
-		RayQueryRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayQueryRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayQueryRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
@@ -45,11 +47,23 @@ namespace Vulkan::RayTracing
 	private:
 		void CreateOutputImage();
 		
-		std::unique_ptr<Image> outputImage_;
-		std::unique_ptr<DeviceMemory> outputImageMemory_;
-		std::unique_ptr<ImageView> outputImageView_;
+		std::unique_ptr<RenderImage> rtAccumulation_;
+		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<RenderImage> rtMotionVector_;
+		std::unique_ptr<RenderImage> rtPingPong0;
+		std::unique_ptr<RenderImage> rtPingPong1;
+		std::unique_ptr<RenderImage> rtVisibility0_;
+		std::unique_ptr<RenderImage> rtVisibility1_;
+
+		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtNormal_;
+
+		std::unique_ptr<RenderImage> rtAdaptiveSample_;
 		
 		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
+
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
 	};
 
 }
