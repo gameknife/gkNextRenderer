@@ -25,6 +25,7 @@ copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm
 	glm:arm64-android ^
 	imgui[core,freetype,android-binding,vulkan-binding]:arm64-android ^
 	stb:arm64-android ^
+	tinyobjloader:arm64-android ^
 	tinygltf:arm64-android ^
 	curl:arm64-android ^
 	draco:arm64-android ^

@@ -10,6 +10,7 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+#include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
