@@ -74,10 +74,10 @@ Options::Options(const int argc, const char* argv[])
 		Throw(Help());
 	}
 
-	if (SceneIndex >= SceneList::AllScenes.size() - 1) // w/o loaded scene
-	{
-		Throw(std::out_of_range("scene index is too large"));
-	}
+	// if (SceneIndex >= SceneList::AllScenes.size()) // w/o loaded scene
+	// {
+	// 	Throw(std::out_of_range("scene index is too large"));
+	// }
 
 	if (PresentMode > 3)
 	{
