@@ -22,9 +22,9 @@ fi
 	glm:x64-osx \
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-osx \
 	stb:x64-osx \
-	tinyobjloader:x64-osx \
 	curl:x64-osx \
 	tinygltf:x64-osx \
 	draco:x64-osx \
 	rapidjson:x64-osx \
+	fmt:x64-osx \
 	cpp-base64:x64-osx
