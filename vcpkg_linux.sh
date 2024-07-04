@@ -22,9 +22,9 @@ fi
 	glm:x64-linux \
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-linux \
 	stb:x64-linux \
-	tinyobjloader:x64-linux \
 	curl:x64-linux \
 	tinygltf:x64-linux \
 	draco:x64-linux \
 	rapidjson:x64-linux \
+	fmt::x64-linux \
 	cpp-base64:x64-linux

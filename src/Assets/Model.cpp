@@ -10,7 +10,6 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -615,6 +614,7 @@ namespace Assets
 
         return static_cast<int32_t>(models.size()) - 1;
     }
+
 
     int Model::CreateCornellBox(const float scale,
                                  std::vector<Model>& models,

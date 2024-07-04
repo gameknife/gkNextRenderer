@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <ctime>
+#include <fmt/format.h>
 #include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
@@ -446,9 +447,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            sprintf(buffer, "%.3f", float(periodTotalFrames_) / float(totalTime));
-
-            std::cout << "Benchmark: " << buffer << " fps" << std::endl;
+            std::cout << "Benchmark: " << fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime)) << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
 

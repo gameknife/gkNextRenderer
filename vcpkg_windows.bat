@@ -13,6 +13,7 @@ IF EXIST vcpkg.windows (
 	call bootstrap-vcpkg.bat || goto :error
 )
 
+rem add if want avif libavif[aom]:x64-windows-static ^
 vcpkg.exe install --recurse ^
 	boost-exception:x64-windows-static ^
 	boost-program-options:x64-windows-static ^
@@ -21,12 +22,11 @@ vcpkg.exe install --recurse ^
 	glm:x64-windows-static ^
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-windows-static ^
 	stb:x64-windows-static ^
-	tinyobjloader:x64-windows-static ^
 	curl:x64-windows-static ^
 	tinygltf:x64-windows-static ^
 	draco:x64-windows-static ^
 	rapidjson:x64-windows-static ^
-	libavif[aom]:x64-windows-static ^
+	fmt::x64-windows-static ^
 	cpp-base64:x64-windows-static || goto :error
 
 cd ..
