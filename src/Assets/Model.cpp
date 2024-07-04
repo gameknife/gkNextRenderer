@@ -10,6 +10,7 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+#include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -40,15 +41,13 @@ typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
 //map of textures names - better for fast search
 uo_map_tex_t tex_names;
+std::string tex_filename;
 
 int32_t get_tex_id(std::string fn, bool& isNew) {
-	std::string tex_filename = std::filesystem::canonical(fn).generic_string();
-	uo_map_tex_t::const_iterator got = tex_names.find(tex_filename);
+	uo_map_tex_t::const_iterator got = tex_names.find(fn);
 	if (got == tex_names.end()) {
-        int32_t tex_id = static_cast<int32_t>(tex_names.size());
-		tex_names[tex_filename] = tex_id;
 		isNew = true;
-		return tex_id;
+		return -1;
 	} else {
 		isNew = false;
 		return got->second;
@@ -395,6 +394,228 @@ namespace Assets
         vertices = std::move(vertices_flatten);
         indices = std::move(indices_flatten);
     }
+
+    int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+                                        std::vector<Texture>& textures,
+                                     std::vector<Material>& materials,
+                                     std::vector<LightObject>& lights, bool autoNode)
+    {
+        int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
+        
+        std::cout << "- loading '" << filename << "'... " << std::flush;
+
+        const auto timer = std::chrono::high_resolution_clock::now();
+        const std::string materialPath = std::filesystem::path(filename).parent_path().string();
+
+        tinyobj::ObjReader objReader;
+        std::vector<std::string> searchPaths;
+		searchPaths.push_back("../assets/textures/");
+		searchPaths.push_back(materialPath + "/");
+
+        if (!objReader.ParseFromFile(filename))
+        {
+            Throw(std::runtime_error("failed to load model '" + filename + "':\n" + objReader.Error()));
+        }
+
+        if (!objReader.Warning().empty())
+        {
+            Utilities::Console::Write(Utilities::Severity::Warning, [&objReader]()
+            {
+                std::cout << "\nWARNING: " << objReader.Warning() << std::flush;
+            });
+        }
+
+        //clear map of textures names
+        tex_names.clear();
+        bool isNew, file_exists;
+        //fill with exists textures
+        for (size_t i = 0; i < textures.size(); i++)
+        {
+			tex_names[textures[i].Loadname()] = i;
+        }
+
+        for (const auto& _material : objReader.GetMaterials())
+        {
+            tinyobj::material_t material = _material;
+            Material m{};
+
+            // texture stuff
+            m.DiffuseTextureId = -1;
+            if (material.diffuse_texname != "")
+            {
+                material.diffuse[0] = 1.0f;
+                material.diffuse[1] = 1.0f;
+                material.diffuse[2] = 1.0f;
+
+				std::string loadname = "", fn;
+				file_exists = false;
+                // find if textures contain texture with loadname equals diffuse_texname
+				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
+					fn = searchPaths[i] + material.diffuse_texname;
+					file_exists = std::filesystem::exists(fn);
+					if(file_exists) loadname = fn;
+				}				
+
+                if(file_exists) {
+                	tex_filename = std::filesystem::canonical(loadname).generic_string();
+                	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
+                	if (isNew)
+                	{
+                		textures.push_back(Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig()));
+                		m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
+                		tex_names[tex_filename] = m.DiffuseTextureId;
+                	}
+                } else {
+                	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
+				}
+            }
+
+            m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
+
+            m.MaterialModel = Material::Enum::Mixture;
+            m.Fuzziness = material.roughness;
+            m.RefractionIndex = m.RefractionIndex2 = max(material.ior, 1.43f);
+            m.Metalness = material.metallic * material.metallic;
+
+            if (material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses" || material.name.find("Water")
+                != std::string::npos || material.name.find("Glass") != std::string::npos || material.name.find("glass")
+                != std::string::npos)
+            {
+                m.MaterialModel = Material::Enum::Dielectric;
+            }
+
+            if (material.emission[0] + material.emission[1] + material.emission[2] > 0)
+            {
+                m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]) * 100.f);
+                // add to lights
+            }
+
+            if (material.metallic > .99f)
+            {
+                m.MaterialModel = Material::Enum::Metallic;
+            }
+
+            materials.emplace_back(m);
+        }
+
+        if (materialIdxOffset == static_cast<int32_t>(materials.size()))
+        {
+            Material m{};
+
+            m.Diffuse = vec4(0.7f, 0.7f, 0.7f, 1.0);
+            m.DiffuseTextureId = -1;
+
+            materials.emplace_back(m);
+
+            materialIdxOffset = static_cast<int32_t>(materials.size());
+        }
+
+        // Geometry
+        const auto& objAttrib = objReader.GetAttrib();
+        std::unordered_map<Vertex, uint32_t> uniqueVertices(objAttrib.vertices.size());
+
+        // add Geometry one by one
+        for (const auto& shape : objReader.GetShapes())
+        {
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+
+            const auto& mesh = shape.mesh;
+            size_t faceId = 0;
+            for (const auto& index : mesh.indices)
+            {
+                Vertex vertex = {};
+
+                size_t idx = 3 * index.vertex_index;
+
+                vertex.Position =
+                {
+                    objAttrib.vertices[idx],
+                    objAttrib.vertices[idx + 1],
+                    objAttrib.vertices[idx + 2],
+                };
+
+                if (!objAttrib.normals.empty())
+                {
+                    idx = 3 * index.normal_index;
+                    vertex.Normal =
+                    {
+                        objAttrib.normals[idx],
+                        objAttrib.normals[idx + 1],
+                        objAttrib.normals[idx + 2]
+                    };
+                }
+
+                if (!objAttrib.texcoords.empty())
+                {
+                    vertex.TexCoord =
+                    {
+                        objAttrib.texcoords[2 * max(0, index.texcoord_index) + 0],
+                        1 - objAttrib.texcoords[2 * max(0, index.texcoord_index) + 1]
+                    };
+                }
+
+                vertex.MaterialIndex = std::max(0, mesh.material_ids[faceId++ / 3] + materialIdxOffset);
+
+                if (uniqueVertices.count(vertex) == 0)
+                {
+                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+                    vertices.push_back(vertex);
+                }
+
+                indices.push_back(uniqueVertices[vertex]);
+            }
+
+            // If the model did not specify normals, then create smooth normals that conserve the same number of vertices.
+            // Using flat normals would mean creating more vertices than we currently have, so for simplicity and better visuals we don't do it.
+            // See https://stackoverflow.com/questions/12139840/obj-file-averaging-normals.
+            if (objAttrib.normals.empty())
+            {
+                std::vector<vec3> normals(vertices.size());
+
+                for (size_t i = 0; i < indices.size(); i += 3)
+                {
+                    const auto normal = normalize(cross(
+                        vec3(vertices[indices[i + 1]].Position) - vec3(vertices[indices[i]].Position),
+                        vec3(vertices[indices[i + 2]].Position) - vec3(vertices[indices[i]].Position)));
+
+                    vertices[indices[i]].Normal += normal;
+                    vertices[indices[i + 1]].Normal += normal;
+                    vertices[indices[i + 2]].Normal += normal;
+                }
+
+                for (auto& vertex : vertices)
+                {
+                    vertex.Normal = normalize(vertex.Normal);
+                }
+            }
+
+            if(vertices.size() == 0)
+            {
+                continue;
+            }
+            // flatten the vertice and indices, individual vertice
+#if FLATTEN_VERTICE
+            FlattenVertices(vertices, indices);
+#endif
+
+            models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
+            if(autoNode)
+            {
+                nodes.push_back(Node::CreateNode(mat4(1), static_cast<int>(models.size()) - 1, false));
+            }
+        }
+        
+        const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+            std::chrono::high_resolution_clock::now() - timer).count();
+
+        std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
+            << materials.size() << " materials, " << lights.size() << " lights";
+        std::cout << elapsed << "s" << '\n';
+
+        return static_cast<int32_t>(models.size()) - 1;
+    }
+
 
     int Model::CreateCornellBox(const float scale,
                                  std::vector<Model>& models,

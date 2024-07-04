@@ -6,6 +6,8 @@
 
 using namespace boost::program_options;
 
+extern std::string scene_filename;
+
 Options::Options(const int argc, const char* argv[])
 {
 	const int lineLength = 120;
@@ -32,6 +34,7 @@ Options::Options(const int argc, const char* argv[])
 	options_description scene("Scene options", lineLength);
 	scene.add_options()
 		("scene", value<uint32_t>(&SceneIndex)->default_value(0), "The scene to start with.")
+		("load-scene", value<std::string>(&scene_filename)->default_value(""), "The scene to load.")
 		;
 
 	options_description vulkan("Vulkan options", lineLength);
@@ -53,7 +56,7 @@ Options::Options(const int argc, const char* argv[])
 		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
 		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
 		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
-	("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
+		("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
 		;
 
 	desc.add(benchmark);
@@ -73,7 +76,7 @@ Options::Options(const int argc, const char* argv[])
 		Throw(Help());
 	}
 
-	if (SceneIndex >= SceneList::AllScenes.size())
+	if (SceneIndex >= SceneList::AllScenes.size() - 1) // w/o loaded scene
 	{
 		Throw(std::out_of_range("scene index is too large"));
 	}

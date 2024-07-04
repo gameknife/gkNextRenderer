@@ -22,6 +22,7 @@ vcpkg.exe install --recurse ^
 	glm:x64-windows-static ^
 	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-windows-static ^
 	stb:x64-windows-static ^
+	tinyobjloader:x64-windows-static ^
 	curl:x64-windows-static ^
 	tinygltf:x64-windows-static ^
 	draco:x64-windows-static ^

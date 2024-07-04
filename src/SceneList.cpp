@@ -14,6 +14,7 @@ using Assets::Model;
 using Assets::Texture;
 
 extern uint32_t RendererType;
+extern std::string scene_filename;
 
 namespace
 {
@@ -205,15 +206,33 @@ void ModernHouse1(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& 
     Model::LoadGLTFScene(Utilities::FileHelper::GetPlatformFilePath("assets/models/moderndepart.glb"),camera, nodes, models, textures, materials, lights);
 }
 
+void loadedScene(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                        std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                        std::vector<Assets::LightObject>& lights)
+{
+    camera.ModelView = lookAt(vec3(2, 1.5, 3), vec3(-4, 1.5, -4), vec3(0, 1, 0));
+    camera.FieldOfView = 40;
+    camera.Aperture = 0.0f;
+    camera.FocusDistance = 100.0f;
+    camera.ControlSpeed = 1.0f;
+    camera.GammaCorrection = true;
+    camera.HasSky = true;
 
-const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
-                                                             std::vector<Assets::Node>& nodes,
-                                                             std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
-                                                             std::vector<Assets::Material>&,
-                                                             std::vector<Assets::LightObject>&)>>> SceneList::AllScenes
+/*
+    int lightModel = Model::CreateLightQuad(vec3(-1, .8, -3.2), vec3(-1, 3, -3.2), vec3(1, 3, -3.2), vec3(1, .8, -3.2),
+                                   vec3(0, 0, 1), vec3(1000, 1000, 1000), models, materials, lights);
+    nodes.push_back(Assets::Node::CreateNode(glm::mat4(1), lightModel, false)); */
+
+    size_t found = scene_filename.find_last_of(".");
+    std::string ext = scene_filename.substr(found+1);
+
+    if(ext == "obj") Model::LoadObjModel(scene_filename, nodes, models, textures, materials, lights);
+}
+
+std::vector<scenes_pair> SceneList::AllScenes
     =
     {
-      {"Qx50", Qx50},
+    {"Qx50", Qx50},
     {"LowpolyTrack", Track},
     {"Simple", Simple},
     {"Complex", Complex},
@@ -222,5 +241,6 @@ const std::vector<std::pair<std::string, std::function<void (Assets::CameraIniti
     {"LivingRoom", LivingRoom},
     {"Kitchen", Kitchen},
     {"LuxBall", LuxBall},
-    {"ModernHouse1", ModernHouse1}
+    {"ModernHouse1", ModernHouse1},
+    {"", loadedScene}
     };
