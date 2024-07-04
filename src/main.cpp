@@ -19,7 +19,7 @@
 
 namespace
 {
-    UserSettings CreateUserSettings(Options& options);
+    UserSettings CreateUserSettings(const Options& options);
     void PrintVulkanSdkInformation();
     void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
     void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
@@ -77,10 +77,10 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
-            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=5", "--temporal=16"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=qx50.glb"};
             const Options options(4, argv);
             GOption = &options;
-            const UserSettings userSettings = CreateUserSettings(options);
+            UserSettings userSettings = CreateUserSettings(options);
             const Vulkan::WindowConfig windowConfig
             {
                 "gkNextRenderer",
@@ -197,9 +197,9 @@ int main(int argc, const char* argv[]) noexcept
 {
     try
     {
-        Options options(argc, argv);
+        const Options options(argc, argv);
         GOption = &options;
-        const UserSettings userSettings = CreateUserSettings(options);
+        UserSettings userSettings = CreateUserSettings(options);
         const Vulkan::WindowConfig windowConfig
         {
             "gkNextRenderer",
@@ -286,7 +286,7 @@ int main(int argc, const char* argv[]) noexcept
 
 namespace
 {
-    UserSettings CreateUserSettings(Options& options)
+    UserSettings CreateUserSettings(const Options& options)
     {
         SceneList::ScanScenes();
         

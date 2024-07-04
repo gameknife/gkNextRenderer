@@ -46,7 +46,10 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 	case GLFW_KEY_LEFT_SHIFT: cameraMovingUp_ = action != GLFW_RELEASE; return true;
 	default: return false;
 	}
+#else
+	return false;
 #endif
+	
 }
 
 bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
