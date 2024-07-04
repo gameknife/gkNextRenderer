@@ -62,6 +62,7 @@ find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
