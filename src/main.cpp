@@ -11,9 +11,6 @@
 #include <cstdlib>
 #include <iostream>
 
-uint32_t RendererType;
-std::string scene_filename;
-
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>
@@ -62,6 +59,8 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
     }
 
+    std::cout << "Renderer: " << GApplication->GetRendererType() << std::endl;
+    
     PrintVulkanSdkInformation();
     PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
     PrintVulkanLayersInformation(*GApplication, options.Benchmark);
@@ -289,23 +288,27 @@ namespace
 {
     UserSettings CreateUserSettings(Options& options)
     {
+        SceneList::ScanScenes();
+        
         UserSettings userSettings{};
 
         userSettings.Benchmark = options.Benchmark;
         userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
         userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-
-        if(scene_filename != "") {
-            size_t found = scene_filename.find_last_of("/\\");
-			std::string raw_fn = scene_filename.substr(found+1);
-			options.SceneIndex = (uint32_t) SceneList::AllScenes.size() - 1;
-			SceneList::AllScenes[options.SceneIndex].first = raw_fn;	//set name of loaded scene to selector
-		} else {
-			SceneList::AllScenes.pop_back(); //hide last scene
-		}
-
         userSettings.SceneIndex = options.SceneIndex;
 
+        if(options.SceneName != "")
+        {
+            for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
+            {
+                if( SceneList::AllScenes[i].first == options.SceneName )
+                {
+                    userSettings.SceneIndex = i;
+                    break;
+                }
+            }
+        }
+        
         userSettings.IsRayTraced = true;
         userSettings.AccumulateRays = false;
         userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
@@ -333,8 +336,6 @@ namespace
         userSettings.SunRotation = 0.5f;
         userSettings.SunLuminance = 500.f;
         userSettings.SkyIntensity = 50.f;
-
-        RendererType = options.RendererType;
 
         return userSettings;
     }

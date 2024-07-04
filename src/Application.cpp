@@ -45,7 +45,7 @@ template <typename Renderer>
 NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings,
                                                            const Vulkan::WindowConfig& windowConfig,
                                                            const VkPresentModeKHR presentMode) :
-    Renderer(windowConfig, presentMode, EnableValidationLayers),
+    Renderer(Renderer::StaticClass(), windowConfig, presentMode, EnableValidationLayers),
     userSettings_(userSettings)
 {
     CheckFramebufferSize();

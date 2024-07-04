@@ -241,7 +241,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 1000.0f, "%.1f");
+		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 100.0f, "%.01f");
 		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, 9);
 		ImGui::SliderFloat("SkyRotation", &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
 		ImGui::SliderFloat("SkyLum", &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
