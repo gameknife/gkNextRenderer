@@ -26,7 +26,7 @@ vcpkg.exe install --recurse ^
 	tinygltf:x64-windows-static ^
 	draco:x64-windows-static ^
 	rapidjson:x64-windows-static ^
-	fmt::x64-windows-static ^
+	fmt:x64-windows-static ^
 	cpp-base64:x64-windows-static || goto :error
 
 cd ..
