@@ -453,7 +453,6 @@ namespace Assets
 				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
 					fn = searchPaths[i] + material.diffuse_texname;
 					file_exists = std::filesystem::exists(fn);
-					printf("\n456 loading %s\nexists=%d\n\n", fn.c_str(), file_exists);
 					if(file_exists) loadname = fn;
 				}				
 
@@ -466,14 +465,16 @@ namespace Assets
                 		m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}
-                }
+                } else {
+                	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
+				}
             }
 
             m.Diffuse = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
 
             m.MaterialModel = Material::Enum::Mixture;
             m.Fuzziness = material.roughness;
-            m.RefractionIndex = material.ior;
+            m.RefractionIndex = m.RefractionIndex2 = max(material.ior, 1.43f);
             m.Metalness = material.metallic * material.metallic;
 
             if (material.name == "Window-Fake-Glass" || material.name == "Wine-Glasses" || material.name.find("Water")
@@ -483,7 +484,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Dielectric;
             }
 
-            if (material.emission[0] > 0)
+            if (material.emission[0] + material.emission[1] + material.emission[2] > 0)
             {
                 m = Material::DiffuseLight(vec3(material.emission[0], material.emission[1], material.emission[2]) * 100.f);
                 // add to lights

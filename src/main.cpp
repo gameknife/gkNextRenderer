@@ -12,6 +12,7 @@
 #include <iostream>
 
 uint32_t RendererType;
+std::string scene_filename;
 
 #if ANDROID
 #include <imgui_impl_android.h>
@@ -21,7 +22,7 @@ uint32_t RendererType;
 
 namespace
 {
-    UserSettings CreateUserSettings(const Options& options);
+    UserSettings CreateUserSettings(Options& options);
     void PrintVulkanSdkInformation();
     void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
     void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
@@ -197,7 +198,7 @@ int main(int argc, const char* argv[]) noexcept
 {
     try
     {
-        const Options options(argc, argv);
+        Options options(argc, argv);
         GOption = &options;
         const UserSettings userSettings = CreateUserSettings(options);
         const Vulkan::WindowConfig windowConfig
@@ -286,13 +287,22 @@ int main(int argc, const char* argv[]) noexcept
 
 namespace
 {
-    UserSettings CreateUserSettings(const Options& options)
+    UserSettings CreateUserSettings(Options& options)
     {
         UserSettings userSettings{};
 
         userSettings.Benchmark = options.Benchmark;
         userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
         userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
+
+        if(scene_filename != "") {
+            size_t found = scene_filename.find_last_of("/\\");
+			std::string raw_fn = scene_filename.substr(found+1);
+			options.SceneIndex = (uint32_t) SceneList::AllScenes.size() - 1;
+			SceneList::AllScenes[options.SceneIndex].first = raw_fn;	//set name of loaded scene to selector
+		} else {
+			SceneList::AllScenes.pop_back(); //hide last scene
+		}
 
         userSettings.SceneIndex = options.SceneIndex;
 

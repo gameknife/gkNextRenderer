@@ -15,13 +15,15 @@ namespace Assets
     struct CameraInitialSate;
 }
 
+
+typedef std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
+                                                             std::vector<Assets::Node>& nodes,
+                                                             std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
+                                                             std::vector<Assets::Material>&,
+                                                             std::vector<Assets::LightObject>&)>> scenes_pair;
+
 class SceneList final
 {
 public:
-    static const std::vector<std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
-                                                                        std::vector<Assets::Node>& nodes,
-                                                                        std::vector<Assets::Model>&,
-                                                                        std::vector<Assets::Texture>&,
-                                                                        std::vector<Assets::Material>&,
-                                                                        std::vector<Assets::LightObject>&)>>> AllScenes;
+    static std::vector<scenes_pair> AllScenes;
 };
