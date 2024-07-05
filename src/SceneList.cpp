@@ -179,3 +179,27 @@ void SceneList::ScanScenes()
         });
     }
 }
+
+int32_t SceneList::AddExternalScene(std::string absPath)
+{
+    // check if absPath exists
+    std::filesystem::path filename = absPath;
+    if (std::filesystem::exists(absPath) && (filename.extension().string() == ".glb" || filename.extension().string() == ".obj") )
+    {
+        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                    std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                    std::vector<Assets::LightObject>& lights)
+        {
+            if(filename.extension().string() == ".glb")
+            {
+                Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, textures, materials, lights);
+            }
+            else if(filename.extension().string() == ".obj")
+            {
+                Model::LoadObjModel(absolute(filename).string(), nodes, models, textures, materials, lights);
+            }
+        }
+        });
+    }
+    return static_cast<int32_t>(AllScenes.size()) - 1;
+}

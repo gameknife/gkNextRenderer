@@ -299,13 +299,19 @@ namespace
 
         if(options.SceneName != "")
         {
+            bool foundInAssets = false;
             for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
             {
                 if( SceneList::AllScenes[i].first == options.SceneName )
                 {
                     userSettings.SceneIndex = i;
+                    foundInAssets = true;
                     break;
                 }
+            }
+            if(!foundInAssets)
+            {
+                userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
             }
         }
         
