@@ -184,9 +184,11 @@ void main() {
 	const float metalProb = mat.Metalness;
 	
 	
-	vec3 skyColor = vec3(1);
+	vec3 skyColor = vec3(0);
 	vec3 bounceColor = vec3(0);
+	uint sampleTimes = Camera.NumberOfSamples;
 	
+	for (uint s = 0; s < sampleTimes; ++s)
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		vec3 trace_dir = chanceReflect ?
@@ -195,20 +197,26 @@ void main() {
 		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
 		);
+
+		// if miss, sample the sky
+		vec3 bounceSingle = vec3(0);
+		vec4 albedoSingle = albedo;
 		
 		if(chanceReflect)
 		{
-		    albedo = vec4(1);
+			albedoSingle = vec4(1);
 		}
 		
-		// if miss, sample the sky
 		vec3 iblColor = equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-		vec3 hitColor = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceColor);
-		skyColor = iblColor * hitColor;
+		vec3 hitColor = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle);
+		skyColor += albedoSingle.rgb * iblColor * hitColor;
+		bounceColor += albedoSingle.rgb * bounceSingle;
 	}
-
-
-    vec4 outColor = albedo * vec4(skyColor,1);
+	skyColor = skyColor / sampleTimes;
+	bounceColor = bounceColor / sampleTimes;
+	
+    vec4 outColor = vec4(skyColor,1);
+	outColor.a = sampleTimes;
     
     if(Camera.HasSun)
     {
@@ -238,13 +246,12 @@ void main() {
 	{
 		imageStore(InOutDirectLight1, ipos, directLight);
 	}
-	
-	
-	outColor.rgb += albedo.rgb * bounceColor.rgb;
+
+	outColor.rgb += bounceColor.rgb;
 	
     imageStore(OutImage, ipos, outColor);
     
-    	// calculate the motion vector
+    // calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
 	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
 

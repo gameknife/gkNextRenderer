@@ -15,6 +15,7 @@
 #include <sstream>
 #include <ctime>
 #include <fmt/format.h>
+#include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
 
 #include "Options.hpp"
@@ -45,7 +46,7 @@ template <typename Renderer>
 NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings,
                                                            const Vulkan::WindowConfig& windowConfig,
                                                            const VkPresentModeKHR presentMode) :
-    Renderer(windowConfig, presentMode, EnableValidationLayers),
+    Renderer(Renderer::StaticClass(), windowConfig, presentMode, EnableValidationLayers),
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
@@ -410,31 +411,21 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         return;
     }
 
-    char buffer[80];
+    
 
     // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
     {
         if (benchmarkNumber_ == 0)
         {
-            time_t rawtime;
-            struct tm* timeinfo;
-
-            time(&rawtime);
-            timeinfo = localtime(&rawtime);
-
-            strftime(buffer, sizeof(buffer), "%d-%m-%Y_%H-%M-%S", timeinfo);
-            std::string report_filename(buffer);
-            report_filename = "report_" + report_filename + ".csv";
-
+            std::time_t now = std::time(nullptr);
+            std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
             benchmarkCsvReportFile.open(report_filename);
-            benchmarkCsvReportFile << "# of scene;name;FPS" << std::endl;
+            benchmarkCsvReportFile << "#;scene;FPS" << std::endl;
         }
-
         std::cout << std::endl;
         std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
-        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'"
-            << std::endl;
+        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'" << std::endl;
         periodInitialTime_ = time_;
     }
 
@@ -447,11 +438,12 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            std::cout << "Benchmark: " << fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime)) << " fps" << std::endl;
+            std::string fps = fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime));
+            std::cout << "Benchmark: " << fps << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
 
-            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << buffer << std::endl;
+            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
             benchmarkNumber_++;
         }
 

@@ -25,5 +25,8 @@ typedef std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
 class SceneList final
 {
 public:
+    static void ScanScenes();
+    static int32_t AddExternalScene(std::string absPath);
+    
     static std::vector<scenes_pair> AllScenes;
 };

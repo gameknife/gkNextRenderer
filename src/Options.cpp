@@ -6,8 +6,6 @@
 
 using namespace boost::program_options;
 
-extern std::string scene_filename;
-
 Options::Options(const int argc, const char* argv[])
 {
 	const int lineLength = 120;
@@ -34,7 +32,7 @@ Options::Options(const int argc, const char* argv[])
 	options_description scene("Scene options", lineLength);
 	scene.add_options()
 		("scene", value<uint32_t>(&SceneIndex)->default_value(0), "The scene to start with.")
-		("load-scene", value<std::string>(&scene_filename)->default_value(""), "The scene to load.")
+		("load-scene", value<std::string>(&SceneName)->default_value(""), "The scene to load.")
 		;
 
 	options_description vulkan("Vulkan options", lineLength);
@@ -76,10 +74,10 @@ Options::Options(const int argc, const char* argv[])
 		Throw(Help());
 	}
 
-	if (SceneIndex >= SceneList::AllScenes.size() - 1) // w/o loaded scene
-	{
-		Throw(std::out_of_range("scene index is too large"));
-	}
+	// if (SceneIndex >= SceneList::AllScenes.size()) // w/o loaded scene
+	// {
+	// 	Throw(std::out_of_range("scene index is too large"));
+	// }
 
 	if (PresentMode > 3)
 	{

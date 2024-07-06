@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <string>
 #include <vector>
 
 class Options final
@@ -41,6 +42,7 @@ public:
 	
 	// Scene options.
 	uint32_t SceneIndex{};
+	std::string SceneName{};
 
 	// Vulkan options
 	uint32_t GpuIdx{};

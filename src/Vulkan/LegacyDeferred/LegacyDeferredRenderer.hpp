@@ -28,7 +28,7 @@ namespace Vulkan::LegacyDeferred
 
 		VULKAN_NON_COPIABLE(LegacyDeferredRenderer)
 		
-		LegacyDeferredRenderer(const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		LegacyDeferredRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		~LegacyDeferredRenderer();
 
 		void CreateSwapChain() override;
