@@ -8,6 +8,7 @@ struct UserSettings final
 	// Benchmark
 	bool BenchmarkNextScenes{};
 	uint32_t BenchmarkMaxTime{};
+	uint32_t BenchmarkMaxFrame{};
 	
 	// Scene
 	int SceneIndex;
