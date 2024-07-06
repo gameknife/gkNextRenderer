@@ -174,6 +174,35 @@ void SceneList::ScanScenes()
             else if(entry.path().extension().string() == ".obj")
             {
                 Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, textures, materials, lights);
+
+                camera.FieldOfView = 38;
+                camera.Aperture = 0.0f;
+                camera.FocusDistance = 100.0f;
+                camera.ControlSpeed = 1.0f;
+                camera.GammaCorrection = true;
+                camera.HasSky = true;
+
+                //auto center camera by scene bounds
+                glm::vec3 boundsMin, boundsMax;
+                for (int i = 0; i < models.size(); i++)
+                {
+                	auto& model = models[i];
+                	glm::vec3 AABBMin = model.GetLocalAABBMin();
+                	glm::vec3 AABBMax = model.GetLocalAABBMax();
+                	if (i == 0)
+                	{
+                		boundsMin = AABBMin;
+                		boundsMax = AABBMax;
+                	}
+                	else
+                	{
+                		boundsMin = glm::min(AABBMin, boundsMin);
+                		boundsMax = glm::max(AABBMax, boundsMax);
+                	}
+                }
+
+                glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+                camera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
             }
         }
         });
@@ -197,6 +226,35 @@ int32_t SceneList::AddExternalScene(std::string absPath)
             else if(filename.extension().string() == ".obj")
             {
                 Model::LoadObjModel(absolute(filename).string(), nodes, models, textures, materials, lights);
+
+                camera.FieldOfView = 38;
+                camera.Aperture = 0.0f;
+                camera.FocusDistance = 100.0f;
+                camera.ControlSpeed = 1.0f;
+                camera.GammaCorrection = true;
+                camera.HasSky = true;
+
+                //auto center camera by scene bounds
+                glm::vec3 boundsMin, boundsMax;
+                for (int i = 0; i < models.size(); i++)
+                {
+                	auto& model = models[i];
+                	glm::vec3 AABBMin = model.GetLocalAABBMin();
+                	glm::vec3 AABBMax = model.GetLocalAABBMax();
+                	if (i == 0)
+                	{
+                		boundsMin = AABBMin;
+                		boundsMax = AABBMax;
+                	}
+                	else
+                	{
+                		boundsMin = glm::min(AABBMin, boundsMin);
+                		boundsMax = glm::max(AABBMax, boundsMax);
+                	}
+                }
+
+                glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+                camera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
             }
         }
         });
