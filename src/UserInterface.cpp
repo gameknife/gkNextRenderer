@@ -326,6 +326,10 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		//ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
+		ImGui::Text("Frame: %zd", statistics.TotalFrames);
+
+		Utilities::get_time_str(buff, static_cast<float>(statistics.RenderTime));
+		ImGui::Text("Time: %s", buff);
 	}
 	ImGui::End();
 }

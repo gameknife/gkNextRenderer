@@ -17,7 +17,7 @@ endforeach()
 set (CMAKE_CXX_STANDARD 17)
 
 if (WIN32)
-	add_definitions(-DUNICODE -D_UNICODE)
+	add_definitions(-DUNICODE -D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
 endif ()
 

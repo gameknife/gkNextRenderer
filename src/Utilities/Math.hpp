@@ -38,4 +38,38 @@ namespace Utilities
 		return sprintf(buff, "%.2f%s%s", value / s_value[6], s_prefix[6], unit);
 	}
 
+	static void get_time_str(char * s, float elapsedTime)
+	{
+		int hours, mins, secs;
+
+		hours=(int)floor(elapsedTime/3600);
+		mins=(int)floor((elapsedTime-hours*3600)/60);
+		secs=(int)floor(elapsedTime-hours*3600-mins*60);
+
+		s[0] = 0;
+
+		if(elapsedTime > 59.99f)
+			{
+			 if(hours > 0.99f) sprintf(s,"%s%dh", s, hours);
+			 if(mins > 0.99f)
+				{
+				if(hours > 0.99f) strcat(s," ");
+				if(mins < 1.f) {
+					if(secs > 0.99f) sprintf(s,"%s%ds", s, secs);
+					}
+				else {
+						if(secs > 0.99f) sprintf(s,"%s%dm %ds", s, mins, secs);
+						else sprintf(s,"%s%dm", s, mins);
+					}
+				} else
+				if(secs > 0.99f)
+				{
+					if(hours > 0.99f) strcat(s," ");
+					sprintf(s,"%s%ds", s, secs);
+				}
+			}
+		else {
+			sprintf(s,"%.1fs", elapsedTime);
+		}
+	}
 }
