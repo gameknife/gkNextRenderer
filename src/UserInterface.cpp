@@ -307,10 +307,10 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 
 		char buff[50];
-		Utilities::metricFormatter(static_cast<double>(statistics.TriCount), buff, sizeof(buff), (void*)"");
+		Utilities::metricFormatter(static_cast<double>(statistics.TriCount), buff, (void*)"");
 		ImGui::Text("Tris: %s", buff);
 
-		Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), buff, sizeof(buff), (void*)"");
+		Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), buff, (void*)"");
 		ImGui::Text("Instance: %s", buff);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
