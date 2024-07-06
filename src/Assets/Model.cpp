@@ -35,7 +35,7 @@
 
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
 
 typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
@@ -274,6 +274,7 @@ namespace Assets
         }
 
         // export whole scene into a big buffer, with vertice indices materials
+        int counter = 0;
         for (tinygltf::Mesh& mesh : model.meshes)
         {
             std::vector<Vertex> vertices;
@@ -283,6 +284,11 @@ namespace Assets
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
+                if( primtive.mode != TINYGLTF_MODE_TRIANGLES || indexAccessor.count == 0)
+                {
+                    continue;
+                }
+               
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
                 tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
                 tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
@@ -298,14 +304,14 @@ namespace Assets
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + i *
+                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + positionAccessor.byteOffset + i *
                         positionStride]);
                     vertex.Position = vec3(
                         position[0],
                         position[1],
                         position[2]
                     );
-                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + i *
+                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + normalAccessor.byteOffset + i *
                         normalStride]);
                     vertex.Normal = vec3(
                         normal[0],
@@ -316,7 +322,7 @@ namespace Assets
                     if(texcoordView.byteOffset + i *
                         texcoordStride < model.buffers[texcoordView.buffer].data.size())
                     {
-                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
+                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + texcoordAccessor.byteOffset + i *
                   texcoordStride]);
                         vertex.TexCoord = vec2(
                             texcoord[0],
@@ -333,15 +339,24 @@ namespace Assets
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
-                    if(strideIndex == 2)
+                    if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
                     {
-                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
+                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                        indices.push_back(*data + vertext_offset);
+                    }
+                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                    {
+                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                        indices.push_back(*data + vertext_offset);
+                    }
+                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT )
+                    {
+                        int32* data = reinterpret_cast<int32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertext_offset);
                     }
                     else
                     {
-                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertext_offset);
+                        assert(0);
                     }
                 }
 
@@ -351,7 +366,7 @@ namespace Assets
             #if FLATTEN_VERTICE
                 FlattenVertices(vertices, indices);
             #endif
-
+            
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
