@@ -445,8 +445,6 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             std::cout << "Benchmark: " << fps << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
-
-            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
             benchmarkNumber_++;
         }
 
@@ -471,6 +469,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
+                benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
             }
 
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
