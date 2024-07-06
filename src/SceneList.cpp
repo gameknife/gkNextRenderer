@@ -156,6 +156,22 @@ std::vector<scenes_pair> SceneList::AllScenes
     {"Cornell Box", CornellBox},
     };
 
+typedef std::unordered_map<std::string, std::string> uo_string_string_t;
+uo_string_string_t sceneNames =
+{
+    {"qx50.glb",            "Qx50"},
+    {"track.glb",           "LowpolyTrack"},
+    {"simple.glb",          "Simple"},
+    {"complex.glb",         "Complex"},
+    {"livingroom.glb",      "LivingRoom"},
+    {"kitchen.glb",         "Kitchen"},
+    {"luxball.glb",         "LuxBall"},
+    {"moderndepart.glb",    "ModernHouse1"}
+};
+
+//compare func for sort scene names
+bool compareSceneNames(scenes_pair i1, scenes_pair i2) { return (i1.first < i2.first); }
+
 // scan assets
 void SceneList::ScanScenes()
 {
@@ -163,7 +179,14 @@ void SceneList::ScanScenes()
     for (const auto & entry : std::filesystem::directory_iterator(path))
     {
         std::filesystem::path filename = entry.path().filename();
-        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+
+        //looking for beauty scene name by file name
+        std::string fn = filename.string();
+        uo_string_string_t::const_iterator got = sceneNames.find(fn);
+
+        //if found - change fn. if not - just filename
+        if (got != sceneNames.end()) fn = got->second;
+        AllScenes.push_back({fn, [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
@@ -206,7 +229,10 @@ void SceneList::ScanScenes()
             }
         }
         });
-    }
+    }	
+	
+	//sort scene names
+    sort(AllScenes.begin(), AllScenes.end(), compareSceneNames); 
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)
