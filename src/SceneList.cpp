@@ -241,7 +241,7 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     std::filesystem::path filename = absPath;
     if (std::filesystem::exists(absPath) && (filename.extension().string() == ".glb" || filename.extension().string() == ".obj") )
     {
-        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+        AllScenes.push_back({filename.filename().string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
