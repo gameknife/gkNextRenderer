@@ -156,6 +156,22 @@ std::vector<scenes_pair> SceneList::AllScenes
     {"Cornell Box", CornellBox},
     };
 
+typedef std::unordered_map<std::string, std::string> uo_string_string_t;
+uo_string_string_t sceneNames =
+{
+    {"qx50.glb",            "Qx50"},
+    {"track.glb",           "LowpolyTrack"},
+    {"simple.glb",          "Simple"},
+    {"complex.glb",         "Complex"},
+    {"livingroom.glb",      "LivingRoom"},
+    {"kitchen.glb",         "Kitchen"},
+    {"luxball.glb",         "LuxBall"},
+    {"moderndepart.glb",    "ModernHouse1"}
+};
+
+//compare func for sort scene names
+bool compareSceneNames(scenes_pair i1, scenes_pair i2) { return (i1.first < i2.first); }
+
 // scan assets
 void SceneList::ScanScenes()
 {
@@ -163,7 +179,14 @@ void SceneList::ScanScenes()
     for (const auto & entry : std::filesystem::directory_iterator(path))
     {
         std::filesystem::path filename = entry.path().filename();
-        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+
+        //looking for beauty scene name by file name
+        std::string fn = filename.string();
+        uo_string_string_t::const_iterator got = sceneNames.find(fn);
+
+        //if found - change fn. if not - just filename
+        if (got != sceneNames.end()) fn = got->second;
+        AllScenes.push_back({fn, [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
@@ -174,10 +197,42 @@ void SceneList::ScanScenes()
             else if(entry.path().extension().string() == ".obj")
             {
                 Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, textures, materials, lights);
+
+                camera.FieldOfView = 38;
+                camera.Aperture = 0.0f;
+                camera.FocusDistance = 100.0f;
+                camera.ControlSpeed = 1.0f;
+                camera.GammaCorrection = true;
+                camera.HasSky = true;
+
+                //auto center camera by scene bounds
+                glm::vec3 boundsMin, boundsMax;
+                for (int i = 0; i < models.size(); i++)
+                {
+                	auto& model = models[i];
+                	glm::vec3 AABBMin = model.GetLocalAABBMin();
+                	glm::vec3 AABBMax = model.GetLocalAABBMax();
+                	if (i == 0)
+                	{
+                		boundsMin = AABBMin;
+                		boundsMax = AABBMax;
+                	}
+                	else
+                	{
+                		boundsMin = glm::min(AABBMin, boundsMin);
+                		boundsMax = glm::max(AABBMax, boundsMax);
+                	}
+                }
+
+                glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+                camera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
             }
         }
         });
-    }
+    }	
+	
+	//sort scene names
+    sort(AllScenes.begin(), AllScenes.end(), compareSceneNames); 
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)
@@ -186,7 +241,7 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     std::filesystem::path filename = absPath;
     if (std::filesystem::exists(absPath) && (filename.extension().string() == ".glb" || filename.extension().string() == ".obj") )
     {
-        AllScenes.push_back({filename.string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+        AllScenes.push_back({filename.filename().string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
@@ -197,6 +252,35 @@ int32_t SceneList::AddExternalScene(std::string absPath)
             else if(filename.extension().string() == ".obj")
             {
                 Model::LoadObjModel(absolute(filename).string(), nodes, models, textures, materials, lights);
+
+                camera.FieldOfView = 38;
+                camera.Aperture = 0.0f;
+                camera.FocusDistance = 100.0f;
+                camera.ControlSpeed = 1.0f;
+                camera.GammaCorrection = true;
+                camera.HasSky = true;
+
+                //auto center camera by scene bounds
+                glm::vec3 boundsMin, boundsMax;
+                for (int i = 0; i < models.size(); i++)
+                {
+                	auto& model = models[i];
+                	glm::vec3 AABBMin = model.GetLocalAABBMin();
+                	glm::vec3 AABBMax = model.GetLocalAABBMax();
+                	if (i == 0)
+                	{
+                		boundsMin = AABBMin;
+                		boundsMax = AABBMax;
+                	}
+                	else
+                	{
+                		boundsMin = glm::min(AABBMin, boundsMin);
+                		boundsMax = glm::max(AABBMax, boundsMax);
+                	}
+                }
+
+                glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+                camera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
             }
         }
         });
