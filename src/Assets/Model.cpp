@@ -387,6 +387,8 @@ namespace Assets
         uint32_t idx_counter = 0;
         for (uint32_t index : indices)
         {
+            if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
+
             vertices_flatten.push_back(vertices[index]);
             indices_flatten.push_back(idx_counter++);
         }
