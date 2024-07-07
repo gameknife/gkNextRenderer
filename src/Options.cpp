@@ -34,6 +34,7 @@ Options::Options(const int argc, const char* argv[])
 	scene.add_options()
 		("scene", value<uint32_t>(&SceneIndex)->default_value(0), "The scene to start with.")
 		("load-scene", value<std::string>(&SceneName)->default_value(""), "The scene to load.")
+		("hdri", value<std::string>(&HDRIfile)->default_value(""), "The HDRI file to load.")
 		;
 
 	options_description vulkan("Vulkan options", lineLength);

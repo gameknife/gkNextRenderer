@@ -52,7 +52,7 @@ protected:
 
 private:
 
-	void LoadScene(uint32_t sceneIndex);
+	void LoadScene(uint32_t sceneIndex, const std::string& HDRIfile);
 	void CheckAndUpdateBenchmarkState(double prevTime);
 	void CheckFramebufferSize() const;
 
