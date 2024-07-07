@@ -300,16 +300,23 @@ namespace
 
         if(options.SceneName != "")
         {
+            std::string mappedSceneName = "";
             bool foundInAssets = false;
+
+            //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
+            Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
+            if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
+
             for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
             {
-                if( SceneList::AllScenes[i].first == options.SceneName )
+                if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
                 {
                     userSettings.SceneIndex = i;
                     foundInAssets = true;
                     break;
                 }
             }
+
             if(!foundInAssets)
             {
                 userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
