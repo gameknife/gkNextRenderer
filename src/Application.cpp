@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
+#include <Utilities/Math.hpp>
 
 #include "Options.hpp"
 #include "curl/curl.h"
@@ -245,6 +246,9 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.FrameRate = frameRate;
     stats.FrameTime = static_cast<float>(timeDelta * 1000);
 
+    stats.TotalFrames = totalFrames_;
+    stats.RenderTime = time_ - sceneInitialTime_;
+
     stats.CamPosX = modelViewController_.Position()[0];
     stats.CamPosY = modelViewController_.Position()[1];
     stats.CamPosZ = modelViewController_.Position()[2];
@@ -399,6 +403,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 
     periodTotalFrames_ = 0;
+    totalFrames_ = 0;
     benchmarkTotalFrames_ = 0;
     sceneInitialTime_ = Renderer::Window().GetTime();
 }
@@ -410,8 +415,6 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
     {
         return;
     }
-
-    
 
     // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
@@ -442,8 +445,6 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             std::cout << "Benchmark: " << fps << " fps" << std::endl;
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
-
-            benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
             benchmarkNumber_++;
         }
 
@@ -453,16 +454,22 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
 
     // If in benchmark mode, bail out from the scene if we've reached the time or sample limit.
     {
-        const bool timeLimitReached = periodTotalFrames_ != 0 && Renderer::Window().GetTime() - sceneInitialTime_ >
+        const bool timeLimitReached = userSettings_.BenchmarkMaxFrame == 0 && periodTotalFrames_ != 0 && time_ - sceneInitialTime_ >
             userSettings_.BenchmarkMaxTime;
-        if (timeLimitReached)
+        const bool frameLimitReached = userSettings_.BenchmarkMaxFrame > 0 && benchmarkTotalFrames_ >= userSettings_.BenchmarkMaxFrame;
+        if (timeLimitReached || frameLimitReached)
         {
             {
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
+
+                char buff[50];
+                Utilities::get_time_str(buff, static_cast<float>(totalTime));
+                printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
+
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
-                
+                benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
             }
 
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==

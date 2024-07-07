@@ -13,6 +13,20 @@ namespace Assets
     struct Material;
     struct LightObject;
     struct CameraInitialSate;
+
+    typedef std::unordered_map<std::string, std::string> uo_string_string_t;
+
+    const uo_string_string_t sceneNames =
+    {
+    	{"qx50.glb",            "Qx50"},
+    	{"track.glb",           "LowpolyTrack"},
+    	{"simple.glb",          "Simple"},
+    	{"complex.glb",         "Complex"},
+    	{"livingroom.glb",      "LivingRoom"},
+    	{"kitchen.glb",         "Kitchen"},
+    	{"luxball.glb",         "LuxBall"},
+    	{"moderndepart.glb",    "ModernHouse1"}
+    };
 }
 
 

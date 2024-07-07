@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <tiny_obj_loader.h>
 #include <chrono>
@@ -35,7 +36,7 @@
 
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
 
 typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
@@ -84,25 +85,34 @@ namespace Assets
         glm::mat4 parentTransform, tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
-            
-        glm::vec3 translation = node.translation.empty()
-                                    ? glm::vec3(0)
-                                    : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-        glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-        glm::quat quaternion = node.rotation.empty()
-                                   ? glm::quat(1, 0, 0, 0)
-                                   : glm::quat(
-                                       static_cast<float>(node.rotation[3]),
-                                       static_cast<float>(node.rotation[0]),
-                                       static_cast<float>(node.rotation[1]),
-                                       static_cast<float>(node.rotation[2]));
-        quaternion = glm::normalize(quaternion);
-        glm::mat4 t = glm::translate(glm::mat4(1), translation);
-        glm::mat4 r = glm::toMat4(quaternion);
-        glm::mat4 s = glm::scale(glm::mat4(1), scaling);
+
+        glm::mat4 transform = glm::mat4(1);
+        if( node.matrix.empty() )
+        {
+            glm::vec3 translation = node.translation.empty()
+                               ? glm::vec3(0)
+                               : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+            glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+            glm::quat quaternion = node.rotation.empty()
+                                       ? glm::quat(1, 0, 0, 0)
+                                       : glm::quat(
+                                           static_cast<float>(node.rotation[3]),
+                                           static_cast<float>(node.rotation[0]),
+                                           static_cast<float>(node.rotation[1]),
+                                           static_cast<float>(node.rotation[2]));
+            quaternion = glm::normalize(quaternion);
+            glm::mat4 t = glm::translate(glm::mat4(1), translation);
+            glm::mat4 r = glm::toMat4(quaternion);
+            glm::mat4 s = glm::scale(glm::mat4(1), scaling);
         
-        glm::mat4 transform =  parentTransform * (t * r * s);
-        
+            transform =  parentTransform * (t * r * s);   
+        }
+        else
+        {
+            glm::mat4 localTs = glm::make_mat4(node.matrix.data());
+            transform =  parentTransform * localTs;   
+        }
+
         if(node.mesh != -1)
         {
             if( node.extras.Has("arealight") )
@@ -162,25 +172,6 @@ namespace Assets
         if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
         {
             return;
-        }
-
-        // default camera
-        cameraInit.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
-        cameraInit.FieldOfView = 20;
-        cameraInit.Aperture = 0.0f;
-        cameraInit.FocusDistance = 1000.0f;
-        cameraInit.ControlSpeed = 5.0f;
-        cameraInit.GammaCorrection = true;
-        cameraInit.HasSky = true;
-        cameraInit.HasSun = false;
-        cameraInit.SkyIdx = 0;
-        
-        // load all lights
-        for (tinygltf::Camera& cam : model.cameras)
-        {
-             cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
-             cameraInit.Aperture = 0.0f;
-             cameraInit.FocusDistance = 100.0f;
         }
 
         // load all textures
@@ -274,6 +265,7 @@ namespace Assets
         }
 
         // export whole scene into a big buffer, with vertice indices materials
+        int counter = 0;
         for (tinygltf::Mesh& mesh : model.meshes)
         {
             std::vector<Vertex> vertices;
@@ -283,6 +275,11 @@ namespace Assets
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
+                if( primtive.mode != TINYGLTF_MODE_TRIANGLES || indexAccessor.count == 0)
+                {
+                    continue;
+                }
+               
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
                 tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
                 tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
@@ -298,14 +295,14 @@ namespace Assets
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + i *
+                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + positionAccessor.byteOffset + i *
                         positionStride]);
                     vertex.Position = vec3(
                         position[0],
                         position[1],
                         position[2]
                     );
-                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + i *
+                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + normalAccessor.byteOffset + i *
                         normalStride]);
                     vertex.Normal = vec3(
                         normal[0],
@@ -316,7 +313,7 @@ namespace Assets
                     if(texcoordView.byteOffset + i *
                         texcoordStride < model.buffers[texcoordView.buffer].data.size())
                     {
-                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + i *
+                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + texcoordAccessor.byteOffset + i *
                   texcoordStride]);
                         vertex.TexCoord = vec2(
                             texcoord[0],
@@ -333,15 +330,24 @@ namespace Assets
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
                 {
-                    if(strideIndex == 2)
+                    if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
                     {
-                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
+                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                        indices.push_back(*data + vertext_offset);
+                    }
+                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                    {
+                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                        indices.push_back(*data + vertext_offset);
+                    }
+                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT )
+                    {
+                        int32* data = reinterpret_cast<int32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertext_offset);
                     }
                     else
                     {
-                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertext_offset);
+                        assert(0);
                     }
                 }
 
@@ -351,8 +357,27 @@ namespace Assets
             #if FLATTEN_VERTICE
                 FlattenVertices(vertices, indices);
             #endif
-
+            
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
+        }
+
+        // default auto camera
+        Model::AutoFocusCamera(cameraInit, models);
+        cameraInit.FieldOfView = 20;
+        cameraInit.Aperture = 0.0f;
+        cameraInit.FocusDistance = 1000.0f;
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = false;
+        cameraInit.SkyIdx = 0;
+        
+        // if we got camera in the scene
+        for (tinygltf::Camera& cam : model.cameras)
+        {
+            cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
+            cameraInit.Aperture = 0.0f;
+            cameraInit.FocusDistance = 100.0f;
         }
 
         auto& root = model.scenes[0];
@@ -387,6 +412,8 @@ namespace Assets
         uint32_t idx_counter = 0;
         for (uint32_t index : indices)
         {
+            if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
+
             vertices_flatten.push_back(vertices[index]);
             indices_flatten.push_back(idx_counter++);
         }
@@ -395,10 +422,35 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
+    void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)
+    {
+        //auto center camera by scene bounds
+        glm::vec3 boundsMin, boundsMax;
+        for (int i = 0; i < models.size(); i++)
+        {
+            auto& model = models[i];
+            glm::vec3 AABBMin = model.GetLocalAABBMin();
+            glm::vec3 AABBMax = model.GetLocalAABBMax();
+            if (i == 0)
+            {
+                boundsMin = AABBMin;
+                boundsMax = AABBMax;
+            }
+            else
+            {
+                boundsMin = glm::min(AABBMin, boundsMin);
+                boundsMax = glm::max(AABBMax, boundsMax);
+            }
+        }
+
+        glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+        cameraInit.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+    }
+
     int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
-                                        std::vector<Texture>& textures,
-                                     std::vector<Material>& materials,
-                                     std::vector<LightObject>& lights, bool autoNode)
+                            std::vector<Texture>& textures,
+                            std::vector<Material>& materials,
+                            std::vector<LightObject>& lights, bool autoNode)
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
         
