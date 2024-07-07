@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <tiny_obj_loader.h>
 #include <chrono>
@@ -84,25 +85,34 @@ namespace Assets
         glm::mat4 parentTransform, tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
-            
-        glm::vec3 translation = node.translation.empty()
-                                    ? glm::vec3(0)
-                                    : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-        glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-        glm::quat quaternion = node.rotation.empty()
-                                   ? glm::quat(1, 0, 0, 0)
-                                   : glm::quat(
-                                       static_cast<float>(node.rotation[3]),
-                                       static_cast<float>(node.rotation[0]),
-                                       static_cast<float>(node.rotation[1]),
-                                       static_cast<float>(node.rotation[2]));
-        quaternion = glm::normalize(quaternion);
-        glm::mat4 t = glm::translate(glm::mat4(1), translation);
-        glm::mat4 r = glm::toMat4(quaternion);
-        glm::mat4 s = glm::scale(glm::mat4(1), scaling);
+
+        glm::mat4 transform = glm::mat4(1);
+        if( node.matrix.empty() )
+        {
+            glm::vec3 translation = node.translation.empty()
+                               ? glm::vec3(0)
+                               : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+            glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+            glm::quat quaternion = node.rotation.empty()
+                                       ? glm::quat(1, 0, 0, 0)
+                                       : glm::quat(
+                                           static_cast<float>(node.rotation[3]),
+                                           static_cast<float>(node.rotation[0]),
+                                           static_cast<float>(node.rotation[1]),
+                                           static_cast<float>(node.rotation[2]));
+            quaternion = glm::normalize(quaternion);
+            glm::mat4 t = glm::translate(glm::mat4(1), translation);
+            glm::mat4 r = glm::toMat4(quaternion);
+            glm::mat4 s = glm::scale(glm::mat4(1), scaling);
         
-        glm::mat4 transform =  parentTransform * (t * r * s);
-        
+            transform =  parentTransform * (t * r * s);   
+        }
+        else
+        {
+            glm::mat4 localTs = glm::make_mat4(node.matrix.data());
+            transform =  parentTransform * localTs;   
+        }
+
         if(node.mesh != -1)
         {
             if( node.extras.Has("arealight") )
