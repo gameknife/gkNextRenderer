@@ -215,7 +215,10 @@ int main(int argc, const char* argv[]) noexcept
         
         
         uint32_t rendererType = options.RendererType;
-        
+
+#if __APPLE__
+        setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
+#endif   
         if(options.RenderDoc)
         {
 #if __linux__
@@ -223,7 +226,6 @@ int main(int argc, const char* argv[]) noexcept
 #endif
 
 #if __APPLE__
-            setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
             setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
             setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
             setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);

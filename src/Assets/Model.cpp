@@ -36,7 +36,7 @@
 
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 0
+#define FLATTEN_VERTICE 1
 
 typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
