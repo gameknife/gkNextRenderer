@@ -174,25 +174,6 @@ namespace Assets
             return;
         }
 
-        // default camera
-        cameraInit.ModelView = lookAt(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0));
-        cameraInit.FieldOfView = 20;
-        cameraInit.Aperture = 0.0f;
-        cameraInit.FocusDistance = 1000.0f;
-        cameraInit.ControlSpeed = 5.0f;
-        cameraInit.GammaCorrection = true;
-        cameraInit.HasSky = true;
-        cameraInit.HasSun = false;
-        cameraInit.SkyIdx = 0;
-        
-        // load all lights
-        for (tinygltf::Camera& cam : model.cameras)
-        {
-             cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
-             cameraInit.Aperture = 0.0f;
-             cameraInit.FocusDistance = 100.0f;
-        }
-
         // load all textures
         for (tinygltf::Image& image : model.images)
         {
@@ -380,6 +361,25 @@ namespace Assets
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
         }
 
+        // default auto camera
+        Model::AutoFocusCamera(cameraInit, models);
+        cameraInit.FieldOfView = 20;
+        cameraInit.Aperture = 0.0f;
+        cameraInit.FocusDistance = 1000.0f;
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = false;
+        cameraInit.SkyIdx = 0;
+        
+        // if we got camera in the scene
+        for (tinygltf::Camera& cam : model.cameras)
+        {
+            cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
+            cameraInit.Aperture = 0.0f;
+            cameraInit.FocusDistance = 100.0f;
+        }
+
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
         {
@@ -422,10 +422,35 @@ namespace Assets
         indices = std::move(indices_flatten);
     }
 
+    void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)
+    {
+        //auto center camera by scene bounds
+        glm::vec3 boundsMin, boundsMax;
+        for (int i = 0; i < models.size(); i++)
+        {
+            auto& model = models[i];
+            glm::vec3 AABBMin = model.GetLocalAABBMin();
+            glm::vec3 AABBMax = model.GetLocalAABBMax();
+            if (i == 0)
+            {
+                boundsMin = AABBMin;
+                boundsMax = AABBMax;
+            }
+            else
+            {
+                boundsMin = glm::min(AABBMin, boundsMin);
+                boundsMax = glm::max(AABBMax, boundsMax);
+            }
+        }
+
+        glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+        cameraInit.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+    }
+
     int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
-                                        std::vector<Texture>& textures,
-                                     std::vector<Material>& materials,
-                                     std::vector<LightObject>& lights, bool autoNode)
+                            std::vector<Texture>& textures,
+                            std::vector<Material>& materials,
+                            std::vector<LightObject>& lights, bool autoNode)
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
         
