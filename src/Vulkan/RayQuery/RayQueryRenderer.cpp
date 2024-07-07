@@ -90,10 +90,24 @@ namespace Vulkan::RayTracing
 
 
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers()));
+
+        // init and copy first to raycast in
+        std::vector<PipelineCommon::RayCastContext> request;
+        request.push_back( PipelineCommon::RayCastContext() );
+        std::vector<PipelineCommon::RayCastResult> results;
+        results.push_back( PipelineCommon::RayCastResult() );
+        Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastIn", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, request, raycastInputBuffer_, raycastInputBuffer_Memory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastOut", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, results, raycastOutputBuffer_, raycastOutputBuffer_Memory_);
+        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), *raycastInputBuffer_, *raycastOutputBuffer_, topAs_[0]));
     }
 
     void RayQueryRenderer::DeleteSwapChain()
     {
+        raycastInputBuffer_.reset();
+        raycastInputBuffer_Memory_.reset();
+        raycastOutputBuffer_.reset();
+        raycastOutputBuffer_Memory_.reset();
+        
         rayTracingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
@@ -111,7 +125,7 @@ namespace Vulkan::RayTracing
 
         rtAdaptiveSample_.reset();
 
-
+        raycastPipeline_.reset();
         
         Vulkan::RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
     }
@@ -192,6 +206,34 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
                            VK_ACCESS_TRANSFER_WRITE_BIT,
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
+
+        {
+            SCOPED_GPU_TIMER("raycast");
+            
+            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
+        }
+    }
+
+    void RayQueryRenderer::BeforeNextFrame()
+    {
+        std::vector<PipelineCommon::RayCastContext> request;
+        PipelineCommon::RayCastContext ray;
+        ray.Origin = lastUBO.ModelViewInverse * glm::vec4(0,0,0,1);
+        ray.Direction = lastUBO.ModelViewInverse * glm::vec4(0,0,-1,0);
+        request.push_back( ray );
+        BufferUtil::CopyFromStagingBuffer(CommandPool(), *raycastInputBuffer_, request);
+        std::vector<PipelineCommon::RayCastResult> results;
+        results.push_back( PipelineCommon::RayCastResult() );
+        BufferUtil::CopyToStagingBuffer(CommandPool(), *raycastOutputBuffer_, results);
+
+        if(results[0].Hitted == 1)
+        {
+            //std::cout << "RayCastResult: " << results[0].T << std::endl;
         }
     }
 

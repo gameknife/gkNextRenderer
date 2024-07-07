@@ -4,6 +4,7 @@
 #include "Vulkan/ImageView.hpp"
 #include <memory>
 #include <vector>
+#include <glm/vec4.hpp>
 
 namespace Assets
 {
@@ -29,6 +30,23 @@ namespace Vulkan::RayTracing
 
 namespace Vulkan::PipelineCommon
 {
+	struct RayCastContext
+	{
+		glm::vec4 Origin;
+		glm::vec4 Direction;
+		float TMin;
+		float TMax;
+	};
+
+	struct RayCastResult
+	{
+		glm::vec4 HitPoint;
+		glm::vec4 Normal;
+		float T;
+		uint32_t MaterialId;
+		uint32_t Hitted;
+	};
+	
 	class AccumulatePipeline final
 	{
 	public:

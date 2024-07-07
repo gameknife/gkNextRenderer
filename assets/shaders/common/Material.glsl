@@ -50,4 +50,5 @@ struct RayCastResult
 	vec4 Normal;
 	float T;
 	uint MaterialId;
+	uint Hitted;
 };

@@ -70,4 +70,16 @@ void Buffer::CopyFrom(CommandPool& commandPool, const Buffer& src, VkDeviceSize 
 	});
 }
 
+void Buffer::CopyTo(CommandPool& commandPool, const Buffer& dst, VkDeviceSize size)
+{
+	SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
+	{
+		VkBufferCopy copyRegion = {};
+		copyRegion.srcOffset = 0; // Optional
+		copyRegion.dstOffset = 0; // Optional
+		copyRegion.size = size;
+
+		vkCmdCopyBuffer(commandBuffer, Handle(), dst.Handle(), 1, &copyRegion);
+	});
+}
 }

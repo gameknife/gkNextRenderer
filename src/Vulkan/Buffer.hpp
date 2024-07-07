@@ -26,6 +26,7 @@ namespace Vulkan
 		VkDeviceAddress GetDeviceAddress() const;
 
 		void CopyFrom(CommandPool& commandPool, const Buffer& src, VkDeviceSize size);
+		void CopyTo(CommandPool& commandPool, const Buffer& dst, VkDeviceSize size);
 
 	private:
 
