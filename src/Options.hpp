@@ -44,6 +44,7 @@ public:
 	// Scene options.
 	uint32_t SceneIndex{};
 	std::string SceneName{};
+	std::string HDRIfile{};
 
 	// Vulkan options
 	uint32_t GpuIdx{};

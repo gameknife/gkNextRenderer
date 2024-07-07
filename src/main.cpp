@@ -351,6 +351,8 @@ namespace
         userSettings.SunLuminance = 500.f;
         userSettings.SkyIntensity = 50.f;
 
+        userSettings.HDRIfile = options.HDRIfile;
+
         return userSettings;
     }
 

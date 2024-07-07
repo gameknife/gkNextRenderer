@@ -161,7 +161,7 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
 {
     Renderer::OnDeviceSet();
 
-    LoadScene(userSettings_.SceneIndex);
+    LoadScene(userSettings_.SceneIndex, userSettings_.HDRIfile);
 
     Renderer::OnPostLoadScene();
 }
@@ -194,7 +194,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
         Renderer::Device().WaitIdle();
         DeleteSwapChain();
         Renderer::OnPreLoadScene();
-        LoadScene(userSettings_.SceneIndex);
+        LoadScene(userSettings_.SceneIndex, userSettings_.HDRIfile);
         Renderer::OnPostLoadScene();
         CreateSwapChain();
         return;
@@ -361,7 +361,7 @@ void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
 }
 
 template <typename Renderer>
-void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
+void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, const std::string& HDRIfile)
 {
     std::vector<Assets::Model> models;
     std::vector<Assets::Texture> textures;
@@ -382,6 +382,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig()));
     textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig()));
 
+    if(HDRIfile != "") textures.push_back(Assets::Texture::LoadHDRTexture(HDRIfile.c_str(), Vulkan::SamplerConfig()));
+
+	userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
     // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
@@ -397,7 +400,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
     userSettings_.Aperture = cameraInitialSate_.Aperture;
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-    userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
+    userSettings_.SkyIdx = HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
     userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
     modelViewController_.Reset(cameraInitialSate_.ModelView);
