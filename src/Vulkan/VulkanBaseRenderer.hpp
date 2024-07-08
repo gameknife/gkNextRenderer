@@ -215,8 +215,11 @@ namespace Vulkan
 
 		virtual void OnTouch(bool down, double xpos, double ypos) {}
 		virtual void OnTouchMove(double xpos, double ypos) {}
-
+		virtual bool GetFocusDistance(float& distance) const {return false;}
+		
 		void CaptureScreenShot();
+
+		
 
 		const std::string& GetRendererType() const {return rendererType_;}
 		

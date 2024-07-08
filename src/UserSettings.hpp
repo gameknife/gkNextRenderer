@@ -28,6 +28,7 @@ struct UserSettings final
 	float FieldOfView;
 	float Aperture;
 	float FocusDistance;
+	bool AutoFocus;
 
 	float SkyRotation;
 	float SunRotation;

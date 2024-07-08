@@ -88,8 +88,17 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
+    float focusDistance = 0;
+    if( userSettings_.AutoFocus && Renderer::GetFocusDistance(focusDistance) )
+    {
+        userSettings_.FocusDistance = focusDistance;
+    }
+
+    
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
+    
+
     ubo.SkyRotation = userSettings_.SkyRotation;
     ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;

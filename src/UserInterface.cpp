@@ -242,6 +242,8 @@ void UserInterface::DrawSettings()
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 100.0f, "%.01f");
+		ImGui::Checkbox("AutoFocus", &Settings().AutoFocus);
+				
 		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, 9);
 		ImGui::SliderFloat("SkyRotation", &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
 		ImGui::SliderFloat("SkyLum", &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
@@ -269,6 +271,32 @@ void UserInterface::DrawSettings()
 		ImGui::NewLine();
 	}
 	ImGui::End();
+
+	// draw a center dot with imgui
+	auto io = ImGui::GetIO();
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0.5, 0.5));
+	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+	ImGui::SetNextWindowSize(ImVec2(1, 1));
+	// set boarder color
+	ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+	ImGui::Begin("CenterDot", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text(" ");
+	ImGui::End();
+	ImGui::PopStyleColor();
+
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0.5, 0.5));
+	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+	ImGui::SetNextWindowSize(ImVec2(1, 1));
+	
+	// set boarder color
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5 + 10, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0, 0.5));
+	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+	ImGui::SetNextWindowSize(ImVec2(0, 0));
+	ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0,0,0,0));
+	ImGui::Begin("HitInfo", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text("%.1fm", Settings().FocusDistance);
+	ImGui::End();
+	ImGui::PopStyleColor();
 }
 
 void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)

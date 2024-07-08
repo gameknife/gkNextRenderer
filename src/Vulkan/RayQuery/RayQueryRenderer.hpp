@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
 #include "Vulkan/RayTracing/RayTracingProperties.hpp"
 
@@ -45,9 +46,13 @@ namespace Vulkan::RayTracing
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		void BeforeNextFrame() override;
+
+		virtual bool GetFocusDistance(float& distance) const override;
 	
 	private:
 		void CreateOutputImage();
+
+		PipelineCommon::RayCastResult cameraCenterCastResult_;
 		
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;

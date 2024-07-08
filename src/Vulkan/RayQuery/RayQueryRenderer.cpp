@@ -231,10 +231,17 @@ namespace Vulkan::RayTracing
         results.push_back( PipelineCommon::RayCastResult() );
         BufferUtil::CopyToStagingBuffer(CommandPool(), *raycastOutputBuffer_, results);
 
-        if(results[0].Hitted == 1)
+        cameraCenterCastResult_ = results[0];
+    }
+
+    bool RayQueryRenderer::GetFocusDistance(float& distance) const
+    {
+        if(cameraCenterCastResult_.Hitted)
         {
-            //std::cout << "RayCastResult: " << results[0].T << std::endl;
+            distance = cameraCenterCastResult_.T;
         }
+
+        return cameraCenterCastResult_.Hitted;
     }
 
     void RayQueryRenderer::CreateOutputImage()
