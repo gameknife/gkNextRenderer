@@ -142,11 +142,14 @@ namespace Assets
         }
         else
         {
-            if(node.camera == 0)
+            if(node.camera >= 0)
             {
                 vec4 camEye = transform * glm::vec4(0,0,0,1);
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
-                out_camera.ModelView = lookAt( vec3(camEye),  vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0,1,0) );
+                glm::mat4 ModelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
+                out_camera.cameras.push_back({ node.name, ModelView, 40 });
+
+                if(node.camera == 0) out_camera.ModelView = ModelView;
             }
         }
 
@@ -173,6 +176,8 @@ namespace Assets
         {
             return;
         }
+
+        cameraInit.cameras.clear();
 
         // load all textures
         for (tinygltf::Image& image : model.images)
@@ -371,14 +376,6 @@ namespace Assets
         cameraInit.HasSky = true;
         cameraInit.HasSun = false;
         cameraInit.SkyIdx = 0;
-        
-        // if we got camera in the scene
-        for (tinygltf::Camera& cam : model.cameras)
-        {
-            cameraInit.FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
-            cameraInit.Aperture = 0.0f;
-            cameraInit.FocusDistance = 100.0f;
-        }
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
@@ -402,6 +399,21 @@ namespace Assets
         {
             ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);
         }
+
+        // if we got camera in the scene
+        int i = 0;
+        for (tinygltf::Camera& cam : model.cameras)
+        {
+            cameraInit.cameras[i].FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
+            if (i == 0) //use 1st camera params
+            {
+                cameraInit.FieldOfView = cameraInit.cameras[i].FieldOfView;
+                cameraInit.Aperture = 0.0f;
+                cameraInit.FocusDistance = 100.0f;
+            }
+            i++;
+        }
+        printf("model.cameras: %d\n", i);
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)

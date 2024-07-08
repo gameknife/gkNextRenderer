@@ -19,6 +19,8 @@
 #include <Utilities/FileHelper.hpp>
 #include <Utilities/Math.hpp>
 
+#include <filesystem>
+
 #include "Options.hpp"
 #include "curl/curl.h"
 #include "cpp-base64/base64.cpp"
@@ -685,6 +687,16 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
 
         printf("screenshot saved to %s\n", filename.c_str());
+
+        std::uintmax_t img_file_size = std::filesystem::file_size(filename);
+
+        char buff[50];
+        Utilities::metricFormatter(static_cast<double>(img_file_size), buff, (void*)"b", 1024);
+        printf("file size: %s\n", buff);
+
+        // send to server
+        //img_encoded = base64_encode(data, img_file_size, false);
+
         free(data);
 #endif
     }
