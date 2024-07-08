@@ -173,15 +173,18 @@ void SceneList::ScanScenes()
 
         //if found - change fn. if not - just filename
         if (got != Assets::sceneNames.end()) fn = got->second;
+        std::string ext = entry.path().extension().string();
+        if(ext != ".glb" && ext != ".obj") continue;
+
         AllScenes.push_back({fn, [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
-            if(entry.path().extension().string() == ".glb")
+            if(ext == ".glb")
             {
                 Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, textures, materials, lights);
             }
-            else if(entry.path().extension().string() == ".obj")
+            else if(ext == ".obj")
             {
                 Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, textures, materials, lights);
 
