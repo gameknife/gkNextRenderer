@@ -71,9 +71,16 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
         pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
     //}
 
+    if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
+    {
+		//cameraInitialSate_.ModelView = (userSettings_.cameras[userSettings_.CameraIdx]).ModelView;
+		//modelViewController_.Reset(cameraInitialSate_.ModelView);
+    }
+
     const auto& init = cameraInitialSate_;
 
     Assets::UniformBufferObject ubo = {};
+
     ubo.ModelView = modelViewController_.ModelView();
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
@@ -404,6 +411,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
     userSettings_.SkyIdx = HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
     userSettings_.SunRotation = cameraInitialSate_.SunRotation;
+
+    userSettings_.cameras = cameraInitialSate_.cameras;
+    userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
 
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 

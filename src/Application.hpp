@@ -22,7 +22,6 @@ public:
 
 	NextRendererApplication(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
 	~NextRendererApplication();
-
 	
 	void OnTouch(bool down, double xpos, double ypos) override;
 	void OnTouchMove(double xpos, double ypos) override;
@@ -48,7 +47,6 @@ protected:
 	void OnCursorPosition(double xpos, double ypos) override;
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
-
 
 private:
 
