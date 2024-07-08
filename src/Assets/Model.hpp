@@ -12,6 +12,13 @@
 
 namespace Assets
 {
+    struct Camera
+    {
+        std::string name;
+        glm::mat4 ModelView;
+        float FieldOfView;
+    };
+
     struct CameraInitialSate
     {
         glm::mat4 ModelView;
@@ -24,6 +31,8 @@ namespace Assets
         bool HasSun;
         uint32_t SkyIdx;
         float SunRotation;
+
+        std::vector<Camera> cameras;
     };
 
     struct alignas(16) NodeProxy final
