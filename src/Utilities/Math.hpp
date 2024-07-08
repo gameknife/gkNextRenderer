@@ -10,10 +10,10 @@ namespace Utilities
         }
     }
 
-	static int metricFormatter(double value, char* buff, void* data)	//if pass data as (void*)"b" - show info like kb, Mb, Gb
+	static int metricFormatter(double value, char* buff, void* data, int kilo = 1000)	//if pass data as (void*)"b" - show info like kb, Mb, Gb
 	{
 		const char* unit = (const char*)data;
-		static double      s_value[] = { 1000000000, 1000000, 1000, 1, 0.001, 0.000001, 0.000000001 };
+		static double      s_value[] = { static_cast<double>(kilo * kilo * kilo), static_cast<double>(kilo * kilo), static_cast<double>(kilo), 1, 1.f / static_cast<double>(kilo), 1.f / static_cast<double>(kilo * kilo), 1.f / static_cast<double>(kilo * kilo * kilo) };
 		static const char* s_prefix[] = { "G", "M", "k", "", "m", "u", "n" };
 
 		const int s_valueSZ = sizeof(s_value);
