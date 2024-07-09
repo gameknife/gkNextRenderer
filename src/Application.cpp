@@ -73,8 +73,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
     {
-		//cameraInitialSate_.ModelView = (userSettings_.cameras[userSettings_.CameraIdx]).ModelView;
-		//modelViewController_.Reset(cameraInitialSate_.ModelView);
+		modelViewController_.Reset((userSettings_.cameras[userSettings_.CameraIdx]).ModelView);
     }
 
     const auto& init = cameraInitialSate_;

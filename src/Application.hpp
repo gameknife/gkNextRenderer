@@ -60,7 +60,8 @@ private:
 	UserSettings userSettings_{};
 	UserSettings previousSettings_{};
 	Assets::CameraInitialSate cameraInitialSate_{};
-	ModelViewController modelViewController_{};
+
+	mutable ModelViewController modelViewController_{};
 
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
