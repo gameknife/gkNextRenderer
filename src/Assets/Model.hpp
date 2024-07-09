@@ -17,6 +17,8 @@ namespace Assets
         std::string name;
         glm::mat4 ModelView;
         float FieldOfView;
+        float Aperture;
+        float FocalDistance;
     };
 
     struct CameraInitialSate

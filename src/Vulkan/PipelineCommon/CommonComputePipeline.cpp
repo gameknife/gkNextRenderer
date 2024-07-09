@@ -11,6 +11,8 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Vulkan/RayTracing/DeviceProcedures.hpp"
+#include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 
 namespace Vulkan::PipelineCommon
 {
@@ -240,6 +242,134 @@ namespace Vulkan::PipelineCommon
     }
 
     VkDescriptorSet VisualDebuggerPipeline::DescriptorSet(uint32_t index) const
+    {
+        return descriptorSetManager_->DescriptorSets().Handle(index);
+    }
+
+    RayCastPipeline::RayCastPipeline(const DeviceProcedures& deviceProcedures, const Buffer& inputBuffer, const Buffer& outputBuffer,
+        const RayTracing::TopLevelAccelerationStructure& accelerationStructure, const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
+    {
+        // Create descriptor pool/sets.
+        const auto& device = deviceProcedures_.Device();
+        const std::vector<DescriptorBinding> descriptorBindings =
+        {
+            {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            //{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            // Vertex buffer, Index buffer, Material buffer, Offset buffer
+            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            // Textures and image samplers
+            {8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+        };
+
+        descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+
+        // Top level acceleration structure.
+        const auto accelerationStructureHandle = accelerationStructure.Handle();
+        VkWriteDescriptorSetAccelerationStructureKHR structureInfo = {};
+        structureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+        structureInfo.pNext = nullptr;
+        structureInfo.accelerationStructureCount = 1;
+        structureInfo.pAccelerationStructures = &accelerationStructureHandle;
+        
+        VkDescriptorBufferInfo inBufferInfo = {};
+        inBufferInfo.buffer = inputBuffer.Handle();
+        inBufferInfo.range = VK_WHOLE_SIZE;
+
+        VkDescriptorBufferInfo outBufferInfo = {};
+        outBufferInfo.buffer = outputBuffer.Handle();
+        outBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Uniform buffer
+        // VkDescriptorBufferInfo uniformBufferInfo = {};
+        // uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+        // uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Vertex buffer
+        VkDescriptorBufferInfo vertexBufferInfo = {};
+        vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+        vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Index buffer
+        VkDescriptorBufferInfo indexBufferInfo = {};
+        indexBufferInfo.buffer = scene.IndexBuffer().Handle();
+        indexBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Material buffer
+        VkDescriptorBufferInfo materialBufferInfo = {};
+        materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+        materialBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Offsets buffer
+        VkDescriptorBufferInfo offsetsBufferInfo = {};
+        offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
+        offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Light buffer
+        VkDescriptorBufferInfo lightBufferInfo = {};
+        lightBufferInfo.buffer = scene.LightBuffer().Handle();
+        lightBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Image and texture samplers.
+        std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
+
+        for (size_t t = 0; t != imageInfos.size(); ++t)
+        {
+            auto& imageInfo = imageInfos[t];
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = scene.TextureImageViews()[t];
+            imageInfo.sampler = scene.TextureSamplers()[t];
+        }
+        
+        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        {
+            descriptorSets.Bind(0, 0, structureInfo),
+            descriptorSets.Bind(0, 1, inBufferInfo),
+            descriptorSets.Bind(0, 2, outBufferInfo),
+            descriptorSets.Bind(0, 4, vertexBufferInfo),
+            descriptorSets.Bind(0, 5, indexBufferInfo),
+            descriptorSets.Bind(0, 6, materialBufferInfo),
+            descriptorSets.Bind(0, 7, offsetsBufferInfo),
+            descriptorSets.Bind(0, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
+        };
+
+        descriptorSets.UpdateDescriptors(0, descriptorWrites);
+        
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/RayCast.comp.spv"));
+
+        VkComputePipelineCreateInfo pipelineCreateInfo = {};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+        pipelineCreateInfo.layout = pipelineLayout_->Handle();
+
+        Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+                                       1, &pipelineCreateInfo,
+                                       NULL, &pipeline_),
+              "create deferred shading pipeline");
+    }
+
+    RayCastPipeline::~RayCastPipeline()
+    {
+        if (pipeline_ != nullptr)
+        {
+            vkDestroyPipeline(deviceProcedures_.Device().Handle(), pipeline_, nullptr);
+            pipeline_ = nullptr;
+        }
+
+        pipelineLayout_.reset();
+        descriptorSetManager_.reset();
+    }
+
+    VkDescriptorSet RayCastPipeline::DescriptorSet(uint32_t index) const
     {
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }

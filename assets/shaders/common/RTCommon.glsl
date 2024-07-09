@@ -6,6 +6,7 @@
 #include "Random.glsl"
 #include "common/equirectangularSample.glsl"
 #include "Scatter.glsl"
+#include "RTSimple.glsl"
 
 void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float RayDist, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const vec3 HitPos, const int PrimitiveIndex, const int InstanceID)
 {

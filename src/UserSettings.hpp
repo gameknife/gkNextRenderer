@@ -1,4 +1,5 @@
 #pragma once
+#include "Assets/UniformBuffer.hpp"
 
 #include "Assets/Model.hpp"
 
@@ -30,6 +31,7 @@ struct UserSettings final
 	float FieldOfView;
 	float Aperture;
 	float FocusDistance;
+	bool AutoFocus;
 
 	float SkyRotation;
 	float SunRotation;
@@ -61,6 +63,8 @@ struct UserSettings final
 	inline const static float FieldOfViewMaxValue = 90.0f;
 
 	uint32_t RR_MIN_DEPTH;
-
+	
 	std::vector<Assets::Camera> cameras;
+	// HitResult
+	Assets::RayCastResult HitResult;
 };

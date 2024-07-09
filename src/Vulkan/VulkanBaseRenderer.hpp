@@ -2,6 +2,7 @@
 
 #include "FrameBuffer.hpp"
 #include "WindowConfig.hpp"
+#include "Assets/UniformBuffer.hpp"
 #include <vector>
 #include <list>
 #include <memory>
@@ -214,8 +215,12 @@ namespace Vulkan
 
 		virtual void OnTouch(bool down, double xpos, double ypos) {}
 		virtual void OnTouchMove(double xpos, double ypos) {}
-
+		virtual bool GetFocusDistance(float& distance) const {return false;}
+		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
+		
 		void CaptureScreenShot();
+
+		
 
 		const std::string& GetRendererType() const {return rendererType_;}
 		
@@ -268,6 +273,8 @@ namespace Vulkan
 		bool visualDebug_{};
 
 		std::string rendererType_{};
+
+		Assets::UniformBufferObject lastUBO;
 
 		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	private:

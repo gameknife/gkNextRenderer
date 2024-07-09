@@ -96,8 +96,20 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
+    Assets::RayCastResult rayResult;
+    Renderer::GetLastRaycastResult(rayResult);
+    
+    if( userSettings_.AutoFocus && rayResult.Hitted )
+    {
+        userSettings_.FocusDistance = rayResult.T;
+    }
+    
+    userSettings_.HitResult = rayResult;
+    
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
+    
+
     ubo.SkyRotation = userSettings_.SkyRotation;
     ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
@@ -392,6 +404,8 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
 
     if(HDRIfile != "") textures.push_back(Assets::Texture::LoadHDRTexture(HDRIfile.c_str(), Vulkan::SamplerConfig()));
     userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
+
+    cameraInitialSate_.cameras.clear();
 
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
