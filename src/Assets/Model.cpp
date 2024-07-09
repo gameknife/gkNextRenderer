@@ -405,13 +405,26 @@ namespace Assets
         int i = 0;
         for (tinygltf::Camera& cam : model.cameras)
         {
+            cameraInit.cameras[i].Aperture = 0.0f;
+            cameraInit.cameras[i].FocalDistance = 1000.0f;
             cameraInit.cameras[i].FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / M_PI;
+            
+            if( cam.extras.Has("F-Stop") )
+            {
+                cameraInit.cameras[i].Aperture = 0.05f / cam.extras.Get("F-Stop").GetNumberAsDouble();
+            }
+            if( cam.extras.Has("FocalDistance") )
+            {
+                cameraInit.cameras[i].FocalDistance = cam.extras.Get("FocalDistance").GetNumberAsDouble();
+            }
+            
             if (i == 0) //use 1st camera params
             {
                 cameraInit.FieldOfView = cameraInit.cameras[i].FieldOfView;
-                cameraInit.Aperture = 0.0f;
-                cameraInit.FocusDistance = 100.0f;
+                cameraInit.Aperture = cameraInit.cameras[i].Aperture;
+                cameraInit.FocusDistance = cameraInit.cameras[i].FocalDistance;
                 cameraInit.CameraIdx = 0;
+
             }
             i++;
         }

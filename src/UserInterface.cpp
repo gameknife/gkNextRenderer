@@ -230,6 +230,8 @@ void UserInterface::DrawSettings()
 		{
 			auto &cam = Settings().cameras[Settings().CameraIdx];
 			Settings().FieldOfView = cam.FieldOfView;
+			Settings().Aperture = cam.Aperture;
+			Settings().FocusDistance = cam.FocalDistance;
 		}
 
 		ImGui::Text("Ray Tracing");
