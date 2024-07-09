@@ -391,8 +391,8 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
     textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig()));
 
     if(HDRIfile != "") textures.push_back(Assets::Texture::LoadHDRTexture(HDRIfile.c_str(), Vulkan::SamplerConfig()));
+    userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
 
-	userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
     // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
