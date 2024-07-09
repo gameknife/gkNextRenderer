@@ -1,4 +1,5 @@
 #pragma once
+#include "Assets/UniformBuffer.hpp"
 
 struct UserSettings final
 {
@@ -57,4 +58,7 @@ struct UserSettings final
 	inline const static float FieldOfViewMaxValue = 90.0f;
 
 	uint32_t RR_MIN_DEPTH;
+
+	// HitResult
+	Assets::RayCastResult HitResult;
 };

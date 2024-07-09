@@ -48,11 +48,12 @@ namespace Vulkan::RayTracing
 		void BeforeNextFrame() override;
 
 		virtual bool GetFocusDistance(float& distance) const override;
+		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
 	
 	private:
 		void CreateOutputImage();
 
-		PipelineCommon::RayCastResult cameraCenterCastResult_;
+		Assets::RayCastResult cameraCenterCastResult_;
 		
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;

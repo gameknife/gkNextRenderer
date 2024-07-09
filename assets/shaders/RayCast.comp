@@ -4,10 +4,19 @@
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer RayCastInArray { RayCastContext[] RayQuery; };
 layout(binding = 2) writeonly buffer RayCastOutArray { RayCastResult[] RayResult; };
+//layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
+layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
+layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
+layout(binding = 8) uniform sampler2D[] TextureSamplers;
+
+#include "common/RTSimple.glsl"
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -36,10 +45,18 @@ void main() {
         const vec3 HitPos = RayOrigin + RayDirection * RayDist;
         const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
         const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
+        
+        vec3 OutNormal;
+        vec2 OutTexcoord;
+        int OutMaterialId;
+        SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, OutNormal, OutTexcoord, OutMaterialId);
 
         hitResult.HitPoint = vec4(HitPos, 1.0);
+        hitResult.Normal = vec4(OutNormal, 0.0);
         hitResult.Hitted = 1;
         hitResult.T = RayDist;
+        hitResult.InstanceId = InstanceID;
+        hitResult.MaterialId = OutMaterialId;
     }
     else
     {

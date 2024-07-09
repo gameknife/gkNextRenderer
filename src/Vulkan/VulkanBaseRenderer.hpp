@@ -216,6 +216,7 @@ namespace Vulkan
 		virtual void OnTouch(bool down, double xpos, double ypos) {}
 		virtual void OnTouchMove(double xpos, double ypos) {}
 		virtual bool GetFocusDistance(float& distance) const {return false;}
+		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
 		
 		void CaptureScreenShot();
 

@@ -92,13 +92,13 @@ namespace Vulkan::RayTracing
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers()));
 
         // init and copy first to raycast in
-        std::vector<PipelineCommon::RayCastContext> request;
-        request.push_back( PipelineCommon::RayCastContext() );
-        std::vector<PipelineCommon::RayCastResult> results;
-        results.push_back( PipelineCommon::RayCastResult() );
+        std::vector<Assets::RayCastContext> request;
+        request.push_back( Assets::RayCastContext() );
+        std::vector<Assets::RayCastResult> results;
+        results.push_back( Assets::RayCastResult() );
         Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastIn", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, request, raycastInputBuffer_, raycastInputBuffer_Memory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastOut", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, results, raycastOutputBuffer_, raycastOutputBuffer_Memory_);
-        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), *raycastInputBuffer_, *raycastOutputBuffer_, topAs_[0]));
+        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), *raycastInputBuffer_, *raycastOutputBuffer_, topAs_[0], GetScene()));
     }
 
     void RayQueryRenderer::DeleteSwapChain()
@@ -221,14 +221,14 @@ namespace Vulkan::RayTracing
 
     void RayQueryRenderer::BeforeNextFrame()
     {
-        std::vector<PipelineCommon::RayCastContext> request;
-        PipelineCommon::RayCastContext ray;
+        std::vector<Assets::RayCastContext> request;
+        Assets::RayCastContext ray;
         ray.Origin = lastUBO.ModelViewInverse * glm::vec4(0,0,0,1);
         ray.Direction = lastUBO.ModelViewInverse * glm::vec4(0,0,-1,0);
         request.push_back( ray );
         BufferUtil::CopyFromStagingBuffer(CommandPool(), *raycastInputBuffer_, request);
-        std::vector<PipelineCommon::RayCastResult> results;
-        results.push_back( PipelineCommon::RayCastResult() );
+        std::vector<Assets::RayCastResult> results;
+        results.push_back( Assets::RayCastResult() );
         BufferUtil::CopyToStagingBuffer(CommandPool(), *raycastOutputBuffer_, results);
 
         cameraCenterCastResult_ = results[0];
@@ -241,6 +241,12 @@ namespace Vulkan::RayTracing
             distance = cameraCenterCastResult_.T;
         }
 
+        return cameraCenterCastResult_.Hitted;
+    }
+
+    bool RayQueryRenderer::GetLastRaycastResult(Assets::RayCastResult& result) const
+    {
+        result = cameraCenterCastResult_;
         return cameraCenterCastResult_.Hitted;
     }
 

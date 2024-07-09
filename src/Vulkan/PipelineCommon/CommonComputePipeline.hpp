@@ -30,23 +30,6 @@ namespace Vulkan::RayTracing
 
 namespace Vulkan::PipelineCommon
 {
-	struct RayCastContext
-	{
-		glm::vec4 Origin;
-		glm::vec4 Direction;
-		float TMin;
-		float TMax;
-	};
-
-	struct RayCastResult
-	{
-		glm::vec4 HitPoint;
-		glm::vec4 Normal;
-		float T;
-		uint32_t MaterialId;
-		uint32_t Hitted;
-	};
-	
 	class AccumulatePipeline final
 	{
 	public:
@@ -129,7 +112,8 @@ namespace Vulkan::PipelineCommon
 			const DeviceProcedures& deviceProcedures,
 			const Buffer& inputBuffer,
 			const Buffer& outputBuffer,
-			const RayTracing::TopLevelAccelerationStructure& accelerationStructure);
+			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const Assets::Scene& scene);
 		~RayCastPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;

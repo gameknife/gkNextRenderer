@@ -246,7 +246,8 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    RayCastPipeline::RayCastPipeline(const DeviceProcedures& deviceProcedures, const Buffer& inputBuffer, const Buffer& outputBuffer, const RayTracing::TopLevelAccelerationStructure& accelerationStructure):deviceProcedures_(deviceProcedures)
+    RayCastPipeline::RayCastPipeline(const DeviceProcedures& deviceProcedures, const Buffer& inputBuffer, const Buffer& outputBuffer,
+        const RayTracing::TopLevelAccelerationStructure& accelerationStructure, const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
     {
         // Create descriptor pool/sets.
         const auto& device = deviceProcedures_.Device();
@@ -255,6 +256,16 @@ namespace Vulkan::PipelineCommon
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            //{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            // Vertex buffer, Index buffer, Material buffer, Offset buffer
+            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            // Textures and image samplers
+            {8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
@@ -276,12 +287,58 @@ namespace Vulkan::PipelineCommon
         VkDescriptorBufferInfo outBufferInfo = {};
         outBufferInfo.buffer = outputBuffer.Handle();
         outBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Uniform buffer
+        // VkDescriptorBufferInfo uniformBufferInfo = {};
+        // uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+        // uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Vertex buffer
+        VkDescriptorBufferInfo vertexBufferInfo = {};
+        vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+        vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Index buffer
+        VkDescriptorBufferInfo indexBufferInfo = {};
+        indexBufferInfo.buffer = scene.IndexBuffer().Handle();
+        indexBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Material buffer
+        VkDescriptorBufferInfo materialBufferInfo = {};
+        materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+        materialBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Offsets buffer
+        VkDescriptorBufferInfo offsetsBufferInfo = {};
+        offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
+        offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Light buffer
+        VkDescriptorBufferInfo lightBufferInfo = {};
+        lightBufferInfo.buffer = scene.LightBuffer().Handle();
+        lightBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Image and texture samplers.
+        std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
+
+        for (size_t t = 0; t != imageInfos.size(); ++t)
+        {
+            auto& imageInfo = imageInfos[t];
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = scene.TextureImageViews()[t];
+            imageInfo.sampler = scene.TextureSamplers()[t];
+        }
         
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
             descriptorSets.Bind(0, 0, structureInfo),
             descriptorSets.Bind(0, 1, inBufferInfo),
             descriptorSets.Bind(0, 2, outBufferInfo),
+            descriptorSets.Bind(0, 4, vertexBufferInfo),
+            descriptorSets.Bind(0, 5, indexBufferInfo),
+            descriptorSets.Bind(0, 6, materialBufferInfo),
+            descriptorSets.Bind(0, 7, offsetsBufferInfo),
+            descriptorSets.Bind(0, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
         };
 
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
