@@ -4,6 +4,7 @@
 #include "Vulkan/ImageView.hpp"
 #include <memory>
 #include <vector>
+#include <glm/vec4.hpp>
 
 namespace Assets
 {
@@ -18,6 +19,13 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class DescriptorSetManager;
+	class DeviceProcedures;
+	class Buffer;
+}
+
+namespace Vulkan::RayTracing
+{
+	class TopLevelAccelerationStructure;
 }
 
 namespace Vulkan::PipelineCommon
@@ -88,6 +96,30 @@ namespace Vulkan::PipelineCommon
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
 	private:
 		const SwapChain& swapChain_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
+
+	class RayCastPipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(RayCastPipeline)
+	
+		RayCastPipeline(
+			const DeviceProcedures& deviceProcedures,
+			const Buffer& inputBuffer,
+			const Buffer& outputBuffer,
+			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const Assets::Scene& scene);
+		~RayCastPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const DeviceProcedures& deviceProcedures_;
 		
 		VULKAN_HANDLE(VkPipeline, pipeline_)
 

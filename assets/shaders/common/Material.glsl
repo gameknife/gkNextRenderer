@@ -35,3 +35,21 @@ struct NodeProxy
 {
 	mat4 World;
 };
+
+struct RayCastContext
+{
+	vec4 Origin;
+	vec4 Direction;
+	float TMin;
+	float TMax;
+};
+
+struct RayCastResult
+{
+	vec4 HitPoint;
+	vec4 Normal;
+	float T;
+	uint InstanceId;
+	uint MaterialId;
+	uint Hitted;
+};
