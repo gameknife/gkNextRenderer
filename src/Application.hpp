@@ -22,7 +22,6 @@ public:
 
 	NextRendererApplication(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
 	~NextRendererApplication();
-
 	
 	void OnTouch(bool down, double xpos, double ypos) override;
 	void OnTouchMove(double xpos, double ypos) override;
@@ -49,7 +48,6 @@ protected:
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
 
-
 private:
 
 	void LoadScene(uint32_t sceneIndex, const std::string& HDRIfile);
@@ -62,7 +60,8 @@ private:
 	UserSettings userSettings_{};
 	UserSettings previousSettings_{};
 	Assets::CameraInitialSate cameraInitialSate_{};
-	ModelViewController modelViewController_{};
+
+	mutable ModelViewController modelViewController_{};
 
 	mutable Assets::UniformBufferObject prevUBO_ {};
 

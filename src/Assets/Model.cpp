@@ -147,7 +147,7 @@ namespace Assets
                 vec4 camEye = transform * glm::vec4(0,0,0,1);
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 glm::mat4 ModelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
-                out_camera.cameras.push_back({ node.name, ModelView, 40 });
+                out_camera.cameras.push_back({ std::to_string(node.camera) + " " + node.name, ModelView, 40});
 
                 if(node.camera == 0) out_camera.ModelView = ModelView;
             }
@@ -178,6 +178,7 @@ namespace Assets
         }
 
         cameraInit.cameras.clear();
+        cameraInit.CameraIdx = -1;
 
         // load all textures
         for (tinygltf::Image& image : model.images)
@@ -410,6 +411,7 @@ namespace Assets
                 cameraInit.FieldOfView = cameraInit.cameras[i].FieldOfView;
                 cameraInit.Aperture = 0.0f;
                 cameraInit.FocusDistance = 100.0f;
+                cameraInit.CameraIdx = 0;
             }
             i++;
         }

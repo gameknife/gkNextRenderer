@@ -12,7 +12,7 @@
 
 namespace Assets
 {
-    struct Camera
+    struct Camera final
     {
         std::string name;
         glm::mat4 ModelView;
@@ -29,7 +29,7 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
-        uint32_t SkyIdx;
+        uint32_t SkyIdx, CameraIdx;
         float SunRotation;
 
         std::vector<Camera> cameras;

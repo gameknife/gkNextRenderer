@@ -199,6 +199,12 @@ void UserInterface::DrawSettings()
 			scenes.push_back(scene.first.c_str());
 		}
 
+		std::vector<const char*> camerasList;
+		for (const auto& cam : Settings().cameras)
+		{
+			camerasList.emplace_back(cam.name.c_str());
+		}
+
 		ImGui::Text("Help");
 		ImGui::Separator();
 		ImGui::BulletText("F1: toggle Settings.");
@@ -211,6 +217,20 @@ void UserInterface::DrawSettings()
 		ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
+
+		int prevCameraIdx = Settings().CameraIdx;
+		ImGui::Text("Camera");
+		ImGui::Separator();
+		ImGui::PushItemWidth(-1);
+		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
+		ImGui::PopItemWidth();
+		ImGui::NewLine();
+
+		if(prevCameraIdx != Settings().CameraIdx)
+		{
+			auto &cam = Settings().cameras[Settings().CameraIdx];
+			Settings().FieldOfView = cam.FieldOfView;
+		}
 
 		ImGui::Text("Ray Tracing");
 		ImGui::Separator();

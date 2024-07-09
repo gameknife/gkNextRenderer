@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Assets/Model.hpp"
+
 struct UserSettings final
 {
 	// Application
@@ -33,7 +35,7 @@ struct UserSettings final
 	float SunRotation;
 	float SunLuminance;
 	float SkyIntensity;
-	int SkyIdx;
+	int SkyIdx, CameraIdx;
 
 	int HDRIsLoaded;
 	std::string HDRIfile;
@@ -59,4 +61,6 @@ struct UserSettings final
 	inline const static float FieldOfViewMaxValue = 90.0f;
 
 	uint32_t RR_MIN_DEPTH;
+
+	std::vector<Assets::Camera> cameras;
 };

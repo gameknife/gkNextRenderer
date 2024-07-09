@@ -71,9 +71,15 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
         pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
     //}
 
+    if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
+    {
+		modelViewController_.Reset((userSettings_.cameras[userSettings_.CameraIdx]).ModelView);
+    }
+
     const auto& init = cameraInitialSate_;
 
     Assets::UniformBufferObject ubo = {};
+
     ubo.ModelView = modelViewController_.ModelView();
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
@@ -385,8 +391,8 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
     textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig()));
 
     if(HDRIfile != "") textures.push_back(Assets::Texture::LoadHDRTexture(HDRIfile.c_str(), Vulkan::SamplerConfig()));
+    userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
 
-	userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
     // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
@@ -404,6 +410,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
     userSettings_.SkyIdx = HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
     userSettings_.SunRotation = cameraInitialSate_.SunRotation;
+
+    userSettings_.cameras = cameraInitialSate_.cameras;
+    userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
 
     modelViewController_.Reset(cameraInitialSate_.ModelView);
 
