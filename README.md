@@ -193,6 +193,16 @@ github action包含windows和linux的自动ci，如有问题可参阅解决。
 vcpkg_windows.bat
 build_windows.bat
 ```
+
+**Android On Windows**
+```
+set ANDROID_NDK_HOME=\path\to\ndk
+#like: set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\25.1.8937393
+vcpkg_android.bat
+build_android.bat
+deploy_android.bat
+```
+
 **Linux**
 
 各平台需要提前安装对应的依赖，vcpkg才可以正确运行。
