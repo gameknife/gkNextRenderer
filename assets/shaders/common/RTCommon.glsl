@@ -139,22 +139,6 @@ void FetchPrimaryRayInfo(in vec2 size, in vec3 origin, in vec3 scatterDir, out v
 	
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
 	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin, 1);
-	/*
-	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	// =>
-	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w + 1.0) * 0.5 * vec2(size));
-	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w + 1.0) * 0.5 * vec2(size));
-	// =>	
-	motionVector = Ray.Distance < -5 ? vec4(0) : vec4(prevfpos - currfpos,0,0);
-	// =>
-	motionVector = Ray.Distance < -5 ? vec4(0) : vec4(((prevFrameHPos.xy / prevFrameHPos.w + 1.0) - (currFrameHPos.xy / currFrameHPos.w + 1.0)) * 0.5 * vec2(size),0,0);
-	// => vec2(size) same as size   because size is vec2
-	// => (prevFrameHPos.xy / prevFrameHPos.w + 1.0) - (currFrameHPos.xy / currFrameHPos.w + 1.0) =
-	// => (prevFrameHPos.xy / prevFrameHPos.w + 1.0 - currFrameHPos.xy / currFrameHPos.w - 1.0) =
-	// => (prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w)
-	// was 2/ 4* => now 2/ 2*
-	*/
 	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size,0,0);
 	primitiveId = Ray.primitiveId;
 }
