@@ -406,6 +406,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, con
     userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
 
     cameraInitialSate_.cameras.clear();
+    cameraInitialSate_.CameraIdx = -1;
 
     SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
 
