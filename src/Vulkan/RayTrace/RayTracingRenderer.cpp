@@ -191,6 +191,7 @@ namespace Vulkan::RayTracing
 
     void RayTracingRenderer::BeforeNextFrame()
     {
+        RayTraceBaseRenderer::BeforeNextFrame();
         {
             SCOPED_CPU_TIMER("OIDN");
 #if WITH_OIDN
@@ -341,6 +342,16 @@ namespace Vulkan::RayTracing
                                            VK_ACCESS_TRANSFER_WRITE_BIT,
                                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
             }
+        }
+
+        {
+            SCOPED_GPU_TIMER("raycast");
+            
+            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
 
 

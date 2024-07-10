@@ -46,14 +46,11 @@ namespace Vulkan::RayTracing
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		void BeforeNextFrame() override;
-
-		virtual bool GetFocusDistance(float& distance) const override;
-		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
 	
 	private:
 		void CreateOutputImage();
 
-		Assets::RayCastResult cameraCenterCastResult_;
+		
 		
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;
@@ -72,14 +69,6 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
-		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
-
-
-		std::unique_ptr<Vulkan::Buffer> raycastInputBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> raycastInputBuffer_Memory_;
-
-		std::unique_ptr<Vulkan::Buffer> raycastOutputBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> raycastOutputBuffer_Memory_;
 	};
 
 }

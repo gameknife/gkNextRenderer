@@ -75,9 +75,9 @@ void main() {
 			if(Camera.AdaptiveSample)
 			{
 				// if history variance is too large, we should not use it.
-				const double historyVariance = Camera.AdaptiveVariance;
+				const float historyVariance = Camera.AdaptiveVariance;
 
-				double diff = abs(luminance(final.rgb) - luminance(history.rgb));
+				float diff = abs(luminance(final.rgb) - luminance(history.rgb));
 				if (diff > historyVariance)
 				{
 					// need sample
