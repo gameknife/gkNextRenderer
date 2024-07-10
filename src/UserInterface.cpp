@@ -263,7 +263,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 1.0f, 100.0f, "%.01f");
+		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 		ImGui::Checkbox("AutoFocus", &Settings().AutoFocus);
 		
 		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, Settings().HDRIsLoaded - 1);
@@ -300,7 +300,7 @@ void UserInterface::DrawSettings()
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(8, 8));
 	
-	// set boarder color
+	// set border color
 	ImGui::PushStyleColor(ImGuiCol_Border, !Settings().AutoFocus ? ImVec4(1,1,1,1) : Settings().HitResult.Hitted ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f): ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1,1));
 	ImGui::Begin("CenterDot", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -313,7 +313,7 @@ void UserInterface::DrawSettings()
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(1, 1));
 	
-	// set boarder color
+	// set border color
 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5 + 10, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0, 0.5));
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(0, 0));
