@@ -177,9 +177,6 @@ namespace Assets
             return;
         }
 
-        cameraInit.cameras.clear();
-        cameraInit.CameraIdx = -1;
-
         // load all textures
         for (tinygltf::Image& image : model.images)
         {
