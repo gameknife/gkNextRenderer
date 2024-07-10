@@ -4,6 +4,7 @@
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
 #include "RayTracingProperties.hpp"
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace Vulkan
 {
@@ -45,8 +46,13 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 
+		virtual void BeforeNextFrame() override;
+
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;
+
+		virtual bool GetFocusDistance(float& distance) const override;
+		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
 
 	protected:
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
@@ -66,6 +72,14 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<DeviceMemory> topScratchBufferMemory_;
 		std::unique_ptr<Buffer> instancesBuffer_;
 		std::unique_ptr<DeviceMemory> instancesBufferMemory_;
+		
+		
+		Assets::RayCastResult cameraCenterCastResult_;
+		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
+		std::unique_ptr<Vulkan::Buffer> raycastInputBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> raycastInputBuffer_Memory_;
+		std::unique_ptr<Vulkan::Buffer> raycastOutputBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> raycastOutputBuffer_Memory_;
 	};
 
 }

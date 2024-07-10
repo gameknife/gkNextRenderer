@@ -296,7 +296,7 @@ void UserInterface::DrawSettings()
 
 	// draw a center dot with imgui
 	auto io = ImGui::GetIO();
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0.5, 0.5));
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(8, 8));
 	
@@ -309,12 +309,12 @@ void UserInterface::DrawSettings()
 	ImGui::PopStyleColor();
 	ImGui::PopStyleVar();
 
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0.5, 0.5));
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(1, 1));
 	
 	// set border color
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5 + 10, io.DisplaySize.y * 0.5), ImGuiCond_Always, ImVec2(0, 0.5));
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f + 10.0f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0, 0.5f));
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
 	ImGui::SetNextWindowSize(ImVec2(0, 0));
 	ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0,0,0,0));

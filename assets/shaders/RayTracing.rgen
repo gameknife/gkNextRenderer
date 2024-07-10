@@ -88,11 +88,12 @@ void main()
 		{
 			vec2 uvOffset = RandomFloat2(Ray.RandomSeed) / isize;
             uv += uvOffset;
-		}       
-		vec2 offset = vec2(0);//Camera.Aperture / 2 * RandomInUnitDisk(Ray.RandomSeed);
+		}
+		
+		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
 		vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
 		vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+		vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance - vec3(offset, 0)), 0);
 		
 		vec4 s_albedo = vec4(0);
 		uint primitiveId = 0;
