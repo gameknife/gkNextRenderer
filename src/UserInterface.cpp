@@ -209,6 +209,7 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		ImGui::BulletText("F1: toggle Settings.");
 		ImGui::BulletText("F2: toggle Statistics.");
+		ImGui::BulletText("SPACE: hold to auto focus.");
 		ImGui::NewLine();
 
 		ImGui::Text("Scene");
@@ -264,7 +265,6 @@ void UserInterface::DrawSettings()
 		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
-		ImGui::Checkbox("AutoFocus", &Settings().AutoFocus);
 		
 		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, Settings().HDRIsLoaded - 1);
 		ImGui::SliderFloat("SkyRotation", &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
@@ -293,35 +293,6 @@ void UserInterface::DrawSettings()
 		ImGui::NewLine();
 	}
 	ImGui::End();
-
-	// draw a center dot with imgui
-	auto io = ImGui::GetIO();
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	ImGui::SetNextWindowSize(ImVec2(8, 8));
-	
-	// set border color
-	ImGui::PushStyleColor(ImGuiCol_Border, !Settings().AutoFocus ? ImVec4(1,1,1,1) : Settings().HitResult.Hitted ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f): ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1,1));
-	ImGui::Begin("CenterDot", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	//ImGui::Text(" ");
-	ImGui::End();
-	ImGui::PopStyleColor();
-	ImGui::PopStyleVar();
-
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	ImGui::SetNextWindowSize(ImVec2(1, 1));
-	
-	// set border color
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f + 10.0f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0, 0.5f));
-	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	ImGui::SetNextWindowSize(ImVec2(0, 0));
-	ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0,0,0,0));
-	ImGui::Begin("HitInfo", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("%.1fm\nInst: %d\nMat: %d", Settings().HitResult.T, Settings().HitResult.InstanceId, Settings().HitResult.MaterialId);
-	ImGui::End();
-	ImGui::PopStyleColor();
 }
 
 void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
@@ -385,4 +356,36 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Time: %s", buff);
 	}
 	ImGui::End();
+
+	if( Settings().AutoFocus )
+	{
+		// draw a center dot with imgui
+		auto io = ImGui::GetIO();
+		ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+		ImGui::SetNextWindowSize(ImVec2(8, 8));
+	
+		// set border color
+		ImGui::PushStyleColor(ImGuiCol_Border, !Settings().AutoFocus ? ImVec4(1,1,1,1) : Settings().HitResult.Hitted ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f): ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1,1));
+		ImGui::Begin("CenterDot", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		//ImGui::Text(" ");
+		ImGui::End();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
+
+		ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+		ImGui::SetNextWindowSize(ImVec2(1, 1));
+	
+		// set border color
+		ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f + 10.0f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0, 0.5f));
+		ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+		ImGui::SetNextWindowSize(ImVec2(0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0,0,0,0));
+		ImGui::Begin("HitInfo", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+		ImGui::Text("%.1fm\nInst: %d\nMat: %d", Settings().HitResult.T, Settings().HitResult.InstanceId, Settings().HitResult.MaterialId);
+		ImGui::End();
+		ImGui::PopStyleColor();
+	}
 }

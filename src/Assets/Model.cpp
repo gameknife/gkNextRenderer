@@ -408,7 +408,7 @@ namespace Assets
             
             if( cam.extras.Has("F-Stop") )
             {
-                cameraInit.cameras[i].Aperture = 0.05f / cam.extras.Get("F-Stop").GetNumberAsDouble();
+                cameraInit.cameras[i].Aperture = 0.2f / cam.extras.Get("F-Stop").GetNumberAsDouble();
             }
             if( cam.extras.Has("FocalDistance") )
             {

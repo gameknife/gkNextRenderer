@@ -195,6 +195,8 @@ build_windows.bat
 ```
 
 **Android On Windows**
+JAVA SDK should be JAVA17 or higher
+Install Android Studio or Android SDK Tool, with NDK 25.1.8937393 installed
 ```
 set ANDROID_NDK_HOME=\path\to\ndk
 #like: set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\25.1.8937393
