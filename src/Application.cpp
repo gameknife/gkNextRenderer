@@ -309,6 +309,20 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
                 break;
             case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
                 break;
+            case GLFW_KEY_SPACE: userSettings_.AutoFocus = true;
+                break;
+            default: break;
+            }
+        }
+    }
+    else if(action == GLFW_RELEASE)
+    {
+        if (!userSettings_.Benchmark)
+        {
+            switch (key)
+            {
+            case GLFW_KEY_SPACE: userSettings_.AutoFocus = false;
+                break;
             default: break;
             }
         }

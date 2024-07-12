@@ -174,13 +174,13 @@ void SceneList::ScanScenes()
         //if found - change fn. if not - just filename
         if (got != Assets::sceneNames.end()) fn = got->second;
         std::string ext = entry.path().extension().string();
-        if(ext != ".glb" && ext != ".obj") continue;
+        if(ext != ".glb" && ext != ".gltf" && ext != ".obj") continue;
 
         AllScenes.push_back({fn, [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
-            if(ext == ".glb")
+            if(ext == ".glb" || ext == ".gltf")
             {
                 Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, textures, materials, lights);
             }
@@ -210,13 +210,13 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     // check if absPath exists
     std::filesystem::path filename = absPath;
     std::string ext = filename.extension().string();
-    if (std::filesystem::exists(absPath) && (ext == ".glb" || ext == ".obj") )
+    if (std::filesystem::exists(absPath) && (ext == ".glb" || ext == ".gltf" || ext == ".obj") )
     {
         AllScenes.push_back({filename.filename().string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
                     std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
-            if(ext == ".glb")
+            if(ext == ".glb" || ext == ".gltf")
             {
                 Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, textures, materials, lights);
             }
