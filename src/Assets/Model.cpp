@@ -12,6 +12,7 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <future>
 #include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
@@ -208,6 +209,15 @@ namespace Assets
             }
 
             std::string loadname = "", fn;
+            size_t maxSz = textureIdx;
+            for (tinygltf::Texture& gltfTex : model.textures)
+            {
+                size_t idx = gltfTex.source + textureIdx;
+                if (maxSz < idx) maxSz = idx;
+            }
+
+            for (; maxSz >= textureIdx; maxSz--) textures.emplace_back(Texture::Texture("", 0, 0, 0, 0, (unsigned char*)0));
+
             for (tinygltf::Texture& gltfTex : model.textures)
             {
                 tinygltf::Image& image = model.images[gltfTex.source];
@@ -227,8 +237,11 @@ namespace Assets
                 	get_tex_id(loadname, isNew);
                 	if (isNew)
                 	{
-                		textures.push_back(Texture::LoadTexture(loadname, Vulkan::SamplerConfig()));
-                		tex_names[loadname] = textures.size() - 1;
+                        size_t idx = gltfTex.source + textureIdx;
+                        //std::async([](const size_t idx, std::vector<Assets::Texture>& textures, std::string& loadname) {
+                            textures[idx] = Texture::LoadTexture(loadname, Vulkan::SamplerConfig());
+                        //}, idx, textures, loadname);
+                        tex_names[loadname] = idx;
                 	}
                 } else {
                 	printf("\n%s NOT FOUND\n", texName.c_str());

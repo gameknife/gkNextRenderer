@@ -14,11 +14,11 @@ namespace Assets
 		static Texture LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 		static Texture LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
-		Texture& operator = (const Texture&) = delete;
-		Texture& operator = (Texture&&) = delete;
+		Texture& operator = (const Texture&) = default;
+		Texture& operator = (Texture&&) = default;
 
-		Texture() = delete;
-		Texture(const Texture&) = delete;
+		Texture() = default;
+		Texture(const Texture&a) = default;
 		Texture(Texture&&) = default;
 		~Texture() = default;
 
@@ -29,9 +29,9 @@ namespace Assets
 		int Channels() const { return channels_; }
 		const std::string& Loadname() const { return loadname_; }
 
-	private:
-
 		Texture(std::string loadname, int width, int height, int channels, int hdr, unsigned char* pixels);
+
+	private:
 
 		Vulkan::SamplerConfig samplerConfig_;
 		std::string loadname_;
