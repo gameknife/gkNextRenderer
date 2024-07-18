@@ -18,6 +18,7 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
+#include "Assets/Texture.hpp"
 #include "Utilities/Exception.hpp"
 #include <array>
 
@@ -116,6 +117,9 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 	OnDeviceSet();
 
+	// Global Texture Pool Creation Here
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_));
+
 	// Create swap chain and command buffers.
 	CreateSwapChain();
 }
@@ -151,6 +155,7 @@ void VulkanBaseRenderer::Start()
 
 void VulkanBaseRenderer::End()
 {
+	globalTexturePool_.reset();
 	device_->WaitIdle();
 	gpuTimer_.reset();
 }
@@ -179,6 +184,10 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	indexingFeatures.pNext = nextDeviceFeatures;
 	indexingFeatures.runtimeDescriptorArray = true;
 	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	indexingFeatures.descriptorBindingPartiallyBound = true;
+	indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	indexingFeatures.descriptorBindingVariableDescriptorCount = true;
+	
 
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;

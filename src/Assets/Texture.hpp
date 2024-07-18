@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Vulkan/Vulkan.hpp"
 #include "Vulkan/Sampler.hpp"
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Assets
 {
@@ -40,6 +42,27 @@ namespace Assets
 		int channels_;
 		int hdr_;
 		std::unique_ptr<unsigned char, void (*) (void*)> pixels_;
+	};
+
+	class GlobalTexturePool final
+	{
+	public:
+		GlobalTexturePool(const Vulkan::Device& device);
+		~GlobalTexturePool();
+
+		VkDescriptorSetLayout Layout() const { return layout_; }
+		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSets_[index]; }
+		
+		static GlobalTexturePool* GetInstance() {return instance_;}
+
+	private:
+		static GlobalTexturePool* instance_;
+
+		
+		const class Vulkan::Device& device_;
+		VkDescriptorPool descriptorPool_{};
+		VkDescriptorSetLayout layout_{};
+		std::vector<VkDescriptorSet> descriptorSets_;
 	};
 
 }
