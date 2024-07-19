@@ -4,7 +4,9 @@
 #include <chrono>
 #include <iostream>
 
+#include "TextureImage.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/ImageView.hpp"
 
 namespace Assets {
 
@@ -162,7 +164,30 @@ GlobalTexturePool::~GlobalTexturePool()
 		layout_ = nullptr;
 	}
 }
+
+void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
+{
+	VkDescriptorImageInfo imageInfo = {};
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imageInfo.imageView = textureImage.ImageView().Handle();
+	imageInfo.sampler = textureImage.Sampler().Handle();
 	
+	
+	VkWriteDescriptorSet descriptorWrite = {};
+	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite.dstSet = descriptorSets_[0];
+	descriptorWrite.dstBinding = 0;
+	descriptorWrite.dstArrayElement = textureIdx;
+	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrite.descriptorCount = 1;
+	descriptorWrite.pImageInfo = &imageInfo;
+	
+	vkUpdateDescriptorSets(
+		device_.Handle(),
+		1,
+		&descriptorWrite, 0, nullptr);
+}
+
 GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;
 	
 }

@@ -10,13 +10,15 @@
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-layout(binding = 3) uniform sampler2D[] TextureSamplers;
+
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
+
+layout(set = 1, binding = 0) uniform sampler2D GlobalTextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/ColorFunc.glsl"
@@ -58,7 +60,7 @@ void main() {
     vec4 albedo = mat.Diffuse;
     if (mat.DiffuseTextureId >= 0)
     {
-        vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
+        vec4 tex = texture(GlobalTextureSamplers[mat.DiffuseTextureId], v.TexCoord);
         albedo *= tex * tex;
     }
 	

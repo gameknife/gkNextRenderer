@@ -8,6 +8,8 @@
 
 namespace Assets
 {
+	class TextureImage;
+	
 	class Texture final
 	{
 	public:
@@ -52,6 +54,8 @@ namespace Assets
 
 		VkDescriptorSetLayout Layout() const { return layout_; }
 		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSets_[index]; }
+
+		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 

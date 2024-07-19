@@ -115,11 +115,12 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	deviceFeatures.drawIndirectFirstInstance = true;
 	
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
-	OnDeviceSet();
 
 	// Global Texture Pool Creation Here
 	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_));
-
+	
+	OnDeviceSet();
+	
 	// Create swap chain and command buffers.
 	CreateSwapChain();
 }

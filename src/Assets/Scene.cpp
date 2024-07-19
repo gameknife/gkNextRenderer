@@ -143,6 +143,11 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	   textureImageViewHandles_[i] = textureImages_[i]->ImageView().Handle();
 	   textureSamplerHandles_[i] = textureImages_[i]->Sampler().Handle();
 	}
+
+	for (size_t i = 0; i != textures_.size(); ++i)
+	{
+		GlobalTexturePool::GetInstance()->BindTexture(i, *(textureImages_[i]));
+	}
 }
 
 Scene::~Scene()
