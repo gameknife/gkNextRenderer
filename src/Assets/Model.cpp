@@ -164,7 +164,6 @@ namespace Assets
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
-        int32_t textureIdx = static_cast<int32_t>( GlobalTexturePool::GetInstance()->TotalTextures() );
         int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
@@ -178,12 +177,16 @@ namespace Assets
         }
 
         // load all textures
+        std::vector<uint32_t> textureIdMap;
+        
         for (tinygltf::Image& image : model.images)
         {
             // 假设，这里的image id和外面的textures id是一样的
-            Texture::LoadTexture(
+            uint32_t texIdx = Texture::LoadTexture(
                 image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
+
+            textureIdMap.push_back(texIdx);
         }
 
         // load all materials
@@ -204,12 +207,12 @@ namespace Assets
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
             {
-                m.DiffuseTextureId = model.textures[texture].source + textureIdx;
+                m.DiffuseTextureId = textureIdMap[ model.textures[texture].source ];
             }
             int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if(mraTexture != -1)
             {
-                m.MRATextureId = model.textures[mraTexture].source + textureIdx;
+                m.MRATextureId = textureIdMap[ model.textures[mraTexture].source ];
                 m.Fuzziness = 1.0;
             }
             

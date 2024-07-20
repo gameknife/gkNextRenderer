@@ -4,6 +4,7 @@
 #include "Vulkan/Sampler.hpp"
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Vulkan {
@@ -60,7 +61,7 @@ namespace Assets
 		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSets_[index]; }
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
-		void AddTexture(uint32_t textureIdx, const Texture& texture);
+		uint32_t TryGetTexureIndex(const std::string& textureName) const;
 		uint32_t RequestNewTexture(const Texture& texture);
 
 		uint32_t TotalTextures() const {return textureImages_.size();}
@@ -77,6 +78,7 @@ namespace Assets
 		std::vector<VkDescriptorSet> descriptorSets_;
 
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
+		std::unordered_map<std::string, uint32_t> textureNameMap_;
 	};
 
 }

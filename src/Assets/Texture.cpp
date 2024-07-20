@@ -12,6 +12,11 @@ namespace Assets {
 
 uint32_t Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
 {
+	uint32_t texIdx = GlobalTexturePool::GetInstance()->TryGetTexureIndex(filename);
+	if (texIdx != -1)
+	{
+		return texIdx;
+	}
 	std::cout << "- loading '" << filename << "'... " << std::flush;
 	const auto timer = std::chrono::high_resolution_clock::now();
 
@@ -34,6 +39,11 @@ uint32_t Texture::LoadTexture(const std::string& filename, const Vulkan::Sampler
 
 uint32_t Texture::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
 {
+	uint32_t texIdx = GlobalTexturePool::GetInstance()->TryGetTexureIndex(texname);
+	if (texIdx != -1)
+	{
+		return texIdx;
+	}
 	const auto timer = std::chrono::high_resolution_clock::now();
 
 	// Load the texture in normal host memory.
@@ -54,6 +64,11 @@ uint32_t Texture::LoadTexture(const std::string& texname, const unsigned char* d
 
 uint32_t Texture::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
 {
+	uint32_t texIdx = GlobalTexturePool::GetInstance()->TryGetTexureIndex(filename);
+	if (texIdx != -1)
+	{
+		return texIdx;
+	}
 	std::cout << "- loading hdr '" << filename << "'... " << std::flush;
 	const auto timer = std::chrono::high_resolution_clock::now();
 
@@ -190,16 +205,29 @@ void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& tex
 		&descriptorWrite, 0, nullptr);
 }
 
-void GlobalTexturePool::AddTexture(uint32_t textureIdx, const Texture &texture) {
-	textureImages_.emplace_back(new TextureImage( commandPool_, texture  ));
-	BindTexture(textureIdx, *(textureImages_.back()));
+uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
+{
+	if( textureNameMap_.find(textureName) != textureNameMap_.end() )
+	{
+		return textureNameMap_.at(textureName);
+	}
+	return -1;
 }
 
 uint32_t GlobalTexturePool::RequestNewTexture(const Texture& texture)
 {
+	textureNameMap_.find(texture.Loadname());
+	if (textureNameMap_.find(texture.Loadname()) != textureNameMap_.end())
+	{
+		return textureNameMap_[texture.Loadname()];
+	}
+	
 	textureImages_.emplace_back(new TextureImage( commandPool_, texture  ));
 	uint32_t newTextureIdx = textureImages_.size() - 1;
 	BindTexture(newTextureIdx, *(textureImages_.back()));
+
+	// cache in namemap
+	textureNameMap_[texture.Loadname()] = newTextureIdx;
 	return newTextureIdx;
 }
 
