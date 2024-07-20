@@ -6,6 +6,10 @@
 #include <string>
 #include <vector>
 
+namespace Vulkan {
+	class CommandPool;
+}
+
 namespace Assets
 {
 	class TextureImage;
@@ -49,24 +53,27 @@ namespace Assets
 	class GlobalTexturePool final
 	{
 	public:
-		GlobalTexturePool(const Vulkan::Device& device);
+		GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool);
 		~GlobalTexturePool();
 
 		VkDescriptorSetLayout Layout() const { return layout_; }
 		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSets_[index]; }
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
+		void AddTexture(uint32_t textureIdx, const Texture& texture);
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 
 	private:
 		static GlobalTexturePool* instance_;
 
-		
+		Vulkan::CommandPool& commandPool_;
 		const class Vulkan::Device& device_;
 		VkDescriptorPool descriptorPool_{};
 		VkDescriptorSetLayout layout_{};
 		std::vector<VkDescriptorSet> descriptorSets_;
+
+		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 	};
 
 }

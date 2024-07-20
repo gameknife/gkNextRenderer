@@ -118,7 +118,7 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
 	// Global Texture Pool Creation Here
-	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_));
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, CommandPool()));
 	
 	OnDeviceSet();
 	

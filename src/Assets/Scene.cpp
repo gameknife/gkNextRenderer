@@ -133,28 +133,14 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
 	
 	// Upload all textures
-	textureImages_.reserve(textures_.size());
-	textureImageViewHandles_.resize(textures_.size());
-	textureSamplerHandles_.resize(textures_.size());
-
 	for (size_t i = 0; i != textures_.size(); ++i)
 	{
-	   textureImages_.emplace_back(new TextureImage(commandPool, textures_[i]));
-	   textureImageViewHandles_[i] = textureImages_[i]->ImageView().Handle();
-	   textureSamplerHandles_[i] = textureImages_[i]->Sampler().Handle();
-	}
-
-	for (size_t i = 0; i != textures_.size(); ++i)
-	{
-		GlobalTexturePool::GetInstance()->BindTexture(i, *(textureImages_[i]));
+		GlobalTexturePool::GetInstance()->AddTexture(i, textures_[i]);
 	}
 }
 
 Scene::~Scene()
 {
-	textureSamplerHandles_.clear();
-	textureImageViewHandles_.clear();
-	textureImages_.clear();
 	proceduralBuffer_.reset();
 	proceduralBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 	aabbBuffer_.reset();

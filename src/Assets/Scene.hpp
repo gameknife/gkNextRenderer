@@ -65,8 +65,6 @@ namespace Assets
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
 
 	private:
-		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
-		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
 		const std::vector<Model> models_;
 		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;
@@ -99,10 +97,6 @@ namespace Assets
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
-		
-		std::vector<std::unique_ptr<TextureImage>> textureImages_;
-		std::vector<VkImageView> textureImageViewHandles_;
-		std::vector<VkSampler> textureSamplerHandles_;
 
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};

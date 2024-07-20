@@ -28,6 +28,7 @@ Texture Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerC
 	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
+	// bind texture to global texture pool directly
 	return Texture(filename, width, height, channels, 0, pixels);
 }
 
@@ -82,8 +83,9 @@ Texture::Texture(std::string loadname, int width, int height, int channels, int 
 {
 }
 
-GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device) :
-	device_(device)
+GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool) :
+	device_(device),
+	commandPool_(command_pool)
 {
 	static const uint32_t k_bindless_texture_binding = 0;
 	static const uint32_t k_max_bindless_resources = 2048;
@@ -186,6 +188,11 @@ void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& tex
 		device_.Handle(),
 		1,
 		&descriptorWrite, 0, nullptr);
+}
+
+void GlobalTexturePool::AddTexture(uint32_t textureIdx, const Texture &texture) {
+	textureImages_.emplace_back(new TextureImage( commandPool_, texture  ));
+	BindTexture(textureIdx, *(textureImages_.back()));
 }
 
 GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;
