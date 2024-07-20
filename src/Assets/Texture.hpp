@@ -18,9 +18,9 @@ namespace Assets
 	{
 	public:
 
-		static Texture LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig);
-		static Texture LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
-		static Texture LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
+		static uint32_t LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig);
+		static uint32_t LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
+		static uint32_t LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
 		Texture& operator = (const Texture&) = delete;
 		Texture& operator = (Texture&&) = delete;
@@ -61,6 +61,9 @@ namespace Assets
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		void AddTexture(uint32_t textureIdx, const Texture& texture);
+		uint32_t RequestNewTexture(const Texture& texture);
+
+		uint32_t TotalTextures() const {return textureImages_.size();}
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 

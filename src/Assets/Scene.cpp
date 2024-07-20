@@ -16,12 +16,10 @@ namespace Assets {
 Scene::Scene(Vulkan::CommandPool& commandPool,
 	std::vector<Node>&& nodes,
 	std::vector<Model>&& models,
-	std::vector<Texture>&& textures,
 	std::vector<Material>&& materials,
 	std::vector<LightObject>&& lights,
 	bool supportRayTracing) :
 	models_(std::move(models)),
-	textures_(std::move(textures)),
 	nodes_(std::move(nodes))
 {
 	// Concatenate all the models
@@ -131,12 +129,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	indicesCount_ = static_cast<uint32_t>(indices.size());
 	verticeCount_ = static_cast<uint32_t>(vertices.size());
 	indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
-	
-	// Upload all textures
-	for (size_t i = 0; i != textures_.size(); ++i)
-	{
-		GlobalTexturePool::GetInstance()->AddTexture(i, textures_[i]);
-	}
 }
 
 Scene::~Scene()

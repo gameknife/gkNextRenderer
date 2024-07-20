@@ -75,7 +75,6 @@ namespace Assets
         static void AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models);
 
         static int LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
-                                        std::vector<Texture>& textures,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode = true);
 
@@ -89,7 +88,7 @@ namespace Assets
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
         static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<class Node>& nodes,
-                                  std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
+                                  std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
 
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, int materialIdx);

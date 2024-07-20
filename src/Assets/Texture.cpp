@@ -10,7 +10,7 @@
 
 namespace Assets {
 
-Texture Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
+uint32_t Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
 {
 	std::cout << "- loading '" << filename << "'... " << std::flush;
 	const auto timer = std::chrono::high_resolution_clock::now();
@@ -29,10 +29,10 @@ Texture Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerC
 	std::cout << elapsed << "s" << std::endl;
 
 	// bind texture to global texture pool directly
-	return Texture(filename, width, height, channels, 0, pixels);
+	return GlobalTexturePool::GetInstance()->RequestNewTexture(Texture(filename, width, height, channels, 0, pixels));
 }
 
-Texture Texture::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
+uint32_t Texture::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
 {
 	const auto timer = std::chrono::high_resolution_clock::now();
 
@@ -49,10 +49,10 @@ Texture Texture::LoadTexture(const std::string& texname, const unsigned char* da
 	std::cout << texname << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
-	return Texture(texname, width, height, channels, 0, pixels);
+	return GlobalTexturePool::GetInstance()->RequestNewTexture( Texture(texname, width, height, channels, 0, pixels));
 }
 
-Texture Texture::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
+uint32_t Texture::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
 {
 	std::cout << "- loading hdr '" << filename << "'... " << std::flush;
 	const auto timer = std::chrono::high_resolution_clock::now();
@@ -70,7 +70,7 @@ Texture Texture::LoadHDRTexture(const std::string& filename, const Vulkan::Sampl
 	std::cout << "(" << width << " x " << height << " x " << channels << ") ";
 	std::cout << elapsed << "s" << std::endl;
 
-	return Texture(filename, width, height, channels, 1, static_cast<unsigned char*>((void*)pixels));
+	return GlobalTexturePool::GetInstance()->RequestNewTexture( Texture(filename, width, height, channels, 1, static_cast<unsigned char*>((void*)pixels)));
 }
 
 Texture::Texture(std::string loadname, int width, int height, int channels, int hdr, unsigned char* const pixels) :
@@ -193,6 +193,14 @@ void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& tex
 void GlobalTexturePool::AddTexture(uint32_t textureIdx, const Texture &texture) {
 	textureImages_.emplace_back(new TextureImage( commandPool_, texture  ));
 	BindTexture(textureIdx, *(textureImages_.back()));
+}
+
+uint32_t GlobalTexturePool::RequestNewTexture(const Texture& texture)
+{
+	textureImages_.emplace_back(new TextureImage( commandPool_, texture  ));
+	uint32_t newTextureIdx = textureImages_.size() - 1;
+	BindTexture(newTextureIdx, *(textureImages_.back()));
+	return newTextureIdx;
 }
 
 GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;

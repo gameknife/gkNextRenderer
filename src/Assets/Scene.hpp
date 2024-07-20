@@ -34,7 +34,6 @@ namespace Assets
 		Scene(Vulkan::CommandPool& commandPool,
 			std::vector<Node>&& nodes,
 			std::vector<Model>&& models,
-			std::vector<Texture>&& textures,
 			std::vector<Material>&& materials,
 			std::vector<LightObject>&& lights,
 			bool supportRayTracing);
@@ -66,7 +65,6 @@ namespace Assets
 
 	private:
 		const std::vector<Model> models_;
-		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;

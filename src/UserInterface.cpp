@@ -336,6 +336,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 		Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), buff, (void*)"");
 		ImGui::Text("Instance: %s", buff);
+		ImGui::Text("Texture: %d", statistics.TextureCount);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display
