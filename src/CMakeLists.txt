@@ -179,6 +179,8 @@ set(src_files
 	UserInterface.cpp
 	UserInterface.hpp
 	UserSettings.hpp
+	TaskCoordinator.cpp
+	TaskCoordinator.hpp
 )
 
 set_source_files_properties(
