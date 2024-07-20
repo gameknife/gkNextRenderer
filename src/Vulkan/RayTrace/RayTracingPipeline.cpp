@@ -53,13 +53,7 @@ namespace Vulkan::RayTracing
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR},
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
-
-            // Textures and image samplers
-            {
-                8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR
-            },
-
+            
             // The Procedural buffer.
             {
                 9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -152,17 +146,6 @@ namespace Vulkan::RayTracing
             lightBufferInfo.buffer = scene.LightBuffer().Handle();
             lightBufferInfo.range = VK_WHOLE_SIZE;
 
-            // Image and texture samplers.
-            std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
-
-            for (size_t t = 0; t != imageInfos.size(); ++t)
-            {
-                auto& imageInfo = imageInfos[t];
-                imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                imageInfo.imageView = scene.TextureImageViews()[t];
-                imageInfo.sampler = scene.TextureSamplers()[t];
-            }
-
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, structureInfo),
@@ -172,7 +155,6 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
                 descriptorSets.Bind(i, 7, offsetsBufferInfo),
-                descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
                 descriptorSets.Bind(i, 10, accumulationImageInfo),
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
                 descriptorSets.Bind(i, 12, visibilityBufferImageInfo),

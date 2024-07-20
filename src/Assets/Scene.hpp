@@ -56,8 +56,7 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
-		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
-		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
+
 		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
@@ -66,7 +65,8 @@ namespace Assets
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
 
 	private:
-
+		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
+		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
 		const std::vector<Model> models_;
 		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;

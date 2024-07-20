@@ -275,7 +275,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     stats.InstanceCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
-    stats.TextureCount = static_cast<uint32_t>(scene_->TextureSamplers().size());
+    stats.TextureCount = static_cast<uint32_t>( 0 ); // swap to global texture pool later
     stats.ComputePassCount = 0;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
