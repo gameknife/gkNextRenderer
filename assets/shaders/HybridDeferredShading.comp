@@ -12,7 +12,7 @@ layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 13, rg32ui) uniform uimage2D MiniGBuffer1;
 layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-layout(binding = 3) uniform sampler2D[] TextureSamplers;
+//layout(binding = 3) uniform sampler2D[] TextureSamplers;
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
@@ -22,6 +22,8 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
 layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
+
+layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/Const_Func.glsl"

@@ -82,7 +82,7 @@ namespace
 }
 
 void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                                       std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                                       std::vector<Assets::Model>& models,
                                        std::vector<Assets::Material>& materials,
                                        std::vector<Assets::LightObject>& lights)
 {
@@ -119,7 +119,7 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
 }
 
 void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                           std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                           std::vector<Assets::Model>& models,
                            std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
 {
     camera.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
@@ -177,16 +177,16 @@ void SceneList::ScanScenes()
         if(ext != ".glb" && ext != ".obj") continue;
 
         AllScenes.push_back({fn, [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                    std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                    std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
             if(ext == ".glb")
             {
-                Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, textures, materials, lights);
+                Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, materials, lights);
             }
             else if(ext == ".obj")
             {
-                Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, textures, materials, lights);
+                Model::LoadObjModel(absolute(entry.path()).string(), nodes, models, materials, lights);
 
                 camera.FieldOfView = 38;
                 camera.Aperture = 0.0f;
@@ -213,16 +213,16 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     if (std::filesystem::exists(absPath) && (ext == ".glb" || ext == ".obj") )
     {
         AllScenes.push_back({filename.filename().string(), [=](Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
-                    std::vector<Assets::Texture>& textures, std::vector<Assets::Material>& materials,
+                    std::vector<Assets::Material>& materials,
                     std::vector<Assets::LightObject>& lights)
         {
             if(ext == ".glb")
             {
-                Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, textures, materials, lights);
+                Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, materials, lights);
             }
             else if(ext == ".obj")
             {
-                Model::LoadObjModel(absolute(filename).string(), nodes, models, textures, materials, lights);
+                Model::LoadObjModel(absolute(filename).string(), nodes, models, materials, lights);
 
                 camera.FieldOfView = 38;
                 camera.Aperture = 0.0f;

@@ -160,11 +160,10 @@ namespace Assets
     }
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
-                              std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                              std::vector<Assets::Model>& models,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
-        int32_t textureIdx = static_cast<int32_t>(textures.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
@@ -178,12 +177,16 @@ namespace Assets
         }
 
         // load all textures
+        std::vector<uint32_t> textureIdMap;
+        
         for (tinygltf::Image& image : model.images)
         {
             // 假设，这里的image id和外面的textures id是一样的
-            textures.push_back(Texture::LoadTexture(
+            uint32_t texIdx = Texture::LoadTexture(
                 image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
-                model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig()));
+                model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
+
+            textureIdMap.push_back(texIdx);
         }
 
         // load all materials
@@ -204,12 +207,12 @@ namespace Assets
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
             {
-                m.DiffuseTextureId = model.textures[texture].source + textureIdx;
+                m.DiffuseTextureId = textureIdMap[ model.textures[texture].source ];
             }
             int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if(mraTexture != -1)
             {
-                m.MRATextureId = model.textures[mraTexture].source + textureIdx;
+                m.MRATextureId = textureIdMap[ model.textures[mraTexture].source ];
                 m.Fuzziness = 1.0;
             }
             
@@ -472,7 +475,6 @@ namespace Assets
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
-                            std::vector<Texture>& textures,
                             std::vector<Material>& materials,
                             std::vector<LightObject>& lights, bool autoNode)
     {
@@ -505,10 +507,10 @@ namespace Assets
         tex_names.clear();
         bool isNew, file_exists;
         //fill with exists textures
-        for (size_t i = 0; i < textures.size(); i++)
-        {
-			tex_names[textures[i].Loadname()] = i;
-        }
+   //      for (size_t i = 0; i < textures.size(); i++)
+   //      {
+			// tex_names[textures[i].Loadname()] = i;
+   //      }
 
         for (const auto& _material : objReader.GetMaterials())
         {
@@ -537,8 +539,8 @@ namespace Assets
                 	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
                 	if (isNew)
                 	{
-                		textures.push_back(Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig()));
-                		m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
+                		uint32_t texIdx = Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig());
+                		m.DiffuseTextureId = static_cast<int32_t>(texIdx);
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}
                 } else {

@@ -33,7 +33,7 @@ namespace Assets
 
 typedef std::pair<std::string, std::function<void (Assets::CameraInitialSate&,
                                                              std::vector<Assets::Node>& nodes,
-                                                             std::vector<Assets::Model>&, std::vector<Assets::Texture>&,
+                                                             std::vector<Assets::Model>&,
                                                              std::vector<Assets::Material>&,
                                                              std::vector<Assets::LightObject>&)>> scenes_pair;
 

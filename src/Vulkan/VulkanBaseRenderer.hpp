@@ -18,6 +18,7 @@
 
 namespace Assets
 {
+	class GlobalTexturePool;
 	class Scene;
 	class UniformBufferObject;
 	class UniformBuffer;
@@ -305,6 +306,8 @@ namespace Vulkan
 		std::unique_ptr<ImageView> screenShotImageView_;
 
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
+
+		std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool_;
 
 		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};

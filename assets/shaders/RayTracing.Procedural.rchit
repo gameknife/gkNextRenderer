@@ -14,7 +14,8 @@ layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
-layout(binding = 8) uniform sampler2D[] TextureSamplers;
+//layout(binding = 8) uniform sampler2D[] TextureSamplers;
+layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 layout(binding = 9) readonly buffer SphereArray { vec4[] Spheres; };
 
 #include "common/Const_Func.glsl"
