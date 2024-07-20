@@ -12,6 +12,7 @@
 #include <iostream>
 #include <numeric>
 
+#include "Assets/Texture.hpp"
 #include "Vulkan/RenderImage.hpp"
 
 #ifdef WIN32
@@ -234,7 +235,13 @@ namespace Vulkan::RayTracing
         // Bind ray tracing pipeline.
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->Handle());
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-
+        
+        // bind the global bindless set
+        static const uint32_t k_bindless_set = 1;
+        VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+        vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracingPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                 1, GlobalDescriptorSets, 0, nullptr );
+        
         // Describe the shader binding table.
         VkStridedDeviceAddressRegionKHR raygenShaderBindingTable = {};
         raygenShaderBindingTable.deviceAddress = shaderBindingTable_->RayGenDeviceAddress();

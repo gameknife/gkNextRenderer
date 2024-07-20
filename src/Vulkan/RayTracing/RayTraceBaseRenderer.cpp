@@ -138,7 +138,9 @@ namespace Vulkan::RayTracing
         results.push_back( Assets::RayCastResult() );
         Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastIn", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, request, raycastInputBuffer_, raycastInputBuffer_Memory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastOut", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, results, raycastOutputBuffer_, raycastOutputBuffer_Memory_);
+#if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), *raycastInputBuffer_, *raycastOutputBuffer_, topAs_[0], GetScene()));
+#endif
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()

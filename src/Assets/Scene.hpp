@@ -34,7 +34,6 @@ namespace Assets
 		Scene(Vulkan::CommandPool& commandPool,
 			std::vector<Node>&& nodes,
 			std::vector<Model>&& models,
-			std::vector<Texture>&& textures,
 			std::vector<Material>&& materials,
 			std::vector<LightObject>&& lights,
 			bool supportRayTracing);
@@ -56,8 +55,7 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
-		const std::vector<VkImageView> TextureImageViews() const { return textureImageViewHandles_; }
-		const std::vector<VkSampler> TextureSamplers() const { return textureSamplerHandles_; }
+
 		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
@@ -66,9 +64,7 @@ namespace Assets
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
 
 	private:
-
 		const std::vector<Model> models_;
-		const std::vector<Texture> textures_;
 		const std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
@@ -99,10 +95,6 @@ namespace Assets
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
-		
-		std::vector<std::unique_ptr<TextureImage>> textureImages_;
-		std::vector<VkImageView> textureImageViewHandles_;
-		std::vector<VkSampler> textureSamplerHandles_;
 
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};

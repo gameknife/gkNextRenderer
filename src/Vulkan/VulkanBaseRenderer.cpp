@@ -18,6 +18,7 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
+#include "Assets/Texture.hpp"
 #include "Utilities/Exception.hpp"
 #include <array>
 
@@ -70,6 +71,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
 
+	globalTexturePool_.reset();
 	commandPool_.reset();
 	device_.reset();
 	surface_.reset();
@@ -114,8 +116,12 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	deviceFeatures.drawIndirectFirstInstance = true;
 	
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
-	OnDeviceSet();
 
+	// Global Texture Pool Creation Here
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, CommandPool()));
+	
+	OnDeviceSet();
+	
 	// Create swap chain and command buffers.
 	CreateSwapChain();
 }
@@ -179,6 +185,10 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	indexingFeatures.pNext = nextDeviceFeatures;
 	indexingFeatures.runtimeDescriptorArray = true;
 	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	indexingFeatures.descriptorBindingPartiallyBound = true;
+	indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	indexingFeatures.descriptorBindingVariableDescriptorCount = true;
+	
 
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
@@ -421,6 +431,12 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+		// bind the global bindless set
+		static const uint32_t k_bindless_set = 1;
+		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), k_bindless_set,
+								 1, GlobalDescriptorSets, 0, nullptr );
+		
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
 
