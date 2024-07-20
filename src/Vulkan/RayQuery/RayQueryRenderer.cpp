@@ -192,6 +192,7 @@ namespace Vulkan::RayTracing
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
+#if !ANDROID
         {
             SCOPED_GPU_TIMER("raycast");
             
@@ -201,6 +202,7 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
+#endif
     }
 
     void RayQueryRenderer::BeforeNextFrame()

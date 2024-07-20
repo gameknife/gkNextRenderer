@@ -86,7 +86,7 @@ GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device) :
 	device_(device)
 {
 	static const uint32_t k_bindless_texture_binding = 0;
-	static const uint32_t k_max_bindless_resources = 16536;
+	static const uint32_t k_max_bindless_resources = 2048;
 	
 	// Create bindless descriptor pool
 	VkDescriptorPoolSize pool_sizes_bindless[] =

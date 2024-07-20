@@ -33,7 +33,6 @@ namespace Vulkan::HybridDeferred
 
             // Others like in frag
             {2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {3, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             // all buffer here
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -77,19 +76,7 @@ namespace Vulkan::HybridDeferred
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Image and texture samplers
-            std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
-
-            for (size_t t = 0; t != imageInfos.size(); ++t)
-            {
-                auto& imageInfo = imageInfos[t];
-                imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                imageInfo.imageView = scene.TextureImageViews()[t];
-                imageInfo.sampler = scene.TextureSamplers()[t];
-            }
-
-
+            
             // Vertex buffer
             VkDescriptorBufferInfo vertexBufferInfo = {};
             vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
@@ -120,7 +107,6 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 0, Info0),
                 descriptorSets.Bind(i, 1, Info1),
                 descriptorSets.Bind(i, 2, uniformBufferInfo),
-                descriptorSets.Bind(i, 3, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
                 descriptorSets.Bind(i, 4, vertexBufferInfo),
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
@@ -147,7 +133,7 @@ namespace Vulkan::HybridDeferred
         Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
                                        1, &pipelineCreateInfo,
                                        NULL, &pipeline_),
-              "create deferred shading pipeline");
+              "create hybird shading pipeline");
     }
 
     HybridShadingPipeline::~HybridShadingPipeline()
