@@ -5,6 +5,7 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include <algorithm>
+#include <iostream>
 #include <set>
 
 namespace Vulkan {
@@ -49,19 +50,26 @@ Device::Device(
 
 	const auto queueFamilies = GetEnumerateVector(physicalDevice, vkGetPhysicalDeviceQueueFamilyProperties);
 
+	for ( auto queue : queueFamilies )
+	{
+		std::cout << "Queue Family: " << queue.queueFlags << " count: " << queue.queueCount << std::endl;
+	}
+	
+
 	// Find the graphics queue.
 	const auto graphicsFamily = FindQueue(queueFamilies, "graphics", VK_QUEUE_GRAPHICS_BIT, 0, 1);
-	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
-	// On SteamDeck, the graphics queue is only 1 count, cannot create more than 1 queue.
+
+	// USE SPARSE BINDING AS THREAD LOAD QUEUE
 	// On MoltenVK, the total queue count is 1, cannot create more than 1 queue.
+#if __APPLE__
+	const auto transferFamily = graphicsFamily;
+#else
+	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_SPARSE_BINDING_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
+#endif
 	
-	//Commented out for Macos compatibility
+	//Commented out for Macos compatibility, and this queue is not in use actually
 	//const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
-
-	//Commented out the dedicated transfer queue, as it's never used (relic from Vulkan tutorial) 
-	//and causes problems with RADV (see https://github.com/NVIDIA/Q2RTX/issues/147).
-	//const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
-
+	
 	// Find the presentation queue (usually the same as graphics queue).
 	const auto presentFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
 	{
