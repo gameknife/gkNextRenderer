@@ -11,7 +11,7 @@ CommandPool::CommandPool(const class Device& device, const uint32_t queueFamilyI
 	poolInfo.queueFamilyIndex = queueFamilyIndex;
 	poolInfo.flags = allowReset ? VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT : 0;
 
-	queue_ = queue == 0 ? device.GraphicsQueue() : device.GraphicsQueue2();
+	queue_ = queue == 0 ? device.GraphicsQueue() : device.TransferQueue();
 
 	Check(vkCreateCommandPool(device.Handle(), &poolInfo, nullptr, &commandPool_),
 		"create command pool");
