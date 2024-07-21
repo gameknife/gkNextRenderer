@@ -43,6 +43,7 @@ namespace Vulkan
 		bool IsMinimized() const;
 		void Run();
 		void WaitForEvents() const;
+		void Show() const;
 
 	private:
 

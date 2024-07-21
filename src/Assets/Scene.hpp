@@ -32,10 +32,10 @@ namespace Assets
 		Scene& operator = (Scene&&) = delete;
 
 		Scene(Vulkan::CommandPool& commandPool,
-			std::vector<Node>&& nodes,
-			std::vector<Model>&& models,
-			std::vector<Material>&& materials,
-			std::vector<LightObject>&& lights,
+			std::vector<Node>& nodes,
+			std::vector<Model>& models,
+			std::vector<Material>& materials,
+			std::vector<LightObject>& lights,
 			bool supportRayTracing);
 		~Scene();
 

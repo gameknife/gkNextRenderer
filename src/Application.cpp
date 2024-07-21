@@ -31,6 +31,8 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+#include "TaskCoordinator.hpp"
+
 #if WITH_AVIF
 #include "avif/avif.h"
 #endif
@@ -43,6 +45,12 @@ namespace
 #else
         true;
 #endif
+
+    struct SceneTaskContext
+    {
+        float elapsed;
+        std::array<char, 256> outputInfo;
+    };
 }
 
 template <typename Renderer>
@@ -198,7 +206,17 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     if(userSettings_.HDRIfile != "") Assets::Texture::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
     userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
 
-    LoadScene(userSettings_.SceneIndex);
+    //LoadScene(userSettings_.SceneIndex);
+
+    std::vector<Assets::Model> models;
+    std::vector<Assets::Node> nodes;
+    std::vector<Assets::Material> materials;
+    std::vector<Assets::LightObject> lights;
+    Assets::CameraInitialSate cameraState;
+
+    
+    scene_.reset(new Assets::Scene(Renderer::CommandPool(), nodes, models,
+                                  materials, lights, Renderer::supportRayTracing_));
 
     Renderer::OnPostLoadScene();
 }
@@ -225,15 +243,17 @@ void NextRendererApplication<Renderer>::DeleteSwapChain()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::DrawFrame()
 {
+    TaskCoordinator::GetInstance()->Tick();
+    
     // Check if the scene has been changed by the user.
     if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
-        Renderer::Device().WaitIdle();
-        DeleteSwapChain();
-        Renderer::OnPreLoadScene();
+        // Renderer::Device().WaitIdle();
+        // DeleteSwapChain();
+        // Renderer::OnPreLoadScene();
         LoadScene(userSettings_.SceneIndex);
-        Renderer::OnPostLoadScene();
-        CreateSwapChain();
+        // Renderer::OnPostLoadScene();
+        // CreateSwapChain();
         return;
     }
     
@@ -268,8 +288,11 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     Renderer::supportDenoiser_ = userSettings_.Denoiser;
     Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
-    // Render the scene
-    Renderer::Render(commandBuffer, imageIndex);
+    // Render the scene if scene loaded
+    if(cameraInitialSate_.CameraIdx != -1)
+    {
+        Renderer::Render(commandBuffer, imageIndex);
+    }
 
     // Check the current state of the benchmark, update it for the new frame.
     CheckAndUpdateBenchmarkState(prevTime);
@@ -294,6 +317,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
+    stats.LoadingStatus = (cameraInitialSate_.CameraIdx == -1);
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
 
@@ -414,35 +438,90 @@ void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
 template <typename Renderer>
 void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
-    std::vector<Assets::Model> models;
-    std::vector<Assets::Node> nodes;
-    std::vector<Assets::Material> materials;
-    std::vector<Assets::LightObject> lights;
-
+    std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
+    std::shared_ptr< std::vector<Assets::Node> > nodes = std::make_shared< std::vector<Assets::Node> >();
+    std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
+    std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
+    std::shared_ptr< Assets::CameraInitialSate > cameraState = std::make_shared< Assets::CameraInitialSate >();
+    
     cameraInitialSate_.cameras.clear();
     cameraInitialSate_.CameraIdx = -1;
 
-    SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, materials, lights);
+    // dispatch in thread task and reset in main thread
+    TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    {
+        SceneTaskContext taskContext {};
+        const auto timer = std::chrono::high_resolution_clock::now();
+        
+        SceneList::AllScenes[sceneIndex].second(*cameraState, *nodes, *models, *materials, *lights);
+        
+        taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
-    scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models),
-                                   std::move(materials), std::move(lights), Renderer::supportRayTracing_));
+        std::stringstream stream;
+        stream << "parsed scene #" << sceneIndex <<  " on cpu in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
+        std::string info = stream.str();
+        std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+        task.SetContext( taskContext );
+    },
+    [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    {
+        SceneTaskContext taskContext {};
+        task.GetContext( taskContext );
+        std::cout << "\n\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
+        
+        const auto timer = std::chrono::high_resolution_clock::now();
+        
+        cameraInitialSate_ = *cameraState;
+        
+        Renderer::Device().WaitIdle();
+        DeleteSwapChain();
+        Renderer::OnPreLoadScene();
+
+        scene_.reset(new Assets::Scene(Renderer::CommandPool(), *nodes, *models,
+                                *materials, *lights, Renderer::supportRayTracing_));
+
+        sceneIndex_ = sceneIndex;
+
+        userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
+        userSettings_.Aperture = cameraInitialSate_.Aperture;
+        userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+        userSettings_.SkyIdx = userSettings_.HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
+        userSettings_.SunRotation = cameraInitialSate_.SunRotation;
+
+        userSettings_.cameras = cameraInitialSate_.cameras;
+        userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
+
+        modelViewController_.Reset(cameraInitialSate_.ModelView);
+
+        periodTotalFrames_ = 0;
+        totalFrames_ = 0;
+        benchmarkTotalFrames_ = 0;
+        sceneInitialTime_ = Renderer::Window().GetTime();
+
+        Renderer::OnPostLoadScene();
+        CreateSwapChain();
+
+        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+        std::stringstream stream;
+        stream << "uploaded scene #" << sceneIndex <<  " to gpu in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
+        std::string info = stream.str();
+
+        std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;
+    },
+    1);
+
+    if(scene_.get() == nullptr)
+    {
+        Renderer::Device().WaitIdle();
+        DeleteSwapChain();
+        Renderer::OnPreLoadScene();
+        scene_.reset(new Assets::Scene(Renderer::CommandPool(), *nodes, *models,
+                                  *materials, *lights, Renderer::supportRayTracing_));
+        Renderer::OnPostLoadScene();
+        CreateSwapChain();
+    }
+
     sceneIndex_ = sceneIndex;
-
-    userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
-    userSettings_.Aperture = cameraInitialSate_.Aperture;
-    userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-    userSettings_.SkyIdx = userSettings_.HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
-    userSettings_.SunRotation = cameraInitialSate_.SunRotation;
-
-    userSettings_.cameras = cameraInitialSate_.cameras;
-    userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
-
-    modelViewController_.Reset(cameraInitialSate_.ModelView);
-
-    periodTotalFrames_ = 0;
-    totalFrames_ = 0;
-    benchmarkTotalFrames_ = 0;
-    sceneInitialTime_ = Renderer::Window().GetTime();
 }
 
 template <typename Renderer>

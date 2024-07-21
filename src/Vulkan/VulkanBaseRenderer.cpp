@@ -46,6 +46,8 @@ VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, const WindowCon
 	supportDenoiser_ = false;
 	supportScreenShot_ = windowConfig.NeedScreenShot;
 	forceSDR_ = windowConfig.ForceSDR;
+
+	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
 
 VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
@@ -126,6 +128,11 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	
 	// Create swap chain and command buffers.
 	CreateSwapChain();
+
+	window_->Show();
+
+	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - uptime;
+	std::cout<< "\n\033[1;32m- renderer initialized in " << (uptime * 1e-6f) << " ms" << "\033[0m" << std::endl;
 }
 
 void VulkanBaseRenderer::Run()
@@ -165,7 +172,6 @@ void VulkanBaseRenderer::End()
 
 bool VulkanBaseRenderer::Tick()
 {
-	TaskCoordinator::GetInstance()->Tick();
 #if ANDROID
 	DrawFrame();
 	return false;

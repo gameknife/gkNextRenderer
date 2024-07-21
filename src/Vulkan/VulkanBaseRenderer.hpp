@@ -313,6 +313,8 @@ namespace Vulkan
 		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};
 		Fence* fence;
+
+		uint64_t uptime {};
 	};
 
 }
