@@ -41,6 +41,10 @@ namespace Vulkan
 		VkQueue PresentQueue() const { return presentQueue_; }
 		//VkQueue TransferQueue() const { return transferQueue_; }
 
+		VkQueue GraphicsQueue2() const { return graphicsQueue2_; }
+		VkQueue ComputeQueue2() const { return computeQueue2_; }
+		VkQueue PresentQueue2() const { return presentQueue2_; }
+
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
 
 		void WaitIdle() const;
@@ -68,6 +72,10 @@ namespace Vulkan
 		VkQueue presentQueue_{};
 		//VkQueue transferQueue_{};
 
+		VkQueue graphicsQueue2_{};
+		VkQueue computeQueue2_{};
+		VkQueue presentQueue2_{};
+		
 		std::unique_ptr<DeviceProcedures> deviceProcedures_;
 
 		VkPhysicalDeviceProperties deviceProp_;

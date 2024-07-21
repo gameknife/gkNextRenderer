@@ -31,7 +31,7 @@ namespace Vulkan
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &commandBuffers[0];
 
-			const auto graphicsQueue = commandPool.Device().GraphicsQueue();
+			const auto graphicsQueue = commandPool.Queue();
 
 			vkQueueSubmit(graphicsQueue, 1, &submitInfo, nullptr);
 			vkQueueWaitIdle(graphicsQueue);
