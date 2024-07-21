@@ -13,12 +13,11 @@ TaskThread::TaskThread(TaskCoordinator* coordinator)
             {
                 break;
             }
-                
-            if (!taskQueue_.empty())
+
+            ResTask task;
+            if (taskQueue_.dequeue(task, false))
             {
-                auto task = taskQueue_.front();
-                taskQueue_.pop();
-                task.task_func();
+                task.task_func(task);
 
                 // sync add to mainthread complete queue
                 if(task.complete_func != nullptr)

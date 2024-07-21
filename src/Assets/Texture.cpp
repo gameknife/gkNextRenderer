@@ -11,6 +11,13 @@
 
 namespace Assets
 {
+    struct TextureTaskContext
+    {
+        float elapsed;
+        std::array<char, 256> outputInfo;
+    };
+
+    
     uint32_t Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
     {
         uint32_t texIdx = GlobalTexturePool::GetInstance()->TryGetTexureIndex(filename);
@@ -248,9 +255,12 @@ namespace Assets
 
         textureImages_.emplace_back(nullptr);
         uint32_t newTextureIdx = textureImages_.size() - 1;
-
-        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx]()
+        
+        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+           const auto timer = std::chrono::high_resolution_clock::now();
+            
             // Load the texture in normal host memory.
             int width, height, channels;
             void* pixels = nullptr;
@@ -270,7 +280,17 @@ namespace Assets
 
             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, Texture(filename, width, height, channels, hdr, static_cast<unsigned char*>((void*)pixels)));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
-        }, nullptr, 0);
+
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            std::string info = "loaded " + filename + "(" + std::to_string(width) + " x " + std::to_string(height) + " x " + std::to_string(channels) + ") in " + std::to_string(taskContext.elapsed) + "s";
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext( taskContext );
+        }, [](ResTask& task)
+        {
+            TextureTaskContext taskContext {};
+            task.GetContext( taskContext );
+            std::cout << "task " << task.task_id << ": " << taskContext.outputInfo.data() << std::endl;
+        }, 0);
 
         // cache in namemap
         textureNameMap_[filename] = newTextureIdx;
@@ -290,8 +310,11 @@ namespace Assets
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);
-        TaskCoordinator::GetInstance()->AddTask([this, texname, copyedData, bytelength, newTextureIdx]()
+        TaskCoordinator::GetInstance()->AddTask([this, texname, copyedData, bytelength, newTextureIdx](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+            const auto timer = std::chrono::high_resolution_clock::now();
+            
             // Load the texture in normal host memory.
             int width, height, channels;
             const auto pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
@@ -305,9 +328,15 @@ namespace Assets
             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, Texture(texname, width, height, channels, 0, pixels));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
-            
-        }, [copyedData]
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            std::string info = "loaded " + texname + "(" + std::to_string(width) + " x " + std::to_string(height) + " x " + std::to_string(channels) + ") in " + std::to_string(taskContext.elapsed) + "s";
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext( taskContext );
+        }, [copyedData](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+            task.GetContext( taskContext );
+            std::cout << "task " << task.task_id << ": " << taskContext.outputInfo.data() << std::endl;
             delete[] copyedData;
         }, 0);
 
