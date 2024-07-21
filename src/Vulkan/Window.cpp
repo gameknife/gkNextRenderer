@@ -83,6 +83,8 @@ Window::Window(const WindowConfig& config) :
 
 	auto* const monitor = config.Fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
+	// create with hidden window
+	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 	window_ = glfwCreateWindow(config.Width, config.Height, config.Title.c_str(), monitor, nullptr);
 	if (window_ == nullptr)
 	{
@@ -229,4 +231,10 @@ void Window::WaitForEvents() const
 #endif
 }
 
+void Window::Show() const
+{
+#if !ANDROID
+	glfwShowWindow(window_);
+#endif
+}
 }

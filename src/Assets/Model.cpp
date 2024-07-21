@@ -430,7 +430,7 @@ namespace Assets
             }
             i++;
         }
-        printf("model.cameras: %d\n", i);
+        //printf("model.cameras: %d\n", i);
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)

@@ -45,6 +45,12 @@ namespace
 #else
         true;
 #endif
+
+    struct SceneTaskContext
+    {
+        float elapsed;
+        std::array<char, 256> outputInfo;
+    };
 }
 
 template <typename Renderer>
@@ -444,10 +450,23 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
     {
+        SceneTaskContext taskContext {};
+        const auto timer = std::chrono::high_resolution_clock::now();
+        
         SceneList::AllScenes[sceneIndex].second(*cameraState, *nodes, *models, *materials, *lights);
+        
+        taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+
+        std::stringstream stream;
+        stream << "Parsing Scene " << sceneIndex <<  " in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
+        std::string info = stream.str();
+        std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+        task.SetContext( taskContext );
     },
     [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
     {
+        const auto timer = std::chrono::high_resolution_clock::now();
+        
         cameraInitialSate_ = *cameraState;
         
         Renderer::Device().WaitIdle();
@@ -477,8 +496,19 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 
         Renderer::OnPostLoadScene();
         CreateSwapChain();
+
+        SceneTaskContext taskContext {};
+        task.GetContext( taskContext );
+        std::cout << "\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
+
+        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+        std::stringstream stream;
+        stream << "Upload Scene " << sceneIndex <<  " in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
+        std::string info = stream.str();
+
+        std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;
     },
-    0);
+    1);
 
     if(scene_.get() == nullptr)
     {

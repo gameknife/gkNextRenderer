@@ -259,7 +259,7 @@ namespace Assets
         TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
         {
             TextureTaskContext taskContext {};
-           const auto timer = std::chrono::high_resolution_clock::now();
+            const auto timer = std::chrono::high_resolution_clock::now();
             
             // Load the texture in normal host memory.
             int width, height, channels;
@@ -282,7 +282,9 @@ namespace Assets
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::string info = "loaded " + filename + "(" + std::to_string(width) + " x " + std::to_string(height) + " x " + std::to_string(channels) + ") in " + std::to_string(taskContext.elapsed) + "s";
+            std::stringstream stream;
+            stream << "loaded " << filename <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
+            std::string info = stream.str();
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
         }, [](ResTask& task)
@@ -329,7 +331,9 @@ namespace Assets
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::string info = "loaded " + texname + "(" + std::to_string(width) + " x " + std::to_string(height) + " x " + std::to_string(channels) + ") in " + std::to_string(taskContext.elapsed) + "s";
+            std::stringstream stream;
+            stream << "loaded " << texname <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
+            std::string info = stream.str();
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
         }, [copyedData](ResTask& task)
