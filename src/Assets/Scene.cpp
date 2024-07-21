@@ -16,12 +16,10 @@ namespace Assets {
 Scene::Scene(Vulkan::CommandPool& commandPool,
 	std::vector<Node>&& nodes,
 	std::vector<Model>&& models,
-	std::vector<Texture>&& textures,
 	std::vector<Material>&& materials,
 	std::vector<LightObject>&& lights,
 	bool supportRayTracing) :
 	models_(std::move(models)),
-	textures_(std::move(textures)),
 	nodes_(std::move(nodes))
 {
 	// Concatenate all the models
@@ -131,25 +129,10 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	indicesCount_ = static_cast<uint32_t>(indices.size());
 	verticeCount_ = static_cast<uint32_t>(vertices.size());
 	indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
-	
-	// Upload all textures
-	textureImages_.reserve(textures_.size());
-	textureImageViewHandles_.resize(textures_.size());
-	textureSamplerHandles_.resize(textures_.size());
-
-	for (size_t i = 0; i != textures_.size(); ++i)
-	{
-	   textureImages_.emplace_back(new TextureImage(commandPool, textures_[i]));
-	   textureImageViewHandles_[i] = textureImages_[i]->ImageView().Handle();
-	   textureSamplerHandles_[i] = textureImages_[i]->Sampler().Handle();
-	}
 }
 
 Scene::~Scene()
 {
-	textureSamplerHandles_.clear();
-	textureImageViewHandles_.clear();
-	textureImages_.clear();
 	proceduralBuffer_.reset();
 	proceduralBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 	aabbBuffer_.reset();

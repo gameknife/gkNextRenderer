@@ -12,7 +12,6 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <future>
 #include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
@@ -162,11 +161,10 @@ namespace Assets
     }
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
-                              std::vector<Assets::Model>& models, std::vector<Assets::Texture>& textures,
+                              std::vector<Assets::Model>& models,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
-        int32_t textureIdx = static_cast<int32_t>(textures.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
@@ -174,89 +172,22 @@ namespace Assets
         std::string err;
         std::string warn;
 
-        std::vector<std::string> searchPaths;
-        searchPaths.push_back(Utilities::FileHelper::GetPlatformFilePath("assets/textures/"));
-        searchPaths.push_back(std::filesystem::path(filename).parent_path().string() + "/");
-
-        bool isAsciiFile = std::filesystem::path(filename).extension().string() == ".gltf";
-
-        if(isAsciiFile)
+        if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
         {
-            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, filename) )
-            {
-                Throw(std::runtime_error("failed to load model '" + filename + "':\n" + err));
-            }
-        }
-        else
-        {
-            if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
-            {
-                Throw(std::runtime_error("failed to load model '" + filename + "':\n" + err));
-            }
+            return;
         }
 
         // load all textures
-        if(isAsciiFile)
+        std::vector<uint32_t> textureIdMap;
+        
+        for (tinygltf::Image& image : model.images)
         {
-            //clear map of textures names
-            tex_names.clear();
-            bool isNew, file_exists;
+            // 假设，这里的image id和外面的textures id是一样的
+            uint32_t texIdx = Texture::LoadTexture(
+                image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+                model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
-            //fill with exists textures
-            for (size_t i = 0; i < textures.size(); i++)
-            {
-			    tex_names[textures[i].Loadname()] = i;
-            }
-
-            std::string loadname = "", fn;
-            size_t maxSz = textureIdx;
-            for (tinygltf::Texture& gltfTex : model.textures)
-            {
-                size_t idx = gltfTex.source + textureIdx;
-                if (maxSz < idx) maxSz = idx;
-            }
-
-            for (; maxSz >= textureIdx; maxSz--) textures.emplace_back(Texture::Texture("", 0, 0, 0, 0, (unsigned char*)0));
-
-            for (tinygltf::Texture& gltfTex : model.textures)
-            {
-                tinygltf::Image& image = model.images[gltfTex.source];
-                std::string texName = image.uri;
-
-                file_exists = false;
-                // find if textures contain texture with loadname equals diffuse_texname
-                for(size_t i = 0; i < searchPaths.size() && !file_exists; i++) {
-                	fn = searchPaths[i] + texName;
-                	file_exists = std::filesystem::exists(fn);
-                	if(file_exists) loadname = fn;
-                }
-
-                if(file_exists)
-                {
-                	loadname = std::filesystem::canonical(loadname).generic_string();
-                	get_tex_id(loadname, isNew);
-                	if (isNew)
-                	{
-                        size_t idx = gltfTex.source + textureIdx;
-                        //std::async([](const size_t idx, std::vector<Assets::Texture>& textures, std::string& loadname) {
-                            textures[idx] = Texture::LoadTexture(loadname, Vulkan::SamplerConfig());
-                        //}, idx, textures, loadname);
-                        tex_names[loadname] = idx;
-                	}
-                } else {
-                	printf("\n%s NOT FOUND\n", texName.c_str());
-                }
-            }
-        }
-        else
-        {
-            for (tinygltf::Image& image : model.images)
-            {
-                // 假设，这里的image id和外面的textures id是一样的
-                textures.push_back(Texture::LoadTexture(
-                    image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
-                    model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig()));
-            }
+            textureIdMap.push_back(texIdx);
         }
 
         // load all materials
@@ -277,12 +208,12 @@ namespace Assets
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
             {
-                m.DiffuseTextureId = model.textures[texture].source + textureIdx;
+                m.DiffuseTextureId = textureIdMap[ model.textures[texture].source ];
             }
             int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
             if(mraTexture != -1)
             {
-                m.MRATextureId = model.textures[mraTexture].source + textureIdx;
+                m.MRATextureId = textureIdMap[ model.textures[mraTexture].source ];
                 m.Fuzziness = 1.0;
             }
             
@@ -545,7 +476,6 @@ namespace Assets
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
-                            std::vector<Texture>& textures,
                             std::vector<Material>& materials,
                             std::vector<LightObject>& lights, bool autoNode)
     {
@@ -559,7 +489,7 @@ namespace Assets
         tinyobj::ObjReader objReader;
         std::vector<std::string> searchPaths;
         searchPaths.push_back(Utilities::FileHelper::GetPlatformFilePath("assets/textures/"));
-        searchPaths.push_back(materialPath + "/");
+		searchPaths.push_back(materialPath + "/");
 
         if (!objReader.ParseFromFile(filename))
         {
@@ -578,10 +508,10 @@ namespace Assets
         tex_names.clear();
         bool isNew, file_exists;
         //fill with exists textures
-        for (size_t i = 0; i < textures.size(); i++)
-        {
-			tex_names[textures[i].Loadname()] = i;
-        }
+   //      for (size_t i = 0; i < textures.size(); i++)
+   //      {
+			// tex_names[textures[i].Loadname()] = i;
+   //      }
 
         for (const auto& _material : objReader.GetMaterials())
         {
@@ -596,25 +526,24 @@ namespace Assets
                 material.diffuse[1] = 1.0f;
                 material.diffuse[2] = 1.0f;
 
-                std::string loadname = "", fn;
-                file_exists = false;
+				std::string loadname = "", fn;
+				file_exists = false;
                 // find if textures contain texture with loadname equals diffuse_texname
-                for(size_t i = 0; i < searchPaths.size() && !file_exists; i++) {
-                	fn = searchPaths[i] + material.diffuse_texname;
-                	file_exists = std::filesystem::exists(fn);
-                	if(file_exists) loadname = fn;
-                }
+				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
+					fn = searchPaths[i] + material.diffuse_texname;
+					file_exists = std::filesystem::exists(fn);
+					if(file_exists) loadname = fn;
+				}				
 
-                if(file_exists)
-                {
-					tex_filename = std::filesystem::canonical(loadname).generic_string();
-					m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
-					if (isNew)
-					{
-						textures.push_back(Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig()));
-						m.DiffuseTextureId = static_cast<int32_t>(textures.size()) - 1;
-						tex_names[tex_filename] = m.DiffuseTextureId;
-					}
+                if(file_exists) {
+                	tex_filename = std::filesystem::canonical(loadname).generic_string();
+                	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
+                	if (isNew)
+                	{
+                		uint32_t texIdx = Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig());
+                		m.DiffuseTextureId = static_cast<int32_t>(texIdx);
+                		tex_names[tex_filename] = m.DiffuseTextureId;
+                	}
                 } else {
                 	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
 				}

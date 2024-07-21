@@ -181,7 +181,24 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
 {
     Renderer::OnDeviceSet();
 
-    LoadScene(userSettings_.SceneIndex, userSettings_.HDRIfile);
+    // global textures
+    // texture id 0: global sky
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
+
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
+
+    if(userSettings_.HDRIfile != "") Assets::Texture::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
+    userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
+
+    LoadScene(userSettings_.SceneIndex);
 
     Renderer::OnPostLoadScene();
 }
@@ -214,7 +231,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
         Renderer::Device().WaitIdle();
         DeleteSwapChain();
         Renderer::OnPreLoadScene();
-        LoadScene(userSettings_.SceneIndex, userSettings_.HDRIfile);
+        LoadScene(userSettings_.SceneIndex);
         Renderer::OnPostLoadScene();
         CreateSwapChain();
         return;
@@ -275,7 +292,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
 
     stats.InstanceCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
-    stats.TextureCount = static_cast<uint32_t>(scene_->TextureSamplers().size());
+    stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
@@ -395,49 +412,26 @@ void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
 }
 
 template <typename Renderer>
-void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex, const std::string& HDRIfile)
+void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
     std::vector<Assets::Model> models;
-    std::vector<Assets::Texture> textures;
     std::vector<Assets::Node> nodes;
     std::vector<Assets::Material> materials;
     std::vector<Assets::LightObject> lights;
 
-    // texture id 0: global sky
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig()));
-
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig()));
-    textures.push_back(Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig()));
-
-    if(HDRIfile != "") textures.push_back(Assets::Texture::LoadHDRTexture(HDRIfile.c_str(), Vulkan::SamplerConfig()));
-    userSettings_.HDRIsLoaded = static_cast<int>( textures.size() );
-
     cameraInitialSate_.cameras.clear();
     cameraInitialSate_.CameraIdx = -1;
 
-    SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, textures, materials, lights);
+    SceneList::AllScenes[sceneIndex].second(cameraInitialSate_, nodes, models, materials, lights);
 
-    // If there are no texture, add a dummy one. It makes the pipeline setup a lot easier.
-    if (textures.empty())
-    {
-        textures.push_back(Assets::Texture::LoadTexture("assets/textures/white.png", Vulkan::SamplerConfig()));
-    }
-
-    scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models), std::move(textures),
+    scene_.reset(new Assets::Scene(Renderer::CommandPool(), std::move(nodes), std::move(models),
                                    std::move(materials), std::move(lights), Renderer::supportRayTracing_));
     sceneIndex_ = sceneIndex;
 
     userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
     userSettings_.Aperture = cameraInitialSate_.Aperture;
     userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-    userSettings_.SkyIdx = HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
+    userSettings_.SkyIdx = userSettings_.HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
     userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
     userSettings_.cameras = cameraInitialSate_.cameras;

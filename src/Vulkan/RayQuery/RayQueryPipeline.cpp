@@ -48,21 +48,15 @@ namespace Vulkan::RayTracing
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-            // Textures and image samplers
-            {8, static_cast<uint32_t>(scene.TextureSamplers().size()), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-            // Output Image
-            //{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            
-                {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-                {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-                {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -109,17 +103,6 @@ namespace Vulkan::RayTracing
             lightBufferInfo.buffer = scene.LightBuffer().Handle();
             lightBufferInfo.range = VK_WHOLE_SIZE;
 
-            // Image and texture samplers.
-            std::vector<VkDescriptorImageInfo> imageInfos(scene.TextureSamplers().size());
-
-            for (size_t t = 0; t != imageInfos.size(); ++t)
-            {
-                auto& imageInfo = imageInfos[t];
-                imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                imageInfo.imageView = scene.TextureImageViews()[t];
-                imageInfo.sampler = scene.TextureSamplers()[t];
-            }
-            
             // Accumulation image
             VkDescriptorImageInfo accumulationImageInfo = {};
             accumulationImageInfo.imageView = accumulationImageView.Handle();
@@ -159,7 +142,6 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
                 descriptorSets.Bind(i, 7, offsetsBufferInfo),
-                descriptorSets.Bind(i, 8, *imageInfos.data(), static_cast<uint32_t>(imageInfos.size())),
                 descriptorSets.Bind(i, 10, accumulationImageInfo),
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
                 descriptorSets.Bind(i, 12, visibilityBufferImageInfo),

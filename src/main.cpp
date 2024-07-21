@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <iostream>
 
+#include "TaskCoordinator.hpp"
+
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>

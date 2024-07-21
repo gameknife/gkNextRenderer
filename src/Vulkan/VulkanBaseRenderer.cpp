@@ -18,11 +18,13 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
+#include "Assets/Texture.hpp"
 #include "Utilities/Exception.hpp"
 #include <array>
 
 #include "ImageMemoryBarrier.hpp"
 #include "SingleTimeCommands.hpp"
+#include "TaskCoordinator.hpp"
 
 namespace Vulkan {
 	
@@ -70,7 +72,9 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
 
+	globalTexturePool_.reset();
 	commandPool_.reset();
+	commandPool2_.reset();
 	device_.reset();
 	surface_.reset();
 	debugUtilsMessenger_.reset();
@@ -114,8 +118,12 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	deviceFeatures.drawIndirectFirstInstance = true;
 	
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
-	OnDeviceSet();
 
+	// Global Texture Pool Creation Here
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, *commandPool2_));
+	
+	OnDeviceSet();
+	
 	// Create swap chain and command buffers.
 	CreateSwapChain();
 }
@@ -157,6 +165,7 @@ void VulkanBaseRenderer::End()
 
 bool VulkanBaseRenderer::Tick()
 {
+	TaskCoordinator::GetInstance()->Tick();
 #if ANDROID
 	DrawFrame();
 	return false;
@@ -179,6 +188,10 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	indexingFeatures.pNext = nextDeviceFeatures;
 	indexingFeatures.runtimeDescriptorArray = true;
 	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	indexingFeatures.descriptorBindingPartiallyBound = true;
+	indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	indexingFeatures.descriptorBindingVariableDescriptorCount = true;
+	
 
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
 	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
@@ -191,7 +204,8 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	hostQueryResetFeatures.hostQueryReset = true;
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
-	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
+	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
+	commandPool2_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 1, true));
 	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 
@@ -421,6 +435,12 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+		// bind the global bindless set
+		static const uint32_t k_bindless_set = 1;
+		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), k_bindless_set,
+								 1, GlobalDescriptorSets, 0, nullptr );
+		
 		uint32_t vertexOffset = 0;
 		uint32_t indexOffset = 0;
 
