@@ -211,6 +211,12 @@ namespace Vulkan::RayTracing
         uint32_t indexOffset = 0;
         uint32_t aabbOffset = 0;
 
+        if(scene.Models().empty())
+        {
+            BottomLevelGeometry geometries;
+            bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
+        }
+        
         for (auto& model : scene.Models())
         {
             const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());

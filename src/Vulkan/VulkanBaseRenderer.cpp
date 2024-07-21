@@ -165,7 +165,6 @@ void VulkanBaseRenderer::End()
 
 bool VulkanBaseRenderer::Tick()
 {
-	TaskCoordinator::GetInstance()->Tick();
 #if ANDROID
 	DrawFrame();
 	return false;

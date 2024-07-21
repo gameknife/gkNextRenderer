@@ -14,10 +14,10 @@
 namespace Assets {
 
 Scene::Scene(Vulkan::CommandPool& commandPool,
-	std::vector<Node>&& nodes,
-	std::vector<Model>&& models,
-	std::vector<Material>&& materials,
-	std::vector<LightObject>&& lights,
+	std::vector<Node>& nodes,
+	std::vector<Model>& models,
+	std::vector<Material>& materials,
+	std::vector<LightObject>& lights,
 	bool supportRayTracing) :
 	models_(std::move(models)),
 	nodes_(std::move(nodes))
