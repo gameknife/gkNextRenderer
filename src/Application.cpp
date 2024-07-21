@@ -248,12 +248,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     // Check if the scene has been changed by the user.
     if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
-        // Renderer::Device().WaitIdle();
-        // DeleteSwapChain();
-        // Renderer::OnPreLoadScene();
         LoadScene(userSettings_.SceneIndex);
-        // Renderer::OnPostLoadScene();
-        // CreateSwapChain();
         return;
     }
     
