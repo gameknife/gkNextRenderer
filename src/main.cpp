@@ -97,8 +97,8 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
     std::cout << "Renderer: " << GApplication->GetRendererType() << std::endl;
     
     PrintVulkanSdkInformation();
-    PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
-    PrintVulkanLayersInformation(*GApplication, options.Benchmark);
+    //PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
+    //PrintVulkanLayersInformation(*GApplication, options.Benchmark);
     PrintVulkanDevices(*GApplication);
 
     SetVulkanDevice(*GApplication, options.GpuIdx);

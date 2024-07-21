@@ -291,7 +291,7 @@ namespace Assets
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
-            std::cout << "task " << task.task_id << ": " << taskContext.outputInfo.data() << std::endl;
+            std::cout << taskContext.outputInfo.data() << std::endl;
         }, 0);
 
         // cache in namemap
@@ -340,7 +340,7 @@ namespace Assets
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
-            std::cout << "task " << task.task_id << ": " << taskContext.outputInfo.data() << std::endl;
+            std::cout << taskContext.outputInfo.data() << std::endl;
             delete[] copyedData;
         }, 0);
 

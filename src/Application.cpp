@@ -458,13 +458,17 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
         std::stringstream stream;
-        stream << "Parsing Scene " << sceneIndex <<  " in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
+        stream << "parsed scene #" << sceneIndex <<  " on cpu in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
         std::string info = stream.str();
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
     [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
     {
+        SceneTaskContext taskContext {};
+        task.GetContext( taskContext );
+        std::cout << "\n\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
+        
         const auto timer = std::chrono::high_resolution_clock::now();
         
         cameraInitialSate_ = *cameraState;
@@ -497,13 +501,9 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         Renderer::OnPostLoadScene();
         CreateSwapChain();
 
-        SceneTaskContext taskContext {};
-        task.GetContext( taskContext );
-        std::cout << "\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
-
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
         std::stringstream stream;
-        stream << "Upload Scene " << sceneIndex <<  " in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
+        stream << "uploaded scene #" << sceneIndex <<  " to gpu in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
         std::string info = stream.str();
 
         std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;

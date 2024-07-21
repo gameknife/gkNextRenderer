@@ -16,6 +16,7 @@
 #include "Vulkan/SingleTimeCommands.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
 
@@ -106,7 +107,7 @@ namespace Vulkan::RayTracing
 
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
-        std::cout << "- built acceleration structures in " << elapsed << "s" << std::endl;
+        std::cout << "- built acceleration structures in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms" << std::endl;
     }
 
     void RayTraceBaseRenderer::DeleteAccelerationStructures()
