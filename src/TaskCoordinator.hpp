@@ -142,43 +142,70 @@ private:
     details::atomic_acq_rel<bool> m_signaled;
 };
 
+template <class T>
+class tsqueue
+{
+public:
+    tsqueue() : q(), m(), c() {}
+
+    ~tsqueue() {}
+
+    // Add an element to the queue.
+    void enqueue(T t)
+    {
+        std::lock_guard<std::mutex> lock(m);
+        q.push(t);
+        c.notify_one();
+    }
+
+    // Get the front element.
+    // If the queue is empty, wait till a element is avaiable.
+    bool dequeue(T& result, bool wait)
+    {
+        std::unique_lock<std::mutex> lock(m);
+        if(wait)
+        {
+            while (q.empty())
+            {
+                // release lock as long as the wait and reaquire it afterwards.
+                c.wait(lock);
+            }     
+        }
+        else
+        {
+            if( q.empty() )
+            {
+                return false;
+            }
+        }
+
+        result = q.front();
+        q.pop();
+        return true;
+    }
+
+private:
+    std::queue<T> q;
+    mutable std::mutex m;
+    std::condition_variable c;
+};
+
 typedef std::function<void ()> TaskFunc;
 struct ResTask
 {
     uint32_t task_id;
     uint8_t priority;
     TaskFunc task_func;
+    TaskFunc complete_func;
 };
+
+class TaskCoordinator;
 
 class TaskThread
 {
 public:
-    TaskThread()
-    {
-        complete_.reset(new event_signal());
-        terminate_.reset(new event_signal());
-        thread_.reset(new std::thread([this] {
-            while (true)
-            {
-                if(terminate_->is_set())
-                {
-                    break;
-                }
-                
-                if (!taskQueue_.empty())
-                {
-                    auto task = taskQueue_.front();
-                    taskQueue_.pop();
-                    task.task_func();
-                }
-                else
-                {
-                    complete_->set();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                }
-            }
-        }));
-    }
+    TaskThread(TaskCoordinator* coordinator = nullptr);
+   
     ~TaskThread()
     {
         std::cout<< "TaskThread " << thread_->get_id() << " request shutting down, " << "wait for task complete." << "remain: " << taskQueue_.size() <<std::endl;
@@ -213,14 +240,20 @@ public:
         }
         std::cout<< "TaskCoordinator shut down." <<std::endl;
     }
+
+    void MarkTaskComplete(const ResTask& task)
+    {
+        completeTaskQueue_.enqueue(task);
+    }
     
-    uint32_t AddTask( TaskFunc task_func, uint8_t priority = 0) const
+    uint32_t AddTask( TaskFunc task_func, TaskFunc complete_func, uint8_t priority = 0) const
     {
         static uint32_t task_id = 0;
         ResTask task;
         task.task_id = task_id++;
         task.priority = priority;
         task.task_func = std::move(task_func);
+        task.complete_func = std::move(complete_func);
         threads_[priority]->taskQueue_.push(task);
         return task.task_id;
     }
@@ -231,8 +264,32 @@ public:
         // if task_id not found, it has been down, return immediately.
     }
 
-    static void TestCase();
+    void Tick()
+    {
+        ResTask task;
+        if( completeTaskQueue_.dequeue(task, false) )
+        {
+            task.complete_func();
+        }
+    }
+    
+
+    static TaskCoordinator* GetInstance()
+    {
+        if(instance_ == nullptr)
+        {
+            instance_.reset(new TaskCoordinator());
+        }
+        return instance_.get();
+    }
+
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
+    tsqueue<ResTask> completeTaskQueue_;
+
+
+private:
+    static std::unique_ptr<TaskCoordinator> instance_;
+    static void TestCase();
 };
 

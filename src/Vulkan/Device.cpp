@@ -86,7 +86,7 @@ Device::Device(
 	};
 
 	// Create queues
-	float queuePriority = 1.0f;
+	std::vector<float> queuePriority = {1.0f, 0.0f};
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
 	for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
@@ -94,8 +94,8 @@ Device::Device(
 		VkDeviceQueueCreateInfo queueCreateInfo = {};
 		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-		queueCreateInfo.queueCount = 1;
-		queueCreateInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfo.queueCount = 2;
+		queueCreateInfo.pQueuePriorities = queuePriority.data();
 
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
@@ -121,6 +121,10 @@ Device::Device(
 	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	//vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
+
+	vkGetDeviceQueue(device_, graphicsFamilyIndex_, 1, &graphicsQueue2_);
+	vkGetDeviceQueue(device_, computeFamilyIndex_, 1, &computeQueue2_);
+	vkGetDeviceQueue(device_, presentFamilyIndex_, 1, &presentQueue2_);
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
 

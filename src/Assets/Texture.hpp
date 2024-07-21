@@ -26,6 +26,7 @@ namespace Assets
 		Texture& operator = (const Texture&) = delete;
 		Texture& operator = (Texture&&) = delete;
 
+		Texture(std::string loadname, int width, int height, int channels, int hdr, unsigned char* pixels);
 		Texture() = delete;
 		Texture(const Texture&) = delete;
 		Texture(Texture&&) = default;
@@ -40,7 +41,7 @@ namespace Assets
 
 	private:
 
-		Texture(std::string loadname, int width, int height, int channels, int hdr, unsigned char* pixels);
+		
 
 		Vulkan::SamplerConfig samplerConfig_;
 		std::string loadname_;
@@ -63,6 +64,8 @@ namespace Assets
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;
 		uint32_t RequestNewTexture(const Texture& texture);
+		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr);
+		uint32_t RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength);
 
 		uint32_t TotalTextures() const {return textureImages_.size();}
 		

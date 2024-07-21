@@ -296,6 +296,7 @@ namespace Vulkan
 		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
+		std::unique_ptr<class CommandPool> commandPool2_;
 		std::unique_ptr<class CommandBuffers> commandBuffers_;
 		std::vector<class Semaphore> imageAvailableSemaphores_;
 		std::vector<class Semaphore> renderFinishedSemaphores_;

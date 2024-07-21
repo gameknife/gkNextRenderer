@@ -24,6 +24,7 @@
 
 #include "ImageMemoryBarrier.hpp"
 #include "SingleTimeCommands.hpp"
+#include "TaskCoordinator.hpp"
 
 namespace Vulkan {
 	
@@ -73,6 +74,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 
 	globalTexturePool_.reset();
 	commandPool_.reset();
+	commandPool2_.reset();
 	device_.reset();
 	surface_.reset();
 	debugUtilsMessenger_.reset();
@@ -118,7 +120,7 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
 	// Global Texture Pool Creation Here
-	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, CommandPool()));
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, *commandPool2_));
 	
 	OnDeviceSet();
 	
@@ -163,6 +165,7 @@ void VulkanBaseRenderer::End()
 
 bool VulkanBaseRenderer::Tick()
 {
+	TaskCoordinator::GetInstance()->Tick();
 #if ANDROID
 	DrawFrame();
 	return false;
@@ -201,7 +204,8 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	hostQueryResetFeatures.hostQueryReset = true;
 	
 	device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
-	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), true));
+	commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
+	commandPool2_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 1, true));
 	gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
 }
 

@@ -197,8 +197,6 @@ void android_main(struct android_app* app)
 
 int main(int argc, const char* argv[]) noexcept
 {
-    TaskCoordinator::TestCase();
-    return 0;
     try
     {
         const Options options(argc, argv);
