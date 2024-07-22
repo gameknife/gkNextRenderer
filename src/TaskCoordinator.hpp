@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <cstring>
 
 namespace details
 {
