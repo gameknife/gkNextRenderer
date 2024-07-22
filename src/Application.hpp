@@ -56,7 +56,7 @@ private:
 
 	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
 
-	uint32_t sceneIndex_{};
+	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};
 	mutable UserSettings userSettings_{};
 	UserSettings previousSettings_{};
 	Assets::CameraInitialSate cameraInitialSate_{};

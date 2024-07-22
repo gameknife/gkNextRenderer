@@ -179,12 +179,14 @@ namespace Assets
 
         // load all textures
         std::vector<uint32_t> textureIdMap;
+
+        std::filesystem::path filepath = filename;
         
         for (tinygltf::Image& image : model.images)
         {
             // 假设，这里的image id和外面的textures id是一样的
             uint32_t texIdx = Texture::LoadTexture(
-                image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+                filepath.filename().string() + "_" + image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
             textureIdMap.push_back(texIdx);
@@ -429,7 +431,7 @@ namespace Assets
             }
             i++;
         }
-        printf("model.cameras: %d\n", i);
+        //printf("model.cameras: %d\n", i);
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)

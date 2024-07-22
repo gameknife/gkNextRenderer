@@ -31,7 +31,9 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, const Texture& text
 	// Transfer the data to device side.
 	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	image_->CopyFrom(commandPool, *stagingBuffer);
-	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// cannot done this on non-graphicbit queue
+	//image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	// Delete the buffer before the memory
 	stagingBuffer.reset();

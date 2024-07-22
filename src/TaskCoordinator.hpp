@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <cstring>
 
 namespace details
 {
@@ -191,13 +192,27 @@ private:
     std::condition_variable c;
 };
 
-typedef std::function<void ()> TaskFunc;
 struct ResTask
 {
+    typedef std::function<void (ResTask& task)> TaskFunc;
+    
     uint32_t task_id;
     uint8_t priority;
     TaskFunc task_func;
     TaskFunc complete_func;
+    uint8_t task_context_1k[1024];
+
+    template<typename T>
+    void SetContext(T& context)
+    {
+        std::memcpy( task_context_1k, &context, sizeof(T) );
+    }
+    template<typename T>
+    void GetContext(T& context)
+    {
+        std::memcpy( &context, task_context_1k,  sizeof(T) );
+    }
+    
 };
 
 class TaskCoordinator;
@@ -209,7 +224,7 @@ public:
    
     ~TaskThread()
     {
-        std::cout<< "TaskThread " << thread_->get_id() << " request shutting down, " << "wait for task complete." << "remain: " << taskQueue_.size() <<std::endl;
+        std::cout<< "TaskThread " << thread_->get_id() << " request shutting down, " << "wait for task complete." <<std::endl;
         complete_->wait();
         terminate_->set();
         thread_->join();
@@ -218,7 +233,7 @@ public:
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
-    std::queue<ResTask> taskQueue_;
+    tsqueue<ResTask> taskQueue_;
 };
 
 class TaskCoordinator
@@ -247,7 +262,7 @@ public:
         completeTaskQueue_.enqueue(task);
     }
     
-    uint32_t AddTask( TaskFunc task_func, TaskFunc complete_func, uint8_t priority = 0) const
+    uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0) const
     {
         static uint32_t task_id = 0;
         ResTask task;
@@ -255,7 +270,7 @@ public:
         task.priority = priority;
         task.task_func = std::move(task_func);
         task.complete_func = std::move(complete_func);
-        threads_[priority]->taskQueue_.push(task);
+        threads_[priority]->taskQueue_.enqueue(task);
         return task.task_id;
     }
 
@@ -270,7 +285,7 @@ public:
         ResTask task;
         if( completeTaskQueue_.dequeue(task, false) )
         {
-            task.complete_func();
+            task.complete_func(task);
         }
     }
     
@@ -293,4 +308,3 @@ private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();
 };
-

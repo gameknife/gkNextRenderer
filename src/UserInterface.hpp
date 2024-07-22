@@ -33,6 +33,7 @@ struct Statistics final
 	uint32_t InstanceCount;
 	uint32_t TextureCount;
 	uint32_t ComputePassCount;
+	bool LoadingStatus;
 
 	mutable std::unordered_map< std::string, std::string> Stats;
 };
@@ -61,7 +62,7 @@ private:
 
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
-
+	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	UserSettings& userSettings_;

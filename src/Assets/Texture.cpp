@@ -11,6 +11,13 @@
 
 namespace Assets
 {
+    struct TextureTaskContext
+    {
+        float elapsed;
+        std::array<char, 256> outputInfo;
+    };
+
+    
     uint32_t Texture::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
     {
         uint32_t texIdx = GlobalTexturePool::GetInstance()->TryGetTexureIndex(filename);
@@ -245,10 +252,14 @@ namespace Assets
         }
 
         textureImages_.emplace_back(nullptr);
-        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
 
-        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx]()
+        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
+        
+        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+            const auto timer = std::chrono::high_resolution_clock::now();
+            
             // Load the texture in normal host memory.
             int width, height, channels;
             void* pixels = nullptr;
@@ -268,7 +279,19 @@ namespace Assets
 
             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, Texture(filename, width, height, channels, hdr, static_cast<unsigned char*>((void*)pixels)));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
-        }, nullptr, 0);
+
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            std::stringstream stream;
+            stream << "loaded " << filename <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
+            std::string info = stream.str();
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext( taskContext );
+        }, [](ResTask& task)
+        {
+            TextureTaskContext taskContext {};
+            task.GetContext( taskContext );
+            std::cout << taskContext.outputInfo.data() << std::endl;
+        }, 0);
 
         // cache in namemap
         textureNameMap_[filename] = newTextureIdx;
@@ -287,8 +310,11 @@ namespace Assets
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);
-        TaskCoordinator::GetInstance()->AddTask([this, texname, copyedData, bytelength, newTextureIdx]()
+        TaskCoordinator::GetInstance()->AddTask([this, texname, copyedData, bytelength, newTextureIdx](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+            const auto timer = std::chrono::high_resolution_clock::now();
+            
             // Load the texture in normal host memory.
             int width, height, channels;
             const auto pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
@@ -302,9 +328,17 @@ namespace Assets
             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, Texture(texname, width, height, channels, 0, pixels));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
-            
-        }, [copyedData]
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            std::stringstream stream;
+            stream << "loaded " << texname <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
+            std::string info = stream.str();
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext( taskContext );
+        }, [copyedData](ResTask& task)
         {
+            TextureTaskContext taskContext {};
+            task.GetContext( taskContext );
+            std::cout << taskContext.outputInfo.data() << std::endl;
             delete[] copyedData;
         }, 0);
 

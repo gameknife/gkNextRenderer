@@ -146,6 +146,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	DrawSettings();
 //#endif
 	DrawOverlay(statistics, gpuTimer);
+	if( statistics.LoadingStatus ) DrawIndicator(std::floor(statistics.RenderTime * 2));
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();
 
@@ -389,4 +390,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::End();
 		ImGui::PopStyleColor();
 	}
+}
+
+void UserInterface::DrawIndicator(uint32_t frameCount)
+{
+	auto io = ImGui::GetIO();
+	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowBgAlpha(0.25f); // Transparent background
+	//ImGui::SetNextWindowSize(ImVec2(256, 256));
+	
+	ImGui::Begin("Indicator", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text("Loading%s   ", frameCount % 4 == 0 ? "" : frameCount % 4 == 1 ? "." : frameCount % 4 == 2 ? ".." : "...");
+	ImGui::End();
 }
