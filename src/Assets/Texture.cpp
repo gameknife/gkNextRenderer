@@ -252,7 +252,6 @@ namespace Assets
         }
 
         textureImages_.emplace_back(nullptr);
-
         uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
         
         TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
