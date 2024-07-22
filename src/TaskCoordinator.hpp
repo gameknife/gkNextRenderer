@@ -308,3 +308,4 @@ private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();
 };
+

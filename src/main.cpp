@@ -273,6 +273,15 @@ int main(int argc, const char* argv[]) noexcept
 #endif
         }
 
+#ifdef _WIN32
+        HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD dwMode;
+
+        GetConsoleMode(hOutput, &dwMode);
+        dwMode |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(hOutput, dwMode);
+#endif
+
         StartApplication(rendererType, windowConfig, userSettings, options);
         
         //applicationPtr->Run();
