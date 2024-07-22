@@ -4,6 +4,7 @@
 #include "Sphere.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/Console.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_inverse.hpp>
@@ -489,7 +490,7 @@ namespace Assets
 
         tinyobj::ObjReader objReader;
         std::vector<std::string> searchPaths;
-		searchPaths.push_back("../assets/textures/");
+        searchPaths.push_back(Utilities::FileHelper::GetPlatformFilePath("assets/textures/"));
 		searchPaths.push_back(materialPath + "/");
 
         if (!objReader.ParseFromFile(filename))

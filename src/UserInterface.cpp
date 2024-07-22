@@ -146,7 +146,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	DrawSettings();
 //#endif
 	DrawOverlay(statistics, gpuTimer);
-	if( statistics.LoadingStatus ) DrawIndicator(std::floor(statistics.RenderTime * 2));
+	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();
 

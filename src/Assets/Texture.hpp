@@ -67,7 +67,7 @@ namespace Assets
 		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr);
 		uint32_t RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength);
 
-		uint32_t TotalTextures() const {return textureImages_.size();}
+		uint32_t TotalTextures() const {return static_cast<uint32_t>(textureImages_.size());}
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 
