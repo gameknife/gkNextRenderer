@@ -146,7 +146,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	DrawSettings();
 //#endif
 	DrawOverlay(statistics, gpuTimer);
-	if( statistics.LoadingStatus ) DrawIndicator(std::floor(statistics.RenderTime * 2));
+	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	//ImGui::ShowStyleEditor();
 	ImGui::Render();
 
@@ -349,7 +349,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		
 		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
 		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
-		//ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" cpugpu-io: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
+		
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
 		ImGui::Text("Frame: %zd", statistics.TotalFrames);

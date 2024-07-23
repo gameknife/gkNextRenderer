@@ -38,14 +38,14 @@ struct NodeProxy
 
 struct RayCastContext
 {
+	// in
 	vec4 Origin;
 	vec4 Direction;
 	float TMin;
 	float TMax;
-};
-
-struct RayCastResult
-{
+	float Reversed0;
+	float Reversed1;
+	// out
 	vec4 HitPoint;
 	vec4 Normal;
 	float T;

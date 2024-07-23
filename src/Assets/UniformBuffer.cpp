@@ -31,4 +31,34 @@ void UniformBuffer::SetValue(const UniformBufferObject& ubo)
 	memory_->Unmap();
 }
 
+RayCastBuffer::RayCastBuffer(const Vulkan::Device& device)
+{
+	const auto bufferSize = sizeof(RayCastIO);
+
+	buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+	memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+}
+
+	RayCastBuffer::RayCastBuffer(RayCastBuffer&& other) noexcept :
+		buffer_(other.buffer_.release()),
+		memory_(other.memory_.release())
+{
+}
+
+RayCastBuffer::~RayCastBuffer()
+{
+	buffer_.reset();
+	memory_.reset(); // release memory after bound buffer has been destroyed
+}
+
+void RayCastBuffer::SyncWithGPU()
+{
+	const auto data = memory_->Map(0, sizeof(RayCastIO));
+	// download
+	RayCastIO* gpuData = static_cast<RayCastIO*>(data);
+	rayCastIO.Result = gpuData->Result;
+	// upload
+	std::memcpy(data, &rayCastIO, sizeof(rayCastIO));
+	memory_->Unmap();
+}
 }

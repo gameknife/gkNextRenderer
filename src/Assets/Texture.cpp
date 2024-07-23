@@ -230,14 +230,13 @@ namespace Assets
 
     uint32_t GlobalTexturePool::RequestNewTexture(const Texture& texture)
     {
-        textureNameMap_.find(texture.Loadname());
         if (textureNameMap_.find(texture.Loadname()) != textureNameMap_.end())
         {
             return textureNameMap_[texture.Loadname()];
         }
 
         textureImages_.emplace_back(new TextureImage(commandPool_, texture));
-        uint32_t newTextureIdx = textureImages_.size() - 1;
+        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
         BindTexture(newTextureIdx, *(textureImages_.back()));
 
         // cache in namemap
@@ -247,14 +246,13 @@ namespace Assets
 
     uint32_t GlobalTexturePool::RequestNewTextureFileAsync(const std::string& filename, bool hdr)
     {
-        textureNameMap_.find(filename);
         if (textureNameMap_.find(filename) != textureNameMap_.end())
         {
             return textureNameMap_[filename];
         }
 
         textureImages_.emplace_back(nullptr);
-        uint32_t newTextureIdx = textureImages_.size() - 1;
+        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
         
         TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
         {
@@ -301,14 +299,13 @@ namespace Assets
 
     uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength)
     {
-        textureNameMap_.find(texname);
         if (textureNameMap_.find(texname) != textureNameMap_.end())
         {
             return textureNameMap_[texname];
         }
 
         textureImages_.emplace_back(nullptr);
-        uint32_t newTextureIdx = textureImages_.size() - 1;
+        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);

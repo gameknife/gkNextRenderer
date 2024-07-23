@@ -130,17 +130,11 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-
         
-        // init and copy first to raycast in
-        std::vector<Assets::RayCastContext> request;
-        request.push_back( Assets::RayCastContext() );
-        std::vector<Assets::RayCastResult> results;
-        results.push_back( Assets::RayCastResult() );
-        Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastIn", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, request, raycastInputBuffer_, raycastInputBuffer_Memory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(CommandPool(), "RayCastOut", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, results, raycastOutputBuffer_, raycastOutputBuffer_Memory_);
+
+        rayCastBuffer_.reset(new Assets::RayCastBuffer(Device()));
 #if !ANDROID
-        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), *raycastInputBuffer_, *raycastOutputBuffer_, topAs_[0], GetScene()));
+        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
     }
 
@@ -148,28 +142,21 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 
-        raycastInputBuffer_.reset();
-        raycastInputBuffer_Memory_.reset();
-        raycastOutputBuffer_.reset();
-        raycastOutputBuffer_Memory_.reset();
+        rayCastBuffer_.reset();
         raycastPipeline_.reset();
     }
 
-    void RayTraceBaseRenderer::BeforeNextFrame()
+    void RayTraceBaseRenderer::AfterRenderCmd()
     {
-        VulkanBaseRenderer::BeforeNextFrame();
-
-        std::vector<Assets::RayCastContext> request;
+        VulkanBaseRenderer::AfterRenderCmd();
+        
         Assets::RayCastContext ray;
         ray.Origin = lastUBO.ModelViewInverse * glm::vec4(0,0,0,1);
         ray.Direction = lastUBO.ModelViewInverse * glm::vec4(0,0,-1,0);
-        request.push_back( ray );
-        BufferUtil::CopyFromStagingBuffer(CommandPool(), *raycastInputBuffer_, request);
-        std::vector<Assets::RayCastResult> results;
-        results.push_back( Assets::RayCastResult() );
-        BufferUtil::CopyToStagingBuffer(CommandPool(), *raycastOutputBuffer_, results);
 
-        cameraCenterCastResult_ = results[0];
+        rayCastBuffer_->SetContext(ray);
+        rayCastBuffer_->SyncWithGPU();
+        cameraCenterCastResult_ = rayCastBuffer_->GetResult();
     }
 
 
