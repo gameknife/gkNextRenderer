@@ -110,8 +110,7 @@ namespace Vulkan::PipelineCommon
 	
 		RayCastPipeline(
 			const DeviceProcedures& deviceProcedures,
-			const Buffer& inputBuffer,
-			const Buffer& outputBuffer,
+			const Buffer& ioBuffer,
 			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
 			const Assets::Scene& scene);
 		~RayCastPipeline();

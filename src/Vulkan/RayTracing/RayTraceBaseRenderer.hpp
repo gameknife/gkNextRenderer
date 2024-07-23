@@ -46,7 +46,7 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 
-		virtual void BeforeNextFrame() override;
+		virtual void AfterRenderCmd() override;
 
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;
@@ -73,13 +73,9 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Buffer> instancesBuffer_;
 		std::unique_ptr<DeviceMemory> instancesBufferMemory_;
 		
-		
 		Assets::RayCastResult cameraCenterCastResult_;
+		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
-		std::unique_ptr<Vulkan::Buffer> raycastInputBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> raycastInputBuffer_Memory_;
-		std::unique_ptr<Vulkan::Buffer> raycastOutputBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> raycastOutputBuffer_Memory_;
 	};
 
 }

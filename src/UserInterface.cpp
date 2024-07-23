@@ -349,7 +349,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		
 		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
 		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
-		//ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" cpugpu-io: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
+		
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
 		ImGui::Text("Frame: %zd", statistics.TotalFrames);

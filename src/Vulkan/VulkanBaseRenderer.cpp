@@ -325,7 +325,10 @@ void VulkanBaseRenderer::DrawFrame()
 		gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
 	}
 
-	BeforeNextFrame();
+	{
+		SCOPED_CPU_TIMER("cpu-prepare");
+		BeforeNextFrame();
+	}
 
 	// next frame synchronization objects
 	fence = &(inFlightFences_[currentFrame_]);
@@ -355,6 +358,11 @@ void VulkanBaseRenderer::DrawFrame()
 	
 	commandBuffers_->End(currentImageIndex_);
 
+	{
+		SCOPED_CPU_TIMER("cpugpu-io");
+		AfterRenderCmd();
+	}
+	
 	UpdateUniformBuffer(currentImageIndex_);
 
 	VkSubmitInfo submitInfo = {};

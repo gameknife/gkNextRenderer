@@ -254,6 +254,7 @@ namespace Vulkan
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		virtual void BeforeNextFrame() {}
+		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
 
 		virtual void OnPreLoadScene() {}
