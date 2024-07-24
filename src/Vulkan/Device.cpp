@@ -135,7 +135,17 @@ Device::Device(
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
 
+	
+
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
+	
+	deviceProp12_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+	deviceProp12_.pNext = NULL;
+	
+	VkPhysicalDeviceProperties2 deviceProp{};
+	deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	deviceProp.pNext = &deviceProp12_;
+	vkGetPhysicalDeviceProperties2(PhysicalDevice(), &deviceProp);
 
 	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
 }

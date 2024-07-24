@@ -117,7 +117,8 @@ namespace Assets
         commandPool_(command_pool)
     {
         static const uint32_t k_bindless_texture_binding = 0;
-        static const uint32_t k_max_bindless_resources = 2048;
+        // The maximum number of bindless resources is limited by the device.
+        static const uint32_t k_max_bindless_resources = device.DeviceProperties12().maxPerStageDescriptorUpdateAfterBindSamplers;
 
         // Create bindless descriptor pool
         VkDescriptorPoolSize pool_sizes_bindless[] =
