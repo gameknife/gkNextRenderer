@@ -419,6 +419,23 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
 }
 
 template <typename Renderer>
+void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* paths[])
+{
+    // add glb to the last, and loaded
+    if (path_count > 0)
+    {
+        std::string path = paths[path_count - 1];
+        std::string ext = path.substr(path.find_last_of(".") + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == "glb")
+        {
+            userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+        }
+    }
+}
+
+template <typename Renderer>
 void NextRendererApplication<Renderer>::OnTouch(bool down, double xpos, double ypos)
 {
     modelViewController_.OnTouch(down, xpos, ypos);

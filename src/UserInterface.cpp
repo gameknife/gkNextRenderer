@@ -211,6 +211,7 @@ void UserInterface::DrawSettings()
 		ImGui::BulletText("F1: toggle Settings.");
 		ImGui::BulletText("F2: toggle Statistics.");
 		ImGui::BulletText("SPACE: hold to auto focus.");
+		ImGui::BulletText("DropFile: if glb file, load it.");
 		ImGui::NewLine();
 
 		ImGui::Text("Scene");
@@ -323,7 +324,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGuiWindowFlags_NoNav |
 		ImGuiWindowFlags_NoSavedSettings;
 
-	if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
+	if (!statistics.LoadingStatus && ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
 	{
 		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
@@ -349,7 +350,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		
 		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
 		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
-		//ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" cpugpu-io: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
+		
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
 		ImGui::Text("Frame: %zd", statistics.TotalFrames);

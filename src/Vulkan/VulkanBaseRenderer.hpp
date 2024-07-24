@@ -254,6 +254,7 @@ namespace Vulkan
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		virtual void BeforeNextFrame() {}
+		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
 
 		virtual void OnPreLoadScene() {}
@@ -263,7 +264,7 @@ namespace Vulkan
 		virtual void OnCursorPosition(double xpos, double ypos) { }
 		virtual void OnMouseButton(int button, int action, int mods) { }
 		virtual void OnScroll(double xoffset, double yoffset) { }
-		
+		virtual void OnDropFile(int path_count, const char* paths[]) { }
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};

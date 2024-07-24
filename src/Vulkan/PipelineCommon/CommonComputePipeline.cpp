@@ -246,7 +246,7 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    RayCastPipeline::RayCastPipeline(const DeviceProcedures& deviceProcedures, const Buffer& inputBuffer, const Buffer& outputBuffer,
+    RayCastPipeline::RayCastPipeline(const DeviceProcedures& deviceProcedures, const Buffer& ioBuffer,
         const RayTracing::TopLevelAccelerationStructure& accelerationStructure, const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
     {
         // Create descriptor pool/sets.
@@ -255,7 +255,6 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             //{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             // Vertex buffer, Index buffer, Material buffer, Offset buffer
@@ -277,13 +276,9 @@ namespace Vulkan::PipelineCommon
         structureInfo.accelerationStructureCount = 1;
         structureInfo.pAccelerationStructures = &accelerationStructureHandle;
         
-        VkDescriptorBufferInfo inBufferInfo = {};
-        inBufferInfo.buffer = inputBuffer.Handle();
-        inBufferInfo.range = VK_WHOLE_SIZE;
-
-        VkDescriptorBufferInfo outBufferInfo = {};
-        outBufferInfo.buffer = outputBuffer.Handle();
-        outBufferInfo.range = VK_WHOLE_SIZE;
+        VkDescriptorBufferInfo ioBufferInfo = {};
+        ioBufferInfo.buffer = ioBuffer.Handle();
+        ioBufferInfo.range = VK_WHOLE_SIZE;
 
         // Uniform buffer
         // VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -318,8 +313,7 @@ namespace Vulkan::PipelineCommon
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
             descriptorSets.Bind(0, 0, structureInfo),
-            descriptorSets.Bind(0, 1, inBufferInfo),
-            descriptorSets.Bind(0, 2, outBufferInfo),
+            descriptorSets.Bind(0, 1, ioBufferInfo),
             descriptorSets.Bind(0, 4, vertexBufferInfo),
             descriptorSets.Bind(0, 5, indexBufferInfo),
             descriptorSets.Bind(0, 6, materialBufferInfo),

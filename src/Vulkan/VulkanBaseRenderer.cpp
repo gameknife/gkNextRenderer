@@ -149,6 +149,7 @@ void VulkanBaseRenderer::Run()
 	window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
 	window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
 	window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
+	window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
 	window_->Run();
 	device_->WaitIdle();
 }
@@ -162,6 +163,7 @@ void VulkanBaseRenderer::Start()
 	window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
 	window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
 	window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
+	window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
 }
 
 void VulkanBaseRenderer::End()
@@ -325,7 +327,10 @@ void VulkanBaseRenderer::DrawFrame()
 		gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
 	}
 
-	BeforeNextFrame();
+	{
+		SCOPED_CPU_TIMER("cpu-prepare");
+		BeforeNextFrame();
+	}
 
 	// next frame synchronization objects
 	fence = &(inFlightFences_[currentFrame_]);
@@ -355,6 +360,11 @@ void VulkanBaseRenderer::DrawFrame()
 	
 	commandBuffers_->End(currentImageIndex_);
 
+	{
+		SCOPED_CPU_TIMER("cpugpu-io");
+		AfterRenderCmd();
+	}
+	
 	UpdateUniformBuffer(currentImageIndex_);
 
 	VkSubmitInfo submitInfo = {};
