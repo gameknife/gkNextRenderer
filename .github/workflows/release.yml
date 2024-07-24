@@ -6,11 +6,61 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  make-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      uploadurl: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+  linux-build:
+    needs: make-release
+    runs-on: ubuntu-22.04
+    env: 
+      SDK_VERSION: 1.3.280
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Ubuntu dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev nasm
+    - name: Install Vulkan SDK
+      run: |
+        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
+        sudo apt-get update
+        sudo apt-get install vulkan-sdk
+    - name: Compile vcpkg dependencies
+      run: ./vcpkg_linux.sh
+    - name: Compile gkNextRenderer
+      run: ./build_linux.sh
+    - name: Create zip file
+      run: |
+        cd build/linux
+        zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.make-release.outputs.uploadurl }}
+        asset_path: ./build/linux/gknextrenderer_linux64_${{ github.ref_name }}.zip
+        asset_name: gknextrenderer_linux64_${{ github.ref_name }}.zip
+        asset_content_type: application/zip
+  windows-build:
+    needs: make-release
     runs-on: windows-2022
     env:
       SDK_VERSION: 1.3.280.0
-
     steps:
     - uses: actions/checkout@v4
     - name: Install zip
@@ -32,26 +82,16 @@ jobs:
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         build_windows.bat
       shell: cmd
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
     - name: Create zip file
       run: |
-        mkdir release
-        zip -r release/gknextrenderer_win64_${{ github.ref_name }}.zip build/windows/bin build/windows/assets/fonts build/windows/assets/models build/windows/assets/shaders build/windows/assets/textures
+        cd build/windows
+        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release/gknextrenderer_win64_${{ github.ref_name }}.zip
+        upload_url: ${{ needs.make-release.outputs.uploadurl }}
+        asset_path: ./build/windows/gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_content_type: application/zip
