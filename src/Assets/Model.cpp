@@ -189,7 +189,7 @@ namespace Assets
             
             std::string texname = image.name.empty() ? fmt::format("tex_{}", i):  image.name;
             // 假设，这里的image id和外面的textures id是一样的
-            uint32_t texIdx = Texture::LoadTexture(
+            uint32_t texIdx = GlobalTexturePool::LoadTexture(
                 filepath.filename().string() + "_" + texname, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
@@ -546,7 +546,7 @@ namespace Assets
                 	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
                 	if (isNew)
                 	{
-                		uint32_t texIdx = Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig());
+                		uint32_t texIdx = GlobalTexturePool::LoadTexture(tex_filename, Vulkan::SamplerConfig());
                 		m.DiffuseTextureId = static_cast<int32_t>(texIdx);
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}

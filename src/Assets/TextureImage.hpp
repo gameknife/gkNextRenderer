@@ -24,7 +24,7 @@ namespace Assets
 		TextureImage& operator = (const TextureImage&) = delete;
 		TextureImage& operator = (TextureImage&&) = delete;
 
-		TextureImage(Vulkan::CommandPool& commandPool, const Texture& texture);
+		TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, bool hdr, const unsigned char* data);
 		~TextureImage();
 
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }
