@@ -70,7 +70,9 @@
 * File Format support
     * Wavefront OBJ File PBR Scene Support
     * GLTF Scene File Support
-* CrossPlatform support for Windows/Linux/MacOS
+* CrossPlatform support for Windows/Linux/MacOS/Android
+* Global Bindless TexturePool
+* MultiThread Resource Loading
 * HDR Display Support
 * Screenshot HDR and encode to avif
 
@@ -101,7 +103,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - Scene Management
     - ~~Element Instancing~~
     - ~~Multi draw indirect~~
-    - GLobal Dynamic Bindless Textures
+    - ~~GLobal Dynamic Bindless Textures~~
 - RayTracing Pipeline
     - ~~Temporal Reprojection~~
     - ~~Ray Query Pipeline~~
@@ -143,7 +145,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [ ] Android Input Handling
 - [x] Realtimg self statics system
 - [ ] Auto release by Github action
-- [ ] Global Dynamic Bindless Textures
+- [x] Global Dynamic Bindless Textures
 - [x] Hybrid rendering with ray query
 - [ ] Blender Export Property as CustomProperty to glb
 - [x] OpenImageDenoise (Only windows)
