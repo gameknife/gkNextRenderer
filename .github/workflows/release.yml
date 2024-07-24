@@ -45,13 +45,13 @@ jobs:
     - name: Create zip file
       run: |
         mkdir release
-        zip -r release/build.zip build/windows/bin build/windows/assets/fonts build/windows/assets/models build/windows/assets/shaders build/windows/assets/textures
+        zip -r release/gknextrenderer_win64_${{ github.ref_name }}.zip build/windows/bin build/windows/assets/fonts build/windows/assets/models build/windows/assets/shaders build/windows/assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: release
-        asset_name: build.zip
+        asset_path: ./release/gknextrenderer_win64_${{ github.ref_name }}.zip
+        asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_content_type: application/zip
