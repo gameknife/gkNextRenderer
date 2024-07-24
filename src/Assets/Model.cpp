@@ -34,6 +34,7 @@
 // #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
+#include <fmt/format.h>
 
 #include "Texture.hpp"
 
@@ -182,11 +183,14 @@ namespace Assets
 
         std::filesystem::path filepath = filename;
         
-        for (tinygltf::Image& image : model.images)
+        for ( uint32_t i = 0; i < model.images.size(); ++i )
         {
+            tinygltf::Image& image = model.images[i];
+            
+            std::string texname = image.name.empty() ? fmt::format("tex_{}", i):  image.name;
             // 假设，这里的image id和外面的textures id是一样的
             uint32_t texIdx = Texture::LoadTexture(
-                filepath.filename().string() + "_" + image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+                filepath.filename().string() + "_" + texname, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
             textureIdMap.push_back(texIdx);
