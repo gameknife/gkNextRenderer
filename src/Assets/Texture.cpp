@@ -56,6 +56,8 @@ namespace Assets
         }
         // const auto timer = std::chrono::high_resolution_clock::now();
         //
+
+        
         // // Load the texture in normal host memory.
         // int width, height, channels;
         // const auto pixels = stbi_load_from_memory(data, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);

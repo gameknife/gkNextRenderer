@@ -22,6 +22,8 @@
 #include <imgui_impl_vulkan.h>
 
 #include <array>
+#include <fmt/format.h>
+#include <fmt/chrono.h>
 
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Math.hpp"
@@ -331,13 +333,11 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
+		
+		ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
 
-		char buff[50];
-		Utilities::metricFormatter(static_cast<double>(statistics.TriCount), buff, (void*)"");
-		ImGui::Text("Tris: %s", buff);
-
-		Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), buff, (void*)"");
-		ImGui::Text("Instance: %s", buff);
+		
+		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
 		ImGui::Text("Texture: %d", statistics.TextureCount);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
@@ -356,9 +356,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
 		ImGui::Text("Frame: %zd", statistics.TotalFrames);
-
-		Utilities::get_time_str(buff, static_cast<float>(statistics.RenderTime));
-		ImGui::Text("Time: %s", buff);
+		
+		ImGui::Text("Time: %s", fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 	}
 	ImGui::End();
 

@@ -591,10 +591,13 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
+                
+                //fmt::format()
+                //printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
 
-                char buff[50];
-                Utilities::get_time_str(buff, static_cast<float>(totalTime));
-                printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
+                std::cout << "\n*** totalTime "
+                << fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(totalTime)))
+                << " fps " << std::fixed << std::setprecision(2) << fps << "\n";
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
                 benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
@@ -812,10 +815,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         printf("screenshot saved to %s\n", filename.c_str());
 
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
-
-        char buff[50];
-        Utilities::metricFormatter(static_cast<double>(img_file_size), buff, (void*)"b", 1024);
-        printf("file size: %s\n", buff);
+        std::cout << "file size: " << Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024) << "\n";
 
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
