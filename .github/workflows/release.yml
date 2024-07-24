@@ -8,50 +8,50 @@ on:
 jobs:
   build:
     runs-on: windows-2022
-      env:
-        SDK_VERSION: 1.3.280.0
+    env:
+      SDK_VERSION: 1.3.280.0
 
-      steps:
-      - uses: actions/checkout@v4
-      - name: Install zip
-        run: choco install zip
-      - name: Download Vulkan SDK
-        run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-      - name: Install Vulkan SDK
-        run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-        shell: cmd
-      - name: Compile vcpkg dependencies
-        run: |
-          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-          vcpkg_windows.bat
-        shell: cmd
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-      - name: Compile gkNextRenderer
-        run: |
-          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-          build_windows.bat
-        shell: cmd
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-      - name: Create zip file
-        run: |
-          mkdir release
-          zip -r release/build.zip build/windows/bin build/windows/assets/fonts build/windows/assets/models build/windows/assets/shaders build/windows/assets/textures
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release
-          asset_name: build.zip
-          asset_content_type: application/zip
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install zip
+      run: choco install zip
+    - name: Download Vulkan SDK
+      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+    - name: Install Vulkan SDK
+      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+      shell: cmd
+    - name: Compile vcpkg dependencies
+      run: |
+        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+        vcpkg_windows.bat
+      shell: cmd
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+    - name: Compile gkNextRenderer
+      run: |
+        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+        build_windows.bat
+      shell: cmd
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Create zip file
+      run: |
+        mkdir release
+        zip -r release/build.zip build/windows/bin build/windows/assets/fonts build/windows/assets/models build/windows/assets/shaders build/windows/assets/textures
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: release
+        asset_name: build.zip
+        asset_content_type: application/zip
