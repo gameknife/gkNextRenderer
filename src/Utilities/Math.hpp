@@ -1,4 +1,6 @@
-﻿#include <string>
+﻿#pragma once
+
+#include <string>
 #include <fmt/printf.h>
 
 namespace Utilities
@@ -16,7 +18,7 @@ namespace Utilities
 		static double      s_value[] = { static_cast<double>(kilo * kilo * kilo), static_cast<double>(kilo * kilo), static_cast<double>(kilo), 1, 1.f / static_cast<double>(kilo), 1.f / static_cast<double>(kilo * kilo), 1.f / static_cast<double>(kilo * kilo * kilo) };
 		static const char* s_prefix[] = { "G", "M", "k", "", "m", "u", "n" };
 
-		const int s_valueSZ = sizeof(s_value);
+		constexpr int s_valueSZ = sizeof(s_value) / sizeof(double);
 
 		if (value < s_value[s_valueSZ - 1])
 		{

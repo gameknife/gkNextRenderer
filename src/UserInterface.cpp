@@ -355,7 +355,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
-		ImGui::Text("Frame: %zd", statistics.TotalFrames);
+		ImGui::Text("Frame: %d", statistics.TotalFrames);
 		
 		ImGui::Text("Time: %s", fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 	}
