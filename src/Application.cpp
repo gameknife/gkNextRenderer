@@ -191,19 +191,19 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
 
     // global textures
     // texture id 0: global sky
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
 
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
 
-    if(userSettings_.HDRIfile != "") Assets::Texture::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
+    if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
     userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
 
     //LoadScene(userSettings_.SceneIndex);
@@ -419,6 +419,23 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
 }
 
 template <typename Renderer>
+void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* paths[])
+{
+    // add glb to the last, and loaded
+    if (path_count > 0)
+    {
+        std::string path = paths[path_count - 1];
+        std::string ext = path.substr(path.find_last_of(".") + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == "glb")
+        {
+            userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+        }
+    }
+}
+
+template <typename Renderer>
 void NextRendererApplication<Renderer>::OnTouch(bool down, double xpos, double ypos)
 {
     modelViewController_.OnTouch(down, xpos, ypos);
@@ -574,10 +591,13 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
+                
+                //fmt::format()
+                //printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
 
-                char buff[50];
-                Utilities::get_time_str(buff, static_cast<float>(totalTime));
-                printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
+                std::cout << "\n*** totalTime "
+                << fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(totalTime)))
+                << " fps " << std::fixed << std::setprecision(2) << fps << "\n";
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
                 benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
@@ -795,10 +815,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         printf("screenshot saved to %s\n", filename.c_str());
 
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
-
-        char buff[50];
-        Utilities::metricFormatter(static_cast<double>(img_file_size), buff, (void*)"b", 1024);
-        printf("file size: %s\n", buff);
+        std::cout << "file size: " << Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024) << "\n";
 
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);

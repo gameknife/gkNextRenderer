@@ -69,7 +69,6 @@ namespace Vulkan
 		VkQueue transferQueue_{};
 				
 		std::unique_ptr<DeviceProcedures> deviceProcedures_;
-
 		VkPhysicalDeviceProperties deviceProp_;
 	};
 

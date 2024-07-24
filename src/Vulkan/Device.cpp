@@ -136,7 +136,7 @@ Device::Device(
 	vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
-
+	
 	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
 }
 
