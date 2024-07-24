@@ -42,7 +42,6 @@ namespace Vulkan
 		VkQueue TransferQueue() const { return transferQueue_; }
 
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
-		VkPhysicalDeviceVulkan12Properties DeviceProperties12() const { return deviceProp12_; }
 
 		void WaitIdle() const;
 
@@ -70,9 +69,7 @@ namespace Vulkan
 		VkQueue transferQueue_{};
 				
 		std::unique_ptr<DeviceProcedures> deviceProcedures_;
-
 		VkPhysicalDeviceProperties deviceProp_;
-		VkPhysicalDeviceVulkan12Properties deviceProp12_;
 	};
 
 }
