@@ -59,6 +59,14 @@ namespace
 			this_->OnScroll(xoffset, yoffset);
 		}
 	}
+	void GlfwSetDropCallback(GLFWwindow* window, int path_count, const char* paths[])
+	{
+		auto* const this_ = static_cast<Window*>(glfwGetWindowUserPointer(window));
+		if (this_->OnDropFile)
+		{
+			this_->OnDropFile(path_count, paths);
+		}
+	}
 #endif
 }
 
@@ -111,6 +119,7 @@ Window::Window(const WindowConfig& config) :
 	glfwSetCursorPosCallback(window_, GlfwCursorPositionCallback);
 	glfwSetMouseButtonCallback(window_, GlfwMouseButtonCallback);
 	glfwSetScrollCallback(window_, GlfwScrollCallback);
+	glfwSetDropCallback(window_, GlfwSetDropCallback);
 #else
 	window_ = static_cast<GLFWwindow*>(config.AndroidNativeWindow);
 #endif

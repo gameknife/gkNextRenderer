@@ -211,6 +211,7 @@ void UserInterface::DrawSettings()
 		ImGui::BulletText("F1: toggle Settings.");
 		ImGui::BulletText("F2: toggle Statistics.");
 		ImGui::BulletText("SPACE: hold to auto focus.");
+		ImGui::BulletText("DropFile: if glb file, load it.");
 		ImGui::NewLine();
 
 		ImGui::Text("Scene");

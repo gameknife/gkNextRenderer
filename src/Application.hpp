@@ -47,6 +47,7 @@ protected:
 	void OnCursorPosition(double xpos, double ypos) override;
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
+	void OnDropFile(int path_count, const char* paths[]) override;
 
 private:
 

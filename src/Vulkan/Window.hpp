@@ -37,6 +37,7 @@ namespace Vulkan
 		std::function<void(double xpos, double ypos)> OnCursorPosition;
 		std::function<void(int button, int action, int mods)> OnMouseButton;
 		std::function<void(double xoffset, double yoffset)> OnScroll;
+		std::function<void(int path_count, const char* paths[])> OnDropFile;
 
 		// Methods
 		void Close();
