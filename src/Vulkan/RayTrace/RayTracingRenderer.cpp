@@ -9,7 +9,6 @@
 #include "Vulkan/SingleTimeCommands.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include <chrono>
-#include <iostream>
 #include <numeric>
 
 #include "Assets/Texture.hpp"

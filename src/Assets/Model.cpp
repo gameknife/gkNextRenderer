@@ -15,7 +15,7 @@
 #include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
-#include <iostream>
+#include <fmt/format.h>
 #include <unordered_map>
 #include <vector>
 
@@ -34,6 +34,7 @@
 // #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
+#include <fmt/format.h>
 
 #include "Texture.hpp"
 
@@ -182,11 +183,14 @@ namespace Assets
 
         std::filesystem::path filepath = filename;
         
-        for (tinygltf::Image& image : model.images)
+        for ( uint32_t i = 0; i < model.images.size(); ++i )
         {
+            tinygltf::Image& image = model.images[i];
+            
+            std::string texname = image.name.empty() ? fmt::format("tex_{}", i):  image.name;
             // 假设，这里的image id和外面的textures id是一样的
-            uint32_t texIdx = Texture::LoadTexture(
-                filepath.filename().string() + "_" + image.name, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+            uint32_t texIdx = GlobalTexturePool::LoadTexture(
+                filepath.filename().string() + "_" + texname, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
             textureIdMap.push_back(texIdx);
@@ -483,7 +487,7 @@ namespace Assets
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
         
-        std::cout << "- loading '" << filename << "'... " << std::flush;
+        fmt::print("- loading '{}'... \n", filename);
 
         const auto timer = std::chrono::high_resolution_clock::now();
         const std::string materialPath = std::filesystem::path(filename).parent_path().string();
@@ -502,7 +506,7 @@ namespace Assets
         {
             Utilities::Console::Write(Utilities::Severity::Warning, [&objReader]()
             {
-                std::cout << "\nWARNING: " << objReader.Warning() << std::flush;
+                fmt::print("\nWARNING: {}\n", objReader.Warning());
             });
         }
 
@@ -542,7 +546,7 @@ namespace Assets
                 	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
                 	if (isNew)
                 	{
-                		uint32_t texIdx = Texture::LoadTexture(tex_filename, Vulkan::SamplerConfig());
+                		uint32_t texIdx = GlobalTexturePool::LoadTexture(tex_filename, Vulkan::SamplerConfig());
                 		m.DiffuseTextureId = static_cast<int32_t>(texIdx);
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}
@@ -690,9 +694,8 @@ namespace Assets
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
 
-        std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
-            << materials.size() << " materials, " << lights.size() << " lights";
-        std::cout << elapsed << "s" << '\n';
+        fmt::print("({} vertices, {} unique vertices, {} materials, {} lights {:.1f}s\n", 
+                    objAttrib.vertices.size(), uniqueVertices.size(), materials.size(), lights.size(), elapsed);
 
         return static_cast<int32_t>(models.size()) - 1;
     }

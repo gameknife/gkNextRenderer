@@ -6,13 +6,12 @@
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Utilities/Exception.hpp"
+#include "Utilities/Console.hpp"
 #include "Utilities/Glm.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
-#include <iostream>
 #include <fstream>
-#include <sstream>
 #include <ctime>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
@@ -32,6 +31,12 @@
 #include <math.h>
 
 #include "TaskCoordinator.hpp"
+
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
+#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
 #if WITH_AVIF
 #include "avif/avif.h"
@@ -61,6 +66,8 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
+
+    status_ = NextRenderer::EApplicationStatus::Starting;
 }
 
 template <typename Renderer>
@@ -191,34 +198,33 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
 
     // global textures
     // texture id 0: global sky
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
 
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::Texture::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
 
-    if(userSettings_.HDRIfile != "") Assets::Texture::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
+    if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
     userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
-
-    //LoadScene(userSettings_.SceneIndex);
-
+    
     std::vector<Assets::Model> models;
     std::vector<Assets::Node> nodes;
     std::vector<Assets::Material> materials;
     std::vector<Assets::LightObject> lights;
     Assets::CameraInitialSate cameraState;
-
     
     scene_.reset(new Assets::Scene(Renderer::CommandPool(), nodes, models,
                                   materials, lights, Renderer::supportRayTracing_));
 
     Renderer::OnPostLoadScene();
+
+    status_ = NextRenderer::EApplicationStatus::Running;
 }
 
 template <typename Renderer>
@@ -246,7 +252,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     TaskCoordinator::GetInstance()->Tick();
     
     // Check if the scene has been changed by the user.
-    if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
+    if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
         LoadScene(userSettings_.SceneIndex);
         return;
@@ -290,7 +296,10 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     }
 
     // Check the current state of the benchmark, update it for the new frame.
-    CheckAndUpdateBenchmarkState(prevTime);
+    if(status_ == NextRenderer::EApplicationStatus::Running)
+    {
+        CheckAndUpdateBenchmarkState(prevTime);
+    }
 
     // Render the UI
     Statistics stats = {};
@@ -312,7 +321,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
-    stats.LoadingStatus = (cameraInitialSate_.CameraIdx == -1);
+    stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
 
@@ -450,6 +459,8 @@ void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
 template <typename Renderer>
 void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
+    status_ = NextRenderer::EApplicationStatus::Loading;
+    
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
     std::shared_ptr< std::vector<Assets::Node> > nodes = std::make_shared< std::vector<Assets::Node> >();
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
@@ -469,9 +480,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
-        std::stringstream stream;
-        stream << "parsed scene #" << sceneIndex <<  " on cpu in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
-        std::string info = stream.str();
+        std::string info = fmt::format("parsed scene #{} on cpu in {:.2f}ms", sceneIndex, taskContext.elapsed * 1000.f);
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
@@ -479,7 +488,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
-        std::cout << "\n\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
+        fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
         
         const auto timer = std::chrono::high_resolution_clock::now();
         
@@ -514,26 +523,13 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         CreateSwapChain();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-        std::stringstream stream;
-        stream << "uploaded scene #" << sceneIndex <<  " to gpu in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
-        std::string info = stream.str();
 
-        std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;
+        fmt::print("{} uploaded scene #{} to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, sceneIndex, elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
+        
+        sceneIndex_ = sceneIndex;
+        status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
-
-    if(scene_.get() == nullptr)
-    {
-        Renderer::Device().WaitIdle();
-        DeleteSwapChain();
-        Renderer::OnPreLoadScene();
-        scene_.reset(new Assets::Scene(Renderer::CommandPool(), *nodes, *models,
-                                  *materials, *lights, Renderer::supportRayTracing_));
-        Renderer::OnPostLoadScene();
-        CreateSwapChain();
-    }
-
-    sceneIndex_ = sceneIndex;
 }
 
 template <typename Renderer>
@@ -552,11 +548,11 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             std::time_t now = std::time(nullptr);
             std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
             benchmarkCsvReportFile.open(report_filename);
-            benchmarkCsvReportFile << "#;scene;FPS" << std::endl;
+            fmt::print(benchmarkCsvReportFile, "#;scene;FPS\n");  
         }
-        std::cout << std::endl;
-        std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
-        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'" << std::endl;
+
+        fmt::print("\n\nRenderer: {}\n", Renderer::StaticClass());
+        fmt::print("Benchmark: Start scene #{} '{}'\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first);
         periodInitialTime_ = time_;
     }
 
@@ -569,8 +565,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            std::string fps = fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime));
-            std::cout << "Benchmark: " << fps << " fps" << std::endl;
+            fmt::print("Benchmark: {:.3f}\n", float(periodTotalFrames_) / float(totalTime));
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
             benchmarkNumber_++;
@@ -591,13 +586,11 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
-
-                char buff[50];
-                Utilities::get_time_str(buff, static_cast<float>(totalTime));
-                printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
+                
+                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)));
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
-                benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
+                fmt::print(benchmarkCsvReportFile, "{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
             }
 
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
@@ -606,7 +599,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 Renderer::Window().Close();
             }
 
-            std::cout << std::endl;
+            puts("");
             userSettings_.SceneIndex += 1;
         }
     }
@@ -621,21 +614,15 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 
     if (userSettings_.Benchmark && cfg.Fullscreen && (fbSize.width != cfg.Width || fbSize.height != cfg.Height))
     {
-        std::ostringstream out;
-        out << "framebuffer fullscreen size mismatch (requested: ";
-        out << cfg.Width << "x" << cfg.Height;
-        out << ", got: ";
-        out << fbSize.width << "x" << fbSize.height << ")";
+        std::string out = fmt::format("framebuffer fullscreen size mismatch (requested: {}x{}, got: {}x{})", cfg.Width, cfg.Height, fbSize.width, fbSize.height);
 
-        Throw(std::runtime_error(out.str()));
+        Throw(std::runtime_error(out));
     }
 }
 
 inline const std::string versionToString(const uint32_t version)
 {
-    std::stringstream ss;
-    ss << VK_VERSION_MAJOR(version) << "." << VK_VERSION_MINOR(version) << "." << VK_VERSION_PATCH(version);
-    return ss.str();
+    return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
 template <typename Renderer>
@@ -812,10 +799,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         printf("screenshot saved to %s\n", filename.c_str());
 
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
-
-        char buff[50];
-        Utilities::metricFormatter(static_cast<double>(img_file_size), buff, (void*)"b", 1024);
-        printf("file size: %s\n", buff);
+        fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
 
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
@@ -834,7 +818,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     };
     std::string json_str = my_json.dump();
 
-    std::cout << "Sending benchmark to perf server..." << std::endl;
+    fmt::print("Sending benchmark to perf server...\n");
     // upload from curl
     CURL* curl;
     CURLcode res;
@@ -850,7 +834,8 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
         curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
-
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        
         /* Perform the request, res gets the return code */
         res = curl_easy_perform(curl);
         /* Check for errors */

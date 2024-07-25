@@ -20,7 +20,9 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Texture.hpp"
 #include "Utilities/Exception.hpp"
+#include "Utilities/Console.hpp"
 #include <array>
+#include <fmt/format.h>
 
 #include "ImageMemoryBarrier.hpp"
 #include "SingleTimeCommands.hpp"
@@ -132,7 +134,7 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	window_->Show();
 
 	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - uptime;
-	std::cout<< "\n\033[1;32m- renderer initialized in " << (uptime * 1e-6f) << " ms" << "\033[0m" << std::endl;
+	fmt::print("\n{} renderer initialized in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, uptime * 1e-6f, CONSOLE_DEFAULT_COLOR);
 }
 
 void VulkanBaseRenderer::Run()

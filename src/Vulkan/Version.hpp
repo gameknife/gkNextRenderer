@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Vulkan.hpp"
-#include <ostream>
+#include <fmt/format.h>
 
 namespace Vulkan 
 {
@@ -34,9 +34,9 @@ namespace Vulkan
 		const unsigned Minor;
 		const unsigned Patch;
 
-		friend std::ostream& operator << (std::ostream& out, const Version& version)
+		friend const std::string to_string(const Version& version)
 		{
-			return out << version.Major << "." << version.Minor << "." << version.Patch;
+			return fmt::format("{}.{}.{}", version.Major, version.Minor, version.Patch);
 		}
 	};
 

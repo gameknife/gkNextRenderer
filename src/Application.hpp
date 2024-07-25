@@ -3,15 +3,25 @@
 #include "ModelViewController.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
-#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
-#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
+#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/WindowConfig.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
 
 #include <fstream>
+
+namespace NextRenderer
+{
+	enum class EApplicationStatus
+	{
+		Starting,
+		Running,
+		Loading,
+		AsyncPreparing,
+	};
+}
+
 
 template <typename Renderer>
 class NextRendererApplication final : public Renderer
@@ -70,6 +80,8 @@ private:
 	std::unique_ptr<class UserInterface> userInterface_;
 
 	double time_{};
+
+	NextRenderer::EApplicationStatus status_{};
 
 	uint32_t totalFrames_{};
 

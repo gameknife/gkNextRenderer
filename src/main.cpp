@@ -9,9 +9,15 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <fmt/format.h>
 #include <iostream>
 
 #include "TaskCoordinator.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
+#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
 #if ANDROID
 #include <imgui_impl_android.h>
@@ -94,7 +100,7 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
     }
 
-    std::cout << "Renderer: " << GApplication->GetRendererType() << std::endl;
+    fmt::print("Renderer: {}\n", GApplication->GetRendererType());
     
     PrintVulkanSdkInformation();
     //PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
@@ -327,7 +333,7 @@ int main(int argc, const char* argv[]) noexcept
     {
         Utilities::Console::Write(Utilities::Severity::Fatal, []()
         {
-            std::cerr << "FATAL: caught unhandled exception" << std::endl;
+            fmt::print(stderr, "FATAL: caught unhandled exception\n");
         });
     }
 
@@ -409,8 +415,7 @@ namespace
 
     void PrintVulkanSdkInformation()
     {
-        std::cout << "Vulkan SDK Header Version: " << VK_HEADER_VERSION << std::endl;
-        std::cout << std::endl;
+        fmt::print("Vulkan SDK Header Version: {}\n\n", VK_HEADER_VERSION);
     }
 
     void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
@@ -420,15 +425,14 @@ namespace
             return;
         }
 
-        std::cout << "Vulkan Instance Extensions: " << std::endl;
+        puts("Vulkan Instance Extensions:");
 
         for (const auto& extension : application.Extensions())
         {
-            std::cout << "- " << extension.extensionName << " (" << Vulkan::Version(extension.specVersion) << ")" <<
-                std::endl;
+            fmt::print("- {} ({})\n", extension.extensionName, to_string(Vulkan::Version(extension.specVersion)));
         }
 
-        std::cout << std::endl;
+        puts("");
     }
 
     void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
@@ -438,22 +442,19 @@ namespace
             return;
         }
 
-        std::cout << "Vulkan Instance Layers: " << std::endl;
+        puts("Vulkan Instance Layers:");
 
         for (const auto& layer : application.Layers())
         {
-            std::cout
-                << "- " << layer.layerName
-                << " (" << Vulkan::Version(layer.specVersion) << ")"
-                << " : " << layer.description << std::endl;
+            fmt::print("- {} ({}) : {}\n", layer.layerName, to_string(Vulkan::Version(layer.specVersion)), layer.description);
         }
 
-        std::cout << std::endl;
+        puts("");
     }
 
     void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application)
     {
-        std::cout << "Vulkan Devices: " << std::endl;
+        puts("Vulkan Devices:");
 
         for (const auto& device : application.PhysicalDevices())
         {
@@ -472,26 +473,19 @@ namespace
             const Vulkan::Version vulkanVersion(prop.apiVersion);
             const Vulkan::Version driverVersion(prop.driverVersion, prop.vendorID);
 
-            std::cout << "- [" << prop.deviceID << "] ";
-            std::cout << Vulkan::Strings::VendorId(prop.vendorID) << " '" << prop.deviceName;
-            std::cout << "' (";
-            std::cout << Vulkan::Strings::DeviceType(prop.deviceType) << ": ";
-            std::cout << "vulkan " << vulkanVersion << ", ";
-            std::cout << "driver " << driverProp.driverName << " " << driverProp.driverInfo << " - " << driverVersion;
-            std::cout << ")" << std::endl;
+            fmt::print("- [{}] {} '{}' ({}: vulkan {} driver {} {} - {})\n",
+                        prop.deviceID, Vulkan::Strings::VendorId(prop.vendorID), prop.deviceName, Vulkan::Strings::DeviceType(prop.deviceType),
+                        to_string(vulkanVersion), driverProp.driverName, driverProp.driverInfo, to_string(driverVersion));
         }
 
-        std::cout << std::endl;
+        puts("");
     }
 
     void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
     {
         const auto& swapChain = application.SwapChain();
 
-        std::cout << "Swap Chain: " << std::endl;
-        std::cout << "- image count: " << swapChain.Images().size() << std::endl;
-        std::cout << "- present mode: " << swapChain.PresentMode() << std::endl;
-        std::cout << std::endl;
+        fmt::print("Swap Chain:\n- image count: {}\n- present mode: {}\n\n", swapChain.Images().size(), static_cast<int>(swapChain.PresentMode()));
     }
 
     void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
@@ -502,9 +496,9 @@ namespace
         deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         vkGetPhysicalDeviceProperties2(pDevice, &deviceProp);
 
-        std::cout << "Setting Device [" << deviceProp.properties.deviceName << "]:" << std::endl;
+        fmt::print("Setting Device [{}]\n", deviceProp.properties.deviceName);
         application.SetPhysicalDevice(pDevice);
 
-        std::cout << std::endl;
+        puts("");
     }
 }
