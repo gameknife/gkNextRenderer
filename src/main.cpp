@@ -12,6 +12,11 @@
 #include <iostream>
 
 #include "TaskCoordinator.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
+#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
 #if ANDROID
 #include <imgui_impl_android.h>

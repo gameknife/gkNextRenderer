@@ -33,6 +33,12 @@
 
 #include "TaskCoordinator.hpp"
 
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
+#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+
 #if WITH_AVIF
 #include "avif/avif.h"
 #endif
@@ -61,6 +67,8 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
+
+    status_ = NextRenderer::EApplicationStatus::Starting;
 }
 
 template <typename Renderer>
@@ -205,9 +213,7 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
 
     if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
     userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
-
-    //LoadScene(userSettings_.SceneIndex);
-
+    
     std::vector<Assets::Model> models;
     std::vector<Assets::Node> nodes;
     std::vector<Assets::Material> materials;
@@ -219,6 +225,8 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
                                   materials, lights, Renderer::supportRayTracing_));
 
     Renderer::OnPostLoadScene();
+
+    status_ = NextRenderer::EApplicationStatus::Running;
 }
 
 template <typename Renderer>
@@ -246,7 +254,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     TaskCoordinator::GetInstance()->Tick();
     
     // Check if the scene has been changed by the user.
-    if (sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
+    if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
         LoadScene(userSettings_.SceneIndex);
         return;
@@ -290,7 +298,10 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     }
 
     // Check the current state of the benchmark, update it for the new frame.
-    CheckAndUpdateBenchmarkState(prevTime);
+    if(status_ == NextRenderer::EApplicationStatus::Running)
+    {
+        CheckAndUpdateBenchmarkState(prevTime);
+    }
 
     // Render the UI
     Statistics stats = {};
@@ -312,7 +323,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
-    stats.LoadingStatus = (cameraInitialSate_.CameraIdx == -1);
+    stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
 
@@ -450,6 +461,8 @@ void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
 template <typename Renderer>
 void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
 {
+    status_ = NextRenderer::EApplicationStatus::Loading;
+    
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
     std::shared_ptr< std::vector<Assets::Node> > nodes = std::make_shared< std::vector<Assets::Node> >();
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
@@ -519,21 +532,11 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         std::string info = stream.str();
 
         std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;
+        
+        sceneIndex_ = sceneIndex;
+        status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
-
-    if(scene_.get() == nullptr)
-    {
-        Renderer::Device().WaitIdle();
-        DeleteSwapChain();
-        Renderer::OnPreLoadScene();
-        scene_.reset(new Assets::Scene(Renderer::CommandPool(), *nodes, *models,
-                                  *materials, *lights, Renderer::supportRayTracing_));
-        Renderer::OnPostLoadScene();
-        CreateSwapChain();
-    }
-
-    sceneIndex_ = sceneIndex;
 }
 
 template <typename Renderer>
@@ -850,7 +853,8 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
         curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
-
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        
         /* Perform the request, res gets the return code */
         res = curl_easy_perform(curl);
         /* Check for errors */
