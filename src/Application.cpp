@@ -848,42 +848,45 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 #endif
     }
 
-    json11::Json my_json = json11::Json::object{
-        {"renderer", Renderer::StaticClass()},
-        {"scene", sceneName},
-        {"gpu", std::string(deviceProp1.deviceName)},
-        {"driver", versionToString(deviceProp1.driverVersion)},
-        {"fps", fps},
-        {"screenshot", img_encoded}
-    };
-    std::string json_str = my_json.dump();
-
-    fmt::print("Sending benchmark to perf server...\n");
-    // upload from curl
-    CURL* curl;
-    CURLcode res;
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-    if (curl)
+    if( NextRenderer::GetBuildVersion() != "v0.0.0.0" )
     {
-        curl_slist* slist1 = nullptr;
-        slist1 = curl_slist_append(slist1, "Content-Type: application/json");
-        slist1 = curl_slist_append(slist1, "Accept: application/json");
+        json11::Json my_json = json11::Json::object{
+            {"renderer", Renderer::StaticClass()},
+            {"scene", sceneName},
+            {"gpu", std::string(deviceProp1.deviceName)},
+            {"driver", versionToString(deviceProp1.driverVersion)},
+            {"fps", fps},
+            {"screenshot", img_encoded}
+        };
+        std::string json_str = my_json.dump();
 
-        /* set custom headers */
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
-        curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        fmt::print("Sending benchmark to perf server...\n");
+        // upload from curl
+        CURL* curl;
+        CURLcode res;
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl = curl_easy_init();
+        if (curl)
+        {
+            curl_slist* slist1 = nullptr;
+            slist1 = curl_slist_append(slist1, "Content-Type: application/json");
+            slist1 = curl_slist_append(slist1, "Accept: application/json");
+
+            /* set custom headers */
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
+            curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
         
-        /* Perform the request, res gets the return code */
-        res = curl_easy_perform(curl);
-        /* Check for errors */
-        if (res != CURLE_OK)
-            fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
+            /* Perform the request, res gets the return code */
+            res = curl_easy_perform(curl);
+            /* Check for errors */
+            if (res != CURLE_OK)
+                fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
 
-        /* always cleanup */
-        curl_easy_cleanup(curl);
+            /* always cleanup */
+            curl_easy_cleanup(curl);
+        }
     }
 }
 

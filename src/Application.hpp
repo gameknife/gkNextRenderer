@@ -20,6 +20,8 @@ namespace NextRenderer
 		Loading,
 		AsyncPreparing,
 	};
+
+	std::string GetBuildVersion();
 }
 
 
