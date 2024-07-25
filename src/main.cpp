@@ -15,7 +15,7 @@
 #include "TaskCoordinator.hpp"
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/RayTrace/RayTracingRenderer.hpp"
-#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
