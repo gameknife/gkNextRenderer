@@ -5,7 +5,6 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include <algorithm>
-#include <iostream>
 #include <set>
 
 namespace Vulkan {

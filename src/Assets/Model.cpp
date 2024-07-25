@@ -5,6 +5,7 @@
 #include "Utilities/Exception.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Utilities/Math.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_inverse.hpp>
@@ -15,7 +16,7 @@
 #include <tiny_obj_loader.h>
 #include <chrono>
 #include <filesystem>
-#include <iostream>
+#include <fmt/format.h>
 #include <unordered_map>
 #include <vector>
 
@@ -487,7 +488,7 @@ namespace Assets
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
         
-        std::cout << "- loading '" << filename << "'... " << std::flush;
+        fmt::print("- loading '{}'... \n", filename);
 
         const auto timer = std::chrono::high_resolution_clock::now();
         const std::string materialPath = std::filesystem::path(filename).parent_path().string();
@@ -506,7 +507,7 @@ namespace Assets
         {
             Utilities::Console::Write(Utilities::Severity::Warning, [&objReader]()
             {
-                std::cout << "\nWARNING: " << objReader.Warning() << std::flush;
+                fmt::print("\nWARNING: {}\n", objReader.Warning());
             });
         }
 
@@ -551,7 +552,7 @@ namespace Assets
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}
                 } else {
-                	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
+                	fmt::print("\n{} NOT FOUND\n", material.diffuse_texname);
 				}
             }
 
@@ -694,9 +695,10 @@ namespace Assets
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
 
-        std::cout << "(" << objAttrib.vertices.size() << " vertices, " << uniqueVertices.size() << " unique vertices, "
-            << materials.size() << " materials, " << lights.size() << " lights";
-        std::cout << elapsed << "s" << '\n';
+        fmt::print("{} vertices, {} unique vertices, {} materials, {} lights\n{:.1f}s\n", 
+                    Utilities::metricFormatter(static_cast<double>(objAttrib.vertices.size()), ""),
+					Utilities::metricFormatter(static_cast<double>(uniqueVertices.size()), ""),
+					materials.size(), lights.size(), elapsed);
 
         return static_cast<int32_t>(models.size()) - 1;
     }

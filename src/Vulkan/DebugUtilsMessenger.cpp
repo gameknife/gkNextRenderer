@@ -2,7 +2,7 @@
 #include "Instance.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
-#include <iostream>
+#include <fmt/format.h>
 
 namespace Vulkan {
 
@@ -71,55 +71,52 @@ namespace Vulkan {
 			switch (messageSeverity)
 			{
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-				std::cerr << "VERBOSE: ";
+				fmt::print(stderr, "VERBOSE: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-				std::cerr << "INFO: ";
+				fmt::print(stderr, "INFO: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-				std::cerr << "WARNING: ";
+				fmt::print(stderr, "WARNING: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-				std::cerr << "ERROR: ";
+				fmt::print(stderr, "ERROR: ");
 				break;
 			default:;
-				std::cerr << "UNKNOWN: ";
+				fmt::print(stderr, "UNKNOWN: ");
 			}
 
 			switch (messageType)
 			{
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-				std::cerr << "GENERAL: ";
+				fmt::print(stderr, "GENERAL: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-				std::cerr << "VALIDATION: ";
+				fmt::print(stderr, "VALIDATION: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-				std::cerr << "PERFORMANCE: ";
+				fmt::print(stderr, "PERFORMANCE: ");
 				break;
 			default:
-				std::cerr << "UNKNOWN: ";
+				fmt::print(stderr, "UNKNOWN: ");
 			}
 
-			std::cerr << pCallbackData->pMessage;
+			fmt::print(stderr, "{}", pCallbackData->pMessage);
 
 			if (pCallbackData->objectCount > 0 && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 			{
-				std::cerr << "\n\n  Objects (" << pCallbackData->objectCount << "):\n";
+				fmt::print(stderr, "\n\n  Objects ({}):\n", pCallbackData->objectCount);
 
 				for (uint32_t i = 0; i != pCallbackData->objectCount; ++i)
 				{
 					const auto object = pCallbackData->pObjects[i];
-					std::cerr
-						<< "  - Object[" << i << "]: "
-						<< "Type: " << ObjectTypeToString(object.objectType ) << ", "
-						<< "Handle: " << reinterpret_cast<void*>(object.objectHandle) << ", "
-						<< "Name: '" << (object.pObjectName ? object.pObjectName : "") << "'"
-						<< "\n";
+					fmt::print(stderr, "  - Object[{}]: Type: {}, Handle: {}, Name: '{}'\n", 
+										ObjectTypeToString(object.objectType), reinterpret_cast<void*>(object.objectHandle), (object.pObjectName ? object.pObjectName : "")
+							 );
 				}
 			}
 
-			std::cerr << std::endl;
+			fmt::print(stderr, "\n");
 
 			Utilities::Console::SetColorByAttributes(attributes);
 

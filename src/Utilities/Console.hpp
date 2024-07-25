@@ -2,6 +2,9 @@
 
 #include "Vulkan/Vulkan.hpp"
 
+#define CONSOLE_GREEN_COLOR		"\033[1;32m-"
+#define CONSOLE_DEFAULT_COLOR	"\033[0m"
+
 namespace Utilities
 {
 	enum class Severity
@@ -27,5 +30,5 @@ namespace Utilities
 
 		static int SetColorBySeverity(Severity severity) noexcept;
 		static void SetColorByAttributes(int attributes) noexcept;
-	};
+	}; 
 }

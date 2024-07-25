@@ -6,13 +6,12 @@
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Utilities/Exception.hpp"
+#include "Utilities/Console.hpp"
 #include "Utilities/Glm.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
-#include <iostream>
 #include <fstream>
-#include <sstream>
 #include <ctime>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
@@ -219,7 +218,6 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     std::vector<Assets::Material> materials;
     std::vector<Assets::LightObject> lights;
     Assets::CameraInitialSate cameraState;
-
     
     scene_.reset(new Assets::Scene(Renderer::CommandPool(), nodes, models,
                                   materials, lights, Renderer::supportRayTracing_));
@@ -482,9 +480,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
-        std::stringstream stream;
-        stream << "parsed scene #" << sceneIndex <<  " on cpu in " << std::fixed << std::setprecision(2) << (taskContext.elapsed * 1000.f) << "ms";
-        std::string info = stream.str();
+        std::string info = fmt::format("parsed scene #{} on cpu in {:.2f}ms", sceneIndex, taskContext.elapsed * 1000.f);
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
@@ -492,7 +488,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
-        std::cout << "\n\033[1;32m- " << taskContext.outputInfo.data() << "\033[0m" << std::endl;
+        fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
         
         const auto timer = std::chrono::high_resolution_clock::now();
         
@@ -527,11 +523,8 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         CreateSwapChain();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-        std::stringstream stream;
-        stream << "uploaded scene #" << sceneIndex <<  " to gpu in " << std::fixed << std::setprecision(2) << elapsed * 1000.f << "ms";
-        std::string info = stream.str();
 
-        std::cout << "\033[1;32m- " << info << "\033[0m" << std::endl;
+        fmt::print("{} uploaded scene #{} to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, sceneIndex, elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
         
         sceneIndex_ = sceneIndex;
         status_ = NextRenderer::EApplicationStatus::Running;
@@ -555,11 +548,11 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             std::time_t now = std::time(nullptr);
             std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
             benchmarkCsvReportFile.open(report_filename);
-            benchmarkCsvReportFile << "#;scene;FPS" << std::endl;
+            fmt::print(benchmarkCsvReportFile, "#;scene;FPS\n");  
         }
-        std::cout << std::endl;
-        std::cout << "Renderer: " << Renderer::StaticClass() << std::endl;
-        std::cout << "Benchmark: Start scene #" << sceneIndex_ << " '" << SceneList::AllScenes[sceneIndex_].first << "'" << std::endl;
+
+        fmt::print("\n\nRenderer: {}\n", Renderer::StaticClass());
+        fmt::print("Benchmark: Start scene #{} '{}'\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first);
         periodInitialTime_ = time_;
     }
 
@@ -572,8 +565,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
         if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
             / period))
         {
-            std::string fps = fmt::format("{:10.5}", float(periodTotalFrames_) / float(totalTime));
-            std::cout << "Benchmark: " << fps << " fps" << std::endl;
+            fmt::print("Benchmark: {:.3f}\n", float(periodTotalFrames_) / float(totalTime));
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
             benchmarkNumber_++;
@@ -594,16 +586,11 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
-                
-                //fmt::format()
-                //printf("\n*** totalTime %s  %.2f fps\n", buff, fps);
 
-                std::cout << "\n*** totalTime "
-                << fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(totalTime)))
-                << " fps " << std::fixed << std::setprecision(2) << fps << "\n";
+                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)));
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
-                benchmarkCsvReportFile << sceneIndex_ << ";" << SceneList::AllScenes[sceneIndex_].first <<";" << fps << std::endl;
+                fmt::print(benchmarkCsvReportFile, "{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
             }
 
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
@@ -612,7 +599,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 Renderer::Window().Close();
             }
 
-            std::cout << std::endl;
+            puts("");
             userSettings_.SceneIndex += 1;
         }
     }
@@ -627,21 +614,15 @@ void NextRendererApplication<Renderer>::CheckFramebufferSize() const
 
     if (userSettings_.Benchmark && cfg.Fullscreen && (fbSize.width != cfg.Width || fbSize.height != cfg.Height))
     {
-        std::ostringstream out;
-        out << "framebuffer fullscreen size mismatch (requested: ";
-        out << cfg.Width << "x" << cfg.Height;
-        out << ", got: ";
-        out << fbSize.width << "x" << fbSize.height << ")";
+        std::string out = fmt::format("framebuffer fullscreen size mismatch (requested: {}x{}, got: {}x{})", cfg.Width, cfg.Height, fbSize.width, fbSize.height);
 
-        Throw(std::runtime_error(out.str()));
+        Throw(std::runtime_error(out));
     }
 }
 
 inline const std::string versionToString(const uint32_t version)
 {
-    std::stringstream ss;
-    ss << VK_VERSION_MAJOR(version) << "." << VK_VERSION_MINOR(version) << "." << VK_VERSION_PATCH(version);
-    return ss.str();
+    return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
 template <typename Renderer>
@@ -757,7 +738,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         {
             Throw(std::runtime_error("Failed to open file for writing"));
         }
-        else printf("screenshot saved to %s\n", filename.c_str());
+        else fmt::print("screenshot saved to {}\n", filename);
         fwrite(avifOutput.data, 1, avifOutput.size, f);
         fclose(f);
 		
@@ -815,10 +796,10 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         std::string filename = sceneName + ".jpg";
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
 
-        printf("screenshot saved to %s\n", filename.c_str());
+        fmt::print("screenshot saved to {}\n", filename);
 
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
-        std::cout << "file size: " << Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024) << "\n";
+        fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
 
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
@@ -837,7 +818,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     };
     std::string json_str = my_json.dump();
 
-    std::cout << "Sending benchmark to perf server..." << std::endl;
+    fmt::print("Sending benchmark to perf server...\n");
     // upload from curl
     CURL* curl;
     CURLcode res;
@@ -859,8 +840,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                    curl_easy_strerror(res));
+            fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);

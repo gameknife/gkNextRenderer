@@ -5,7 +5,7 @@
 #include <queue>
 #include <thread>
 #include <atomic>
-#include <iostream>
+#include <fmt/format.h>
 #include <cstring>
 
 namespace details
@@ -224,7 +224,9 @@ public:
    
     ~TaskThread()
     {
-        std::cout<< "TaskThread " << thread_->get_id() << " request shutting down, " << "wait for task complete." <<std::endl;
+        std::thread::id threadId = thread_->get_id();
+        unsigned int ThreadIdAsInt = *static_cast<unsigned int*>(static_cast<void*>(&threadId));
+        fmt::print("TaskThread {} request shutting down, wait for task complete.\n", ThreadIdAsInt);
         complete_->wait();
         terminate_->set();
         thread_->join();
@@ -249,12 +251,12 @@ public:
 
     ~TaskCoordinator()
     {
-        std::cout<< "TaskCoordinator request shutting down, wait for TaskThread. " << "remain: " << threads_.size() <<std::endl;
+        fmt::print("TaskCoordinator request shutting down, wait for TaskThread. remain: {}\n", threads_.size());
         for (auto& thread : threads_)
         {
             thread.reset();
         }
-        std::cout<< "TaskCoordinator shut down." <<std::endl;
+        puts("TaskCoordinator shut down.");
     }
 
     void MarkTaskComplete(const ResTask& task)

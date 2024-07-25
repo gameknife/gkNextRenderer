@@ -2,7 +2,7 @@
 #include "Utilities/StbImage.hpp"
 #include "Utilities/Exception.hpp"
 #include <chrono>
-#include <iostream>
+#include <fmt/format.h>
 
 #include "TaskCoordinator.hpp"
 #include "TextureImage.hpp"
@@ -186,16 +186,14 @@ namespace Assets
             stbi_image_free(pixels);
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::stringstream stream;
-            stream << "loaded " << filename <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
-            std::string info = stream.str();
+            std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", filename, width, height, channels, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
         }, [](ResTask& task)
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
-            std::cout << taskContext.outputInfo.data() << std::endl;
+            fmt::print("{}\n", taskContext.outputInfo.data());
         }, 0);
 
         // cache in namemap
@@ -235,16 +233,14 @@ namespace Assets
             stbi_image_free(pixels);
             
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::stringstream stream;
-            stream << "loaded " << texname <<  "(" << width << " x " << height << " x " << channels << ") in " << std::fixed << std::setprecision(2) << taskContext.elapsed * 1000.f << "ms";
-            std::string info = stream.str();
+            std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, channels, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
         }, [copyedData](ResTask& task)
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
-            std::cout << taskContext.outputInfo.data() << std::endl;
+            fmt::print("{}\n", taskContext.outputInfo.data());
             delete[] copyedData;
         }, 0);
 

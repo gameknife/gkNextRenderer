@@ -1,7 +1,7 @@
 #include "Window.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/StbImage.hpp"
-#include <iostream>
+#include <fmt/format.h>
 
 #if ANDROID
 #include <time.h>
@@ -21,7 +21,7 @@ namespace
 #if !ANDROID
 	void GlfwErrorCallback(const int error, const char* const description)
 	{
-		std::cerr << "ERROR: GLFW: " << description << " (code: " << error << ")" << std::endl;
+		fmt::print(stderr, "ERROR: GLFW: {} (code: {})\n", description, error);
 	}
 
 	void GlfwKeyCallback(GLFWwindow* window, const int key, const int scancode, const int action, const int mods)
