@@ -18,7 +18,6 @@ jobs:
     runs-on: windows-2022
     env:
       SDK_VERSION: 1.3.280.0
-
     steps:
     - uses: actions/checkout@v4
     - name: Download Vulkan SDK
@@ -31,11 +30,6 @@ jobs:
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         vcpkg_windows.bat
       shell: cmd
-    # This is where GitHub actions on Windows get really nonsensical.
-    # MSBuild is not on the path by default, despite this running on a Windows / Visual Studio 2019 docker image.
-    # We currently use 3rd party action to avoid hard coding the path to MSBuild
-    # (originally at https://github.com/warrenbuckley/Setup-MSBuild, later on adopted by Microsoft themselves).
-    # Comedy bonus: GitHub is now owned by Microsoft.
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
     - name: Compile gkNextRenderer
