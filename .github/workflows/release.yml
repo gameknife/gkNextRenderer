@@ -43,7 +43,7 @@ jobs:
         sudo apt-get install vulkan-sdk
     - name: Compile gkNextRenderer
       run: |
-        echo "BUILDVER(${{ github.ref_name }})" > build.version
+        echo "BUILDVER(${{ github.ref_name }})" > src/build.version
         ./build_android.sh
     - name: Create zip file
       run: |
@@ -76,7 +76,7 @@ jobs:
         sudo apt-get install vulkan-sdk
     - name: Compile vcpkg dependencies
       run: |
-        echo "BUILDVER(${{ github.ref_name }})" > build.version
+        echo "BUILDVER(${{ github.ref_name }})" > src/build.version
         ./vcpkg_linux.sh
     - name: Compile gkNextRenderer
       run: ./build_linux.sh
@@ -117,7 +117,7 @@ jobs:
     - name: Compile gkNextRenderer
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        echo BUILDVER(${{ github.ref_name }}) > build.version
+        echo BUILDVER(${{ github.ref_name }}) > src/build.version
         build_windows.bat
       shell: cmd
     - name: Create zip file
