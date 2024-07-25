@@ -738,7 +738,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         {
             Throw(std::runtime_error("Failed to open file for writing"));
         }
-        else printf("screenshot saved to %s\n", filename.c_str());
+        else fmt::print("screenshot saved to {}\n", filename);
         fwrite(avifOutput.data, 1, avifOutput.size, f);
         fclose(f);
 		
@@ -796,7 +796,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         std::string filename = sceneName + ".jpg";
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
 
-        printf("screenshot saved to %s\n", filename.c_str());
+        fmt::print("screenshot saved to {}\n", filename);
 
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
         fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
@@ -840,8 +840,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         res = curl_easy_perform(curl);
         /* Check for errors */
         if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                    curl_easy_strerror(res));
+            fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);

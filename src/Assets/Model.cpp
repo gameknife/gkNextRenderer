@@ -5,6 +5,7 @@
 #include "Utilities/Exception.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Utilities/Math.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_inverse.hpp>
@@ -551,7 +552,7 @@ namespace Assets
                 		tex_names[tex_filename] = m.DiffuseTextureId;
                 	}
                 } else {
-                	printf("\n%s NOT FOUND\n", material.diffuse_texname.c_str());
+                	fmt::print("\n{} NOT FOUND\n", material.diffuse_texname);
 				}
             }
 
@@ -694,8 +695,10 @@ namespace Assets
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
 
-        fmt::print("({} vertices, {} unique vertices, {} materials, {} lights {:.1f}s\n", 
-                    objAttrib.vertices.size(), uniqueVertices.size(), materials.size(), lights.size(), elapsed);
+        fmt::print("{} vertices, {} unique vertices, {} materials, {} lights\n{:.1f}s\n", 
+                    Utilities::metricFormatter(static_cast<double>(objAttrib.vertices.size()), ""),
+					Utilities::metricFormatter(static_cast<double>(uniqueVertices.size()), ""),
+					materials.size(), lights.size(), elapsed);
 
         return static_cast<int32_t>(models.size()) - 1;
     }
