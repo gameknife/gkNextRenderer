@@ -587,7 +587,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
 
-                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)));
+                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
                 fmt::print(benchmarkCsvReportFile, "{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
@@ -638,7 +638,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     
     vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
 
-    std::string img_encoded = "";
+    std::string img_encoded {};
     if (upload_screen || save_screen)
     {
 #if WITH_AVIF
@@ -778,19 +778,14 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         // save to file with scenename
         std::string filename = sceneName + ".avif";
-        FILE* f = fopen(filename.c_str(), "wb");
-        if (!f)
-        {
-            Throw(std::runtime_error("Failed to open file for writing"));
-        }
-        else fmt::print("screenshot saved to {}\n", filename);
-        fwrite(avifOutput.data, 1, avifOutput.size, f);
-        fclose(f);
+        std::wfstream file(filename.c_str());
+        file << avifOutput.data;
+        file.close();
 		
         free(data);
 
         // send to server
-        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();

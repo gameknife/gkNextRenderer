@@ -76,6 +76,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
 
+	gpuTimer_.reset();
 	globalTexturePool_.reset();
 	commandPool_.reset();
 	commandPool2_.reset();
