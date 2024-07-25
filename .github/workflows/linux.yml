@@ -24,7 +24,7 @@ jobs:
     - name: Install Ubuntu dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev nasm
+        sudo apt-get install curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev ninja-build
     - name: Install Vulkan SDK
       run: |
         wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
