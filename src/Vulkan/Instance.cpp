@@ -105,8 +105,8 @@ void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)
 	if (minVersion > version)
 	{
 		std::ostringstream out;
-		out << "minimum required version not found (required " << Version(minVersion);
-		out << ", found " << Version(version) << ")";
+		out << "minimum required version not found (required " << to_string(Version(minVersion));
+		out << ", found " << to_string(Version(version)) << ")";
 
 		Throw(std::runtime_error(out.str()));
 	}

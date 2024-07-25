@@ -665,7 +665,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         image->clli.maxPALL = 0; //maxFALLNits;
 
         avifEncoder* encoder = NULL;
-        avifRWData consavifOutput = AVIF_DATA_EMPTY;
+        avifRWData avifOutput = AVIF_DATA_EMPTY;
 
         avifRGBImage rgbAvifImage{};
         avifRGBImageSetDefaults(&rgbAvifImage, image);
