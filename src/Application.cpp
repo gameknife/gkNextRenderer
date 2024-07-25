@@ -652,59 +652,104 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         constexpr uint32_t kCompCnt = 3;
         int imageSize = extent.width * extent.height * kCompCnt;
 
-        avifImage* image = avifImageCreate(extent.width, extent.height, 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+        avifImage* image = avifImageCreate(extent.width, extent.height, swapChain.IsHDR() ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
             Throw(std::runtime_error("avif image creation failed"));
         }
         image->yuvRange = AVIF_RANGE_FULL;
-        image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
-        image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
+        image->colorPrimaries = swapChain.IsHDR() ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
+        image->transferCharacteristics = swapChain.IsHDR() ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
         image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
         image->clli.maxCLL = static_cast<uint16_t>(userSettings_.PaperWhiteNit); //maxCLLNits;
         image->clli.maxPALL = 0; //maxFALLNits;
 
         avifEncoder* encoder = NULL;
-        avifRWData avifOutput = AVIF_DATA_EMPTY;
+        avifRWData consavifOutput = AVIF_DATA_EMPTY;
 
         avifRGBImage rgbAvifImage{};
         avifRGBImageSetDefaults(&rgbAvifImage, image);
         rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
         rgbAvifImage.ignoreAlpha = AVIF_TRUE;
 
-        uint8_t* data = (uint8_t*)malloc(imageSize);
+        void* data = nullptr;
+        if(swapChain.IsHDR())
         {
-            Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
-
-            uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
-
-            uint32_t yDelta = extent.width * kCompCnt;
-            uint32_t xDelta = kCompCnt;
-            uint32_t idxDelta = extent.width * 4;
-            uint32_t yy = 0;
-            uint32_t xx = 0, idx = 0;
-            for (uint32_t y = 0; y < extent.height; y++)
+            size_t hdrsize = rgbAvifImage.width * rgbAvifImage.height * 3 * 2;
+            data = malloc(hdrsize);
+            uint16_t* dataview = (uint16_t*)data;
             {
-                xx = 0;
-                for (uint32_t x = 0; x < extent.width; x++)
+                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t idxDelta = extent.width * 4;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
                 {
-                    uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
-                    uint32_t uInPixel = *pInPixel;
-
-                    data[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                    data[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                    data[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-
-                    idx += 4;
-                    xx += xDelta;
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+                        dataview[yy + xx + 2]     = (uInPixel & (0b1111111111 << 20)) >> 20;
+                        dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                        dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                        
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    //idx += idxDelta;
+                    yy += yDelta;
                 }
-                yy += yDelta;
+                vkMemory->Unmap();
             }
-            vkMemory->Unmap();
-        }
 
-        rgbAvifImage.pixels = (uint8_t*)data;
-        rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
+            rgbAvifImage.pixels = (uint8_t*)data;
+            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
+        }
+        else
+        {
+            data = malloc(imageSize);
+            uint8_t* dataview = (uint8_t*)data;
+            {
+                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t idxDelta = extent.width * 4;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
+                {
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+
+                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
+
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    yy += yDelta;
+                }
+                vkMemory->Unmap();
+            }
+
+            rgbAvifImage.pixels = (uint8_t*)data;
+            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
+        }
+       
+       
 
         avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
         if (convertResult != AVIF_RESULT_OK)
