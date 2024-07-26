@@ -1,0 +1,4 @@
+DropFile: if glb file, load it.;拖入文件：加载支持的模型文件
+F1: toggle Settings.;F1：切换设置面板
+F2: toggle Statistics.;F2：切换统计面板
+SPACE: hold to auto focus.;空格：按住自动对焦

@@ -29,6 +29,8 @@ set(src_files_utilities
 	Utilities/Glm.hpp
 	Utilities/StbImage.cpp
 	Utilities/StbImage.hpp
+	Utilities/Localization.hpp
+	Utilities/Localization.cpp
 )
 
 set(src_files_vulkan

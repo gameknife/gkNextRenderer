@@ -31,6 +31,7 @@
 #include <math.h>
 
 #include "TaskCoordinator.hpp"
+#include "Utilities/Localization.hpp"
 
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/RayTrace/RayTracingRenderer.hpp"
@@ -68,11 +69,14 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
+
+    Utilities::Localization::ReadLocTexts("assets/locale/en.txt");
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
+    Utilities::Localization::SaveLocTexts("assets/locale/en.txt");
     scene_.reset();
 }
 
