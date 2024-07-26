@@ -255,7 +255,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
         LoadScene(userSettings_.SceneIndex);
-        return;
+        //return;
     }
     
     previousSettings_ = userSettings_;

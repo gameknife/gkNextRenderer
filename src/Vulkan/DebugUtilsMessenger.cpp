@@ -110,7 +110,7 @@ namespace Vulkan {
 				for (uint32_t i = 0; i != pCallbackData->objectCount; ++i)
 				{
 					const auto object = pCallbackData->pObjects[i];
-					fmt::print(stderr, "  - Object[{}]: Type: {}, Handle: {}, Name: '{}'\n", 
+					fmt::print(stderr, "  - Object: Type: {}, Handle: {}, Name: '{}'\n", 
 										ObjectTypeToString(object.objectType), reinterpret_cast<void*>(object.objectHandle), (object.pObjectName ? object.pObjectName : "")
 							 );
 				}
