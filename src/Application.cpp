@@ -833,21 +833,13 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         }
 
         // save to file with scenename
-        /*
-        std::string filename = sceneName + ".png";
-        stbi_write_png(filename.c_str(), extent.width, extent.height, kCompCnt, (const void *) data, extent.width * kCompCnt);
-        */
         std::string filename = sceneName + ".jpg";
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
-
         fmt::print("screenshot saved to {}\n", filename);
-
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
         fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
-
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
-
         free(data);
 #endif
     }
@@ -860,6 +852,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             {"gpu", std::string(deviceProp1.deviceName)},
             {"driver", versionToString(deviceProp1.driverVersion)},
             {"fps", fps},
+            {"version", NextRenderer::GetBuildVersion()},
             {"screenshot", img_encoded}
         };
         std::string json_str = my_json.dump();
