@@ -1,0 +1,26 @@
+AdaptiveSample;自适应采样
+AdaptiveVariance;自适应采样阈值
+AntiAlias;抗锯齿
+Aperture;光圈
+Camera;相机
+DropFile: if glb file, load it.;拖入文件：加载支持的模型文件
+F1: toggle Settings.;F1：切换设置面板
+F2: toggle Statistics.;F2：切换统计面板
+FoV;焦距
+Focus(cm);对焦距离（厘米）
+PaperWhitNit;HDR峰值亮度
+Performance;性能
+Profiler;可视化
+RR Start;俄罗斯轮盘起始步
+Ray Tracing;光线追踪
+SPACE: hold to auto focus.;空格：按住自动对焦
+Scaling;缩放
+Scene;场景
+ShaderTime;Shader耗时
+SkyIdx;天空盒Id
+SkyLum;天空盒亮度
+SkyRotation;天空盒旋转
+SunLum;太阳亮度
+SunRotation;太阳旋转
+Temporal Frames;时域收敛总帧数
+TemporalSteps;时域收敛步数

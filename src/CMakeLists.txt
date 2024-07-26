@@ -29,6 +29,8 @@ set(src_files_utilities
 	Utilities/Glm.hpp
 	Utilities/StbImage.cpp
 	Utilities/StbImage.hpp
+	Utilities/Localization.hpp
+	Utilities/Localization.cpp
 )
 
 set(src_files_vulkan
@@ -181,12 +183,6 @@ set(src_files
 	UserSettings.hpp
 	TaskCoordinator.cpp
 	TaskCoordinator.hpp
-)
-
-set_source_files_properties(
-  ${src_files_thirdparty_json11}
-  PROPERTIES
-  COMPILE_FLAGS "-w"
 )
 
 source_group("Assets" FILES ${src_files_assets})

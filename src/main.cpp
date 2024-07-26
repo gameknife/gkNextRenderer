@@ -19,6 +19,16 @@
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
+
+#define BUILDVER(X) std::string buildver(#X);
+#include "build.version"
+namespace NextRenderer
+{
+    std::string GetBuildVersion()
+    {
+        return buildver;
+    }
+}
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>
@@ -100,7 +110,7 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
             userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
     }
 
-    fmt::print("Renderer: {}\n", GApplication->GetRendererType());
+    fmt::print("Renderer: {}, BuildVer: {}\n", GApplication->GetRendererType(), NextRenderer::GetBuildVersion());
     
     PrintVulkanSdkInformation();
     //PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
@@ -247,7 +257,7 @@ int main(int argc, const char* argv[]) noexcept
         UserSettings userSettings = CreateUserSettings(options);
         const Vulkan::WindowConfig windowConfig
         {
-            "gkNextRenderer",
+            "gkNextRenderer " + NextRenderer::GetBuildVersion(),
             options.Width,
             options.Height,
             options.Benchmark && options.Fullscreen,

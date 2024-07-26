@@ -1,5 +1,6 @@
 
 file(GLOB font_files fonts/*.ttf)
+file(GLOB locale_files locale/*.txt)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
@@ -40,9 +41,11 @@ macro(copy_assets asset_files dir_name copied_files)
 endmacro()
 
 copy_assets(font_files fonts copied_fonts)
+copy_assets(locale_files locale copied_locale)
 copy_assets(model_files models copied_models)
 copy_assets(texture_files textures copied_textures)
 
+source_group("Locales" FILES ${locale_files})
 source_group("Fonts" FILES ${font_files})
 source_group("Models" FILES ${model_files})
 source_group("Shaders" FILES ${shader_files} ${shader_extra_files})
@@ -51,7 +54,7 @@ source_group("Textures" FILES ${texture_files})
 
 add_custom_target(
 	Assets 
-	DEPENDS ${copied_fonts} ${copied_models} ${compiled_shaders} ${copied_textures} 
+	DEPENDS ${copied_fonts} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
 	SOURCES ${font_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
 
 

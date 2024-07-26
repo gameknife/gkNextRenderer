@@ -26,6 +26,7 @@ public:
 	bool RenderDoc{};
 	bool Denoiser{};
 	bool ForceSDR{};
+	std::string locale{};
 	
 	// Benchmark options.
 	bool BenchmarkNextScenes{};

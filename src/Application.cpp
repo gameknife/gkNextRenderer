@@ -31,10 +31,11 @@
 #include <math.h>
 
 #include "TaskCoordinator.hpp"
+#include "Utilities/Localization.hpp"
 
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/RayTrace/RayTracingRenderer.hpp"
-#include "vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
@@ -68,11 +69,14 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
+    
+    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
+    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
     scene_.reset();
 }
 
@@ -255,7 +259,7 @@ void NextRendererApplication<Renderer>::DrawFrame()
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
         LoadScene(userSettings_.SceneIndex);
-        return;
+        //return;
     }
     
     previousSettings_ = userSettings_;
@@ -587,7 +591,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
 
-                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)));
+                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
                 fmt::print(benchmarkCsvReportFile, "{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
@@ -638,7 +642,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     
     vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
 
-    std::string img_encoded = "";
+    std::string img_encoded {};
     if (upload_screen || save_screen)
     {
 #if WITH_AVIF
@@ -652,14 +656,14 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         constexpr uint32_t kCompCnt = 3;
         int imageSize = extent.width * extent.height * kCompCnt;
 
-        avifImage* image = avifImageCreate(extent.width, extent.height, 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+        avifImage* image = avifImageCreate(extent.width, extent.height, swapChain.IsHDR() ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
             Throw(std::runtime_error("avif image creation failed"));
         }
         image->yuvRange = AVIF_RANGE_FULL;
-        image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT2020;
-        image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084;
+        image->colorPrimaries = swapChain.IsHDR() ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
+        image->transferCharacteristics = swapChain.IsHDR() ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
         image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
         image->clli.maxCLL = static_cast<uint16_t>(userSettings_.PaperWhiteNit); //maxCLLNits;
         image->clli.maxPALL = 0; //maxFALLNits;
@@ -672,39 +676,84 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
         rgbAvifImage.ignoreAlpha = AVIF_TRUE;
 
-        uint8_t* data = (uint8_t*)malloc(imageSize);
+        void* data = nullptr;
+        if(swapChain.IsHDR())
         {
-            Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
-
-            uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
-
-            uint32_t yDelta = extent.width * kCompCnt;
-            uint32_t xDelta = kCompCnt;
-            uint32_t idxDelta = extent.width * 4;
-            uint32_t yy = 0;
-            uint32_t xx = 0, idx = 0;
-            for (uint32_t y = 0; y < extent.height; y++)
+            size_t hdrsize = rgbAvifImage.width * rgbAvifImage.height * 3 * 2;
+            data = malloc(hdrsize);
+            uint16_t* dataview = (uint16_t*)data;
             {
-                xx = 0;
-                for (uint32_t x = 0; x < extent.width; x++)
+                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t idxDelta = extent.width * 4;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
                 {
-                    uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
-                    uint32_t uInPixel = *pInPixel;
-
-                    data[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                    data[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                    data[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-
-                    idx += 4;
-                    xx += xDelta;
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+                        dataview[yy + xx + 2]     = (uInPixel & (0b1111111111 << 20)) >> 20;
+                        dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                        dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                        
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    //idx += idxDelta;
+                    yy += yDelta;
                 }
-                yy += yDelta;
+                vkMemory->Unmap();
             }
-            vkMemory->Unmap();
-        }
 
-        rgbAvifImage.pixels = (uint8_t*)data;
-        rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
+            rgbAvifImage.pixels = (uint8_t*)data;
+            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
+        }
+        else
+        {
+            data = malloc(imageSize);
+            uint8_t* dataview = (uint8_t*)data;
+            {
+                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t idxDelta = extent.width * 4;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
+                {
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+
+                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
+
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    yy += yDelta;
+                }
+                vkMemory->Unmap();
+            }
+
+            rgbAvifImage.pixels = (uint8_t*)data;
+            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
+        }
+       
+       
 
         avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
         if (convertResult != AVIF_RESULT_OK)
@@ -733,19 +782,14 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
 
         // save to file with scenename
         std::string filename = sceneName + ".avif";
-        FILE* f = fopen(filename.c_str(), "wb");
-        if (!f)
-        {
-            Throw(std::runtime_error("Failed to open file for writing"));
-        }
-        else fmt::print("screenshot saved to {}\n", filename);
-        fwrite(avifOutput.data, 1, avifOutput.size, f);
-        fclose(f);
+        std::wfstream file(filename.c_str());
+        file << avifOutput.data;
+        file.close();
 		
         free(data);
 
         // send to server
-        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
@@ -789,61 +833,57 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         }
 
         // save to file with scenename
-        /*
-        std::string filename = sceneName + ".png";
-        stbi_write_png(filename.c_str(), extent.width, extent.height, kCompCnt, (const void *) data, extent.width * kCompCnt);
-        */
         std::string filename = sceneName + ".jpg";
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
-
         fmt::print("screenshot saved to {}\n", filename);
-
         std::uintmax_t img_file_size = std::filesystem::file_size(filename);
         fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
-
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
-
         free(data);
 #endif
     }
 
-    json11::Json my_json = json11::Json::object{
-        {"renderer", Renderer::StaticClass()},
-        {"scene", sceneName},
-        {"gpu", std::string(deviceProp1.deviceName)},
-        {"driver", versionToString(deviceProp1.driverVersion)},
-        {"fps", fps},
-        {"screenshot", img_encoded}
-    };
-    std::string json_str = my_json.dump();
-
-    fmt::print("Sending benchmark to perf server...\n");
-    // upload from curl
-    CURL* curl;
-    CURLcode res;
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-    if (curl)
+    if( NextRenderer::GetBuildVersion() != "v0.0.0.0" )
     {
-        curl_slist* slist1 = nullptr;
-        slist1 = curl_slist_append(slist1, "Content-Type: application/json");
-        slist1 = curl_slist_append(slist1, "Accept: application/json");
+        json11::Json my_json = json11::Json::object{
+            {"renderer", Renderer::StaticClass()},
+            {"scene", sceneName},
+            {"gpu", std::string(deviceProp1.deviceName)},
+            {"driver", versionToString(deviceProp1.driverVersion)},
+            {"fps", fps},
+            {"version", NextRenderer::GetBuildVersion()},
+            {"screenshot", img_encoded}
+        };
+        std::string json_str = my_json.dump();
 
-        /* set custom headers */
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
-        curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        fmt::print("Sending benchmark to perf server...\n");
+        // upload from curl
+        CURL* curl;
+        CURLcode res;
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl = curl_easy_init();
+        if (curl)
+        {
+            curl_slist* slist1 = nullptr;
+            slist1 = curl_slist_append(slist1, "Content-Type: application/json");
+            slist1 = curl_slist_append(slist1, "Accept: application/json");
+
+            /* set custom headers */
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist1);
+            curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
         
-        /* Perform the request, res gets the return code */
-        res = curl_easy_perform(curl);
-        /* Check for errors */
-        if (res != CURLE_OK)
-            fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
+            /* Perform the request, res gets the return code */
+            res = curl_easy_perform(curl);
+            /* Check for errors */
+            if (res != CURLE_OK)
+                fmt::print(stderr, "curl_easy_perform() failed: {}\n", curl_easy_strerror(res));
 
-        /* always cleanup */
-        curl_easy_cleanup(curl);
+            /* always cleanup */
+            curl_easy_cleanup(curl);
+        }
     }
 }
 
