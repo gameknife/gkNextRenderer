@@ -25,6 +25,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
+#include "Options.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
@@ -112,7 +113,8 @@ UserInterface::UserInterface(
 	// Upload ImGui fonts (use ImGuiFreeType for better font rendering, see https://github.com/ocornut/imgui/tree/master/misc/freetype).
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 12 * scaleFactor, nullptr, io.Fonts->GetGlyphRangesChineseFull()))
+	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 12 * scaleFactor, nullptr, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load ImGui font"));
 	}
@@ -219,7 +221,7 @@ void UserInterface::DrawSettings()
 		ImGui::BulletText(LOCTEXT("DropFile: if glb file, load it."));
 		ImGui::NewLine();
 
-		ImGui::Text("Scene");
+		ImGui::Text(LOCTEXT("Scene"));
 		ImGui::Separator();
 		ImGui::PushItemWidth(-1);
 		ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
@@ -242,14 +244,14 @@ void UserInterface::DrawSettings()
 			Settings().FocusDistance = cam.FocalDistance;
 		}
 
-		ImGui::Text("Ray Tracing");
+		ImGui::Text(LOCTEXT("Ray Tracing"));
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
-		ImGui::SliderScalar("RR Start", ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
-		ImGui::Checkbox("AdativeSample", &Settings().AdaptiveSample);
-		ImGui::Checkbox("AntiAlias", &Settings().TAA);
-		ImGui::SliderFloat("AdaptiveVariance", &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
-		ImGui::SliderInt("TemporalSteps", &Settings().AdaptiveSteps, 2, 16);
+		ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
+		ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
+		ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
+		ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
+		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
 
 		
 		ImGui::NewLine();
@@ -267,35 +269,34 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		#endif
 		
-		ImGui::Text("Camera");
+		ImGui::Text(LOCTEXT("Camera"));
 		ImGui::Separator();
-		ImGui::SliderFloat("FoV", &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
-		ImGui::SliderFloat("Aperture", &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat("Focus(cm)", &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+		ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
+		ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 		
-		ImGui::SliderInt("SkyIdx", &Settings().SkyIdx, 0, Settings().HDRIsLoaded - 1);
-		ImGui::SliderFloat("SkyRotation", &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-		ImGui::SliderFloat("SkyLum", &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-		ImGui::SliderFloat("SunRotation", &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-		ImGui::SliderFloat("SunLum", &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
-		
-		
-		ImGui::SliderFloat("PaperWhitNit", &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
+		ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, Settings().HDRIsLoaded - 1);
+		ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+		ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+
+		ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
 		
 		ImGui::NewLine();
 
-		ImGui::Text("Profiler");
+		ImGui::Text(LOCTEXT("Profiler"));
 		ImGui::Separator();
-		ImGui::Checkbox("VisualDebug", &Settings().ShowVisualDebug);
-		ImGui::SliderFloat("Scaling", &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+		ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
+		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
 
-		ImGui::Text("Performance");
+		ImGui::Text(LOCTEXT("Performance"));
 		ImGui::Separator();
-		ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
+		//ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
 		{
 			uint32_t min = 0, max = 256;
-			ImGui::SliderScalar("Temporal Frames", ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
+			ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
 		}
 		ImGui::NewLine();
 	}

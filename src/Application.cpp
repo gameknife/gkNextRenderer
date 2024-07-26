@@ -69,14 +69,14 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-
-    Utilities::Localization::ReadLocTexts("assets/locale/en.txt");
+    
+    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
-    Utilities::Localization::SaveLocTexts("assets/locale/en.txt");
+    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
     scene_.reset();
 }
 
