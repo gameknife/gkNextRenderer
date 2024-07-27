@@ -213,7 +213,7 @@ void UserInterface::DrawSettings()
 			camerasList.emplace_back(cam.name.c_str());
 		}
 
-		ImGui::Text("Help");
+		ImGui::Text("%s", LOCTEXT("Help"));
 		ImGui::Separator();
 		ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
 		ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));

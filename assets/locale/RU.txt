@@ -1,3 +1,4 @@
+Help; Подсказка
 AdaptiveSample; Адаптивная выборка
 AdaptiveVariance; Диспресия адаптивности
 AntiAlias; Сглаживание
