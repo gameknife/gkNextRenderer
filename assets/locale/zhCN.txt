@@ -1,3 +1,4 @@
+Help;帮助
 AdaptiveSample;自适应采样
 AdaptiveVariance;自适应采样阈值
 AntiAlias;抗锯齿
