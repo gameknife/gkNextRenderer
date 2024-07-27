@@ -17,7 +17,7 @@ Ray Tracing; Трассировка лучей
 SPACE: hold to auto focus.; Пробел: удерживайте для автофокуса
 Scaling; Масштабирование
 Scene; Сцена
-ShaderTime; Время выполнения шейдера
+ShaderTime; Показать стадии шейдеров
 SkyIdx; Номер HDRI
 SkyLum; Яркость неба
 SkyRotation; Поворот неба
