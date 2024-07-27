@@ -83,7 +83,7 @@ jobs:
     - name: Create zip file
       run: |
         cd build/linux
-        zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
+        zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -123,7 +123,7 @@ jobs:
     - name: Create zip file
       run: |
         cd build/windows
-        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
+        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
