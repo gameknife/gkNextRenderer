@@ -1,28 +1,28 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set options[0]=¹âÏß×·×ÙäÖÈ¾Æ÷(RTPipeline)
-set options[1]=ÏÖ´úÑÓ³ÙäÖÈ¾Æ÷
-set options[2]=´«Í³ÑÓ³ÙäÖÈ¾Æ÷
-set options[3]=¹âÏß×·×ÙäÖÈ¾Æ÷(RQ)
-set options[4]=»ìºÏäÖÈ¾Æ÷
-set options[5]=ÍË³ö
+set options[0]=å…‰çº¿è¿½è¸ªæ¸²æŸ“å™¨(RTPipeline)
+set options[1]=ç°ä»£å»¶è¿Ÿæ¸²æŸ“å™¨
+set options[2]=ä¼ ç»Ÿå»¶è¿Ÿæ¸²æŸ“å™¨
+set options[3]=å…‰çº¿è¿½è¸ªæ¸²æŸ“å™¨(RQ)
+set options[4]=æ··åˆæ¸²æŸ“å™¨
+set options[5]=é€€å‡º
 
 set count=6
 
 :menu
 cls
-echo ÇëÑ¡ÔñÒ»¸öÑ¡Ïî£¬È»ºó°´»Ø³µ¼üÈ·ÈÏ:
+echo è¯·é€‰æ‹©ä¸€ä¸ªé€‰é¡¹ï¼Œç„¶åæŒ‰å›è½¦é”®ç¡®è®¤:
 for /L %%i in (0,1,%count%-1) do (
 	echo %%i. !options[%%i]!
 )
 
-set /p choice=ÊäÈëÊı×ÖÑ¡Ôñ (0-%count%):
+set /p choice=è¾“å…¥æ•°å­—é€‰æ‹© (0-%count%):
 
 if %choice% geq 0 if %choice% lss %count% (
 	goto execute
 ) else (
-	echo ÎŞĞ§µÄÑ¡Ôñ£¬ÇëÖØÊÔ¡£
+	echo æ— æ•ˆçš„é€‰æ‹©ï¼Œè¯·é‡è¯•ã€‚
 	pause
 	goto menu
 )
@@ -38,6 +38,6 @@ pause
 goto menu
 
 :exit
-echo ÔÙ¼û£¡
+echo å†è§ï¼
 pause
 exit

@@ -1,26 +1,26 @@
 AdaptiveSample; Адаптивная выборка
-AdaptiveVariance; Адаптивная дисперсия
+AdaptiveVariance; Диспресия адаптивности
 AntiAlias; Сглаживание
 Aperture; Диафрагма
 Camera; Камера
-DropFile: if glb file, load it.; Перетащите файл: если это файл формата GLB, загрузите его.
-F1: toggle Settings.; F1: переключение настроек
-F2: toggle Statistics.; F2: переключение статистики
-FoV; Угол обзора (фокусное расстояние)
-Focus(cm); Фокусное расстояние (в сантиметрах)
+DropFile: if glb file, load it.; Перетащите файл: если это файл GLB, загрузится сцена из него.
+F1: toggle Settings.; F1: показать/спрятать настройки
+F2: toggle Statistics.; F2: показать/спрятать статистику
+FoV; Угол обзора
+Focus(cm); Фокусное расстояние(см)
 PaperWhitNit; Яркость бумаги (HDR)
 Performance; Производительность
 Profiler; Профилирование
-RR Start; Начальный шаг в рулетке России
+RR Start; Начальный шаг русской рулетки
 Ray Tracing; Трассировка лучей
 SPACE: hold to auto focus.; Пробел: удерживайте для автофокуса
 Scaling; Масштабирование
 Scene; Сцена
 ShaderTime; Время выполнения шейдера
-SkyIdx; Индекс неба
+SkyIdx; Номер HDRI
 SkyLum; Яркость неба
-SkyRotation; Вращение неба
+SkyRotation; Поворот неба
 SunLum; Яркость солнца
-SunRotation; Вращение солнца
-Temporal Frames; Временные кадры (итоговое количество)
-TemporalSteps; Временные шаги
+SunRotation; Поворот солнца
+Temporal Frames; Временных кадров
+TemporalSteps; Временных шагов
