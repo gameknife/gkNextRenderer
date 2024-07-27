@@ -215,20 +215,20 @@ void UserInterface::DrawSettings()
 
 		ImGui::Text("Help");
 		ImGui::Separator();
-		ImGui::BulletText(LOCTEXT("F1: toggle Settings."));
-		ImGui::BulletText(LOCTEXT("F2: toggle Statistics."));
-		ImGui::BulletText(LOCTEXT("SPACE: hold to auto focus."));
-		ImGui::BulletText(LOCTEXT("DropFile: if glb file, load it."));
+		ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
+		ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
+		ImGui::BulletText("%s", LOCTEXT("SPACE: hold to auto focus."));
+		ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
 		ImGui::NewLine();
 
-		ImGui::Text(LOCTEXT("Scene"));
+		ImGui::Text("%s", LOCTEXT("Scene"));
 		ImGui::Separator();
 		ImGui::PushItemWidth(-1);
 		ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
 
-		ImGui::Text(LOCTEXT("Ray Tracing"));
+		ImGui::Text("%s", LOCTEXT("Ray Tracing"));
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
@@ -254,7 +254,7 @@ void UserInterface::DrawSettings()
 		#endif
 
 		int prevCameraIdx = Settings().CameraIdx;
-		ImGui::Text(LOCTEXT("Camera"));
+		ImGui::Text("%s", LOCTEXT("Camera"));
 		ImGui::Separator();
 		ImGui::PushItemWidth(-1);
 		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
@@ -283,13 +283,13 @@ void UserInterface::DrawSettings()
 		
 		ImGui::NewLine();
 
-		ImGui::Text(LOCTEXT("Profiler"));
+		ImGui::Text("%s", LOCTEXT("Profiler"));
 		ImGui::Separator();
 		ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
 		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
 
-		ImGui::Text(LOCTEXT("Performance"));
+		ImGui::Text("%s", LOCTEXT("Performance"));
 		ImGui::Separator();
 		//ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
 		{
