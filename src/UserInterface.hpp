@@ -4,6 +4,11 @@
 #include <string>
 #include <unordered_map>
 
+namespace ImStudio
+{
+	struct GUI;
+}
+
 namespace Vulkan
 {
 	class CommandPool;
@@ -66,4 +71,6 @@ private:
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	UserSettings& userSettings_;
+
+	std::unique_ptr<ImStudio::GUI> editorGUI_;
 };

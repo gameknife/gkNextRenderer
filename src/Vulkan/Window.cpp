@@ -86,6 +86,8 @@ Window::Window(const WindowConfig& config) :
 		Throw(std::runtime_error("glfwVulkanSupported() failed"));
 	}
 
+	// hide title bar, handle in ImGUI Later
+	//glfwWindowHint( GLFW_DECORATED, GLFW_FALSE );
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 

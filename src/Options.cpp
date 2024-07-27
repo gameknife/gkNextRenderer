@@ -58,6 +58,7 @@ Options::Options(const int argc, const char* argv[])
 		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
 		("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
 		("locale", value<std::string>(&locale)->default_value("en"), "Locale: en, zhCN, RU.")
+		("editor", bool_switch(&Editor)->default_value(false), "Start Editor Mode.")
 		;
 
 	desc.add(benchmark);

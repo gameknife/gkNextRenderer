@@ -22,10 +22,12 @@
 #include <imgui_impl_vulkan.h>
 
 #include <array>
+#include <Editor/ims_gui.h>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
+#include "Editor/main_window.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
@@ -49,6 +51,9 @@ UserInterface::UserInterface(
 	UserSettings& userSettings) :
 	userSettings_(userSettings)
 {
+	editorGUI_.reset(new ImStudio::GUI());
+	editorGUI_->bw.objects.reserve(2048);
+	
 	const auto& device = swapChain.Device();
 	const auto& window = device.Surface().Instance().Window();
 
@@ -63,6 +68,8 @@ UserInterface::UserInterface(
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+
+	
 
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
@@ -102,11 +109,12 @@ UserInterface::UserInterface(
 #if ANDROID
     const auto scaleFactor = 1.5;
 #else
-    const auto scaleFactor = 1.0;//window.ContentScale();
+    const auto scaleFactor = window.ContentScale();
 #endif
 
 
-	ImGui::StyleColorsDark();
+	//ImGui::StyleColorsDark();
+	MainWindowStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 
 
@@ -130,6 +138,8 @@ UserInterface::UserInterface(
 
 UserInterface::~UserInterface()
 {
+	editorGUI_.reset();
+	
 	ImGui_ImplVulkan_Shutdown();
 #if !ANDROID
 	ImGui_ImplGlfw_Shutdown();
@@ -149,12 +159,17 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	ImGui_ImplVulkan_NewFrame();
 	ImGui::NewFrame();
 
-//#if !ANDROID
-	DrawSettings();
-//#endif
-	DrawOverlay(statistics, gpuTimer);
-	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
-	//ImGui::ShowStyleEditor();
+	if( GOption->Editor )
+	{
+		MainWindowGUI(*editorGUI_);
+	}
+	else
+	{
+		DrawSettings();
+		DrawOverlay(statistics, gpuTimer);
+		if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
+	}
+	
 	ImGui::Render();
 
 	VkRenderPassBeginInfo renderPassInfo = {};
