@@ -228,22 +228,6 @@ void UserInterface::DrawSettings()
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
 
-		int prevCameraIdx = Settings().CameraIdx;
-		ImGui::Text("Camera");
-		ImGui::Separator();
-		ImGui::PushItemWidth(-1);
-		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
-		ImGui::PopItemWidth();
-		ImGui::NewLine();
-
-		if(prevCameraIdx != Settings().CameraIdx)
-		{
-			auto &cam = Settings().cameras[Settings().CameraIdx];
-			Settings().FieldOfView = cam.FieldOfView;
-			Settings().Aperture = cam.Aperture;
-			Settings().FocusDistance = cam.FocalDistance;
-		}
-
 		ImGui::Text(LOCTEXT("Ray Tracing"));
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
@@ -268,9 +252,23 @@ void UserInterface::DrawSettings()
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 			ImGui::NewLine();
 		#endif
-		
+
+		int prevCameraIdx = Settings().CameraIdx;
 		ImGui::Text(LOCTEXT("Camera"));
 		ImGui::Separator();
+		ImGui::PushItemWidth(-1);
+		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
+		ImGui::PopItemWidth();
+		ImGui::NewLine();
+
+		if(prevCameraIdx != Settings().CameraIdx)
+		{
+			auto &cam = Settings().cameras[Settings().CameraIdx];
+			Settings().FieldOfView = cam.FieldOfView;
+			Settings().Aperture = cam.Aperture;
+			Settings().FocusDistance = cam.FocalDistance;
+		}
+
 		ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
