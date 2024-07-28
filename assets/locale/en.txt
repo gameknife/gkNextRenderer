@@ -1,3 +1,4 @@
+Help;
 AdaptiveSample;
 AdaptiveVariance;
 AntiAlias;

@@ -212,8 +212,8 @@ void UserInterface::DrawSettings()
 		{
 			camerasList.emplace_back(cam.name.c_str());
 		}
-		
-		ImGui::Text("Help");
+
+		ImGui::Text("%s", LOCTEXT("Help"));
 		ImGui::Separator();
 		ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
 		ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
@@ -227,22 +227,6 @@ void UserInterface::DrawSettings()
 		ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
 		ImGui::PopItemWidth();
 		ImGui::NewLine();
-
-		int prevCameraIdx = Settings().CameraIdx;
-		ImGui::Text("Camera");
-		ImGui::Separator();
-		ImGui::PushItemWidth(-1);
-		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
-		ImGui::PopItemWidth();
-		ImGui::NewLine();
-
-		if(prevCameraIdx != Settings().CameraIdx)
-		{
-			auto &cam = Settings().cameras[Settings().CameraIdx];
-			Settings().FieldOfView = cam.FieldOfView;
-			Settings().Aperture = cam.Aperture;
-			Settings().FocusDistance = cam.FocalDistance;
-		}
 
 		ImGui::Text("%s", LOCTEXT("Ray Tracing"));
 		ImGui::Separator();
@@ -268,9 +252,23 @@ void UserInterface::DrawSettings()
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 			ImGui::NewLine();
 		#endif
-		
+
+		int prevCameraIdx = Settings().CameraIdx;
 		ImGui::Text("%s", LOCTEXT("Camera"));
 		ImGui::Separator();
+		ImGui::PushItemWidth(-1);
+		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
+		ImGui::PopItemWidth();
+		ImGui::NewLine();
+
+		if(prevCameraIdx != Settings().CameraIdx)
+		{
+			auto &cam = Settings().cameras[Settings().CameraIdx];
+			Settings().FieldOfView = cam.FieldOfView;
+			Settings().Aperture = cam.Aperture;
+			Settings().FocusDistance = cam.FocalDistance;
+		}
+
 		ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 		ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
