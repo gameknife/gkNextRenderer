@@ -57,15 +57,17 @@ void MainWindowStyle()
     
 }
 
-void MainWindowGUI(ImStudio::GUI & gui_r)
+void MainWindowGUI(ImStudio::GUI & gui_r, ImTextureID viewportImage, ImVec2 viewportSize)
 {
 
     //////////////////////////////////
     ImStudio::GUI &gui = gui_r;
     ImGuiIO &io = ImGui::GetIO();
 
-    static int w_w = io.DisplaySize.x;
-    static int w_h = io.DisplaySize.y;
+    // static int w_w = io.DisplaySize.x;
+    // static int w_h = io.DisplaySize.y;
+    int w_w = io.DisplaySize.x;
+    int w_h = io.DisplaySize.y;
     //////////////////////////////////
 
     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -78,7 +80,9 @@ void MainWindowGUI(ImStudio::GUI & gui_r)
     if (gui.menubar) gui.ShowMenubar();
 
     // workspace-create
-    if (!gui.compact){
+    //if (!gui.compact){
+    if(false)
+    {
         if (gui.wksp_create)
         {// create-main
             {// create-sidebar
@@ -94,7 +98,7 @@ void MainWindowGUI(ImStudio::GUI & gui_r)
                 // create-viewport
                 gui.vp_P = ImVec2(gui.sb_S.x, gui.mb_S.y);
                 gui.vp_S = ImVec2(gui.pt_P.x - gui.sb_S.x, w_h - gui.mb_S.y);
-                if (gui.viewport) gui.ShowViewport();
+                if (gui.viewport) gui.ShowViewport(viewportImage, viewportSize);
 
             }
         }
@@ -125,7 +129,7 @@ void MainWindowGUI(ImStudio::GUI & gui_r)
         // create-viewport
         gui.vp_P = ImVec2(gui.sb_S.x, gui.mb_S.y);
         gui.vp_S = ImVec2(gui.pt_P.x - gui.sb_S.x, w_h - gui.mb_S.y);
-        if (gui.viewport) gui.ShowViewport();
+        if (gui.viewport) gui.ShowViewport(viewportImage, viewportSize);
     }
 
     { // create-children

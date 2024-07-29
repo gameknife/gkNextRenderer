@@ -260,7 +260,7 @@ void VulkanBaseRenderer::CreateSwapChain()
 	screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 	screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
 
-	rtEditorViewport_.reset(new RenderImage(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
+	rtEditorViewport_.reset(new RenderImage(*device_, {1280,720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 void VulkanBaseRenderer::DeleteSwapChain()
@@ -344,7 +344,7 @@ void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, co
 	copyRegion.srcOffset = {0, 0, 0};
 	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
 	copyRegion.dstOffset = {0, 0, 0};
-	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+	copyRegion.extent = {rtEditorViewport_->GetImage().Extent().width, rtEditorViewport_->GetImage().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
 				   image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,

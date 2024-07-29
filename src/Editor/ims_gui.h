@@ -41,7 +41,7 @@ namespace ImStudio
         ImVec2                  vp_P                       = {};                   // Viewport Pos
         ImVec2                  vp_S                       = {};                   // Viewport Size
         BufferWindow            bw;            
-        void                    ShowViewport               ();         
+        void                    ShowViewport               (ImTextureID viewportImage, ImVec2 viewportSize);         
 
         bool                    wksp_output                = false;                // Workspace "Output"
         ImVec2                  ot_P                       = {};                   // Output Window Pos

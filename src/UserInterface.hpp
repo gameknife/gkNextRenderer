@@ -1,4 +1,6 @@
 #pragma once
+#include <imgui.h>
+
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
 #include <string>
@@ -77,4 +79,5 @@ private:
 	std::unique_ptr<ImStudio::GUI> editorGUI_;
 
 	VkDescriptorSet viewportTextureId_;
+	ImVec2 viewportSize_;
 };

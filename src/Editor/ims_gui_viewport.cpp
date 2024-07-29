@@ -1,15 +1,15 @@
 #include "ims_gui.h"
 
-void ImStudio::GUI::ShowViewport()
+void ImStudio::GUI::ShowViewport(ImTextureID viewportImage, ImVec2 viewportSize)
 {
     ImGui::SetNextWindowPos(vp_P);
     ImGui::SetNextWindowSize(vp_S);
-    ImGui::Begin("Viewport", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::Begin("Viewport", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoInputs);
 
     /// content-viewport
     {
         utils::DrawGrid();
-        
+        ImGui::GetWindowDrawList()->AddImage(viewportImage, ImVec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y), ImVec2(ImGui::GetCursorScreenPos().x + viewportSize.x, ImGui::GetCursorScreenPos().y + viewportSize.y));
         ImGui::Text("Buffer Window: %gx%g", bw.size.x, bw.size.y);
         ImGui::SameLine();
         utils::TextCentered("Make sure to lock widgets before interacting with them.", 1);
@@ -20,8 +20,9 @@ void ImStudio::GUI::ShowViewport()
         utils::HelpMarker("Hotkeys:\nAlt + M - \"Add\" context menu\n"\
                           "Left/Right Arrow - Cycle object selection\n"\
                           "Ctrl + E - Focus on property field\nDelete - Delete selected object");
+
         
-        bw.drawall();
+        //bw.drawall();
     }
 
     ImGui::End();

@@ -107,6 +107,10 @@ UserInterface::UserInterface(
 
 	// No ini file.
 	io.IniFilename = nullptr;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 	// Window scaling and style.
 #if ANDROID
@@ -136,11 +140,10 @@ UserInterface::UserInterface(
 		{
 			Throw(std::runtime_error("failed to create ImGui font textures"));
 		}
-
-		//viewportImage.InsertBarrier(commandBuffer, VK_ACCESS_NONE, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	});
 
 	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
 }
 
 UserInterface::~UserInterface()
@@ -160,20 +163,19 @@ UserInterface::~UserInterface()
 
 void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
+	auto& io = ImGui::GetIO();
+
+	ImGui_ImplVulkan_NewFrame();
 #if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
 #else
 	ImGui_ImplAndroid_NewFrame();
 #endif
-	ImGui_ImplVulkan_NewFrame();
 	ImGui::NewFrame();
 
 	if( GOption->Editor )
 	{
-		//MainWindowGUI(*editorGUI_);
-		ImGui::Begin("Viewport");
-		ImGui::Image(viewportTextureId_, ImGui::GetContentRegionAvail(), ImVec2(0, 1), ImVec2(1, 0));
-		ImGui::End();
+		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_);
 	}
 	else
 	{
@@ -196,6 +198,13 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	vkCmdEndRenderPass(commandBuffer);
+
+	// if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	// {
+	// 	ImGui::UpdatePlatformWindows();
+	// 	ImGui::RenderPlatformWindowsDefault();
+	// 	// TODO for OpenGL: restore current GL context.
+	// }
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const
