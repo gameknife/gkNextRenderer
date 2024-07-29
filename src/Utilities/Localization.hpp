@@ -28,7 +28,7 @@ namespace Utilities
         static void ReadLocTexts(const char* localeFilePath)
         {
             // Read from file
-            std::ifstream file(Utilities::FileHelper::GetPlatformFilePath(localeFilePath));
+            std::ifstream file(Utilities::FileHelper::GetNormalizedFilePath(localeFilePath));
             if(file.is_open())
             {
                 std::string line;
@@ -45,7 +45,7 @@ namespace Utilities
         static void SaveLocTexts(const char* localeFilePath)
         {
             // Write to file
-            std::ofstream file(Utilities::FileHelper::GetPlatformFilePath(localeFilePath));
+            std::ofstream file(Utilities::FileHelper::GetNormalizedFilePath(localeFilePath));
             if(file.is_open())
             {
                 for(auto& locText : locTexts)
