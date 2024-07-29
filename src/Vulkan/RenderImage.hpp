@@ -4,6 +4,7 @@
 
 #include "Vulkan.hpp"
 #include "DeviceMemory.hpp"
+#include "Sampler.hpp"
 
 #if WIN32
 #define ExtHandle HANDLE
@@ -31,12 +32,14 @@ namespace Vulkan
 
 		const Image& GetImage() const { return *image_; }
 		const ImageView& GetImageView() const { return *imageView_; }
+		const Vulkan::Sampler& Sampler() const { return *sampler_; }
 		void InsertBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout) const;
 		ExtHandle GetExternalHandle() const;
 	private:
 		std::unique_ptr<Image> image_;
 		std::unique_ptr<DeviceMemory> imageMemory_;
 		std::unique_ptr<ImageView> imageView_;
+		std::unique_ptr<Vulkan::Sampler> sampler_;
 		
 	};
 

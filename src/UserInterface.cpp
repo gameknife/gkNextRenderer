@@ -31,6 +31,8 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 
 namespace
@@ -48,7 +50,8 @@ UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings) :
+	UserSettings& userSettings,
+	Vulkan::RenderImage& viewportImage) :
 	userSettings_(userSettings)
 {
 	editorGUI_.reset(new ImStudio::GUI());
@@ -62,7 +65,7 @@ UserInterface::UserInterface(
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
 	};
-	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, 1));
+	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount()));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
 
 	// Initialise ImGui
@@ -127,17 +130,23 @@ UserInterface::UserInterface(
 		Throw(std::runtime_error("failed to load ImGui font"));
 	}
 
-	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
+	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
 		{
 			Throw(std::runtime_error("failed to create ImGui font textures"));
 		}
+
+		//viewportImage.InsertBarrier(commandBuffer, VK_ACCESS_NONE, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	});
+
+	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 UserInterface::~UserInterface()
 {
+	ImGui_ImplVulkan_RemoveTexture(viewportTextureId_);
+	
 	editorGUI_.reset();
 	
 	ImGui_ImplVulkan_Shutdown();
@@ -161,7 +170,10 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 
 	if( GOption->Editor )
 	{
-		MainWindowGUI(*editorGUI_);
+		//MainWindowGUI(*editorGUI_);
+		ImGui::Begin("Viewport");
+		ImGui::Image(viewportTextureId_, ImGui::GetContentRegionAvail(), ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::End();
 	}
 	else
 	{

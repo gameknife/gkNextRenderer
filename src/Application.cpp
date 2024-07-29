@@ -237,7 +237,7 @@ void NextRendererApplication<Renderer>::CreateSwapChain()
     Renderer::CreateSwapChain();
 
     userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(),
-                                           userSettings_));
+                                           userSettings_, Renderer::GetRenderImage()));
 
     CheckFramebufferSize();
 }
@@ -272,17 +272,6 @@ void NextRendererApplication<Renderer>::DrawFrame()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
-    static float frameRate = 0.0;
-    static double lastTime = 0.0;
-    // Record delta time between calls to Render.
-    if(totalFrames_ % 30 == 0)
-    {
-        double now = Renderer::Window().GetTime();
-        const auto timeDelta = now - lastTime;
-        lastTime = now;
-        frameRate = static_cast<float>(30 / timeDelta);
-    }
-
     const auto prevTime = time_;
     time_ = Renderer::Window().GetTime();
     const auto timeDelta = time_ - prevTime;
@@ -304,7 +293,22 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     {
         CheckAndUpdateBenchmarkState(prevTime);
     }
+}
 
+template <typename Renderer>
+void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    static float frameRate = 0.0;
+    static double lastTime = 0.0;
+    // Record delta time between calls to Render.
+    if(totalFrames_ % 30 == 0)
+    {
+        double now = Renderer::Window().GetTime();
+        const auto timeDelta = now - lastTime;
+        lastTime = now;
+        frameRate = static_cast<float>(30 / timeDelta);
+    }
+    
     // Render the UI
     Statistics stats = {};
 
@@ -312,7 +316,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
-    stats.FrameTime = static_cast<float>(timeDelta * 1000);
+    //stats.FrameTime = static_cast<float>(timeDelta * 1000);
 
     stats.TotalFrames = totalFrames_;
     stats.RenderTime = time_ - sceneInitialTime_;
@@ -328,7 +332,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-
+    
     userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats, Renderer::GpuTimer());
 }
 

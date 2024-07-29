@@ -16,6 +16,11 @@
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
 
+namespace Vulkan
+{
+	class RenderImage;
+}
+
 namespace Assets
 {
 	class GlobalTexturePool;
@@ -220,8 +225,9 @@ namespace Vulkan
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
 		
 		void CaptureScreenShot();
+		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 
-		
+		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
 		const std::string& GetRendererType() const {return rendererType_;}
 		
@@ -252,6 +258,7 @@ namespace Vulkan
 		virtual void DeleteSwapChain();
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		virtual void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) {}
 
 		virtual void BeforeNextFrame() {}
 		virtual void AfterRenderCmd() {}
@@ -306,6 +313,8 @@ namespace Vulkan
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;
+
+		std::unique_ptr<RenderImage> rtEditorViewport_;
 
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
 

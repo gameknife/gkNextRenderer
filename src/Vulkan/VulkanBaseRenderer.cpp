@@ -25,6 +25,8 @@
 #include <fmt/format.h>
 
 #include "ImageMemoryBarrier.hpp"
+#include "Options.hpp"
+#include "RenderImage.hpp"
 #include "SingleTimeCommands.hpp"
 #include "TaskCoordinator.hpp"
 
@@ -76,6 +78,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
 
+	rtEditorViewport_.reset();
 	gpuTimer_.reset();
 	globalTexturePool_.reset();
 	commandPool_.reset();
@@ -256,6 +259,8 @@ void VulkanBaseRenderer::CreateSwapChain()
 
 	screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 	screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+
+	rtEditorViewport_.reset(new RenderImage(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 void VulkanBaseRenderer::DeleteSwapChain()
@@ -313,7 +318,48 @@ void VulkanBaseRenderer::CaptureScreenShot()
 							   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	});
 }
+
+void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+{
+	const auto& image = swapChain_->Images()[imageIndex];
+
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
 	
+	ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
+				   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, 0,
+					   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	// Copy output image into swap-chain image.
+	VkImageCopy copyRegion;
+	copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.srcOffset = {0, 0, 0};
+	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.dstOffset = {0, 0, 0};
+	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+
+	vkCmdCopyImage(commandBuffer,
+				   image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   rtEditorViewport_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				   1, &copyRegion);
+
+	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+						   VK_ACCESS_TRANSFER_READ_BIT,
+						   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+	ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
+				   VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
 void VulkanBaseRenderer::DrawFrame()
 {
 	const auto noTimeout = std::numeric_limits<uint64_t>::max();
@@ -359,6 +405,14 @@ void VulkanBaseRenderer::DrawFrame()
 	{
 		SCOPED_GPU_TIMER("gpu time");
 		Render(commandBuffer, currentImageIndex_);
+
+		// copy to editor surface
+		if( GOption->Editor )
+		{
+			CaptureEditorViewport(commandBuffer, currentImageIndex_);
+		}
+
+		RenderUI(commandBuffer, currentImageIndex_);
 	}
 	
 	commandBuffers_->End(currentImageIndex_);

@@ -18,6 +18,7 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class VulkanGpuTimer;
+	class RenderImage;
 }
 
 struct UserSettings;
@@ -53,7 +54,8 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings);
+		UserSettings& userSettings,
+		Vulkan::RenderImage& viewportImage);
 	~UserInterface();
 
 	void Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
@@ -73,4 +75,6 @@ private:
 	UserSettings& userSettings_;
 
 	std::unique_ptr<ImStudio::GUI> editorGUI_;
+
+	VkDescriptorSet viewportTextureId_;
 };
