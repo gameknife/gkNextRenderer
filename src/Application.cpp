@@ -215,7 +215,7 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
 
     if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
-    userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
+    userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     
     std::vector<Assets::Model> models;
     std::vector<Assets::Node> nodes;
