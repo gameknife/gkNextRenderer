@@ -61,7 +61,7 @@ public:
 		Vulkan::RenderImage& viewportImage);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
+	void Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
@@ -75,6 +75,7 @@ private:
 	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
+	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	UserSettings& userSettings_;
 
 	std::unique_ptr<ImStudio::GUI> editorGUI_;

@@ -67,14 +67,29 @@ UserInterface::UserInterface(
 		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
 	};
 	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount()));
-	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
-
+	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	
+	const auto& debugUtils = device.DebugUtils();
+	debugUtils.SetObjectName(renderPass_->Handle(), "UI RenderPass");
+	
+	for (const auto& imageView : swapChain.ImageViews())
+	{
+		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
+		debugUtils.SetObjectName(uiFrameBuffers_.back().Handle(), "UI FrameBuffer");
+	}
+	
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-
 	
-
+	auto& io = ImGui::GetIO();
+	// No ini file.
+	io.IniFilename = "editor.ini";
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
 	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
@@ -103,16 +118,7 @@ UserInterface::UserInterface(
 	{
 		Throw(std::runtime_error("failed to initialise ImGui vulkan adapter"));
 	}
-
-	auto& io = ImGui::GetIO();
-
-	// No ini file.
-	io.IniFilename = nullptr;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-
+	
 	// Window scaling and style.
 #if ANDROID
     const auto scaleFactor = 1.5;
@@ -154,6 +160,8 @@ UserInterface::UserInterface(
 
 UserInterface::~UserInterface()
 {
+	uiFrameBuffers_.clear();
+	
 	ImGui_ImplVulkan_RemoveTexture(viewportTextureId_);
 	
 	editorGUI_.reset();
@@ -167,7 +175,7 @@ UserInterface::~UserInterface()
 	ImGui::DestroyContext();
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
+void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
 	auto& io = ImGui::GetIO();
 
@@ -196,7 +204,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	VkRenderPassBeginInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass_->Handle();
-	renderPassInfo.framebuffer = frameBuffer.Handle();
+	renderPassInfo.framebuffer = uiFrameBuffers_[imageIdx].Handle();
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = renderPass_->SwapChain().Extent();
 	renderPassInfo.clearValueCount = 0;
@@ -206,12 +214,12 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	vkCmdEndRenderPass(commandBuffer);
 
-	// if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	// {
-	// 	ImGui::UpdatePlatformWindows();
-	// 	ImGui::RenderPlatformWindowsDefault();
-	// 	// TODO for OpenGL: restore current GL context.
-	// }
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+		// TODO for OpenGL: restore current GL context.
+	}
 
 	firstRun = false;
 }
