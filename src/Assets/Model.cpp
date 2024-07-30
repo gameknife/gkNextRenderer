@@ -209,8 +209,8 @@ namespace Assets
             m.MaterialModel = Material::Enum::Mixture;
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
             m.Metalness = static_cast<float>(mat.pbrMetallicRoughness.metallicFactor);
-            m.RefractionIndex = 1.0f;
-            m.RefractionIndex2 = 1.0f;
+            m.RefractionIndex = 1.46f;
+            m.RefractionIndex2 = 1.46f;
             
             int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
             if(texture != -1)
