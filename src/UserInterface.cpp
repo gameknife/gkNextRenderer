@@ -34,6 +34,7 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Vulkan/Window.hpp"
 
 namespace
 {
@@ -144,6 +145,11 @@ UserInterface::UserInterface(
 
 	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
+
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	viewport->PlatformHandle = window.Handle();
+
+	firstRun = true;
 }
 
 UserInterface::~UserInterface()
@@ -172,10 +178,11 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	ImGui_ImplAndroid_NewFrame();
 #endif
 	ImGui::NewFrame();
+	
 
 	if( GOption->Editor )
 	{
-		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_);
+		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_, firstRun);
 	}
 	else
 	{
@@ -205,6 +212,8 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuf
 	// 	ImGui::RenderPlatformWindowsDefault();
 	// 	// TODO for OpenGL: restore current GL context.
 	// }
+
+	firstRun = false;
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const

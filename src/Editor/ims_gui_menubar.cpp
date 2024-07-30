@@ -2,14 +2,14 @@
 
 void ImStudio::GUI::ShowMenubar()
 {
-    ImGui::SetNextWindowPos(mb_P);
-    ImGui::SetNextWindowSize(mb_S);
-    ImGui::Begin("Menubar", NULL,
-                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    // ImGui::SetNextWindowPos(mb_P);
+    // ImGui::SetNextWindowSize(mb_S);
+    // ImGui::Begin("Menubar", NULL,
+    //              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+    //                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDocking);
 
     // MENU
-    if (ImGui::BeginMenuBar())
+    if (ImGui::BeginMainMenuBar())
     {
         /// menu-file
         if (ImGui::BeginMenu("File"))
@@ -76,34 +76,34 @@ void ImStudio::GUI::ShowMenubar()
             ImGui::EndMenu();
         }
 
-        ImGui::EndMenuBar();
+        ImGui::EndMainMenuBar();
     }
 
     // TAB
-    if (!compact)
-    {
-        if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
-        {
-            // tab-create
-            if (ImGui::BeginTabItem("Create"))
-            {
-                wksp_output = false;
-                wksp_create = true;
-                ImGui::EndTabItem();
-            }
-
-            // tab-output
-            if (ImGui::BeginTabItem("Output"))
-            {
-                wksp_create = false;
-                wksp_output = true;
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
-        }
-    }
+    // if (!compact)
+    // {
+    //     if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
+    //     {
+    //         // tab-create
+    //         if (ImGui::BeginTabItem("Create"))
+    //         {
+    //             wksp_output = false;
+    //             wksp_create = true;
+    //             ImGui::EndTabItem();
+    //         }
+    //
+    //         // tab-output
+    //         if (ImGui::BeginTabItem("Output"))
+    //         {
+    //             wksp_create = false;
+    //             wksp_output = true;
+    //             ImGui::EndTabItem();
+    //         }
+    //
+    //         ImGui::EndTabBar();
+    //     }
+    // }
     
 
-    ImGui::End();
+    //ImGui::End();
 }

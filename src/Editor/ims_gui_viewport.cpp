@@ -2,9 +2,9 @@
 
 void ImStudio::GUI::ShowViewport(ImTextureID viewportImage, ImVec2 viewportSize)
 {
-    ImGui::SetNextWindowPos(vp_P);
-    ImGui::SetNextWindowSize(vp_S);
-    ImGui::Begin("Viewport", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoInputs);
+    // ImGui::SetNextWindowPos(vp_P);
+    // ImGui::SetNextWindowSize(vp_S);
+    ImGui::Begin("Viewport", NULL, ImGuiWindowFlags_NoInputs);
 
     /// content-viewport
     {

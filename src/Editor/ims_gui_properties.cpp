@@ -2,9 +2,9 @@
 
 void ImStudio::GUI::ShowProperties()
 {
-    ImGui::SetNextWindowPos(pt_P);
-    ImGui::SetNextWindowSize(pt_S);
-    ImGui::Begin("Properties", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+    //ImGui::SetNextWindowPos(pt_P);
+    //ImGui::SetNextWindowSize(pt_S);
+    ImGui::Begin("Properties", NULL);
     {
         {
             if (!bw.objects.empty())

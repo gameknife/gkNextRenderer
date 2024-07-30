@@ -13,6 +13,7 @@ namespace ImStudio
 
 namespace Vulkan
 {
+	class Window;
 	class CommandPool;
 	class DepthBuffer;
 	class DescriptorPool;
@@ -80,4 +81,6 @@ private:
 
 	VkDescriptorSet viewportTextureId_;
 	ImVec2 viewportSize_;
+
+	bool firstRun;
 };
