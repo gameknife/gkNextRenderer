@@ -88,7 +88,7 @@ UserInterface::UserInterface(
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	if(GOption->Editor) io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
