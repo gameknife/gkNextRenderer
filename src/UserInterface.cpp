@@ -1,4 +1,5 @@
 #include "UserInterface.hpp"
+
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
 #include "Utilities/Exception.hpp"
@@ -52,7 +53,8 @@ UserInterface::UserInterface(
 	const Vulkan::DepthBuffer& depthBuffer,
 	UserSettings& userSettings,
 	Vulkan::RenderImage& viewportImage) :
-	userSettings_(userSettings)
+	userSettings_(userSettings),
+	swapChain_(swapChain)
 {
 	editorGUI_.reset(new ImStudio::GUI());
 	editorGUI_->bw.objects.reserve(2048);
@@ -83,7 +85,7 @@ UserInterface::UserInterface(
 	
 	auto& io = ImGui::GetIO();
 	// No ini file.
-	io.IniFilename = "editor.ini";
+	io.IniFilename = "imgui.ini";
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
@@ -153,9 +155,6 @@ UserInterface::UserInterface(
 	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
 
-	//ImGuiViewport* viewport = ImGui::GetMainViewport();
-	//viewport->PlatformHandle = window.Handle();
-
 	firstRun = true;
 }
 
@@ -179,7 +178,7 @@ UserInterface::~UserInterface()
 void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
 	auto& io = ImGui::GetIO();
-
+	
 	ImGui_ImplVulkan_NewFrame();
 #if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
@@ -191,7 +190,11 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 
 	if( GOption->Editor )
 	{
-		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_, firstRun);
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGuiID id = ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode, nullptr);
+		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
+		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);
+		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_, id, firstRun);
 	}
 	else
 	{

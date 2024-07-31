@@ -41,7 +41,7 @@ public:
 protected:
 
 	const Assets::Scene& GetScene() const override { return *scene_; }
-	Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const override;
+	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const override;
 
 	void SetPhysicalDeviceImpl(
 		VkPhysicalDevice physicalDevice, 

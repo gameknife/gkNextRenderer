@@ -5,4 +5,4 @@
 #include "ims_gui.h"
 
 void MainWindowStyle();
-void MainWindowGUI(ImStudio::GUI & gui, ImTextureID viewportImage, ImVec2 viewportSize, bool firstRun);
+void MainWindowGUI(ImStudio::GUI & gui, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun);

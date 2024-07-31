@@ -539,7 +539,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 
 void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
 {
-	lastUBO = GetUniformBufferObject(swapChain_->Extent());
+	lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->RenderExtent());
 	uniformBuffers_[imageIndex].SetValue(lastUBO);
 }
 

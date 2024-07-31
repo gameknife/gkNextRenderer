@@ -12,7 +12,7 @@ namespace Vulkan
 
 namespace Assets
 {
-	class UniformBufferObject
+	class alignas(16) UniformBufferObject
 	{
 	public:
 
@@ -22,6 +22,8 @@ namespace Assets
 		glm::mat4 ProjectionInverse;
 		glm::mat4 ViewProjection;
 		glm::mat4 PrevViewProjection;
+
+		glm::vec4 ViewportRect;
 		
 		float Aperture;
 		float FocusDistance;

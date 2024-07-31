@@ -245,7 +245,7 @@ namespace Vulkan
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
 		virtual const Assets::Scene& GetScene() const = 0;
-		virtual Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const = 0;
+		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const = 0;
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 

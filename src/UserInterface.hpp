@@ -72,6 +72,7 @@ public:
 
 private:
 
+	const Vulkan::SwapChain& swapChain_;
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);

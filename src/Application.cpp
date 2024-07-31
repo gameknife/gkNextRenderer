@@ -81,7 +81,7 @@ NextRendererApplication<Renderer>::~NextRendererApplication()
 }
 
 template <typename Renderer>
-Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkExtent2D extent) const
+Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
 {
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -115,6 +115,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
+    ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+    
     Assets::RayCastResult rayResult;
     Renderer::GetLastRaycastResult(rayResult);
     

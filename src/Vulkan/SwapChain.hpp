@@ -25,9 +25,13 @@ namespace Vulkan
 		const std::vector<VkImage>& Images() const { return images_; }
 		const std::vector<std::unique_ptr<ImageView>>& ImageViews() const { return imageViews_; }
 		const VkExtent2D& Extent() const { return extent_; }
+		const VkExtent2D& RenderExtent() const { return renderExtent_; }
+		const VkOffset2D& RenderOffset() const { return renderOffset_; }
 		VkFormat Format() const { return format_; }
 		VkPresentModeKHR PresentMode() const { return presentMode_; }
 		bool IsHDR() const { return hdr_;}
+
+		void UpdateEditorViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 
 	private:
 
@@ -53,6 +57,8 @@ namespace Vulkan
 		VkPresentModeKHR presentMode_;
 		VkFormat format_;
 		VkExtent2D extent_{};
+		mutable VkExtent2D renderExtent_{};
+		mutable VkOffset2D renderOffset_{};
 		std::vector<VkImage> images_;
 		std::vector<std::unique_ptr<ImageView>> imageViews_;
 		bool hdr_{};
