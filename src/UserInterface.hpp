@@ -1,7 +1,9 @@
 #pragma once
 #include <imgui.h>
-
+#include <imgui_internal.h>
 #include "Vulkan/Vulkan.hpp"
+#include "Vulkan/FrameBuffer.hpp"
+#include <vector>
 #include <memory>
 #include <string>
 #include <unordered_map>

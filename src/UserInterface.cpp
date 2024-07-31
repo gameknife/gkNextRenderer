@@ -4,7 +4,6 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
@@ -122,6 +121,8 @@ UserInterface::UserInterface(
 	// Window scaling and style.
 #if ANDROID
     const auto scaleFactor = 1.5;
+#elif __APPLE__
+	const auto scaleFactor = 1.0;
 #else
     const auto scaleFactor = window.ContentScale();
 #endif
@@ -152,8 +153,8 @@ UserInterface::UserInterface(
 	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
 
-	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	viewport->PlatformHandle = window.Handle();
+	//ImGuiViewport* viewport = ImGui::GetMainViewport();
+	//viewport->PlatformHandle = window.Handle();
 
 	firstRun = true;
 }

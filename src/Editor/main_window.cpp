@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include <imgui_internal.h>
 
 void MainWindowStyle()
 {
