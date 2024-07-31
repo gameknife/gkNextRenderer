@@ -69,14 +69,18 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-    
+
+#if !ANDROID
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+#endif
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
+#if !ANDROID
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+#endif
     scene_.reset();
 }
 
