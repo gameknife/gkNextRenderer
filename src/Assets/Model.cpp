@@ -39,7 +39,7 @@
 
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
 
 typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
@@ -284,6 +284,7 @@ namespace Assets
         {
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
+            std::vector<uint32_t> materials;
 
             uint32_t vertext_offset = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
@@ -340,6 +341,7 @@ namespace Assets
                     vertices.push_back(vertex);
                 }
 
+                materials.push_back(max(0, primtive.material) + matieralIdx);
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
@@ -372,7 +374,7 @@ namespace Assets
                 FlattenVertices(vertices, indices);
             #endif
             
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
         }
 
         // default auto camera
@@ -605,6 +607,7 @@ namespace Assets
         {
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
+            std::vector<uint32_t> materials;
 
             const auto& mesh = shape.mesh;
             size_t faceId = 0;
@@ -649,6 +652,11 @@ namespace Assets
                     vertices.push_back(vertex);
                 }
 
+                if( std::find(materials.begin(), materials.end(), vertex.MaterialIndex) == std::end(materials) )
+                {
+                    materials.push_back(vertex.MaterialIndex);
+                }
+                
                 indices.push_back(uniqueVertices[vertex]);
             }
 
@@ -685,7 +693,7 @@ namespace Assets
             FlattenVertices(vertices, indices);
 #endif
 
-            models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
+            models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
             if(autoNode)
             {
                 nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, false));
@@ -711,6 +719,14 @@ namespace Assets
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
+        std::vector<uint32_t> materialIds;
+
+        int32_t prev_mat_id = static_cast<int32_t>(materials.size());
+
+        materialIds.push_back(prev_mat_id + 0);
+        materialIds.push_back(prev_mat_id + 1);
+        materialIds.push_back(prev_mat_id + 2);
+        materialIds.push_back(prev_mat_id + 3);
 
         CornellBox::Create(scale, vertices, indices, materials, lights);
 
@@ -721,6 +737,7 @@ namespace Assets
         models.push_back(Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIds),
             nullptr
         ));
 
@@ -772,6 +789,8 @@ namespace Assets
             20, 21, 22, 20, 22, 23
         };
 
+        std::vector<uint32_t> materialids = {(uint32_t)materialIdx};
+
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
@@ -779,6 +798,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialids),
             nullptr);
     }
 
@@ -857,6 +877,7 @@ namespace Assets
             }
         }
 
+        std::vector<uint32_t> materialIdxs = {(uint32_t)materialIdx};
 
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
@@ -865,6 +886,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIdxs),
             isProcedural ? new Sphere(center, radius) : nullptr);
     }
 
@@ -906,18 +928,22 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
+        std::vector<uint32_t> materialIds = {(uint32_t)materialIdx};
+        
         models.push_back( Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIds),
             nullptr));
 
         return static_cast<int32_t>(models.size()) - 1;
     }
 
-    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices,
+    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
                  const class Procedural* procedural) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
+        materialIdx_(std::move(materials)),
         procedural_(procedural)
     {
         // calculate local aabb

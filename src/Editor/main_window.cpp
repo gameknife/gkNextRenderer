@@ -64,6 +64,8 @@ void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureI
     ImStudio::GUI &gui = gui_r;
     ImGuiIO &io = ImGui::GetIO();
 
+    gui.current_scene = scene;
+
     // static int w_w = io.DisplaySize.x;
     // static int w_h = io.DisplaySize.y;
     int w_w = io.DisplaySize.x;

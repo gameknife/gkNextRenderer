@@ -15,6 +15,11 @@
 
 namespace Assets
 {
+    class Node;
+}
+
+namespace Assets
+{
     class Scene;
 }
 
@@ -45,7 +50,9 @@ namespace ImStudio
         bool                    viewport                   = true;                 // Viewport State
         ImVec2                  vp_P                       = {};                   // Viewport Pos
         ImVec2                  vp_S                       = {};                   // Viewport Size
-        BufferWindow            bw;            
+        BufferWindow            bw;
+        const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
+        const Assets::Scene*    current_scene              = nullptr;
         void                    ShowViewport               (ImTextureID viewportImage, ImVec2 viewportSize);         
 
         bool                    wksp_output                = false;                // Workspace "Output"
