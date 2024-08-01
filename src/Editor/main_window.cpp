@@ -58,7 +58,7 @@ void MainWindowStyle()
     
 }
 
-void MainWindowGUI(ImStudio::GUI & gui_r, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun)
+void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
     ImStudio::GUI &gui = gui_r;
@@ -94,40 +94,13 @@ if (firstRun) {
     
     // workspace-create
     //if (!gui.compact){
-    if(false)
-    {
-        if (gui.wksp_create)
-        {// create-main
-            {// create-sidebar
-                gui.sb_P = ImVec2(0, gui.mb_S.y);
-                gui.sb_S = ImVec2(170, w_h - gui.mb_S.y);
-                if (gui.sidebar) gui.ShowSidebar();
-
-                // create-properties
-                gui.pt_P = ImVec2(w_w - 300, gui.mb_S.y);
-                gui.pt_S = ImVec2(300, w_h - gui.mb_S.y);
-                if (gui.properties) gui.ShowProperties();
-
-                // create-viewport
-                gui.vp_P = ImVec2(gui.sb_S.x, gui.mb_S.y);
-                gui.vp_S = ImVec2(gui.pt_P.x - gui.sb_S.x, w_h - gui.mb_S.y);
-                if (gui.viewport) gui.ShowViewport(viewportImage, viewportSize);
-
-            }
-        }
-        // workspace-output
-        gui.ot_P = ImVec2(0, gui.mb_S.y);
-        gui.ot_S = ImVec2(w_w, w_h - gui.mb_S.y);
-        if (gui.wksp_output) gui.ShowOutputWorkspace();
-    }
-    else
     {
         gui.wksp_output = true;
             
         // create-sidebar
         gui.sb_P = ImVec2(0, gui.mb_S.y);
         gui.sb_S = ImVec2(170, w_h - gui.mb_S.y);
-        if (gui.sidebar) gui.ShowSidebar();
+        if (gui.sidebar) gui.ShowSidebar(scene);
 
         // create-properties
         gui.pt_P = ImVec2(w_w - 300, gui.mb_S.y);

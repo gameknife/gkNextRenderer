@@ -45,7 +45,7 @@ namespace Assets
     class Node final
     {
     public:
-        static Node CreateNode(glm::mat4 transform, int id, bool procedural);
+        static Node CreateNode(std::string name, glm::mat4 transform, int id, bool procedural);
         Node& operator =(const Node&) = delete;
         Node& operator =(Node&&) = delete;
 
@@ -58,10 +58,12 @@ namespace Assets
         const glm::mat4& WorldTransform() const { return transform_; }
         int GetModel() const { return modelId_; }
         bool IsProcedural() const { return procedural_; }
+        const std::string& GetName() const {return name_; }
 
     private:
-        Node(glm::mat4 transform, int id, bool procedural);
+        Node(std::string name, glm::mat4 transform, int id, bool procedural);
 
+        std::string name_;
         glm::mat4 transform_;
         int modelId_;
         bool procedural_;

@@ -8,6 +8,10 @@
 #include <string>
 #include <unordered_map>
 
+namespace Assets
+{
+	class Scene;
+}
 namespace ImStudio
 {
 	struct GUI;
@@ -63,7 +67,7 @@ public:
 		Vulkan::RenderImage& viewportImage);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
+	void Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;

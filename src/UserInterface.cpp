@@ -286,7 +286,7 @@ void UserInterface::ToolbarUI()
 	ImGui::End();
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
+void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene)
 {
 	auto& io = ImGui::GetIO();
 	
@@ -302,13 +302,13 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	if( GOption->Editor )
 	{
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
-		//ImGuiID id = ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode, nullptr);
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();
 		
 		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);
-		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_, id, firstRun);
+		
+		MainWindowGUI(*editorGUI_, scene, viewportTextureId_, viewportSize_, id, firstRun);
 	}
 	else
 	{

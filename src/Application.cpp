@@ -335,7 +335,7 @@ void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, 
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
     
-    userInterface_->Render(commandBuffer, imageIndex, stats, Renderer::GpuTimer());
+    userInterface_->Render(commandBuffer, imageIndex, stats, Renderer::GpuTimer(), scene_.get());
 }
 
 template <typename Renderer>

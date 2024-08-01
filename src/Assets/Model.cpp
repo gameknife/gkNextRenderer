@@ -120,7 +120,7 @@ namespace Assets
         {
             if( node.extras.Has("arealight") )
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
 
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
@@ -140,7 +140,7 @@ namespace Assets
             }
             else
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
             }
         }
         else
@@ -688,7 +688,7 @@ namespace Assets
             models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
             if(autoNode)
             {
-                nodes.push_back(Node::CreateNode(mat4(1), static_cast<int>(models.size()) - 1, false));
+                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, false));
             }
         }
         
@@ -931,12 +931,12 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(glm::mat4 transform, int id, bool procedural)
+    Node Node::CreateNode(std::string name, glm::mat4 transform, int id, bool procedural)
     {
-        return Node(transform, id, procedural);
+        return Node(name, transform, id, procedural);
     }
 
-    Node::Node(glm::mat4 transform, int id, bool procedural): transform_(transform), modelId_(id),
+    Node::Node(std::string name, glm::mat4 transform, int id, bool procedural): name_(name), transform_(transform), modelId_(id),
                                                               procedural_(procedural)
     {
     }

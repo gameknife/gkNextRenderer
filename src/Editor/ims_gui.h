@@ -13,6 +13,11 @@
 #include "JsClipboardTricks.h"
 #endif
 
+namespace Assets
+{
+    class Scene;
+}
+
 namespace ImStudio
 {
 
@@ -30,7 +35,7 @@ namespace ImStudio
         bool                    sidebar                    = true;                 // Sidebar State
         ImVec2                  sb_P                       = {};                   // Sidebar Pos
         ImVec2                  sb_S                       = {};                   // Sidebar Size
-        void                    ShowSidebar();         
+        void                    ShowSidebar(const Assets::Scene* scene);         
 
         bool                    properties                 = true;                 // Properties State
         ImVec2                  pt_P                       = {};                   // Properties Pos
