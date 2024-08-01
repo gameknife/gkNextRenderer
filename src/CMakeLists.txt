@@ -183,6 +183,7 @@ set(src_files_editor
 	Editor/ims_buffer.cpp
 	Editor/ims_buffer.h
 	Editor/ims_object_draw.cpp
+	Editor/IconsFontAwesome6.h
 )
 
 set(src_files

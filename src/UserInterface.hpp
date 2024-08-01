@@ -72,6 +72,9 @@ public:
 
 private:
 
+	ImGuiID DockSpaceUI();
+	void ToolbarUI();
+	
 	const Vulkan::SwapChain& swapChain_;
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
@@ -85,6 +88,9 @@ private:
 
 	VkDescriptorSet viewportTextureId_;
 	ImVec2 viewportSize_;
+
+	ImFont* fontText_;
+	ImFont* fontIcon_;
 
 	bool firstRun;
 };

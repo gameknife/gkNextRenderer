@@ -22,6 +22,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <array>
+#include <filesystem>
 #include <Editor/ims_gui.h>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
@@ -35,6 +36,7 @@
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Vulkan/Window.hpp"
+#include "Editor/IconsFontAwesome6.h"
 
 namespace
 {
@@ -44,6 +46,16 @@ namespace
 		{
 			Throw(std::runtime_error(std::string("ImGui Vulkan error (") + Vulkan::ToString(err) + ")"));
 		}
+	}
+
+	const ImWchar*  GetGlyphRangesFontAwesome()
+	{
+		static const ImWchar ranges[] =
+		{
+			ICON_MIN_FA, ICON_MAX_FA, // Basic Latin + Latin Supplement
+			0,
+		};
+		return &ranges[0];
 	}
 }
 
@@ -139,11 +151,19 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 12 * scaleFactor, nullptr, glyphRange ))
+	fontText_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 12 * scaleFactor, nullptr, glyphRange );
+	if (!fontText_)
 	{
-		Throw(std::runtime_error("failed to load ImGui font"));
+		Throw(std::runtime_error("failed to load ImGui Text font"));
 	}
 
+	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
+	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 16 * scaleFactor, nullptr, iconRange );
+	if (!fontIcon_)
+	{
+		Throw(std::runtime_error("failed to load ImGui Icon font"));
+	}
+	
 	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
@@ -175,6 +195,97 @@ UserInterface::~UserInterface()
 	ImGui::DestroyContext();
 }
 
+const float toolbarSize = 50;
+const float toolbarIconWidth = 32;
+const float toolbarIconHeight = 32;
+float menuBarHeight = 0;
+
+ImGuiID UserInterface::DockSpaceUI()
+{
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize));
+	ImGui::SetNextWindowViewport(viewport->ID);
+	ImGui::SetNextWindowBgAlpha(0);
+	ImGuiWindowFlags window_flags = 0
+		| ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking
+		| ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
+		| ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::Begin("Master DockSpace", NULL, window_flags);
+	ImGuiID dockMain = ImGui::GetID("MyDockspace");
+	
+	// Save off menu bar height for later.
+	menuBarHeight = ImGui::GetCurrentWindow()->MenuBarHeight();
+
+	ImGui::DockSpace(dockMain, ImVec2(0,0), ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::End();
+	ImGui::PopStyleVar(3);
+
+	return dockMain;
+}
+
+void UserInterface::ToolbarUI()
+{
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + menuBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, toolbarSize));
+	ImGui::SetNextWindowViewport(viewport->ID);
+
+	ImGuiWindowFlags window_flags = 0
+		| ImGuiWindowFlags_NoDocking 
+		| ImGuiWindowFlags_NoTitleBar 
+		| ImGuiWindowFlags_NoResize 
+		| ImGuiWindowFlags_NoMove 
+		| ImGuiWindowFlags_NoScrollbar 
+		| ImGuiWindowFlags_NoSavedSettings
+		;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+	ImGui::Begin("TOOLBAR", NULL, window_flags);
+	ImGui::PopStyleVar();
+
+	ImGui::BeginGroup();
+	ImGui::PushFont(fontIcon_);
+	ImGui::Button(ICON_FA_FLOPPY_DISK, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
+	ImGui::Button(ICON_FA_FOLDER, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
+	ImGui::PopFont();
+	ImGui::EndGroup();ImGui::SameLine();
+
+	ImGui::BeginGroup();ImGui::SameLine(50);
+	ImGui::PushFont(fontIcon_);
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80,210,0,255));
+	if( ImGui::Button(ICON_FA_PLAY, ImVec2(toolbarIconWidth, toolbarIconHeight)) )
+	{
+		std::filesystem::path currentPath = std::filesystem::current_path();
+		std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
+		std::system(cmdline.c_str());
+	}
+	ImGui::SameLine();
+	
+	ImGui::PopStyleColor();
+	ImGui::PopFont();
+	static int item = 3;
+	static float color[4] = { 0.4f, 0.7f, 0.0f, 0.5f };
+	ImGui::SetNextItemWidth(120);
+	ImGui::SetCursorPosY(16);
+	ImGui::Combo("##Render", &item, "RTPipe\0ModernDeferred\0LegacyDeferred\0RayQuery\0HybirdRender\0\0");ImGui::SameLine();
+	ImGui::EndGroup();ImGui::SameLine();
+
+
+	ImGui::BeginGroup();ImGui::SameLine(50);
+	ImGui::PushFont(fontIcon_);
+	
+	ImGui::Button(ICON_FA_FILE_IMPORT, ImVec2(0, toolbarIconHeight));ImGui::SameLine();
+	ImGui::PopFont();
+	ImGui::EndGroup();
+	
+	ImGui::End();
+}
+
 void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
 {
 	auto& io = ImGui::GetIO();
@@ -191,7 +302,10 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	if( GOption->Editor )
 	{
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGuiID id = ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode, nullptr);
+		//ImGuiID id = ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode, nullptr);
+		ImGuiID id = DockSpaceUI();
+		ToolbarUI();
+		
 		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);
 		MainWindowGUI(*editorGUI_, viewportTextureId_, viewportSize_, id, firstRun);
