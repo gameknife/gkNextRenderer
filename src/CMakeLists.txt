@@ -171,6 +171,7 @@ set(src_files_thirdparty_json11
 set(src_files_editor
 	Editor/main_window.cpp
 	Editor/main_window.h
+	Editor/ims_gui.h
 	Editor/ims_gui_menubar.cpp
 	Editor/ims_gui_properties.cpp
 	Editor/ims_gui_sidebar.cpp
