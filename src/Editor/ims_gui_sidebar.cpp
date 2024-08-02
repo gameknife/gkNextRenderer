@@ -9,16 +9,16 @@ void ImStudio::GUI::ShowSidebar(const Assets::Scene* scene)
     //ImGui::SetNextWindowSizeConstraints(ImVec2(0, -1), ImVec2(FLT_MAX, -1));
     //ImGui::SetNextWindowSize(sb_S);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.00f, 5.00f));
-    ImGui::Begin("Sidebar", NULL);
+    ImGui::Begin("Outliner", NULL);
 
     /// content-sidebar
     {
 
         ImGui::TextDisabled("NOTE");
         ImGui::SameLine(); utils::HelpMarker
-        ("THESE ARE NOT THE ONLY WIDGETS IMGUI PROVIDES!\n"
-        "You can find out more in the Dear ImGui Demo "
-        "(Tools > Demo Window) and imgui/imgui_demo.cpp");
+        ("ALL SCENE NODES\n"
+        "limited to 1000 nodes\n"
+        "select and view node properties\n");
         ImGui::Separator();
         
         //ANCHOR SIDEBAR.DATAINPUTS
@@ -35,7 +35,8 @@ void ImStudio::GUI::ShowSidebar(const Assets::Scene* scene)
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
             if( limit % 2 == 0 ) { flag |= ImGuiTreeNodeFlags_Selected; ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.0f, 0.0f, 0.0f, 0.1f));}
-            if(selected_obj == &node)
+            bool selected = (selected_obj == &node);
+            if(selected)
             {
                 flag |= ImGuiTreeNodeFlags_Selected;
                 ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.2f, 0.2f, 0.8f, 1.0f));
@@ -48,7 +49,7 @@ void ImStudio::GUI::ShowSidebar(const Assets::Scene* scene)
                 }
                 ImGui::TreePop();
             }
-            if(selected_obj == &node)
+            if(selected)
             {
                 ImGui::PopStyleColor();
             }

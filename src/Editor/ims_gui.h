@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 
 #include "ims_utils.h"
@@ -68,6 +68,8 @@ namespace ImStudio
         bool                    child_stack                = false;                // Show Stack Tool
         bool                    child_resources            = false;                // Show Help Resources
         bool                    child_about                = false;                // Show About Window
+
+        ImFont*                 fontIcon_                  = nullptr;
     };
 
 }

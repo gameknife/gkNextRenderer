@@ -87,9 +87,9 @@ if (firstRun) {
     ImGuiID dock2 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Right, 0.2f, nullptr, &id);
     ImGuiID dock3 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.25f, nullptr, &id);
     
-    ImGui::DockBuilderDockWindow("Sidebar", dock1);
+    ImGui::DockBuilderDockWindow("Outliner", dock1);
     ImGui::DockBuilderDockWindow("Properties", dock2);
-    ImGui::DockBuilderDockWindow("Output", dock3);
+    ImGui::DockBuilderDockWindow("Content Browser", dock3);
     
     ImGui::DockBuilderFinish(id);
 }

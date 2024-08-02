@@ -35,7 +35,6 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
-#include "Vulkan/Window.hpp"
 #include "Editor/IconsFontAwesome6.h"
 
 namespace
@@ -151,24 +150,26 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	fontText_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 13 * scaleFactor, nullptr, glyphRange );
-	if (!fontText_)
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 13 * scaleFactor, nullptr, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load ImGui Text font"));
 	}
-
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
-
 	ImFontConfig config;
 	config.MergeMode = true;
 	config.GlyphMinAdvanceX = 13.0f;
 	config.GlyphOffset = ImVec2(0, 0);
-
-	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 13 * scaleFactor, &config, iconRange );
-	if (!fontIcon_)
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 13 * scaleFactor, &config, iconRange ))
 	{
-		Throw(std::runtime_error("failed to load ImGui Icon font"));
+		
 	}
+
+	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 20 * scaleFactor, nullptr, glyphRange );
+	
+	config.GlyphMinAdvanceX = 20.0f;
+	config.GlyphOffset = ImVec2(0, 0);
+	io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 20 * scaleFactor, &config, iconRange );
+	
 	
 	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
 	{
@@ -182,6 +183,8 @@ UserInterface::UserInterface(
 	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
 
 	firstRun = true;
+
+	editorGUI_->fontIcon_ = fontIcon_;
 }
 
 UserInterface::~UserInterface()
@@ -255,14 +258,14 @@ void UserInterface::ToolbarUI()
 	ImGui::PopStyleVar();
 
 	ImGui::BeginGroup();
-	//ImGui::PushFont(fontIcon_);
+	ImGui::PushFont(fontIcon_);
 	ImGui::Button(ICON_FA_FLOPPY_DISK, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
 	ImGui::Button(ICON_FA_FOLDER, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
-	//ImGui::PopFont();
+	ImGui::PopFont();
 	ImGui::EndGroup();ImGui::SameLine();
 
 	ImGui::BeginGroup();ImGui::SameLine(50);
-	//ImGui::PushFont(fontIcon_);
+	ImGui::PushFont(fontIcon_);
 	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80,210,0,255));
 	if( ImGui::Button(ICON_FA_PLAY, ImVec2(toolbarIconWidth, toolbarIconHeight)) )
 	{
@@ -273,7 +276,7 @@ void UserInterface::ToolbarUI()
 	ImGui::SameLine();
 	
 	ImGui::PopStyleColor();
-	//ImGui::PopFont();
+	ImGui::PopFont();
 	static int item = 3;
 	static float color[4] = { 0.4f, 0.7f, 0.0f, 0.5f };
 	ImGui::SetNextItemWidth(120);
@@ -283,10 +286,9 @@ void UserInterface::ToolbarUI()
 
 
 	ImGui::BeginGroup();ImGui::SameLine(50);
-	//ImGui::PushFont(fontIcon_);
-	
-	ImGui::Button(ICON_FA_FILE_IMPORT, ImVec2(0, toolbarIconHeight));ImGui::SameLine();
-	//ImGui::PopFont();
+	ImGui::PushFont(fontIcon_);
+	ImGui::Button(ICON_FA_FILE_IMPORT, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
+	ImGui::PopFont();
 	ImGui::EndGroup();
 	
 	ImGui::End();

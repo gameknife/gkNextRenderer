@@ -14,10 +14,13 @@ void ImStudio::GUI::ShowProperties()
     {
         if (selected_obj != nullptr)
         {
+            ImGui::NewLine();
+            ImGui::PushFont(fontIcon_);
             ImGui::Text(selected_obj->GetName().c_str());
+            ImGui::PopFont();
             ImGui::Separator();
             ImGui::NewLine();
-            ImGui::NewLine();
+            
 
 
             ImGui::Text(ICON_FA_LOCATION_ARROW " Transform");
@@ -63,6 +66,8 @@ void ImStudio::GUI::ShowProperties()
 
             ImGui::NewLine();
             ImGui::Text( ICON_FA_CIRCLE_HALF_STROKE " Material");
+            ImGui::Separator();
+            
             if(current_scene != nullptr)
             {
                 auto& model = current_scene->Models()[modelId];
@@ -73,7 +78,7 @@ void ImStudio::GUI::ShowProperties()
                     ImGui::InputInt("##MaterialId", &matIdx, 1, 1, ImGuiInputTextFlags_ReadOnly);
                 }
             }
-            ImGui::Separator();
+            
             ImGui::NewLine();
         }
     }
