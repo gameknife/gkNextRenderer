@@ -186,6 +186,7 @@ bool VulkanBaseRenderer::Tick()
 #else
 	glfwPollEvents();
 	DrawFrame();
+	window_->attemptDragWindow();
 	return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
 }

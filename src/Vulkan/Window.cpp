@@ -87,7 +87,7 @@ Window::Window(const WindowConfig& config) :
 	}
 
 	// hide title bar, handle in ImGUI Later
-	//glfwWindowHint( GLFW_DECORATED, GLFW_FALSE );
+	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 
@@ -246,6 +246,35 @@ void Window::Show() const
 {
 #if !ANDROID
 	glfwShowWindow(window_);
+#endif
+}
+	
+void Window::attemptDragWindow() {
+#if !ANDROID
+	if (glfwGetMouseButton(window_, 0) == GLFW_PRESS && dragState == 0) {
+		glfwGetCursorPos(window_, &s_xpos, &s_ypos);
+		glfwGetWindowSize(window_, &w_xsiz, &w_ysiz);
+		dragState = 1;
+	}
+	if (glfwGetMouseButton(window_, 0) == GLFW_PRESS && dragState == 1) {
+		double c_xpos, c_ypos;
+		int w_xpos, w_ypos;
+		glfwGetCursorPos(window_, &c_xpos, &c_ypos);
+		glfwGetWindowPos(window_, &w_xpos, &w_ypos);
+		if (
+			s_xpos >= 0 && s_xpos <= ((double)w_xsiz - 170) &&
+			s_ypos >= 0 && s_ypos <= 25) {
+			glfwSetWindowPos(window_, w_xpos + (c_xpos - s_xpos), w_ypos + (c_ypos - s_ypos));
+			}
+		if (
+			s_xpos >= ((double)w_xsiz - 15) && s_xpos <= ((double)w_xsiz) &&
+			s_ypos >= ((double)w_ysiz - 15) && s_ypos <= ((double)w_ysiz)) {
+			glfwSetWindowSize(window_, w_xsiz + (c_xpos - s_xpos), w_ysiz + (c_ypos - s_ypos));
+			}
+	}
+	if (glfwGetMouseButton(window_, 0) == GLFW_RELEASE && dragState == 1) {
+		dragState = 0;
+	}
 #endif
 }
 }
