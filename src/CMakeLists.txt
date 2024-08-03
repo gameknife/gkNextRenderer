@@ -179,11 +179,7 @@ set(src_files_editor
 	Editor/ims_gui_output.cpp
 	Editor/ims_utils.cpp
 	Editor/ims_utils.h
-	Editor/ims_object.cpp
-	Editor/ims_object.h
-	Editor/ims_buffer.cpp
-	Editor/ims_buffer.h
-	Editor/ims_object_draw.cpp
+	Editor/EditorCommand.hpp
 	Editor/IconsFontAwesome6.h
 )
 
