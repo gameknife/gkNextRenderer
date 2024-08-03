@@ -1,4 +1,5 @@
 #include "ims_gui.h"
+#include "Assets/Model.hpp"
 
 void ImStudio::GUI::ShowViewport(ImTextureID viewportImage, ImVec2 viewportSize)
 {
@@ -15,7 +16,7 @@ void ImStudio::GUI::ShowViewport(ImTextureID viewportImage, ImVec2 viewportSize)
         utils::TextCentered("Make sure to lock widgets before interacting with them.", 1);
         ImGui::Text("Cursor: %gx%g", ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
         ImGui::Text("Objects: %d", static_cast<int>(bw.objects.size()));
-        if (!bw.objects.empty()) ImGui::Text("Selected: %s", bw.getbaseobj(bw.selected_obj_id)->identifier.c_str());
+        if (!bw.objects.empty()) ImGui::Text("Selected: %s", selected_obj != nullptr ? selected_obj->GetName().c_str() : "none");
         ImGui::Text("Performance: %.1f FPS", ImGui::GetIO().Framerate);
         utils::HelpMarker("Hotkeys:\nAlt + M - \"Add\" context menu\n"\
                           "Left/Right Arrow - Cycle object selection\n"\

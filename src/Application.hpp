@@ -61,6 +61,8 @@ protected:
 	void OnScroll(double xoffset, double yoffset) override;
 	void OnDropFile(int path_count, const char* paths[]) override;
 
+	Vulkan::Window& GetWindow() {return Renderer::Window();}
+
 private:
 
 	void LoadScene(uint32_t sceneIndex);

@@ -37,9 +37,10 @@
 #include <tiny_gltf.h>
 #include <fmt/format.h>
 
+#include "Options.hpp"
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 0
+#define FLATTEN_VERTICE 1
 
 typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
 
@@ -443,20 +444,22 @@ namespace Assets
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
-        std::vector<Vertex> vertices_flatten;
-        std::vector<uint32_t> indices_flatten;
+        if(GOption->RendererType == 1 || GOption->RendererType == 4) {
+            std::vector<Vertex> vertices_flatten;
+            std::vector<uint32_t> indices_flatten;
 
-        uint32_t idx_counter = 0;
-        for (uint32_t index : indices)
-        {
-            if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
+            uint32_t idx_counter = 0;
+            for (uint32_t index : indices)
+            {
+                if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
 
-            vertices_flatten.push_back(vertices[index]);
-            indices_flatten.push_back(idx_counter++);
+                vertices_flatten.push_back(vertices[index]);
+                indices_flatten.push_back(idx_counter++);
+            }
+
+            vertices = std::move(vertices_flatten);
+            indices = std::move(indices_flatten);
         }
-
-        vertices = std::move(vertices_flatten);
-        indices = std::move(indices_flatten);
     }
 
     void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)

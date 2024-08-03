@@ -46,6 +46,9 @@ namespace Vulkan
 		void WaitForEvents() const;
 		void Show() const;
 
+		void Minimize();
+		void Maximum();
+
 		void attemptDragWindow();
 	private:
 

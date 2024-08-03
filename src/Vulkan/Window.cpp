@@ -249,6 +249,16 @@ void Window::Show() const
 #endif
 }
 
+void Window::Minimize() {
+	//glfwSetWindowSize(window_, 0,0);
+}
+
+void Window::Maximum() {
+#if !ANDROID
+	glfwMaximizeWindow(window_);
+#endif
+}
+
 constexpr double CLOSE_AREA_WIDTH = 0;
 constexpr double TITLE_AREA_HEIGHT = 55;	
 void Window::attemptDragWindow() {

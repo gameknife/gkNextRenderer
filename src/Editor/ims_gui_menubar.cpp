@@ -1,3 +1,4 @@
+#include "EditorCommand.hpp"
 #include "IconsFontAwesome6.h"
 #include "ims_gui.h"
 
@@ -14,12 +15,13 @@ void ImStudio::GUI::ShowMenubar()
     ImGui::SetNextWindowSize(ImVec2(viewport->Size.x - 255, 55));
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowBgAlpha(0);
-    
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::Begin("Menubar", NULL,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                       ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDocking);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
     ImGui::GetWindowDrawList()->AddRectFilled(viewport->Pos, viewport->Pos + ImVec2(viewport->Size.x, 55), ImGui::GetColorU32(ImGuiCol_MenuBarBg));
     ImGui::PopStyleVar();
     
@@ -149,9 +151,18 @@ void ImStudio::GUI::ShowMenubar()
     ImGui::GetWindowDrawList()->AddRectFilled(viewport->Pos + ImVec2(viewport->Size.x - 200, 0), viewport->Pos + ImVec2(viewport->Size.x, 55), ImGui::GetColorU32(ImGuiCol_MenuBarBg));
     ImGui::SetCursorPos( ImVec2(50,5) );
     ImGui::PushStyleColor( ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-    ImGui::Button(ICON_FA_WINDOW_MINIMIZE, ImVec2(40, 40));ImGui::SameLine();
-    ImGui::Button(ICON_FA_WINDOW_MAXIMIZE, ImVec2(40, 40));ImGui::SameLine();
-    ImGui::Button(ICON_FA_XMARK, ImVec2(40, 40));ImGui::SameLine();
+    if(ImGui::Button(ICON_FA_WINDOW_MINIMIZE, ImVec2(40, 40))) {
+        EditorCommandArgs args{};
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMinimize, args);
+    };ImGui::SameLine();
+    if(ImGui::Button(ICON_FA_WINDOW_MAXIMIZE, ImVec2(40, 40))) {
+        EditorCommandArgs args{};
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMaximum, args);
+    };ImGui::SameLine();
+    if(ImGui::Button(ICON_FA_XMARK, ImVec2(40, 40))) {
+        EditorCommandArgs args{};
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestExit, args);
+    };ImGui::SameLine();
     ImGui::PopStyleColor();
     ImGui::End();
     
