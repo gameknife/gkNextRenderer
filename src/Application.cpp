@@ -73,17 +73,21 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](EditorCommandArgs& args)->bool {
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
         GetWindow().Close();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](EditorCommandArgs& args)->bool {
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
         GetWindow().Maximum();
-    return true;
+        return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](EditorCommandArgs& args)->bool {
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
         GetWindow().Minimize();
-    return true;
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+        userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        return true;
     });
 }
 

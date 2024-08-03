@@ -3,6 +3,8 @@
 #include "Utilities/StbImage.hpp"
 #include <fmt/format.h>
 
+#include "Options.hpp"
+
 #if ANDROID
 #include <time.h>
 
@@ -87,7 +89,10 @@ Window::Window(const WindowConfig& config) :
 	}
 
 	// hide title bar, handle in ImGUI Later
-	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+	if(GOption->Editor)
+	{
+		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+	}
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 

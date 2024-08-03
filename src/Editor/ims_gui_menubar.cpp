@@ -56,7 +56,7 @@ void ImStudio::GUI::ShowMenubar()
             }
             if (ImGui::BeginMenu("Behavior"))
             {
-                ImGui::MenuItem("Static Mode", NULL, &bw.staticlayout);
+                ImGui::MenuItem("Static Mode", NULL);
                 ImGui::SameLine();
                 utils::HelpMarker("Toggle between static/linear layout and fixed/manual layout");
 
@@ -64,11 +64,7 @@ void ImStudio::GUI::ShowMenubar()
             }
             if (ImGui::MenuItem("Reset"))
             {
-                bw.objects.clear();
-                bw.selected_obj_id = -1;
-                bw.open_child_id = -1;
-                bw.open_child = false;
-                bw.idgen = 0;
+               
             }
 
             ImGui::EndMenu();
@@ -152,16 +148,13 @@ void ImStudio::GUI::ShowMenubar()
     ImGui::SetCursorPos( ImVec2(50,5) );
     ImGui::PushStyleColor( ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
     if(ImGui::Button(ICON_FA_WINDOW_MINIMIZE, ImVec2(40, 40))) {
-        EditorCommandArgs args{};
-        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMinimize, args);
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMinimize);
     };ImGui::SameLine();
     if(ImGui::Button(ICON_FA_WINDOW_MAXIMIZE, ImVec2(40, 40))) {
-        EditorCommandArgs args{};
-        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMaximum, args);
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestMaximum);
     };ImGui::SameLine();
     if(ImGui::Button(ICON_FA_XMARK, ImVec2(40, 40))) {
-        EditorCommandArgs args{};
-        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestExit, args);
+        EditorCommand::ExecuteCommand(EEditorCommand::ECmdSystem_RequestExit);
     };ImGui::SameLine();
     ImGui::PopStyleColor();
     ImGui::End();

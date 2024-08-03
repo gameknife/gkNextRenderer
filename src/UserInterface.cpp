@@ -68,7 +68,6 @@ UserInterface::UserInterface(
 	swapChain_(swapChain)
 {
 	editorGUI_.reset(new ImStudio::GUI());
-	editorGUI_->bw.objects.reserve(2048);
 	
 	const auto& device = swapChain.Device();
 	const auto& window = device.Surface().Instance().Window();
@@ -330,8 +329,9 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	{
 		DrawSettings();
 		DrawOverlay(statistics, gpuTimer);
-		if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	}
+
+	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	
 	ImGui::Render();
 
@@ -582,17 +582,21 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("%.1fm\nInst: %d\nMat: %d", Settings().HitResult.T, Settings().HitResult.InstanceId, Settings().HitResult.MaterialId);
 		ImGui::End();
 		ImGui::PopStyleColor();
+		
 	}
 }
 
 void UserInterface::DrawIndicator(uint32_t frameCount)
 {
-	auto io = ImGui::GetIO();
-	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowBgAlpha(0.25f); // Transparent background
-	//ImGui::SetNextWindowSize(ImVec2(256, 256));
-	
-	ImGui::Begin("Indicator", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("Loading%s   ", frameCount % 4 == 0 ? "" : frameCount % 4 == 1 ? "." : frameCount % 4 == 2 ? ".." : "...");
-	ImGui::End();
+	ImGui::OpenPopup("Loading");
+	// Always center this window when appearing
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(100,40));
+
+	if (ImGui::BeginPopupModal("Loading", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::Text("Loading%s   ", frameCount % 4 == 0 ? "" : frameCount % 4 == 1 ? "." : frameCount % 4 == 2 ? ".." : "...");
+		ImGui::EndPopup();
+	}
 }

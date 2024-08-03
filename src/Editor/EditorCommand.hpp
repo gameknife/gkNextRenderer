@@ -15,7 +15,7 @@ struct EditorCommandArgs {
     uint8_t context_1k[1024];
 };
 
-typedef std::function<bool (EditorCommandArgs& args)> CommandFunc;
+typedef std::function<bool (std::string& args)> CommandFunc;
 
 class EditorCommand {
 public:
@@ -27,8 +27,8 @@ public:
             Throw(std::runtime_error(std::string("Duplicated Command")));
         }
     }
-
-    static bool ExecuteCommand( EEditorCommand cmd, EditorCommandArgs& args) {
+    
+    static bool ExecuteCommand( EEditorCommand cmd, std::string& args) {
         if( commandMaps_.find(cmd) != commandMaps_.end() ) {
             return commandMaps_[cmd](args);
         }
@@ -36,6 +36,11 @@ public:
             Throw(std::runtime_error(std::string("Call Unregisterd Command")));
         }
         return false;
+    }
+
+    static bool ExecuteCommand( EEditorCommand cmd) {
+        std::string args;
+        return ExecuteCommand(cmd, args);
     }
 private:
     static std::unordered_map<EEditorCommand, CommandFunc> commandMaps_;

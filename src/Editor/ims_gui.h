@@ -5,9 +5,6 @@
 #include "imgui.h"
 
 #include "ims_utils.h"
-#include "ims_object.h"
-#include "ims_buffer.h"
-#include "ims_generator.h"
 
 #ifdef __EMSCRIPTEN__
 #include "JsClipboardTricks.h"
@@ -33,24 +30,15 @@ namespace ImStudio
         bool                    wksp_create                = true;                 // Workspace "Create"
 
         bool                    menubar                    = true;                 // Menubar State
-        ImVec2                  mb_P                       = {};                   // Menubar Pos
-        ImVec2                  mb_S                       = {};                   // Menubar Size
         void                    ShowMenubar();         
 
         bool                    sidebar                    = true;                 // Sidebar State
-        ImVec2                  sb_P                       = {};                   // Sidebar Pos
-        ImVec2                  sb_S                       = {};                   // Sidebar Size
         void                    ShowSidebar(const Assets::Scene* scene);         
 
         bool                    properties                 = true;                 // Properties State
-        ImVec2                  pt_P                       = {};                   // Properties Pos
-        ImVec2                  pt_S                       = {};                   // Properties Size
         void                    ShowProperties();      
 
         bool                    viewport                   = true;                 // Viewport State
-        ImVec2                  vp_P                       = {};                   // Viewport Pos
-        ImVec2                  vp_S                       = {};                   // Viewport Size
-        BufferWindow            bw;
         const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
         const Assets::Scene*    current_scene              = nullptr;
         void                    ShowViewport               (ImTextureID viewportImage, ImVec2 viewportSize);         

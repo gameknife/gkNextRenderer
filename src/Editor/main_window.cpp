@@ -69,22 +69,11 @@ void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureI
     ImGuiIO &io = ImGui::GetIO();
 
     gui.current_scene = scene;
-
-    // static int w_w = io.DisplaySize.x;
-    // static int w_h = io.DisplaySize.y;
+    
     int w_w = io.DisplaySize.x;
     int w_h = io.DisplaySize.y;
     //////////////////////////////////
-
-    // ImGui::SetNextWindowPos(ImVec2(0, 0));
-    // ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
-    // ImGui::SetNextWindowBgAlpha(0.00f);
-
-    // window-menubar
-    gui.mb_P = ImVec2(0, 0);
-    gui.mb_S = ImVec2(w_w, 46);
     
-
 // Only run DockBuilder functions on the first frame of the app:
 if (firstRun) {
     ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.1f, nullptr, &id);
@@ -97,46 +86,30 @@ if (firstRun) {
     
     ImGui::DockBuilderFinish(id);
 }
-    
-    // workspace-create
-    //if (!gui.compact){
+
     {
         gui.wksp_output = true;
             
         // create-sidebar
-        gui.sb_P = ImVec2(0, gui.mb_S.y);
-        gui.sb_S = ImVec2(170, w_h - gui.mb_S.y);
         if (gui.sidebar) gui.ShowSidebar(scene);
 
         // create-properties
-        gui.pt_P = ImVec2(w_w - 300, gui.mb_S.y);
-        gui.pt_S = ImVec2(300, w_h - gui.mb_S.y);
         if (gui.properties) gui.ShowProperties();
 
         // workspace-output
-        gui.ot_P = ImVec2(gui.sb_S.x, w_h - 300);
-        gui.ot_S = ImVec2(gui.pt_P.x - gui.sb_S.x, 300);
         if (gui.wksp_output) gui.ShowOutputWorkspace();
 
         // create-viewport
-        gui.vp_P = ImVec2(gui.sb_S.x, gui.mb_S.y);
-        gui.vp_S = ImVec2(gui.pt_P.x - gui.sb_S.x, w_h - gui.mb_S.y);
         //if (gui.viewport) gui.ShowViewport(viewportImage, viewportSize);
     }
 
     { // create-children
         if (gui.child_style) utils::ShowStyleEditorWindow(&gui.child_style);
-
         if (gui.child_demo) ImGui::ShowDemoWindow(&gui.child_demo);
-
         if (gui.child_metrics) ImGui::ShowMetricsWindow(&gui.child_metrics);
-
         if (gui.child_stack) ImGui::ShowStackToolWindow(&gui.child_stack);
-
         if (gui.child_color) utils::ShowColorExportWindow(&gui.child_color);
-
         if (gui.child_resources) utils::ShowResourcesWindow(&gui.child_resources);
-
         if (gui.child_about) utils::ShowAboutWindow(&gui.child_about);
     }
 
