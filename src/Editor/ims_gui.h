@@ -70,6 +70,7 @@ namespace ImStudio
         bool                    child_about                = false;                // Show About Window
 
         ImFont*                 fontIcon_                  = nullptr;
+        ImFont*                 bigIcon_                   = nullptr;
     };
 
 }

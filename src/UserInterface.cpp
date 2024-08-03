@@ -150,26 +150,27 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 13 * scaleFactor, nullptr, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load ImGui Text font"));
 	}
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
 	ImFontConfig config;
 	config.MergeMode = true;
-	config.GlyphMinAdvanceX = 13.0f;
+	config.GlyphMinAdvanceX = 14.0f;
 	config.GlyphOffset = ImVec2(0, 0);
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 13 * scaleFactor, &config, iconRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
 	{
 		
 	}
 
-	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 20 * scaleFactor, nullptr, glyphRange );
+	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 18 * scaleFactor, nullptr, glyphRange );
 	
 	config.GlyphMinAdvanceX = 20.0f;
 	config.GlyphOffset = ImVec2(0, 0);
-	io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 20 * scaleFactor, &config, iconRange );
-	
+	io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 18 * scaleFactor, &config, iconRange );
+
+	fontBigIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr, iconRange );
 	
 	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
 	{
@@ -185,6 +186,7 @@ UserInterface::UserInterface(
 	firstRun = true;
 
 	editorGUI_->fontIcon_ = fontIcon_;
+	editorGUI_->bigIcon_ = fontBigIcon_;
 }
 
 UserInterface::~UserInterface()
@@ -207,13 +209,15 @@ UserInterface::~UserInterface()
 const float toolbarSize = 50;
 const float toolbarIconWidth = 32;
 const float toolbarIconHeight = 32;
+const float titleBarHeight = 55;
 float menuBarHeight = 0;
+
 
 ImGuiID UserInterface::DockSpaceUI()
 {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize));
-	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize));
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize + titleBarHeight - menuBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight));
 	ImGui::SetNextWindowViewport(viewport->ID);
 	ImGui::SetNextWindowBgAlpha(0);
 	ImGuiWindowFlags window_flags = 0
@@ -241,7 +245,7 @@ ImGuiID UserInterface::DockSpaceUI()
 void UserInterface::ToolbarUI()
 {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + menuBarHeight));
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + titleBarHeight));
 	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, toolbarSize));
 	ImGui::SetNextWindowViewport(viewport->ID);
 
@@ -254,9 +258,12 @@ void UserInterface::ToolbarUI()
 		| ImGuiWindowFlags_NoSavedSettings
 		;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+
 	ImGui::Begin("TOOLBAR", NULL, window_flags);
 	ImGui::PopStyleVar();
-
+	ImGui::PopStyleVar();
+	
 	ImGui::BeginGroup();
 	ImGui::PushFont(fontIcon_);
 	ImGui::Button(ICON_FA_FLOPPY_DISK, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
@@ -312,6 +319,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();
+		MainWindowsGUINoDocking(*editorGUI_);
 		
 		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);

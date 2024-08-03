@@ -93,7 +93,7 @@ private:
 	VkDescriptorSet viewportTextureId_;
 	ImVec2 viewportSize_;
 
-	ImFont* fontText_;
+	ImFont* fontBigIcon_;
 	ImFont* fontIcon_;
 
 	bool firstRun;

@@ -58,6 +58,10 @@ void MainWindowStyle()
     
 }
 
+void MainWindowsGUINoDocking(ImStudio::GUI& gui)
+{
+    gui.ShowMenubar();
+}
 void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
@@ -72,14 +76,14 @@ void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureI
     int w_h = io.DisplaySize.y;
     //////////////////////////////////
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
-    ImGui::SetNextWindowBgAlpha(0.00f);
+    // ImGui::SetNextWindowPos(ImVec2(0, 0));
+    // ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+    // ImGui::SetNextWindowBgAlpha(0.00f);
 
     // window-menubar
     gui.mb_P = ImVec2(0, 0);
     gui.mb_S = ImVec2(w_w, 46);
-    gui.ShowMenubar();
+    
 
 // Only run DockBuilder functions on the first frame of the app:
 if (firstRun) {

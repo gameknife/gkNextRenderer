@@ -248,7 +248,9 @@ void Window::Show() const
 	glfwShowWindow(window_);
 #endif
 }
-	
+
+constexpr double CLOSE_AREA_WIDTH = 0;
+constexpr double TITLE_AREA_HEIGHT = 55;	
 void Window::attemptDragWindow() {
 #if !ANDROID
 	if (glfwGetMouseButton(window_, 0) == GLFW_PRESS && dragState == 0) {
@@ -262,8 +264,8 @@ void Window::attemptDragWindow() {
 		glfwGetCursorPos(window_, &c_xpos, &c_ypos);
 		glfwGetWindowPos(window_, &w_xpos, &w_ypos);
 		if (
-			s_xpos >= 0 && s_xpos <= ((double)w_xsiz - 170) &&
-			s_ypos >= 0 && s_ypos <= 25) {
+			s_xpos >= 0 && s_xpos <= ((double)w_xsiz - CLOSE_AREA_WIDTH) &&
+			s_ypos >= 0 && s_ypos <= TITLE_AREA_HEIGHT) {
 			glfwSetWindowPos(window_, w_xpos + (c_xpos - s_xpos), w_ypos + (c_ypos - s_ypos));
 			}
 		if (
