@@ -153,6 +153,14 @@ UserInterface::UserInterface(
 	{
 		Throw(std::runtime_error("failed to load ImGui Text font"));
 	}
+
+	ImFontConfig configLocale;
+	configLocale.MergeMode = true;
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
+	{
+		Throw(std::runtime_error("failed to load ImGui Text font"));
+	}
+
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
 	ImFontConfig config;
 	config.MergeMode = true;

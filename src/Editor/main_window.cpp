@@ -70,10 +70,6 @@ void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureI
 
     gui.current_scene = scene;
     
-    int w_w = io.DisplaySize.x;
-    int w_h = io.DisplaySize.y;
-    //////////////////////////////////
-    
 // Only run DockBuilder functions on the first frame of the app:
 if (firstRun) {
     ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.1f, nullptr, &id);
@@ -100,7 +96,7 @@ if (firstRun) {
         if (gui.wksp_output) gui.ShowOutputWorkspace();
 
         // create-viewport
-        //if (gui.viewport) gui.ShowViewport(viewportImage, viewportSize);
+        if (gui.viewport) gui.ShowViewport(id);
     }
 
     { // create-children

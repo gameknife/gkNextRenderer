@@ -41,7 +41,7 @@ namespace ImStudio
         bool                    viewport                   = true;                 // Viewport State
         const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
         const Assets::Scene*    current_scene              = nullptr;
-        void                    ShowViewport               (ImTextureID viewportImage, ImVec2 viewportSize);         
+        void                    ShowViewport               (ImGuiID id);
 
         bool                    wksp_output                = false;                // Workspace "Output"
         ImVec2                  ot_P                       = {};                   // Output Window Pos

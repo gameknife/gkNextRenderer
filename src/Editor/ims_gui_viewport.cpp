@@ -1,30 +1,28 @@
 #include "ims_gui.h"
 #include "Assets/Model.hpp"
 
-void ImStudio::GUI::ShowViewport(ImTextureID viewportImage, ImVec2 viewportSize)
+void ImStudio::GUI::ShowViewport(ImGuiID id)
 {
-    // ImGui::SetNextWindowPos(vp_P);
-    // ImGui::SetNextWindowSize(vp_S);
-    ImGui::Begin("Viewport", NULL, ImGuiWindowFlags_NoInputs);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 
-    /// content-viewport
-    {
-        // utils::DrawGrid();
-        // ImGui::GetWindowDrawList()->AddImage(viewportImage, ImVec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y), ImVec2(ImGui::GetCursorScreenPos().x + viewportSize.x, ImGui::GetCursorScreenPos().y + viewportSize.y));
-        // ImGui::Text("Buffer Window: %gx%g", bw.size.x, bw.size.y);
-        // ImGui::SameLine();
-        // utils::TextCentered("Make sure to lock widgets before interacting with them.", 1);
-        // ImGui::Text("Cursor: %gx%g", ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-        // ImGui::Text("Objects: %d", static_cast<int>(bw.objects.size()));
-        // if (!bw.objects.empty()) ImGui::Text("Selected: %s", selected_obj != nullptr ? selected_obj->GetName().c_str() : "none");
-        // ImGui::Text("Performance: %.1f FPS", ImGui::GetIO().Framerate);
-        // utils::HelpMarker("Hotkeys:\nAlt + M - \"Add\" context menu\n"\
-        //                   "Left/Right Arrow - Cycle object selection\n"\
-        //                   "Ctrl + E - Focus on property field\nDelete - Delete selected object");
+    ImGui::SetNextWindowPos(node->Pos);
+    ImGui::SetNextWindowSize(node->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::SetNextWindowBgAlpha(0);
 
-        
-        //bw.drawall();
-    }
+    ImGuiWindowFlags window_flags = 0
+        | ImGuiWindowFlags_NoDocking
+        | ImGuiWindowFlags_NoTitleBar
+        | ImGuiWindowFlags_NoResize
+        | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoScrollbar
+        | ImGuiWindowFlags_NoSavedSettings
+        ;
+
+    ImGui::Begin("ViewportStat", nullptr, window_flags);
+
+    ImGui::Text("Reatime Statstics: ");
 
     ImGui::End();
 }

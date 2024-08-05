@@ -63,69 +63,10 @@ void ImStudio::GUI::ShowSidebar(const Assets::Scene* scene)
             }
         }
 
-        // if (ImGui::Button("Input Text"))
-        //     bw.create("textinput");
-        //
-        // if (ImGui::Button("Input Int"))
-        //     bw.create("inputint");
-        //
-        // ImGui::SameLine(); utils::HelpMarker
-        // ("You can apply arithmetic operators +,*,/ on numerical values.\n"
-        // "  e.g. [ 100 ], input \'*2\', result becomes [ 200 ]\n"
-        // "Use +- to subtract.");
-        //
-        // if (ImGui::Button("Input Float"))
-        //     bw.create("inputfloat");
-        //
-        // if (ImGui::Button("Input Double"))
-        //     bw.create("inputdouble");
-        //
-        // if (ImGui::Button("Input Scientific"))
-        //     bw.create("inputscientific");
-        //
-        // ImGui::SameLine(); utils::HelpMarker
-        // ("You can input value using the scientific notation,\n"
-        // "  e.g. \"1e+8\" becomes \"100000000\".");
-        //
-        // if (ImGui::Button("Input Float3"))
-        //     bw.create("inputfloat3");
-        //
-        // if (ImGui::Button("Drag Int"))
-        //     bw.create("dragint");
-        //
-        // ImGui::SameLine(); utils::HelpMarker
-        // ("Click and drag to edit value.\n"
-        // "Hold SHIFT/ALT for faster/slower edit.\n"
-        // "Double-click or CTRL+click to input value.");
-        //
-        // if (ImGui::Button("Drag Int %"))
-        //     bw.create("dragint100");
-        //
-        // if (ImGui::Button("Drag Float"))
-        //     bw.create("dragfloat");
-        //
-        // if (ImGui::Button("Drag Float Small"))
-        //     bw.create("dragfloatsmall");
-        //
-        // if (ImGui::Button("Slider Int"))
-        //     bw.create("sliderint");
-        //
-        // ImGui::SameLine(); utils::HelpMarker("CTRL+click to input value.");
-        //
-        // if (ImGui::Button("Slider Float"))
-        //     bw.create("sliderfloat");
-        //
-        // if (ImGui::Button("Slider Float Log"))
-        //     bw.create("sliderfloatlog");
-        //
-        // if (ImGui::Button("Slider Angle"))
-        //     bw.create("sliderangle");
-
         if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_F4))))
         {
             state = false;
         }
-        
     }
 
     ImGui::End();
