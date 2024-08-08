@@ -1,4 +1,5 @@
 #include "DebugUtilsMessenger.hpp"
+
 #include "Instance.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
@@ -68,55 +69,56 @@ namespace Vulkan {
 
 			const auto attributes = Utilities::Console::SetColorBySeverity(static_cast<Utilities::Severity>(messageSeverity));
 
+			FILE* outDevice = stdout;
 			switch (messageSeverity)
 			{
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-				fmt::print(stderr, "VERBOSE: ");
+				fmt::print(outDevice, "VERBOSE: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-				fmt::print(stderr, "INFO: ");
+				fmt::print(outDevice, "INFO: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-				fmt::print(stderr, "WARNING: ");
+				fmt::print(outDevice, "WARNING: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-				fmt::print(stderr, "ERROR: ");
+				outDevice = stderr;
+				fmt::print(outDevice, "ERROR: ");
 				break;
 			default:;
-				fmt::print(stderr, "UNKNOWN: ");
+				fmt::print(outDevice, "UNKNOWN: ");
 			}
 
 			switch (messageType)
 			{
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-				fmt::print(stderr, "GENERAL: ");
+				fmt::print(outDevice, "GENERAL: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-				fmt::print(stderr, "VALIDATION: ");
+				fmt::print(outDevice, "VALIDATION: ");
 				break;
 			case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-				fmt::print(stderr, "PERFORMANCE: ");
+				fmt::print(outDevice, "PERFORMANCE: ");
 				break;
 			default:
-				fmt::print(stderr, "UNKNOWN: ");
+				fmt::print(outDevice, "UNKNOWN: ");
 			}
 
-			fmt::print(stderr, "{}", pCallbackData->pMessage);
+			fmt::print(outDevice, "{}", pCallbackData->pMessage);
 
 			if (pCallbackData->objectCount > 0 && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 			{
-				fmt::print(stderr, "\n\n  Objects ({}):\n", pCallbackData->objectCount);
+				fmt::print(outDevice, "\n\n  Objects ({}):\n", pCallbackData->objectCount);
 
 				for (uint32_t i = 0; i != pCallbackData->objectCount; ++i)
 				{
 					const auto object = pCallbackData->pObjects[i];
-					fmt::print(stderr, "  - Object: Type: {}, Handle: {}, Name: '{}'\n", 
+					fmt::print(outDevice, "  - Object: Type: {}, Handle: {}, Name: '{}'\n",
 										ObjectTypeToString(object.objectType), reinterpret_cast<void*>(object.objectHandle), (object.pObjectName ? object.pObjectName : "")
 							 );
 				}
 			}
-
-			fmt::print(stderr, "\n");
+			fmt::print(outDevice, "\n");
 
 			Utilities::Console::SetColorByAttributes(attributes);
 

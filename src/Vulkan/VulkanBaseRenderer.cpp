@@ -330,7 +330,7 @@ void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, co
 	subresourceRange.levelCount = 1;
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
-	
+
 	ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
 				   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
