@@ -1,5 +1,10 @@
 #include "ims_utils.h"
 
+#include <fmt/core.h>
+#include <fmt/printf.h>
+
+#include "Application.hpp"
+
 #ifndef PROJECT_VERSION_STRING
 #define PROJECT_VERSION_STRING "0.0.0"
 #endif
@@ -303,22 +308,20 @@ void utils::ShowResourcesWindow(bool *child_resources)
 
 void utils::ShowAboutWindow(bool *child_about)
 {
-    std::string ver = PROJECT_VERSION_STRING;
-    std::string hash = GIT_SHA1;
-    if (hash.length() > 7)
-        hash = hash.substr(0, 7);
+    std::string ver = NextRenderer::GetBuildVersion();
+    std::string imguiver = IMGUI_VERSION;
+    std::string fmtver = fmt::sprintf("%d", FMT_VERSION);
 
     ImGui::OpenPopup("About");
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("About", NULL, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            TextCentered("ImStudio");
+            TextCentered("gkNextRenderer");
             ImGui::Separator();
-            ImGui::Text("Version: %s (%s)", ver.c_str(), hash.c_str());
-            ImGui::Text("Source: Raais/ImStudio");
-            ImGui::Text("ImGui: 18700 (c71a50d)");
-            ImGui::Text("Fmt: 8.0.1 (d141cdb)");
+            ImGui::Text("Version: %s", ver.c_str());
+            ImGui::Text("ImGui: %s", imguiver.c_str());
+            ImGui::Text("Fmt: %s", fmtver.c_str());
             ImGui::Separator();
 
             if (ImGui::Button("Back")) { ImGui::CloseCurrentPopup(); *child_about = false; }

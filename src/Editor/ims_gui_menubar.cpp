@@ -6,7 +6,6 @@ void ImStudio::GUI::ShowMenubar()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 
-    //ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     
@@ -30,15 +29,6 @@ void ImStudio::GUI::ShowMenubar()
         /// menu-file
         if (ImGui::BeginMenu("File"))
         {
-            #ifndef __EMSCRIPTEN__
-            if (ImGui::MenuItem("Export to clipboard"))
-            {
-                ImGui::LogToClipboard();
-                ImGui::LogText("%s", output.c_str());
-                ImGui::LogFinish();
-            };
-            #endif
-
             if (ImGui::MenuItem("Exit"))
             {
                 state = false;
@@ -51,7 +41,7 @@ void ImStudio::GUI::ShowMenubar()
         {
             if (ImGui::BeginMenu("Layout"))
             {
-                ImGui::MenuItem("Compact", NULL, &compact);
+                ImGui::MenuItem("Reset");
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Behavior"))
@@ -90,31 +80,6 @@ void ImStudio::GUI::ShowMenubar()
 
         ImGui::EndMenuBar();
     }
-
-    // TAB
-    // if (!compact)
-    // {
-    //     if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None))
-    //     {
-    //         // tab-create
-    //         if (ImGui::BeginTabItem("Create"))
-    //         {
-    //             wksp_output = false;
-    //             wksp_create = true;
-    //             ImGui::EndTabItem();
-    //         }
-    //
-    //         // tab-output
-    //         if (ImGui::BeginTabItem("Output"))
-    //         {
-    //             wksp_create = false;
-    //             wksp_output = true;
-    //             ImGui::EndTabItem();
-    //         }
-    //
-    //         ImGui::EndTabBar();
-    //     }
-    // }
     
     ImGui::End();
 

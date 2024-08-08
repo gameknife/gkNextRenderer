@@ -2,11 +2,12 @@
 
 #include "ims_gui.h"
 
+struct Statistics;
+
 namespace Assets
 {
     class Scene;    
 }
 
 void MainWindowStyle();
-void MainWindowsGUINoDocking(ImStudio::GUI & gui);
-void MainWindowGUI(ImStudio::GUI & gui, const Assets::Scene* scene, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun);
+void MainWindowGUI(ImStudio::GUI & gui, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun);

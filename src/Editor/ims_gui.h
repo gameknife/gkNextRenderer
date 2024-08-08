@@ -10,6 +10,8 @@
 #include "JsClipboardTricks.h"
 #endif
 
+struct Statistics;
+
 namespace Assets
 {
     class Node;
@@ -26,8 +28,6 @@ namespace ImStudio
     struct GUI
     {
         bool                    state                      = true;                 // Alive
-        bool                    compact                    = false;                // Compact/Spacious Switch
-        bool                    wksp_create                = true;                 // Workspace "Create"
 
         bool                    menubar                    = true;                 // Menubar State
         void                    ShowMenubar();         
@@ -41,13 +41,10 @@ namespace ImStudio
         bool                    viewport                   = true;                 // Viewport State
         const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
         const Assets::Scene*    current_scene              = nullptr;
-        void                    ShowViewport               (ImGuiID id);
+        void                    ShowViewport               (ImGuiID id, const Statistics& statistics);
 
-        bool                    wksp_output                = false;                // Workspace "Output"
-        ImVec2                  ot_P                       = {};                   // Output Window Pos
-        ImVec2                  ot_S                       = {};                   // Output Window Size
-        std::string             output                     = {};
-        void                    ShowOutputWorkspace();        
+        bool                    contentBrowser             = true;                // Workspace "Output"
+        void                    ShowContentBrowser();
 
         bool                    child_style                = false;                // Show Style Editor
         bool                    child_demo                 = false;                // Show Demo Window

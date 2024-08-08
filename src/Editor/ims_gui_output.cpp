@@ -8,7 +8,7 @@
 
 const int ICON_SIZE = 72;
 
-void ImStudio::GUI::ShowOutputWorkspace()
+void ImStudio::GUI::ShowContentBrowser()
 {
     ImGui::Begin("Content Browser", NULL,  ImGuiWindowFlags_NoScrollbar);
     {

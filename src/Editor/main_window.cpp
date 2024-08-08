@@ -1,6 +1,8 @@
 #include "main_window.h"
 #include <imgui_internal.h>
 
+#include "UserInterface.hpp"
+
 void MainWindowStyle()
 {
     
@@ -49,20 +51,15 @@ void MainWindowStyle()
     colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
     colors[ImGuiCol_NavHighlight]           = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
     style->WindowPadding                    = ImVec2(12.00f, 8.00f);
-    style->ItemSpacing                      = ImVec2(7.00f, 3.00f);
+    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
     style->GrabMinSize                      = 20.00f;
     style->WindowRounding                   = 8.00f;
     style->FrameBorderSize                  = 0.00f;
     style->FrameRounding                    = 4.00f;
     style->GrabRounding                     = 12.00f;
-    
 }
 
-void MainWindowsGUINoDocking(ImStudio::GUI& gui)
-{
-    gui.ShowMenubar();
-}
-void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureID viewportImage, ImVec2 viewportSize, ImGuiID id, bool firstRun)
+void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
     ImStudio::GUI &gui = gui_r;
@@ -70,22 +67,22 @@ void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, ImTextureI
 
     gui.current_scene = scene;
     
-// Only run DockBuilder functions on the first frame of the app:
-if (firstRun) {
-    ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.1f, nullptr, &id);
-    ImGuiID dock2 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Right, 0.2f, nullptr, &id);
-    ImGuiID dock3 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.25f, nullptr, &id);
-    
-    ImGui::DockBuilderDockWindow("Outliner", dock1);
-    ImGui::DockBuilderDockWindow("Properties", dock2);
-    ImGui::DockBuilderDockWindow("Content Browser", dock3);
-    
-    ImGui::DockBuilderFinish(id);
-}
+    // Only run DockBuilder functions on the first frame of the app:
+    if (firstRun) {
+        ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.1f, nullptr, &id);
+        ImGuiID dock2 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Right, 0.2f, nullptr, &id);
+        ImGuiID dock3 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.25f, nullptr, &id);
+
+        ImGui::DockBuilderDockWindow("Outliner", dock1);
+        ImGui::DockBuilderDockWindow("Properties", dock2);
+        ImGui::DockBuilderDockWindow("Content Browser", dock3);
+
+        ImGui::DockBuilderFinish(id);
+    }
 
     {
-        gui.wksp_output = true;
-            
+        gui.ShowMenubar();
+
         // create-sidebar
         if (gui.sidebar) gui.ShowSidebar(scene);
 
@@ -93,10 +90,10 @@ if (firstRun) {
         if (gui.properties) gui.ShowProperties();
 
         // workspace-output
-        if (gui.wksp_output) gui.ShowOutputWorkspace();
+        if (gui.contentBrowser) gui.ShowContentBrowser();
 
         // create-viewport
-        if (gui.viewport) gui.ShowViewport(id);
+        if (gui.viewport) gui.ShowViewport(id, statistics);
     }
 
     { // create-children

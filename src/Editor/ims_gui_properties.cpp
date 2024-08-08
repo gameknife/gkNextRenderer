@@ -14,7 +14,6 @@ void ImStudio::GUI::ShowProperties()
     {
         if (selected_obj != nullptr)
         {
-            ImGui::NewLine();
             ImGui::PushFont(fontIcon_);
             ImGui::Text(selected_obj->GetName().c_str());
             ImGui::PopFont();
@@ -25,7 +24,6 @@ void ImStudio::GUI::ShowProperties()
 
             ImGui::Text(ICON_FA_LOCATION_ARROW " Transform");
             ImGui::Separator();
-            ImGui::NewLine();
             auto mat4 = selected_obj->WorldTransform();
 
             glm::mat4 transformation; // your transformation matrix.
@@ -61,8 +59,6 @@ void ImStudio::GUI::ShowProperties()
             ImGui::Separator();
             int modelId = selected_obj->GetModel();
             ImGui::InputInt("##ModelId", &modelId, 1, 1, ImGuiInputTextFlags_ReadOnly);
-            
-            ImGui::NewLine();
 
             ImGui::NewLine();
             ImGui::Text( ICON_FA_CIRCLE_HALF_STROKE " Material");
@@ -78,8 +74,6 @@ void ImStudio::GUI::ShowProperties()
                     ImGui::InputInt("##MaterialId", &matIdx, 1, 1, ImGuiInputTextFlags_ReadOnly);
                 }
             }
-            
-            ImGui::NewLine();
         }
     }
 

@@ -326,12 +326,9 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();
-		MainWindowsGUINoDocking(*editorGUI_);
-		
 		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);
-		
-		MainWindowGUI(*editorGUI_, scene, viewportTextureId_, viewportSize_, id, firstRun);
+		MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
 	}
 	else
 	{
