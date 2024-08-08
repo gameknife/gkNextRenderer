@@ -1,4 +1,4 @@
-#include "main_window.h"
+#include "EditorMain.h"
 #include <imgui_internal.h>
 
 #include "UserInterface.hpp"
@@ -59,10 +59,10 @@ void MainWindowStyle()
     style->GrabRounding                     = 12.00f;
 }
 
-void MainWindowGUI(ImStudio::GUI & gui_r, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
+void MainWindowGUI(Editor::GUI & gui_r, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
-    ImStudio::GUI &gui = gui_r;
+    Editor::GUI &gui = gui_r;
     ImGuiIO &io = ImGui::GetIO();
 
     gui.current_scene = scene;

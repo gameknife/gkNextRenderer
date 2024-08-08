@@ -1,9 +1,9 @@
-#include "ims_gui.h"
+#include "EditorGUI.h"
 #include "UserInterface.hpp"
 #include "Assets/Model.hpp"
 #include "Utilities/Math.hpp"
 
-void ImStudio::GUI::ShowViewport(ImGuiID id, const Statistics& statistics)
+void Editor::GUI::ShowViewport(ImGuiID id, const Statistics& statistics)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);

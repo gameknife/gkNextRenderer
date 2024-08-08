@@ -23,12 +23,12 @@
 
 #include <array>
 #include <filesystem>
-#include <Editor/ims_gui.h>
+#include <Editor/EditorGUI.h>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
-#include "Editor/main_window.h"
+#include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
@@ -67,7 +67,7 @@ UserInterface::UserInterface(
 	userSettings_(userSettings),
 	swapChain_(swapChain)
 {
-	editorGUI_.reset(new ImStudio::GUI());
+	editorGUI_.reset(new Editor::GUI());
 	
 	const auto& device = swapChain.Device();
 	const auto& window = device.Surface().Instance().Window();

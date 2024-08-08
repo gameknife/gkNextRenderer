@@ -12,7 +12,7 @@ namespace Assets
 {
 	class Scene;
 }
-namespace ImStudio
+namespace Editor
 {
 	struct GUI;
 }
@@ -88,7 +88,7 @@ private:
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	UserSettings& userSettings_;
 
-	std::unique_ptr<ImStudio::GUI> editorGUI_;
+	std::unique_ptr<Editor::GUI> editorGUI_;
 
 	VkDescriptorSet viewportTextureId_;
 	ImVec2 viewportSize_;

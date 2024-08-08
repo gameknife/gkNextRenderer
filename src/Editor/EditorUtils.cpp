@@ -1,16 +1,9 @@
-#include "ims_utils.h"
+#include "EditorUtils.h"
 
 #include <fmt/core.h>
 #include <fmt/printf.h>
 
 #include "Application.hpp"
-
-#ifndef PROJECT_VERSION_STRING
-#define PROJECT_VERSION_STRING "0.0.0"
-#endif
-#ifndef GIT_SHA1
-#define GIT_SHA1 "0000000"
-#endif
 
 ImVec2 utils::GetLocalCursor()
 {

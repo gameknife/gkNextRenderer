@@ -1,8 +1,8 @@
 #include "EditorCommand.hpp"
 #include "IconsFontAwesome6.h"
-#include "ims_gui.h"
+#include "EditorGUI.h"
 
-void ImStudio::GUI::ShowMenubar()
+void Editor::GUI::ShowMenubar()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 

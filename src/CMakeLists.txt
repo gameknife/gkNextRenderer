@@ -169,16 +169,16 @@ set(src_files_thirdparty_json11
 )
 
 set(src_files_editor
-	Editor/main_window.cpp
-	Editor/main_window.h
-	Editor/ims_gui.h
-	Editor/ims_gui_menubar.cpp
-	Editor/ims_gui_properties.cpp
-	Editor/ims_gui_sidebar.cpp
-	Editor/ims_gui_viewport.cpp
-	Editor/ims_gui_output.cpp
-	Editor/ims_utils.cpp
-	Editor/ims_utils.h
+		Editor/EditorMain.cpp
+		Editor/EditorMain.h
+        Editor/EditorGUI.h
+		Editor/EditorMenubar.cpp
+		Editor/EditorProperties.cpp
+		Editor/EditorOutliner.cpp
+		Editor/EditorViewport.cpp
+		Editor/EditorContentBrowser.cpp
+		Editor/EditorUtils.cpp
+		Editor/EditorUtils.h
 	Editor/EditorCommand.hpp
 	Editor/IconsFontAwesome6.h
 )

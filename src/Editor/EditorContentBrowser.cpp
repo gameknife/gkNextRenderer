@@ -2,13 +2,13 @@
 
 #include "EditorCommand.hpp"
 #include "IconsFontAwesome6.h"
-#include "ims_gui.h"
+#include "EditorGUI.h"
 #include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
 
 const int ICON_SIZE = 72;
 
-void ImStudio::GUI::ShowContentBrowser()
+void Editor::GUI::ShowContentBrowser()
 {
     ImGui::Begin("Content Browser", NULL,  ImGuiWindowFlags_NoScrollbar);
     {

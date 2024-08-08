@@ -3,12 +3,7 @@
 #include <string>
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
-
-#include "ims_utils.h"
-
-#ifdef __EMSCRIPTEN__
-#include "JsClipboardTricks.h"
-#endif
+#include "EditorUtils.h"
 
 struct Statistics;
 
@@ -22,7 +17,7 @@ namespace Assets
     class Scene;
 }
 
-namespace ImStudio
+namespace Editor
 {
 
     struct GUI

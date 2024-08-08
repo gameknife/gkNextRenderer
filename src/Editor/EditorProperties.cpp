@@ -1,4 +1,4 @@
-#include "ims_gui.h"
+#include "EditorGUI.h"
 #include "Assets/Model.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -6,7 +6,7 @@
 #include "IconsFontAwesome6.h"
 #include "Assets/Scene.hpp"
 
-void ImStudio::GUI::ShowProperties()
+void Editor::GUI::ShowProperties()
 {
     //ImGui::SetNextWindowPos(pt_P);
     //ImGui::SetNextWindowSize(pt_S);
