@@ -18,6 +18,11 @@
 
 namespace Vulkan
 {
+	namespace PipelineCommon
+	{
+		class BufferClearPipeline;
+	}
+
 	class RenderImage;
 }
 
@@ -226,7 +231,8 @@ namespace Vulkan
 		
 		void CaptureScreenShot();
 		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
-
+		void ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
+		
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
 		const std::string& GetRendererType() const {return rendererType_;}
@@ -302,6 +308,7 @@ namespace Vulkan
 		std::vector<Assets::UniformBuffer> uniformBuffers_;
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
+		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

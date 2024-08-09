@@ -29,6 +29,7 @@
 #include "RenderImage.hpp"
 #include "SingleTimeCommands.hpp"
 #include "TaskCoordinator.hpp"
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace Vulkan {
 	
@@ -248,6 +249,7 @@ void VulkanBaseRenderer::CreateSwapChain()
 	}
 
 	graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), isWireFrame_));
+	bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_));
 
 	for (const auto& imageView : swapChain_->ImageViews())
 	{
@@ -271,6 +273,7 @@ void VulkanBaseRenderer::DeleteSwapChain()
 	commandBuffers_.reset();
 	swapChainFramebuffers_.clear();
 	graphicsPipeline_.reset();
+	bufferClearPipeline_.reset();
 	uniformBuffers_.clear();
 	inFlightFences_.clear();
 	renderFinishedSemaphores_.clear();
@@ -361,6 +364,34 @@ void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, co
 				   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
+void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+{
+	{
+		SCOPED_GPU_TIMER("clear pass");
+
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = 1;
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+									   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+									   VK_IMAGE_LAYOUT_GENERAL);
+		
+		VkDescriptorSet DescriptorSets[] = {bufferClearPipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bufferClearPipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								bufferClearPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+						  VK_ACCESS_TRANSFER_WRITE_BIT,
+						  0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+}
+
 void VulkanBaseRenderer::DrawFrame()
 {
 	const auto noTimeout = std::numeric_limits<uint64_t>::max();
@@ -405,12 +436,14 @@ void VulkanBaseRenderer::DrawFrame()
 
 	{
 		SCOPED_GPU_TIMER("gpu time");
+		
+		ClearViewport(commandBuffer, currentImageIndex_);
 		Render(commandBuffer, currentImageIndex_);
 
 		// copy to editor surface
 		if( GOption->Editor )
 		{
-			CaptureEditorViewport(commandBuffer, currentImageIndex_);
+			//CaptureEditorViewport(commandBuffer, currentImageIndex_);
 		}
 
 		RenderUI(commandBuffer, currentImageIndex_);
