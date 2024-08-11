@@ -37,6 +37,7 @@
 #include <tiny_gltf.h>
 #include <fmt/format.h>
 
+#include "Options.hpp"
 #include "Texture.hpp"
 
 #define FLATTEN_VERTICE 1
@@ -120,7 +121,7 @@ namespace Assets
         {
             if( node.extras.Has("arealight") )
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
 
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
@@ -140,7 +141,7 @@ namespace Assets
             }
             else
             {
-                out_nodes.push_back(Node::CreateNode(transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
             }
         }
         else
@@ -284,6 +285,7 @@ namespace Assets
         {
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
+            std::vector<uint32_t> materials;
 
             uint32_t vertext_offset = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
@@ -340,6 +342,7 @@ namespace Assets
                     vertices.push_back(vertex);
                 }
 
+                materials.push_back(max(0, primtive.material) + matieralIdx);
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
@@ -372,7 +375,7 @@ namespace Assets
                 FlattenVertices(vertices, indices);
             #endif
             
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), nullptr));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
         }
 
         // default auto camera
@@ -441,20 +444,22 @@ namespace Assets
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
-        std::vector<Vertex> vertices_flatten;
-        std::vector<uint32_t> indices_flatten;
+        if(GOption->RendererType == 1 || GOption->RendererType == 4) {
+            std::vector<Vertex> vertices_flatten;
+            std::vector<uint32_t> indices_flatten;
 
-        uint32_t idx_counter = 0;
-        for (uint32_t index : indices)
-        {
-            if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
+            uint32_t idx_counter = 0;
+            for (uint32_t index : indices)
+            {
+                if (index < 0 || index > vertices.size() - 1) continue; //fix "out of range index" error
 
-            vertices_flatten.push_back(vertices[index]);
-            indices_flatten.push_back(idx_counter++);
+                vertices_flatten.push_back(vertices[index]);
+                indices_flatten.push_back(idx_counter++);
+            }
+
+            vertices = std::move(vertices_flatten);
+            indices = std::move(indices_flatten);
         }
-
-        vertices = std::move(vertices_flatten);
-        indices = std::move(indices_flatten);
     }
 
     void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)
@@ -605,6 +610,7 @@ namespace Assets
         {
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
+            std::vector<uint32_t> materials;
 
             const auto& mesh = shape.mesh;
             size_t faceId = 0;
@@ -649,6 +655,11 @@ namespace Assets
                     vertices.push_back(vertex);
                 }
 
+                if( std::find(materials.begin(), materials.end(), vertex.MaterialIndex) == std::end(materials) )
+                {
+                    materials.push_back(vertex.MaterialIndex);
+                }
+                
                 indices.push_back(uniqueVertices[vertex]);
             }
 
@@ -685,10 +696,10 @@ namespace Assets
             FlattenVertices(vertices, indices);
 #endif
 
-            models.push_back(Model(std::move(vertices), std::move(indices), nullptr));
+            models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
             if(autoNode)
             {
-                nodes.push_back(Node::CreateNode(mat4(1), static_cast<int>(models.size()) - 1, false));
+                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, false));
             }
         }
         
@@ -711,6 +722,14 @@ namespace Assets
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
+        std::vector<uint32_t> materialIds;
+
+        int32_t prev_mat_id = static_cast<int32_t>(materials.size());
+
+        materialIds.push_back(prev_mat_id + 0);
+        materialIds.push_back(prev_mat_id + 1);
+        materialIds.push_back(prev_mat_id + 2);
+        materialIds.push_back(prev_mat_id + 3);
 
         CornellBox::Create(scale, vertices, indices, materials, lights);
 
@@ -721,6 +740,7 @@ namespace Assets
         models.push_back(Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIds),
             nullptr
         ));
 
@@ -772,6 +792,8 @@ namespace Assets
             20, 21, 22, 20, 22, 23
         };
 
+        std::vector<uint32_t> materialids = {(uint32_t)materialIdx};
+
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
@@ -779,6 +801,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialids),
             nullptr);
     }
 
@@ -857,6 +880,7 @@ namespace Assets
             }
         }
 
+        std::vector<uint32_t> materialIdxs = {(uint32_t)materialIdx};
 
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
@@ -865,6 +889,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIdxs),
             isProcedural ? new Sphere(center, radius) : nullptr);
     }
 
@@ -906,18 +931,22 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
+        std::vector<uint32_t> materialIds = {(uint32_t)materialIdx};
+        
         models.push_back( Model(
             std::move(vertices),
             std::move(indices),
+            std::move(materialIds),
             nullptr));
 
         return static_cast<int32_t>(models.size()) - 1;
     }
 
-    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices,
+    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
                  const class Procedural* procedural) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
+        materialIdx_(std::move(materials)),
         procedural_(procedural)
     {
         // calculate local aabb
@@ -931,12 +960,12 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(glm::mat4 transform, int id, bool procedural)
+    Node Node::CreateNode(std::string name, glm::mat4 transform, int id, bool procedural)
     {
-        return Node(transform, id, procedural);
+        return Node(name, transform, id, procedural);
     }
 
-    Node::Node(glm::mat4 transform, int id, bool procedural): transform_(transform), modelId_(id),
+    Node::Node(std::string name, glm::mat4 transform, int id, bool procedural): name_(name), transform_(transform), modelId_(id),
                                                               procedural_(procedural)
     {
     }

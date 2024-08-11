@@ -8,13 +8,14 @@
 
 namespace Vulkan {
 
-FrameBuffer::FrameBuffer(const class ImageView& imageView, const class RenderPass& renderPass) : device_(imageView.Device())
+FrameBuffer::FrameBuffer(const class ImageView& imageView, const class RenderPass& renderPass, bool withDS ) : device_(imageView.Device())
 {
-	std::array<VkImageView, 2> attachments =
+	std::vector<VkImageView> attachments;
+	attachments.push_back(imageView.Handle());
+	if(withDS)
 	{
-		imageView.Handle(),
-		renderPass.DepthBuffer().ImageView().Handle()
-	};
+		attachments.push_back( renderPass.DepthBuffer().ImageView().Handle() );
+	}
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;

@@ -172,6 +172,61 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
+    BufferClearPipeline::BufferClearPipeline(const SwapChain& swapChain):swapChain_(swapChain)
+    {
+        // Create descriptor pool/sets.
+        const auto& device = swapChain.Device();
+        const std::vector<DescriptorBinding> descriptorBindings =
+        {
+            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+        };
+
+        descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, swapChain.ImageViews().size()));
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
+        {
+            VkDescriptorImageInfo Info0 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
+
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(i, 0, Info0),
+            };
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
+
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/BufferClear.comp.spv"));
+
+        VkComputePipelineCreateInfo pipelineCreateInfo = {};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+        pipelineCreateInfo.layout = pipelineLayout_->Handle();
+
+        Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
+                                       1, &pipelineCreateInfo,
+                                       NULL, &pipeline_),
+              "create buffer clear pipeline");
+    }
+
+    BufferClearPipeline::~BufferClearPipeline()
+    {
+        if (pipeline_ != nullptr)
+        {
+            vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+            pipeline_ = nullptr;
+        }
+
+        pipelineLayout_.reset();
+        descriptorSetManager_.reset();
+    }
+
+    VkDescriptorSet BufferClearPipeline::DescriptorSet(uint32_t index) const
+    {
+        return descriptorSetManager_->DescriptorSets().Handle(index);
+    }
+
     VisualDebuggerPipeline::VisualDebuggerPipeline(const SwapChain& swapChain, const ImageView& debugImage1View, const ImageView& debugImage2View,
                                                    const ImageView& debugImage3View, const ImageView& debugImage4View, const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
     {

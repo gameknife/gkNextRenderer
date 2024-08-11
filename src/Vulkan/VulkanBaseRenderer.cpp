@@ -25,8 +25,11 @@
 #include <fmt/format.h>
 
 #include "ImageMemoryBarrier.hpp"
+#include "Options.hpp"
+#include "RenderImage.hpp"
 #include "SingleTimeCommands.hpp"
 #include "TaskCoordinator.hpp"
+#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace Vulkan {
 	
@@ -76,6 +79,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 {
 	VulkanBaseRenderer::DeleteSwapChain();
 
+	rtEditorViewport_.reset();
 	gpuTimer_.reset();
 	globalTexturePool_.reset();
 	commandPool_.reset();
@@ -183,6 +187,7 @@ bool VulkanBaseRenderer::Tick()
 #else
 	glfwPollEvents();
 	DrawFrame();
+	window_->attemptDragWindow();
 	return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
 }
@@ -244,6 +249,7 @@ void VulkanBaseRenderer::CreateSwapChain()
 	}
 
 	graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), isWireFrame_));
+	bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_));
 
 	for (const auto& imageView : swapChain_->ImageViews())
 	{
@@ -256,6 +262,8 @@ void VulkanBaseRenderer::CreateSwapChain()
 
 	screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 	screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+
+	rtEditorViewport_.reset(new RenderImage(*device_, {1280,720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 void VulkanBaseRenderer::DeleteSwapChain()
@@ -265,6 +273,7 @@ void VulkanBaseRenderer::DeleteSwapChain()
 	commandBuffers_.reset();
 	swapChainFramebuffers_.clear();
 	graphicsPipeline_.reset();
+	bufferClearPipeline_.reset();
 	uniformBuffers_.clear();
 	inFlightFences_.clear();
 	renderFinishedSemaphores_.clear();
@@ -313,7 +322,76 @@ void VulkanBaseRenderer::CaptureScreenShot()
 							   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	});
 }
-	
+
+void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+{
+	const auto& image = swapChain_->Images()[imageIndex];
+
+	VkImageSubresourceRange subresourceRange = {};
+	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subresourceRange.baseMipLevel = 0;
+	subresourceRange.levelCount = 1;
+	subresourceRange.baseArrayLayer = 0;
+	subresourceRange.layerCount = 1;
+
+	ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
+				   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, 0,
+					   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	// Copy output image into swap-chain image.
+	VkImageCopy copyRegion;
+	copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.srcOffset = {0, 0, 0};
+	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+	copyRegion.dstOffset = {0, 0, 0};
+	copyRegion.extent = {rtEditorViewport_->GetImage().Extent().width, rtEditorViewport_->GetImage().Extent().height, 1};
+
+	vkCmdCopyImage(commandBuffer,
+				   image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				   rtEditorViewport_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				   1, &copyRegion);
+
+	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+						   VK_ACCESS_TRANSFER_READ_BIT,
+						   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+	ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
+				   VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+{
+	{
+		SCOPED_GPU_TIMER("clear pass");
+
+		VkImageSubresourceRange subresourceRange = {};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = 1;
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+									   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+									   VK_IMAGE_LAYOUT_GENERAL);
+		
+		VkDescriptorSet DescriptorSets[] = {bufferClearPipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bufferClearPipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								bufferClearPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+						  VK_ACCESS_TRANSFER_WRITE_BIT,
+						  0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+}
+
 void VulkanBaseRenderer::DrawFrame()
 {
 	const auto noTimeout = std::numeric_limits<uint64_t>::max();
@@ -358,7 +436,17 @@ void VulkanBaseRenderer::DrawFrame()
 
 	{
 		SCOPED_GPU_TIMER("gpu time");
+		
+		ClearViewport(commandBuffer, currentImageIndex_);
 		Render(commandBuffer, currentImageIndex_);
+
+		// copy to editor surface
+		if( GOption->Editor )
+		{
+			//CaptureEditorViewport(commandBuffer, currentImageIndex_);
+		}
+
+		RenderUI(commandBuffer, currentImageIndex_);
 	}
 	
 	commandBuffers_->End(currentImageIndex_);
@@ -485,7 +573,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 
 void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
 {
-	lastUBO = GetUniformBufferObject(swapChain_->Extent());
+	lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->RenderExtent());
 	uniformBuffers_[imageIndex].SetValue(lastUBO);
 }
 

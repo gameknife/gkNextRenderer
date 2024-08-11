@@ -100,8 +100,11 @@ DeviceMemory::DeviceMemory(
 
 	VkExportMemoryAllocateInfoKHR export_memory_allocate_info{};
 	export_memory_allocate_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
+#if WIN32
 	export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
-
+#else
+	export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+#endif
 #if WIN32
 	WinSecurityAttributes            win_security_attributes;
 	VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};

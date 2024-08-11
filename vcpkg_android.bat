@@ -23,7 +23,7 @@ copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm
 	boost-program-options:arm64-android ^
 	boost-stacktrace:arm64-android ^
 	glm:arm64-android ^
-	imgui[core,freetype,android-binding,vulkan-binding]:arm64-android ^
+	imgui[core,freetype,android-binding,vulkan-binding,docking-experimental]:arm64-android ^
 	stb:arm64-android ^
 	tinyobjloader:arm64-android ^
 	tinygltf:arm64-android ^

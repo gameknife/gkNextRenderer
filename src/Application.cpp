@@ -31,6 +31,7 @@
 #include <math.h>
 
 #include "TaskCoordinator.hpp"
+#include "Editor/EditorCommand.hpp"
 #include "Utilities/Localization.hpp"
 
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
@@ -72,6 +73,23 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
 
 #if !ANDROID
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
+        GetWindow().Close();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
+        GetWindow().Maximum();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
+        GetWindow().Minimize();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+        userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        return true;
+    });
 #endif
 }
 
@@ -85,7 +103,7 @@ NextRendererApplication<Renderer>::~NextRendererApplication()
 }
 
 template <typename Renderer>
-Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkExtent2D extent) const
+Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
 {
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -119,6 +137,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
+    ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+    
     Assets::RayCastResult rayResult;
     Renderer::GetLastRaycastResult(rayResult);
     
@@ -241,7 +261,7 @@ void NextRendererApplication<Renderer>::CreateSwapChain()
     Renderer::CreateSwapChain();
 
     userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(),
-                                           userSettings_));
+                                           userSettings_, Renderer::GetRenderImage()));
 
     CheckFramebufferSize();
 }
@@ -276,17 +296,6 @@ void NextRendererApplication<Renderer>::DrawFrame()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
-    static float frameRate = 0.0;
-    static double lastTime = 0.0;
-    // Record delta time between calls to Render.
-    if(totalFrames_ % 30 == 0)
-    {
-        double now = Renderer::Window().GetTime();
-        const auto timeDelta = now - lastTime;
-        lastTime = now;
-        frameRate = static_cast<float>(30 / timeDelta);
-    }
-
     const auto prevTime = time_;
     time_ = Renderer::Window().GetTime();
     const auto timeDelta = time_ - prevTime;
@@ -308,7 +317,22 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     {
         CheckAndUpdateBenchmarkState(prevTime);
     }
+}
 
+template <typename Renderer>
+void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    static float frameRate = 0.0;
+    static double lastTime = 0.0;
+    // Record delta time between calls to Render.
+    if(totalFrames_ % 30 == 0)
+    {
+        double now = Renderer::Window().GetTime();
+        const auto timeDelta = now - lastTime;
+        lastTime = now;
+        frameRate = static_cast<float>(30 / timeDelta);
+    }
+    
     // Render the UI
     Statistics stats = {};
 
@@ -316,7 +340,7 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
-    stats.FrameTime = static_cast<float>(timeDelta * 1000);
+    //stats.FrameTime = static_cast<float>(timeDelta * 1000);
 
     stats.TotalFrames = totalFrames_;
     stats.RenderTime = time_ - sceneInitialTime_;
@@ -332,8 +356,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-
-    userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats, Renderer::GpuTimer());
+    
+    userInterface_->Render(commandBuffer, imageIndex, stats, Renderer::GpuTimer(), scene_.get());
 }
 
 template <typename Renderer>

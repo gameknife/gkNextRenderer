@@ -7,6 +7,8 @@ struct UniformBufferObject
 	mat4 ProjectionInverse;
 	mat4 ViewProjection;
 	mat4 PrevViewProjection;
+	vec4 ViewportRect;
+	
 	float Aperture;
 	float FocusDistance;
 	float SkyRotation;

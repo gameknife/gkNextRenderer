@@ -17,12 +17,12 @@ fi
 #replace the triplets/arm64-android.cmake file with ours
 cp -f ../../android/custom-triplets/arm64-android.cmake ./triplets/arm64-android.cmake
 
-./vcpkg install \
+./vcpkg --recurse install \
 	boost-exception:arm64-android \
 	boost-program-options:arm64-android \
 	boost-stacktrace:arm64-android \
 	glm:arm64-android \
-	imgui[core,freetype,android-binding,vulkan-binding]:arm64-android \
+	imgui[core,freetype,android-binding,vulkan-binding,docking-experimental]:arm64-android \
 	stb:arm64-android \
 	tinyobjloader:arm64-android \
 	curl:arm64-android \

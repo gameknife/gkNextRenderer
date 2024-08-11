@@ -1,5 +1,5 @@
-﻿#pragma once
-
+#pragma once
+#include <random>
 #include <filesystem>
 #include <string>
 
@@ -15,7 +15,7 @@ namespace Utilities
             return std::string("../") + srcPath;
 #endif
         }
-        
+
         static std::string GetNormalizedFilePath( const char* srcPath )
         {
             std::string normlizedPath {};
@@ -36,7 +36,24 @@ namespace Utilities
             }
 
             return normlizedPath;
-        }  
+        }
     }
 
+    namespace NameHelper
+    {
+        static std::string RandomName(size_t length)
+        {
+            const std::string characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            std::random_device rd;
+            std::mt19937 generator(rd());
+            std::uniform_int_distribution<> distribution(0, characters.size() - 1);
+
+            std::string randomName;
+            for (size_t i = 0; i < length; ++i) {
+                randomName += characters[distribution(generator)];
+            }
+
+            return randomName;
+        }
+    }
 }

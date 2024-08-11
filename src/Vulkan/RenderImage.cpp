@@ -28,10 +28,13 @@ namespace Vulkan {
             const auto& debugUtils = device.DebugUtils();
             debugUtils.SetObjectName(image_->Handle(), debugName);
         }
+
+        sampler_.reset(new Vulkan::Sampler(device, Vulkan::SamplerConfig()));
     }
 
     RenderImage::~RenderImage()
     {
+        sampler_.reset();
         image_.reset();
         imageMemory_.reset();
         imageView_.reset();

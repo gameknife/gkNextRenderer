@@ -51,9 +51,10 @@ void main() {
 	vec4 gbuffer = vec4(0);
 	vec4 motionvector = vec4(0);
     uint primitiveId = 0;
-    
-    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    vec2 isize = vec2(imageSize(AccumulationImage));
+
+    ivec2 iposLocal = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 ipos = iposLocal + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    vec2 isize = vec2(Camera.ViewportRect.z, Camera.ViewportRect.w);
     
     // Ray Initialize
     Ray.RandomSeed = InitRandomSeed(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, Camera.TotalFrames);
@@ -80,7 +81,7 @@ void main() {
     
     for (uint s = 0; s < sampleTimes; ++s)
 	{
-        const vec2 pixel = vec2(ipos);
+        const vec2 pixel = vec2(iposLocal);
         vec2 uv = (pixel / isize) * 2.0 - 1.0;
         // anti aliasing
 		if( Camera.TAA )

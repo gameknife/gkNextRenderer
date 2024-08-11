@@ -76,6 +76,8 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	presentMode_ = actualPresentMode;
 	format_ = surfaceFormat.format;
 	extent_ = extent;
+	renderExtent_ = extent_;
+	renderOffset_ = {0,0};
 	images_ = GetEnumerateVector(device_.Handle(), swapChain_, vkGetSwapchainImagesKHR);
 	imageViews_.reserve(images_.size());
 
@@ -102,6 +104,12 @@ SwapChain::~SwapChain()
 		vkDestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
 		swapChain_ = nullptr;
 	}
+}
+
+void SwapChain::UpdateEditorViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+{
+	renderExtent_ = { width, height };
+	renderOffset_ = { x, y };
 }
 
 SwapChain::SupportDetails SwapChain::QuerySwapChainSupport(VkPhysicalDevice physicalDevice, const VkSurfaceKHR surface)
