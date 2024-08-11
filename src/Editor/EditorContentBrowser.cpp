@@ -27,7 +27,6 @@ void Editor::GUI::ShowContentBrowser()
             }
             else
             {
-                auto element = entry.path().filename().string().c_str();
                 auto abspath = absolute(entry.path()).string();
                                 
                 ImGui::BeginGroup();
@@ -56,7 +55,6 @@ void Editor::GUI::ShowContentBrowser()
               
                 
                 ImGui::PushItemWidth(ICON_SIZE);
-                ImVec2 textSize = ImGui::CalcTextSize(entry.path().filename().string().c_str());
                 ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ICON_SIZE);
                 ImGui::Text("%s", entry.path().filename().string().c_str());
                 ImGui::PopTextWrapPos();

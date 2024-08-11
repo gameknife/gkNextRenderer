@@ -15,7 +15,7 @@ void Editor::GUI::ShowProperties()
         if (selected_obj != nullptr)
         {
             ImGui::PushFont(fontIcon_);
-            ImGui::Text(selected_obj->GetName().c_str());
+            ImGui::TextUnformatted(selected_obj->GetName().c_str());
             ImGui::PopFont();
             ImGui::Separator();
             ImGui::NewLine();
@@ -25,8 +25,7 @@ void Editor::GUI::ShowProperties()
             ImGui::Text(ICON_FA_LOCATION_ARROW " Transform");
             ImGui::Separator();
             auto mat4 = selected_obj->WorldTransform();
-
-            glm::mat4 transformation; // your transformation matrix.
+            
             glm::vec3 scale;
             glm::quat rotation;
             glm::vec3 translation;

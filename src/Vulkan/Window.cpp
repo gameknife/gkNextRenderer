@@ -279,14 +279,14 @@ void Window::attemptDragWindow() {
 		glfwGetCursorPos(window_, &c_xpos, &c_ypos);
 		glfwGetWindowPos(window_, &w_xpos, &w_ypos);
 		if (
-			s_xpos >= 0 && s_xpos <= ((double)w_xsiz - CLOSE_AREA_WIDTH) &&
+			s_xpos >= 0 && s_xpos <= (static_cast<double>(w_xsiz) - CLOSE_AREA_WIDTH) &&
 			s_ypos >= 0 && s_ypos <= TITLE_AREA_HEIGHT) {
-			glfwSetWindowPos(window_, w_xpos + (c_xpos - s_xpos), w_ypos + (c_ypos - s_ypos));
+			glfwSetWindowPos(window_, w_xpos + static_cast<int>(c_xpos - s_xpos), w_ypos + static_cast<int>(c_ypos - s_ypos));
 			}
 		if (
-			s_xpos >= ((double)w_xsiz - 15) && s_xpos <= ((double)w_xsiz) &&
-			s_ypos >= ((double)w_ysiz - 15) && s_ypos <= ((double)w_ysiz)) {
-			glfwSetWindowSize(window_, w_xsiz + (c_xpos - s_xpos), w_ysiz + (c_ypos - s_ypos));
+			s_xpos >= (static_cast<double>(w_xsiz) - 15) && s_xpos <= (static_cast<double>(w_xsiz)) &&
+			s_ypos >= (static_cast<double>(w_ysiz) - 15) && s_ypos <= (static_cast<double>(w_ysiz))) {
+			glfwSetWindowSize(window_, w_xsiz + static_cast<int>(c_xpos - s_xpos), w_ysiz + static_cast<int>(c_ypos - s_ypos));
 			}
 	}
 	if (glfwGetMouseButton(window_, 0) == GLFW_RELEASE && dragState == 1) {

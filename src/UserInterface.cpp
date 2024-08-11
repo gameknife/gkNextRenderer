@@ -188,7 +188,7 @@ UserInterface::UserInterface(
 	});
 
 	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	viewportSize_ = ImVec2(viewportImage.GetImage().Extent().width, viewportImage.GetImage().Extent().height );
+	viewportSize_ = ImVec2(static_cast<float>(viewportImage.GetImage().Extent().width), static_cast<float>(viewportImage.GetImage().Extent().height));
 
 	firstRun = true;
 
@@ -327,7 +327,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();
 		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
-		swapChain_.UpdateEditorViewport(node->Pos.x - viewport->Pos.x, node->Pos.y - viewport->Pos.y, node->Size.x, node->Size.y);
+		swapChain_.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 		MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
 	}
 	else

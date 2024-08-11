@@ -227,6 +227,7 @@ add_library(${exe_name} SHARED
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_editor}
 	${src_files}
 	GameActivitySources.cpp
 )

@@ -11,6 +11,16 @@ namespace Utilities
         {
             return size % divider == 0 ? size / divider : size / divider + 1;
         }
+
+    	static int32_t floorToInt(float value)
+        {
+        	return static_cast<int32_t>(std::floor(value));
+        }
+
+    	static int32_t ceilToInt(float value)
+		{
+			return static_cast<int32_t>(std::ceil(value));
+		}
     }
 
 	static std::string metricFormatter(double value, std::string unit, int kilo = 1000)	//if pass data as (void*)"b" - show info like kb, Mb, Gb
