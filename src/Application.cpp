@@ -70,9 +70,10 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-    
-    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
+#if !ANDROID
+    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
         GetWindow().Close();
         return true;
@@ -89,12 +90,15 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
         userSettings_.SceneIndex = SceneList::AddExternalScene(args);
         return true;
     });
+#endif
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
+#if !ANDROID
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+#endif
     scene_.reset();
 }
 
