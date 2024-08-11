@@ -168,6 +168,21 @@ set(src_files_thirdparty_json11
 	ThirdParty/json11/json11.hpp
 )
 
+set(src_files_editor
+		Editor/EditorMain.cpp
+		Editor/EditorMain.h
+        Editor/EditorGUI.h
+		Editor/EditorMenubar.cpp
+		Editor/EditorProperties.cpp
+		Editor/EditorOutliner.cpp
+		Editor/EditorViewport.cpp
+		Editor/EditorContentBrowser.cpp
+		Editor/EditorUtils.cpp
+		Editor/EditorUtils.h
+	Editor/EditorCommand.hpp
+	Editor/IconsFontAwesome6.h
+)
+
 set(src_files
 	main.cpp
 	ModelViewController.cpp
@@ -196,10 +211,8 @@ source_group("Vulkan.RayQuery" FILES ${src_files_vulkan_rayquery})
 source_group("Vulkan.RayTrace" FILES ${src_files_vulkan_raytrace})
 source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
+source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
-
-
-
 
 if ( ANDROID )
 add_library(${exe_name} SHARED
@@ -230,6 +243,7 @@ add_executable(${exe_name}
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_editor}
 	${src_files}
 )
 endif()
