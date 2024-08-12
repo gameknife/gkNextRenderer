@@ -121,7 +121,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - ~~Android Vulkan ( RayTracing on 8Gen2 )~~
 - Benchmark
     - ~~Online benchmark chart~~
-    - Version Management
+    - ~~Version Management~~
     - ~~Full render statstics~~
     - ~~GPU Timer based on Vulkan Query~~
 - Others
@@ -144,16 +144,16 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 - [x] Android RayQuery Rendering
 - [ ] Android Input Handling
 - [x] Realtimg self statics system
-- [ ] Auto release by Github action
+- [x] Auto release by Github action
 - [x] Global Dynamic Bindless Textures
 - [x] Hybrid rendering with ray query
-- [ ] Blender Export Property as CustomProperty to glb
+- [x] Blender Export Property as CustomProperty to glb
 - [x] OpenImageDenoise (Only windows)
 - [X] SDR / HDR competiable
 - [ ] Full scope refactor
 - [ ] Dynamic Scene Management
 - [ ] Multi Material Execution
-- [ ] ImGUI Editor Mode
+- [x] ImGUI Editor Mode
 - [ ] Material Node-based Edit
 - [ ] Huge Landscape
 
@@ -183,8 +183,14 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - 最终这个每像素2ray的管线，在android上也有较为良好的性能，同时间接光照的渲染效果接近PathTracing的Renderer
 
 - **[ImGUI]** 对ImGUI一直有一些偏见，可能是因为Unity PTSD。但其实ImGUI的设计真的十分精妙，之前确实没有看过他的实现。同时，Dear ImGUI的页面上，有大量的扩展作品，基本上，涵盖了编辑器的所有了。渲染器初步feature做差不多之后，考虑用ImGUI再搭建一个Editor的Application，用来搞一些材质编辑之类的事情，更好的测试渲染器在真实生产环境下的适应能力。
+    - 使用ImGUI开发了一个基础的编辑器框架，配合docking branch，很快便搭建起了一个类似主流引擎的编辑器架子。快速的接入了outliner，content browser，detail面板的雏形，接下来可以引入node editor，先做一个类似blender的可视化材质预览器，接下来再考虑材质编辑的事情。
+    - ImGUI的代码写起来，其实处处能感觉到slate的味道，但是写起来又更加的舒服，继续的用一段时间看看。
 
 - **[OpenImageDenoise]** 这是intel推出的一个专门面向RayTracing的降噪器，Blender Cycles也在使用，效果比Optix好。接进来还是花了不少功夫，主要是CUDA与VULKAN共享显存这件事。可以参考的代码不多，不过做完之后，效果非常好，FAST质量下，1080p的scene0可以跑到100fps左右，给16的temporal, 基本可以认为是Realtime PathTracing了。感觉，小拇指碰到了一下“圣杯”。cmake的时候，通过`-D WITH_OIDN=1`打开
+
+- **[What's next]** 项目的下一步走向何方？这是个问题，项目的初衷，可以说已经达到了80%了。抱着补课的目的开始这个项目，学习光追，学习现代渲染框架。目前可以说已经得到了我想要的了。在项目前期开发的过程中，不断的刷新了认知，收获了更多未曾考虑过的东西。反而，感觉项目的进度，从80%退回到了一个可能5%？项目未来我希望他成为新的尖端技术的试验田，就像gkENGINE对于刚入行的我一样，我可以通过这个项目，快速验证，学习，实践工作中的所需，可以自由的无所顾忌的coding，同时不断磨练自己的基础coding水平，同时在整个项目中里不留任何妥协。慢慢的做成一个可用的游戏开发工具。<br>
+当然，这是我目前的计划，计划可能随时会变。
+
 ## Building
 
 首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
@@ -213,23 +219,23 @@ deploy_android.bat
 
 例如，ubuntu
 ```
-sudo apt-get install curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
+sudo apt-get install ninja-dev curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
 ./vcpkg_linux.sh
 ./build_linux.sh
 ```
 SteamDeck Archlinux
 ```
 sudo steamos-readonly disable
-sudo pacman devel-base
+sudo pacman -S devel-base ninja
 ./vcpkg_linux.sh
 ./build_linux.sh
 ```
 
 **MacOS**
 ```
-brew install nasm
 brew install molten-vk
 brew install glslang
+brew install ninja
 ./vcpkg_macos.sh
 ./build_macos.sh
 ```
