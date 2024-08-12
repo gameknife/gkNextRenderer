@@ -31,7 +31,12 @@ namespace Assets
     {
         return GetInstance()->RequestNewTextureFileAsync(filename, true);
     }
-    
+
+    void GlobalTexturePool::UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
+    {
+        GetInstance()->RequestUpdateTextureFileAsync(idx, filename, true);
+    }
+
     GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool) :
         device_(device),
         commandPool_(command_pool)
@@ -199,6 +204,46 @@ namespace Assets
         // cache in namemap
         textureNameMap_[filename] = newTextureIdx;
         return newTextureIdx;
+    }
+
+    void GlobalTexturePool::RequestUpdateTextureFileAsync(uint32_t textureIdx, const std::string& filename, bool hdr)
+    {
+        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, textureIdx](ResTask& task)
+        {
+            TextureTaskContext taskContext {};
+            const auto timer = std::chrono::high_resolution_clock::now();
+            
+            // Load the texture in normal host memory.
+            int width, height, channels;
+            void* pixels = nullptr;
+            if(hdr)
+            {
+                pixels = stbi_loadf(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+            }
+            else
+            {
+                pixels = stbi_load(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+            }
+
+            if (!pixels)
+            {
+                Throw(std::runtime_error("failed to load texture image '" + filename + "'"));
+            }
+
+            textureImages_[textureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
+            BindTexture(textureIdx, *(textureImages_[textureIdx]));
+            stbi_image_free(pixels);
+
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            std::string info = fmt::format("reloaded {} ({} x {} x {}) in {:.2f}ms", filename, width, height, channels, taskContext.elapsed * 1000.f);
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext( taskContext );
+        }, [](ResTask& task)
+        {
+            TextureTaskContext taskContext {};
+            task.GetContext( taskContext );
+            fmt::print("{}\n", taskContext.outputInfo.data());
+        }, 0);
     }
 
     uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength)

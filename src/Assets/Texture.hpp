@@ -27,6 +27,7 @@ namespace Assets
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;
 		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr);
+		void RequestUpdateTextureFileAsync(uint32_t textureIdx, const std::string& filename, bool hdr);
 		uint32_t RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength);
 
 		uint32_t TotalTextures() const {return static_cast<uint32_t>(textureImages_.size());}
@@ -35,6 +36,8 @@ namespace Assets
 		static uint32_t LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig);
 		static uint32_t LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 		static uint32_t LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
+
+		static void UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
 	private:
 		static GlobalTexturePool* instance_;

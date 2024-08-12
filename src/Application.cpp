@@ -225,7 +225,9 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     Renderer::OnDeviceSet();
 
     // global textures
-    // texture id 0: global sky
+    // texture id 0: dynamic hdri sky
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/std_env.hdr"), Vulkan::SamplerConfig());
+    
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
@@ -238,8 +240,7 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
 
-    if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
-    userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures() - 1;
+    if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
     
     std::vector<Assets::Model> models;
     std::vector<Assets::Node> nodes;
@@ -473,6 +474,12 @@ void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* p
         {
             userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         }
+
+        if( ext == "hdr")
+        {
+            Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+            userSettings_.SkyIdx = 0;
+        }
     }
 }
 
@@ -538,7 +545,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-        userSettings_.SkyIdx = userSettings_.HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
+        userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
         userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
         userSettings_.cameras = cameraInitialSate_.cameras;
