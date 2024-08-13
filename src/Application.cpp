@@ -90,6 +90,11 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
         userSettings_.SceneIndex = SceneList::AddExternalScene(args);
         return true;
     });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
+        Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
+        userSettings_.SkyIdx = 0;
+        return true;
+    });
 #endif
 }
 
