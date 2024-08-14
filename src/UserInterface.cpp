@@ -217,6 +217,7 @@ const float toolbarSize = 50;
 const float toolbarIconWidth = 32;
 const float toolbarIconHeight = 32;
 const float titleBarHeight = 55;
+const float footBarHeight = 40;
 float menuBarHeight = 0;
 
 
@@ -224,7 +225,7 @@ ImGuiID UserInterface::DockSpaceUI()
 {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize + titleBarHeight - menuBarHeight));
-	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight - footBarHeight));
 	ImGui::SetNextWindowViewport(viewport->ID);
 	ImGui::SetNextWindowBgAlpha(0);
 	ImGuiWindowFlags window_flags = 0

@@ -83,6 +83,7 @@ void Editor::GUI::ShowMenubar()
     
     ImGui::End();
 
+    // LOGO
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y));
     ImGui::SetNextWindowSize(ImVec2(55, 55));
     ImGui::SetNextWindowViewport(viewport->ID);
@@ -100,11 +101,12 @@ void Editor::GUI::ShowMenubar()
     ImGui::PopFont();
     ImGui::End();
 
+    // XMARK
     ImGui::SetNextWindowPos(viewport->Pos + ImVec2(viewport->Size.x - 200, 0));
     ImGui::SetNextWindowSize(ImVec2(200, 55));
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowBgAlpha(0);
-
+    
     ImGui::Begin("XMark", NULL,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDocking);
@@ -123,7 +125,38 @@ void Editor::GUI::ShowMenubar()
     };ImGui::SameLine();
     ImGui::PopStyleColor();
     ImGui::End();
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();
     
+    // FOOTER
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - 40));
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, 40));
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::SetNextWindowBgAlpha(100);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+    
+    ImGui::Begin("Footer", NULL,
+              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoDocking);
+
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - 40), ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y - 40), IM_COL32(20,20,20,255), 2);
+    
+    if(ImGui::Button(ICON_FA_HOUSE, ImVec2(60, 30))) {
+
+    };ImGui::SameLine();
+    if(ImGui::Button(ICON_FA_PEN, ImVec2(60, 30))) {
+
+    };ImGui::SameLine();
+    char cvar[255] = "";
+    ImGui::SetNextItemWidth(300);
+    ImGui::InputTextWithHint("CVar", "Execute CVar...", cvar, 255);
+    ImGui::End();
+
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
