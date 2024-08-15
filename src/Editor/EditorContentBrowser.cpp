@@ -12,6 +12,7 @@ void Editor::GUI::ShowContentBrowser()
 {
     ImGui::Begin("Content Browser", NULL, ImGuiWindowFlags_NoScrollbar);
     {
+        static std::string selectedpath = "";
         static auto modelpath = Utilities::FileHelper::GetPlatformFilePath("assets");
         std::filesystem::path path = modelpath;
     
@@ -45,7 +46,11 @@ void Editor::GUI::ShowContentBrowser()
                 ImGui::SameLine();
                 ImGui::TextUnformatted(">");
                 ImGui::SameLine();
-                if (ImGui::Button(paths[i].c_str()))
+                auto upperPath = paths[i];
+                if (!upperPath.empty()) {
+                    upperPath[0] = std::toupper(upperPath[0]);
+                }
+                if (ImGui::Button(upperPath.c_str()))
                 {
                     std::string newpath = paths[0];
                     for (int j = 1; j <= i; j++)
@@ -58,7 +63,7 @@ void Editor::GUI::ShowContentBrowser()
         }
         ImGui::PopFont();
 
-        auto CursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y);
+        auto CursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y + 2);
         ImGui::NewLine();
         ImGui::GetWindowDrawList()->AddLine(CursorPos + ImVec2(0,1), CursorPos + ImVec2(ImGui::GetWindowSize().x,1), IM_COL32(20,20,20,128), 1);
         ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x,0), IM_COL32(20,20,20,255), 1);
@@ -69,7 +74,7 @@ void Editor::GUI::ShowContentBrowser()
         static bool open = false;
         static std::string contextMenuFile;
 
-        auto elementLambda = [this](const std::string& path, const std::string& name, const char* icon, ImU32 color, std::function<void ()> menu_actions)
+        auto elementLambda = [this](const std::string& path, const std::string& name, const char* icon, ImU32 color, std::function<void ()> menu_actions, std::function<void ()> doubleclick_action)
         {
             ImGui::BeginGroup();
             ImGui::PushFont(bigIcon_); // use the font awesome font
@@ -85,13 +90,26 @@ void Editor::GUI::ShowContentBrowser()
                 ImGui::EndPopup();
             }
             ImGui::OpenPopupOnItemClick(path.c_str(), ImGuiPopupFlags_MouseButtonRight);
+            if( ImGui::IsItemHovered(ImGuiHoveredFlags_None) )
+            {
+                if( ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                {
+                    doubleclick_action();
+                }
+                if( ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                {
+                    selectedpath = path;
+                }
+            }
 
             auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4);
-            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),IM_COL32(64, 64, 64, 255), 4);
+            bool selected = selectedpath == path;
+            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? IM_COL32(64, 128, 255, 255) : IM_COL32(64, 64, 64, 255), 4);
             ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ICON_SIZE, 0), color, 2);
 
             ImGui::PushItemWidth(ICON_SIZE);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ICON_SIZE);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
             ImGui::Text("%s", name.c_str());
             ImGui::PopTextWrapPos();
             ImGui::PopItemWidth();
@@ -117,6 +135,10 @@ void Editor::GUI::ShowContentBrowser()
                     {
                         modelpath = relpath;
                     }
+                },
+                [&relpath]()
+                {
+                    modelpath = relpath;
                 });
             }
             else
@@ -129,7 +151,11 @@ void Editor::GUI::ShowContentBrowser()
                         {
                             EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadScene, abspath);
                         }
-                    });
+                    },
+                [&abspath]()
+                {
+                    EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadScene, abspath);
+                });
                 }
                 else if (ext == ".hdr")
                 {
@@ -139,7 +165,11 @@ void Editor::GUI::ShowContentBrowser()
                         {
                             EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadHDRI, abspath);
                         }
-                    });
+                    },
+                [&abspath]()
+                {
+                    EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadHDRI, abspath);
+                });
                 }
             }
         }

@@ -138,7 +138,7 @@ void Editor::GUI::ShowMenubar()
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
     
     ImGui::Begin("Footer", NULL,
               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -153,7 +153,8 @@ void Editor::GUI::ShowMenubar()
 
     };ImGui::SameLine();
     char cvar[255] = "";
-    ImGui::SetNextItemWidth(300);
+    ImGui::SetNextItemWidth(200);
+    ImGui::SetCursorPosY(8);
     ImGui::InputTextWithHint("CVar", "Execute CVar...", cvar, 255);
     ImGui::End();
 

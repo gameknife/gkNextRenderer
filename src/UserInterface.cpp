@@ -295,7 +295,7 @@ void UserInterface::ToolbarUI()
 	static int item = 3;
 	static float color[4] = { 0.4f, 0.7f, 0.0f, 0.5f };
 	ImGui::SetNextItemWidth(120);
-	ImGui::SetCursorPosY(16);
+	ImGui::SetCursorPosY(14);
 	ImGui::Combo("##Render", &item, "RTPipe\0ModernDeferred\0LegacyDeferred\0RayQuery\0HybirdRender\0\0");ImGui::SameLine();
 	ImGui::EndGroup();ImGui::SameLine();
 
