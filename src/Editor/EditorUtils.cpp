@@ -380,13 +380,18 @@ float utils::CenterHorizontal()
 
 void utils::ShowDemoMaterialEditor(bool *child_mat_editor)
 {
-    ImGui::SetNextWindowSize(ImVec2(1002,674));
-    ImGui::Begin("Nodes", child_mat_editor, ImGuiWindowFlags_NoDocking);
     static ImFlow::ImNodeFlow myNode;
     static bool init_nodes = true;
     static std::shared_ptr<Nodes::NodeSetColor> ptNodeTemperature;
     static std::shared_ptr<Nodes::NodeSetFloat> ptNodeSetpoint;
     static std::shared_ptr<Nodes::NodeMaterial> ptNodePlot;
+
+    if(init_nodes)
+    {
+        ImGui::SetNextWindowSize(ImVec2(1280,800));
+    }
+    ImGui::Begin("Nodes", child_mat_editor, ImGuiWindowFlags_NoDocking);
+
     
     if (init_nodes)
     {
