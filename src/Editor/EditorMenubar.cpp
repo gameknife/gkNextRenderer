@@ -68,6 +68,7 @@ void Editor::GUI::ShowMenubar()
             ImGui::MenuItem("Metrics", NULL, &child_metrics);
             ImGui::MenuItem("Stack Tool", NULL, &child_stack);
             ImGui::MenuItem("Color Export", NULL, &child_color);
+            ImGui::MenuItem("Material Editor", NULL, &child_mat_editor);
             ImGui::EndMenu();
         }
 
@@ -97,7 +98,7 @@ void Editor::GUI::ShowMenubar()
 
     ImGui::GetWindowDrawList()->AddRectFilled(viewport->Pos, viewport->Pos + ImVec2(55, 55), ImGui::GetColorU32(ImGuiCol_MenuBarBg));
     ImGui::PushFont(bigIcon_);
-    ImGui::GetWindowDrawList()->AddText( viewport->Pos + ImVec2(10,7), IM_COL32(110,240,60,255), ICON_FA_SEEDLING);
+    ImGui::GetWindowDrawList()->AddText( viewport->Pos + ImVec2(10,7), IM_COL32(240,180,60,255), ICON_FA_SHEKEL_SIGN);
     ImGui::PopFont();
     ImGui::End();
 

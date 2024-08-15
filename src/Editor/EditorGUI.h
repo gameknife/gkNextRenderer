@@ -48,6 +48,7 @@ namespace Editor
         bool                    child_stack                = false;                // Show Stack Tool
         bool                    child_resources            = false;                // Show Help Resources
         bool                    child_about                = false;                // Show About Window
+        bool                    child_mat_editor           = false;                // Show About Window
 
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;

@@ -29,18 +29,24 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
         uint32_t limit = 1000;
         for( auto& node : allnodes )
         {
+            
+
+            // draw stripe background
+            ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
+            ImVec2 CursorPos = ImGui::GetCursorScreenPos() - ImVec2(WindowPadding.x,2);
+            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, 22),limit % 2 == 0 ? IM_COL32(0, 0, 0, 50) : IM_COL32(0, 0, 0, 0), 0);
+
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_Leaf;
             
             ImGui::PushStyleColor(ImGuiCol_HeaderActive , ImVec4(0.3f, 0.3f, 0.9f, 1.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-            if( limit % 2 == 0 ) { flag |= ImGuiTreeNodeFlags_Selected; ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.0f, 0.0f, 0.0f, 0.1f));}
-            bool selected = (selected_obj == &node);
-            if(selected)
+
+            if(selected_obj == &node)
             {
-                flag |= ImGuiTreeNodeFlags_Selected;
-                ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.2f, 0.2f, 0.8f, 1.0f));
+                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, 22),IM_COL32(70, 120, 255, 255), 0);
             }
+            
             if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node.GetName()).c_str(), flag))
             {
                 if (ImGui::IsItemClicked())
@@ -49,11 +55,6 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
                 }
                 ImGui::TreePop();
             }
-            if(selected)
-            {
-                ImGui::PopStyleColor();
-            }
-            if( limit % 2 == 0 ) ImGui::PopStyleColor();
             ImGui::PopStyleVar();
             ImGui::PopStyleVar();
             ImGui::PopStyleColor();
