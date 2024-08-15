@@ -154,8 +154,9 @@ void Editor::GUI::ShowMenubar()
     };ImGui::SameLine();
     char cvar[255] = "";
     ImGui::SetNextItemWidth(200);
-    ImGui::SetCursorPosY(8);
-    ImGui::InputTextWithHint("CVar", "Execute CVar...", cvar, 255);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8,8));
+    ImGui::InputTextWithHint("##CVar", "Execute CVar...", cvar, 255);
+    ImGui::PopStyleVar();
     ImGui::End();
 
     ImGui::PopStyleVar();
