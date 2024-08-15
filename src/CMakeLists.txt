@@ -179,8 +179,14 @@ set(src_files_editor
 		Editor/EditorContentBrowser.cpp
 		Editor/EditorUtils.cpp
 		Editor/EditorUtils.h
-	Editor/EditorCommand.hpp
-	Editor/IconsFontAwesome6.h
+		Editor/EditorCommand.hpp
+		Editor/IconsFontAwesome6.h
+		Editor/Nodes/NodeSetFloat.cpp
+		Editor/Nodes/NodeSetFloat.hpp
+		Editor/Nodes/NodeSetInt.cpp
+		Editor/Nodes/NodeSetInt.hpp
+		Editor/Nodes/NodeMaterial.cpp
+		Editor/Nodes/NodeMaterial.hpp
 )
 
 set(src_files
@@ -254,6 +260,10 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# This is not needed with GCC9 or higher.
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
+
+add_subdirectory(ThirdParty/ImNodeFlow)
+target_compile_definitions(${exe_name} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+target_link_libraries(${exe_name} PRIVATE ImNodeFlow)
 
 add_dependencies(${exe_name} Assets)
 set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
