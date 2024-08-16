@@ -180,6 +180,7 @@ set(src_files_editor
 		Editor/EditorUtils.cpp
 		Editor/EditorUtils.h
 		Editor/EditorCommand.hpp
+		Editor/EditorMaterialEd.cpp
 		Editor/IconsFontAwesome6.h
 		Editor/Nodes/NodeSetFloat.cpp
 		Editor/Nodes/NodeSetFloat.hpp

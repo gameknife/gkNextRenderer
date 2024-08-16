@@ -25,7 +25,7 @@ namespace Nodes
     void NodeSetFloat::draw()
     {
         ImGui::SetNextItemWidth(100.f);
-        ImGui::InputFloat("##Val1", &value1, 0.1, 1.0, "%.1f");
+        ImGui::InputFloat("##Val1", &value1, 0.1f, 1.0f, "%.1f");
     }
 
     NodeSetColor::NodeSetColor(const std::string name, glm::vec3 initValue)

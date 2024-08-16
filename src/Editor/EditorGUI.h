@@ -1,9 +1,13 @@
 #pragma once
 
 #include <string>
-#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "EditorUtils.h"
+
+namespace Assets
+{
+    struct Material;
+}
 
 struct Statistics;
 
@@ -41,6 +45,10 @@ namespace Editor
         bool                    contentBrowser             = true;                // Workspace "Output"
         void                    ShowContentBrowser();
 
+        bool                    ed_material                = false;                // Material Editor
+        Assets::Material*       selected_material          = nullptr;              // Material Selected
+        void                    ShowMaterialEditor();
+
         bool                    child_style                = false;                // Show Style Editor
         bool                    child_demo                 = false;                // Show Demo Window
         bool                    child_metrics              = false;                // Show Metrics Window
@@ -49,7 +57,7 @@ namespace Editor
         bool                    child_resources            = false;                // Show Help Resources
         bool                    child_about                = false;                // Show About Window
         bool                    child_mat_editor           = false;                // Show About Window
-
+        
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;
     };

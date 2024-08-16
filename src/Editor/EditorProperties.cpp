@@ -71,6 +71,11 @@ void Editor::GUI::ShowProperties()
                 {
                     int matIdx = mat;
                     ImGui::InputInt("##MaterialId", &matIdx, 1, 1, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::SameLine();
+                    if( ImGui::Button(ICON_FA_LINK) )
+                    {
+                        ed_material = true;
+                    }
                 }
             }
         }

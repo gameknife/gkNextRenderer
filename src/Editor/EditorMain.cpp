@@ -104,7 +104,11 @@ void MainWindowGUI(Editor::GUI & gui_r, const Assets::Scene* scene, const Statis
         if (gui.child_color) utils::ShowColorExportWindow(&gui.child_color);
         if (gui.child_resources) utils::ShowResourcesWindow(&gui.child_resources);
         if (gui.child_about) utils::ShowAboutWindow(&gui.child_about);
-        if (gui.child_mat_editor) utils::ShowDemoMaterialEditor(&gui.child_mat_editor);
+        //if (gui.child_mat_editor) utils::ShowDemoMaterialEditor(&gui.child_mat_editor);
+    }
+
+    {
+        if(gui.ed_material) gui.ShowMaterialEditor();
     }
 
 }

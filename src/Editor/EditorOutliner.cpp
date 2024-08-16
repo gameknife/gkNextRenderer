@@ -34,7 +34,8 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
             // draw stripe background
             ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
             ImVec2 CursorPos = ImGui::GetCursorScreenPos() - ImVec2(WindowPadding.x,2);
-            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, 22),limit % 2 == 0 ? IM_COL32(0, 0, 0, 50) : IM_COL32(0, 0, 0, 0), 0);
+            float singleHeight = ImGui::GetTextLineHeight() + 4;
+            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),limit % 2 == 0 ? IM_COL32(0, 0, 0, 50) : IM_COL32(0, 0, 0, 0), 0);
 
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_Leaf;
             
@@ -44,7 +45,7 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
 
             if(selected_obj == &node)
             {
-                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, 22),IM_COL32(70, 120, 255, 255), 0);
+                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),IM_COL32(70, 120, 255, 255), 0);
             }
             
             if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node.GetName()).c_str(), flag))

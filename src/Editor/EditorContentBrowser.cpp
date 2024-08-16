@@ -32,6 +32,7 @@ void Editor::GUI::ShowContentBrowser()
 
         // show path
         ImGui::PushFont(fontIcon_); // use the font awesome font
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8,4));
         for (int i = 0; i < paths.size(); i++)
         {
             if (i == 0)
@@ -61,6 +62,7 @@ void Editor::GUI::ShowContentBrowser()
                 }
             }
         }
+        ImGui::PopStyleVar();
         ImGui::PopFont();
 
         auto CursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y + 2);
