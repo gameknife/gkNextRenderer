@@ -15,6 +15,7 @@ namespace Assets
     struct TextureTaskContext
     {
         int32_t textureId;
+        TextureImage* transferPtr;
         float elapsed;
         std::array<char, 256> outputInfo;
     };
@@ -242,18 +243,22 @@ namespace Assets
                 Throw(std::runtime_error("failed to load texture image '" + filename + "'"));
             }
 
-            textureImages_[textureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
-            BindTexture(textureIdx, *(textureImages_[textureIdx]));
+            // thread reset may cause crash, created the new texture here, but reset in later main thread phase
+            taskContext.transferPtr = new TextureImage(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
             stbi_image_free(pixels);
-
+            taskContext.textureId = textureIdx;
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
             std::string info = fmt::format("reloaded {} ({} x {} x {}) in {:.2f}ms", filename, width, height, channels, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
-        }, [](ResTask& task)
+        }, [this](ResTask& task)
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
+
+            textureImages_[taskContext.textureId].reset(taskContext.transferPtr);
+            BindTexture(taskContext.textureId, *(textureImages_[taskContext.textureId]));
+            
             fmt::print("{}\n", taskContext.outputInfo.data());
         }, 0);
     }

@@ -283,8 +283,6 @@ void NextRendererApplication<Renderer>::DeleteSwapChain()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::DrawFrame()
 {
-    TaskCoordinator::GetInstance()->Tick();
-    
     // Check if the scene has been changed by the user.
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
@@ -330,10 +328,12 @@ void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, 
 {
     static float frameRate = 0.0;
     static double lastTime = 0.0;
+    static double lastTimestamp = 0.0;
+    double now = Renderer::Window().GetTime();
+    
     // Record delta time between calls to Render.
     if(totalFrames_ % 30 == 0)
     {
-        double now = Renderer::Window().GetTime();
         const auto timeDelta = now - lastTime;
         lastTime = now;
         frameRate = static_cast<float>(30 / timeDelta);
@@ -341,12 +341,15 @@ void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, 
     
     // Render the UI
     Statistics stats = {};
-
+    
+    stats.FrameTime = static_cast<float>((now - lastTimestamp) * 1000.0);
+    lastTimestamp = now;
+    
     stats.Stats["gpu"] = Renderer::Device().DeviceProperties().deviceName;
     
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
-    //stats.FrameTime = static_cast<float>(timeDelta * 1000);
+    
 
     stats.TotalFrames = totalFrames_;
     stats.RenderTime = time_ - sceneInitialTime_;
@@ -486,6 +489,13 @@ void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* p
             userSettings_.SkyIdx = 0;
         }
     }
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::BeforeNextFrame()
+{
+    TaskCoordinator::GetInstance()->Tick();
+    Renderer::BeforeNextFrame();
 }
 
 template <typename Renderer>

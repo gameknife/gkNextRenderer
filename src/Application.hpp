@@ -60,6 +60,7 @@ protected:
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
 	void OnDropFile(int path_count, const char* paths[]) override;
+	void BeforeNextFrame() override;
 
 	Vulkan::Window& GetWindow() {return Renderer::Window();}
 

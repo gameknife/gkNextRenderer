@@ -97,10 +97,13 @@ UserInterface::UserInterface(
 	auto& io = ImGui::GetIO();
 	// No ini file.
 	io.IniFilename = "imgui.ini";
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	if(GOption->Editor) io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	if(GOption->Editor)
+	{
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	}
 	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
@@ -333,10 +336,13 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 {
 	GUserInterface = this;
 
-	uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
-	for ( uint32_t i = 0; i < count; ++i )
+	if( GOption->Editor )
 	{
-		RequestImTextureId(i);
+		uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+		for ( uint32_t i = 0; i < count; ++i )
+		{
+			RequestImTextureId(i);
+		}
 	}
 	
 	auto& io = ImGui::GetIO();
