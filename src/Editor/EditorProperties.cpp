@@ -74,7 +74,9 @@ void Editor::GUI::ShowProperties()
                     ImGui::SameLine();
                     if( ImGui::Button(ICON_FA_LINK) )
                     {
+                        selected_material = &(current_scene->Materials()[matIdx]);
                         ed_material = true;
+                        OpenMaterialEditor();
                     }
                 }
             }

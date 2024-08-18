@@ -2,6 +2,7 @@
 #include "Utilities/StbImage.hpp"
 #include "Utilities/Exception.hpp"
 #include <chrono>
+#include <imgui_impl_vulkan.h>
 #include <fmt/format.h>
 
 #include "TaskCoordinator.hpp"
@@ -13,6 +14,7 @@ namespace Assets
 {
     struct TextureTaskContext
     {
+        int32_t textureId;
         float elapsed;
         std::array<char, 256> outputInfo;
     };
@@ -37,9 +39,19 @@ namespace Assets
         GetInstance()->RequestUpdateTextureFileAsync(idx, filename, true);
     }
 
-    GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool) :
+    TextureImage* GlobalTexturePool::GetTextureImage(uint32_t idx)
+    {
+        if(GetInstance()->textureImages_.size() > idx)
+        {
+            return GetInstance()->textureImages_[idx].get();
+        }
+        return nullptr;
+    }
+
+    GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt) :
         device_(device),
-        commandPool_(command_pool)
+        commandPool_(command_pool),
+        mainThreadCommandPool_(command_pool_mt)
     {
         static const uint32_t k_bindless_texture_binding = 0;
         // The maximum number of bindless resources is limited by the device.
@@ -276,15 +288,17 @@ namespace Assets
             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, false, static_cast<unsigned char*>((void*)pixels));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
             stbi_image_free(pixels);
-            
+
+            taskContext.textureId = newTextureIdx;
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
             std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, channels, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
-        }, [copyedData](ResTask& task)
+        }, [this, copyedData](ResTask& task)
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
+            textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
             fmt::print("{}\n", taskContext.outputInfo.data());
             delete[] copyedData;
         }, 0);

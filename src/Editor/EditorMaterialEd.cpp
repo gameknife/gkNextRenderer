@@ -3,35 +3,60 @@
 #include "Editor/Nodes/NodeSetInt.hpp"
 #include "Editor/Nodes/NodeSetFloat.hpp"
 #include "Nodes/NodeMaterial.hpp"
+#include "Assets/Material.hpp"
+
+static std::unique_ptr<ImFlow::ImNodeFlow> myNode;
+static bool init_nodes = true;
+
+void Editor::GUI::OpenMaterialEditor()
+{
+    myNode.reset( new ImFlow::ImNodeFlow() );
+    init_nodes = true;
+    
+    if(selected_material != nullptr)
+    {
+        float baseY = 20.0f;
+        float seprateY = 100.0f;
+        float seprateX = 400.0f;
+        // from material to node
+        auto nodeIOR = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30,baseY), "IOR", selected_material->RefractionIndex);
+        auto nodeShadingMode = myNode->placeNodeAt<Nodes::NodeSetInt>(ImVec2(30,baseY += seprateY), "ShadingMode", (int)selected_material->MaterialModel);
+        
+        auto nodeAlbedo = myNode->placeNodeAt<Nodes::NodeSetColor>(ImVec2(30, baseY += seprateY), "Albedo", glm::vec3(selected_material->Diffuse));
+        auto nodeRoughness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Roughness", selected_material->Fuzziness);
+        auto nodeMetalness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Metalness", selected_material->Metalness);
+
+
+        
+        auto nodeMat  = myNode->placeNodeAt<Nodes::NodeMaterial>(ImVec2(seprateX, baseY * 0.5f - seprateY));
+
+        nodeIOR->outPin("Out")->createLink(nodeMat->inPin("IOR"));
+        nodeShadingMode->outPin("Out")->createLink(nodeMat->inPin("ShadingMode"));
+        
+        nodeAlbedo->outPin("Out")->createLink(nodeMat->inPin("Albedo"));
+        nodeRoughness->outPin("Out")->createLink(nodeMat->inPin("Roughness"));
+        nodeMetalness->outPin("Out")->createLink(nodeMat->inPin("Metalness"));
+
+        if(selected_material->DiffuseTextureId != -1)
+        {
+            auto nodeAlbedoTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->DiffuseTextureId);
+            nodeAlbedoTexture->outPin("Out")->createLink(nodeMat->inPin("AlbedoTexture"));
+        }
+    }
+}
 
 void Editor::GUI::ShowMaterialEditor()
 {
-    static ImFlow::ImNodeFlow myNode;
-    static bool init_nodes = true;
-    static std::shared_ptr<Nodes::NodeSetColor> ptNodeTemperature;
-    static std::shared_ptr<Nodes::NodeSetFloat> ptNodeSetpoint;
-    static std::shared_ptr<Nodes::NodeMaterial> ptNodePlot;
-
     if(init_nodes)
     {
         ImGui::SetNextWindowSize(ImVec2(1280,800));
-    }
-    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking);
-
-    
-    if (init_nodes)
-    {
-        ptNodeTemperature = myNode.placeNodeAt<Nodes::NodeSetColor>(ImVec2(30, 20), "Albedo", glm::vec3(1,1,1));
-        ptNodeSetpoint = myNode.placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, 210), "Roughness", 1.0);
-        ptNodePlot = myNode.placeNodeAt<Nodes::NodeMaterial>(ImVec2(300, 180));
-        
-        ptNodeTemperature->outPin("Out")->createLink(ptNodePlot->inPin("Albedo"));
-        ptNodeSetpoint->outPin("Out")->createLink(ptNodePlot->inPin("Roughness"));
-
+        ImGui::SetWindowFocus("Material Editor");
         init_nodes = false;
     }
-
-    myNode.rightClickPopUpContent([](ImFlow::BaseNode *node)
+    
+    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking);
+    
+    myNode->rightClickPopUpContent([](ImFlow::BaseNode *node)
                                       {
             if (node != nullptr)
             {
@@ -52,19 +77,19 @@ void Editor::GUI::ShowMaterialEditor()
                 if (ImGui::Button("Add Node"))
                 {
                     ImVec2 pos = ImGui::GetMousePos();
-                    myNode.placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1);
+                    myNode->placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1);
                     ImGui::CloseCurrentPopup();
                 }
             } });
 
-    myNode.droppedLinkPopUpContent([](ImFlow::Pin *dragged)
+    myNode->droppedLinkPopUpContent([](ImFlow::Pin *dragged)
                                    { dragged->deleteLink(); });
 
-    std::vector<std::weak_ptr<ImFlow::Link>> myLinks = myNode.getLinks();
+    std::vector<std::weak_ptr<ImFlow::Link>> myLinks = myNode->getLinks();
 
     ImGui::Text("Links: %lu", myLinks.size());
     ImGui::SameLine();
-    ImGui::Text("Nodes: %u", myNode.getNodesCount());
+    ImGui::Text("Nodes: %u", myNode->getNodesCount());
 
     for (auto wp : myLinks)
     {
@@ -85,6 +110,8 @@ void Editor::GUI::ShowMaterialEditor()
         }
     }
 
-    myNode.update();
+    myNode->update();
     ImGui::End();
 }
+
+

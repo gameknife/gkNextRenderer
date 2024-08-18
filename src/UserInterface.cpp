@@ -28,6 +28,7 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
@@ -77,7 +78,7 @@ UserInterface::UserInterface(
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
 	};
-	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount()));
+	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 256));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
 	
 	const auto& debugUtils = device.DebugUtils();
@@ -179,7 +180,7 @@ UserInterface::UserInterface(
 
 	fontBigIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr, iconRange );
 	
-	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
+	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
 		{
@@ -220,6 +221,24 @@ const float titleBarHeight = 55;
 const float footBarHeight = 40;
 float menuBarHeight = 0;
 
+
+VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
+{
+	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
+	{
+		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
+		if(texture)
+		{
+			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			return imTextureIdMap_[globalTextureId];
+		}
+	}
+	else
+	{
+		return imTextureIdMap_[globalTextureId];
+	}
+	return VK_NULL_HANDLE;
+}
 
 ImGuiID UserInterface::DockSpaceUI()
 {
@@ -312,6 +331,14 @@ void UserInterface::ToolbarUI()
 
 void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene)
 {
+	GUserInterface = this;
+
+	uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+	for ( uint32_t i = 0; i < count; ++i )
+	{
+		RequestImTextureId(i);
+	}
+	
 	auto& io = ImGui::GetIO();
 	
 	ImGui_ImplVulkan_NewFrame();
@@ -363,6 +390,8 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	}
 
 	firstRun = false;
+
+	GUserInterface = nullptr;
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const

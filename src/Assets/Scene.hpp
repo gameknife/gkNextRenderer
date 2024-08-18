@@ -41,6 +41,7 @@ namespace Assets
 
 		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
+		const std::vector<Material>& Materials() const { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
 		
 		
@@ -64,6 +65,7 @@ namespace Assets
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
 
 	private:
+		const std::vector<Material> materials_;
 		const std::vector<Model> models_;
 		const std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;

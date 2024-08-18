@@ -46,8 +46,9 @@ namespace Editor
         void                    ShowContentBrowser();
 
         bool                    ed_material                = false;                // Material Editor
-        Assets::Material*       selected_material          = nullptr;              // Material Selected
+        const Assets::Material*       selected_material          = nullptr;              // Material Selected
         void                    ShowMaterialEditor();
+        void                    OpenMaterialEditor();
 
         bool                    child_style                = false;                // Show Style Editor
         bool                    child_demo                 = false;                // Show Demo Window

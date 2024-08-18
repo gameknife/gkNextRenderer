@@ -18,7 +18,7 @@ namespace Assets
 	class GlobalTexturePool final
 	{
 	public:
-		GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool);
+		GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt);
 		~GlobalTexturePool();
 
 		VkDescriptorSetLayout Layout() const { return layout_; }
@@ -39,10 +39,12 @@ namespace Assets
 
 		static void UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
+		static TextureImage* GetTextureImage(uint32_t idx);
 	private:
 		static GlobalTexturePool* instance_;
 
 		Vulkan::CommandPool& commandPool_;
+		Vulkan::CommandPool& mainThreadCommandPool_;
 		const class Vulkan::Device& device_;
 		VkDescriptorPool descriptorPool_{};
 		VkDescriptorSetLayout layout_{};

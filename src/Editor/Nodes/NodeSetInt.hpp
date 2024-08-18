@@ -3,6 +3,7 @@
 #define NODES_SET_INT_H
 
 #include "../../ImNodeFlow/include/ImNodeFlow.h"
+#include "Vulkan/DescriptorSetLayout.hpp"
 
 namespace Nodes
 {
@@ -15,6 +16,18 @@ namespace Nodes
 
     private:
         int value = 0;
+    };
+
+    class NodeSetTexture : public ImFlow::BaseNode
+    {
+    public:
+        explicit NodeSetTexture(const std::string name, int initTextureId);
+        ~NodeSetTexture();
+        void draw() override;
+
+    private:
+        int textureId = 0;
+        VkDescriptorSet imTextureId;
     };
 
 } // namespace Nodes

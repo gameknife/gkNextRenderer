@@ -29,6 +29,7 @@ namespace Assets
 
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }
 		const Vulkan::Sampler& Sampler() const { return *sampler_; }
+		void MainThreadPostLoading(Vulkan::CommandPool& commandPool);
 
 	private:
 
