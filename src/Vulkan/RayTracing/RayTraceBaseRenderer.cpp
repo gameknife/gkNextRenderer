@@ -149,12 +149,8 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::AfterRenderCmd()
     {
         VulkanBaseRenderer::AfterRenderCmd();
-        
-        Assets::RayCastContext ray;
-        ray.Origin = lastUBO.ModelViewInverse * glm::vec4(0,0,0,1);
-        ray.Direction = lastUBO.ModelViewInverse * glm::vec4(0,0,-1,0);
 
-        rayCastBuffer_->SetContext(ray);
+        rayCastBuffer_->SetContext(cameraCenterCastContext_);
         rayCastBuffer_->SyncWithGPU();
         cameraCenterCastResult_ = rayCastBuffer_->GetResult();
     }
@@ -175,7 +171,13 @@ namespace Vulkan::RayTracing
         result = cameraCenterCastResult_;
         return cameraCenterCastResult_.Hitted;
     }
-    
+
+    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir) const
+    {
+        cameraCenterCastContext_.Origin = glm::vec4(org, 1);
+        cameraCenterCastContext_.Direction = glm::vec4(dir, 0);
+    }
+
     void RayTraceBaseRenderer::OnPreLoadScene()
     {
         Vulkan::VulkanBaseRenderer::OnPreLoadScene();

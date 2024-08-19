@@ -143,14 +143,28 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+
+    glm::vec2 pixel = glm::vec2(540,540);
+    glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+    glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+    glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+
+    glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+    glm::vec3 rayorg = glm::vec3(origin);
+
+    Renderer::SetRaycastRay(rayorg, raydir);
     
     Assets::RayCastResult rayResult;
     Renderer::GetLastRaycastResult(rayResult);
-    
+
+    static uint32_t lastSelectedId = -1;
     if( userSettings_.AutoFocus && rayResult.Hitted )
     {
         userSettings_.FocusDistance = rayResult.T;
+        lastSelectedId = rayResult.InstanceId;
     }
+
+    ubo.SelectedId = lastSelectedId;
     
     userSettings_.HitResult = rayResult;
     

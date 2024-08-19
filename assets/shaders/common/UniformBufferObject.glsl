@@ -39,4 +39,6 @@ struct UniformBufferObject
 	float AdaptiveVariance;
 	uint AdaptiveSteps;
 	bool TAA;
+	
+	uint SelectedId;
 };
