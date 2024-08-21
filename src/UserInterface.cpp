@@ -28,6 +28,7 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
+#include "Assets/Scene.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
@@ -37,6 +38,8 @@
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
+
+extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {
@@ -358,6 +361,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 
 	if( GOption->Editor )
 	{
+		editorGUI_->selected_obj_id = scene->GetSelectedId();
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();

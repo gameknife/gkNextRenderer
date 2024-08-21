@@ -10,7 +10,7 @@ namespace Nodes
         setStyle(ImFlow::NodeStyle::brown());
         
         addIN<float>("IOR", 1.46f, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
-        addIN<int>("ShadingMode", 0.0, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
+        addIN<int>("ShadingMode", 0, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
         
         addIN<glm::vec3>("Albedo", glm::vec3(1,1,1), ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
         addIN<float>("Roughness", 1.0f, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());

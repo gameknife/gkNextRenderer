@@ -63,7 +63,6 @@ protected:
 	void BeforeNextFrame() override;
 
 	Vulkan::Window& GetWindow() {return Renderer::Window();}
-
 private:
 
 	void LoadScene(uint32_t sceneIndex);
@@ -97,4 +96,6 @@ private:
 	uint32_t benchmarkTotalFrames_{};
 	uint32_t benchmarkNumber_{0};
 	std::ofstream benchmarkCsvReportFile;
+
+	glm::vec2 mousePos_ {};
 };

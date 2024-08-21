@@ -29,8 +29,11 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
         uint32_t limit = 1000;
         for( auto& node : allnodes )
         {
-            
-
+            const Assets::Node* selected_obj = nullptr;
+            if(selected_obj_id >= 0 && selected_obj_id < allnodes.size())
+            {
+                selected_obj = &allnodes[selected_obj_id];
+            }
             // draw stripe background
             ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
             ImVec2 CursorPos = ImGui::GetCursorScreenPos() - ImVec2(WindowPadding.x,2);
@@ -52,7 +55,15 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
             {
                 if (ImGui::IsItemClicked())
                 {
-                    selected_obj = &node;
+                    for (uint32_t i = 0; i < allnodes.size(); i++)
+                    {
+                        if (&allnodes[i] == &node)
+                        {
+                            selected_obj_id = i;
+                            break;
+                        }
+                    }
+                    scene->SetSelectedId(selected_obj_id);
                 }
                 ImGui::TreePop();
             }

@@ -144,7 +144,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
 
-    glm::vec2 pixel = glm::vec2(540,540);
+    glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
     glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
     glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
     glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
@@ -156,15 +156,21 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     
     Assets::RayCastResult rayResult;
     Renderer::GetLastRaycastResult(rayResult);
-
-    static uint32_t lastSelectedId = -1;
-    if( userSettings_.AutoFocus && rayResult.Hitted )
+    
+    if( userSettings_.AutoFocus )
     {
-        userSettings_.FocusDistance = rayResult.T;
-        lastSelectedId = rayResult.InstanceId;
+        if(rayResult.Hitted )
+        {
+            userSettings_.FocusDistance = rayResult.T;
+            scene_->SetSelectedId(rayResult.InstanceId);
+        }
+        else
+        {
+            scene_->SetSelectedId(-1);
+        }
     }
 
-    ubo.SelectedId = lastSelectedId;
+    ubo.SelectedId = scene_->GetSelectedId();
     
     userSettings_.HitResult = rayResult;
     
@@ -450,6 +456,8 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
 
     // Camera motions
     modelViewController_.OnCursorPosition(xpos, ypos);
+
+    mousePos_ = glm::vec2(xpos, ypos);
 }
 
 template <typename Renderer>
@@ -464,6 +472,16 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
 
     // Camera motions
     modelViewController_.OnMouseButton(button, action, mods);
+#if !ANDROID
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        userSettings_.AutoFocus = true;
+    }
+    else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+    {
+        userSettings_.AutoFocus = false;
+    }
+#endif
 }
 
 template <typename Renderer>

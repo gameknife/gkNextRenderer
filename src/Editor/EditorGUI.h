@@ -38,7 +38,7 @@ namespace Editor
         void                    ShowProperties();      
 
         bool                    viewport                   = true;                 // Viewport State
-        const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
+        uint32_t                selected_obj_id               = -1;              // Viewport Selected
         const Assets::Scene*    current_scene              = nullptr;
         void                    ShowViewport               (ImGuiID id, const Statistics& statistics);
 

@@ -36,7 +36,7 @@ void ProcessMiss(const vec3 RayDirection)
 {
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
-	Ray.primitiveId = 0;
+	Ray.primitiveId = 65535 << 16 | 0;
 	Ray.Exit = true;
 	Ray.Distance = 1000.0;
 	Ray.pdf = 1.0;
