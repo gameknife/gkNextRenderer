@@ -67,6 +67,10 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
                 }
                 ImGui::TreePop();
             }
+            if(selected_obj == &node)
+            {
+                ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
+            }
             ImGui::PopStyleVar();
             ImGui::PopStyleVar();
             ImGui::PopStyleColor();
