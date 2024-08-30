@@ -45,7 +45,7 @@ namespace Assets
     class Node final
     {
     public:
-        static Node CreateNode(glm::mat4 transform, int id, bool procedural);
+        static Node CreateNode(std::string name, glm::mat4 transform, int id, bool procedural);
         Node& operator =(const Node&) = delete;
         Node& operator =(Node&&) = delete;
 
@@ -58,10 +58,12 @@ namespace Assets
         const glm::mat4& WorldTransform() const { return transform_; }
         int GetModel() const { return modelId_; }
         bool IsProcedural() const { return procedural_; }
+        const std::string& GetName() const {return name_; }
 
     private:
-        Node(glm::mat4 transform, int id, bool procedural);
+        Node(std::string name, glm::mat4 transform, int id, bool procedural);
 
+        std::string name_;
         glm::mat4 transform_;
         int modelId_;
         bool procedural_;
@@ -104,6 +106,7 @@ namespace Assets
 
         const std::vector<Vertex>& Vertices() const { return vertices_; }
         const std::vector<uint32_t>& Indices() const { return indices_; }
+        const std::vector<uint32_t>& Materials() const { return materialIdx_; }
 
         const class Procedural* Procedural() const { return procedural_.get(); }
 
@@ -114,11 +117,12 @@ namespace Assets
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
 
     private:
-        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, const class Procedural* procedural);
+        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, const class Procedural* procedural);
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
         std::shared_ptr<const class Procedural> procedural_;
+        std::vector<uint32_t> materialIdx_;
 
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;

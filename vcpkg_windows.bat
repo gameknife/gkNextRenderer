@@ -20,7 +20,7 @@ vcpkg.exe install --recurse ^
 	boost-stacktrace:x64-windows-static ^
 	glfw3:x64-windows-static ^
 	glm:x64-windows-static ^
-	imgui[core,freetype,glfw-binding,vulkan-binding]:x64-windows-static ^
+	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:x64-windows-static ^
 	stb:x64-windows-static ^
 	tinyobjloader:x64-windows-static ^
 	curl:x64-windows-static ^

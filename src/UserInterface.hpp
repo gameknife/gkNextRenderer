@@ -1,11 +1,25 @@
 #pragma once
+#include <imgui.h>
+#include <imgui_internal.h>
 #include "Vulkan/Vulkan.hpp"
+#include "Vulkan/FrameBuffer.hpp"
+#include <vector>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+namespace Assets
+{
+	class Scene;
+}
+namespace Editor
+{
+	struct GUI;
+}
+
 namespace Vulkan
 {
+	class Window;
 	class CommandPool;
 	class DepthBuffer;
 	class DescriptorPool;
@@ -13,6 +27,7 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class VulkanGpuTimer;
+	class RenderImage;
 }
 
 struct UserSettings;
@@ -48,22 +63,45 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings);
+		UserSettings& userSettings,
+		Vulkan::RenderImage& viewportImage);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, const Vulkan::FrameBuffer& frameBuffer, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
+	void Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
 
 	UserSettings& Settings() { return userSettings_; }
 
+	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
+
 private:
 
+	ImGuiID DockSpaceUI();
+	void ToolbarUI();
+	
+	const Vulkan::SwapChain& swapChain_;
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
+	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	UserSettings& userSettings_;
+
+	std::unique_ptr<Editor::GUI> editorGUI_;
+
+	VkDescriptorSet viewportTextureId_;
+	ImVec2 viewportSize_;
+
+	ImFont* fontBigIcon_;
+	ImFont* fontIcon_;
+
+	bool firstRun;
+	
+	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	
 };
+
+inline UserInterface* GUserInterface = nullptr;

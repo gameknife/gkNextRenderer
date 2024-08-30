@@ -39,9 +39,6 @@ struct UserSettings final
 	float SkyIntensity;
 	int SkyIdx, CameraIdx;
 
-	int HDRIsLoaded;
-	std::string HDRIfile;
-
 	// Profiler
 	bool ShowVisualDebug;
 	float HeatmapScale;

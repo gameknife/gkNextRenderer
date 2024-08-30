@@ -41,6 +41,7 @@ namespace Assets
 
 		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
+		const std::vector<Material>& Materials() const { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
 		
 		
@@ -62,8 +63,12 @@ namespace Assets
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
 		const uint32_t GetVerticeCount() const {return verticeCount_;}
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
-
+		
+		uint32_t GetSelectedId() const { return selectedId_; }
+		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
+		
 	private:
+		const std::vector<Material> materials_;
 		const std::vector<Model> models_;
 		const std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
@@ -100,6 +105,8 @@ namespace Assets
 		uint32_t indicesCount_ {};
 		uint32_t verticeCount_ {};
 		uint32_t indirectDrawBatchCount_ {};
+
+		mutable uint32_t selectedId_ = -1;
 	};
 
 }

@@ -18,10 +18,11 @@
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
-
+#include <filesystem>
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -29,10 +30,42 @@ namespace NextRenderer
         return buildver;
     }
 }
+
 #if ANDROID
 #include <imgui_impl_android.h>
 #include <android/log.h>
 #include <game-activity/native_app_glue/android_native_app_glue.h>
+
+static void MakeExternalDirectory( android_app* app, std::string srcPath )
+{
+    if( std::filesystem::exists(std::string("/sdcard/Android/data/com.gknextrenderer/files/") + srcPath) )
+    {
+        return;
+    }
+    
+    std::filesystem::create_directories(std::filesystem::path(std::string("/sdcard/Android/data/com.gknextrenderer/files/") + srcPath));
+    
+    AAssetDir* assetDir = AAssetManager_openDir(
+                        app->activity->assetManager, srcPath.c_str());
+    const char* filename;
+    while ((filename = AAssetDir_getNextFileName(assetDir)) != NULL){
+        AAsset* file = AAssetManager_open(app->activity->assetManager, (srcPath + "/" + filename).c_str(),
+                                       AASSET_MODE_BUFFER);
+        size_t fileLen = AAsset_getLength(file);
+        std::vector<char> fileData;
+        fileData.resize(fileLen);
+
+        AAsset_read(file, static_cast<void*>(fileData.data()), fileLen);
+        AAsset_close(file);
+
+        std::string targetPath = std::string("/sdcard/Android/data/com.gknextrenderer/files/") + srcPath + "/" + filename;
+    
+        FILE* targetFile = fopen(targetPath.c_str(), "wb");
+        fwrite(fileData.data(), 1, fileLen, targetFile);
+        fclose(targetFile);
+    }
+    AAssetDir_close(assetDir);
+}
 
 class androidbuf : public std::streambuf {
 public:
@@ -128,6 +161,12 @@ void handle_cmd(android_app* app, int32_t cmd) {
     case APP_CMD_INIT_WINDOW:
         // The window is being shown, get it ready.
         {
+            MakeExternalDirectory(app, "assets/fonts");
+            MakeExternalDirectory(app, "assets/models");
+            MakeExternalDirectory(app, "assets/shaders");
+            MakeExternalDirectory(app, "assets/textures");
+            MakeExternalDirectory(app, "assets/locale");
+            
             const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=qx50.glb"};
             const Options options(4, argv);
             GOption = &options;
@@ -417,7 +456,6 @@ namespace
         userSettings.SunLuminance = 500.f;
         userSettings.SkyIntensity = 50.f;
         
-        userSettings.HDRIfile = options.HDRIfile;
         userSettings.AutoFocus = false;
 
         return userSettings;

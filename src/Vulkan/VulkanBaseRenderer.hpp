@@ -16,6 +16,16 @@
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
 
+namespace Vulkan
+{
+	namespace PipelineCommon
+	{
+		class BufferClearPipeline;
+	}
+
+	class RenderImage;
+}
+
 namespace Assets
 {
 	class GlobalTexturePool;
@@ -218,10 +228,13 @@ namespace Vulkan
 		virtual void OnTouchMove(double xpos, double ypos) {}
 		virtual bool GetFocusDistance(float& distance) const {return false;}
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
+		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const {};
 		
 		void CaptureScreenShot();
-
+		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
+		void ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		
+		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
 		const std::string& GetRendererType() const {return rendererType_;}
 		
@@ -239,7 +252,7 @@ namespace Vulkan
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
 		virtual const Assets::Scene& GetScene() const = 0;
-		virtual Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const = 0;
+		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const = 0;
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
@@ -252,6 +265,7 @@ namespace Vulkan
 		virtual void DeleteSwapChain();
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		virtual void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) {}
 
 		virtual void BeforeNextFrame() {}
 		virtual void AfterRenderCmd() {}
@@ -295,6 +309,7 @@ namespace Vulkan
 		std::vector<Assets::UniformBuffer> uniformBuffers_;
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
+		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;
@@ -306,6 +321,8 @@ namespace Vulkan
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;
+
+		std::unique_ptr<RenderImage> rtEditorViewport_;
 
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
 

@@ -47,4 +47,8 @@ TextureImage::~TextureImage()
 	imageMemory_.reset();
 }
 
+void TextureImage::MainThreadPostLoading(Vulkan::CommandPool& commandPool)
+{
+	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
 }

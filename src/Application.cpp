@@ -31,6 +31,7 @@
 #include <math.h>
 
 #include "TaskCoordinator.hpp"
+#include "Editor/EditorCommand.hpp"
 #include "Utilities/Localization.hpp"
 
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
@@ -69,19 +70,45 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-    
+
+#if !ANDROID
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
+        GetWindow().Close();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
+        GetWindow().Maximum();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
+        GetWindow().Minimize();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+        userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
+        Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
+        userSettings_.SkyIdx = 0;
+        return true;
+    });
+#endif
 }
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::~NextRendererApplication()
 {
+#if !ANDROID
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+#endif
     scene_.reset();
 }
 
 template <typename Renderer>
-Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkExtent2D extent) const
+Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
 {
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -115,13 +142,35 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
+    ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+
+    glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
+    glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+    glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+    glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+
+    glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+    glm::vec3 rayorg = glm::vec3(origin);
+
+    Renderer::SetRaycastRay(rayorg, raydir);
+    
     Assets::RayCastResult rayResult;
     Renderer::GetLastRaycastResult(rayResult);
     
-    if( userSettings_.AutoFocus && rayResult.Hitted )
+    if( userSettings_.AutoFocus )
     {
-        userSettings_.FocusDistance = rayResult.T;
+        if(rayResult.Hitted )
+        {
+            userSettings_.FocusDistance = rayResult.T;
+            scene_->SetSelectedId(rayResult.InstanceId);
+        }
+        else
+        {
+            scene_->SetSelectedId(-1);
+        }
     }
+
+    ubo.SelectedId = scene_->GetSelectedId();
     
     userSettings_.HitResult = rayResult;
     
@@ -201,7 +250,9 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     Renderer::OnDeviceSet();
 
     // global textures
-    // texture id 0: global sky
+    // texture id 0: dynamic hdri sky
+    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/std_env.hdr"), Vulkan::SamplerConfig());
+    
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
@@ -214,8 +265,7 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
 
-    if(userSettings_.HDRIfile != "") Assets::GlobalTexturePool::LoadHDRTexture(userSettings_.HDRIfile.c_str(), Vulkan::SamplerConfig());
-    userSettings_.HDRIsLoaded = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+    if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
     
     std::vector<Assets::Model> models;
     std::vector<Assets::Node> nodes;
@@ -237,7 +287,7 @@ void NextRendererApplication<Renderer>::CreateSwapChain()
     Renderer::CreateSwapChain();
 
     userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(),
-                                           userSettings_));
+                                           userSettings_, Renderer::GetRenderImage()));
 
     CheckFramebufferSize();
 }
@@ -253,8 +303,6 @@ void NextRendererApplication<Renderer>::DeleteSwapChain()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::DrawFrame()
 {
-    TaskCoordinator::GetInstance()->Tick();
-    
     // Check if the scene has been changed by the user.
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
@@ -272,17 +320,6 @@ void NextRendererApplication<Renderer>::DrawFrame()
 template <typename Renderer>
 void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
-    static float frameRate = 0.0;
-    static double lastTime = 0.0;
-    // Record delta time between calls to Render.
-    if(totalFrames_ % 30 == 0)
-    {
-        double now = Renderer::Window().GetTime();
-        const auto timeDelta = now - lastTime;
-        lastTime = now;
-        frameRate = static_cast<float>(30 / timeDelta);
-    }
-
     const auto prevTime = time_;
     time_ = Renderer::Window().GetTime();
     const auto timeDelta = time_ - prevTime;
@@ -304,15 +341,35 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     {
         CheckAndUpdateBenchmarkState(prevTime);
     }
+}
 
+template <typename Renderer>
+void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    static float frameRate = 0.0;
+    static double lastTime = 0.0;
+    static double lastTimestamp = 0.0;
+    double now = Renderer::Window().GetTime();
+    
+    // Record delta time between calls to Render.
+    if(totalFrames_ % 30 == 0)
+    {
+        const auto timeDelta = now - lastTime;
+        lastTime = now;
+        frameRate = static_cast<float>(30 / timeDelta);
+    }
+    
     // Render the UI
     Statistics stats = {};
-
+    
+    stats.FrameTime = static_cast<float>((now - lastTimestamp) * 1000.0);
+    lastTimestamp = now;
+    
     stats.Stats["gpu"] = Renderer::Device().DeviceProperties().deviceName;
     
     stats.FramebufferSize = Renderer::Window().FramebufferSize();
     stats.FrameRate = frameRate;
-    stats.FrameTime = static_cast<float>(timeDelta * 1000);
+    
 
     stats.TotalFrames = totalFrames_;
     stats.RenderTime = time_ - sceneInitialTime_;
@@ -328,8 +385,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-
-    userInterface_->Render(commandBuffer, Renderer::SwapChainFrameBuffer(imageIndex), stats, Renderer::GpuTimer());
+    
+    userInterface_->Render(commandBuffer, imageIndex, stats, Renderer::GpuTimer(), scene_.get());
 }
 
 template <typename Renderer>
@@ -399,6 +456,8 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
 
     // Camera motions
     modelViewController_.OnCursorPosition(xpos, ypos);
+
+    mousePos_ = glm::vec2(xpos, ypos);
 }
 
 template <typename Renderer>
@@ -413,6 +472,16 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
 
     // Camera motions
     modelViewController_.OnMouseButton(button, action, mods);
+#if !ANDROID
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        userSettings_.AutoFocus = true;
+    }
+    else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+    {
+        userSettings_.AutoFocus = false;
+    }
+#endif
 }
 
 template <typename Renderer>
@@ -445,7 +514,20 @@ void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* p
         {
             userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         }
+
+        if( ext == "hdr")
+        {
+            Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+            userSettings_.SkyIdx = 0;
+        }
     }
+}
+
+template <typename Renderer>
+void NextRendererApplication<Renderer>::BeforeNextFrame()
+{
+    TaskCoordinator::GetInstance()->Tick();
+    Renderer::BeforeNextFrame();
 }
 
 template <typename Renderer>
@@ -510,7 +592,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-        userSettings_.SkyIdx = userSettings_.HDRIfile != "" ? userSettings_.HDRIsLoaded - 1 : cameraInitialSate_.SkyIdx;
+        userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
         userSettings_.SunRotation = cameraInitialSate_.SunRotation;
 
         userSettings_.cameras = cameraInitialSate_.cameras;

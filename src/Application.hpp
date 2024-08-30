@@ -41,7 +41,7 @@ public:
 protected:
 
 	const Assets::Scene& GetScene() const override { return *scene_; }
-	Assets::UniformBufferObject GetUniformBufferObject(VkExtent2D extent) const override;
+	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const override;
 
 	void SetPhysicalDeviceImpl(
 		VkPhysicalDevice physicalDevice, 
@@ -54,13 +54,15 @@ protected:
 	void DeleteSwapChain() override;
 	void DrawFrame() override;
 	void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-
+	void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 	void OnKey(int key, int scancode, int action, int mods) override;
 	void OnCursorPosition(double xpos, double ypos) override;
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
 	void OnDropFile(int path_count, const char* paths[]) override;
+	void BeforeNextFrame() override;
 
+	Vulkan::Window& GetWindow() {return Renderer::Window();}
 private:
 
 	void LoadScene(uint32_t sceneIndex);
@@ -94,4 +96,6 @@ private:
 	uint32_t benchmarkTotalFrames_{};
 	uint32_t benchmarkNumber_{0};
 	std::ofstream benchmarkCsvReportFile;
+
+	glm::vec2 mousePos_ {};
 };

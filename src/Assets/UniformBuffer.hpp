@@ -12,7 +12,7 @@ namespace Vulkan
 
 namespace Assets
 {
-	class UniformBufferObject
+	class alignas(16) UniformBufferObject
 	{
 	public:
 
@@ -22,6 +22,8 @@ namespace Assets
 		glm::mat4 ProjectionInverse;
 		glm::mat4 ViewProjection;
 		glm::mat4 PrevViewProjection;
+
+		glm::vec4 ViewportRect;
 		
 		float Aperture;
 		float FocusDistance;
@@ -56,6 +58,8 @@ namespace Assets
 		float AdaptiveVariance;
 		uint32_t AdaptiveSteps;
 		uint32_t TAA; // bool
+
+		uint32_t SelectedId;
 	};
 
 	// lightquad can represent by 4 points

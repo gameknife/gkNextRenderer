@@ -3,6 +3,8 @@
 #include "Utilities/StbImage.hpp"
 #include <fmt/format.h>
 
+#include "Options.hpp"
+
 #if ANDROID
 #include <time.h>
 
@@ -86,6 +88,11 @@ Window::Window(const WindowConfig& config) :
 		Throw(std::runtime_error("glfwVulkanSupported() failed"));
 	}
 
+	// hide title bar, handle in ImGUI Later
+	if(GOption->Editor)
+	{
+		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+	}
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 
@@ -244,6 +251,47 @@ void Window::Show() const
 {
 #if !ANDROID
 	glfwShowWindow(window_);
+#endif
+}
+
+void Window::Minimize() {
+	//glfwSetWindowSize(window_, 0,0);
+}
+
+void Window::Maximum() {
+#if !ANDROID
+	glfwMaximizeWindow(window_);
+#endif
+}
+
+constexpr double CLOSE_AREA_WIDTH = 0;
+constexpr double TITLE_AREA_HEIGHT = 55;	
+void Window::attemptDragWindow() {
+#if !ANDROID
+	if (glfwGetMouseButton(window_, 0) == GLFW_PRESS && dragState == 0) {
+		glfwGetCursorPos(window_, &s_xpos, &s_ypos);
+		glfwGetWindowSize(window_, &w_xsiz, &w_ysiz);
+		dragState = 1;
+	}
+	if (glfwGetMouseButton(window_, 0) == GLFW_PRESS && dragState == 1) {
+		double c_xpos, c_ypos;
+		int w_xpos, w_ypos;
+		glfwGetCursorPos(window_, &c_xpos, &c_ypos);
+		glfwGetWindowPos(window_, &w_xpos, &w_ypos);
+		if (
+			s_xpos >= 0 && s_xpos <= (static_cast<double>(w_xsiz) - CLOSE_AREA_WIDTH) &&
+			s_ypos >= 0 && s_ypos <= TITLE_AREA_HEIGHT) {
+			glfwSetWindowPos(window_, w_xpos + static_cast<int>(c_xpos - s_xpos), w_ypos + static_cast<int>(c_ypos - s_ypos));
+			}
+		if (
+			s_xpos >= (static_cast<double>(w_xsiz) - 15) && s_xpos <= (static_cast<double>(w_xsiz)) &&
+			s_ypos >= (static_cast<double>(w_ysiz) - 15) && s_ypos <= (static_cast<double>(w_ysiz))) {
+			glfwSetWindowSize(window_, w_xsiz + static_cast<int>(c_xpos - s_xpos), w_ysiz + static_cast<int>(c_ypos - s_ypos));
+			}
+	}
+	if (glfwGetMouseButton(window_, 0) == GLFW_RELEASE && dragState == 1) {
+		dragState = 0;
+	}
 #endif
 }
 }
