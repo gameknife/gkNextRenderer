@@ -180,13 +180,32 @@ namespace Assets
             return;
         }
 
-        // load all textures
-        std::vector<uint32_t> textureIdMap;
+        // collect used textures IDs
+        std::unordered_map<uint32_t, uint32_t> textureIdMap;
 
+
+        for (tinygltf::Material& mat : model.materials)
+        {
+            int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
+            if (texture != -1)
+            {
+                textureIdMap[model.textures[texture].source] = ~0;
+            }
+            int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            if (mraTexture != -1)
+            {
+                textureIdMap[model.textures[mraTexture].source] = ~0;
+            }
+        }
+
+        // load used textures only
         std::filesystem::path filepath = filename;
         
         for ( uint32_t i = 0; i < model.images.size(); ++i )
         {
+            //skip unused
+            if (textureIdMap.find(i) == textureIdMap.end()) continue;
+
             tinygltf::Image& image = model.images[i];
             
             std::string texname = image.name.empty() ? fmt::format("tex_{}", i):  image.name;
@@ -195,7 +214,7 @@ namespace Assets
                 filepath.filename().string() + "_" + texname, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
                 model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
 
-            textureIdMap.push_back(texIdx);
+            textureIdMap[i] = texIdx;
         }
 
         // load all materials
