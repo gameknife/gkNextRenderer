@@ -29,31 +29,48 @@ void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
         uint32_t limit = 1000;
         for( auto& node : allnodes )
         {
+            const Assets::Node* selected_obj = nullptr;
+            if(selected_obj_id >= 0 && selected_obj_id < allnodes.size())
+            {
+                selected_obj = &allnodes[selected_obj_id];
+            }
+            // draw stripe background
+            ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
+            ImVec2 CursorPos = ImGui::GetCursorScreenPos() - ImVec2(WindowPadding.x,2);
+            float singleHeight = ImGui::GetTextLineHeight() + 4;
+            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),limit % 2 == 0 ? IM_COL32(0, 0, 0, 50) : IM_COL32(0, 0, 0, 0), 0);
+
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_Leaf;
             
             ImGui::PushStyleColor(ImGuiCol_HeaderActive , ImVec4(0.3f, 0.3f, 0.9f, 1.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-            if( limit % 2 == 0 ) { flag |= ImGuiTreeNodeFlags_Selected; ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.0f, 0.0f, 0.0f, 0.1f));}
-            bool selected = (selected_obj == &node);
-            if(selected)
+
+            if(selected_obj == &node)
             {
-                flag |= ImGuiTreeNodeFlags_Selected;
-                ImGui::PushStyleColor(ImGuiCol_Header , ImVec4(0.2f, 0.2f, 0.8f, 1.0f));
+                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),IM_COL32(70, 120, 255, 255), 0);
             }
+            
             if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node.GetName()).c_str(), flag))
             {
                 if (ImGui::IsItemClicked())
                 {
-                    selected_obj = &node;
+                    for (uint32_t i = 0; i < allnodes.size(); i++)
+                    {
+                        if (&allnodes[i] == &node)
+                        {
+                            selected_obj_id = i;
+                            break;
+                        }
+                    }
+                    scene->SetSelectedId(selected_obj_id);
                 }
                 ImGui::TreePop();
             }
-            if(selected)
+            if(selected_obj == &node)
             {
-                ImGui::PopStyleColor();
+                ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
             }
-            if( limit % 2 == 0 ) ImGui::PopStyleColor();
             ImGui::PopStyleVar();
             ImGui::PopStyleVar();
             ImGui::PopStyleColor();

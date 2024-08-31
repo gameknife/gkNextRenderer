@@ -94,7 +94,7 @@ namespace Vulkan
 			VkQueryPool queryPool,
 			uint32_t firstQuery)>
 		vkCmdWriteAccelerationStructuresPropertiesKHR;
-#if WIN32
+#if WIN32 && !defined(__MINGW32__)
 		const std::function<VkResult(
 			VkDevice device,
 			const VkMemoryGetWin32HandleInfoKHR* pGetWin32HandleInfo,

@@ -17,6 +17,26 @@ layout(binding = 8, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
+uint FetchPrimitiveIndex(in uint InstanceID)
+{
+	return (InstanceID >> 16) - 1;
+}
+
+bool EdgeDetect(in uint current_primitive_index, in bool isEvenFrame, in ivec2 ipos)
+{
+	uint center = FetchPrimitiveIndex(current_primitive_index);
+	
+	uint prev_primitive_index0 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(2,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(2,0)).r);
+	uint prev_primitive_index1 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(-2,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(-2,0)).r);
+	uint prev_primitive_index2 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0, 2)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0, 2)).r);
+	uint prev_primitive_index3 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0, -2)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0, -2)).r);
+
+	bool edge0 = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center) ));
+	bool edge1 = any( equal( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center) ));
+
+	return edge0 && edge1;
+}
+
 // a simple accumulation shader, reproject can impl here later.
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
@@ -96,6 +116,15 @@ void main() {
     {
         imageStore(AccumulateImage, ipos, final);
     }
+
+	uint realInstanceId = FetchPrimitiveIndex(current_primitive_index);
+	if(realInstanceId == Camera.SelectedId)
+	{
+		if( EdgeDetect(current_primitive_index, isEvenFrame, ipos ) )
+		{
+			final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
+		}
+	}
 
     imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
 }

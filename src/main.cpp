@@ -328,7 +328,7 @@ int main(int argc, const char* argv[]) noexcept
 #endif
         }
 
-#ifdef _WIN32
+#if WIN32 && !defined(__MINGW32__)
         HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         DWORD dwMode;
 
@@ -338,8 +338,6 @@ int main(int argc, const char* argv[]) noexcept
 #endif
 
         StartApplication(rendererType, windowConfig, userSettings, options);
-        
-        //applicationPtr->Run();
 
         {
             GApplication->Start();
@@ -456,7 +454,6 @@ namespace
         userSettings.SunLuminance = 500.f;
         userSettings.SkyIntensity = 50.f;
         
-        userSettings.HDRIfile = options.HDRIfile;
         userSettings.AutoFocus = false;
 
         return userSettings;

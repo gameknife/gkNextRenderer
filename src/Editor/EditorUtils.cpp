@@ -4,6 +4,11 @@
 #include <fmt/printf.h>
 
 #include "Application.hpp"
+#include "ImNodeFlow.h"
+
+#include "Editor/Nodes/NodeSetInt.hpp"
+#include "Editor/Nodes/NodeSetFloat.hpp"
+#include "Nodes/NodeMaterial.hpp"
 
 ImVec2 utils::GetLocalCursor()
 {

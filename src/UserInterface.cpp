@@ -28,6 +28,8 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
+#include "Assets/Scene.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
@@ -36,6 +38,8 @@
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
+
+extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {
@@ -77,7 +81,7 @@ UserInterface::UserInterface(
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
 	};
-	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount()));
+	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 256));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
 	
 	const auto& debugUtils = device.DebugUtils();
@@ -96,10 +100,13 @@ UserInterface::UserInterface(
 	auto& io = ImGui::GetIO();
 	// No ini file.
 	io.IniFilename = "imgui.ini";
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	if(GOption->Editor) io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	if(GOption->Editor)
+	{
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	}
 	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
@@ -179,7 +186,7 @@ UserInterface::UserInterface(
 
 	fontBigIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr, iconRange );
 	
-	Vulkan::SingleTimeCommands::Submit(commandPool, [&viewportImage] (VkCommandBuffer commandBuffer)
+	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
 		{
@@ -217,14 +224,33 @@ const float toolbarSize = 50;
 const float toolbarIconWidth = 32;
 const float toolbarIconHeight = 32;
 const float titleBarHeight = 55;
+const float footBarHeight = 40;
 float menuBarHeight = 0;
 
+
+VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
+{
+	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
+	{
+		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
+		if(texture)
+		{
+			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			return imTextureIdMap_[globalTextureId];
+		}
+	}
+	else
+	{
+		return imTextureIdMap_[globalTextureId];
+	}
+	return VK_NULL_HANDLE;
+}
 
 ImGuiID UserInterface::DockSpaceUI()
 {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize + titleBarHeight - menuBarHeight));
-	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight - footBarHeight));
 	ImGui::SetNextWindowViewport(viewport->ID);
 	ImGui::SetNextWindowBgAlpha(0);
 	ImGuiWindowFlags window_flags = 0
@@ -294,8 +320,9 @@ void UserInterface::ToolbarUI()
 	static int item = 3;
 	static float color[4] = { 0.4f, 0.7f, 0.0f, 0.5f };
 	ImGui::SetNextItemWidth(120);
-	ImGui::SetCursorPosY(16);
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7,7));
 	ImGui::Combo("##Render", &item, "RTPipe\0ModernDeferred\0LegacyDeferred\0RayQuery\0HybirdRender\0\0");ImGui::SameLine();
+	ImGui::PopStyleVar();
 	ImGui::EndGroup();ImGui::SameLine();
 
 
@@ -310,6 +337,17 @@ void UserInterface::ToolbarUI()
 
 void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene)
 {
+	GUserInterface = this;
+
+	if( GOption->Editor )
+	{
+		uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+		for ( uint32_t i = 0; i < count; ++i )
+		{
+			RequestImTextureId(i);
+		}
+	}
+	
 	auto& io = ImGui::GetIO();
 	
 	ImGui_ImplVulkan_NewFrame();
@@ -323,6 +361,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 
 	if( GOption->Editor )
 	{
+		editorGUI_->selected_obj_id = scene->GetSelectedId();
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGuiID id = DockSpaceUI();
 		ToolbarUI();
@@ -361,6 +400,8 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	}
 
 	firstRun = false;
+
+	GUserInterface = nullptr;
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const
@@ -465,7 +506,7 @@ void UserInterface::DrawSettings()
 		ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 		
-		ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, Settings().HDRIsLoaded - 1);
+		ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
 		ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
 		ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");

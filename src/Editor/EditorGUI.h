@@ -1,9 +1,14 @@
 #pragma once
 
 #include <string>
-#define IMGUI_DEFINE_MATH_OPERATORS
+#include <cstdint>
 #include "imgui.h"
 #include "EditorUtils.h"
+
+namespace Assets
+{
+    struct Material;
+}
 
 struct Statistics;
 
@@ -34,12 +39,17 @@ namespace Editor
         void                    ShowProperties();      
 
         bool                    viewport                   = true;                 // Viewport State
-        const Assets::Node*     selected_obj               = nullptr;              // Viewport Selected
+        uint32_t                selected_obj_id               = -1;              // Viewport Selected
         const Assets::Scene*    current_scene              = nullptr;
         void                    ShowViewport               (ImGuiID id, const Statistics& statistics);
 
         bool                    contentBrowser             = true;                // Workspace "Output"
         void                    ShowContentBrowser();
+
+        bool                    ed_material                = false;                // Material Editor
+        const Assets::Material*       selected_material          = nullptr;              // Material Selected
+        void                    ShowMaterialEditor();
+        void                    OpenMaterialEditor();
 
         bool                    child_style                = false;                // Show Style Editor
         bool                    child_demo                 = false;                // Show Demo Window
@@ -48,7 +58,8 @@ namespace Editor
         bool                    child_stack                = false;                // Show Stack Tool
         bool                    child_resources            = false;                // Show Help Resources
         bool                    child_about                = false;                // Show About Window
-
+        bool                    child_mat_editor           = false;                // Show About Window
+        
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;
     };

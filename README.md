@@ -202,6 +202,19 @@ vcpkg_windows.bat
 build_windows.bat
 ```
 
+**Windows (MinGW)**
+init the MSYS2 MINGW64 shell with following packages
+```
+pacman -S --needed git base-devel mingw-w64-x86_64-toolchain cmake ninja
+```
+cmake's module FindVulkan has a little bug on MingGW, try modified FindVulkan.cmake as below
+set(_Vulkan_library_name vulkan) -> set(_Vulkan_library_name vulkan-1)
+then, execute scripts bellow
+```
+vcpkg_mingw.sh
+build_mings.sh
+```
+
 **Android On Windows**
 JAVA SDK should be JAVA17 or higher
 Install Android Studio or Android SDK Tool, with NDK 25.1.8937393 installed

@@ -21,5 +21,4 @@ namespace utils
     bool           GrabButton                     (ImVec2 pos, int random_int);
     void           HelpMarker                     (const char *desc);
     float          CenterHorizontal               ();
-
 }

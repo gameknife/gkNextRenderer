@@ -9,6 +9,7 @@ enum class EEditorCommand {
     ECmdSystem_RequestMaximum,
 
     ECmdIO_LoadScene,
+    ECmdIO_LoadHDRI,
 };
 
 struct EditorCommandArgs {

@@ -129,7 +129,7 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
 	// Global Texture Pool Creation Here
-	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, *commandPool2_));
+	globalTexturePool_.reset(new Assets::GlobalTexturePool(*device_, *commandPool2_, *commandPool_));
 	
 	OnDeviceSet();
 	
@@ -439,13 +439,7 @@ void VulkanBaseRenderer::DrawFrame()
 		
 		ClearViewport(commandBuffer, currentImageIndex_);
 		Render(commandBuffer, currentImageIndex_);
-
-		// copy to editor surface
-		if( GOption->Editor )
-		{
-			//CaptureEditorViewport(commandBuffer, currentImageIndex_);
-		}
-
+		// vulkan command is submitted with the render pass, so, imgui cost should count in the render pass
 		RenderUI(commandBuffer, currentImageIndex_);
 	}
 	
@@ -509,7 +503,6 @@ void VulkanBaseRenderer::DrawFrame()
 	}
 
 	currentFrame_ = (currentFrame_ + 1) % inFlightFences_.size();
-
 	frameCount_++;
 }
 

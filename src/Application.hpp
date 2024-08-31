@@ -60,9 +60,9 @@ protected:
 	void OnMouseButton(int button, int action, int mods) override;
 	void OnScroll(double xoffset, double yoffset) override;
 	void OnDropFile(int path_count, const char* paths[]) override;
+	void BeforeNextFrame() override;
 
 	Vulkan::Window& GetWindow() {return Renderer::Window();}
-
 private:
 
 	void LoadScene(uint32_t sceneIndex);
@@ -96,4 +96,6 @@ private:
 	uint32_t benchmarkTotalFrames_{};
 	uint32_t benchmarkNumber_{0};
 	std::ofstream benchmarkCsvReportFile;
+
+	glm::vec2 mousePos_ {};
 };

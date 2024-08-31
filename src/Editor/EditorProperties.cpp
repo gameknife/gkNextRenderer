@@ -12,8 +12,10 @@ void Editor::GUI::ShowProperties()
     //ImGui::SetNextWindowSize(pt_S);
     ImGui::Begin("Properties", NULL);
     {
-        if (selected_obj != nullptr)
+        if (selected_obj_id != -1)
         {
+            const Assets::Node* selected_obj = &(current_scene->Nodes()[selected_obj_id]);
+            
             ImGui::PushFont(fontIcon_);
             ImGui::TextUnformatted(selected_obj->GetName().c_str());
             ImGui::PopFont();
@@ -71,6 +73,13 @@ void Editor::GUI::ShowProperties()
                 {
                     int matIdx = mat;
                     ImGui::InputInt("##MaterialId", &matIdx, 1, 1, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::SameLine();
+                    if( ImGui::Button(ICON_FA_LINK) )
+                    {
+                        selected_material = &(current_scene->Materials()[matIdx]);
+                        ed_material = true;
+                        OpenMaterialEditor();
+                    }
                 }
             }
         }

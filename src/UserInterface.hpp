@@ -74,6 +74,8 @@ public:
 
 	UserSettings& Settings() { return userSettings_; }
 
+	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
+
 private:
 
 	ImGuiID DockSpaceUI();
@@ -97,4 +99,9 @@ private:
 	ImFont* fontIcon_;
 
 	bool firstRun;
+	
+	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	
 };
+
+inline UserInterface* GUserInterface = nullptr;

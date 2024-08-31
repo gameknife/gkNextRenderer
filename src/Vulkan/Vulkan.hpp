@@ -1,6 +1,9 @@
 #pragma once
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
+
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #if !ANDROID
