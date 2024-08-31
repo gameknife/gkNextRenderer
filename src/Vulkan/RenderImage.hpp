@@ -6,7 +6,7 @@
 #include "DeviceMemory.hpp"
 #include "Sampler.hpp"
 
-#if WIN32
+#if WIN32 && !defined(__MINGW32__)
 #define ExtHandle HANDLE
 #else
 #define ExtHandle int

@@ -57,7 +57,7 @@ namespace Vulkan {
     ExtHandle RenderImage::GetExternalHandle() const
     {
         ExtHandle handle;
-        #if WIN32
+        #if WIN32 && !defined(__MINGW32__)
         VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
         handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
         handleInfo.memory = imageMemory_->Handle();

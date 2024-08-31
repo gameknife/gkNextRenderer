@@ -83,7 +83,7 @@ namespace Vulkan::RayTracing
                                       VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
                                       VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME
                                   });
-#if WIN32
+#if WIN32 && !defined(__MINGW32__)
         requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
 #endif
 
