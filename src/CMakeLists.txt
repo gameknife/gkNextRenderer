@@ -291,7 +291,7 @@ else()
 target_link_libraries(${exe_name} PRIVATE glfw)
 endif()
 
-if ( WIN32 )
+if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
 target_link_libraries(${exe_name} PRIVATE gdi32)
 endif()
 
