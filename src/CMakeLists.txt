@@ -286,7 +286,7 @@ endif()
 if ( ANDROID )
 target_link_libraries(${exe_name} PRIVATE fmt::fmt game-activity::game-activity log android rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
-target_link_libraries(${exe_name} PRIVATE fmt::fmt rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE fmt::fmt rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw gdi32 glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 endif()
 
 if ( WITH_AVIF )

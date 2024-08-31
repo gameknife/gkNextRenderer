@@ -333,7 +333,7 @@ ASALocalRun/
 build
 
 assets/shaders/Platform.glsl
-
+assets/package
 android/.gradle/
 android/app/src/main/assets/
 android/local.properties
