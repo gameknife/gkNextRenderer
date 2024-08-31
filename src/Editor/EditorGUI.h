@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 #include "imgui.h"
 #include "EditorUtils.h"
 

@@ -34,7 +34,7 @@ DeviceProcedures::DeviceProcedures(const class Device& device, bool raytracing, 
 	vkGetRayTracingShaderGroupHandlesKHR(raytracing ? GetProcedure<PFN_vkGetRayTracingShaderGroupHandlesKHR>(device, "vkGetRayTracingShaderGroupHandlesKHR"): nullptr),
 	vkGetAccelerationStructureDeviceAddressKHR(GetProcedure<PFN_vkGetAccelerationStructureDeviceAddressKHR>(device, "vkGetAccelerationStructureDeviceAddressKHR")),
 	vkCmdWriteAccelerationStructuresPropertiesKHR(GetProcedure<PFN_vkCmdWriteAccelerationStructuresPropertiesKHR>(device, "vkCmdWriteAccelerationStructuresPropertiesKHR")),
-#if WIN32
+#if WIN32 && !defined(__MINGW32__)
 	vkGetMemoryWin32HandleKHR(GetProcedure<PFN_vkGetMemoryWin32HandleKHR>(device, "vkGetMemoryWin32HandleKHR")),
 #endif
 	device_(device)

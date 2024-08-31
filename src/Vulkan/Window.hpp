@@ -38,6 +38,7 @@ namespace Vulkan
 		std::function<void(int button, int action, int mods)> OnMouseButton;
 		std::function<void(double xoffset, double yoffset)> OnScroll;
 		std::function<void(int path_count, const char* paths[])> OnDropFile;
+		std::function<void(GLFWwindow* window, int focused)> OnFocus;
 
 		// Methods
 		void Close();

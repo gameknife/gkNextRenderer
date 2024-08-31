@@ -5,6 +5,7 @@
 #include <functional>
 #include <random>
 #include <filesystem>
+#include <algorithm>
 
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
