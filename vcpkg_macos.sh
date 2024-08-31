@@ -26,6 +26,5 @@ fi
 	curl:x64-osx \
 	tinygltf:x64-osx \
 	draco:x64-osx \
-	rapidjson:x64-osx \
 	fmt:x64-osx \
 	cpp-base64:x64-osx
