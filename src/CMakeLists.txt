@@ -179,8 +179,15 @@ set(src_files_editor
 		Editor/EditorContentBrowser.cpp
 		Editor/EditorUtils.cpp
 		Editor/EditorUtils.h
-	Editor/EditorCommand.hpp
-	Editor/IconsFontAwesome6.h
+		Editor/EditorCommand.hpp
+		Editor/EditorMaterialEd.cpp
+		Editor/IconsFontAwesome6.h
+		Editor/Nodes/NodeSetFloat.cpp
+		Editor/Nodes/NodeSetFloat.hpp
+		Editor/Nodes/NodeSetInt.cpp
+		Editor/Nodes/NodeSetInt.hpp
+		Editor/Nodes/NodeMaterial.cpp
+		Editor/Nodes/NodeMaterial.hpp
 )
 
 set(src_files
@@ -255,6 +262,10 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
+add_subdirectory(ThirdParty/ImNodeFlow)
+target_compile_definitions(${exe_name} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+target_link_libraries(${exe_name} PRIVATE ImNodeFlow)
+
 add_dependencies(${exe_name} Assets)
 set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
@@ -275,7 +286,7 @@ endif()
 if ( ANDROID )
 target_link_libraries(${exe_name} PRIVATE fmt::fmt game-activity::game-activity log android rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 else()
-target_link_libraries(${exe_name} PRIVATE fmt::fmt rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+target_link_libraries(${exe_name} PRIVATE fmt::fmt rapidjson CURL::libcurl PRIVATE Boost::boost Boost::exception Boost::program_options glfw gdi32 glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 endif()
 
 if ( WITH_AVIF )
