@@ -12,6 +12,7 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
 #include <fstream>
+#include <iostream>
 #include <ctime>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
