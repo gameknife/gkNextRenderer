@@ -635,7 +635,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             std::time_t now = std::time(nullptr);
             std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
             benchmarkCsvReportFile.open(report_filename);
-            fmt::print(benchmarkCsvReportFile, "#;scene;FPS\n");  
+            benchmarkCsvReportFile << fmt::format("#;scene;FPS\n");
         }
 
         fmt::print("\n\nRenderer: {}\n", Renderer::StaticClass());
@@ -677,7 +677,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
                 fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
-                fmt::print(benchmarkCsvReportFile, "{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
+                benchmarkCsvReportFile << fmt::format("{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
             }
 
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==

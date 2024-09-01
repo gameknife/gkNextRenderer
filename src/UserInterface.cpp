@@ -131,8 +131,9 @@ UserInterface::UserInterface(
 	vulkanInit.ImageCount = static_cast<uint32_t>(swapChain.Images().size());
 	vulkanInit.Allocator = nullptr;
 	vulkanInit.CheckVkResultFn = CheckVulkanResultCallback;
+	vulkanInit.RenderPass = renderPass_->Handle();
 
-	if (!ImGui_ImplVulkan_Init(&vulkanInit, renderPass_->Handle()))
+	if (!ImGui_ImplVulkan_Init(&vulkanInit))
 	{
 		Throw(std::runtime_error("failed to initialise ImGui vulkan adapter"));
 	}
@@ -266,7 +267,7 @@ ImGuiID UserInterface::DockSpaceUI()
 	ImGuiID dockMain = ImGui::GetID("MyDockspace");
 	
 	// Save off menu bar height for later.
-	menuBarHeight = ImGui::GetCurrentWindow()->MenuBarHeight();
+	menuBarHeight = ImGui::GetCurrentWindow()->MenuBarHeight;
 
 	ImGui::DockSpace(dockMain, ImVec2(0,0), ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
 	ImGui::End();

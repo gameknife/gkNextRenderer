@@ -29,7 +29,25 @@ jobs:
       run: |
         brew install molten-vk
         brew install glslang
+
+    - name: Restore cached Primes
+      id: cache-primes-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          build/vcpkg.macos
+        key: ${{ runner.os }}-primes
+
     - name: Compile vcpkg dependencies
       run: ./vcpkg_macos.sh
+
+    - name: Save Primes
+      id: cache-primes-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          build/vcpkg.macos
+        key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
+
     - name: Compile gkNextRenderer
       run: ./build_macos.sh

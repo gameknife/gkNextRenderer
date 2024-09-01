@@ -9,7 +9,7 @@ IF EXIST vcpkg.windows (
 ) ELSE (
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.windows || goto :error
 	cd vcpkg.windows || goto :error
-	git checkout 2024.03.25 || goto :error
+	git checkout 2024.08.23 || goto :error
 	call bootstrap-vcpkg.bat || goto :error
 )
 
