@@ -27,11 +27,29 @@ jobs:
     - name: Install Vulkan SDK
       run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
       shell: cmd
+
+    - name: Restore cached Primes
+      id: cache-primes-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          build/vcpkg.windows
+        key: ${{ runner.os }}-primes
+
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         vcpkg_windows.bat
       shell: cmd
+
+    - name: Save Primes
+      id: cache-primes-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          build/vcpkg.windows
+        key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
+
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
     - name: Compile gkNextRenderer

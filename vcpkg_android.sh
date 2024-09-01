@@ -10,9 +10,10 @@ if [ -d "vcpkg.android" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.android
 	cd vcpkg.android
-	#git checkout 2024.03.25
-	./bootstrap-vcpkg.sh
 fi
+
+git checkout 2024.08.23
+./bootstrap-vcpkg.sh
 
 #replace the triplets/arm64-android.cmake file with ours
 cp -f ../../android/custom-triplets/arm64-android.cmake ./triplets/arm64-android.cmake
@@ -28,6 +29,5 @@ cp -f ../../android/custom-triplets/arm64-android.cmake ./triplets/arm64-android
 	curl:arm64-android \
 	tinygltf:arm64-android \
 	draco:arm64-android \
-	rapidjson:arm64-android \
 	fmt:arm64-android \
 	cpp-base64:arm64-android

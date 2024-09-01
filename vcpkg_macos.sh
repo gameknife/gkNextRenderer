@@ -10,9 +10,10 @@ if [ -d "vcpkg.macos" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.macos
 	cd vcpkg.macos
-	git checkout 2024.03.25
-	./bootstrap-vcpkg.sh
 fi
+
+git checkout 2024.08.23
+./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
 	boost-exception:x64-osx \
@@ -26,6 +27,5 @@ fi
 	curl:x64-osx \
 	tinygltf:x64-osx \
 	draco:x64-osx \
-	rapidjson:x64-osx \
 	fmt:x64-osx \
 	cpp-base64:x64-osx

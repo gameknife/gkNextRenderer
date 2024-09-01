@@ -10,9 +10,10 @@ if [ -d "vcpkg.linux" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.linux
 	cd vcpkg.linux
-	git checkout 2024.03.25
-	./bootstrap-vcpkg.sh
 fi
+
+git checkout 2024.08.23
+./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
 	boost-exception:x64-linux \
@@ -26,6 +27,5 @@ fi
 	curl:x64-linux \
 	tinygltf:x64-linux \
 	draco:x64-linux \
-	rapidjson:x64-linux \
 	fmt:x64-linux \
 	cpp-base64:x64-linux

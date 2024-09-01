@@ -2,6 +2,7 @@
 
 #include <string>
 #include <map>
+#include <fstream>
 
 namespace Utilities
 {

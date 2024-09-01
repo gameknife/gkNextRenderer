@@ -10,9 +10,11 @@ if [ -d "vcpkg.mingw" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.mingw
 	cd vcpkg.mingw
-	git checkout 2024.03.25
-	./bootstrap-vcpkg.sh
 fi
+
+# handle vcpkg update
+git checkout 2024.08.23
+./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
 	boost-exception:x64-mingw-static \
@@ -26,6 +28,5 @@ fi
 	curl:x64-mingw-static \
 	tinygltf:x64-mingw-static \
 	draco:x64-mingw-static \
-	rapidjson:x64-mingw-static \
 	fmt:x64-mingw-static \
 	cpp-base64:x64-mingw-static
