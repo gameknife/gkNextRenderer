@@ -14,6 +14,9 @@ else
 	./bootstrap-vcpkg.sh
 fi
 
+git checkout 2024.08.23
+./bootstrap-vcpkg.sh
+
 ./vcpkg --recurse install \
 	boost-exception:x64-linux \
 	boost-program-options:x64-linux \

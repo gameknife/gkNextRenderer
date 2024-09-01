@@ -16,7 +16,6 @@ on:
       - '**/CMakeLists.txt'
 jobs:
   build:
-
     runs-on: ubuntu-22.04
     env: 
       SDK_VERSION: 1.3.280

@@ -11,9 +11,10 @@ IF EXIST vcpkg.android (
 ) ELSE (
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.android || goto :error
 	cd vcpkg.android || goto :error
-	git checkout 2024.08.23 || goto :error
-	call bootstrap-vcpkg.bat || goto :error
 )
+
+git checkout 2024.08.23 || goto :error
+call bootstrap-vcpkg.bat || goto :error
 
 rem replace the triplets/arm64-android.cmake file with ours
 copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm64-android.cmake
