@@ -29,7 +29,7 @@ android {
         externalNativeBuild {
             cmake {
                 abiFilters 'arm64-v8a'
-                arguments '-DCMAKE_BUILD_TYPE=Release', '-DANDROID_PLATFORM=33', '-DVCPKG_CMAKE_SYSTEM_VERSION=33', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+                arguments '-DANDROID_STL=c++_shared', '-DCMAKE_BUILD_TYPE=Release', '-DANDROID_PLATFORM=33', '-DVCPKG_CMAKE_SYSTEM_VERSION=33', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
                 targets "gkNextRenderer"
             }
         }
