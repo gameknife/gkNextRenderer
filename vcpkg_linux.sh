@@ -10,8 +10,6 @@ if [ -d "vcpkg.linux" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.linux
 	cd vcpkg.linux
-	git checkout 2024.08.23
-	./bootstrap-vcpkg.sh
 fi
 
 git checkout 2024.08.23

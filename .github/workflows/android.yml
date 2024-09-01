@@ -17,7 +17,7 @@ on:
 jobs:
   build:
 
-    runs-on: windows-2022
+    runs-on: ubuntu-22.04
     env: 
       SDK_VERSION: 1.3.280
     steps:
@@ -36,8 +36,8 @@ jobs:
         key: ${{ runner.os }}-primes
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg_android.bat
-
+      run: ./vcpkg_android.sh
+      
     - name: Save Primes
       id: cache-primes-save
       uses: actions/cache/save@v4
@@ -46,12 +46,11 @@ jobs:
           build/vcpkg.android
         key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
 
-    - name: Download Vulkan SDK
-      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-
-    - name: Install Vulkan SDK
-      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-      shell: cmd
-
+    - name: Install Dependencies
+      run: |
+        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
+        sudo apt-get update
+        sudo apt-get install vulkan-sdk
     - name: Compile gkNextRenderer
-      run: ./build_android.bat
+      run: ./build_android.sh

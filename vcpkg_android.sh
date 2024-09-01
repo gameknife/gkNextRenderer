@@ -10,8 +10,6 @@ if [ -d "vcpkg.android" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.android
 	cd vcpkg.android
-	git checkout 2024.08.23
-	./bootstrap-vcpkg.sh
 fi
 
 git checkout 2024.08.23
