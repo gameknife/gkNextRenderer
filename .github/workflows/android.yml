@@ -26,8 +26,26 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
     - uses: actions/checkout@v4
+
+    - name: Restore cached Primes
+      id: cache-primes-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          build/vcpkg.android
+        key: ${{ runner.os }}-primes
+
     - name: Compile vcpkg dependencies
       run: ./vcpkg_android.sh
+      
+    - name: Save Primes
+      id: cache-primes-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          build/vcpkg.android
+        key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
+
     - name: Install Dependencies
       run: |
         wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
