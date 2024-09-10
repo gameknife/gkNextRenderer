@@ -152,4 +152,8 @@ Scene::~Scene()
 	indirectDrawBufferMemory_.reset();
 }
 
+void Scene::UpdateMaterial()
+{
+	// update value after binding, like the bindless textures, try
+}
 }

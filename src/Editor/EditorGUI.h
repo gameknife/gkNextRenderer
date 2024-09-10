@@ -40,16 +40,17 @@ namespace Editor
 
         bool                    viewport                   = true;                 // Viewport State
         uint32_t                selected_obj_id               = -1;              // Viewport Selected
-        const Assets::Scene*    current_scene              = nullptr;
+        Assets::Scene*    current_scene              = nullptr;
         void                    ShowViewport               (ImGuiID id, const Statistics& statistics);
 
         bool                    contentBrowser             = true;                // Workspace "Output"
         void                    ShowContentBrowser();
 
         bool                    ed_material                = false;                // Material Editor
-        const Assets::Material*       selected_material          = nullptr;              // Material Selected
+        Assets::Material*       selected_material          = nullptr;              // Material Selected
         void                    ShowMaterialEditor();
         void                    OpenMaterialEditor();
+        void                    ApplyMaterial();
 
         bool                    child_style                = false;                // Show Style Editor
         bool                    child_demo                 = false;                // Show Demo Window

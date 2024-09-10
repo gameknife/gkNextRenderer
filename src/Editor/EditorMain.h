@@ -10,4 +10,4 @@ namespace Assets
 }
 
 void MainWindowStyle();
-void MainWindowGUI(Editor::GUI & gui, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun);
+void MainWindowGUI(Editor::GUI & gui, Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun);

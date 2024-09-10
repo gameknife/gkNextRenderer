@@ -59,7 +59,7 @@ void MainWindowStyle()
     style->GrabRounding                     = 12.00f;
 }
 
-void MainWindowGUI(Editor::GUI & gui_r, const Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
+void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
     Editor::GUI &gui = gui_r;

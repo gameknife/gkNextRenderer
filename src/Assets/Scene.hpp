@@ -41,7 +41,7 @@ namespace Assets
 
 		const std::vector<Node>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
-		const std::vector<Material>& Materials() const { return materials_; }
+		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
 		
 		
@@ -66,9 +66,11 @@ namespace Assets
 		
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
+
+		void UpdateMaterial();
 		
 	private:
-		const std::vector<Material> materials_;
+		std::vector<Material> materials_;
 		const std::vector<Model> models_;
 		const std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;

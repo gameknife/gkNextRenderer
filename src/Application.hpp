@@ -80,7 +80,7 @@ private:
 
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
-	std::unique_ptr<const Assets::Scene> scene_;
+	std::unique_ptr<Assets::Scene> scene_;
 	std::unique_ptr<class UserInterface> userInterface_;
 
 	double time_{};
