@@ -1,5 +1,6 @@
 
-set(exe_name ${MAIN_PROJECT})
+set(exe_name gkNextRenderer)
+set(exe_editor_name gkNextEditor)
 
 set(src_files_assets
 	Assets/CornellBox.cpp
@@ -254,7 +255,23 @@ add_executable(${exe_name}
 	${src_files_editor}
 	${src_files}
 )
+add_executable(${exe_editor_name}
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_vulkan} 
+	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_raytrace}
+	${src_files_vulkan_moderndeferred} 
+	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
+	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
+	${src_files_editor}
+	${src_files}
+)
 endif()
+
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
@@ -262,58 +279,69 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
+
+# editor stuff
 add_subdirectory(ThirdParty/ImNodeFlow)
-target_compile_definitions(${exe_name} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
-target_link_libraries(${exe_name} PRIVATE ImNodeFlow)
 
-add_dependencies(${exe_name} Assets)
-set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
-target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
-target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
+set(AllTargets ${exe_name} ${exe_editor_name})
 
-target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
+# common setup
+foreach(item IN LISTS AllTargets)
+	# common dependencies
+	add_dependencies(${item} Assets)
+	set_target_properties(${item} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+	target_include_directories(${item} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+	target_include_directories(${item} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
+	target_include_directories(${item} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 
-if ( ANDROID )
-target_include_directories(${exe_name} PRIVATE
-    ${ANDROID_NDK}/sources/android/native_app_glue)
-endif()
+	target_link_directories(${item} PRIVATE ${Vulkan_LIBRARY})
 
-if ( APPLE )
-target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
-endif()
+	if ( ANDROID )
+	target_include_directories(${item} PRIVATE
+		${ANDROID_NDK}/sources/android/native_app_glue)
+	endif()
 
-target_link_libraries(${exe_name} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+	if ( APPLE )
+	target_compile_definitions(${item} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+	endif()
 
-if ( ANDROID)
-target_link_libraries(${exe_name} PRIVATE game-activity::game-activity log android)
-else()
-target_link_libraries(${exe_name} PRIVATE glfw)
-endif()
+	target_link_libraries(${item} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 
-if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
-target_link_libraries(${exe_name} PRIVATE gdi32)
-endif()
+	if ( ANDROID)
+	target_link_libraries(${item} PRIVATE game-activity::game-activity log android)
+	else()
+	target_link_libraries(${item} PRIVATE glfw)
+	endif()
 
-if ( WITH_AVIF )
-target_compile_definitions(${exe_name} PUBLIC WITH_AVIF=1)
-target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-target_link_libraries(${exe_name} PRIVATE avif)
-endif()
+	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
+	target_link_libraries(${item} PRIVATE gdi32)
+	endif()
 
-if ( WITH_OIDN )
-target_compile_definitions(${exe_name} PUBLIC WITH_OIDN=1)
-target_include_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/include/)
-target_link_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/lib/)
-target_link_libraries(${exe_name} PRIVATE OpenImageDenoise OpenImageDenoise_core )
+	if ( WITH_AVIF )
+	target_compile_definitions(${item} PUBLIC WITH_AVIF=1)
+	target_compile_definitions(${item} PUBLIC AVIF_CODEC_AOM=SYSTEM)
+	target_link_libraries(${item} PRIVATE avif)
+	endif()
 
-add_custom_command(
-            TARGET ${exe_name} POST_BUILD
-			COMMAND echo \"copy oidn dlls...\"
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-        )
-endif()
+	if ( WITH_OIDN )
+	target_compile_definitions(${item} PUBLIC WITH_OIDN=1)
+	target_include_directories(${item} PRIVATE ../src/ThirdParty/oidn/include/)
+	target_link_directories(${item} PRIVATE ../src/ThirdParty/oidn/lib/)
+	target_link_libraries(${item} PRIVATE OpenImageDenoise OpenImageDenoise_core )
 
-if( WIN32 )
-target_compile_definitions(${exe_name} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
-endif()
+	add_custom_command(
+				TARGET ${item} POST_BUILD
+				COMMAND echo \"copy oidn dlls...\"
+				COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+			)
+	endif()
+
+	if( WIN32 )
+	target_compile_definitions(${item} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
+	endif()
+
+	target_compile_definitions(${item} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+	target_link_libraries(${item} PRIVATE ImNodeFlow)
+endforeach()
+
+
