@@ -235,7 +235,6 @@ add_library(${exe_name} SHARED
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
-	${src_files_editor}
 	${src_files}
 	GameActivitySources.cpp
 )
@@ -252,7 +251,6 @@ add_executable(${exe_name}
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
-	${src_files_editor}
 	${src_files}
 )
 add_executable(${exe_editor_name}
@@ -341,7 +339,16 @@ foreach(item IN LISTS AllTargets)
 	endif()
 
 	target_compile_definitions(${item} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
-	target_link_libraries(${item} PRIVATE ImNodeFlow)
 endforeach()
 
+#specific setup for target
+target_link_libraries(${exe_editor_name} PRIVATE ImNodeFlow)
+target_compile_definitions(${exe_name} PUBLIC WITH_EDITOR=0)
+target_compile_definitions(${exe_editor_name} PUBLIC WITH_EDITOR=1)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# set_target_properties(Assets PROPERTIES FOLDER "Assets")
+# set_target_properties(${exe_name} PROPERTIES FOLDER "Runtime")
+# set_target_properties(${exe_editor_name} PROPERTIES FOLDER "Editor")
+set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 
