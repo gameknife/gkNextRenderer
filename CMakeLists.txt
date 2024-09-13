@@ -16,6 +16,11 @@ endforeach()
 
 set (CMAKE_CXX_STANDARD 17)
 
+if (MSVC)
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
+else()
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function")
+endif()
 if (WIN32)
 	add_definitions(-DUNICODE -D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
