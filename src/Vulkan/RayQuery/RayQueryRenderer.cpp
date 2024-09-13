@@ -116,8 +116,6 @@ namespace Vulkan::RayTracing
 
     void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        const auto extent = SwapChain().Extent();
-        
         VkImageSubresourceRange subresourceRange = {};
         subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         subresourceRange.baseMipLevel = 0;

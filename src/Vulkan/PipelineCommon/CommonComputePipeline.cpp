@@ -247,16 +247,11 @@ namespace Vulkan::PipelineCommon
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            
             VkDescriptorImageInfo Info0 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, debugImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info2 = {NULL, debugImage2View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info3 = {NULL, debugImage3View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info4 = {NULL, debugImage4View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            
-            VkDescriptorBufferInfo uniformBufferInfo = {};
-            uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
-            uniformBufferInfo.range = VK_WHOLE_SIZE;
 
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -359,11 +354,6 @@ namespace Vulkan::PipelineCommon
         VkDescriptorBufferInfo offsetsBufferInfo = {};
         offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
         offsetsBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Light buffer
-        VkDescriptorBufferInfo lightBufferInfo = {};
-        lightBufferInfo.buffer = scene.LightBuffer().Handle();
-        lightBufferInfo.range = VK_WHOLE_SIZE;
         
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {

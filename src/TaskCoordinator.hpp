@@ -224,9 +224,6 @@ public:
    
     ~TaskThread()
     {
-        std::thread::id threadId = thread_->get_id();
-        unsigned int ThreadIdAsInt = *static_cast<unsigned int*>(static_cast<void*>(&threadId));
-        fmt::print("TaskThread {} request shutting down, wait for task complete.\n", ThreadIdAsInt);
         complete_->wait();
         terminate_->set();
         thread_->join();

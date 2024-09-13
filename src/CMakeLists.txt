@@ -359,6 +359,15 @@ foreach(target IN LISTS AllTargets)
 
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 
+	# warning as error
+	if (MSVC)
+	#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
+	target_compile_options(${target} PRIVATE /WX)
+	else()
+	#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function")
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare)
+	endif()
+
 	# specific for targets
 
 	if ( ${target} STREQUAL gkNextRenderer )
