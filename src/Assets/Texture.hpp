@@ -43,9 +43,10 @@ namespace Assets
 	private:
 		static GlobalTexturePool* instance_;
 
+		const class Vulkan::Device& device_;
 		Vulkan::CommandPool& commandPool_;
 		Vulkan::CommandPool& mainThreadCommandPool_;
-		const class Vulkan::Device& device_;
+		
 		VkDescriptorPool descriptorPool_{};
 		VkDescriptorSetLayout layout_{};
 		std::vector<VkDescriptorSet> descriptorSets_;

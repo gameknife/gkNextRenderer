@@ -1,6 +1,4 @@
-
-set(exe_name gkNextRenderer)
-set(exe_editor_name gkNextEditor)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(src_files_assets
 	Assets/CornellBox.cpp
@@ -169,6 +167,19 @@ set(src_files_thirdparty_json11
 	ThirdParty/json11/json11.hpp
 )
 
+if (MSVC)
+set_source_files_properties(
+  ${src_files_thirdparty_json11}
+  PROPERTIES
+  COMPILE_FLAGS "/W0"
+) 
+else()
+set_source_files_properties(
+  ${src_files_thirdparty_json11}
+  PROPERTIES
+  COMPILE_FLAGS "-w"
+) 
+endif()
 set(src_files_editor
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
@@ -223,7 +234,7 @@ source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
 
 if ( ANDROID )
-add_library(${exe_name} SHARED
+add_library(gkNextRenderer SHARED
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -239,7 +250,7 @@ add_library(${exe_name} SHARED
 	GameActivitySources.cpp
 )
 else()
-add_executable(${exe_name}
+add_executable(gkNextRenderer
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -253,7 +264,7 @@ add_executable(${exe_name}
 	${src_files_thirdparty_json11}
 	${src_files}
 )
-add_executable(${exe_editor_name}
+add_executable(gkNextEditor
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -281,74 +292,87 @@ endif()
 # editor stuff
 add_subdirectory(ThirdParty/ImNodeFlow)
 
-set(AllTargets ${exe_name} ${exe_editor_name})
-
+if ( ANDROID )
+set(AllTargets 
+gkNextRenderer
+)
+else()
+set(AllTargets 
+gkNextRenderer 
+gkNextEditor
+)
+endif()
 # common setup
-foreach(item IN LISTS AllTargets)
+foreach(target IN LISTS AllTargets)
 	# common dependencies
-	add_dependencies(${item} Assets)
-	set_target_properties(${item} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-	target_include_directories(${item} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
-	target_include_directories(${item} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
-	target_include_directories(${item} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
+	add_dependencies(${target} Assets)
+	set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+	target_include_directories(${target} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
+	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 
-	target_link_directories(${item} PRIVATE ${Vulkan_LIBRARY})
+	target_link_directories(${target} PRIVATE ${Vulkan_LIBRARY})
 
 	if ( ANDROID )
-	target_include_directories(${item} PRIVATE
+	target_include_directories(${target} PRIVATE
 		${ANDROID_NDK}/sources/android/native_app_glue)
 	endif()
 
 	if ( APPLE )
-	target_compile_definitions(${item} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+	target_compile_definitions(${target} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 	endif()
 
-	target_link_libraries(${item} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+	target_link_libraries(${target} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 
 	if ( ANDROID)
-	target_link_libraries(${item} PRIVATE game-activity::game-activity log android)
+	target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
 	else()
-	target_link_libraries(${item} PRIVATE glfw)
+	target_link_libraries(${target} PRIVATE glfw)
 	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
-	target_link_libraries(${item} PRIVATE gdi32)
+	target_link_libraries(${target} PRIVATE gdi32)
 	endif()
 
 	if ( WITH_AVIF )
-	target_compile_definitions(${item} PUBLIC WITH_AVIF=1)
-	target_compile_definitions(${item} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-	target_link_libraries(${item} PRIVATE avif)
+	target_compile_definitions(${target} PUBLIC WITH_AVIF=1)
+	target_compile_definitions(${target} PUBLIC AVIF_CODEC_AOM=SYSTEM)
+	target_link_libraries(${target} PRIVATE avif)
 	endif()
 
 	if ( WITH_OIDN )
-	target_compile_definitions(${item} PUBLIC WITH_OIDN=1)
-	target_include_directories(${item} PRIVATE ../src/ThirdParty/oidn/include/)
-	target_link_directories(${item} PRIVATE ../src/ThirdParty/oidn/lib/)
-	target_link_libraries(${item} PRIVATE OpenImageDenoise OpenImageDenoise_core )
+	target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
+	target_include_directories(${target} PRIVATE ../src/ThirdParty/oidn/include/)
+	target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
+	target_link_libraries(${target} PRIVATE OpenImageDenoise OpenImageDenoise_core )
 
 	add_custom_command(
-				TARGET ${item} POST_BUILD
+				TARGET ${target} POST_BUILD
 				COMMAND echo \"copy oidn dlls...\"
 				COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
 			)
 	endif()
 
 	if( WIN32 )
-	target_compile_definitions(${item} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
+	target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
 	endif()
 
-	target_compile_definitions(${item} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+
+	# specific for targets
+
+	if ( ${target} STREQUAL gkNextRenderer )
+	target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
+	endif()
+
+	if ( ${target} STREQUAL gkNextEditor )
+	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
+	target_compile_definitions(gkNextEditor PUBLIC WITH_EDITOR=1)
+	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+	endif()
+
 endforeach()
 
-#specific setup for target
-target_link_libraries(${exe_editor_name} PRIVATE ImNodeFlow)
-target_compile_definitions(${exe_name} PUBLIC WITH_EDITOR=0)
-target_compile_definitions(${exe_editor_name} PUBLIC WITH_EDITOR=1)
-
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # set_target_properties(Assets PROPERTIES FOLDER "Assets")
 # set_target_properties(${exe_name} PROPERTIES FOLDER "Runtime")
 # set_target_properties(${exe_editor_name} PROPERTIES FOLDER "Editor")
-set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
-

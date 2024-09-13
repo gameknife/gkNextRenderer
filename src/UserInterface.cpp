@@ -125,8 +125,9 @@ UserInterface::UserInterface(
 	const Vulkan::DepthBuffer& depthBuffer,
 	UserSettings& userSettings,
 	Vulkan::RenderImage& viewportImage) :
-	userSettings_(userSettings),
-	swapChain_(swapChain)
+	swapChain_(swapChain),
+	userSettings_(userSettings)
+	
 {
 	editorGUI_.reset(new Editor::GUI());
 	

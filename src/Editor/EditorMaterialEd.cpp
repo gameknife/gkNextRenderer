@@ -90,7 +90,7 @@ void Editor::GUI::ShowMaterialEditor()
                 if (ImGui::Button("Add Node"))
                 {
                     ImVec2 pos = ImGui::GetMousePos();
-                    myNode->placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1);
+                    myNode->placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1.0f);
                     ImGui::CloseCurrentPopup();
                 }
             } });

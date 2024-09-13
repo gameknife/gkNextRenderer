@@ -558,7 +558,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     cameraInitialSate_.CameraIdx = -1;
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();

@@ -121,9 +121,9 @@ namespace Assets
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
-        std::shared_ptr<const class Procedural> procedural_;
         std::vector<uint32_t> materialIdx_;
-
+        std::shared_ptr<const class Procedural> procedural_;
+        
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
     };
