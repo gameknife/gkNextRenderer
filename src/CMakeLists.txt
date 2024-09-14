@@ -378,6 +378,12 @@ foreach(target IN LISTS AllTargets)
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
 	target_compile_definitions(gkNextEditor PUBLIC WITH_EDITOR=1)
 	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+
+	if (MSVC)
+
+	else()
+	set_source_files_properties(${src_files_editor} PROPERTIES COMPILE_FLAGS "-w")
+	endif()
 	endif()
 
 endforeach()
