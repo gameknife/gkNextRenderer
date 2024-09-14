@@ -155,7 +155,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 
     Renderer::SetRaycastRay(rayorg, raydir);
     
-    Assets::RayCastResult rayResult;
+    Assets::RayCastResult rayResult {};
     Renderer::GetLastRaycastResult(rayResult);
     
     if( userSettings_.AutoFocus )
