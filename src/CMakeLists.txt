@@ -1,5 +1,4 @@
-
-set(exe_name ${MAIN_PROJECT})
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(src_files_assets
 	Assets/CornellBox.cpp
@@ -168,6 +167,19 @@ set(src_files_thirdparty_json11
 	ThirdParty/json11/json11.hpp
 )
 
+if (MSVC)
+set_source_files_properties(
+  ${src_files_thirdparty_json11}
+  PROPERTIES
+  COMPILE_FLAGS "/W0"
+) 
+else()
+set_source_files_properties(
+  ${src_files_thirdparty_json11}
+  PROPERTIES
+  COMPILE_FLAGS "-w"
+) 
+endif()
 set(src_files_editor
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
@@ -222,7 +234,7 @@ source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
 
 if ( ANDROID )
-add_library(${exe_name} SHARED
+add_library(gkNextRenderer SHARED
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -234,12 +246,25 @@ add_library(${exe_name} SHARED
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
-	${src_files_editor}
 	${src_files}
 	GameActivitySources.cpp
 )
 else()
-add_executable(${exe_name}
+add_executable(gkNextRenderer
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_vulkan} 
+	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_raytrace}
+	${src_files_vulkan_moderndeferred} 
+	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
+	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
+	${src_files}
+)
+add_executable(gkNextEditor
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -255,6 +280,7 @@ add_executable(${exe_name}
 	${src_files}
 )
 endif()
+
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
@@ -262,58 +288,104 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
+
+# editor stuff
 add_subdirectory(ThirdParty/ImNodeFlow)
-target_compile_definitions(${exe_name} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
-target_link_libraries(${exe_name} PRIVATE ImNodeFlow)
-
-add_dependencies(${exe_name} Assets)
-set_target_properties(${exe_name} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-target_include_directories(${exe_name} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
-target_include_directories(${exe_name} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
-target_include_directories(${exe_name} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
-
-target_link_directories(${exe_name} PRIVATE ${Vulkan_LIBRARY})
 
 if ( ANDROID )
-target_include_directories(${exe_name} PRIVATE
-    ${ANDROID_NDK}/sources/android/native_app_glue)
-endif()
-
-if ( APPLE )
-target_compile_definitions(${exe_name} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
-endif()
-
-target_link_libraries(${exe_name} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
-
-if ( ANDROID)
-target_link_libraries(${exe_name} PRIVATE game-activity::game-activity log android)
+set(AllTargets 
+gkNextRenderer
+)
 else()
-target_link_libraries(${exe_name} PRIVATE glfw)
+set(AllTargets 
+gkNextRenderer 
+gkNextEditor
+)
 endif()
+# common setup
+foreach(target IN LISTS AllTargets)
+	# common dependencies
+	add_dependencies(${target} Assets)
+	set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+	target_include_directories(${target} PRIVATE . ${STB_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
+	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 
-if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
-target_link_libraries(${exe_name} PRIVATE gdi32)
-endif()
+	target_link_directories(${target} PRIVATE ${Vulkan_LIBRARY})
 
-if ( WITH_AVIF )
-target_compile_definitions(${exe_name} PUBLIC WITH_AVIF=1)
-target_compile_definitions(${exe_name} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-target_link_libraries(${exe_name} PRIVATE avif)
-endif()
+	if ( ANDROID )
+	target_include_directories(${target} PRIVATE
+		${ANDROID_NDK}/sources/android/native_app_glue)
+	endif()
 
-if ( WITH_OIDN )
-target_compile_definitions(${exe_name} PUBLIC WITH_OIDN=1)
-target_include_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/include/)
-target_link_directories(${exe_name} PRIVATE ../src/ThirdParty/oidn/lib/)
-target_link_libraries(${exe_name} PRIVATE OpenImageDenoise OpenImageDenoise_core )
+	if ( APPLE )
+	target_compile_definitions(${target} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
+	endif()
 
-add_custom_command(
-            TARGET ${exe_name} POST_BUILD
-			COMMAND echo \"copy oidn dlls...\"
-            COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-        )
-endif()
+	target_link_libraries(${target} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 
-if( WIN32 )
-target_compile_definitions(${exe_name} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
-endif()
+	if ( ANDROID)
+	target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
+	else()
+	target_link_libraries(${target} PRIVATE glfw)
+	endif()
+
+	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
+	target_link_libraries(${target} PRIVATE gdi32)
+	endif()
+
+	if ( WITH_AVIF )
+	target_compile_definitions(${target} PUBLIC WITH_AVIF=1)
+	target_compile_definitions(${target} PUBLIC AVIF_CODEC_AOM=SYSTEM)
+	target_link_libraries(${target} PRIVATE avif)
+	endif()
+
+	if ( WITH_OIDN )
+	target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
+	target_include_directories(${target} PRIVATE ../src/ThirdParty/oidn/include/)
+	target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
+	target_link_libraries(${target} PRIVATE OpenImageDenoise OpenImageDenoise_core )
+
+	add_custom_command(
+				TARGET ${target} POST_BUILD
+				COMMAND echo \"copy oidn dlls...\"
+				COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+			)
+	endif()
+
+	if( WIN32 )
+	target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
+	endif()
+
+	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+
+	# warning as error
+	if (MSVC)
+	target_compile_options(${target} PRIVATE /WX)
+	else()
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+	endif()
+
+	# specific for targets
+	if ( ${target} STREQUAL gkNextRenderer )
+	target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
+	endif()
+
+	if ( ${target} STREQUAL gkNextEditor )
+	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
+	target_compile_definitions(gkNextEditor PUBLIC WITH_EDITOR=1)
+	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+
+	# third-party warning fix
+	if (MSVC)
+
+	else()
+	set_source_files_properties(${src_files_editor} PROPERTIES COMPILE_FLAGS "-w")
+	endif()
+	endif()
+
+endforeach()
+
+# set_target_properties(Assets PROPERTIES FOLDER "Assets")
+# set_target_properties(${exe_name} PROPERTIES FOLDER "Runtime")
+# set_target_properties(${exe_editor_name} PROPERTIES FOLDER "Editor")

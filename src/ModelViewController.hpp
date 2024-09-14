@@ -48,7 +48,8 @@ private:
 	
 	double mousePosX_{};
 	double mousePosY_{};
-	
+
+	bool resetMousePos_{};
 	bool mouseLeftPressed_{};
 	bool mouseRightPressed_{};
 

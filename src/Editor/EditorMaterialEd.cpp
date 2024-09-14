@@ -4,8 +4,10 @@
 #include "Editor/Nodes/NodeSetFloat.hpp"
 #include "Nodes/NodeMaterial.hpp"
 #include "Assets/Material.hpp"
+#include "Assets/Scene.hpp"
 
 static std::unique_ptr<ImFlow::ImNodeFlow> myNode;
+static std::weak_ptr<Nodes::NodeMaterial> matNode;
 static bool init_nodes = true;
 
 void Editor::GUI::OpenMaterialEditor()
@@ -29,6 +31,7 @@ void Editor::GUI::OpenMaterialEditor()
 
         
         auto nodeMat  = myNode->placeNodeAt<Nodes::NodeMaterial>(ImVec2(seprateX, baseY * 0.5f - seprateY));
+        matNode = nodeMat;
 
         nodeIOR->outPin("Out")->createLink(nodeMat->inPin("IOR"));
         nodeShadingMode->outPin("Out")->createLink(nodeMat->inPin("ShadingMode"));
@@ -42,6 +45,16 @@ void Editor::GUI::OpenMaterialEditor()
             auto nodeAlbedoTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->DiffuseTextureId);
             nodeAlbedoTexture->outPin("Out")->createLink(nodeMat->inPin("AlbedoTexture"));
         }
+    }
+}
+
+void Editor::GUI::ApplyMaterial()
+{
+    if(std::shared_ptr<Nodes::NodeMaterial> mat = matNode.lock())
+    {
+        const glm::vec3& color = mat->getInVal<glm::vec3>("Albedo");
+        selected_material->Diffuse = glm::vec4(color,1.0);
+        current_scene->UpdateMaterial();
     }
 }
 
@@ -77,7 +90,7 @@ void Editor::GUI::ShowMaterialEditor()
                 if (ImGui::Button("Add Node"))
                 {
                     ImVec2 pos = ImGui::GetMousePos();
-                    myNode->placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1);
+                    myNode->placeNodeAt<Nodes::NodeSetFloat>(pos, "Test", 1.0f);
                     ImGui::CloseCurrentPopup();
                 }
             } });

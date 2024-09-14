@@ -54,6 +54,12 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 
 bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 {
+	if(resetMousePos_)
+	{
+		resetMousePos_ = false;
+		mousePosX_ = xpos;
+		mousePosY_ = ypos;
+	}
 	const auto deltaX = static_cast<float>(xpos - mousePosX_) * mouseSensitive_;
 	const auto deltaY = static_cast<float>(ypos - mousePosY_) * mouseSensitive_;
 
@@ -81,11 +87,19 @@ bool ModelViewController::OnMouseButton(const int button, const int action, cons
 	if (button == GLFW_MOUSE_BUTTON_LEFT)
 	{
 		mouseLeftPressed_ = action == GLFW_PRESS;
+		if(mouseLeftPressed_)
+		{
+			resetMousePos_ = true;
+		}
 	}
 
 	if (button == GLFW_MOUSE_BUTTON_RIGHT)
 	{
 		mouseRightPressed_ = action == GLFW_PRESS;
+		if(mouseRightPressed_)
+		{
+			resetMousePos_ = true;
+		}
 	}
 #endif
 	return true;

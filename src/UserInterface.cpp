@@ -60,6 +60,63 @@ namespace
 		};
 		return &ranges[0];
 	}
+
+	
+	void MainWindowStyle()
+	{
+	    
+	    ImGuiIO &io = ImGui::GetIO();
+
+	    io.IniFilename              = NULL;
+
+	    ImGuiStyle* style = &ImGui::GetStyle();
+	    ImVec4* colors = style->Colors;
+	    ImGui::StyleColorsDark(style);
+	    colors[ImGuiCol_Text]                   = ImVec4(0.84f, 0.84f, 0.84f, 1.00f);
+	    colors[ImGuiCol_WindowBg]               = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+	    colors[ImGuiCol_ChildBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
+	    colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
+	    colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
+	    colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
+	    colors[ImGuiCol_FrameBg]                = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+	    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
+	    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+	    colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+	    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+	    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+	    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+	    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+	    colors[ImGuiCol_CheckMark]              = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_SliderGrab]             = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_Button]                 = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+	    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
+	    colors[ImGuiCol_ButtonActive]           = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_Header]                 = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+	    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_HeaderActive]           = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+	    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
+	    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
+	    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.19f, 0.39f, 0.69f, 1.00f);
+	    colors[ImGuiCol_Tab]                    = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+	    colors[ImGuiCol_TabHovered]             = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+	    colors[ImGuiCol_TabActive]              = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
+	    colors[ImGuiCol_PlotHistogram]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
+	    colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_NavHighlight]           = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    style->WindowPadding                    = ImVec2(12.00f, 8.00f);
+	    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
+	    style->GrabMinSize                      = 20.00f;
+	    style->WindowRounding                   = 8.00f;
+	    style->FrameBorderSize                  = 0.00f;
+	    style->FrameRounding                    = 4.00f;
+	    style->GrabRounding                     = 12.00f;
+	}
 }
 
 UserInterface::UserInterface(
@@ -68,8 +125,9 @@ UserInterface::UserInterface(
 	const Vulkan::DepthBuffer& depthBuffer,
 	UserSettings& userSettings,
 	Vulkan::RenderImage& viewportImage) :
-	userSettings_(userSettings),
-	swapChain_(swapChain)
+	swapChain_(swapChain),
+	userSettings_(userSettings)
+	
 {
 	editorGUI_.reset(new Editor::GUI());
 	
@@ -100,14 +158,13 @@ UserInterface::UserInterface(
 	auto& io = ImGui::GetIO();
 	// No ini file.
 	io.IniFilename = "imgui.ini";
-	if(GOption->Editor)
-	{
+#if WITH_EDITOR
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-	}
-	
+#endif
+
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
 	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
@@ -336,18 +393,17 @@ void UserInterface::ToolbarUI()
 	ImGui::End();
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, const Assets::Scene* scene)
+void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
 	GUserInterface = this;
 
-	if( GOption->Editor )
+#if WITH_EDITOR
+	uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+	for ( uint32_t i = 0; i < count; ++i )
 	{
-		uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
-		for ( uint32_t i = 0; i < count; ++i )
-		{
-			RequestImTextureId(i);
-		}
+		RequestImTextureId(i);
 	}
+#endif
 	
 	auto& io = ImGui::GetIO();
 	
@@ -360,21 +416,18 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	ImGui::NewFrame();
 	
 
-	if( GOption->Editor )
-	{
-		editorGUI_->selected_obj_id = scene->GetSelectedId();
-		ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGuiID id = DockSpaceUI();
-		ToolbarUI();
-		ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
-		swapChain_.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
-		MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
-	}
-	else
-	{
-		DrawSettings();
-		DrawOverlay(statistics, gpuTimer);
-	}
+#if WITH_EDITOR
+	editorGUI_->selected_obj_id = scene->GetSelectedId();
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGuiID id = DockSpaceUI();
+	ToolbarUI();
+	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
+	swapChain_.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
+#else
+	DrawSettings();
+	DrawOverlay(statistics, gpuTimer);
+#endif
 
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	

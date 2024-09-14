@@ -72,7 +72,8 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	uint32_t vertexOffset = 0;
 	uint32_t nodeOffset = 0;
 	uint32_t nodeOffsetBatched = 0;
-	for (int i = 0; i < models_.size(); i++)
+	int modelCount = static_cast<int>(models_.size());
+	for (int i = 0; i < modelCount; i++)
 	{	
 		uint32_t modelCount = 0;
 		for (const auto& node : nodes_)
@@ -152,4 +153,8 @@ Scene::~Scene()
 	indirectDrawBufferMemory_.reset();
 }
 
+void Scene::UpdateMaterial()
+{
+	// update value after binding, like the bindless textures, try
+}
 }

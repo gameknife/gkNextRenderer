@@ -155,7 +155,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 
     Renderer::SetRaycastRay(rayorg, raydir);
     
-    Assets::RayCastResult rayResult;
+    Assets::RayCastResult rayResult {};
     Renderer::GetLastRaycastResult(rayResult);
     
     if( userSettings_.AutoFocus )
@@ -219,6 +219,9 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
     VkPhysicalDeviceFeatures& deviceFeatures,
     void* nextDeviceFeatures)
 {
+    deviceFeatures.fillModeNonSolid = true;
+    deviceFeatures.samplerAnisotropy = true;
+
     // Required extensions. windows only
 #if WIN32
     requiredExtensions.insert(requiredExtensions.end(),
@@ -226,7 +229,6 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
                                   // VK_KHR_SHADER_CLOCK is required for heatmap
                                   VK_KHR_SHADER_CLOCK_EXTENSION_NAME
                               });
-#endif
 
     // Opt-in into mandatory device features.
     VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures = {};
@@ -234,10 +236,6 @@ void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
     shaderClockFeatures.pNext = nextDeviceFeatures;
     shaderClockFeatures.shaderSubgroupClock = true;
 
-    deviceFeatures.fillModeNonSolid = true;
-    deviceFeatures.samplerAnisotropy = true;
-    
-#if WIN32
     deviceFeatures.shaderInt64 = true;
     Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
 #else
@@ -558,7 +556,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     cameraInitialSate_.CameraIdx = -1;
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
@@ -716,13 +714,6 @@ template <typename Renderer>
 void NextRendererApplication<Renderer>::Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
 {
     VkPhysicalDeviceProperties deviceProp1{};
-    VkPhysicalDeviceDriverProperties driverProp{};
-    driverProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
-
-    VkPhysicalDeviceProperties2 deviceProp{};
-    deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    deviceProp.pNext = &driverProp;
-    
     vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
 
     std::string img_encoded {};

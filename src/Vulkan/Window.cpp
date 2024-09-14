@@ -97,10 +97,9 @@ Window::Window(const WindowConfig& config) :
 	}
 
 	// hide title bar, handle in ImGUI Later
-	if(GOption->Editor)
-	{
+#if WITH_EDITOR
 		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-	}
+#endif
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 
