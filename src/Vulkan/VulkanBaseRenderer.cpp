@@ -150,17 +150,23 @@ void VulkanBaseRenderer::End()
 	gpuTimer_.reset();
 }
 
-bool VulkanBaseRenderer::Tick()
+const Assets::Scene& VulkanBaseRenderer::GetScene()
 {
-#if ANDROID
-	DrawFrame();
-	return false;
-#else
-	glfwPollEvents();
-	DrawFrame();
-	window_->attemptDragWindow();
-	return glfwWindowShouldClose( window_->Handle() ) != 0;
-#endif
+	return *scene_.lock();
+}
+
+void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
+{
+	scene_ = scene;
+}
+
+Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
+{
+	if(DelegateGetUniformBufferObject)
+	{
+		return DelegateGetUniformBufferObject(offset, extent);
+	}
+	return {};
 }
 
 void VulkanBaseRenderer::SetPhysicalDeviceImpl(
@@ -223,6 +229,10 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 
 void VulkanBaseRenderer::OnDeviceSet()
 {
+	if(DelegateOnDeviceSet)
+	{
+		DelegateOnDeviceSet();
+	}
 }
 
 void VulkanBaseRenderer::CreateSwapChain()
@@ -260,10 +270,20 @@ void VulkanBaseRenderer::CreateSwapChain()
 	screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
 
 	rtEditorViewport_.reset(new RenderImage(*device_, {1280,720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
+
+	if(DelegateCreateSwapChain)
+	{
+		DelegateCreateSwapChain();
+	}
 }
 
 void VulkanBaseRenderer::DeleteSwapChain()
 {
+	if(DelegateDeleteSwapChain)
+	{
+		DelegateDeleteSwapChain();
+	}
+	
 	screenShotImageMemory_.reset();
 	screenShotImage_.reset();
 	commandBuffers_.reset();
@@ -435,6 +455,10 @@ void VulkanBaseRenderer::DrawFrame()
 		
 		ClearViewport(commandBuffer, currentImageIndex_);
 		Render(commandBuffer, currentImageIndex_);
+		if(DelegatePostRender)
+		{
+			DelegatePostRender(commandBuffer, currentImageIndex_);
+		}
 	}
 	
 	commandBuffers_->End(currentImageIndex_);

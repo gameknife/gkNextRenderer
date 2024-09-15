@@ -28,6 +28,8 @@
 
 #include "stb_image_write.h"
 
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -63,14 +65,22 @@ namespace
     };
 }
 
-template <typename Renderer>
-NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings,
+NextRendererApplication::NextRendererApplication(uint32_t rendererType,
+    const UserSettings& userSettings,
                                                             Vulkan::Window* window, 
                                                            const VkPresentModeKHR presentMode) :
-    Renderer(Renderer::StaticClass(), window, presentMode, EnableValidationLayers),
+    window_(window),
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
+
+    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window, presentMode, EnableValidationLayers) );
+    renderer_->DelegateOnDeviceSet = [this]()->void{OnDeviceSet();};
+    renderer_->DelegateCreateSwapChain = [this]()->void{CreateSwapChain();};
+    renderer_->DelegateDeleteSwapChain = [this]()->void{DeleteSwapChain();};
+    renderer_->DelegateBeforeNextTick = [this]()->void{BeforeNextFrame();};
+    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
+    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{RenderUI(commandBuffer, imageIndex);};
 
     status_ = NextRenderer::EApplicationStatus::Starting;
     
@@ -107,8 +117,7 @@ NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& u
 #endif
 }
 
-template <typename Renderer>
-NextRendererApplication<Renderer>::~NextRendererApplication()
+NextRendererApplication::~NextRendererApplication()
 {
 #if !ANDROID
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
@@ -116,8 +125,50 @@ NextRendererApplication<Renderer>::~NextRendererApplication()
     scene_.reset();
 }
 
-template <typename Renderer>
-Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
+void NextRendererApplication::Start()
+{
+    renderer_->Start();
+}
+
+bool NextRendererApplication::Tick()
+{
+    const auto prevTime = time_;
+    time_ = GetWindow().GetTime();
+    const auto timeDelta = time_ - prevTime;
+
+    // Update the camera position / angle.
+    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
+
+    if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
+    {
+        LoadScene(userSettings_.SceneIndex);
+        //return;
+    }
+    
+    previousSettings_ = userSettings_;
+    
+#if ANDROID
+    DrawFrame();
+    totalFrames_ += 1;
+    return false;
+#else
+    glfwPollEvents();
+    renderer_->DrawFrame();
+    window_->attemptDragWindow();
+
+    totalFrames_ += 1;
+    return glfwWindowShouldClose( window_->Handle() ) != 0;
+#endif
+
+    
+}
+
+void NextRendererApplication::End()
+{
+    renderer_->End();
+}
+
+Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
 {
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -161,10 +212,10 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
     glm::vec3 rayorg = glm::vec3(origin);
 
-    Renderer::SetRaycastRay(rayorg, raydir);
+    renderer_->SetRaycastRay(rayorg, raydir);
     
     Assets::RayCastResult rayResult {};
-    Renderer::GetLastRaycastResult(rayResult);
+    renderer_->GetLastRaycastResult(rayResult);
     
     if( userSettings_.AutoFocus )
     {
@@ -209,7 +260,7 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
-    ubo.HDR = Renderer::SwapChain().IsHDR();
+    ubo.HDR = renderer_->SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
 
@@ -220,11 +271,8 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
     return ubo;
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnDeviceSet()
+void NextRendererApplication::OnDeviceSet()
 {
-    Renderer::OnDeviceSet();
-
     // global textures
     // texture id 0: dynamic hdri sky
     Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/std_env.hdr"), Vulkan::SamplerConfig());
@@ -249,35 +297,29 @@ void NextRendererApplication<Renderer>::OnDeviceSet()
     std::vector<Assets::LightObject> lights;
     Assets::CameraInitialSate cameraState;
     
-    scene_.reset(new Assets::Scene(Renderer::CommandPool(), nodes, models,
-                                  materials, lights, Renderer::supportRayTracing_));
+    scene_.reset(new Assets::Scene(renderer_->CommandPool(), nodes, models,
+                                  materials, lights, renderer_->supportRayTracing_));
 
-    Renderer::OnPostLoadScene();
+    renderer_->SetScene(scene_);
+    renderer_->OnPostLoadScene();
 
     status_ = NextRenderer::EApplicationStatus::Running;
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::CreateSwapChain()
+void NextRendererApplication::CreateSwapChain()
 {
-    Renderer::CreateSwapChain();
-
-    userInterface_.reset(new UserInterface(Renderer::CommandPool(), Renderer::SwapChain(), Renderer::DepthBuffer(),
-                                           userSettings_, Renderer::GetRenderImage()));
+    userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
+                                           userSettings_, renderer_->GetRenderImage()));
 
     CheckFramebufferSize();
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::DeleteSwapChain()
+void NextRendererApplication::DeleteSwapChain()
 {
     userInterface_.reset();
-
-    Renderer::DeleteSwapChain();
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::DrawFrame()
+void NextRendererApplication::DrawFrame()
 {
     // Check if the scene has been changed by the user.
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
@@ -288,28 +330,27 @@ void NextRendererApplication<Renderer>::DrawFrame()
     
     previousSettings_ = userSettings_;
 
-    Renderer::DrawFrame();
+    renderer_->DrawFrame();
 
     totalFrames_ += 1;
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+void NextRendererApplication::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
     const auto prevTime = time_;
-    time_ = Renderer::Window().GetTime();
+    time_ = GetWindow().GetTime();
     const auto timeDelta = time_ - prevTime;
 
     // Update the camera position / angle.
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
     
-    Renderer::supportDenoiser_ = userSettings_.Denoiser;
-    Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
+    //Renderer::supportDenoiser_ = userSettings_.Denoiser;
+    //Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
 
     // Render the scene if scene loaded
     if(cameraInitialSate_.CameraIdx != -1)
     {
-        Renderer::Render(commandBuffer, imageIndex);
+        //Renderer::Render(commandBuffer, imageIndex);
     }
 
     // Check the current state of the benchmark, update it for the new frame.
@@ -321,13 +362,12 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     RenderUI(commandBuffer, imageIndex);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void NextRendererApplication::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     static float frameRate = 0.0;
     static double lastTime = 0.0;
     static double lastTimestamp = 0.0;
-    double now = Renderer::Window().GetTime();
+    double now = GetWindow().GetTime();
     
     // Record delta time between calls to Render.
     if(totalFrames_ % 30 == 0)
@@ -343,9 +383,9 @@ void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, 
     stats.FrameTime = static_cast<float>((now - lastTimestamp) * 1000.0);
     lastTimestamp = now;
     
-    stats.Stats["gpu"] = Renderer::Device().DeviceProperties().deviceName;
+    stats.Stats["gpu"] = renderer_->Device().DeviceProperties().deviceName;
     
-    stats.FramebufferSize = Renderer::Window().FramebufferSize();
+    stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.FrameRate = frameRate;
     
 
@@ -362,13 +402,12 @@ void NextRendererApplication<Renderer>::RenderUI(VkCommandBuffer commandBuffer, 
     stats.ComputePassCount = 0;
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
-    Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
+    //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
     
-    userInterface_->Render(commandBuffer, imageIndex, stats, Renderer::GpuTimer(), scene_.get());
+    userInterface_->Render(commandBuffer, imageIndex, stats, renderer_->GpuTimer(), scene_.get());
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action, int mods)
+void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
 {
     if (userInterface_->WantsToCaptureKeyboard())
     {
@@ -379,7 +418,7 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
     {
         switch (key)
         {
-        case GLFW_KEY_ESCAPE: Renderer::Window().Close();
+        case GLFW_KEY_ESCAPE: GetWindow().Close();
             break;
         default: break;
         }
@@ -420,10 +459,9 @@ void NextRendererApplication<Renderer>::OnKey(int key, int scancode, int action,
     }
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, const double ypos)
+void NextRendererApplication::OnCursorPosition(const double xpos, const double ypos)
 {
-    if (!Renderer::HasSwapChain() ||
+    if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureKeyboard() ||
         userInterface_->WantsToCaptureMouse()
@@ -438,10 +476,9 @@ void NextRendererApplication<Renderer>::OnCursorPosition(const double xpos, cons
     mousePos_ = glm::vec2(xpos, ypos);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnMouseButton(const int button, const int action, const int mods)
+void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)
 {
-    if (!Renderer::HasSwapChain() ||
+    if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
@@ -462,10 +499,9 @@ void NextRendererApplication<Renderer>::OnMouseButton(const int button, const in
 #endif
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const double yoffset)
+void NextRendererApplication::OnScroll(const double xoffset, const double yoffset)
 {
-    if (!Renderer::HasSwapChain() ||
+    if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
@@ -478,8 +514,7 @@ void NextRendererApplication<Renderer>::OnScroll(const double xoffset, const dou
         UserSettings::FieldOfViewMaxValue);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* paths[])
+void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
 {
     // add glb to the last, and loaded
     if (path_count > 0)
@@ -501,27 +536,22 @@ void NextRendererApplication<Renderer>::OnDropFile(int path_count, const char* p
     }
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::BeforeNextFrame()
+void NextRendererApplication::BeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
-    Renderer::BeforeNextFrame();
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnTouch(bool down, double xpos, double ypos)
+void NextRendererApplication::OnTouch(bool down, double xpos, double ypos)
 {
     modelViewController_.OnTouch(down, xpos, ypos);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::OnTouchMove(double xpos, double ypos)
+void NextRendererApplication::OnTouchMove(double xpos, double ypos)
 {
     modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
+void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
 {
     status_ = NextRenderer::EApplicationStatus::Loading;
     
@@ -558,13 +588,14 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         
         cameraInitialSate_ = *cameraState;
         
-        Renderer::Device().WaitIdle();
-        DeleteSwapChain();
-        Renderer::OnPreLoadScene();
+        renderer_->Device().WaitIdle();
+        renderer_->DeleteSwapChain();
+        renderer_->OnPreLoadScene();
 
-        scene_.reset(new Assets::Scene(Renderer::CommandPool(), *nodes, *models,
-                                *materials, *lights, Renderer::supportRayTracing_));
-
+        scene_.reset(new Assets::Scene(renderer_->CommandPool(), *nodes, *models,
+                                *materials, *lights, renderer_->supportRayTracing_));
+        renderer_->SetScene(scene_);
+        
         sceneIndex_ = sceneIndex;
 
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -581,10 +612,10 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
         periodTotalFrames_ = 0;
         totalFrames_ = 0;
         benchmarkTotalFrames_ = 0;
-        sceneInitialTime_ = Renderer::Window().GetTime();
+        sceneInitialTime_ = GetWindow().GetTime();
 
-        Renderer::OnPostLoadScene();
-        CreateSwapChain();
+        renderer_->OnPostLoadScene();
+        renderer_->CreateSwapChain();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -596,8 +627,7 @@ void NextRendererApplication<Renderer>::LoadScene(const uint32_t sceneIndex)
     1);
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prevTime)
+void NextRendererApplication::CheckAndUpdateBenchmarkState(double prevTime)
 {
     if (!userSettings_.Benchmark)
     {
@@ -615,7 +645,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             benchmarkCsvReportFile << fmt::format("#;scene;FPS\n");
         }
 
-        fmt::print("\n\nRenderer: {}\n", Renderer::StaticClass());
+        fmt::print("\n\nRenderer: {}\n", renderer_->StaticClass());
         fmt::print("Benchmark: Start scene #{} '{}'\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first);
         periodInitialTime_ = time_;
     }
@@ -660,7 +690,7 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
             if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
                 SceneList::AllScenes.size() - 1)
             {
-                Renderer::Window().Close();
+                GetWindow().Close();
             }
 
             puts("");
@@ -669,12 +699,11 @@ void NextRendererApplication<Renderer>::CheckAndUpdateBenchmarkState(double prev
     }
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::CheckFramebufferSize() const
+void NextRendererApplication::CheckFramebufferSize()
 {
     // Check the framebuffer size when requesting a fullscreen window, as it's not guaranteed to match.
-    const auto& cfg = Renderer::Window().Config();
-    const auto fbSize = Renderer::Window().FramebufferSize();
+    const auto& cfg = GetWindow().Config();
+    const auto fbSize = GetWindow().FramebufferSize();
 
     if (userSettings_.Benchmark && cfg.Fullscreen && (fbSize.width != cfg.Width || fbSize.height != cfg.Height))
     {
@@ -689,22 +718,21 @@ inline const std::string versionToString(const uint32_t version)
     return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
-template <typename Renderer>
-void NextRendererApplication<Renderer>::Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
+void NextRendererApplication::Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
 {
     VkPhysicalDeviceProperties deviceProp1{};
-    vkGetPhysicalDeviceProperties(Renderer::Device().PhysicalDevice(), &deviceProp1);
+    vkGetPhysicalDeviceProperties(renderer_->Device().PhysicalDevice(), &deviceProp1);
 
     std::string img_encoded {};
     if (upload_screen || save_screen)
     {
 #if WITH_AVIF
         // screenshot stuffs
-        const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+        const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
         const auto extent = swapChain.Extent();
 
         // capture and export
-        Renderer::CaptureScreenShot();
+        renderer_->CaptureScreenShot();
 
         constexpr uint32_t kCompCnt = 3;
         int imageSize = extent.width * extent.height * kCompCnt;
@@ -736,7 +764,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             data = malloc(hdrsize);
             uint16_t* dataview = (uint16_t*)data;
             {
-                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
 
                 uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
 
@@ -773,7 +801,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
             data = malloc(imageSize);
             uint8_t* dataview = (uint8_t*)data;
             {
-                Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
 
                 uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
 
@@ -845,18 +873,18 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
         // screenshot stuffs
-        const Vulkan::SwapChain& swapChain = Renderer::SwapChain();
+        const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
         const auto extent = swapChain.Extent();
 
         // capture and export
-        Renderer::CaptureScreenShot();
+        renderer_->CaptureScreenShot();
 
         constexpr uint32_t kCompCnt = 3;
         int imageSize = extent.width * extent.height * kCompCnt;
 
         uint8_t* data = (uint8_t*)malloc(imageSize);
         {
-            Vulkan::DeviceMemory* vkMemory = Renderer::GetScreenShotMemory();
+            Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
 
             uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
 
@@ -900,7 +928,7 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
     if( NextRenderer::GetBuildVersion() != "v0.0.0.0" )
     {
         json11::Json my_json = json11::Json::object{
-            {"renderer", Renderer::StaticClass()},
+            {"renderer", renderer_->StaticClass()},
             {"scene", sceneName},
             {"gpu", std::string(deviceProp1.deviceName)},
             {"driver", versionToString(deviceProp1.driverVersion)},
@@ -939,11 +967,3 @@ void NextRendererApplication<Renderer>::Report(int fps, const std::string& scene
         }
     }
 }
-
-// export it 
-template class NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>;
-template class NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>;
-template class NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>;
-template class NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>;
-template class NextRendererApplication<Vulkan::HybridDeferred::HybridDeferredRenderer>;
-template class NextRendererApplication<Vulkan::VulkanBaseRenderer>;

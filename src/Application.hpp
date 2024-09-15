@@ -24,27 +24,30 @@ namespace NextRenderer
 	std::string GetBuildVersion();
 }
 
-
-template <typename Renderer>
-class NextRendererApplication final : public Renderer
+class NextRendererApplication final
 {
 public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(const UserSettings& userSettings, Vulkan::Window* window, VkPresentModeKHR presentMode);
+	NextRendererApplication(uint32_t rendererType, const UserSettings& userSettings, Vulkan::Window* window, VkPresentModeKHR presentMode);
 	~NextRendererApplication();
-	
+
+	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
+
+	void Start();
+	bool Tick();
+	void End();
 protected:
 	
-	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const override;
-	void OnDeviceSet() override;
-	void CreateSwapChain() override;
-	void DeleteSwapChain() override;
-	void DrawFrame() override;
-	void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+	void OnDeviceSet();
+	void CreateSwapChain();
+	void DeleteSwapChain();
+	void DrawFrame();
+	void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void BeforeNextFrame() override;
+	void BeforeNextFrame();
 
 	const Assets::Scene& GetScene() const { return *scene_; }
 	
@@ -56,14 +59,19 @@ protected:
 	void OnTouch(bool down, double xpos, double ypos);
 	void OnTouchMove(double xpos, double ypos);
 	
-	Vulkan::Window& GetWindow() {return Renderer::Window();}
+	Vulkan::Window& GetWindow() {return *window_;}
+
+	
 private:
 
 	void LoadScene(uint32_t sceneIndex);
 	void CheckAndUpdateBenchmarkState(double prevTime);
-	void CheckFramebufferSize() const;
+	void CheckFramebufferSize();
 
 	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
+
+	Vulkan::Window* window_;
+	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
 	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};
 	mutable UserSettings userSettings_{};
@@ -74,7 +82,7 @@ private:
 
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
-	std::unique_ptr<Assets::Scene> scene_;
+	std::shared_ptr<Assets::Scene> scene_;
 	std::unique_ptr<class UserInterface> userInterface_;
 
 	double time_{};

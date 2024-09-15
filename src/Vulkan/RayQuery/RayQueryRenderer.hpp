@@ -31,7 +31,7 @@ namespace Vulkan::RayTracing
 
 		VULKAN_NON_COPIABLE(RayQueryRenderer);
 	
-	protected:
+	public:
 
 		RayQueryRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayQueryRenderer();

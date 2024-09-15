@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <algorithm>
 
+#include "Application.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 
@@ -21,7 +22,7 @@ using Assets::Material;
 using Assets::Model;
 using Assets::Texture;
 
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
+extern std::unique_ptr<NextRendererApplication> GApplication;
 
 namespace
 {
@@ -98,7 +99,7 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
     camera.HasSky = true;
     camera.HasSun = false;
     
-    const bool isProc = GApplication->GetRendererType() != "RayQueryRenderer";
+    const bool isProc = false;
 
     std::mt19937 engine(42);
     std::function<float ()> random = std::bind(std::uniform_real_distribution<float>(), engine);

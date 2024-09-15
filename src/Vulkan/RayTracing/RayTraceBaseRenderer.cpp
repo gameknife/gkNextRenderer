@@ -86,8 +86,8 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::OnDeviceSet()
     {
+        rayTracingProperties_.reset(new RayTracingProperties(Device()));
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
-        rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
     void RayTraceBaseRenderer::CreateAccelerationStructures()

@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <chrono>
+#include <functional>
 #include <glm/vec2.hpp>
 
 #include "Image.hpp"
@@ -220,7 +221,6 @@ namespace Vulkan
 		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
 		
 		void Start();
-		bool Tick();
 		void End();
 		
 		virtual bool GetFocusDistance(float& distance) const {return false;}
@@ -234,8 +234,9 @@ namespace Vulkan
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
 		const std::string& GetRendererType() const {return rendererType_;}
-		
-	protected:
+
+		virtual void DrawFrame();
+
 
 		VulkanBaseRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
@@ -248,8 +249,10 @@ namespace Vulkan
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
-		virtual const Assets::Scene& GetScene() const = 0;
-		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const = 0;
+		const Assets::Scene& GetScene();
+		void SetScene(std::shared_ptr<Assets::Scene> scene);
+		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
@@ -260,21 +263,36 @@ namespace Vulkan
 		virtual void OnDeviceSet();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
-		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		virtual void BeforeNextFrame() {}
+		virtual void BeforeNextFrame()
+		{
+			if(DelegateBeforeNextTick)
+			{
+				DelegateBeforeNextTick();
+			}
+		}
 		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
-		// virtual void OnKey(int key, int scancode, int action, int mods) { }
-		// virtual void OnCursorPosition(double xpos, double ypos) { }
-		// virtual void OnMouseButton(int button, int action, int mods) { }
-		// virtual void OnScroll(double xoffset, double yoffset) { }
-		// virtual void OnDropFile(int path_count, const char* paths[]) { }
+		// Callbacks
+		std::function<void()> DelegateOnDeviceSet;
+		std::function<void()> DelegateCreateSwapChain;
+		std::function<void()> DelegateDeleteSwapChain;
+		std::function<void()> DelegateBeforeNextTick;
+		std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> DelegateGetUniformBufferObject;
+		std::function<void(VkCommandBuffer, uint32_t)> DelegatePostRender;
+		
+		// std::function<void()> OnScroll;
+		// std::function<void()> OnDropFile;
+		// std::function<void()> OnFocus;
+
+		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
+	
+		std::weak_ptr<Assets::Scene> scene_;
 		
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
@@ -284,12 +302,12 @@ namespace Vulkan
 		bool supportScreenShot_{};
 		bool forceSDR_{};
 		bool visualDebug_{};
-
+	protected:
 		std::string rendererType_{};
 
 		Assets::UniformBufferObject lastUBO;
 
-		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
+		
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);
