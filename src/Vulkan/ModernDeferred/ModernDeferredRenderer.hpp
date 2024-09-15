@@ -33,7 +33,7 @@ namespace Vulkan::ModernDeferred
 
 		VULKAN_NON_COPIABLE(ModernDeferredRenderer)
 		
-		ModernDeferredRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		ModernDeferredRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		~ModernDeferredRenderer();
 		
 		void CreateSwapChain() override;

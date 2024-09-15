@@ -22,6 +22,7 @@
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
+#include "Vulkan/Window.hpp"
 
 namespace NextRenderer
 {
@@ -116,31 +117,35 @@ std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication = nullptr;
 
 void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowConfig, const UserSettings& userSettings, const Options& options)
 {
+    //windowConfig_.Title = windowConfig_.Title + " - " + GetRendererType();
+
+    Vulkan::Window* window = new Vulkan::Window(windowConfig);
+    
     switch (rendererType)
     {
     case 0:
         GApplication.reset(new NextRendererApplication<Vulkan::RayTracing::RayTracingRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     case 1:
         GApplication.reset(new NextRendererApplication<Vulkan::ModernDeferred::ModernDeferredRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     case 2:
         GApplication.reset(new NextRendererApplication<Vulkan::LegacyDeferred::LegacyDeferredRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     case 3:
         GApplication.reset(new NextRendererApplication<Vulkan::RayTracing::RayQueryRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     case 4:
         GApplication.reset(new NextRendererApplication<Vulkan::HybridDeferred::HybridDeferredRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
         break;
     default:
         GApplication.reset(new NextRendererApplication<Vulkan::VulkanBaseRenderer>(
-            userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+            userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
     }
 
     fmt::print("Renderer: {}, BuildVer: {}\n", GApplication->GetRendererType(), NextRenderer::GetBuildVersion());

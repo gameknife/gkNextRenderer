@@ -33,7 +33,7 @@ namespace Vulkan::RayTracing
 	
 	protected:
 
-		RayQueryRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayQueryRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayQueryRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,

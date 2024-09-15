@@ -218,14 +218,11 @@ namespace Vulkan
 		bool HasSwapChain() const { return swapChain_.operator bool(); }
 
 		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
-		void Run();
 		
 		void Start();
 		bool Tick();
 		void End();
-
-		virtual void OnTouch(bool down, double xpos, double ypos) {}
-		virtual void OnTouchMove(double xpos, double ypos) {}
+		
 		virtual bool GetFocusDistance(float& distance) const {return false;}
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
 		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const {};
@@ -240,7 +237,7 @@ namespace Vulkan
 		
 	protected:
 
-		VulkanBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		VulkanBaseRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }
@@ -265,7 +262,6 @@ namespace Vulkan
 		virtual void DeleteSwapChain();
 		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		virtual void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) {}
 
 		virtual void BeforeNextFrame() {}
 		virtual void AfterRenderCmd() {}
@@ -274,11 +270,12 @@ namespace Vulkan
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
-		virtual void OnKey(int key, int scancode, int action, int mods) { }
-		virtual void OnCursorPosition(double xpos, double ypos) { }
-		virtual void OnMouseButton(int button, int action, int mods) { }
-		virtual void OnScroll(double xoffset, double yoffset) { }
-		virtual void OnDropFile(int path_count, const char* paths[]) { }
+		// virtual void OnKey(int key, int scancode, int action, int mods) { }
+		// virtual void OnCursorPosition(double xpos, double ypos) { }
+		// virtual void OnMouseButton(int button, int action, int mods) { }
+		// virtual void OnScroll(double xoffset, double yoffset) { }
+		// virtual void OnDropFile(int path_count, const char* paths[]) { }
+		
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};

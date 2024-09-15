@@ -18,8 +18,8 @@
 
 namespace Vulkan::LegacyDeferred {
 
-LegacyDeferredRenderer::LegacyDeferredRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	Vulkan::VulkanBaseRenderer(rendererType, windowConfig, presentMode, enableValidationLayers)
+LegacyDeferredRenderer::LegacyDeferredRenderer(const char* rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+	Vulkan::VulkanBaseRenderer(rendererType, window, presentMode, enableValidationLayers)
 {
 	
 }

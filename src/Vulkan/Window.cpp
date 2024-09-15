@@ -231,23 +231,6 @@ bool Window::IsMinimized() const
 	return size.height == 0 && size.width == 0;
 }
 
-void Window::Run()
-{
-#if !ANDROID
-	glfwSetTime(0.0);
-
-	while (!glfwWindowShouldClose(window_))
-	{
-		glfwPollEvents();
-
-		if (DrawFrame)
-		{
-			DrawFrame();
-		}
-	}
-#endif
-}
-
 void Window::WaitForEvents() const
 {
 #if !ANDROID

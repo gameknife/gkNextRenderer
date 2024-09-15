@@ -32,36 +32,30 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
+	NextRendererApplication(const UserSettings& userSettings, Vulkan::Window* window, VkPresentModeKHR presentMode);
 	~NextRendererApplication();
 	
-	void OnTouch(bool down, double xpos, double ypos) override;
-	void OnTouchMove(double xpos, double ypos) override;
-	
 protected:
-
-	const Assets::Scene& GetScene() const override { return *scene_; }
+	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const override;
-
-	void SetPhysicalDeviceImpl(
-		VkPhysicalDevice physicalDevice, 
-		std::vector<const char*>& requiredExtensions, 
-		VkPhysicalDeviceFeatures& deviceFeatures, 
-		void* nextDeviceFeatures) override;
-
 	void OnDeviceSet() override;
 	void CreateSwapChain() override;
 	void DeleteSwapChain() override;
 	void DrawFrame() override;
 	void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-	void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-	void OnKey(int key, int scancode, int action, int mods) override;
-	void OnCursorPosition(double xpos, double ypos) override;
-	void OnMouseButton(int button, int action, int mods) override;
-	void OnScroll(double xoffset, double yoffset) override;
-	void OnDropFile(int path_count, const char* paths[]) override;
+	void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void BeforeNextFrame() override;
 
+	const Assets::Scene& GetScene() const { return *scene_; }
+	
+	void OnKey(int key, int scancode, int action, int mods);
+	void OnCursorPosition(double xpos, double ypos);
+	void OnMouseButton(int button, int action, int mods);
+	void OnScroll(double xoffset, double yoffset);
+	void OnDropFile(int path_count, const char* paths[]);
+	void OnTouch(bool down, double xpos, double ypos);
+	void OnTouchMove(double xpos, double ypos);
+	
 	Vulkan::Window& GetWindow() {return Renderer::Window();}
 private:
 

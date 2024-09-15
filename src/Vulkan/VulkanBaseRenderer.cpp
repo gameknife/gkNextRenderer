@@ -33,24 +33,21 @@
 
 namespace Vulkan {
 	
-VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
 	rendererType_(rendererType),
 	presentMode_(presentMode)
 {
 	const auto validationLayers = enableValidationLayers
 		? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
 		: std::vector<const char*>{};
-	
-	WindowConfig windowConfig_ = windowConfig;
-	windowConfig_.Title = windowConfig_.Title + " - " + GetRendererType();
 
-	window_.reset(new class Window(windowConfig_));
+	window_.reset(window);
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
 	supportDenoiser_ = false;
-	supportScreenShot_ = windowConfig.NeedScreenShot;
-	forceSDR_ = windowConfig.ForceSDR;
+	supportScreenShot_ = false;//windowConfig.NeedScreenShot;
+	forceSDR_ = false;//windowConfig.ForceSDR;
 
 	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
@@ -142,35 +139,9 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	fmt::print("\n{} renderer initialized in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, uptime * 1e-6f, CONSOLE_DEFAULT_COLOR);
 }
 
-void VulkanBaseRenderer::Run()
-{
-	if (!device_)
-	{
-		Throw(std::logic_error("physical device has not been set"));
-	}
-
-	currentFrame_ = 0;
-
-	window_->DrawFrame = [this]() { DrawFrame(); };
-	window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
-	window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
-	window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
-	window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
-	window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
-	window_->Run();
-	device_->WaitIdle();
-}
-
 void VulkanBaseRenderer::Start()
 {
 	currentFrame_ = 0;
-
-	window_->DrawFrame = [this]() { DrawFrame(); };
-	window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
-	window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
-	window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
-	window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
-	window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
 }
 
 void VulkanBaseRenderer::End()
@@ -198,10 +169,35 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 	VkPhysicalDeviceFeatures& deviceFeatures,
 	void* nextDeviceFeatures)
 {
+	
+	deviceFeatures.fillModeNonSolid = true;
+	deviceFeatures.samplerAnisotropy = true;
+
+	// Required extensions. windows only
+#if WIN32
+	requiredExtensions.insert(requiredExtensions.end(),
+							  {
+								  // VK_KHR_SHADER_CLOCK is required for heatmap
+								  VK_KHR_SHADER_CLOCK_EXTENSION_NAME
+							  });
+
+	// Opt-in into mandatory device features.
+	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures = {};
+	shaderClockFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR;
+	shaderClockFeatures.pNext = nextDeviceFeatures;
+	shaderClockFeatures.shaderSubgroupClock = true;
+
+	deviceFeatures.shaderInt64 = true;
+#endif
+	
 	// support bindless material
 	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
 	indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+#if WIN32
+	indexingFeatures.pNext = &shaderClockFeatures;
+#else
 	indexingFeatures.pNext = nextDeviceFeatures;
+#endif
 	indexingFeatures.runtimeDescriptorArray = true;
 	indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
 	indexingFeatures.descriptorBindingPartiallyBound = true;
@@ -439,8 +435,6 @@ void VulkanBaseRenderer::DrawFrame()
 		
 		ClearViewport(commandBuffer, currentImageIndex_);
 		Render(commandBuffer, currentImageIndex_);
-		// vulkan command is submitted with the render pass, so, imgui cost should count in the render pass
-		RenderUI(commandBuffer, currentImageIndex_);
 	}
 	
 	commandBuffers_->End(currentImageIndex_);

@@ -41,6 +41,8 @@
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
+#include "Vulkan/Window.hpp"
+
 #if WITH_AVIF
 #include "avif/avif.h"
 #endif
@@ -63,14 +65,20 @@ namespace
 
 template <typename Renderer>
 NextRendererApplication<Renderer>::NextRendererApplication(const UserSettings& userSettings,
-                                                           const Vulkan::WindowConfig& windowConfig,
+                                                            Vulkan::Window* window, 
                                                            const VkPresentModeKHR presentMode) :
-    Renderer(Renderer::StaticClass(), windowConfig, presentMode, EnableValidationLayers),
+    Renderer(Renderer::StaticClass(), window, presentMode, EnableValidationLayers),
     userSettings_(userSettings)
 {
     CheckFramebufferSize();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
+    
+    window->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
+    window->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
+    window->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
+    window->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
+    window->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
 
 #if !ANDROID
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
@@ -213,37 +221,6 @@ Assets::UniformBufferObject NextRendererApplication<Renderer>::GetUniformBufferO
 }
 
 template <typename Renderer>
-void NextRendererApplication<Renderer>::SetPhysicalDeviceImpl(
-    VkPhysicalDevice physicalDevice,
-    std::vector<const char*>& requiredExtensions,
-    VkPhysicalDeviceFeatures& deviceFeatures,
-    void* nextDeviceFeatures)
-{
-    deviceFeatures.fillModeNonSolid = true;
-    deviceFeatures.samplerAnisotropy = true;
-
-    // Required extensions. windows only
-#if WIN32
-    requiredExtensions.insert(requiredExtensions.end(),
-                              {
-                                  // VK_KHR_SHADER_CLOCK is required for heatmap
-                                  VK_KHR_SHADER_CLOCK_EXTENSION_NAME
-                              });
-
-    // Opt-in into mandatory device features.
-    VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures = {};
-    shaderClockFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR;
-    shaderClockFeatures.pNext = nextDeviceFeatures;
-    shaderClockFeatures.shaderSubgroupClock = true;
-
-    deviceFeatures.shaderInt64 = true;
-    Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &shaderClockFeatures);
-#else
-    Renderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
-#endif
-}
-
-template <typename Renderer>
 void NextRendererApplication<Renderer>::OnDeviceSet()
 {
     Renderer::OnDeviceSet();
@@ -340,6 +317,8 @@ void NextRendererApplication<Renderer>::Render(VkCommandBuffer commandBuffer, co
     {
         CheckAndUpdateBenchmarkState(prevTime);
     }
+
+    RenderUI(commandBuffer, imageIndex);
 }
 
 template <typename Renderer>
