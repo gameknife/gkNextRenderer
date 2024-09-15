@@ -361,15 +361,12 @@ foreach(target IN LISTS AllTargets)
 
 	# warning as error
 	if (MSVC)
-	#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
 	target_compile_options(${target} PRIVATE /WX)
 	else()
-	#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function")
-	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare)
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 	endif()
 
 	# specific for targets
-
 	if ( ${target} STREQUAL gkNextRenderer )
 	target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
 	endif()
@@ -378,6 +375,13 @@ foreach(target IN LISTS AllTargets)
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
 	target_compile_definitions(gkNextEditor PUBLIC WITH_EDITOR=1)
 	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+
+	# third-party warning fix
+	if (MSVC)
+
+	else()
+	set_source_files_properties(${src_files_editor} PROPERTIES COMPILE_FLAGS "-w")
+	endif()
 	endif()
 
 endforeach()
