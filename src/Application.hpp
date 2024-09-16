@@ -30,7 +30,7 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(uint32_t rendererType, const UserSettings& userSettings, Vulkan::Window* window, VkPresentModeKHR presentMode);
+	NextRendererApplication(uint32_t rendererType, const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
 	~NextRendererApplication();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
@@ -41,13 +41,11 @@ public:
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
-	void OnDeviceSet();
-	void CreateSwapChain();
-	void DeleteSwapChain();
-	void DrawFrame();
-	void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void BeforeNextFrame();
+	void OnRendererDeviceSet();
+	void OnRendererCreateSwapChain();
+	void OnRendererDeleteSwapChain();
+	void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void OnRendererBeforeNextFrame();
 
 	const Assets::Scene& GetScene() const { return *scene_; }
 	
@@ -70,7 +68,7 @@ private:
 
 	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
 
-	Vulkan::Window* window_;
+	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
 	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};

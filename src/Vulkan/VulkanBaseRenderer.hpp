@@ -315,7 +315,7 @@ namespace Vulkan
 
 		const VkPresentModeKHR presentMode_;
 		
-		std::unique_ptr<class Window> window_;
+		class Window* window_;
 		std::unique_ptr<class Instance> instance_;
 		std::unique_ptr<class DebugUtilsMessenger> debugUtilsMessenger_;
 		std::unique_ptr<class Surface> surface_;

@@ -41,7 +41,7 @@ VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, Vulkan::Window*
 		? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
 		: std::vector<const char*>{};
 
-	window_.reset(window);
+	window_ = window;
 	instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
@@ -85,7 +85,7 @@ VulkanBaseRenderer::~VulkanBaseRenderer()
 	surface_.reset();
 	debugUtilsMessenger_.reset();
 	instance_.reset();
-	window_.reset();
+	window_ = nullptr;
 }
 
 const std::vector<VkExtensionProperties>& VulkanBaseRenderer::Extensions() const

@@ -119,9 +119,9 @@ void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowC
 {
     //windowConfig_.Title = windowConfig_.Title + " - " + GetRendererType();
 
-    Vulkan::Window* window = new Vulkan::Window(windowConfig);
     
-    GApplication.reset(new NextRendererApplication(rendererType, userSettings, window, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
+    
+    GApplication.reset(new NextRendererApplication(rendererType, userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
 
     //fmt::print("Renderer: {}, BuildVer: {}\n", GApplication->GetRendererType(), NextRenderer::GetBuildVersion());
     

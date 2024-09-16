@@ -67,28 +67,30 @@ namespace
 
 NextRendererApplication::NextRendererApplication(uint32_t rendererType,
     const UserSettings& userSettings,
-                                                            Vulkan::Window* window, 
+                                                            const Vulkan::WindowConfig& windowConfig, 
                                                            const VkPresentModeKHR presentMode) :
-    window_(window),
     userSettings_(userSettings)
 {
+    window_.reset( new Vulkan::Window(windowConfig));
+    
     CheckFramebufferSize();
 
-    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window, presentMode, EnableValidationLayers) );
-    renderer_->DelegateOnDeviceSet = [this]()->void{OnDeviceSet();};
-    renderer_->DelegateCreateSwapChain = [this]()->void{CreateSwapChain();};
-    renderer_->DelegateDeleteSwapChain = [this]()->void{DeleteSwapChain();};
-    renderer_->DelegateBeforeNextTick = [this]()->void{BeforeNextFrame();};
+    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window_.get(), presentMode, EnableValidationLayers) );
+    
+    renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
+    renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
+    renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
+    renderer_->DelegateBeforeNextTick = [this]()->void{OnRendererBeforeNextFrame();};
     renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
-    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{RenderUI(commandBuffer, imageIndex);};
+    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
 
     status_ = NextRenderer::EApplicationStatus::Starting;
     
-    window->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
-    window->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
-    window->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
-    window->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
-    window->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
+    window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
+    window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
+    window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
+    window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
+    window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
 
 #if !ANDROID
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
@@ -123,6 +125,8 @@ NextRendererApplication::~NextRendererApplication()
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 #endif
     scene_.reset();
+    renderer_.reset();
+    window_.reset();
 }
 
 void NextRendererApplication::Start()
@@ -271,7 +275,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     return ubo;
 }
 
-void NextRendererApplication::OnDeviceSet()
+void NextRendererApplication::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
@@ -306,7 +310,7 @@ void NextRendererApplication::OnDeviceSet()
     status_ = NextRenderer::EApplicationStatus::Running;
 }
 
-void NextRendererApplication::CreateSwapChain()
+void NextRendererApplication::OnRendererCreateSwapChain()
 {
     userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
                                            userSettings_, renderer_->GetRenderImage()));
@@ -314,55 +318,12 @@ void NextRendererApplication::CreateSwapChain()
     CheckFramebufferSize();
 }
 
-void NextRendererApplication::DeleteSwapChain()
+void NextRendererApplication::OnRendererDeleteSwapChain()
 {
     userInterface_.reset();
 }
 
-void NextRendererApplication::DrawFrame()
-{
-    // Check if the scene has been changed by the user.
-    if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
-    {
-        LoadScene(userSettings_.SceneIndex);
-        //return;
-    }
-    
-    previousSettings_ = userSettings_;
-
-    renderer_->DrawFrame();
-
-    totalFrames_ += 1;
-}
-
-void NextRendererApplication::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-{
-    const auto prevTime = time_;
-    time_ = GetWindow().GetTime();
-    const auto timeDelta = time_ - prevTime;
-
-    // Update the camera position / angle.
-    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
-    
-    //Renderer::supportDenoiser_ = userSettings_.Denoiser;
-    //Renderer::checkerboxRendering_ = userSettings_.UseCheckerBoardRendering;
-
-    // Render the scene if scene loaded
-    if(cameraInitialSate_.CameraIdx != -1)
-    {
-        //Renderer::Render(commandBuffer, imageIndex);
-    }
-
-    // Check the current state of the benchmark, update it for the new frame.
-    if(status_ == NextRenderer::EApplicationStatus::Running)
-    {
-        CheckAndUpdateBenchmarkState(prevTime);
-    }
-
-    RenderUI(commandBuffer, imageIndex);
-}
-
-void NextRendererApplication::RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     static float frameRate = 0.0;
     static double lastTime = 0.0;
@@ -536,7 +497,7 @@ void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
     }
 }
 
-void NextRendererApplication::BeforeNextFrame()
+void NextRendererApplication::OnRendererBeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
 }
