@@ -1,5 +1,4 @@
 #include "Options.hpp"
-#include "SceneList.hpp"
 #include "Utilities/Exception.hpp"
 #include <boost/program_options.hpp>
 #include <iostream>
@@ -76,12 +75,7 @@ Options::Options(const int argc, const char* argv[])
 		std::cout << desc << std::endl;
 		Throw(Help());
 	}
-
-	// if (SceneIndex >= SceneList::AllScenes.size()) // w/o loaded scene
-	// {
-	// 	Throw(std::out_of_range("scene index is too large"));
-	// }
-
+	
 	if (PresentMode > 3)
 	{
 		Throw(std::out_of_range("invalid present mode"));

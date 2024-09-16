@@ -1,8 +1,6 @@
 #include "EditorMain.h"
 #include <imgui_internal.h>
 
-#include "UserInterface.hpp"
-
 void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////

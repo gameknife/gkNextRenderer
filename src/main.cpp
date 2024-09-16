@@ -5,14 +5,14 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
-#include "Application.hpp"
+#include "Runtime/Application.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 #include <fmt/format.h>
 #include <iostream>
 
-#include "TaskCoordinator.hpp"
+#include "Runtime/TaskCoordinator.hpp"
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/RayTrace/RayTracingRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
