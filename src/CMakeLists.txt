@@ -180,6 +180,7 @@ set_source_files_properties(
   COMPILE_FLAGS "-w"
 ) 
 endif()
+
 set(src_files_editor
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
@@ -202,21 +203,24 @@ set(src_files_editor
 		Editor/Nodes/NodeMaterial.hpp
 )
 
+set(src_files_runtime
+	Runtime/ModelViewController.cpp
+	Runtime/ModelViewController.hpp
+	Runtime/Application.cpp
+	Runtime/Application.hpp
+	Runtime/SceneList.cpp
+	Runtime/SceneList.hpp
+	Runtime/UserInterface.cpp
+	Runtime/UserInterface.hpp
+	Runtime/UserSettings.hpp
+	Runtime/TaskCoordinator.cpp
+	Runtime/TaskCoordinator.hpp
+)
+
 set(src_files
 	main.cpp
-	ModelViewController.cpp
-	ModelViewController.hpp
 	Options.cpp
 	Options.hpp
-	Application.cpp
-	Application.hpp
-	SceneList.cpp
-	SceneList.hpp
-	UserInterface.cpp
-	UserInterface.hpp
-	UserSettings.hpp
-	TaskCoordinator.cpp
-	TaskCoordinator.hpp
 )
 
 source_group("Assets" FILES ${src_files_assets})
@@ -246,6 +250,7 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_runtime}
 	${src_files}
 	GameActivitySources.cpp
 )
@@ -262,6 +267,7 @@ add_executable(gkNextRenderer
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_runtime}
 	${src_files}
 )
 add_executable(gkNextEditor
@@ -277,6 +283,7 @@ add_executable(gkNextEditor
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_editor}
+	${src_files_runtime}
 	${src_files}
 )
 endif()
