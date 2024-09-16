@@ -152,14 +152,13 @@ bool NextRendererApplication::Tick()
     previousSettings_ = userSettings_;
     
 #if ANDROID
-    DrawFrame();
+    renderer_->DrawFrame();
     totalFrames_ += 1;
     return false;
 #else
     glfwPollEvents();
     renderer_->DrawFrame();
     window_->attemptDragWindow();
-
     totalFrames_ += 1;
     return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif

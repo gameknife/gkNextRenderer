@@ -38,6 +38,11 @@ public:
 	void Start();
 	bool Tick();
 	void End();
+
+public:
+	void OnTouch(bool down, double xpos, double ypos);
+	void OnTouchMove(double xpos, double ypos);
+	
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
@@ -54,8 +59,6 @@ protected:
 	void OnMouseButton(int button, int action, int mods);
 	void OnScroll(double xoffset, double yoffset);
 	void OnDropFile(int path_count, const char* paths[]);
-	void OnTouch(bool down, double xpos, double ypos);
-	void OnTouchMove(double xpos, double ypos);
 	
 	Vulkan::Window& GetWindow() {return *window_;}
 

@@ -25,10 +25,8 @@
 #include <fmt/format.h>
 
 #include "ImageMemoryBarrier.hpp"
-#include "Options.hpp"
 #include "RenderImage.hpp"
 #include "SingleTimeCommands.hpp"
-#include "TaskCoordinator.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace Vulkan {
