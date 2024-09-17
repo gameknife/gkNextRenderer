@@ -1,23 +1,13 @@
 #include "Vulkan/Enumerate.hpp"
 #include "Vulkan/Strings.hpp"
-#include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Version.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Application.hpp"
-
 #include <algorithm>
 #include <cstdlib>
 #include <fmt/format.h>
 #include <iostream>
-
-#include "Runtime/TaskCoordinator.hpp"
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
-#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
-#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 #include <filesystem>
 
 #define BUILDVER(X) std::string buildver(#X);
@@ -101,39 +91,7 @@ private:
 };
 #endif
 
-
-namespace
-{
-    UserSettings CreateUserSettings(const Options& options);
-    void PrintVulkanSdkInformation();
-    void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
-    void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
-    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application);
-    void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, bool benchmark);
-    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx);
-}
-
 std::unique_ptr<NextRendererApplication> GApplication = nullptr;
-
-void StartApplication(uint32_t rendererType, const Vulkan::WindowConfig& windowConfig, const UserSettings& userSettings, const Options& options)
-{
-    //windowConfig_.Title = windowConfig_.Title + " - " + GetRendererType();
-
-    
-    
-    GApplication.reset(new NextRendererApplication(rendererType, userSettings, windowConfig, static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode)));
-
-    //fmt::print("Renderer: {}, BuildVer: {}\n", GApplication->GetRendererType(), NextRenderer::GetBuildVersion());
-    
-    PrintVulkanSdkInformation();
-    //PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
-    //PrintVulkanLayersInformation(*GApplication, options.Benchmark);
-    PrintVulkanDevices(GApplication->GetRenderer());
-
-    SetVulkanDevice(GApplication->GetRenderer(), options.GpuIdx);
-
-    PrintVulkanSwapChainInformation(GApplication->GetRenderer(), options.Benchmark);
-}
 
 #if ANDROID
 void handle_cmd(android_app* app, int32_t cmd) {
@@ -150,20 +108,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
             const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=qx50.glb"};
             const Options options(4, argv);
             GOption = &options;
-            UserSettings userSettings = CreateUserSettings(options);
-            const Vulkan::WindowConfig windowConfig
-            {
-                "gkNextRenderer",
-                options.Width,
-                options.Height,
-                options.Benchmark && options.Fullscreen,
-                options.Fullscreen,
-                !options.Fullscreen,
-                options.SaveFile,
-                app->window,
-                options.ForceSDR
-            };
-            StartApplication(options.RendererType, windowConfig, userSettings, options);
+            GApplication.reset(new NextRendererApplication(options));
             __android_log_print(ANDROID_LOG_INFO, "vkdemo",
                 "start gknextrenderer: %d", options.RendererType);
             GApplication->Start();
@@ -269,27 +214,15 @@ void android_main(struct android_app* app)
 
 int main(int argc, const char* argv[]) noexcept
 {
+    // Runtime Main Routine
     try
     {
+        // Handle command line options.
         const Options options(argc, argv);
+        // Global GOption, can access from everywhere
         GOption = &options;
-        UserSettings userSettings = CreateUserSettings(options);
-        const Vulkan::WindowConfig windowConfig
-        {
-            "gkNextRenderer " + NextRenderer::GetBuildVersion(),
-            options.Width,
-            options.Height,
-            options.Benchmark && options.Fullscreen,
-            options.Fullscreen,
-            !options.Fullscreen,
-            options.SaveFile,
-            nullptr,
-            options.ForceSDR
-        };
         
-        
-        uint32_t rendererType = options.RendererType;
-
+        // Init environment variables
 #if __APPLE__
         setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
 #endif   
@@ -308,6 +241,7 @@ int main(int argc, const char* argv[]) noexcept
 #endif
         }
 
+        // Windows console color support
 #if WIN32 && !defined(__MINGW32__)
         HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         DWORD dwMode;
@@ -316,9 +250,11 @@ int main(int argc, const char* argv[]) noexcept
         dwMode |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
         SetConsoleMode(hOutput, dwMode);
 #endif
+        
+        // Start the application.
+        GApplication.reset(new NextRendererApplication(options));
 
-        StartApplication(rendererType, windowConfig, userSettings, options);
-
+        // Application Main Loop
         {
             GApplication->Start();
             while (1)
@@ -331,16 +267,15 @@ int main(int argc, const char* argv[]) noexcept
             GApplication->End();
         }
 
+        // Shutdown
         GApplication.reset();
 
         return EXIT_SUCCESS;
     }
-
     catch (const Options::Help&)
     {
         return EXIT_SUCCESS;
     }
-
     catch (const std::exception& exception)
     {
         Utilities::Console::Write(Utilities::Severity::Fatal, [&exception]()
@@ -355,7 +290,6 @@ int main(int argc, const char* argv[]) noexcept
             }
         });
     }
-
     catch (...)
     {
         Utilities::Console::Write(Utilities::Severity::Fatal, []()
@@ -363,168 +297,5 @@ int main(int argc, const char* argv[]) noexcept
             fmt::print(stderr, "FATAL: caught unhandled exception\n");
         });
     }
-
     return EXIT_FAILURE;
-}
-
-namespace
-{
-    UserSettings CreateUserSettings(const Options& options)
-    {
-        SceneList::ScanScenes();
-        
-        UserSettings userSettings{};
-
-        userSettings.Benchmark = options.Benchmark;
-        userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
-        userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-        userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
-        userSettings.SceneIndex = options.SceneIndex;
-
-        if(options.SceneName != "")
-        {
-            std::string mappedSceneName = "";
-            bool foundInAssets = false;
-
-            //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
-            Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
-            if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
-
-            for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
-            {
-                if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
-                {
-                    userSettings.SceneIndex = i;
-                    foundInAssets = true;
-                    break;
-                }
-            }
-
-            if(!foundInAssets)
-            {
-                userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
-            }
-        }
-        
-        userSettings.IsRayTraced = true;
-        userSettings.AccumulateRays = false;
-        userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
-        userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
-        userSettings.MaxNumberOfBounces = options.MaxBounces;
-        userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
-        userSettings.AdaptiveSample = options.AdaptiveSample;
-        userSettings.AdaptiveVariance = 6.0f;
-        userSettings.AdaptiveSteps = 8;
-        userSettings.TAA = true;
-
-        userSettings.ShowSettings = !options.Benchmark;
-        userSettings.ShowOverlay = true;
-
-        userSettings.ShowVisualDebug = false;
-        userSettings.HeatmapScale = 1.5f;
-
-        userSettings.UseCheckerBoardRendering = false;
-        userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
-
-        userSettings.Denoiser = options.Denoiser;
-
-        userSettings.PaperWhiteNit = 600.f;
-
-        userSettings.SunRotation = 0.5f;
-        userSettings.SunLuminance = 500.f;
-        userSettings.SkyIntensity = 50.f;
-        
-        userSettings.AutoFocus = false;
-
-        return userSettings;
-    }
-
-    void PrintVulkanSdkInformation()
-    {
-        fmt::print("Vulkan SDK Header Version: {}\n\n", VK_HEADER_VERSION);
-    }
-
-    void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
-    {
-        if (benchmark)
-        {
-            return;
-        }
-
-        puts("Vulkan Instance Extensions:");
-
-        for (const auto& extension : application.Extensions())
-        {
-            fmt::print("- {} ({})\n", extension.extensionName, to_string(Vulkan::Version(extension.specVersion)));
-        }
-
-        puts("");
-    }
-
-    void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
-    {
-        if (benchmark)
-        {
-            return;
-        }
-
-        puts("Vulkan Instance Layers:");
-
-        for (const auto& layer : application.Layers())
-        {
-            fmt::print("- {} ({}) : {}\n", layer.layerName, to_string(Vulkan::Version(layer.specVersion)), layer.description);
-        }
-
-        puts("");
-    }
-
-    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application)
-    {
-        puts("Vulkan Devices:");
-
-        for (const auto& device : application.PhysicalDevices())
-        {
-            VkPhysicalDeviceDriverProperties driverProp{};
-            driverProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
-
-            VkPhysicalDeviceProperties2 deviceProp{};
-            deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-            deviceProp.pNext = &driverProp;
-            vkGetPhysicalDeviceProperties2(device, &deviceProp);
-            VkPhysicalDeviceFeatures features;
-            vkGetPhysicalDeviceFeatures(device, &features);
-
-            const auto& prop = deviceProp.properties;
-            
-            const Vulkan::Version vulkanVersion(prop.apiVersion);
-            const Vulkan::Version driverVersion(prop.driverVersion, prop.vendorID);
-
-            fmt::print("- [{}] {} '{}' ({}: vulkan {} driver {} {} - {})\n",
-                        prop.deviceID, Vulkan::Strings::VendorId(prop.vendorID), prop.deviceName, Vulkan::Strings::DeviceType(prop.deviceType),
-                        to_string(vulkanVersion), driverProp.driverName, driverProp.driverInfo, to_string(driverVersion));
-        }
-
-        puts("");
-    }
-
-    void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
-    {
-        const auto& swapChain = application.SwapChain();
-
-        fmt::print("Swap Chain:\n- image count: {}\n- present mode: {}\n\n", swapChain.Images().size(), static_cast<int>(swapChain.PresentMode()));
-    }
-
-    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
-    {
-        const auto& physicalDevices = application.PhysicalDevices();
-        VkPhysicalDevice pDevice = physicalDevices[gpuIdx <= physicalDevices.size() ? gpuIdx : 0 ];
-        VkPhysicalDeviceProperties2 deviceProp{};
-        deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-        vkGetPhysicalDeviceProperties2(pDevice, &deviceProp);
-
-        fmt::print("Setting Device [{}]\n", deviceProp.properties.deviceName);
-        application.SetPhysicalDevice(pDevice);
-
-        puts("");
-    }
 }

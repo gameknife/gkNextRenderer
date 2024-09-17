@@ -8,6 +8,7 @@
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/WindowConfig.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Options.hpp"
 
 #include <fstream>
 
@@ -30,7 +31,7 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(uint32_t rendererType, const UserSettings& userSettings, const Vulkan::WindowConfig& windowConfig, VkPresentModeKHR presentMode);
+	NextRendererApplication(const Options& options);
 	~NextRendererApplication();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }

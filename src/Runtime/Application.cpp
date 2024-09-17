@@ -65,17 +65,97 @@ namespace
     };
 }
 
-NextRendererApplication::NextRendererApplication(uint32_t rendererType,
-    const UserSettings& userSettings,
-                                                            const Vulkan::WindowConfig& windowConfig, 
-                                                           const VkPresentModeKHR presentMode) :
-    userSettings_(userSettings)
+UserSettings CreateUserSettings(const Options& options)
+    {
+        SceneList::ScanScenes();
+        
+        UserSettings userSettings{};
+
+        userSettings.Benchmark = options.Benchmark;
+        userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
+        userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
+        userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
+        userSettings.SceneIndex = options.SceneIndex;
+
+        if(options.SceneName != "")
+        {
+            std::string mappedSceneName = "";
+            bool foundInAssets = false;
+
+            //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
+            Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
+            if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
+
+            for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
+            {
+                if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
+                {
+                    userSettings.SceneIndex = i;
+                    foundInAssets = true;
+                    break;
+                }
+            }
+
+            if(!foundInAssets)
+            {
+                userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
+            }
+        }
+        
+        userSettings.IsRayTraced = true;
+        userSettings.AccumulateRays = false;
+        userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
+        userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
+        userSettings.MaxNumberOfBounces = options.MaxBounces;
+        userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
+        userSettings.AdaptiveSample = options.AdaptiveSample;
+        userSettings.AdaptiveVariance = 6.0f;
+        userSettings.AdaptiveSteps = 8;
+        userSettings.TAA = true;
+
+        userSettings.ShowSettings = !options.Benchmark;
+        userSettings.ShowOverlay = true;
+
+        userSettings.ShowVisualDebug = false;
+        userSettings.HeatmapScale = 1.5f;
+
+        userSettings.UseCheckerBoardRendering = false;
+        userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
+
+        userSettings.Denoiser = options.Denoiser;
+
+        userSettings.PaperWhiteNit = 600.f;
+
+        userSettings.SunRotation = 0.5f;
+        userSettings.SunLuminance = 500.f;
+        userSettings.SkyIntensity = 50.f;
+        
+        userSettings.AutoFocus = false;
+
+        return userSettings;
+    }
+
+NextRendererApplication::NextRendererApplication(const Options& options)
 {
+    const Vulkan::WindowConfig windowConfig
+    {
+        "gkNextRenderer " + NextRenderer::GetBuildVersion(),
+        options.Width,
+        options.Height,
+        options.Benchmark && options.Fullscreen,
+        options.Fullscreen,
+        !options.Fullscreen,
+        options.SaveFile,
+        nullptr,
+        options.ForceSDR
+    };
+    
+    userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
     
     CheckFramebufferSize();
 
-    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window_.get(), presentMode, EnableValidationLayers) );
+    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};

@@ -25,9 +25,104 @@
 #include <fmt/format.h>
 
 #include "ImageMemoryBarrier.hpp"
+#include "Options.hpp"
 #include "RenderImage.hpp"
 #include "SingleTimeCommands.hpp"
+#include "Strings.hpp"
+#include "Version.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
+
+namespace
+{
+    void PrintVulkanSdkInformation()
+    {
+        fmt::print("Vulkan SDK Header Version: {}\n\n", VK_HEADER_VERSION);
+    }
+
+    void PrintVulkanInstanceInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
+    {
+        if (benchmark)
+        {
+            return;
+        }
+    
+        puts("Vulkan Instance Extensions:");
+    
+        for (const auto& extension : application.Extensions())
+        {
+            fmt::print("- {} ({})\n", extension.extensionName, to_string(Vulkan::Version(extension.specVersion)));
+        }
+    
+        puts("");
+    }
+    
+    void PrintVulkanLayersInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
+    {
+        if (benchmark)
+        {
+            return;
+        }
+    
+        puts("Vulkan Instance Layers:");
+    
+        for (const auto& layer : application.Layers())
+        {
+            fmt::print("- {} ({}) : {}\n", layer.layerName, to_string(Vulkan::Version(layer.specVersion)), layer.description);
+        }
+    
+        puts("");
+    }
+
+    void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application)
+    {
+        puts("Vulkan Devices:");
+
+        for (const auto& device : application.PhysicalDevices())
+        {
+            VkPhysicalDeviceDriverProperties driverProp{};
+            driverProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+
+            VkPhysicalDeviceProperties2 deviceProp{};
+            deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            deviceProp.pNext = &driverProp;
+            vkGetPhysicalDeviceProperties2(device, &deviceProp);
+            VkPhysicalDeviceFeatures features;
+            vkGetPhysicalDeviceFeatures(device, &features);
+
+            const auto& prop = deviceProp.properties;
+            
+            const Vulkan::Version vulkanVersion(prop.apiVersion);
+            const Vulkan::Version driverVersion(prop.driverVersion, prop.vendorID);
+
+            fmt::print("- [{}] {} '{}' ({}: vulkan {} driver {} {} - {})\n",
+                        prop.deviceID, Vulkan::Strings::VendorId(prop.vendorID), prop.deviceName, Vulkan::Strings::DeviceType(prop.deviceType),
+                        to_string(vulkanVersion), driverProp.driverName, driverProp.driverInfo, to_string(driverVersion));
+        }
+
+        puts("");
+    }
+
+    void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
+    {
+        const auto& swapChain = application.SwapChain();
+
+        fmt::print("Swap Chain:\n- image count: {}\n- present mode: {}\n\n", swapChain.Images().size(), static_cast<int>(swapChain.PresentMode()));
+    }
+
+    void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
+    {
+        const auto& physicalDevices = application.PhysicalDevices();
+        VkPhysicalDevice pDevice = physicalDevices[gpuIdx <= physicalDevices.size() ? gpuIdx : 0 ];
+        VkPhysicalDeviceProperties2 deviceProp{};
+        deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        vkGetPhysicalDeviceProperties2(pDevice, &deviceProp);
+
+        fmt::print("Setting Device [{}]\n", deviceProp.properties.deviceName);
+        application.SetPhysicalDevice(pDevice);
+
+        puts("");
+    }
+}
 
 namespace Vulkan {
 	
@@ -139,6 +234,15 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 
 void VulkanBaseRenderer::Start()
 {
+	// setup vulkan
+	  
+	PrintVulkanSdkInformation();
+	//PrintVulkanInstanceInformation(*GApplication, options.Benchmark);
+	//PrintVulkanLayersInformation(*GApplication, options.Benchmark);
+	PrintVulkanDevices(*this);
+	SetVulkanDevice(*this, GOption->GpuIdx);
+	PrintVulkanSwapChainInformation(*this, GOption->Benchmark);
+	
 	currentFrame_ = 0;
 }
 
