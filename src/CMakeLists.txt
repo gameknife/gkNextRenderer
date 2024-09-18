@@ -215,10 +215,13 @@ set(src_files_runtime
 	Runtime/UserSettings.hpp
 	Runtime/TaskCoordinator.cpp
 	Runtime/TaskCoordinator.hpp
+	Runtime/Platform/PlatformCommon.h
+	Runtime/Platform/PlatformAndroid.h
+	Runtime/Platform/PlatformWindows.h
+	Runtime/Platform/PlatformLinux.h
 )
 
 set(src_files
-	main.cpp
 	Options.cpp
 	Options.hpp
 )
@@ -252,6 +255,7 @@ add_library(gkNextRenderer SHARED
 	${src_files_thirdparty_json11}
 	${src_files_runtime}
 	${src_files}
+	AndroidMain.cpp
 	GameActivitySources.cpp
 )
 else()
@@ -269,6 +273,7 @@ add_executable(gkNextRenderer
 	${src_files_thirdparty_json11}
 	${src_files_runtime}
 	${src_files}
+	DesktopMain.cpp
 )
 add_executable(gkNextEditor
 	${src_files_assets} 
@@ -285,6 +290,7 @@ add_executable(gkNextEditor
 	${src_files_editor}
 	${src_files_runtime}
 	${src_files}
+	DesktopMain.cpp
 )
 endif()
 
