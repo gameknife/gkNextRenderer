@@ -49,6 +49,17 @@
 #include "avif/avif.h"
 #endif
 
+#define BUILDVER(X) std::string buildver(#X);
+#include "build.version"
+
+namespace NextRenderer
+{
+    std::string GetBuildVersion()
+    {
+        return buildver;
+    }
+}
+
 namespace
 {
     const bool EnableValidationLayers =
@@ -66,74 +77,74 @@ namespace
 }
 
 UserSettings CreateUserSettings(const Options& options)
+{
+    SceneList::ScanScenes();
+    
+    UserSettings userSettings{};
+
+    userSettings.Benchmark = options.Benchmark;
+    userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
+    userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
+    userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
+    userSettings.SceneIndex = options.SceneIndex;
+
+    if(options.SceneName != "")
     {
-        SceneList::ScanScenes();
-        
-        UserSettings userSettings{};
+        std::string mappedSceneName = "";
+        bool foundInAssets = false;
 
-        userSettings.Benchmark = options.Benchmark;
-        userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
-        userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-        userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
-        userSettings.SceneIndex = options.SceneIndex;
+        //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
+        Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
+        if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
 
-        if(options.SceneName != "")
+        for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
         {
-            std::string mappedSceneName = "";
-            bool foundInAssets = false;
-
-            //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
-            Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
-            if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
-
-            for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
+            if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
             {
-                if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
-                {
-                    userSettings.SceneIndex = i;
-                    foundInAssets = true;
-                    break;
-                }
-            }
-
-            if(!foundInAssets)
-            {
-                userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
+                userSettings.SceneIndex = i;
+                foundInAssets = true;
+                break;
             }
         }
-        
-        userSettings.IsRayTraced = true;
-        userSettings.AccumulateRays = false;
-        userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
-        userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
-        userSettings.MaxNumberOfBounces = options.MaxBounces;
-        userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
-        userSettings.AdaptiveSample = options.AdaptiveSample;
-        userSettings.AdaptiveVariance = 6.0f;
-        userSettings.AdaptiveSteps = 8;
-        userSettings.TAA = true;
 
-        userSettings.ShowSettings = !options.Benchmark;
-        userSettings.ShowOverlay = true;
-
-        userSettings.ShowVisualDebug = false;
-        userSettings.HeatmapScale = 1.5f;
-
-        userSettings.UseCheckerBoardRendering = false;
-        userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
-
-        userSettings.Denoiser = options.Denoiser;
-
-        userSettings.PaperWhiteNit = 600.f;
-
-        userSettings.SunRotation = 0.5f;
-        userSettings.SunLuminance = 500.f;
-        userSettings.SkyIntensity = 50.f;
-        
-        userSettings.AutoFocus = false;
-
-        return userSettings;
+        if(!foundInAssets)
+        {
+            userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
+        }
     }
+    
+    userSettings.IsRayTraced = true;
+    userSettings.AccumulateRays = false;
+    userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
+    userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
+    userSettings.MaxNumberOfBounces = options.MaxBounces;
+    userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
+    userSettings.AdaptiveSample = options.AdaptiveSample;
+    userSettings.AdaptiveVariance = 6.0f;
+    userSettings.AdaptiveSteps = 8;
+    userSettings.TAA = true;
+
+    userSettings.ShowSettings = !options.Benchmark;
+    userSettings.ShowOverlay = true;
+
+    userSettings.ShowVisualDebug = false;
+    userSettings.HeatmapScale = 1.5f;
+
+    userSettings.UseCheckerBoardRendering = false;
+    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
+
+    userSettings.Denoiser = options.Denoiser;
+
+    userSettings.PaperWhiteNit = 600.f;
+
+    userSettings.SunRotation = 0.5f;
+    userSettings.SunLuminance = 500.f;
+    userSettings.SkyIntensity = 50.f;
+    
+    userSettings.AutoFocus = false;
+
+    return userSettings;
+}
 
 NextRendererApplication::NextRendererApplication(const Options& options)
 {
