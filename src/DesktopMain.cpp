@@ -9,8 +9,6 @@
 
 #include "Runtime/Platform/PlatformCommon.h"
 
-std::unique_ptr<NextRendererApplication> GApplication = nullptr;
-
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine
