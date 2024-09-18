@@ -23,8 +23,8 @@
 
 namespace Vulkan::HybridDeferred
 {
-    HybridDeferredRenderer::HybridDeferredRenderer(const char* rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-        RayTracing::RayTraceBaseRenderer(rendererType, window, presentMode, enableValidationLayers)
+    HybridDeferredRenderer::HybridDeferredRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
+        RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
     {
     }
 

@@ -38,7 +38,7 @@ namespace Vulkan::HybridDeferred
 
 		VULKAN_NON_COPIABLE(HybridDeferredRenderer)
 		
-		HybridDeferredRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		HybridDeferredRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		~HybridDeferredRenderer();
 		
 		void CreateSwapChain() override;

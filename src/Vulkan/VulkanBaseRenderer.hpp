@@ -233,12 +233,10 @@ namespace Vulkan
 		
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
-		const std::string& GetRendererType() const {return rendererType_;}
-
 		virtual void DrawFrame();
 
 
-		VulkanBaseRenderer(const char* rendererType, Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }
@@ -303,8 +301,6 @@ namespace Vulkan
 		bool forceSDR_{};
 		bool visualDebug_{};
 	protected:
-		std::string rendererType_{};
-
 		Assets::UniformBufferObject lastUBO;
 
 		

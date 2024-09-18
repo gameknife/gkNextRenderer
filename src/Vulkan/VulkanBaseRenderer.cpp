@@ -126,8 +126,7 @@ namespace
 
 namespace Vulkan {
 	
-VulkanBaseRenderer::VulkanBaseRenderer(const char* rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	rendererType_(rendererType),
+VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
 	presentMode_(presentMode)
 {
 	const auto validationLayers = enableValidationLayers

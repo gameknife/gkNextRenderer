@@ -5,6 +5,7 @@
 #include <imgui_impl_vulkan.h>
 #include <fmt/format.h>
 
+#include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
 #include "Vulkan/Device.hpp"
@@ -211,7 +212,7 @@ namespace Assets
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
-            fmt::print("{}\n", taskContext.outputInfo.data());
+            if(!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
         }, 0);
 
         // cache in namemap
@@ -304,7 +305,7 @@ namespace Assets
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
             textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
-            fmt::print("{}\n", taskContext.outputInfo.data());
+            if(!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
             delete[] copyedData;
         }, 0);
 

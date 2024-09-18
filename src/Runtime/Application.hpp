@@ -23,6 +23,8 @@ namespace NextRenderer
 	};
 
 	std::string GetBuildVersion();
+
+	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 }
 
 class NextRendererApplication final

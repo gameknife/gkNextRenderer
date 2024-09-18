@@ -11,6 +11,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <ctime>
@@ -18,32 +19,25 @@
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
 #include <Utilities/Math.hpp>
-
 #include <filesystem>
 
 #include "Options.hpp"
-#include "curl/curl.h"
-#include "cpp-base64/base64.cpp"
-#include "ThirdParty/json11/json11.hpp"
-
-#include "stb_image_write.h"
-
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
-
-#define _USE_MATH_DEFINES
-#include <math.h>
-
 #include "TaskCoordinator.hpp"
 #include "Editor/EditorCommand.hpp"
 #include "Utilities/Localization.hpp"
-
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/RayTrace/RayTracingRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
 
-#include "Vulkan/Window.hpp"
+#include "curl/curl.h"
+#include "cpp-base64/base64.cpp"
+#include "ThirdParty/json11/json11.hpp"
+#include "stb_image_write.h"
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #if WITH_AVIF
 #include "avif/avif.h"
@@ -58,6 +52,26 @@ namespace NextRenderer
     {
         return buildver;
     }
+
+    Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers)
+    {
+        switch(rendererType)
+        {
+            case 0:
+                return new Vulkan::RayTracing::RayTracingRenderer(window, presentMode, enableValidationLayers);
+            case 1:
+                return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
+            case 2:
+                return new Vulkan::LegacyDeferred::LegacyDeferredRenderer(window, presentMode, enableValidationLayers);
+            case 3:
+                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
+            case 4:
+                return new Vulkan::HybridDeferred::HybridDeferredRenderer(window, presentMode, enableValidationLayers);
+            default:
+                return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+        }
+    }
+
 }
 
 namespace
@@ -166,7 +180,7 @@ NextRendererApplication::NextRendererApplication(const Options& options)
     
     CheckFramebufferSize();
 
-    renderer_.reset( new Vulkan::RayTracing::RayQueryRenderer("Base", window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
+    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
@@ -182,10 +196,9 @@ NextRendererApplication::NextRendererApplication(const Options& options)
     window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
     window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
     window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
-
-#if !ANDROID
-    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
     
+    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+#if WITH_EDITOR    
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
         GetWindow().Close();
         return true;
@@ -212,9 +225,8 @@ NextRendererApplication::NextRendererApplication(const Options& options)
 
 NextRendererApplication::~NextRendererApplication()
 {
-#if !ANDROID
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-#endif
+
     scene_.reset();
     renderer_.reset();
     window_.reset();
@@ -231,6 +243,8 @@ bool NextRendererApplication::Tick()
     time_ = GetWindow().GetTime();
     const auto timeDelta = time_ - prevTime;
 
+
+
     // Update the camera position / angle.
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
 
@@ -241,6 +255,11 @@ bool NextRendererApplication::Tick()
     }
     
     previousSettings_ = userSettings_;
+
+    if(status_ == NextRenderer::EApplicationStatus::Running)
+    {
+        CheckAndUpdateBenchmarkState(prevTime);
+    }
     
 #if ANDROID
     renderer_->DrawFrame();
@@ -696,7 +715,7 @@ void NextRendererApplication::CheckAndUpdateBenchmarkState(double prevTime)
             benchmarkCsvReportFile << fmt::format("#;scene;FPS\n");
         }
 
-        fmt::print("\n\nRenderer: {}\n", renderer_->StaticClass());
+        fmt::print("\n\nRenderer: {}\n", renderer_->GetActualClassName());
         fmt::print("Benchmark: Start scene #{} '{}'\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first);
         periodInitialTime_ = time_;
     }
@@ -731,8 +750,7 @@ void NextRendererApplication::CheckAndUpdateBenchmarkState(double prevTime)
                 const double totalTime = time_ - sceneInitialTime_;
                 std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
                 double fps = benchmarkTotalFrames_ / totalTime;
-
-                fmt::print("\n*** totalTime {:%H:%M:%S} fps {:.3f}\n", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
+                fmt::print("{}- totalTime {:%H:%M:%S} fps {:.3f}{}\n", CONSOLE_GREEN_COLOR, std::chrono::seconds(static_cast<long long>(totalTime)), fps, CONSOLE_DEFAULT_COLOR);
 
                 Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
                 benchmarkCsvReportFile << fmt::format("{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);

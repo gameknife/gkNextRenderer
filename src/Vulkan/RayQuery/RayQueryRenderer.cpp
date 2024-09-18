@@ -43,9 +43,9 @@ namespace Vulkan::RayTracing
         }
     }
 
-    RayQueryRenderer::RayQueryRenderer(const char* rendererType, Vulkan::Window* window,const VkPresentModeKHR presentMode,
+    RayQueryRenderer::RayQueryRenderer(Vulkan::Window* window,const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
-        Vulkan::RayTracing::RayTraceBaseRenderer(rendererType, window, presentMode, enableValidationLayers)
+        Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
     {
     }
 
