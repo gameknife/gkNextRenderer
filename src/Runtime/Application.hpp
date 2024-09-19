@@ -6,11 +6,10 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 #include "Vulkan/FrameBuffer.hpp"
-#include "Vulkan/WindowConfig.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 
-#include <fstream>
+class BenchMarker;
 
 namespace NextRenderer
 {
@@ -76,6 +75,7 @@ private:
 
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
+	std::unique_ptr<BenchMarker> benchMarker_;
 
 	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};
 	mutable UserSettings userSettings_{};
@@ -89,19 +89,10 @@ private:
 	std::shared_ptr<Assets::Scene> scene_;
 	std::unique_ptr<class UserInterface> userInterface_;
 
-	double time_{};
-
 	NextRenderer::EApplicationStatus status_{};
 
 	uint32_t totalFrames_{};
-
-	// Benchmark stats
-	double sceneInitialTime_{};
-	double periodInitialTime_{};
-	uint32_t periodTotalFrames_{};
-	uint32_t benchmarkTotalFrames_{};
-	uint32_t benchmarkNumber_{0};
-	std::ofstream benchmarkCsvReportFile;
+	double time_{};
 
 	glm::vec2 mousePos_ {};
 };

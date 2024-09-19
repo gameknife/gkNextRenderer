@@ -215,6 +215,8 @@ set(src_files_runtime
 	Runtime/UserSettings.hpp
 	Runtime/TaskCoordinator.cpp
 	Runtime/TaskCoordinator.hpp
+	Runtime/BenchMark.cpp
+	Runtime/BenchMark.hpp
 	Runtime/Platform/PlatformCommon.h
 	Runtime/Platform/PlatformAndroid.h
 	Runtime/Platform/PlatformWindows.h
