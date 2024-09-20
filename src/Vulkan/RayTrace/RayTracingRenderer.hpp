@@ -25,14 +25,11 @@ namespace Vulkan::RayTracing
 	class RayTracingRenderer : public RayTraceBaseRenderer
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(RayTracingRenderer);
-	
-	protected:
-
-		RayTracingRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayTracingRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayTracingRenderer();
-
+		
+	protected:
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,
 			VkPhysicalDeviceFeatures& deviceFeatures,

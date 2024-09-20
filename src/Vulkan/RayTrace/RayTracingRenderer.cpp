@@ -55,9 +55,9 @@ namespace Vulkan::RayTracing
         }
     }
 
-    RayTracingRenderer::RayTracingRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
+    RayTracingRenderer::RayTracingRenderer( Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                            const bool enableValidationLayers) :
-        RayTraceBaseRenderer(rendererType, windowConfig, presentMode, enableValidationLayers)
+        RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
     {
         // try use amd gpu as denoise device
     }

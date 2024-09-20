@@ -32,7 +32,6 @@ namespace Vulkan
 		double GetTime() const;
 
 		// Callbacks
-		std::function<void()> DrawFrame;
 		std::function<void(int key, int scancode, int action, int mods)> OnKey;
 		std::function<void(double xpos, double ypos)> OnCursorPosition;
 		std::function<void(int button, int action, int mods)> OnMouseButton;
