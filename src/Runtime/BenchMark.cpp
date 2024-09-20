@@ -15,6 +15,7 @@
 #include <math.h>
 
 #include "Application.hpp"
+#include "Utilities/Exception.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/SwapChain.hpp"
@@ -23,6 +24,20 @@
 #include "avif/avif.h"
 #endif
 
+
+BenchMarker::BenchMarker()
+{
+    std::time_t now = std::time(nullptr);
+    std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
+
+    benchmarkCsvReportFile.open(report_filename);
+    benchmarkCsvReportFile << fmt::format("#,scene,FPS\n");
+}
+
+BenchMarker::~BenchMarker()
+{
+    benchmarkCsvReportFile.close();
+}
 
 void BenchMarker::OnSceneStart( double nowInSeconds )
 {
@@ -38,16 +53,6 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
        // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
     {
-        if (benchmarkNumber_ == 0)
-        {
-            std::time_t now = std::time(nullptr);
-            std::string report_filename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", fmt::localtime(now));
-            //benchmarkCsvReportFile.open(report_filename);
-            //benchmarkCsvReportFile << fmt::format("#;scene;FPS\n");
-        }
-
-        //fmt::print("\n\nRenderer: {}\n", renderer->GetActualClassName());
-        //fmt::print("Benchmark: Start scene #{} '{}'\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first);
         periodInitialTime_ = nowInSeconds;
     }
 
@@ -63,7 +68,6 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
             fmt::print("\t[Benchmarking] fps: {:.0f}\n", float(periodTotalFrames_) / float(totalTime));
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
-            benchmarkNumber_++;
         }
 
         periodTotalFrames_++;
@@ -83,16 +87,13 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
     return false;
 }
 
-void BenchMarker::OnReport()
+void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::string& SceneName)
 {
     const double totalTime = time_ - sceneInitialTime_;
     
     double fps = benchmarkTotalFrames_ / totalTime;
     fmt::print("{} totalTime {:%H:%M:%S} fps {:.3f}{}\n", CONSOLE_GOLD_COLOR, std::chrono::seconds(static_cast<long long>(totalTime)), fps, CONSOLE_DEFAULT_COLOR);
-
-    //std::string SceneName = SceneList::AllScenes[userSettings_.SceneIndex].first;
-    //Report(static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
-    //benchmarkCsvReportFile << fmt::format("{};{};{:.3f}\n", sceneIndex_, SceneList::AllScenes[sceneIndex_].first, fps);
+    Report(renderer, static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
 }
 
 
@@ -103,6 +104,10 @@ inline const std::string versionToString(const uint32_t version)
 
 void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const std::string& sceneName, bool upload_screen, bool save_screen)
 {
+    // report file
+    benchmarkCsvReportFile << fmt::format("{},{},{}\n", benchUnit_++, sceneName, fps);
+
+    // screenshot
     VkPhysicalDeviceProperties deviceProp1{};
     vkGetPhysicalDeviceProperties(renderer_->Device().PhysicalDevice(), &deviceProp1);
 
@@ -129,7 +134,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
         image->colorPrimaries = swapChain.IsHDR() ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
         image->transferCharacteristics = swapChain.IsHDR() ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
         image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
-        image->clli.maxCLL = static_cast<uint16_t>(userSettings_.PaperWhiteNit); //maxCLLNits;
+        image->clli.maxCLL = static_cast<uint16_t>(600); //maxCLLNits;
         image->clli.maxPALL = 0; //maxFALLNits;
 
         avifEncoder* encoder = NULL;
@@ -246,10 +251,12 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
 
         // save to file with scenename
         std::string filename = sceneName + ".avif";
-        std::wfstream file(filename.c_str());
-        file << avifOutput.data;
+        std::ofstream file(filename, std::ios::out | std::ios::binary);
+        if(file.is_open())
+        {
+            file.write(reinterpret_cast<const char*>(avifOutput.data), avifOutput.size);
+        }
         file.close();
-		
         free(data);
 
         // send to server
@@ -299,15 +306,13 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
         // save to file with scenename
         std::string filename = sceneName + ".jpg";
         stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
-        fmt::print("screenshot saved to {}\n", filename);
-        std::uintmax_t img_file_size = std::filesystem::file_size(filename);
-        fmt::print("file size: {}\n", Utilities::metricFormatter(static_cast<double>(img_file_size), "b", 1024));
         // send to server
         //img_encoded = base64_encode(data, img_file_size, false);
         free(data);
 #endif
     }
 
+    // perf server upload
     if( NextRenderer::GetBuildVersion() != "v0.0.0.0" )
     {
         json11::Json my_json = json11::Json::object{

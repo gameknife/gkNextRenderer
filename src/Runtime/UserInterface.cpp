@@ -523,16 +523,8 @@ void UserInterface::DrawSettings()
 		ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
 		ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
 		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
-
 		
 		ImGui::NewLine();
-
-		// min = 1, max = 128;
-		// ImGui::SliderScalar("Samples", ImGuiDataType_U32, &Settings().NumberOfSamples, &min, &max);
-		// min = 1, max = 32;
-		// ImGui::SliderScalar("Bounces", ImGuiDataType_U32, &Settings().NumberOfBounces, &min, &max);
-		// ImGui::NewLine();
-
 		#if WITH_OIDN
 			ImGui::Text("Denoiser");
 			ImGui::Separator();

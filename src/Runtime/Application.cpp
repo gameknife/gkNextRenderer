@@ -167,7 +167,10 @@ NextRendererApplication::NextRendererApplication(const Options& options)
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
-    benchMarker_ = std::make_unique<BenchMarker>();
+    if(options.Benchmark)
+    {
+        benchMarker_ = std::make_unique<BenchMarker>();
+    }
     
     CheckFramebufferSize();
 
@@ -248,7 +251,7 @@ bool NextRendererApplication::Tick()
 
     if(status_ == NextRenderer::EApplicationStatus::Running)
     {
-        CheckAndUpdateBenchmarkState(prevTime);
+        CheckAndUpdateBenchmarkState();
     }
     
 #if ANDROID
@@ -672,7 +675,10 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         
         totalFrames_ = 0;
 
-        benchMarker_->OnSceneStart(GetWindow().GetTime());
+        if(benchMarker_)
+        {
+            benchMarker_->OnSceneStart(GetWindow().GetTime());
+        }
 
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
@@ -687,17 +693,12 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
     1);
 }
 
-void NextRendererApplication::CheckAndUpdateBenchmarkState(double prevTime)
+void NextRendererApplication::CheckAndUpdateBenchmarkState()
 {
-    if (!userSettings_.Benchmark)
-    {
-        return;
-    }
-
-    if( benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
+    if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
     {
         // Benchmark is done, report the results.
-        benchMarker_->OnReport();
+        benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex].first);
         
         if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
             SceneList::AllScenes.size() - 1)

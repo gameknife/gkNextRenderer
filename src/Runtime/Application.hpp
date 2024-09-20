@@ -68,7 +68,7 @@ protected:
 private:
 
 	void LoadScene(uint32_t sceneIndex);
-	void CheckAndUpdateBenchmarkState(double prevTime);
+	void CheckAndUpdateBenchmarkState();
 	void CheckFramebufferSize();
 
 	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
