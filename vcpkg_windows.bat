@@ -9,11 +9,15 @@ IF EXIST vcpkg.windows (
 ) ELSE (
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.windows || goto :error
 	cd vcpkg.windows || goto :error
+	git checkout 2024.08.23 || goto :error
+	call bootstrap-vcpkg.bat || goto :error
 )
 
 rem handle the vcpkg update, auto process
-git checkout 2024.08.23 || goto :error
-call bootstrap-vcpkg.bat || goto :error
+IF "%1" == "forceinstall" (
+	git checkout 2024.08.23 || goto :error
+	call bootstrap-vcpkg.bat || goto :error
+)
 
 rem add if want avif libavif[aom]:x64-windows-static ^
 vcpkg.exe install --recurse ^
@@ -30,6 +34,10 @@ vcpkg.exe install --recurse ^
 	draco:x64-windows-static ^
 	fmt:x64-windows-static ^
 	cpp-base64:x64-windows-static || goto :error
+
+IF "%1" == "avif" (
+	vcpkg.exe install --recurse libavif[aom]:x64-windows-static || goto :error
+)
 
 cd ..
 cd ..

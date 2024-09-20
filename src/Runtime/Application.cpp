@@ -152,6 +152,9 @@ UserSettings CreateUserSettings(const Options& options)
 
 NextRendererApplication::NextRendererApplication(const Options& options)
 {
+    status_ = NextRenderer::EApplicationStatus::Starting;
+
+    // Create Window
     const Vulkan::WindowConfig windowConfig
     {
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
@@ -167,15 +170,15 @@ NextRendererApplication::NextRendererApplication(const Options& options)
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
+
+    // Initialize BenchMarker
     if(options.Benchmark)
     {
         benchMarker_ = std::make_unique<BenchMarker>();
     }
     
-    CheckFramebufferSize();
-
+    // Initialize Renderer
     renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
-    
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
     renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
@@ -183,15 +186,17 @@ NextRendererApplication::NextRendererApplication(const Options& options)
     renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
     renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
 
-    status_ = NextRenderer::EApplicationStatus::Starting;
-    
+    // Initialize IO
     window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
     window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
     window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
     window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
     window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
-    
+
+    // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+
+    // EditorCommand, need Refactoring
 #if WITH_EDITOR    
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
         GetWindow().Close();
@@ -234,26 +239,30 @@ void NextRendererApplication::Start()
 
 bool NextRendererApplication::Tick()
 {
+    // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
     const auto timeDelta = time_ - prevTime;
 
-    // Update the camera position / angle.
+    // Camera Update
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
 
+    // Handle Scene Switching
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
     {
         LoadScene(userSettings_.SceneIndex);
-        //return;
     }
-    
+
+    // Setting Update
     previousSettings_ = userSettings_;
 
+    // Benchmark Update
     if(status_ == NextRenderer::EApplicationStatus::Running)
     {
-        CheckAndUpdateBenchmarkState();
+        TickBenchMarker();
     }
-    
+
+    // Renderer Tick
 #if ANDROID
     renderer_->DrawFrame();
     totalFrames_ += 1;
@@ -265,8 +274,6 @@ bool NextRendererApplication::Tick()
     totalFrames_ += 1;
     return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
-
-    
 }
 
 void NextRendererApplication::End()
@@ -276,13 +283,6 @@ void NextRendererApplication::End()
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
 {
-    glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
-    glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
-
-    //if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR) {
-        pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
-    //}
-
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
     {
 		modelViewController_.Reset((userSettings_.cameras[userSettings_.CameraIdx]).ModelView);
@@ -296,54 +296,69 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
+
+    // handle android vulkan pre rotation
 #if ANDROID
+    glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
+    glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
+    pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
+    
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
     ubo.Projection = pre_rotate_mat * ubo.Projection;
 #endif
+    
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
+    
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
 
-    glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
-    glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-    glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-    glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-
-    glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-    glm::vec3 rayorg = glm::vec3(origin);
-
-    renderer_->SetRaycastRay(rayorg, raydir);
-    
-    Assets::RayCastResult rayResult {};
-    renderer_->GetLastRaycastResult(rayResult);
-    
-    if( userSettings_.AutoFocus )
+    // Raycasting
     {
-        if(rayResult.Hitted )
+        glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
+        glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+        glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+        glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+        glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+        glm::vec3 rayorg = glm::vec3(origin);
+
+        // Send new
+        renderer_->SetRaycastRay(rayorg, raydir);
+        Assets::RayCastResult rayResult {};
+        renderer_->GetLastRaycastResult(rayResult);
+    
+        if( userSettings_.AutoFocus )
         {
-            userSettings_.FocusDistance = rayResult.T;
-            scene_->SetSelectedId(rayResult.InstanceId);
+            if(rayResult.Hitted )
+            {
+                userSettings_.FocusDistance = rayResult.T;
+                scene_->SetSelectedId(rayResult.InstanceId);
+            }
+            else
+            {
+                scene_->SetSelectedId(-1);
+            }
+
+            // only active one frame
+            userSettings_.AutoFocus = false;
         }
-        else
-        {
-            scene_->SetSelectedId(-1);
-        }
+
+        userSettings_.HitResult = rayResult;
     }
 
+
     ubo.SelectedId = scene_->GetSelectedId();
-    
-    userSettings_.HitResult = rayResult;
-    
+
+    // Camera Stuff
     ubo.Aperture = userSettings_.Aperture;
     ubo.FocusDistance = userSettings_.FocusDistance;
-    
 
+    // SceneStuff
     ubo.SkyRotation = userSettings_.SkyRotation;
     ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
@@ -369,9 +384,9 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.HDR = renderer_->SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
-
     ubo.LightCount = scene_->GetLightCount();
 
+    // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 
     return ubo;
@@ -416,8 +431,6 @@ void NextRendererApplication::OnRendererCreateSwapChain()
 {
     userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
                                            userSettings_, renderer_->GetRenderImage()));
-
-    CheckFramebufferSize();
 }
 
 void NextRendererApplication::OnRendererDeleteSwapChain()
@@ -495,8 +508,6 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
                 break;
             case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
                 break;
-            case GLFW_KEY_SPACE: userSettings_.AutoFocus = true;
-                break;
             default: break;
             }
         }
@@ -505,12 +516,10 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
     {
         if (!userSettings_.Benchmark)
         {
-            switch (key)
-            {
-            case GLFW_KEY_SPACE: userSettings_.AutoFocus = false;
-                break;
-            default: break;
-            }
+            // switch (key)
+            // {
+            //     default: break;
+            // }
         }
     }
 #endif
@@ -551,13 +560,17 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     // Camera motions
     modelViewController_.OnMouseButton(button, action, mods);
 #if !ANDROID
+    static glm::vec2 pressMousePos_ {};
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        userSettings_.AutoFocus = true;
+       pressMousePos_ = mousePos_;
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
-        userSettings_.AutoFocus = false;
+        if( glm::distance(pressMousePos_, mousePos_) < 1.0f )
+        {
+            userSettings_.AutoFocus = true;
+        }
     }
 #endif
 }
@@ -693,7 +706,7 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
     1);
 }
 
-void NextRendererApplication::CheckAndUpdateBenchmarkState()
+void NextRendererApplication::TickBenchMarker()
 {
     if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
     {
@@ -707,19 +720,5 @@ void NextRendererApplication::CheckAndUpdateBenchmarkState()
         }
         
         userSettings_.SceneIndex += 1;
-    }
-}
-
-void NextRendererApplication::CheckFramebufferSize()
-{
-    // Check the framebuffer size when requesting a fullscreen window, as it's not guaranteed to match.
-    const auto& cfg = GetWindow().Config();
-    const auto fbSize = GetWindow().FramebufferSize();
-
-    if (userSettings_.Benchmark && cfg.Fullscreen && (fbSize.width != cfg.Width || fbSize.height != cfg.Height))
-    {
-        std::string out = fmt::format("framebuffer fullscreen size mismatch (requested: {}x{}, got: {}x{})", cfg.Width, cfg.Height, fbSize.width, fbSize.height);
-
-        Throw(std::runtime_error(out));
     }
 }

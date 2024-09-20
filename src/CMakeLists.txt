@@ -378,7 +378,7 @@ foreach(target IN LISTS AllTargets)
 	if (MSVC)
 	target_compile_options(${target} PRIVATE /WX)
 	else()
-	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 	endif()
 
 	# specific for targets

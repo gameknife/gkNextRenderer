@@ -114,7 +114,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
     std::string img_encoded {};
     if (upload_screen || save_screen)
     {
-#if WITH_AVIF
+
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
         const auto extent = swapChain.Extent();
@@ -122,9 +122,79 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
         // capture and export
         renderer_->CaptureScreenShot();
 
-        constexpr uint32_t kCompCnt = 3;
-        int imageSize = extent.width * extent.height * kCompCnt;
+        // prepare data
+        void* data = nullptr;
+        uint32_t dataBytes = 0;
+        uint32_t rowBytes = 0;
 
+        constexpr uint32_t kCompCnt = 3;
+        if(swapChain.IsHDR())
+        {
+            dataBytes = extent.width * extent.height * 3 * 2;
+            rowBytes = extent.width * 3 * sizeof(uint16_t);
+            data = malloc(dataBytes);
+            
+            uint16_t* dataview = (uint16_t*)data;
+            {
+                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
+                {
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+                        dataview[yy + xx + 2] = (uInPixel & (0b1111111111 << 20)) >> 20;
+                        dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                        dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                        
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    yy += yDelta;
+                }
+                vkMemory->Unmap();
+            }
+        }
+        else
+        {
+            dataBytes = extent.width * extent.height * kCompCnt;
+            rowBytes = extent.width * 3 * sizeof(uint8_t);
+            data = malloc(dataBytes);
+            
+            uint8_t* dataview = (uint8_t*)data;
+            {
+                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
+                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+                uint32_t yDelta = extent.width * kCompCnt;
+                uint32_t xDelta = kCompCnt;
+                uint32_t yy = 0;
+                uint32_t xx = 0, idx = 0;
+                for (uint32_t y = 0; y < extent.height; y++)
+                {
+                    xx = 0;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
+                        uint32_t uInPixel = *pInPixel;
+                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
+                        idx += 4;
+                        xx += xDelta;
+                    }
+                    yy += yDelta;
+                }
+                vkMemory->Unmap();
+            }
+        }
+        
+#if WITH_AVIF
         avifImage* image = avifImageCreate(extent.width, extent.height, swapChain.IsHDR() ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
@@ -144,85 +214,8 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
         avifRGBImageSetDefaults(&rgbAvifImage, image);
         rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
         rgbAvifImage.ignoreAlpha = AVIF_TRUE;
-
-        void* data = nullptr;
-        if(swapChain.IsHDR())
-        {
-            size_t hdrsize = rgbAvifImage.width * rgbAvifImage.height * 3 * 2;
-            data = malloc(hdrsize);
-            uint16_t* dataview = (uint16_t*)data;
-            {
-                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
-
-                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
-
-                uint32_t yDelta = extent.width * kCompCnt;
-                uint32_t xDelta = kCompCnt;
-                uint32_t idxDelta = extent.width * 4;
-                uint32_t yy = 0;
-                uint32_t xx = 0, idx = 0;
-                for (uint32_t y = 0; y < extent.height; y++)
-                {
-                    xx = 0;
-                    for (uint32_t x = 0; x < extent.width; x++)
-                    {
-                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
-                        uint32_t uInPixel = *pInPixel;
-                        dataview[yy + xx + 2]     = (uInPixel & (0b1111111111 << 20)) >> 20;
-                        dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-                        dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
-                        
-                        idx += 4;
-                        xx += xDelta;
-                    }
-                    //idx += idxDelta;
-                    yy += yDelta;
-                }
-                vkMemory->Unmap();
-            }
-
-            rgbAvifImage.pixels = (uint8_t*)data;
-            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint16_t);
-        }
-        else
-        {
-            data = malloc(imageSize);
-            uint8_t* dataview = (uint8_t*)data;
-            {
-                Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
-
-                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
-
-                uint32_t yDelta = extent.width * kCompCnt;
-                uint32_t xDelta = kCompCnt;
-                uint32_t idxDelta = extent.width * 4;
-                uint32_t yy = 0;
-                uint32_t xx = 0, idx = 0;
-                for (uint32_t y = 0; y < extent.height; y++)
-                {
-                    xx = 0;
-                    for (uint32_t x = 0; x < extent.width; x++)
-                    {
-                        uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
-                        uint32_t uInPixel = *pInPixel;
-
-                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-
-                        idx += 4;
-                        xx += xDelta;
-                    }
-                    yy += yDelta;
-                }
-                vkMemory->Unmap();
-            }
-
-            rgbAvifImage.pixels = (uint8_t*)data;
-            rgbAvifImage.rowBytes = rgbAvifImage.width * 3 * sizeof(uint8_t);
-        }
-       
-       
+        rgbAvifImage.pixels = (uint8_t*)data;
+        rgbAvifImage.rowBytes = rowBytes;
 
         avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
         if (convertResult != AVIF_RESULT_OK)
@@ -257,59 +250,34 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
             file.write(reinterpret_cast<const char*>(avifOutput.data), avifOutput.size);
         }
         file.close();
-        free(data);
 
         // send to server
         img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
-        // screenshot stuffs
-        const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
-        const auto extent = swapChain.Extent();
-
-        // capture and export
-        renderer_->CaptureScreenShot();
-
-        constexpr uint32_t kCompCnt = 3;
-        int imageSize = extent.width * extent.height * kCompCnt;
-
-        uint8_t* data = (uint8_t*)malloc(imageSize);
-        {
-            Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
-
-            uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, imageSize);
-
-            uint32_t yDelta = extent.width * kCompCnt;
-            uint32_t xDelta = kCompCnt;
-            uint32_t idxDelta = extent.width * 4;
-            uint32_t yy = 0;
-            uint32_t xx = 0, idx = 0;
-            for (uint32_t y = 0; y < extent.height; y++)
-            {
-                xx = 0;
-                for (uint32_t x = 0; x < extent.width; x++)
-                {
-                    uint32_t* pInPixel = (uint32_t*)&mappedData[idx];
-                    uint32_t uInPixel = *pInPixel;
-
-                    data[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                    data[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                    data[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-
-                    idx += 4;
-                    xx += xDelta;
-                }
-                yy += yDelta;
-            }
-            vkMemory->Unmap();
-        }
-
         // save to file with scenename
         std::string filename = sceneName + ".jpg";
-        stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
-        // send to server
-        //img_encoded = base64_encode(data, img_file_size, false);
-        free(data);
+        
+        // if hdr, transcode 16bit to 8bit
+        if(swapChain.IsHDR())
+        {
+            uint16_t* dataview = (uint16_t*)data;
+            uint8_t* sdrData = (uint8_t*)malloc(extent.width * extent.height * kCompCnt);
+            for ( uint32_t i = 0; i < extent.width * extent.height * kCompCnt; i++ )
+            {
+                float scaled = dataview[i] / 1200.f * 2.0f;
+                scaled = scaled * scaled;
+                scaled *= 255.f;
+                sdrData[i] = (uint8_t)(std::min(scaled, 255.f));
+            }
+            stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)sdrData, 91);
+            free(sdrData);
+        }
+        else
+        {
+            stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
+        }
 #endif
+        free(data);
     }
 
     // perf server upload
