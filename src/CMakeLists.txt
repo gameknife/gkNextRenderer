@@ -180,6 +180,7 @@ set_source_files_properties(
   COMPILE_FLAGS "-w"
 ) 
 endif()
+
 set(src_files_editor
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
@@ -202,21 +203,29 @@ set(src_files_editor
 		Editor/Nodes/NodeMaterial.hpp
 )
 
+set(src_files_runtime
+	Runtime/ModelViewController.cpp
+	Runtime/ModelViewController.hpp
+	Runtime/Application.cpp
+	Runtime/Application.hpp
+	Runtime/SceneList.cpp
+	Runtime/SceneList.hpp
+	Runtime/UserInterface.cpp
+	Runtime/UserInterface.hpp
+	Runtime/UserSettings.hpp
+	Runtime/TaskCoordinator.cpp
+	Runtime/TaskCoordinator.hpp
+	Runtime/BenchMark.cpp
+	Runtime/BenchMark.hpp
+	Runtime/Platform/PlatformCommon.h
+	Runtime/Platform/PlatformAndroid.h
+	Runtime/Platform/PlatformWindows.h
+	Runtime/Platform/PlatformLinux.h
+)
+
 set(src_files
-	main.cpp
-	ModelViewController.cpp
-	ModelViewController.hpp
 	Options.cpp
 	Options.hpp
-	Application.cpp
-	Application.hpp
-	SceneList.cpp
-	SceneList.hpp
-	UserInterface.cpp
-	UserInterface.hpp
-	UserSettings.hpp
-	TaskCoordinator.cpp
-	TaskCoordinator.hpp
 )
 
 source_group("Assets" FILES ${src_files_assets})
@@ -246,7 +255,9 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_runtime}
 	${src_files}
+	AndroidMain.cpp
 	GameActivitySources.cpp
 )
 else()
@@ -262,7 +273,9 @@ add_executable(gkNextRenderer
 	${src_files_vulkan_hybriddeferred}
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
+	${src_files_runtime}
 	${src_files}
+	DesktopMain.cpp
 )
 add_executable(gkNextEditor
 	${src_files_assets} 
@@ -277,7 +290,9 @@ add_executable(gkNextEditor
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_editor}
+	${src_files_runtime}
 	${src_files}
+	DesktopMain.cpp
 )
 endif()
 
@@ -363,7 +378,7 @@ foreach(target IN LISTS AllTargets)
 	if (MSVC)
 	target_compile_options(${target} PRIVATE /WX)
 	else()
-	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 	endif()
 
 	# specific for targets
