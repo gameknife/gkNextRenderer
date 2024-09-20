@@ -138,14 +138,18 @@ VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentMo
 	debugUtilsMessenger_.reset(enableValidationLayers ? new DebugUtilsMessenger(*instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) : nullptr);
 	surface_.reset(new Surface(*instance_));
 	supportDenoiser_ = false;
-	supportScreenShot_ = false;//windowConfig.NeedScreenShot;
-	forceSDR_ = false;//windowConfig.ForceSDR;
+	forceSDR_ = GOption->ForceSDR;
 
 	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
 
 VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
 {
+	if(GOption->Benchmark)
+	{
+		return;
+	}
+	
 	device_ = device;
 	time_stamps.resize(totalCount);
 	timeStampPeriod_ = prop.limits.timestampPeriod;
@@ -161,6 +165,11 @@ VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhy
 
 VulkanGpuTimer::~VulkanGpuTimer()
 {
+	if(GOption->Benchmark)
+	{
+		return;
+	}
+	
 	vkDestroyQueryPool(device_, query_pool_timestamps, nullptr);
 }
 

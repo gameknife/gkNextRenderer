@@ -13,10 +13,11 @@
 #include <glm/vec2.hpp>
 
 #include "Image.hpp"
+#include "Options.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
-
+#define BENCH_MARK_CHECK() if(GOption->Benchmark) return
 namespace Vulkan
 {
 	namespace PipelineCommon
@@ -47,6 +48,7 @@ namespace Vulkan
 
 		void Reset(VkCommandBuffer commandBuffer)
 		{
+			BENCH_MARK_CHECK();
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 			started_ = true;
@@ -54,6 +56,7 @@ namespace Vulkan
 
 		void FrameEnd(VkCommandBuffer commandBuffer)
 		{
+			BENCH_MARK_CHECK();
 			if(started_)
 			{
 				started_ = false;
@@ -81,6 +84,7 @@ namespace Vulkan
 
 		void Start(VkCommandBuffer commandBuffer, const char* name)
 		{
+			BENCH_MARK_CHECK();
 			if( timer_query_map.find(name) == timer_query_map.end())
 			{
 				timer_query_map[name] = std::make_tuple(0, 0);
@@ -91,6 +95,7 @@ namespace Vulkan
 		}
 		void End(VkCommandBuffer commandBuffer, const char* name)
 		{
+			BENCH_MARK_CHECK();
 			assert( timer_query_map.find(name) != timer_query_map.end() );
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
 			std::get<1>(timer_query_map[name]) = queryIdx;
@@ -98,6 +103,7 @@ namespace Vulkan
 		}
 		void StartCpuTimer(const char* name)
 		{
+			BENCH_MARK_CHECK();
 			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
 			{
 				cpu_timer_query_map[name] = std::make_tuple(0, 0);
@@ -106,6 +112,7 @@ namespace Vulkan
 		}
 		void EndCpuTimer(const char* name)
 		{
+			BENCH_MARK_CHECK();
 			assert( cpu_timer_query_map.find(name) != cpu_timer_query_map.end() );
 			std::get<1>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
@@ -297,7 +304,6 @@ namespace Vulkan
 		bool supportRayTracing_ {};
 		bool supportDenoiser_ {};
 		int frameCount_{};
-		bool supportScreenShot_{};
 		bool forceSDR_{};
 		bool visualDebug_{};
 	protected:

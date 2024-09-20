@@ -135,7 +135,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.HeatmapScale = 1.5f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
+    userSettings.TemporalFrames = options.Benchmark ? 512 : options.Temporal;
 
     userSettings.Denoiser = options.Denoiser;
 

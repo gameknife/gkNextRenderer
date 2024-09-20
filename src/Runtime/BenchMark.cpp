@@ -106,7 +106,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
 {
     // report file
     benchmarkCsvReportFile << fmt::format("{},{},{}\n", benchUnit_++, sceneName, fps);
-
+    benchmarkCsvReportFile.flush();
     // screenshot
     VkPhysicalDeviceProperties deviceProp1{};
     vkGetPhysicalDeviceProperties(renderer_->Device().PhysicalDevice(), &deviceProp1);
