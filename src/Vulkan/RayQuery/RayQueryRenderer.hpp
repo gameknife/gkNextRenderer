@@ -31,9 +31,9 @@ namespace Vulkan::RayTracing
 
 		VULKAN_NON_COPIABLE(RayQueryRenderer);
 	
-	protected:
+	public:
 
-		RayQueryRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayQueryRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayQueryRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,

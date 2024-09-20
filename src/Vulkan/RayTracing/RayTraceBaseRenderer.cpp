@@ -41,9 +41,9 @@ namespace Vulkan::RayTracing
         }
     }
 
-    RayTraceBaseRenderer::RayTraceBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, const VkPresentModeKHR presentMode,
+    RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
-        Vulkan::VulkanBaseRenderer(rendererType, windowConfig, presentMode, enableValidationLayers)
+        Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
     }
 
@@ -86,8 +86,8 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::OnDeviceSet()
     {
+        rayTracingProperties_.reset(new RayTracingProperties(Device()));
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
-        rayTracingProperties_.reset(new RayTracingProperties(Device()));       
     }
 
     void RayTraceBaseRenderer::CreateAccelerationStructures()

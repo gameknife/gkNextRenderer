@@ -27,7 +27,8 @@ ClassName& operator = (ClassName&&) = delete; \
 	ClassName(ClassName&&) = delete; \
 	ClassName& operator = (const ClassName&) = delete; \
 	ClassName& operator = (ClassName&&) = delete; \
-	static const char* StaticClass() {return #ClassName;}
+	static const char* StaticClass() {return #ClassName;} \
+	virtual const char* GetActualClassName() const {return #ClassName;}
 
 #define VULKAN_HANDLE(VulkanHandleType, name) \
 public: \

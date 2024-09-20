@@ -9,13 +9,15 @@
 #include <unordered_map>
 #include <cassert>
 #include <chrono>
+#include <functional>
 #include <glm/vec2.hpp>
 
 #include "Image.hpp"
+#include "Options.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
-
+#define BENCH_MARK_CHECK() if(GOption->Benchmark) return
 namespace Vulkan
 {
 	namespace PipelineCommon
@@ -46,6 +48,7 @@ namespace Vulkan
 
 		void Reset(VkCommandBuffer commandBuffer)
 		{
+			BENCH_MARK_CHECK();
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 			started_ = true;
@@ -53,6 +56,7 @@ namespace Vulkan
 
 		void FrameEnd(VkCommandBuffer commandBuffer)
 		{
+			BENCH_MARK_CHECK();
 			if(started_)
 			{
 				started_ = false;
@@ -80,6 +84,7 @@ namespace Vulkan
 
 		void Start(VkCommandBuffer commandBuffer, const char* name)
 		{
+			BENCH_MARK_CHECK();
 			if( timer_query_map.find(name) == timer_query_map.end())
 			{
 				timer_query_map[name] = std::make_tuple(0, 0);
@@ -90,6 +95,7 @@ namespace Vulkan
 		}
 		void End(VkCommandBuffer commandBuffer, const char* name)
 		{
+			BENCH_MARK_CHECK();
 			assert( timer_query_map.find(name) != timer_query_map.end() );
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
 			std::get<1>(timer_query_map[name]) = queryIdx;
@@ -97,6 +103,7 @@ namespace Vulkan
 		}
 		void StartCpuTimer(const char* name)
 		{
+			BENCH_MARK_CHECK();
 			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
 			{
 				cpu_timer_query_map[name] = std::make_tuple(0, 0);
@@ -105,6 +112,7 @@ namespace Vulkan
 		}
 		void EndCpuTimer(const char* name)
 		{
+			BENCH_MARK_CHECK();
 			assert( cpu_timer_query_map.find(name) != cpu_timer_query_map.end() );
 			std::get<1>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
@@ -218,14 +226,10 @@ namespace Vulkan
 		bool HasSwapChain() const { return swapChain_.operator bool(); }
 
 		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
-		void Run();
 		
 		void Start();
-		bool Tick();
 		void End();
-
-		virtual void OnTouch(bool down, double xpos, double ypos) {}
-		virtual void OnTouchMove(double xpos, double ypos) {}
+		
 		virtual bool GetFocusDistance(float& distance) const {return false;}
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
 		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const {};
@@ -236,11 +240,10 @@ namespace Vulkan
 		
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
-		const std::string& GetRendererType() const {return rendererType_;}
-		
-	protected:
+		virtual void DrawFrame();
 
-		VulkanBaseRenderer(const char* rendererType, const WindowConfig& windowConfig, VkPresentModeKHR presentMode, bool enableValidationLayers);
+
+		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }
@@ -251,8 +254,10 @@ namespace Vulkan
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
-		virtual const Assets::Scene& GetScene() const = 0;
-		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const = 0;
+		const Assets::Scene& GetScene();
+		void SetScene(std::shared_ptr<Assets::Scene> scene);
+		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
@@ -263,36 +268,48 @@ namespace Vulkan
 		virtual void OnDeviceSet();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
-		virtual void DrawFrame();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		virtual void RenderUI(VkCommandBuffer commandBuffer, uint32_t imageIndex) {}
 
-		virtual void BeforeNextFrame() {}
+		virtual void BeforeNextFrame()
+		{
+			if(DelegateBeforeNextTick)
+			{
+				DelegateBeforeNextTick();
+			}
+		}
 		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
-		virtual void OnKey(int key, int scancode, int action, int mods) { }
-		virtual void OnCursorPosition(double xpos, double ypos) { }
-		virtual void OnMouseButton(int button, int action, int mods) { }
-		virtual void OnScroll(double xoffset, double yoffset) { }
-		virtual void OnDropFile(int path_count, const char* paths[]) { }
+		// Callbacks
+		std::function<void()> DelegateOnDeviceSet;
+		std::function<void()> DelegateCreateSwapChain;
+		std::function<void()> DelegateDeleteSwapChain;
+		std::function<void()> DelegateBeforeNextTick;
+		std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> DelegateGetUniformBufferObject;
+		std::function<void(VkCommandBuffer, uint32_t)> DelegatePostRender;
+		
+		// std::function<void()> OnScroll;
+		// std::function<void()> OnDropFile;
+		// std::function<void()> OnFocus;
+
+		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
+	
+		std::weak_ptr<Assets::Scene> scene_;
+		
 		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
 		bool supportDenoiser_ {};
 		int frameCount_{};
-		bool supportScreenShot_{};
 		bool forceSDR_{};
 		bool visualDebug_{};
-
-		std::string rendererType_{};
-
+	protected:
 		Assets::UniformBufferObject lastUBO;
 
-		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
+		
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);
@@ -300,7 +317,7 @@ namespace Vulkan
 
 		const VkPresentModeKHR presentMode_;
 		
-		std::unique_ptr<class Window> window_;
+		class Window* window_;
 		std::unique_ptr<class Instance> instance_;
 		std::unique_ptr<class DebugUtilsMessenger> debugUtilsMessenger_;
 		std::unique_ptr<class Surface> surface_;

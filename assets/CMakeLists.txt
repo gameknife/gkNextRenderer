@@ -55,7 +55,7 @@ source_group("Textures" FILES ${texture_files})
 add_custom_target(
 	Assets 
 	DEPENDS ${copied_fonts} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
-	SOURCES ${font_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
+	SOURCES ${font_files} ${locale_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
 
 
 # Shader compilation -> POST_BUILD

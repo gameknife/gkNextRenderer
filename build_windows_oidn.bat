@@ -4,7 +4,7 @@ for %%X in (cmake.exe) do (set FOUND=%%~$PATH:X)
 if defined FOUND (
 set CMAKE=cmake
 ) ELSE (
-set CMAKE="%CD%\build\vcpkg.windows\downloads\tools\cmake-3.27.1-windows\cmake-3.27.1-windows-i386\bin\cmake.exe"
+set CMAKE="%CD%\build\vcpkg.windows\downloads\tools\cmake-3.29.2-windows\cmake-3.29.2-windows-i386\bin\cmake.exe"
 )
 
 for %%X in (msbuild.exe) do (set FOUND=%%~$PATH:X)

@@ -3,6 +3,7 @@
 #include "Vulkan/Vulkan.hpp"
 
 #define CONSOLE_GREEN_COLOR		"\033[1;32m-"
+#define CONSOLE_GOLD_COLOR		"\033[1;33m-"
 #define CONSOLE_DEFAULT_COLOR	"\033[0m"
 
 namespace Utilities
