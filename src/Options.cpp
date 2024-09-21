@@ -24,7 +24,6 @@ Options::Options(const int argc, const char* argv[])
 		("max-bounces", value<uint32_t>(&MaxBounces)->default_value(10), "The maximum bounces per ray.")
 		("temporal", value<uint32_t>(&Temporal)->default_value(64), "The number of temporal frames.")
 		("denoiser", bool_switch(&Denoiser)->default_value(false), "Use Denoiser.")
-		("rr", value<uint32_t>(&RR_MIN_DEPTH)->default_value(2), "Russian roulette start from bounce.")
 		("adaptivesample", bool_switch(&AdaptiveSample)->default_value(false), "use adaptive sample to improve render quality.")
 	
     ;

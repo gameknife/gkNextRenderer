@@ -21,7 +21,7 @@ namespace Vulkan::PipelineCommon
 namespace Assets
 {
 	class Scene;
-	class UniformBufferObject;
+	struct UniformBufferObject;
 	class UniformBuffer;
 }
 

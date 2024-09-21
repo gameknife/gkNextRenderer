@@ -26,7 +26,7 @@ namespace Vulkan::ModernDeferred
 namespace Assets
 {
 	class Scene;
-	class UniformBufferObject;
+	struct UniformBufferObject;
 	class UniformBuffer;
 }
 

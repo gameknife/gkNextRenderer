@@ -1,3 +1,8 @@
+#if __VERSION__ >= 300
+#define glbool bool
+#else
+#define glbool uint32_t
+#endif
 
 struct UniformBufferObject
 {
@@ -8,37 +13,34 @@ struct UniformBufferObject
 	mat4 ViewProjection;
 	mat4 PrevViewProjection;
 	vec4 ViewportRect;
+
+	vec4 SunDirection;
+	vec4 SunColor;
+	vec4 BackGroundColor;
 	
 	float Aperture;
 	float FocusDistance;
 	float SkyRotation;
 	float HeatmapScale;
-	float ColorPhi;
-	float DepthPhi;
-	float NormalPhi;
 	float PaperWhiteNit;
-	vec4 SunDirection;
-	vec4 SunColor;
-	vec4 BackGroundColor;
+
 	float SkyIntensity;
 	uint SkyIdx;
 	uint TotalFrames;
 	uint MaxNumberOfBounces;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
-	uint RR_MIN_DEPTH;
 	uint RandomSeed;
 	uint LightCount;
-	bool HasSky;
-	bool ShowHeatmap;
-	bool UseCheckerBoard;
+	glbool HasSky;
+	glbool ShowHeatmap;
+	glbool UseCheckerBoard;
 	uint TemporalFrames;
-	bool HasSun;
-	bool HDR;
-	bool AdaptiveSample;
+	glbool HasSun;
+	glbool HDR;
+	glbool AdaptiveSample;
 	float AdaptiveVariance;
 	uint AdaptiveSteps;
-	bool TAA;
-	
+	glbool TAA;
 	uint SelectedId;
 };

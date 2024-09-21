@@ -58,8 +58,6 @@ struct UserSettings final
 	
 	inline const static float FieldOfViewMinValue = 10.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;
-
-	uint32_t RR_MIN_DEPTH;
 	
 	std::vector<Assets::Camera> cameras;
 	// HitResult

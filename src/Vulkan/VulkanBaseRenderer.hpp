@@ -32,7 +32,7 @@ namespace Assets
 {
 	class GlobalTexturePool;
 	class Scene;
-	class UniformBufferObject;
+	struct UniformBufferObject;
 	class UniformBuffer;
 }
 

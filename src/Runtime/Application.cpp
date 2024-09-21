@@ -122,7 +122,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
-    userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
+
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
@@ -364,7 +364,6 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = userSettings_.NumberOfSamples;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
-    ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
@@ -386,6 +385,10 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
 
+    // Other Setup
+    renderer_->supportDenoiser_ = userSettings_.Denoiser;
+
+    
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 

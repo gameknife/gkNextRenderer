@@ -39,7 +39,7 @@ public:
 	uint32_t MaxBounces{};
 	uint32_t RendererType{};
 	uint32_t Temporal{};
-	uint32_t RR_MIN_DEPTH{};
+
 	bool AdaptiveSample{};
 	
 	// Scene options.
