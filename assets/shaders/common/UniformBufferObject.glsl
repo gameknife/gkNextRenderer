@@ -1,7 +1,7 @@
-#if __VERSION__ >= 300
-#define glbool bool
-#else
+#ifdef __cplusplus
 #define glbool uint32_t
+#else
+#define glbool bool
 #endif
 
 struct UniformBufferObject
