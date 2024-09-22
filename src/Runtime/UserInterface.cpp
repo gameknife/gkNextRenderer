@@ -216,16 +216,18 @@ UserInterface::UserInterface(
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
 	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
 	{
-		Throw(std::runtime_error("failed to load ImGui Text font"));
+		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
 
+#if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
 	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
 	{
-		Throw(std::runtime_error("failed to load ImGui Text font"));
+		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}
-
+#endif
+	
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
 	ImFontConfig config;
 	config.MergeMode = true;
@@ -251,10 +253,7 @@ UserInterface::UserInterface(
 			Throw(std::runtime_error("failed to create ImGui font textures"));
 		}
 	});
-
-	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	viewportSize_ = ImVec2(static_cast<float>(viewportImage.GetImage().Extent().width), static_cast<float>(viewportImage.GetImage().Extent().height));
-
+	
 	firstRun = true;
 
 	editorGUI_->fontIcon_ = fontIcon_;
@@ -264,9 +263,6 @@ UserInterface::UserInterface(
 UserInterface::~UserInterface()
 {
 	uiFrameBuffers_.clear();
-	
-	ImGui_ImplVulkan_RemoveTexture(viewportTextureId_);
-	
 	editorGUI_.reset();
 	
 	ImGui_ImplVulkan_Shutdown();

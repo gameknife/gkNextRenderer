@@ -92,9 +92,6 @@ private:
 
 	std::unique_ptr<Editor::GUI> editorGUI_;
 
-	VkDescriptorSet viewportTextureId_;
-	ImVec2 viewportSize_;
-
 	ImFont* fontBigIcon_;
 	ImFont* fontIcon_;
 
