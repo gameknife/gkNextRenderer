@@ -2,7 +2,10 @@
 
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
-#include "Vulkan/RayTracing/RayTracingProperties.hpp"
+
+#if WITH_OIDN
+#include <oidn.hpp>
+#endif
 
 namespace Vulkan
 {
@@ -63,6 +66,9 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
 
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		
 		std::unique_ptr<RenderImage> rtAdaptiveSample_;
 
 		std::unique_ptr<RenderImage> rtShaderTimer_;
@@ -71,7 +77,13 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
+
+#if WITH_OIDN
+		oidn::DeviceRef device;
+		oidn::FilterRef filter;
+#endif
 	};
 
 }

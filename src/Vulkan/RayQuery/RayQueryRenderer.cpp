@@ -60,11 +60,39 @@ namespace Vulkan::RayTracing
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        Vulkan::RayTracing::RayTraceBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
+        supportRayTracing_ = true;
+
+        // Required extensions.
+        requiredExtensions.insert(requiredExtensions.end(),
+                                  {
+                                    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME
+                                  });
+#if WIN32 && !defined(__MINGW32__)
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+#endif
+        
+        RayTraceBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
     }
 
     void RayQueryRenderer::OnDeviceSet()
     {
+#if WITH_OIDN
+        // Query the UUID of the Vulkan physical device
+        VkPhysicalDeviceIDProperties id_properties{};
+        id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 properties{};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &id_properties;
+        vkGetPhysicalDeviceProperties2(Device().PhysicalDevice(), &properties);
+
+        oidn::UUID uuid;
+        std::memcpy(uuid.bytes, id_properties.deviceUUID, sizeof(uuid.bytes));
+
+        device = oidn::newDevice(uuid); // CPU or GPU if available
+        device.commit();
+#endif
+        
         Vulkan::RayTracing::RayTraceBaseRenderer::OnDeviceSet();
     }
 
@@ -90,7 +118,8 @@ namespace Vulkan::RayTracing
 
 
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers()));
-
+        composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), UniformBuffers()));
+        
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                                       rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(),
                                                                       UniformBuffers()));
@@ -101,6 +130,7 @@ namespace Vulkan::RayTracing
         rayTracingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
+        composePipelineDenoiser_.reset();
         visualDebugPipeline_.reset();
         
         rtAccumulation_.reset();
@@ -116,6 +146,9 @@ namespace Vulkan::RayTracing
         rtShaderTimer_.reset();
 
         rtAdaptiveSample_.reset();
+
+        rtDenoise0_.reset();
+        rtDenoise1_.reset();
         
         Vulkan::RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
     }
@@ -182,22 +215,38 @@ namespace Vulkan::RayTracing
 
         {
             SCOPED_GPU_TIMER("compose");
-
-
+            
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-                                       VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                       VK_IMAGE_LAYOUT_GENERAL);
-
-            ImageMemoryBarrier::Insert(commandBuffer, rtOutput_->GetImage().Handle(), subresourceRange, 0,
+                                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                 VK_IMAGE_LAYOUT_GENERAL);
+#if WITH_OIDN
+            if (supportDenoiser_)
+            {
+                ImageMemoryBarrier::Insert(commandBuffer, rtDenoise1_->GetImage().Handle(), subresourceRange, 0,
                                            VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                            VK_IMAGE_LAYOUT_GENERAL);
+                VkDescriptorSet DescriptorSets[] = {composePipelineDenoiser_->DescriptorSet(imageIndex)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineDenoiser_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        composePipelineDenoiser_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+                vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+            }
+            else
+#endif
+            {
 
-            VkDescriptorSet DescriptorSets[] = {composePipelineNonDenoiser_->DescriptorSet(imageIndex)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineNonDenoiser_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    composePipelineNonDenoiser_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);
 
+                ImageMemoryBarrier::Insert(commandBuffer, rtOutput_->GetImage().Handle(), subresourceRange, 0,
+                                               VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                               VK_IMAGE_LAYOUT_GENERAL);
+
+                VkDescriptorSet DescriptorSets[] = {composePipelineNonDenoiser_->DescriptorSet(imageIndex)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineNonDenoiser_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        composePipelineNonDenoiser_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+                vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);
+            }
+            
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
                            VK_ACCESS_TRANSFER_WRITE_BIT,
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -247,12 +296,57 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
+
+        if (supportDenoiser_)
+        {
+            VkImageSubresourceRange subresourceRange = {};
+            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresourceRange.baseMipLevel = 0;
+            subresourceRange.levelCount = 1;
+            subresourceRange.baseArrayLayer = 0;
+            subresourceRange.layerCount = 1;
+
+            ImageMemoryBarrier::Insert(commandBuffer, rtOutput_->GetImage().Handle(), subresourceRange,
+                                       VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtDenoise0_->GetImage().Handle(), subresourceRange, 0,
+                                       VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            // Copy output image into swap-chain image.
+            VkImageCopy copyRegion;
+            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.srcOffset = {0, 0, 0};
+            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.dstOffset = {0, 0, 0};
+            copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+
+            vkCmdCopyImage(commandBuffer,
+                           rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           rtDenoise0_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &copyRegion);
+
+            ImageMemoryBarrier::Insert(commandBuffer, rtOutput_->GetImage().Handle(), subresourceRange,
+                                       VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+        }
 #endif
+
+        
     }
 
     void RayQueryRenderer::BeforeNextFrame()
     {
         Vulkan::RayTracing::RayTraceBaseRenderer::BeforeNextFrame();
+        {
+            SCOPED_CPU_TIMER("OIDN");
+#if WITH_OIDN
+            if (supportDenoiser_)
+            {
+                filter.executeAsync();
+                device.sync();
+            }
+#endif
+        }
     }
     
     void RayQueryRenderer::CreateOutputImage()
@@ -263,6 +357,7 @@ namespace Vulkan::RayTracing
         
         rtAccumulation_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "accumulate"));
         rtOutput_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false, "output0"));
+        
         rtPingPong0.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "pingpong0"));
         rtPingPong1.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "pingpong1"));
         rtMotionVector_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "motionvector"));
@@ -275,5 +370,31 @@ namespace Vulkan::RayTracing
         rtShaderTimer_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "shadertimer"));
         
         rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
+
+        rtDenoise0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "denoise0"));
+        rtDenoise1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "denoise1"));
+
+#if WITH_OIDN
+        size_t SrcImageSize = extent.width * extent.height * 4 * 2;
+        size_t SrcImageW8 = 4 * 2 * extent.width;
+        size_t SrcImage8 = 4 * 2;
+        oidn::BufferRef colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef outBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef albedoBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef normalBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, SrcImageSize);
+
+        filter = device.newFilter("RT"); // generic ray tracing filter
+        filter.setImage("color", colorBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // beauty
+        filter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        filter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        filter.setImage("output", outBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // denoised beauty
+        filter.set("hdr", true); // beauty image is HDR
+        filter.set("quality", oidn::Quality::Fast);
+        //filter.set("quality", oidn::Quality::Balanced);
+        //filter.set("quality", oidn::Quality::High);
+        filter.set("cleanAux", true);
+        //filter.set("inputScale", 1.0f);
+        filter.commit();
+#endif
     }
 }

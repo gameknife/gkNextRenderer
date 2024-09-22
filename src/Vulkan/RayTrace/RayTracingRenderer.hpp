@@ -48,7 +48,6 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<RenderImage> rtAccumulation_;
 		std::unique_ptr<RenderImage> rtOutput_;
-		std::unique_ptr<RenderImage> rtOutputForOIDN_;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtPingPong0;
 		std::unique_ptr<RenderImage> rtPingPong1;
