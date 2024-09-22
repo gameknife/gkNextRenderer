@@ -221,7 +221,7 @@ UserInterface::UserInterface(
 
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load ImGui Text font"));
 	}

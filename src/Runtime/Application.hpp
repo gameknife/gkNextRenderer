@@ -32,7 +32,7 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(const Options& options);
+	NextRendererApplication(const Options& options, void* userdata = nullptr);
 	~NextRendererApplication();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }

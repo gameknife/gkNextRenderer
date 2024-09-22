@@ -150,7 +150,7 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(const Options& options)
+NextRendererApplication::NextRendererApplication(const Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -164,7 +164,7 @@ NextRendererApplication::NextRendererApplication(const Options& options)
         options.Fullscreen,
         !options.Fullscreen,
         options.SaveFile,
-        nullptr,
+        userdata,
         options.ForceSDR
     };
     
