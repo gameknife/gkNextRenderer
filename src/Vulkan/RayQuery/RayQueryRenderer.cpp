@@ -1,14 +1,10 @@
 #include "RayQueryRenderer.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
-#include "RayQueryRenderer.hpp"
-#include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Assets/Scene.hpp"
 #include "Utilities/Glm.hpp"
-#include "Vulkan/Buffer.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
-#include "Vulkan/ImageView.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
 #include "Vulkan/SwapChain.hpp"
@@ -24,25 +20,6 @@
 
 namespace Vulkan::RayTracing
 {
-    namespace
-    {
-        template <class TAccelerationStructure>
-        VkAccelerationStructureBuildSizesInfoKHR GetTotalRequirements(
-            const std::vector<TAccelerationStructure>& accelerationStructures)
-        {
-            VkAccelerationStructureBuildSizesInfoKHR total{};
-
-            for (const auto& accelerationStructure : accelerationStructures)
-            {
-                total.accelerationStructureSize += accelerationStructure.BuildSizes().accelerationStructureSize;
-                total.buildScratchSize += accelerationStructure.BuildSizes().buildScratchSize;
-                total.updateScratchSize += accelerationStructure.BuildSizes().updateScratchSize;
-            }
-
-            return total;
-        }
-    }
-
     RayQueryRenderer::RayQueryRenderer(Vulkan::Window* window,const VkPresentModeKHR presentMode,
                              const bool enableValidationLayers) :
         Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
@@ -61,7 +38,7 @@ namespace Vulkan::RayTracing
         void* nextDeviceFeatures)
     {
         supportRayTracing_ = true;
-
+#if WITH_OIDN
         // Required extensions.
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
@@ -71,6 +48,7 @@ namespace Vulkan::RayTracing
         requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
 #endif
         
+#endif
         RayTraceBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
     }
 

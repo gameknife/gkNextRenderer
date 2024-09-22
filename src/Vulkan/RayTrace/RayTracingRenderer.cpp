@@ -14,47 +14,8 @@
 #include "Assets/Texture.hpp"
 #include "Vulkan/RenderImage.hpp"
 
-#ifdef WIN32
-#	include <aclapi.h>
-#	include <dxgi1_2.h>
-#endif
-
-#if WITH_OIDN
-#include <oidn.hpp>
-#endif
-
 namespace Vulkan::RayTracing
-{
-#if WITH_OIDN
-    oidn::DeviceRef device;
-    oidn::FilterRef filter;
-#endif
-
-    struct DenoiserPushConstantData
-    {
-        uint32_t pingpong;
-        uint32_t stepsize;
-    };
-
-    namespace
-    {
-        template <class TAccelerationStructure>
-        VkAccelerationStructureBuildSizesInfoKHR GetTotalRequirements(
-            const std::vector<TAccelerationStructure>& accelerationStructures)
-        {
-            VkAccelerationStructureBuildSizesInfoKHR total{};
-
-            for (const auto& accelerationStructure : accelerationStructures)
-            {
-                total.accelerationStructureSize += accelerationStructure.BuildSizes().accelerationStructureSize;
-                total.buildScratchSize += accelerationStructure.BuildSizes().buildScratchSize;
-                total.updateScratchSize += accelerationStructure.BuildSizes().updateScratchSize;
-            }
-
-            return total;
-        }
-    }
-
+{    
     RayTracingRenderer::RayTracingRenderer( Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                            const bool enableValidationLayers) :
         RayTraceBaseRenderer(window, presentMode, enableValidationLayers)

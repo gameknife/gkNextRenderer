@@ -2,6 +2,10 @@
 
 #include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
 
+#if WITH_OIDN
+#include <oidn.hpp>
+#endif
+
 namespace Vulkan
 {
 	namespace PipelineCommon
@@ -68,6 +72,11 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
+
+#if WITH_OIDN
+		oidn::DeviceRef device;
+		oidn::FilterRef filter;
+#endif
 	};
 
 }
