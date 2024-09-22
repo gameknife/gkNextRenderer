@@ -92,17 +92,27 @@ void main() {
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);
-			
+
+            // 这里我们希望评估的是噪点密集的区域，就是肉眼看上去十分闪烁的区域
+            // 应该类似SVGF一样，评估时间，空间域内的方差
+            // 然后，这个评估，也可以用于降噪，这种区域，应该提升降噪强度。
+            // 最终的结果，类似于，采样数严重不足的区域，自适应的提升采样数，并拉高后续的降噪强度
+            // 而比如光线充足的大平面，采样数足够，后续也可以适当降低降噪强度
+            // 我们先输出一个区域的图给到visualdebug	
 			if(Camera.AdaptiveSample)
 			{
+			    // 之前的算法是不稳定，抖动的。使用 delta ^ 2 = prev - cur ^ 2 来预估
+			
+			    // 将方差直接写入buffer，显示一下，他应该是稳定的
+			
 				// if history variance is too large, we should not use it.
 				const float historyVariance = Camera.AdaptiveVariance;
 
-				float diff = abs(luminance(final.rgb) - luminance(history.rgb));
+				float diff = abs(luminance(src.rgb) - luminance(history.rgb));
 				if (diff > historyVariance)
 				{
 					// need sample
-					imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
+					//imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
 				}
 			}
 		}

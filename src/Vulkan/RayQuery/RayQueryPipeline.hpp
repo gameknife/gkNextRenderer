@@ -41,6 +41,7 @@ namespace Vulkan::RayTracing
 			const ImageView& OutAlbedoImageView,
 			const ImageView& OutNormalImageView,
 			const ImageView& AdaptiveSampleImageView,
+			const ImageView& OutShaderTimerImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayQueryPipeline();

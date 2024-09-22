@@ -75,7 +75,7 @@ namespace Vulkan::RayTracing
         rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), topAs_[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
-                                                         rtAdaptiveSample_->GetImageView(), UniformBuffers(), GetScene()));
+                                                         rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));
 
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                         rtAccumulation_->GetImageView(),
@@ -90,6 +90,10 @@ namespace Vulkan::RayTracing
 
 
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers()));
+
+        visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
+                                                                      rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(),
+                                                                      UniformBuffers()));
     }
 
     void RayQueryRenderer::DeleteSwapChain()
@@ -97,6 +101,7 @@ namespace Vulkan::RayTracing
         rayTracingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
+        visualDebugPipeline_.reset();
         
         rtAccumulation_.reset();
         rtOutput_.reset();
@@ -108,6 +113,7 @@ namespace Vulkan::RayTracing
 
         rtAlbedo_.reset();
         rtNormal_.reset();
+        rtShaderTimer_.reset();
 
         rtAdaptiveSample_.reset();
         
@@ -133,6 +139,7 @@ namespace Vulkan::RayTracing
         rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Execute ray tracing shaders.
@@ -196,6 +203,40 @@ namespace Vulkan::RayTracing
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
+        if (visualDebug_)
+        {
+            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtShaderTimer_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtAlbedo_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtNormal_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtAdaptiveSample_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtMotionVector_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+
+            {
+                VkDescriptorSet DescriptorSets[] = {visualDebugPipeline_->DescriptorSet(imageIndex)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebugPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        visualDebugPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+                vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+            }
+
+            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+                                       VK_ACCESS_TRANSFER_WRITE_BIT,
+                                       0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
+    
 #if !ANDROID
         {
             SCOPED_GPU_TIMER("raycast");
@@ -229,7 +270,9 @@ namespace Vulkan::RayTracing
         rtVisibility1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "vis1"));
 
         rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "albedo"));
-        rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "albedo"));
+        rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "normal"));
+        
+        rtShaderTimer_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "shadertimer"));
         
         rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
     }

@@ -28,6 +28,7 @@ namespace Vulkan::RayTracing
         const ImageView& OutAlbedoImageView,
         const ImageView& OutNormalImageView,
         const ImageView& AdaptiveSampleImageView,
+        const ImageView& OutShaderTimerImageView,
         
         const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
     {
@@ -57,6 +58,8 @@ namespace Vulkan::RayTracing
             {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
+                {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -133,6 +136,10 @@ namespace Vulkan::RayTracing
             adaptiveSampleImageInfo.imageView = AdaptiveSampleImageView.Handle();
             adaptiveSampleImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+            VkDescriptorImageInfo outShaderTimerImageInfo = {};
+            outShaderTimerImageInfo.imageView = OutShaderTimerImageView.Handle();
+            outShaderTimerImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, structureInfo),
@@ -149,6 +156,7 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 14, outAlbedoImageInfo),
                 descriptorSets.Bind(i, 15, outNormalImageInfo),
                 descriptorSets.Bind(i, 16, adaptiveSampleImageInfo),
+                descriptorSets.Bind(i, 17, outShaderTimerImageInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

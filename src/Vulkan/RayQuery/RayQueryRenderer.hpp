@@ -64,11 +64,14 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<RenderImage> rtNormal_;
 
 		std::unique_ptr<RenderImage> rtAdaptiveSample_;
+
+		std::unique_ptr<RenderImage> rtShaderTimer_;
 		
 		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
 
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
+		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 	};
 
 }

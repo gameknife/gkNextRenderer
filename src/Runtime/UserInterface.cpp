@@ -500,13 +500,13 @@ void UserInterface::DrawSettings()
 			camerasList.emplace_back(cam.name.c_str());
 		}
 
-		ImGui::Text("%s", LOCTEXT("Help"));
-		ImGui::Separator();
-		ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
-		ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
-		ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
-		ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
-		ImGui::NewLine();
+		// ImGui::Text("%s", LOCTEXT("Help"));
+		// ImGui::Separator();
+		// ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
+		// ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
+		// ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
+		// ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
+		// ImGui::NewLine();
 
 		ImGui::Text("%s", LOCTEXT("Scene"));
 		ImGui::Separator();
@@ -519,9 +519,9 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
-		//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
+		ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
 		ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
-		//ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
+		ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 1.0f, 2000.0f, "%.0f");
 		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
 		
 		ImGui::NewLine();
@@ -565,7 +565,7 @@ void UserInterface::DrawSettings()
 		ImGui::Text("%s", LOCTEXT("Profiler"));
 		ImGui::Separator();
 		ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
-		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
 
 		ImGui::Text("%s", LOCTEXT("Performance"));

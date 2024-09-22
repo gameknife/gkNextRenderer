@@ -132,7 +132,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
-    userSettings.HeatmapScale = 1.5f;
+    userSettings.HeatmapScale = 0.5f;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Benchmark ? 512 : options.Temporal;
@@ -376,7 +376,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
     ubo.HasSky = init.HasSky;
     ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
-    ubo.ShowHeatmap = false;
+    ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
@@ -387,7 +387,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
-
+    renderer_->visualDebug_ = userSettings_.ShowVisualDebug;
     
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
