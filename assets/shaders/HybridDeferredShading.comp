@@ -60,7 +60,7 @@ struct RayPayload
 	vec3    BaryCoords;
 };
 
-vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor)
+bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
 	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, INF);
@@ -106,9 +106,11 @@ vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
 
 		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
+		const vec4 lightColor = material.MaterialModel == MaterialDiffuseLight ? material.Diffuse : vec4(0);
 		
 		// may get from previous frame, if not, use the albedo and force lose a magic energy
 		bounceColor = texColor.rgb * texColor.rgb * material.Diffuse.rgb * iblColor * 0.5;
+		illumColor = lightColor.rgb;
 		
 		vec3 hitPos = origin + direction * PayloadData.HitDist;
 		vec4 hpos =  Camera.PrevViewProjection * vec4(hitPos, 1);
@@ -116,7 +118,7 @@ vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
 		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
 		{
-			return vec3(0);
+			return true;
 		}
 		if(Camera.TotalFrames % 2 == 0 )
 		{
@@ -126,9 +128,10 @@ vec3 TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		{
 			bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;// * 0.5;
 		}
-		return vec3(0);
+		return true;
 	}
-	return vec3(1);
+	// miss, hit sky
+	return false;
 }
 
 #include "common/VertexFunc.glsl"
@@ -186,7 +189,7 @@ void main() {
 	const float metalProb = mat.Metalness;
 	
 	
-	vec3 skyColor = vec3(0);
+	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
 	uint sampleTimes = Camera.NumberOfSamples;
 	
@@ -209,15 +212,24 @@ void main() {
 			albedoSingle = vec4(1);
 		}
 		
-		vec3 iblColor = equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-		vec3 hitColor = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle);
-		skyColor += albedoSingle.rgb * iblColor * hitColor;
+		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 illumColor = vec3(0.0);
+		bool hit = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle, illumColor);
+		if(!hit)
+		{
+			irradianceColor += albedoSingle.rgb * iblColor;
+		}
+		else
+		{
+			irradianceColor += albedoSingle.rgb * illumColor;
+		}
+		
 		bounceColor += albedoSingle.rgb * bounceSingle;
 	}
-	skyColor = skyColor / sampleTimes;
+	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;
 	
-    vec4 outColor = vec4(skyColor,1);
+    vec4 outColor = vec4(irradianceColor,1);
 	outColor.a = sampleTimes;
     
     if(Camera.HasSun)
