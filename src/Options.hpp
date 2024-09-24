@@ -57,4 +57,4 @@ public:
 	bool Fullscreen{};
 };
 
-inline const Options* GOption = nullptr;
+extern const Options* GOption;
