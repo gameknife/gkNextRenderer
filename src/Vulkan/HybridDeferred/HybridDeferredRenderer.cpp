@@ -68,6 +68,16 @@ namespace Vulkan::HybridDeferred
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT));
 
+        rtDirectLightSource.reset(new RenderImage(Device(), extent,
+                                             VK_FORMAT_R16G16B16A16_SFLOAT,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_STORAGE_BIT));
+
+        rtDirectLightDest.reset(new RenderImage(Device(), extent,
+                                             VK_FORMAT_R16G16B16A16_SFLOAT,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_STORAGE_BIT));
+        
         rtDirectLight0.reset(new RenderImage(Device(), extent,
                                              VK_FORMAT_R16G16B16A16_SFLOAT,
                                              VK_IMAGE_TILING_OPTIMAL,
@@ -97,8 +107,8 @@ namespace Vulkan::HybridDeferred
                                                                  rtVisibility1->GetImageView(),
                                                                  rtAccumlation->GetImageView(),
                                                                  rtMotionVector->GetImageView(),
-                                                                 rtDirectLight0->GetImageView(),
-                                                                 rtDirectLight1->GetImageView(),
+                                                                 rtDirectLightDest->GetImageView(),
+                                                                 rtDirectLightSource->GetImageView(),
                                                                  UniformBuffers(), GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                          rtAccumlation->GetImageView(),
@@ -110,10 +120,20 @@ namespace Vulkan::HybridDeferred
                                                                          rtOutput->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
+        accumulateForLightPipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
+                                                                         rtDirectLightSource->GetImageView(),
+                                                                         rtDirectLight0->GetImageView(),
+                                                                         rtDirectLight1->GetImageView(),
+                                                                         rtMotionVector->GetImageView(),
+                                                                         rtVisibility0->GetImageView(),
+                                                                         rtVisibility1->GetImageView(),
+                                                                         rtDirectLightDest->GetImageView(),
+                                                                         UniformBuffers(), GetScene()));
+
         composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), UniformBuffers()));
 
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
-                                                              rtDirectLight0->GetImageView(), rtMotionVector->GetImageView(), rtAdaptiveSample_->GetImageView(), rtOutput->GetImageView(),
+                                                              rtDirectLightDest->GetImageView(), rtMotionVector->GetImageView(), rtAdaptiveSample_->GetImageView(), rtOutput->GetImageView(),
                                                               UniformBuffers()));
     }
 
@@ -123,6 +143,7 @@ namespace Vulkan::HybridDeferred
         visibility1Pipeline_.reset();
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
+        accumulateForLightPipeline_.reset();
         composePipeline_.reset();
         visualDebugPipeline_.reset();
         
@@ -137,6 +158,8 @@ namespace Vulkan::HybridDeferred
         rtAccumlation.reset();
         rtDirectLight0.reset();
         rtDirectLight1.reset();
+        rtDirectLightSource.reset();
+        rtDirectLightDest.reset();
 
         rtPingPong0.reset();
         rtPingPong1.reset();
@@ -236,6 +259,8 @@ namespace Vulkan::HybridDeferred
             rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLight0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLight1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtDirectLightSource->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtDirectLightDest->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
@@ -280,6 +305,15 @@ namespace Vulkan::HybridDeferred
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 4), 1);
 
             rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+
+        {
+            SCOPED_GPU_TIMER("dlight reproj pass");
+            VkDescriptorSet DescriptorSets[] = {accumulateForLightPipeline_->DescriptorSet(imageIndex)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulateForLightPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    accumulateForLightPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 4), 1);
         }
 
         {

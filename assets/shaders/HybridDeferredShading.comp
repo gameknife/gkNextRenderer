@@ -121,14 +121,8 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		{
 			return true;
 		}
-		if(Camera.TotalFrames % 2 == 0 )
-		{
-			bounceColor = imageLoad(InOutDirectLight1, ipos_new).rgb;// * 0.5;
-		}
-		else
-		{
-			bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;// * 0.5;
-		}
+		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;// * 0.5;
+		
 		return true;
 	}
 	// miss, hit sky
@@ -167,6 +161,7 @@ void main() {
 		vec3 iblColor = Camera.HasSky ? equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
+		imageStore(InOutDirectLight1, ipos, vec4(iblColor,1));
 		return;
 	}
     
@@ -199,6 +194,7 @@ void main() {
 		vec3 lightColor = albedo.rgb;
 		imageStore(OutImage, ipos, vec4(lightColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
+		imageStore(InOutDirectLight1, ipos, vec4(lightColor,1));
 		return;
 	}
 	
@@ -269,15 +265,8 @@ void main() {
     }
 	
 	vec4 directLight = vec4(outColor.rgb, 1);
-
-	if(Camera.TotalFrames % 2 == 0 )
-	{
-		imageStore(InOutDirectLight0, ipos, directLight);
-	}
-	else
-	{
-		imageStore(InOutDirectLight1, ipos, directLight);
-	}
+	
+	imageStore(InOutDirectLight1, ipos, directLight);
 
 	// with multiple bounceColor
 	outColor.rgb += bounceColor.rgb;
