@@ -17,6 +17,7 @@
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 
 std::unique_ptr<NextRendererApplication> GApplication = nullptr;
+const Options* GOption = nullptr;
 
 void handle_cmd(android_app* app, int32_t cmd) {
     switch (cmd) {
