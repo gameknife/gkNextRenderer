@@ -79,8 +79,8 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	renderExtent_ = extent_;
 	renderOffset_ = {0,0};
 #if ANDROID
-	renderExtent_ = { extent.width / 2, extent.height / 2 };
-	renderOffset_ = { (int32_t)extent.width / 4, (int32_t)extent.height / 4 };
+	//renderExtent_ = { extent.width / 2, extent.height / 2 };
+	//renderOffset_ = { (int32_t)extent.width / 4, (int32_t)extent.height / 4 };
 #endif
 	
 	images_ = GetEnumerateVector(device_.Handle(), swapChain_, vkGetSwapchainImagesKHR);

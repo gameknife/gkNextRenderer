@@ -88,6 +88,7 @@ void main() {
 				subpixel.y
 			);
 
+			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);

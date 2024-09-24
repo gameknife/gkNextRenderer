@@ -29,7 +29,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
             MakeExternalDirectory(app, "assets/textures");
             MakeExternalDirectory(app, "assets/locale");
             
-            const char* argv[] = { "gkNextRenderer", "--renderer=3", "--scene=1", "--load-scene=simple.glb"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=simple.glb"};
             const Options options(4, argv);
             GOption = &options;
             GApplication.reset(new NextRendererApplication(options, app->window));
