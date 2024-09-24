@@ -18,7 +18,7 @@
 namespace Vulkan::HybridDeferred
 {
     HybridShadingPipeline::HybridShadingPipeline(const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-                                                 const ImageView& miniGBufferImageView, const ImageView& miniGBuffer1ImageView,
+                                                 const ImageView& miniGBufferImageView, 
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
                                                  const ImageView& directLight0ImageView, const ImageView& directLight1ImageView,
                                                  const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
@@ -46,8 +46,6 @@ namespace Vulkan::HybridDeferred
 
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -65,7 +63,6 @@ namespace Vulkan::HybridDeferred
             structureInfo.pAccelerationStructures = &accelerationStructureHandle;
 
             VkDescriptorImageInfo Info0 = {NULL, miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info13 = {NULL, miniGBuffer1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
 
@@ -115,8 +112,7 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 9, Info8),
                 descriptorSets.Bind(i, 10, structureInfo),
                 descriptorSets.Bind(i, 11, Info11),
-                descriptorSets.Bind(i, 12, Info12),
-                descriptorSets.Bind(i, 13, Info13)
+                descriptorSets.Bind(i, 12, Info12)
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
