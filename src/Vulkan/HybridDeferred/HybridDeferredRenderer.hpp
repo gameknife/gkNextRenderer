@@ -51,6 +51,7 @@ namespace Vulkan::HybridDeferred
 		std::unique_ptr<class HybridShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
+		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 		std::unique_ptr<class FrameBuffer> deferred1FrameBuffer_;
 

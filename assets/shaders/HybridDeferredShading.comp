@@ -7,6 +7,7 @@
 #include "common/Material.glsl"
 #include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
+#include "common/GGXSample.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 13, rg32ui) uniform uimage2D MiniGBuffer1;
@@ -163,7 +164,7 @@ void main() {
 	if(vBuffer.x == 0)
 	{
 		const vec3 blurRay = AlignWithNormal( RandomInCone(RandomSeed, cos(0.2 / 180.f * M_PI)), ray_dir );
-		vec3 iblColor = equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+		vec3 iblColor = Camera.HasSky ? equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		return;
@@ -193,13 +194,30 @@ void main() {
 	vec3 bounceColor = vec3(0);
 	uint sampleTimes = Camera.NumberOfSamples;
 	
+	if (mat.MaterialModel == MaterialDiffuseLight)
+	{
+		vec3 lightColor = albedo.rgb;
+		imageStore(OutImage, ipos, vec4(lightColor,1));
+		imageStore(OutMotionVector, ipos, vec4(0));
+		return;
+	}
+	
+	// emit ray without any guidance
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
-		vec3 trace_dir = chanceReflect ?
-		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
-		( RandomFloat(RandomSeed) < metalProb ?
-		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
+		const vec3 reflected = reflect( ray_dir, outwardNormal);
+		
+//		vec3 trace_dir = chanceReflect ?
+//		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
+//		( RandomFloat(RandomSeed) < metalProb ?
+//		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
+//		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
+//		);
+
+
+		const vec3 trace_dir = chanceReflect ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
+		(RandomFloat(RandomSeed) < metalProb ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
 		);
 
@@ -261,6 +279,7 @@ void main() {
 		imageStore(InOutDirectLight1, ipos, directLight);
 	}
 
+	// with multiple bounceColor
 	outColor.rgb += bounceColor.rgb;
 	
     imageStore(OutImage, ipos, outColor);

@@ -9,4 +9,5 @@ vec4 equirectangularSample(vec3 direction, float rotate)
 
 	return min( vec4(10,10,10,1), texture(TextureSamplers[Camera.SkyIdx], t));
 }
+		
 #endif
