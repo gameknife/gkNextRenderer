@@ -161,7 +161,7 @@ void main() {
 		vec3 iblColor = Camera.HasSky ? equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
-		imageStore(InOutDirectLight1, ipos, vec4(iblColor,1));
+		imageStore(InOutDirectLight1, ipos, vec4(0));
 		return;
 	}
     
