@@ -13,7 +13,6 @@ layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 7, rgba8) uniform image2D OutImage;
-layout(binding = 8, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
