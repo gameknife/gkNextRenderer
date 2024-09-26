@@ -11,16 +11,48 @@ layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {
-    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+
+    const ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    
+    // simple joint bilateral filter
+    const int N = int(Camera.BFSize); // filter size
+    const float sigma = Camera.BFSigma; // spatial sigma
+    const float sigmaL = Camera.BFSigmaLum * 100.0; // 
+    const int SX = 1; // spatial step
+    const int SY = 1; // spatial step
+
+    const vec3 CenterColor = imageLoad(InImage, ipos).rgb;
+    const float CenterLum = dot(CenterColor, vec3(0.212671F, 0.715160F, 0.072169F));
+
+    float Weight = 0;      
+    vec3 Total = vec3(0); 
+
+    int c,d;
+    for(c=-N;c<N+1;c++)
+    {
+        for(d=-N;d<N+1;d++)
+        {
+            const vec3 Ci = imageLoad(InImage, ipos + ivec2(c*SX,d*SY)).rgb;
+            const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
+
+            const float dist = clamp( float(c*c+d*d)/float(N*N) , 0., 1. );
+            const float dlum = (CenterLum - lumi)*(CenterLum - lumi);
+
+            const float Fi = exp(-dist*dist/(2.* sigma*sigma));
+            const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
+
+            Total += Ci * Fi * Li;
+            Weight += Fi * Li;
+        }
+    }
+    Total /= Weight;
 
     if(Camera.HDR)
     {
-        imageStore(OutImage, ipos, vec4( LinearToST2084UE( imageLoad(InImage, ipos).rgb * Camera.PaperWhiteNit / 230.0), 1.0));
+        imageStore(OutImage, ipos, vec4( LinearToST2084UE( Total * Camera.PaperWhiteNit / 230.0), 1.0));
     }
     else
     {
-        // manmal exposure
-        imageStore(OutImage, ipos, vec4( ACES_Tonemapping( imageLoad(InImage, ipos).rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
+        imageStore(OutImage, ipos, vec4( ACES_Tonemapping( Total * Camera.PaperWhiteNit / 20000.0), 1.0));
     }
-    //imageStore(OutImage, ipos, vec4( imageLoad(InImage, ipos).rgb, 1.0));
 }

@@ -521,12 +521,18 @@ void UserInterface::DrawSettings()
 		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
 		
 		ImGui::NewLine();
-		#if WITH_OIDN
+		
 			ImGui::Text("Denoiser");
 			ImGui::Separator();
+#if WITH_OIDN
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
+#else
+		ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 10.0f, "%.2f");
+		ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
+#endif
 			ImGui::NewLine();
-		#endif
+		
 
 		int prevCameraIdx = Settings().CameraIdx;
 		ImGui::Text("%s", LOCTEXT("Camera"));
