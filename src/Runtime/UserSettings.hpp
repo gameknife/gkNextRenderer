@@ -55,6 +55,7 @@ struct UserSettings final
 	bool Denoiser;
 	float DenoiseSigma;
 	float DenoiseSigmaLum;
+	float DenoiseSigmaNormal;
 	int DenoiseSize;
 
 	float PaperWhiteNit;

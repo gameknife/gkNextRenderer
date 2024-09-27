@@ -63,6 +63,9 @@ namespace Vulkan::PipelineCommon
 		FinalComposePipeline(
 			const SwapChain& swapChain, 
 			const ImageView& sourceImageView,
+			const ImageView& normalBufferImageView,
+			const ImageView& visibility0ImageView,
+			const ImageView& visibility1ImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers);
 		~FinalComposePipeline();
 

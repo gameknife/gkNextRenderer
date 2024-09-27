@@ -148,8 +148,9 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AutoFocus = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 0.5f;
-    userSettings.DenoiseSize = 3;
+    userSettings.DenoiseSigmaLum = 2.0f;
+    userSettings.DenoiseSigmaNormal = 0.5f;
+    userSettings.DenoiseSize = 10;
 
     return userSettings;
 }
@@ -391,6 +392,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 
     ubo.BFSigma = userSettings_.DenoiseSigma;
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
+    ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
     ubo.BFSize = userSettings_.DenoiseSize;
 
     // Other Setup

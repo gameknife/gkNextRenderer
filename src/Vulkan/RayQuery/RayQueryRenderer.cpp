@@ -94,8 +94,8 @@ namespace Vulkan::RayTracing
                                                                         UniformBuffers(), GetScene()));
 
 
-        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers()));
-        composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), UniformBuffers()));
+        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
+        composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
         
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                                       rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(),

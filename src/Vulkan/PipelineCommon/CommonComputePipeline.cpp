@@ -104,7 +104,11 @@ namespace Vulkan::PipelineCommon
     }
 
     FinalComposePipeline::FinalComposePipeline(const SwapChain& swapChain,
-                                               const ImageView& sourceImageView, const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
+                                               const ImageView& sourceImageView,
+                                               const ImageView& normalBufferImageView,
+                                                const ImageView& visibility0ImageView,
+                                                const ImageView& visibility1ImageView,
+                                                const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -113,6 +117,9 @@ namespace Vulkan::PipelineCommon
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, swapChain.ImageViews().size()));
@@ -126,12 +133,17 @@ namespace Vulkan::PipelineCommon
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
-
+            VkDescriptorImageInfo Info3 = {NULL, normalBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info4 = {NULL, visibility0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info5 = {NULL, visibility1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
                 descriptorSets.Bind(i, 1, Info1),
                 descriptorSets.Bind(i, 2, uniformBufferInfo),
+                descriptorSets.Bind(i, 3, Info3),
+                descriptorSets.Bind(i, 4, Info4),
+                descriptorSets.Bind(i, 5, Info5),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

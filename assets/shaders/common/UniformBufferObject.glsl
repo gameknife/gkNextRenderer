@@ -46,5 +46,6 @@ struct UniformBufferObject
 		
 	float BFSigma;
 	float BFSigmaLum;
+	float BFSigmaNormal;
 	uint BFSize;
 };

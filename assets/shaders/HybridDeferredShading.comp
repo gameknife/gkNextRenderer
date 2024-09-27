@@ -269,6 +269,14 @@ void main() {
 
 	// with multiple bounceColor
 	outColor.rgb += bounceColor.rgb;
+
+	//#if USE_FIREFLY_FILTER
+ 	 float lum = luminance(outColor.rgb);
+	if(lum > 1600.0F)
+	{
+		outColor.rgb *= 1600.0F / lum;
+	}
+	//#endif
 	
     imageStore(OutImage, ipos, outColor);
     
