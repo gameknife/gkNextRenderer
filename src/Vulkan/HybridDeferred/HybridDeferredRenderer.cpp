@@ -123,7 +123,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtDirectLightDest->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtOutput->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtOutput->GetImageView(),  rtOutput->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
 
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                               rtAccumlation->GetImageView(), rtMotionVector->GetImageView(), rtAdaptiveSample_->GetImageView(), rtOutput->GetImageView(),

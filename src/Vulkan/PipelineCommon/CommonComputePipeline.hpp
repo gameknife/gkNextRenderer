@@ -63,6 +63,7 @@ namespace Vulkan::PipelineCommon
 		FinalComposePipeline(
 			const SwapChain& swapChain, 
 			const ImageView& sourceImageView,
+			const ImageView& albedoBufferImageView,
 			const ImageView& normalBufferImageView,
 			const ImageView& visibility0ImageView,
 			const ImageView& visibility1ImageView,

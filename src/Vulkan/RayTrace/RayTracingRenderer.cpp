@@ -102,8 +102,8 @@ namespace Vulkan::RayTracing
                                                                          UniformBuffers(), GetScene()));
 
 
-        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
-        composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), rtDenoise1_->GetImageView(), UniformBuffers()));
+        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
+        composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), rtDenoise1_->GetImageView(), UniformBuffers()));
 
         const std::vector<ShaderBindingTable::Entry> rayGenPrograms = {{rayTracingPipeline_->RayGenShaderIndex(), {}}};
         const std::vector<ShaderBindingTable::Entry> missPrograms = {{rayTracingPipeline_->MissShaderIndex(), {}}};

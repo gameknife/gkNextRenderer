@@ -9,9 +9,10 @@ layout(binding = 1, rgba8) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 // use for jbf
-layout(binding = 3, rgba16f) uniform image2D InNormal;
-layout(binding = 4, r32ui) uniform uimage2D InVisibility0;
-layout(binding = 5, r32ui) uniform uimage2D InVisibility1;
+layout(binding = 3, rgba16f) uniform image2D InAlbedo;
+layout(binding = 4, rgba16f) uniform image2D InNormal;
+layout(binding = 5, r32ui) uniform uimage2D InVisibility0;
+layout(binding = 6, r32ui) uniform uimage2D InVisibility1;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -19,50 +20,64 @@ void main() {
 
     const ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
     bool isEvenFrame = Camera.TotalFrames % 2 == 0;
+
+    vec3 Total = vec3(0);
     
-    // simple joint bilateral filter
-    const int N = int(Camera.BFSize); // filter size
-    const float sigma = Camera.BFSigma; // spatial sigma
-    const float sigmaL = Camera.BFSigmaLum * 100.0; // 
-    const float sigmaN = Camera.BFSigmaNormal;
-    const int SX = 1; // spatial step
-    const int SY = 1; // spatial step
-
-    const vec3 CenterColor = imageLoad(InImage, ipos).rgb;
-    const vec3 Normal = imageLoad(InNormal, ipos).rgb;
-    uint current_primitive_index = isEvenFrame ? imageLoad(InVisibility0, ipos).r : imageLoad(InVisibility1, ipos).r;
-    
-    const float CenterLum = dot(CenterColor, vec3(0.212671F, 0.715160F, 0.072169F));
-
-    float Weight = 0;      
-    vec3 Total = vec3(0); 
-
-    int c,d;
-    for(c=-N;c<N+1;c++)
+    if(Camera.BFSize > 0)
     {
-        for(d=-N;d<N+1;d++)
+        // simple joint bilateral filter
+        const int N = int(Camera.BFSize); // filter size
+        const float sigma = Camera.BFSigma; // spatial sigma
+        const float sigmaL = Camera.BFSigmaLum * 100.0; // 
+        const float sigmaN = Camera.BFSigmaNormal;
+        const int SX = 1; // spatial step
+        const int SY = 1; // spatial step
+
+        const vec3 CenterColor = imageLoad(InImage, ipos).rgb;
+        const vec3 CenterAlbedo = imageLoad(InAlbedo, ipos).rgb + vec3(0.001,0.001,0.001);
+        const vec3 DemodulateColor = CenterColor / CenterAlbedo;
+        
+        const vec3 Normal = imageLoad(InNormal, ipos).rgb;
+        uint current_primitive_index = isEvenFrame ? imageLoad(InVisibility0, ipos).r : imageLoad(InVisibility1, ipos).r;
+
+        const float CenterLum = dot(DemodulateColor, vec3(0.212671F, 0.715160F, 0.072169F));
+
+        float Weight = 0;
+        
+        int c,d;
+        for(c=-N;c<N+1;c++)
         {
-            const vec3 Ci = imageLoad(InImage, ipos + ivec2(c*SX,d*SY)).rgb;
-            const vec3 Ni = imageLoad(InNormal, ipos + ivec2(c*SX,d*SY)).rgb;
-            const uint Pi = isEvenFrame ? imageLoad(InVisibility0, ipos + ivec2(c*SX,d*SY)).r : imageLoad(InVisibility1, ipos + ivec2(c*SX,d*SY)).r;
-            const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
-            
+            for(d=-N;d<N+1;d++)
+            {
+                const vec3 Ci = imageLoad(InImage, ipos + ivec2(c*SX,d*SY)).rgb / (imageLoad(InAlbedo, ipos + ivec2(c*SX,d*SY)).rgb + vec3(0.001,0.001,0.001));
+                
+                const vec3 Ni = imageLoad(InNormal, ipos + ivec2(c*SX,d*SY)).rgb;
+                const uint Pi = isEvenFrame ? imageLoad(InVisibility0, ipos + ivec2(c*SX,d*SY)).r : imageLoad(InVisibility1, ipos + ivec2(c*SX,d*SY)).r;
+                const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
 
-            const float dist = clamp( float(c*c+d*d)/float(N*N) , 0., 1. );
-            const float normaldist = 1.0 - dot(Ni, Normal);
-            const float dlum = (CenterLum - lumi)*(CenterLum - lumi);
 
-            const float Fi = exp(-dist*dist/(2.* sigma*sigma));
-            const float Ai = exp(-normaldist*normaldist/(2.* sigmaN*sigmaN));
-            const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
-            const float Oi = float(current_primitive_index == Pi);
+                const float dist = clamp( float(c*c+d*d)/float(N*N) , 0., 1. );
+                const float normaldist = 1.0 - dot(Ni, Normal);
+                const float dlum = (CenterLum - lumi)*(CenterLum - lumi);
 
-            Total += Ci * Fi * Li * Ai * Oi;
-            Weight += Fi * Li * Ai * Oi;
+                const float Fi = exp(-dist*dist/(2.* sigma*sigma));
+                const float Ai = exp(-normaldist*normaldist/(2.* sigmaN*sigmaN));
+                const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
+                const float Oi = float(current_primitive_index == Pi);
+
+                Total += Ci * Fi * Li * Ai * Oi;
+                Weight += Fi * Li * Ai * Oi;
+            }
         }
+        Total /= Weight;
+        
+        Total = Total * CenterAlbedo;
     }
-    Total /= Weight;
-
+    else
+    {
+        Total = imageLoad(InImage, ipos).rgb;
+    }
+    
     if(Camera.HDR)
     {
         imageStore(OutImage, ipos, vec4( LinearToST2084UE( Total * Camera.PaperWhiteNit / 230.0), 1.0));

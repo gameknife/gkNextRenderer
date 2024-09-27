@@ -105,6 +105,7 @@ namespace Vulkan::PipelineCommon
 
     FinalComposePipeline::FinalComposePipeline(const SwapChain& swapChain,
                                                const ImageView& sourceImageView,
+                                               const ImageView& albedoBufferImageView,
                                                const ImageView& normalBufferImageView,
                                                 const ImageView& visibility0ImageView,
                                                 const ImageView& visibility1ImageView,
@@ -120,6 +121,7 @@ namespace Vulkan::PipelineCommon
             {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, swapChain.ImageViews().size()));
@@ -133,9 +135,10 @@ namespace Vulkan::PipelineCommon
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
-            VkDescriptorImageInfo Info3 = {NULL, normalBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info4 = {NULL, visibility0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info5 = {NULL, visibility1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info3 = {NULL, albedoBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info4 = {NULL, normalBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info5 = {NULL, visibility0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info6 = {NULL, visibility1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -144,6 +147,7 @@ namespace Vulkan::PipelineCommon
                 descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, Info4),
                 descriptorSets.Bind(i, 5, Info5),
+                descriptorSets.Bind(i, 6, Info6),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

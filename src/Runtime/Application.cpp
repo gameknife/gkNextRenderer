@@ -135,7 +135,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.HeatmapScale = 0.5f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Benchmark ? 512 : options.Temporal;
+    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
     userSettings.Denoiser = options.Denoiser;
 
@@ -148,9 +148,9 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AutoFocus = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 2.0f;
-    userSettings.DenoiseSigmaNormal = 0.5f;
-    userSettings.DenoiseSize = 10;
+    userSettings.DenoiseSigmaLum = 5.0f;
+    userSettings.DenoiseSigmaNormal = 0.005f;
+    userSettings.DenoiseSize = 5;
 
     return userSettings;
 }
@@ -393,7 +393,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BFSigma = userSettings_.DenoiseSigma;
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
-    ubo.BFSize = userSettings_.DenoiseSize;
+    ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

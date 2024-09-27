@@ -525,8 +525,9 @@ void UserInterface::DrawSettings()
 		ImGui::Text("Denoiser");
 		ImGui::Separator();
 #if WITH_OIDN
-			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
+		ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 #else
+		ImGui::Checkbox("Use JBF", &Settings().Denoiser);
 		ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 10.0f, "%.2f");
 		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
