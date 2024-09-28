@@ -19,9 +19,9 @@ struct UserSettings final
 	// Renderer
 	bool IsRayTraced;
 	bool AccumulateRays;
-	uint32_t NumberOfSamples;
-	uint32_t NumberOfBounces;
-	uint32_t MaxNumberOfBounces;
+	int32_t NumberOfSamples;
+	int32_t NumberOfBounces;
+	int32_t MaxNumberOfBounces;
 	bool AdaptiveSample;
 	float AdaptiveVariance;
 	int AdaptiveSteps;

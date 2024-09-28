@@ -84,6 +84,6 @@ void main() {
     }
     else
     {
-        imageStore(OutImage, ipos, vec4( ACES_Tonemapping( Total * Camera.PaperWhiteNit / 20000.0), 1.0));
+        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( Total * Camera.PaperWhiteNit / 20000.0), 1.0));
     }
 }

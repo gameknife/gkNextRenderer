@@ -69,6 +69,8 @@ namespace
 
 	    io.IniFilename              = NULL;
 
+		ImVec4 ActiveColor = true ? ImVec4(0.42f, 0.45f, 0.5f, 1.00f) : ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+
 	    ImGuiStyle* style = &ImGui::GetStyle();
 	    ImVec4* colors = style->Colors;
 	    ImGui::StyleColorsDark(style);
@@ -82,33 +84,33 @@ namespace
 	    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
 	    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
 	    colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-	    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
 	    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
 	    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
 	    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
 	    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-	    colors[ImGuiCol_CheckMark]              = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-	    colors[ImGuiCol_SliderGrab]             = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-	    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_CheckMark]              = ActiveColor;
+	    colors[ImGuiCol_SliderGrab]             = ActiveColor;
+	    colors[ImGuiCol_SliderGrabActive]       = ActiveColor;
 	    colors[ImGuiCol_Button]                 = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
 	    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-	    colors[ImGuiCol_ButtonActive]           = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_ButtonActive]           = ActiveColor;
 	    colors[ImGuiCol_Header]                 = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
-	    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_HeaderHovered]          = ActiveColor;
 	    colors[ImGuiCol_HeaderActive]           = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
 	    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-	    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-	    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_SeparatorHovered]       = ActiveColor;
+	    colors[ImGuiCol_SeparatorActive]        = ActiveColor;
 	    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
-	    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_ResizeGripHovered]      = ActiveColor;
 	    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.19f, 0.39f, 0.69f, 1.00f);
 	    colors[ImGuiCol_Tab]                    = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
 	    colors[ImGuiCol_TabHovered]             = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
 	    colors[ImGuiCol_TabActive]              = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-	    colors[ImGuiCol_PlotHistogram]          = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_PlotHistogram]          = ActiveColor;
 	    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
-	    colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-	    colors[ImGuiCol_NavHighlight]           = ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
+	    colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
+	    colors[ImGuiCol_NavHighlight]           = ActiveColor;
 	    style->WindowPadding                    = ImVec2(12.00f, 8.00f);
 	    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
 	    style->GrabMinSize                      = 20.00f;
@@ -484,102 +486,104 @@ void UserInterface::DrawSettings()
 
 	if (ImGui::Begin("Settings", &Settings().ShowSettings, flags))
 	{
-		std::vector<const char*> scenes;
-		for (const auto& scene : SceneList::AllScenes)
+		if( ImGui::CollapsingHeader("Help", ImGuiTreeNodeFlags_None) )
 		{
-			scenes.push_back(scene.first.c_str());
+			ImGui::Separator();
+			ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
+			ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
+			ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
+			ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
+			ImGui::NewLine();
+		}
+		
+		if( ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) )
+		{
+			std::vector<const char*> scenes;
+			for (const auto& scene : SceneList::AllScenes)
+			{
+				scenes.push_back(scene.first.c_str());
+			}
+
+			std::vector<const char*> camerasList;
+			for (const auto& cam : Settings().cameras)
+			{
+				camerasList.emplace_back(cam.name.c_str());
+			}
+			
+			ImGui::Text("%s", LOCTEXT("Scene"));
+			ImGui::PushItemWidth(-1);
+			ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
+			ImGui::PopItemWidth();
+
+			int prevCameraIdx = Settings().CameraIdx;
+			ImGui::Text("%s", LOCTEXT("Camera"));
+			ImGui::PushItemWidth(-1);
+			ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
+			ImGui::PopItemWidth();
+			if(prevCameraIdx != Settings().CameraIdx)
+			{
+				auto &cam = Settings().cameras[Settings().CameraIdx];
+				Settings().FieldOfView = cam.FieldOfView;
+				Settings().Aperture = cam.Aperture;
+				Settings().FocusDistance = cam.FocalDistance;
+			}
+			ImGui::NewLine();
 		}
 
-		std::vector<const char*> camerasList;
-		for (const auto& cam : Settings().cameras)
+		if( ImGui::CollapsingHeader("Ray Tracing", ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			camerasList.emplace_back(cam.name.c_str());
+			uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
+			//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
+			//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
+			ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
+			ImGui::SliderInt(LOCTEXT("Samples"), &Settings().NumberOfSamples, 1, 16);
+			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
+			ImGui::NewLine();
 		}
 
-		// ImGui::Text("%s", LOCTEXT("Help"));
-		// ImGui::Separator();
-		// ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
-		// ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
-		// ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
-		// ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
-		// ImGui::NewLine();
-
-		ImGui::Text("%s", LOCTEXT("Scene"));
-		ImGui::Separator();
-		ImGui::PushItemWidth(-1);
-		ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
-		ImGui::PopItemWidth();
-		ImGui::NewLine();
-
-		ImGui::Text("%s", LOCTEXT("Ray Tracing"));
-		ImGui::Separator();
-		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
-		//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
-		ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
-		ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
-		ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 1.0f, 2000.0f, "%.0f");
-		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
-		
-		ImGui::NewLine();
-		
-		ImGui::Text("Denoiser");
-		ImGui::Separator();
+		if( ImGui::CollapsingHeader("Denoiser", ImGuiTreeNodeFlags_DefaultOpen) )
+		{
 #if WITH_OIDN
-		ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
+			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 #else
-		ImGui::Checkbox("Use JBF", &Settings().Denoiser);
-		ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
-		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 10.0f, "%.2f");
-		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
-		ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
+			ImGui::Checkbox("Use JBF", &Settings().Denoiser);
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 10.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
+			ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
 #endif
 			ImGui::NewLine();
+		}
 		
-
-		int prevCameraIdx = Settings().CameraIdx;
-		ImGui::Text("%s", LOCTEXT("Camera"));
-		ImGui::Separator();
-		ImGui::PushItemWidth(-1);
-		ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
-		ImGui::PopItemWidth();
-		ImGui::NewLine();
-
-		if(prevCameraIdx != Settings().CameraIdx)
+		if( ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_None) )
 		{
-			auto &cam = Settings().cameras[Settings().CameraIdx];
-			Settings().FieldOfView = cam.FieldOfView;
-			Settings().Aperture = cam.Aperture;
-			Settings().FocusDistance = cam.FocalDistance;
+			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
+			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+		
+			ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
+			ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+			ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+
+			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
+			ImGui::NewLine();
 		}
 
-		ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
-		ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-		ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
-		
-		ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
-		ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-		ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-		ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-		ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
-
-		ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
-		
-		ImGui::NewLine();
-
-		ImGui::Text("%s", LOCTEXT("Profiler"));
-		ImGui::Separator();
-		ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
-		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
-		ImGui::NewLine();
-
-		ImGui::Text("%s", LOCTEXT("Performance"));
-		ImGui::Separator();
-		//ImGui::Checkbox("Use CheckerBoard", &Settings().UseCheckerBoardRendering);
+		if( ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_None) )
 		{
+			ImGui::Text("%s", LOCTEXT("Profiler"));
+			ImGui::Separator();
+			ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
+			ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+			ImGui::NewLine();
+
+			ImGui::Text("%s", LOCTEXT("Performance"));
+			ImGui::Separator();
 			uint32_t min = 0, max = 256;
 			ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
 		}
-		ImGui::NewLine();
 	}
 	ImGui::End();
 }
@@ -617,7 +621,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
-		ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
+		//ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 		
 		ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
 
