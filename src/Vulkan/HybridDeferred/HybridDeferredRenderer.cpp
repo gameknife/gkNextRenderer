@@ -159,6 +159,9 @@ namespace Vulkan::HybridDeferred
         rtPingPong0.reset();
         rtPingPong1.reset();
 
+        rtAlbedo_.reset();
+        rtNormal_.reset();
+
         rtAdaptiveSample_.reset();
         
         RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
