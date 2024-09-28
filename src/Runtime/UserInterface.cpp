@@ -216,16 +216,18 @@ UserInterface::UserInterface(
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
 	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
 	{
-		Throw(std::runtime_error("failed to load ImGui Text font"));
+		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
 
+#if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/MicrosoftYaHeiMono.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
 	{
-		Throw(std::runtime_error("failed to load ImGui Text font"));
+		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}
-
+#endif
+	
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
 	ImFontConfig config;
 	config.MergeMode = true;
@@ -251,10 +253,7 @@ UserInterface::UserInterface(
 			Throw(std::runtime_error("failed to create ImGui font textures"));
 		}
 	});
-
-	viewportTextureId_ = ImGui_ImplVulkan_AddTexture( viewportImage.Sampler().Handle(), viewportImage.GetImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	viewportSize_ = ImVec2(static_cast<float>(viewportImage.GetImage().Extent().width), static_cast<float>(viewportImage.GetImage().Extent().height));
-
+	
 	firstRun = true;
 
 	editorGUI_->fontIcon_ = fontIcon_;
@@ -264,9 +263,6 @@ UserInterface::UserInterface(
 UserInterface::~UserInterface()
 {
 	uiFrameBuffers_.clear();
-	
-	ImGui_ImplVulkan_RemoveTexture(viewportTextureId_);
-	
 	editorGUI_.reset();
 	
 	ImGui_ImplVulkan_Shutdown();
@@ -500,13 +496,13 @@ void UserInterface::DrawSettings()
 			camerasList.emplace_back(cam.name.c_str());
 		}
 
-		ImGui::Text("%s", LOCTEXT("Help"));
-		ImGui::Separator();
-		ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
-		ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
-		ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
-		ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
-		ImGui::NewLine();
+		// ImGui::Text("%s", LOCTEXT("Help"));
+		// ImGui::Separator();
+		// ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
+		// ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
+		// ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
+		// ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
+		// ImGui::NewLine();
 
 		ImGui::Text("%s", LOCTEXT("Scene"));
 		ImGui::Separator();
@@ -519,18 +515,26 @@ void UserInterface::DrawSettings()
 		ImGui::Separator();
 		uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 		//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
-		//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
+		ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
 		ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
-		//ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 0.1f, 10.0f, "%.0f");
+		ImGui::SliderFloat(LOCTEXT("AdaptiveVariance"), &Settings().AdaptiveVariance, 1.0f, 2000.0f, "%.0f");
 		ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
 		
 		ImGui::NewLine();
-		#if WITH_OIDN
-			ImGui::Text("Denoiser");
-			ImGui::Separator();
-			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
+		
+		ImGui::Text("Denoiser");
+		ImGui::Separator();
+#if WITH_OIDN
+		ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
+#else
+		ImGui::Checkbox("Use JBF", &Settings().Denoiser);
+		ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 10.0f, "%.2f");
+		ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
+		ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
+#endif
 			ImGui::NewLine();
-		#endif
+		
 
 		int prevCameraIdx = Settings().CameraIdx;
 		ImGui::Text("%s", LOCTEXT("Camera"));
@@ -565,7 +569,7 @@ void UserInterface::DrawSettings()
 		ImGui::Text("%s", LOCTEXT("Profiler"));
 		ImGui::Separator();
 		ImGui::Checkbox(LOCTEXT("ShaderTime"), &Settings().ShowVisualDebug);
-		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SliderFloat(LOCTEXT("Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 		ImGui::NewLine();
 
 		ImGui::Text("%s", LOCTEXT("Performance"));

@@ -48,11 +48,13 @@ Image::Image(
 #else
 	external_memory_image_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 #endif
-	
+
+#if !ANDROID
 	if(external_)
 	{
 		imageInfo.pNext = &external_memory_image_info;
 	}
+#endif
 
 	Check(vkCreateImage(device.Handle(), &imageInfo, nullptr, &image_),
 		"create image");

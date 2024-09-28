@@ -53,13 +53,15 @@ struct UserSettings final
 
 	// Denoise
 	bool Denoiser;
+	float DenoiseSigma;
+	float DenoiseSigmaLum;
+	float DenoiseSigmaNormal;
+	int DenoiseSize;
 
 	float PaperWhiteNit;
 	
 	inline const static float FieldOfViewMinValue = 10.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;
-
-	uint32_t RR_MIN_DEPTH;
 	
 	std::vector<Assets::Camera> cameras;
 	// HitResult

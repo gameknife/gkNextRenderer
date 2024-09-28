@@ -17,6 +17,7 @@
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 
 std::unique_ptr<NextRendererApplication> GApplication = nullptr;
+const Options* GOption = nullptr;
 
 void handle_cmd(android_app* app, int32_t cmd) {
     switch (cmd) {
@@ -29,10 +30,10 @@ void handle_cmd(android_app* app, int32_t cmd) {
             MakeExternalDirectory(app, "assets/textures");
             MakeExternalDirectory(app, "assets/locale");
             
-            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=qx50.glb"};
+            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=simple.glb"};
             const Options options(4, argv);
             GOption = &options;
-            GApplication.reset(new NextRendererApplication(options));
+            GApplication.reset(new NextRendererApplication(options, app->window));
             __android_log_print(ANDROID_LOG_INFO, "vkdemo",
                 "start gknextrenderer: %d", options.RendererType);
             GApplication->Start();
@@ -109,7 +110,7 @@ return 0;
 
 void android_main(struct android_app* app)
 {
-    std::cout.rdbuf(new androidbuf);
+    //std::cout.rdbuf(new androidbuf);
     
     app->onAppCmd = handle_cmd;
 
@@ -132,5 +133,5 @@ void android_main(struct android_app* app)
         }
     } while (app->destroyRequested == 0);
 
-    delete std::cout.rdbuf(0);
+    //delete std::cout.rdbuf(0);
 }

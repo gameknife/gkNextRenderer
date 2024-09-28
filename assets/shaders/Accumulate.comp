@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "Platform.glsl"
 #include "common/UniformBufferObject.glsl"
-#include "common/Const_Func.glsl"
+#include "common/Random.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
 layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
@@ -13,7 +13,6 @@ layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferOb
 layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 7, rgba8) uniform image2D OutImage;
-layout(binding = 8, r8ui) uniform uimage2D AdaptiveSampleBuffer;
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -89,20 +88,31 @@ void main() {
 				subpixel.y
 			);
 
+			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, currKeep);
-			
+
+            // 这里我们希望评估的是噪点密集的区域，就是肉眼看上去十分闪烁的区域
+            // 应该类似SVGF一样，评估时间，空间域内的方差
+            // 然后，这个评估，也可以用于降噪，这种区域，应该提升降噪强度。
+            // 最终的结果，类似于，采样数严重不足的区域，自适应的提升采样数，并拉高后续的降噪强度
+            // 而比如光线充足的大平面，采样数足够，后续也可以适当降低降噪强度
+            // 我们先输出一个区域的图给到visualdebug	
 			if(Camera.AdaptiveSample)
 			{
+			    // 之前的算法是不稳定，抖动的。使用 delta ^ 2 = prev - cur ^ 2 来预估
+			
+			    // 将方差直接写入buffer，显示一下，他应该是稳定的
+			
 				// if history variance is too large, we should not use it.
 				const float historyVariance = Camera.AdaptiveVariance;
 
-				float diff = abs(luminance(final.rgb) - luminance(history.rgb));
+				float diff = abs(luminance(src.rgb) - luminance(history.rgb));
 				if (diff > historyVariance)
 				{
 					// need sample
-					imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
+					//imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
 				}
 			}
 		}
@@ -122,7 +132,7 @@ void main() {
 	{
 		if( EdgeDetect(current_primitive_index, isEvenFrame, ipos ) )
 		{
-			final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
+			//final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
 		}
 	}
 

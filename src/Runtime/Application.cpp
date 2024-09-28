@@ -122,7 +122,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
-    userSettings.RR_MIN_DEPTH = options.RR_MIN_DEPTH;
+
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
@@ -132,10 +132,10 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
-    userSettings.HeatmapScale = 1.5f;
+    userSettings.HeatmapScale = 0.5f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Benchmark ? 512 : options.Temporal;
+    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
     userSettings.Denoiser = options.Denoiser;
 
@@ -147,10 +147,15 @@ UserSettings CreateUserSettings(const Options& options)
     
     userSettings.AutoFocus = false;
 
+    userSettings.DenoiseSigma = 0.5f;
+    userSettings.DenoiseSigmaLum = 5.0f;
+    userSettings.DenoiseSigmaNormal = 0.005f;
+    userSettings.DenoiseSize = 5;
+
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(const Options& options)
+NextRendererApplication::NextRendererApplication(const Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -164,7 +169,7 @@ NextRendererApplication::NextRendererApplication(const Options& options)
         options.Fullscreen,
         !options.Fullscreen,
         options.SaveFile,
-        nullptr,
+        userdata,
         options.ForceSDR
     };
     
@@ -364,7 +369,6 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = userSettings_.NumberOfSamples;
     ubo.NumberOfBounces = userSettings_.NumberOfBounces;
-    ubo.RR_MIN_DEPTH = userSettings_.RR_MIN_DEPTH;
     ubo.AdaptiveSample = userSettings_.AdaptiveSample;
     ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
@@ -377,7 +381,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
     ubo.HasSky = init.HasSky;
     ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
-    ubo.ShowHeatmap = false;
+    ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = userSettings_.TemporalFrames;
@@ -386,6 +390,15 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
 
+    ubo.BFSigma = userSettings_.DenoiseSigma;
+    ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
+    ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
+    ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
+
+    // Other Setup
+    renderer_->supportDenoiser_ = userSettings_.Denoiser;
+    renderer_->visualDebug_ = userSettings_.ShowVisualDebug;
+    
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 

@@ -41,18 +41,12 @@ namespace Vulkan::HybridDeferred
         const auto format = SwapChain().Format();
 
         visibilityPipeline_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-        visibility1Pipeline_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 
         rtVisibility0.reset(new RenderImage(Device(), extent,
                                             VK_FORMAT_R32G32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,false,"visibility0"));
-
-        rtVisibility1.reset(new RenderImage(Device(), extent,
-                                            VK_FORMAT_R32G32_UINT,
-                                            VK_IMAGE_TILING_OPTIMAL,
-                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,false,"visibility1"));
-
+        
         rtOutput.reset(new RenderImage(Device(), extent,
                                        VK_FORMAT_R16G16B16A16_SFLOAT,
                                        VK_IMAGE_TILING_OPTIMAL,
@@ -68,6 +62,16 @@ namespace Vulkan::HybridDeferred
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT));
 
+        rtDirectLightSource.reset(new RenderImage(Device(), extent,
+                                             VK_FORMAT_R16G16B16A16_SFLOAT,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_STORAGE_BIT));
+
+        rtDirectLightDest.reset(new RenderImage(Device(), extent,
+                                             VK_FORMAT_R16G16B16A16_SFLOAT,
+                                             VK_IMAGE_TILING_OPTIMAL,
+                                             VK_IMAGE_USAGE_STORAGE_BIT));
+        
         rtDirectLight0.reset(new RenderImage(Device(), extent,
                                              VK_FORMAT_R16G16B16A16_SFLOAT,
                                              VK_IMAGE_TILING_OPTIMAL,
@@ -87,55 +91,76 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_TILING_OPTIMAL,
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
+        rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "albedo"));
+        rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "normal"));
+        
         rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
 
         deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline_->RenderPass()));
-        deferred1FrameBuffer_.reset(new FrameBuffer(rtVisibility1->GetImageView(), visibility1Pipeline_->RenderPass()));
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), topAs_[0],
-                                                                 rtVisibility0->GetImageView(),
-                                                                 rtVisibility1->GetImageView(),
-                                                                 rtAccumlation->GetImageView(),
-                                                                 rtMotionVector->GetImageView(),
-                                                                 rtDirectLight0->GetImageView(),
-                                                                 rtDirectLight1->GetImageView(),
-                                                                 UniformBuffers(), GetScene()));
+                                                         rtVisibility0->GetImageView(),
+                                                         rtAccumlation->GetImageView(),
+                                                         rtMotionVector->GetImageView(),
+                                                         rtDirectLightDest->GetImageView(),
+                                                         rtDirectLightSource->GetImageView(),
+                                                         rtAlbedo_->GetImageView(),
+                                                         rtNormal_->GetImageView(),
+                                                         UniformBuffers(), GetScene()));
+        
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                          rtAccumlation->GetImageView(),
                                                                          rtPingPong0->GetImageView(),
                                                                          rtPingPong1->GetImageView(),
                                                                          rtMotionVector->GetImageView(),
                                                                          rtVisibility0->GetImageView(),
-                                                                         rtVisibility1->GetImageView(),
+                                                                         rtVisibility0->GetImageView(),
                                                                          rtOutput->GetImageView(),
-                                                                         rtAdaptiveSample_->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), UniformBuffers()));
+        accumulateForLightPipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
+                                                                         rtDirectLightSource->GetImageView(),
+                                                                         rtDirectLight0->GetImageView(),
+                                                                         rtDirectLight1->GetImageView(),
+                                                                         rtMotionVector->GetImageView(),
+                                                                         rtVisibility0->GetImageView(),
+                                                                         rtVisibility0->GetImageView(),
+                                                                         rtDirectLightDest->GetImageView(),
+                                                                         UniformBuffers(), GetScene()));
+
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtAlbedo_->GetImageView(),  rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
+
+        visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
+                                                              rtAccumlation->GetImageView(), rtMotionVector->GetImageView(), rtAdaptiveSample_->GetImageView(), rtOutput->GetImageView(),
+                                                              UniformBuffers()));
     }
 
     void HybridDeferredRenderer::DeleteSwapChain()
     {
         visibilityPipeline_.reset();
-        visibility1Pipeline_.reset();
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
+        accumulateForLightPipeline_.reset();
         composePipeline_.reset();
+        visualDebugPipeline_.reset();
         
         deferredFrameBuffer_.reset();
-        deferred1FrameBuffer_.reset();
 
         rtVisibility0.reset();
-        rtVisibility1.reset();
         rtOutput.reset();
         rtMotionVector.reset();
 
         rtAccumlation.reset();
         rtDirectLight0.reset();
         rtDirectLight1.reset();
+        rtDirectLightSource.reset();
+        rtDirectLightDest.reset();
 
         rtPingPong0.reset();
         rtPingPong1.reset();
+
+        rtAlbedo_.reset();
+        rtNormal_.reset();
 
         rtAdaptiveSample_.reset();
         
@@ -153,75 +178,36 @@ namespace Vulkan::HybridDeferred
         {
             SCOPED_GPU_TIMER("drawpass");
 
-            if(frameCount_ % 2 == 0)
+            VkRenderPassBeginInfo renderPassInfo = {};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
+            renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = SwapChain().Extent();
+            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            renderPassInfo.pClearValues = clearValues.data();
+
+            // make it to generate gbuffer
+            vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
             {
-                 VkRenderPassBeginInfo renderPassInfo = {};
-                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
-                renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
-                renderPassInfo.renderArea.offset = {0, 0};
-                renderPassInfo.renderArea.extent = SwapChain().Extent();
-                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-                renderPassInfo.pClearValues = clearValues.data();
-                
-                // make it to generate gbuffer
-                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-                {
-                    const auto& scene = GetScene();
+            const auto& scene = GetScene();
 
-                    VkDescriptorSet descriptorSets[] = {visibilityPipeline_->DescriptorSet(imageIndex)};
-                    VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
-                    const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-                    VkDeviceSize offsets[] = {0};
+            VkDescriptorSet descriptorSets[] = {visibilityPipeline_->DescriptorSet(imageIndex)};
+            VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
+            const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+            VkDeviceSize offsets[] = {0};
 
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-                    // indirect draw
-                    vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
-                }
-                vkCmdEndRenderPass(commandBuffer);
-
-                rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-                rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            // indirect draw
+            vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
             }
-            else
-            {
-                VkRenderPassBeginInfo renderPassInfo = {};
-                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                renderPassInfo.renderPass = visibility1Pipeline_->RenderPass().Handle();
-                renderPassInfo.framebuffer = deferred1FrameBuffer_->Handle();
-                renderPassInfo.renderArea.offset = {0, 0};
-                renderPassInfo.renderArea.extent = SwapChain().Extent();
-                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-                renderPassInfo.pClearValues = clearValues.data();
-                
-                // make it to generate gbuffer
-                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-                {
-                    const auto& scene = GetScene();
+            vkCmdEndRenderPass(commandBuffer);
 
-                    VkDescriptorSet descriptorSets[] = {visibility1Pipeline_->DescriptorSet(imageIndex)};
-                    VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
-                    const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-                    VkDeviceSize offsets[] = {0};
-
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibility1Pipeline_->Handle());
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibility1Pipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-                    // indirect draw
-                    vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
-                }
-                vkCmdEndRenderPass(commandBuffer);
-
-                rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-                rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            }
-           
+            rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
@@ -232,7 +218,10 @@ namespace Vulkan::HybridDeferred
             rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLight0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLight1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtDirectLightSource->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtDirectLightDest->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
@@ -279,6 +268,15 @@ namespace Vulkan::HybridDeferred
         }
 
         {
+            SCOPED_GPU_TIMER("dlight reproj pass");
+            VkDescriptorSet DescriptorSets[] = {accumulateForLightPipeline_->DescriptorSet(imageIndex)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulateForLightPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    accumulateForLightPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 4), 1);
+        }
+
+        {
             SCOPED_GPU_TIMER("compose pass");
             
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
@@ -292,6 +290,34 @@ namespace Vulkan::HybridDeferred
             vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
 
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
+
+        if (visualDebug_)
+        {
+            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtDirectLight0->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtMotionVector->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+            ImageMemoryBarrier::Insert(commandBuffer, rtOutput->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                                       VK_IMAGE_LAYOUT_GENERAL);
+
+            {
+                VkDescriptorSet DescriptorSets[] = {visualDebugPipeline_->DescriptorSet(imageIndex)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebugPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        visualDebugPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+                vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
+            }
+
+            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
+                                       VK_ACCESS_TRANSFER_WRITE_BIT,
+                                       0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
     }
 }

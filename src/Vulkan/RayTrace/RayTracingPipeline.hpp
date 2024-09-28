@@ -66,36 +66,6 @@ namespace Vulkan::RayTracing
 		uint32_t triangleHitGroupIndex_;
 		uint32_t proceduralHitGroupIndex_;
 	};
-	
-	class DenoiserPipeline final
-	{
-	public:
-
-		VULKAN_NON_COPIABLE(DenoiserPipeline)
-
-		DenoiserPipeline(
-			const DeviceProcedures& deviceProcedures,
-			const SwapChain& swapChain,
-			const TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& pingpongImage0View,
-			const ImageView& pingpongImage1View,
-			const ImageView& gbufferImageView,
-			const ImageView& albedoImageView,
-			const std::vector<Assets::UniformBuffer>& uniformBuffers,
-			const Assets::Scene& scene);
-		~DenoiserPipeline();
-
-		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const class PipelineLayout& PipelineLayout() const { return *PipelineLayout_; }
-	private:
-
-		const SwapChain& swapChain_;
-
-		VULKAN_HANDLE(VkPipeline, pipeline_)
-
-		std::unique_ptr<DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<class PipelineLayout> PipelineLayout_;
-	};
 
 	class ComposePipeline final
 	{

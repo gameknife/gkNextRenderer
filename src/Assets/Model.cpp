@@ -437,7 +437,11 @@ namespace Assets
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
-        if(GOption->RendererType == 1 || GOption->RendererType == 4) {
+        bool doFlatten = (GOption->RendererType == 1 || GOption->RendererType == 4);
+#if ANDROID
+        doFlatten = true;
+#endif
+        if(doFlatten) {
             std::vector<Vertex> vertices_flatten;
             std::vector<uint32_t> indices_flatten;
 
@@ -800,8 +804,8 @@ namespace Assets
 
     Model Model::CreateSphere(const vec3& center, float radius, int materialIdx, const bool isProcedural)
     {
-        const int slices = isProcedural ? 32 : 64;
-        const int stacks = isProcedural ? 16 : 32;
+        const int slices = 32;
+        const int stacks = 16;
 
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;

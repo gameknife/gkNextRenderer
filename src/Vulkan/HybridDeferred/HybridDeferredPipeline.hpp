@@ -38,8 +38,9 @@ namespace Vulkan::HybridDeferred
 	
 		HybridShadingPipeline(
 			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& miniGBufferImageView, const ImageView& miniGBuffer1ImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
+			const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
 			const ImageView& directLight0ImageView, const ImageView& directLight1ImageView,
+			const ImageView& albedoImageView, const ImageView& normalImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~HybridShadingPipeline();

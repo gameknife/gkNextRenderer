@@ -112,6 +112,8 @@ DeviceMemory::DeviceMemory(
 	export_memory_win32_handle_info.pAttributes = &win_security_attributes;
 	export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
 #endif
+
+#if !ANDROID
 	if(external)
 	{
 #if WIN32 && !defined(__MINGW32__)
@@ -119,7 +121,8 @@ DeviceMemory::DeviceMemory(
 #endif
 		allocInfo.pNext = &export_memory_allocate_info;
 	}
-
+#endif
+	
 	Check(vkAllocateMemory(device.Handle(), &allocInfo, nullptr, &memory_),
 		"allocate memory");
 }

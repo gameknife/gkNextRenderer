@@ -56,5 +56,5 @@ void main() {
     DRAW(InDebugImage1,0u,3u,4u,ipos,isize,1.0);
     DRAWNORMAL(InDebugImage2,1u,3u,4u,ipos,isize);
     DRAWINT(InDebugImage3,2u,3u,4u,ipos,isize);
-    DRAW(InDebugImage4,3u,3u,4u,ipos,isize,0.02);
+    DRAW(InDebugImage4,3u,3u,4u,ipos,isize,1.0);
 }

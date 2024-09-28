@@ -123,7 +123,8 @@ jobs:
     - name: Create zip file
       run: |
         cd build/windows
-        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
+        copy /Y ..\..\package\*.bat .\
+        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures ./*.bat
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
