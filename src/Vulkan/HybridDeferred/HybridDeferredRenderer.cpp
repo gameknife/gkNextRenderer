@@ -91,6 +91,9 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_TILING_OPTIMAL,
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
+        rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "albedo"));
+        rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, true, "normal"));
+        
         rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
 
         deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline_->RenderPass()));
@@ -101,6 +104,8 @@ namespace Vulkan::HybridDeferred
                                                          rtMotionVector->GetImageView(),
                                                          rtDirectLightDest->GetImageView(),
                                                          rtDirectLightSource->GetImageView(),
+                                                         rtAlbedo_->GetImageView(),
+                                                         rtNormal_->GetImageView(),
                                                          UniformBuffers(), GetScene()));
         
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
@@ -123,7 +128,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtDirectLightDest->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtOutput->GetImageView(),  rtOutput->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtAlbedo_->GetImageView(),  rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
 
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                               rtAccumlation->GetImageView(), rtMotionVector->GetImageView(), rtAdaptiveSample_->GetImageView(), rtOutput->GetImageView(),
@@ -212,7 +217,8 @@ namespace Vulkan::HybridDeferred
             rtDirectLight1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLightSource->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtDirectLightDest->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
@@ -295,9 +301,6 @@ namespace Vulkan::HybridDeferred
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
             ImageMemoryBarrier::Insert(commandBuffer, rtOutput->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                       VK_IMAGE_LAYOUT_GENERAL);
-            ImageMemoryBarrier::Insert(commandBuffer, rtAdaptiveSample_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
 

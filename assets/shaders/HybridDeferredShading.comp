@@ -22,6 +22,8 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
 layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
+layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
+layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -161,6 +163,7 @@ void main() {
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(InOutDirectLight1, ipos, vec4(0));
+		imageStore(OutAlbedoBuffer, ipos, vec4(iblColor,1.0));
 		return;
 	}
     
@@ -194,6 +197,8 @@ void main() {
 		imageStore(OutImage, ipos, vec4(lightColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(InOutDirectLight1, ipos, vec4(lightColor,1));
+		imageStore(OutAlbedoBuffer, ipos, vec4(lightColor,1.0));
+		imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
 		return;
 	}
 	
@@ -203,14 +208,6 @@ void main() {
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
 		const vec3 reflected = reflect( ray_dir, outwardNormal);
 		
-//		vec3 trace_dir = chanceReflect ?
-//		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
-//		( RandomFloat(RandomSeed) < metalProb ?
-//		AlignWithNormal( RandomInCone(RandomSeed, cos(mat.Fuzziness * M_PI_4)), reflect( ray_dir, outwardNormal) ) :
-//		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
-//		);
-
-
 		const vec3 trace_dir = chanceReflect ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
 		(RandomFloat(RandomSeed) < metalProb ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
@@ -266,7 +263,8 @@ void main() {
 	vec4 directLight = vec4(outColor.rgb, 1);
 	
 	imageStore(InOutDirectLight1, ipos, directLight);
-
+	imageStore(OutAlbedoBuffer, ipos, albedo);
+	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
 	// with multiple bounceColor
 	outColor.rgb += bounceColor.rgb;
 

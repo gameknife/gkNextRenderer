@@ -21,6 +21,7 @@ namespace Vulkan::HybridDeferred
                                                  const ImageView& miniGBufferImageView, 
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
                                                  const ImageView& directLight0ImageView, const ImageView& directLight1ImageView,
+                                                 const ImageView& albedoImageView, const ImageView& normalImageView,
                                                  const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
@@ -46,6 +47,9 @@ namespace Vulkan::HybridDeferred
 
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -68,7 +72,8 @@ namespace Vulkan::HybridDeferred
 
             VkDescriptorImageInfo Info11 = {NULL, directLight0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info12 = {NULL, directLight1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-
+            VkDescriptorImageInfo Info13 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info14 = {NULL, normalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -112,7 +117,9 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 9, Info8),
                 descriptorSets.Bind(i, 10, structureInfo),
                 descriptorSets.Bind(i, 11, Info11),
-                descriptorSets.Bind(i, 12, Info12)
+                descriptorSets.Bind(i, 12, Info12),
+                descriptorSets.Bind(i, 13, Info13),
+                descriptorSets.Bind(i, 14, Info14)
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
