@@ -17,10 +17,65 @@ layout(binding = 6, r32ui) uniform uimage2D InVisibility1;
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 const int WORK_GROUP_AXIS_SIZE = 16;
-const int WINDOW_R = 3;
+const int WINDOW_R = 7;
 const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
 
+// thread group is 16 x 16 = 256
+// if window R = 5
+// all shared pixel is 26 x 26 = 676
+// outer set up only cover to 512, not covered, so on pixel write more than 1
+
+// if window R = 3
+// all shared pixel is 22 x 22 = 484
+// outer set up only cover to 512, covered
+
 shared vec3 window[WINDOW_LEN][WINDOW_LEN];
+
+vec3 FetchColor(in ivec2 ipos)
+{
+    return imageLoad(InImage, ipos).rgb;
+}
+
+vec3 FetchAlbedo(in ivec2 ipos)
+{
+    return imageLoad(InAlbedo, ipos).rgb;
+}
+
+vec3 FetchNormal(in ivec2 ipos)
+{
+    return imageLoad(InNormal, ipos).rgb;
+}
+
+uint FetchVisibility(in ivec2 ipos)
+{
+    bool isEvenFrame = Camera.TotalFrames % 2 == 0 ? true : false;
+    return isEvenFrame ? imageLoad(InVisibility0, ipos).r : imageLoad(InVisibility1, ipos).r;
+}
+
+void JBF(ivec2 coord, ivec2 localCoord, inout vec3 Total, inout float Weight, in float CenterLum, in vec3 CenterNormal, in uint CenterVisibility)
+{
+    const float sigma = Camera.BFSigma; // spatial sigma
+    const float sigmaL = Camera.BFSigmaLum * 100.0; // 
+    const float sigmaN = Camera.BFSigmaNormal;
+    const int N = int(Camera.BFSize); // filter size
+    
+    const vec3 Ci = FetchColor(coord) / (FetchAlbedo(coord) + vec3(0.001,0.001,0.001));
+    const vec3 Ni = FetchNormal(coord);
+    const uint Pi = FetchVisibility(coord);
+    const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
+
+    const float dist = clamp( float(localCoord.x*localCoord.x+localCoord.y*localCoord.y)/float(N*N) , 0., 1. );
+    const float normaldist = 1.0 - dot(Ni, CenterNormal);
+    const float dlum = (CenterLum - lumi)*(CenterLum - lumi);
+
+    const float Fi = exp(-dist*dist/(2.* sigma*sigma));
+    const float Ai = exp(-normaldist*normaldist/(2.* sigmaN*sigmaN));
+    const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
+    const float Oi = float(CenterVisibility == Pi);
+
+    Total += Ci * Fi * Li * Ai * Oi;
+    Weight += Fi * Li * Ai * Oi;
+}
 
 void main() {
 
@@ -48,11 +103,37 @@ void main() {
                 coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
                 window[row][col] = imageLoad(InImage, coord).rgb;
             }
+            
+            if (WINDOW_R > 3)
+            {
+                idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
+                if (idx < WINDOW_LEN * WINDOW_LEN)
+                {
+                    row = idx / WINDOW_LEN;
+                    col = idx % WINDOW_LEN;
+                    coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
+                    window[row][col] = imageLoad(InImage, coord).rgb;
+                }
+            }
+
+            if (WINDOW_R > 5)
+            {
+                idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
+                if (idx < WINDOW_LEN * WINDOW_LEN)
+                {
+                    row = idx / WINDOW_LEN;
+                    col = idx % WINDOW_LEN;
+                    coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
+                    window[row][col] = imageLoad(InImage, coord).rgb;
+                }
+            }
 
             barrier();
+            // now, the WINDOW_R + WINDOW_R range pixel is in the shared memory
+            // free to access
 
             coord = ivec2(gl_LocalInvocationID.xy) + WINDOW_R;
-            vec3 sum = window[coord.y][coord.x];
+            vec3 sum = window[coord.y][coord.x]; // center
             float sum_w = 1.0, texel_w;
             
             for (int i = -WINDOW_R; i <= WINDOW_R; ++i)
@@ -73,13 +154,6 @@ void main() {
         else
         {
             // simple joint bilateral filter
-            const int N = int(Camera.BFSize); // filter size
-            const float sigma = Camera.BFSigma; // spatial sigma
-            const float sigmaL = Camera.BFSigmaLum * 100.0; // 
-            const float sigmaN = Camera.BFSigmaNormal;
-            const int SX = 1; // spatial step
-            const int SY = 1; // spatial step
-
             const vec3 CenterColor = imageLoad(InImage, ipos).rgb;
             const vec3 CenterAlbedo = imageLoad(InAlbedo, ipos).rgb + vec3(0.001,0.001,0.001);
             const vec3 DemodulateColor = CenterColor / CenterAlbedo;
@@ -92,28 +166,12 @@ void main() {
             float Weight = 0;
 
             int c,d;
+            const int N = int(Camera.BFSize);
             for(c=-N;c<N+1;c++)
             {
                 for(d=-N;d<N+1;d++)
                 {
-                    const vec3 Ci = imageLoad(InImage, ipos + ivec2(c*SX,d*SY)).rgb / (imageLoad(InAlbedo, ipos + ivec2(c*SX,d*SY)).rgb + vec3(0.001,0.001,0.001));
-
-                    const vec3 Ni = imageLoad(InNormal, ipos + ivec2(c*SX,d*SY)).rgb;
-                    const uint Pi = isEvenFrame ? imageLoad(InVisibility0, ipos + ivec2(c*SX,d*SY)).r : imageLoad(InVisibility1, ipos + ivec2(c*SX,d*SY)).r;
-                    const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
-
-
-                    const float dist = clamp( float(c*c+d*d)/float(N*N) , 0., 1. );
-                    const float normaldist = 1.0 - dot(Ni, Normal);
-                    const float dlum = (CenterLum - lumi)*(CenterLum - lumi);
-
-                    const float Fi = exp(-dist*dist/(2.* sigma*sigma));
-                    const float Ai = exp(-normaldist*normaldist/(2.* sigmaN*sigmaN));
-                    const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
-                    const float Oi = float(current_primitive_index == Pi);
-
-                    Total += Ci * Fi * Li * Ai * Oi;
-                    Weight += Fi * Li * Ai * Oi;
+                    JBF(ipos + ivec2(c,d), ivec2(c,d), Total, Weight, CenterLum, Normal, current_primitive_index);
                 }
             }
             Total /= Weight;
