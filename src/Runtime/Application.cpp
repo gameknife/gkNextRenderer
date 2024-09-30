@@ -17,7 +17,6 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
-#include <Utilities/Math.hpp>
 #include <filesystem>
 
 #include "Options.hpp"
@@ -25,7 +24,6 @@
 #include "Editor/EditorCommand.hpp"
 #include "Utilities/Localization.hpp"
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
-#include "Vulkan/RayTrace/RayTracingRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
@@ -48,15 +46,13 @@ namespace NextRenderer
         switch(rendererType)
         {
             case 0:
-                return new Vulkan::RayTracing::RayTracingRenderer(window, presentMode, enableValidationLayers);
-            case 1:
-                return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
-            case 2:
-                return new Vulkan::LegacyDeferred::LegacyDeferredRenderer(window, presentMode, enableValidationLayers);
-            case 3:
                 return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
-            case 4:
+            case 1:
                 return new Vulkan::HybridDeferred::HybridDeferredRenderer(window, presentMode, enableValidationLayers);
+            case 2:
+                return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
+            case 3:
+                return new Vulkan::LegacyDeferred::LegacyDeferredRenderer(window, presentMode, enableValidationLayers);
             default:
                 return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
         }
@@ -148,7 +144,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AutoFocus = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 5.0f;
+    userSettings.DenoiseSigmaLum = 10.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 

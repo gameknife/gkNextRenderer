@@ -128,13 +128,6 @@ set(src_files_vulkan_rayquery
 	Vulkan/RayQuery/RayQueryPipeline.hpp
 )
 
-set(src_files_vulkan_raytrace
-	Vulkan/RayTrace/RayTracingRenderer.cpp
-	Vulkan/RayTrace/RayTracingRenderer.hpp
-	Vulkan/RayTrace/RayTracingPipeline.cpp
-	Vulkan/RayTrace/RayTracingPipeline.hpp
-)
-
 set(src_files_vulkan_legacydeferred
 	Vulkan/LegacyDeferred/LegacyDeferredRenderer.cpp
 	Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp
@@ -236,7 +229,6 @@ source_group("Vulkan.ModernDeferred" FILES ${src_files_vulkan_moderndeferred})
 source_group("Vulkan.LegacyDeferred" FILES ${src_files_vulkan_legacydeferred})
 source_group("Vulkan.PipelineCommon" FILES ${src_files_common_compute_pipeline})
 source_group("Vulkan.RayQuery" FILES ${src_files_vulkan_rayquery})
-source_group("Vulkan.RayTrace" FILES ${src_files_vulkan_raytrace})
 source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Editor" FILES ${src_files_editor})
@@ -249,7 +241,6 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
 	${src_files_vulkan_rayquery}
-	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_vulkan_hybriddeferred}
@@ -267,7 +258,6 @@ add_executable(gkNextRenderer
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
 	${src_files_vulkan_rayquery}
-	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_vulkan_hybriddeferred}
@@ -283,7 +273,6 @@ add_executable(gkNextEditor
 	${src_files_vulkan} 
 	${src_files_vulkan_raytracing} 
 	${src_files_vulkan_rayquery}
-	${src_files_vulkan_raytrace}
 	${src_files_vulkan_moderndeferred} 
 	${src_files_vulkan_legacydeferred} 
 	${src_files_vulkan_hybriddeferred}
