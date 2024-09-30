@@ -132,7 +132,7 @@ void main() {
 	{
 		if( EdgeDetect(current_primitive_index, isEvenFrame, ipos ) )
 		{
-			//final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
+			final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
 		}
 	}
 

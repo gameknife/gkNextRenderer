@@ -86,7 +86,8 @@ void JBF(ivec2 coord, ivec2 localCoord, inout vec3 Total, inout float Weight, in
 
 void main() {
 
-    const ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    const ivec2 globalOffset = ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    const ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + globalOffset;
     bool isEvenFrame = Camera.TotalFrames % 2 == 0 ? true : false;
 
     vec3 Total = vec3(0);
@@ -96,7 +97,7 @@ void main() {
         // share memory
         int row = int(gl_LocalInvocationIndex / WINDOW_LEN);
         int col = int(gl_LocalInvocationIndex % WINDOW_LEN);
-        ivec2 coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
+        ivec2 coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
         window[row][col] = imageLoad(InImage, coord).rgb;
         albedo[row][col] = imageLoad(InAlbedo, coord).rgb;
         normal[row][col] = imageLoad(InNormal, coord).rgb;
@@ -107,7 +108,7 @@ void main() {
         {
             row = idx / WINDOW_LEN;
             col = idx % WINDOW_LEN;
-            coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
+            coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
             window[row][col] = imageLoad(InImage, coord).rgb;
             albedo[row][col] = imageLoad(InAlbedo, coord).rgb;
             normal[row][col] = imageLoad(InNormal, coord).rgb;
@@ -121,29 +122,14 @@ void main() {
             {
                 row = idx / WINDOW_LEN;
                 col = idx % WINDOW_LEN;
-                coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
+                coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
                 window[row][col] = imageLoad(InImage, coord).rgb;
                 albedo[row][col] = imageLoad(InAlbedo, coord).rgb;
                 normal[row][col] = imageLoad(InNormal, coord).rgb;
                 visibility[row][col] = isEvenFrame ? imageLoad(InVisibility0, coord).r : imageLoad(InVisibility1, coord).r;
             }
         }
-
-        if (WINDOW_R > 5)
-        {
-            idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
-            if (idx < WINDOW_LEN * WINDOW_LEN)
-            {
-                row = idx / WINDOW_LEN;
-                col = idx % WINDOW_LEN;
-                coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R);
-                window[row][col] = imageLoad(InImage, coord).rgb;
-                albedo[row][col] = imageLoad(InAlbedo, coord).rgb;
-                normal[row][col] = imageLoad(InNormal, coord).rgb;
-                visibility[row][col] = isEvenFrame ? imageLoad(InVisibility0, coord).r : imageLoad(InVisibility1, coord).r;
-            }
-        }
-
+        
         barrier();
         // now, the WINDOW_R + WINDOW_R range pixel is in the shared memory
         // free to access
