@@ -115,6 +115,7 @@ UserSettings CreateUserSettings(const Options& options)
     
     userSettings.IsRayTraced = true;
     userSettings.AccumulateRays = false;
+    
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
@@ -147,6 +148,11 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSigmaLum = 10.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
+
+#if ANDROID
+    userSettings.NumberOfSamples = 1;
+    userSettings.Denoiser = false;
+#endif
 
     return userSettings;
 }
