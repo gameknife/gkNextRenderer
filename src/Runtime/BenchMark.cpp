@@ -264,7 +264,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
             uint8_t* sdrData = (uint8_t*)malloc(extent.width * extent.height * kCompCnt);
             for ( uint32_t i = 0; i < extent.width * extent.height * kCompCnt; i++ )
             {
-                float scaled = dataview[i] / 1200.f * 2.0f;
+                float scaled = dataview[i] / 1300.f * 2.0f;
                 scaled = scaled * scaled;
                 scaled *= 255.f;
                 sdrData[i] = (uint8_t)(std::min(scaled, 255.f));
