@@ -153,7 +153,7 @@ namespace Vulkan
 			{
 				if( startIdx < last_order)
 				{
-					prefix += " ";
+					prefix += "  ";
 					last_order = endIdx;
 				}
 				result.push_back(std::make_tuple(prefix + name, time));

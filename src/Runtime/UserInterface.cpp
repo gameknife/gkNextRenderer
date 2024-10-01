@@ -95,9 +95,9 @@ namespace
 	    colors[ImGuiCol_Button]                 = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
 	    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
 	    colors[ImGuiCol_ButtonActive]           = ActiveColor;
-	    colors[ImGuiCol_Header]                 = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+	    colors[ImGuiCol_Header]                 = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
 	    colors[ImGuiCol_HeaderHovered]          = ActiveColor;
-	    colors[ImGuiCol_HeaderActive]           = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+	    colors[ImGuiCol_HeaderActive]           = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
 	    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
 	    colors[ImGuiCol_SeparatorHovered]       = ActiveColor;
 	    colors[ImGuiCol_SeparatorActive]        = ActiveColor;
@@ -477,7 +477,9 @@ void UserInterface::DrawSettings()
 	const ImVec2 pos = ImVec2(distance, distance);
 	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-
+	ImGui::SetNextWindowSize(ImVec2(400,-1));
+	ImGui::SetNextWindowBgAlpha(0.9f);
+	
 	const auto flags =
 		ImGuiWindowFlags_AlwaysAutoResize |
 		ImGuiWindowFlags_NoMove |
@@ -486,7 +488,7 @@ void UserInterface::DrawSettings()
 
 	if (ImGui::Begin("Settings", &Settings().ShowSettings, flags))
 	{
-		if( ImGui::CollapsingHeader("Help", ImGuiTreeNodeFlags_None) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Help"), ImGuiTreeNodeFlags_None) )
 		{
 			ImGui::Separator();
 			ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
@@ -496,7 +498,7 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		}
 		
-		if( ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 			std::vector<const char*> scenes;
 			for (const auto& scene : SceneList::AllScenes)
@@ -511,6 +513,7 @@ void UserInterface::DrawSettings()
 			}
 			
 			ImGui::Text("%s", LOCTEXT("Scene"));
+			
 			ImGui::PushItemWidth(-1);
 			ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
 			ImGui::PopItemWidth();
@@ -530,7 +533,7 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		}
 
-		if( ImGui::CollapsingHeader("Ray Tracing", ImGuiTreeNodeFlags_DefaultOpen) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Ray Tracing"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 			uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
 			//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
@@ -541,12 +544,12 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		}
 
-		if( ImGui::CollapsingHeader("Denoiser", ImGuiTreeNodeFlags_DefaultOpen) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 #if WITH_OIDN
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 #else
-			ImGui::Checkbox("Use JBF", &Settings().Denoiser);
+			ImGui::Checkbox(LOCTEXT("Use JBF"), &Settings().Denoiser);
 			// ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
 			// ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
 			// ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
@@ -555,7 +558,7 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		}
 		
-		if( ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_None) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Camera"), ImGuiTreeNodeFlags_None) )
 		{
 			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
@@ -571,7 +574,7 @@ void UserInterface::DrawSettings()
 			ImGui::NewLine();
 		}
 
-		if( ImGui::CollapsingHeader("Misc", ImGuiTreeNodeFlags_None) )
+		if( ImGui::CollapsingHeader(LOCTEXT("Misc"), ImGuiTreeNodeFlags_None) )
 		{
 			ImGui::Text("%s", LOCTEXT("Profiler"));
 			ImGui::Separator();

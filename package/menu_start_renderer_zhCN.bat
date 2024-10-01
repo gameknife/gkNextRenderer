@@ -1,14 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set options[0]=光线追踪渲染器(RTPipeline)
-set options[1]=现代延迟渲染器
-set options[2]=传统延迟渲染器
-set options[3]=光线追踪渲染器(RQ)
-set options[4]=混合渲染器
-set options[5]=退出
+set options[0]=光线追踪渲染器
+set options[1]=混合渲染器
+set options[2]=现代延迟渲染器
+set options[3]=传统延迟渲染器
+set options[4]=退出
 
-set count=6
+set count=5
 
 :menu
 cls
@@ -28,7 +27,7 @@ if %choice% geq 0 if %choice% lss %count% (
 )
 
 :execute
-if %choice%==5 goto exit
+if %choice%==4 goto exit
 
 pushd bin
 gkNextRenderer.exe --renderer=%choice% --locale=zhCN

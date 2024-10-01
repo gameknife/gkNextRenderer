@@ -1,14 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set options[0]=RayTracingRenderer(RTPipeline)
-set options[1]=ModernDeferredRenderer
-set options[2]=LegacyDeferredRenderer
-set options[3]=RayQueryRenderer(RQ)
-set options[4]=HybridRenderer
-set options[5]=Exit
+set options[0]=RayQueryRenderer(RTPipeline)
+set options[1]=HybridRenderer
+set options[2]=ModernDeferredRenderer
+set options[3]=LegacyDeferredRenderer
+set options[4]=Exit
 
-set count=6
+set count=5
 
 :menu
 cls
@@ -28,7 +27,7 @@ if %choice% geq 0 if %choice% lss %count% (
 )
 
 :execute
-if %choice%==5 goto exit
+if %choice%==4 goto exit
 
 pushd bin
 gkNextRenderer.exe --renderer=%choice% --locale=en

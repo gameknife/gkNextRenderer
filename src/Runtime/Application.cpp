@@ -503,7 +503,7 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
     {
         switch (key)
         {
-        case GLFW_KEY_ESCAPE: GetWindow().Close();
+        case GLFW_KEY_ESCAPE: scene_->SetSelectedId(-1);;
             break;
         default: break;
         }
