@@ -48,7 +48,7 @@ jobs:
         ./build_android.sh
     - name: Create zip file
       run: |
-        zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/debug/app-debug.apk ./deploy_android.bat
+        zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/release/app-release.apk ./deploy_android.bat
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
@@ -124,7 +124,7 @@ jobs:
     - name: Create zip file
       run: |
         cd build/windows
-        copy /Y ..\..\package\*.bat %CD%
+        Copy-Item -Path ..\..\package\*.bat -Destination .
         zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures ./*.bat
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1

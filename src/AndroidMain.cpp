@@ -30,24 +30,18 @@ void handle_cmd(android_app* app, int32_t cmd) {
             MakeExternalDirectory(app, "assets/textures");
             MakeExternalDirectory(app, "assets/locale");
             
-            const char* argv[] = { "gkNextRenderer", "--renderer=4", "--scene=1", "--load-scene=simple.glb"};
-            const Options options(4, argv);
-            GOption = &options;
-            GApplication.reset(new NextRendererApplication(options, app->window));
-            __android_log_print(ANDROID_LOG_INFO, "vkdemo",
-                "start gknextrenderer: %d", options.RendererType);
+            const char* argv[] = { "gkNextRenderer", "--renderer=1" };
+            GOption = new Options(2, argv);
+            GApplication.reset(new NextRendererApplication(*GOption, app->window));
             GApplication->Start();
         }
         break;
     case APP_CMD_TERM_WINDOW:
         // The window is being hidden or closed, clean it up.
         {
-            
+            delete GOption;
         }
         break;
-    default:
-        __android_log_print(ANDROID_LOG_INFO, "Vulkan Tutorials",
-                            "event not handled: %d", cmd);
     }
 }
 
@@ -69,14 +63,14 @@ static int32_t engine_handle_input(struct android_app* app) {
             case AMOTION_EVENT_ACTION_UP:
                 io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
                 io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.75, GameActivityPointerAxes_getAxisValue(
-            &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.75);
+                &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5, GameActivityPointerAxes_getAxisValue(
+            &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5);
                 io.AddMouseButtonEvent(0, event->action == AMOTION_EVENT_ACTION_DOWN);
 
                 GApplication->OnTouch(event->action == AMOTION_EVENT_ACTION_DOWN, GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.75,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.75);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5);
 
                 break;
             case AMOTION_EVENT_ACTION_MOVE:
@@ -88,14 +82,14 @@ static int32_t engine_handle_input(struct android_app* app) {
                 //...
                     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
                     io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.75,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.75);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5);
 
                 GApplication->OnTouchMove(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.75,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.75);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5);
                break;
             }
         }
