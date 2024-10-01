@@ -79,7 +79,7 @@ void main() {
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = Camera.TemporalFrames / Camera.AdaptiveSteps;
+		sampleTimes = min(16, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps);
 	}
 
     #if MOBILE
@@ -145,7 +145,7 @@ void main() {
         
                 if (miss)
                 {
-                    sampleTimes = max(Camera.TemporalFrames / Camera.AdaptiveSteps, sampleTimes);
+                    sampleTimes = max(min(16, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
                     multisamplecount = Camera.AdaptiveSteps;
                 }
             }
@@ -171,7 +171,7 @@ void main() {
     imageStore(AdaptiveSampleBuffer, ipos, uvec4(multisamplecount));
 
     pixelColor = pixelColor / sampleTimes;
-    imageStore(AccumulationImage, ipos, vec4(pixelColor.rgb, sampleTimes) );
+    imageStore(AccumulationImage, ipos, vec4(pixelColor.rgb, sampleTimes / Camera.NumberOfSamples) );
     
     if (Camera.ShowHeatmap)
     {

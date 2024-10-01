@@ -399,7 +399,11 @@ namespace Assets
         if(root.extras.Has("SunRotation"))
         {
             cameraInit.SunRotation = static_cast<float>(root.extras.Get("SunRotation").GetNumberAsDouble());
-        }  
+        }
+        if(root.extras.Has("NoSky"))
+        {
+            cameraInit.HasSky = false;
+        }
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);

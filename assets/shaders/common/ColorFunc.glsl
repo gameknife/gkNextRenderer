@@ -36,6 +36,25 @@ vec3 ACES_Tonemapping(vec3 color){
 	return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));
 }
 
+vec3 uncharted2Tonemap(vec3 x) {
+	float A = 0.15;
+	float B = 0.50;
+	float C = 0.10;
+	float D = 0.20;
+	float E = 0.02;
+	float F = 0.30;
+	float W = 11.2;
+	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+vec3 Uncharted2_Tonemapping(vec3 color) {
+	const float W = 11.2;
+	float exposureBias = 2.0;
+	vec3 curr = uncharted2Tonemap(exposureBias * color);
+	vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
+	return curr * whiteScale;
+}
+
 // hsv to rgb
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);

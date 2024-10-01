@@ -26,7 +26,7 @@ namespace Assets
     	{"livingroom.glb",      "LivingRoom"},
     	{"kitchen.glb",         "Kitchen"},
     	{"luxball.glb",         "LuxBall"},
-    	{"moderndepart.glb",    "ModernHouse1"}
+    	{"still.glb",			   "Still"}
     };
 }
 
