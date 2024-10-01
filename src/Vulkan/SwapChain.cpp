@@ -35,8 +35,8 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 
 #if ANDROID
 	float aspect = extent.width / static_cast<float>(extent.height);
-	extent.height = 1920;
-	extent.width = floorf(1920 * aspect);
+	extent.height = 1280;
+	extent.width = floorf(1280 * aspect);
 #endif
 	
 	VkSwapchainCreateInfoKHR createInfo = {};
@@ -233,12 +233,6 @@ VkPresentModeKHR SwapChain::ChooseSwapPresentMode(const std::vector<VkPresentMod
 
 VkExtent2D SwapChain::ChooseSwapExtent(const Window& window, const VkSurfaceCapabilitiesKHR& capabilities)
 {
-#if ANDROID
-	__android_log_print(ANDROID_LOG_INFO, "vkdemo",
-					"curr capabilities res: %d x %d", capabilities.currentExtent.width, capabilities.currentExtent.height);
-	__android_log_print(ANDROID_LOG_INFO, "vkdemo",
-					"max capabilities res: %d x %d", capabilities.maxImageExtent.width, capabilities.maxImageExtent.height);
-#endif
 	// Vulkan tells us to match the resolution of the window by setting the width and height in the currentExtent member.
 	// However, some window managers do allow us to differ here and this is indicated by setting the width and height in
 	// currentExtent to a special value: the maximum value of uint32_t. In that case we'll pick the resolution that best 

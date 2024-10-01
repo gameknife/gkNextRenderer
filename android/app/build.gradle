@@ -15,6 +15,14 @@
 apply plugin: 'com.android.application'
 
 android {
+    signingConfigs {
+        release {
+            storeFile file('../keystore/public.jks')
+            storePassword 'public'
+            keyAlias 'public'
+            keyPassword 'public'
+        }
+    }
     namespace = "com.gknextrenderer"
     compileSdkVersion 33
     //ndkVersion "25.2.9519653" on runner, ndk may differ from the vcpkg one
@@ -41,6 +49,7 @@ android {
         }
     }
     buildTypes.release.minifyEnabled = false
+    buildTypes.release.signingConfig = signingConfigs.release
     buildFeatures.prefab  = true
 }
 

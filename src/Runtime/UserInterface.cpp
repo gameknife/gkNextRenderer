@@ -199,7 +199,7 @@ UserInterface::UserInterface(
 	
 	// Window scaling and style.
 #if ANDROID
-    const auto scaleFactor = 1.5;
+    const auto scaleFactor = 1.0;
 #elif __APPLE__
 	const auto scaleFactor = 1.0;
 #else
@@ -477,7 +477,11 @@ void UserInterface::DrawSettings()
 	const ImVec2 pos = ImVec2(distance, distance);
 	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
+#if ANDROID
+	ImGui::SetNextWindowSize(ImVec2(300,-1));
+#else
 	ImGui::SetNextWindowSize(ImVec2(400,-1));
+#endif
 	ImGui::SetNextWindowBgAlpha(0.9f);
 	
 	const auto flags =
@@ -601,7 +605,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 	const auto& io = ImGui::GetIO();
 	const float distance = 10.0f;
 #if ANDROID
-	const ImVec2 pos = ImVec2(io.DisplaySize.x * 0.75 - distance, distance);
+	const ImVec2 pos = ImVec2(io.DisplaySize.x * 0.5 - distance, distance);
 	const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
 #else
 	const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance);
