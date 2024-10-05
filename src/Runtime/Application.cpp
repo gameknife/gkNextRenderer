@@ -252,6 +252,7 @@ bool NextRendererApplication::Tick()
     const auto timeDelta = time_ - prevTime;
 
     // Camera Update
+    userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
 
     // Handle Scene Switching
@@ -606,8 +607,8 @@ void NextRendererApplication::OnScroll(const double xoffset, const double yoffse
     {
         return;
     }
-    const auto prevFov = userSettings_.FieldOfView;
-    userSettings_.FieldOfView = std::clamp(
+    const auto prevFov = userSettings_.RawFieldOfView;
+    userSettings_.RawFieldOfView = std::clamp(
         static_cast<float>(prevFov - yoffset),
         UserSettings::FieldOfViewMinValue,
         UserSettings::FieldOfViewMaxValue);
@@ -697,6 +698,7 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         
         sceneIndex_ = sceneIndex;
 
+        userSettings_.RawFieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;

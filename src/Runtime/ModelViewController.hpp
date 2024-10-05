@@ -41,10 +41,16 @@ private:
 	bool cameraMovingDown_{};
 	bool cameraMovingUp_{};
 
+	// with smooth movement
 	double cameraRotX_{};
 	double cameraRotY_{};
 	double modelRotX_{};
 	double modelRotY_{};
+
+	double rawCameraRotX_ {};
+	double rawCameraRotY_ {};
+	double rawModelRotX_ {};
+	double rawModelRotY_ {};
 	
 	double mousePosX_{};
 	double mousePosY_{};

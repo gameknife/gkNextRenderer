@@ -29,6 +29,7 @@ struct UserSettings final
 
 	// Camera
 	float FieldOfView;
+	float RawFieldOfView;
 	float Aperture;
 	float FocusDistance;
 	bool AutoFocus;

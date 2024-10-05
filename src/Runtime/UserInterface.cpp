@@ -537,7 +537,7 @@ void UserInterface::DrawSettings()
 			if(prevCameraIdx != Settings().CameraIdx)
 			{
 				auto &cam = Settings().cameras[Settings().CameraIdx];
-				Settings().FieldOfView = cam.FieldOfView;
+				Settings().RawFieldOfView = cam.FieldOfView;
 				Settings().Aperture = cam.Aperture;
 				Settings().FocusDistance = cam.FocalDistance;
 			}
@@ -571,7 +571,7 @@ void UserInterface::DrawSettings()
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Camera"), ImGuiTreeNodeFlags_None) )
 		{
-			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
+			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 		
