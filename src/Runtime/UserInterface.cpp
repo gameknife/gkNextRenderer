@@ -144,15 +144,6 @@ UserInterface::UserInterface(
 	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 256));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
 	
-	const auto& debugUtils = device.DebugUtils();
-	debugUtils.SetObjectName(renderPass_->Handle(), "UI RenderPass");
-	
-	for (const auto& imageView : swapChain.ImageViews())
-	{
-		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
-		debugUtils.SetObjectName(uiFrameBuffers_.back().Handle(), "UI FrameBuffer");
-	}
-	
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -300,6 +291,22 @@ VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
 		return imTextureIdMap_[globalTextureId];
 	}
 	return VK_NULL_HANDLE;
+}
+
+void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
+{
+	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	
+	for (const auto& imageView : swapChain.ImageViews())
+	{
+		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
+	}
+}
+
+void UserInterface::OnDestroySurface()
+{
+	renderPass_.reset();
+	uiFrameBuffers_.clear();
 }
 
 ImGuiID UserInterface::DockSpaceUI()

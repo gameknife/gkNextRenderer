@@ -140,7 +140,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.SunRotation = 0.5f;
     userSettings.SunLuminance = 500.f;
-    userSettings.SkyIntensity = 50.f;
+    userSettings.SkyIntensity = 100.f;
     
     userSettings.AutoFocus = false;
 
@@ -286,6 +286,7 @@ bool NextRendererApplication::Tick()
 void NextRendererApplication::End()
 {
     renderer_->End();
+    userInterface_.reset();
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
@@ -444,13 +445,20 @@ void NextRendererApplication::OnRendererDeviceSet()
 
 void NextRendererApplication::OnRendererCreateSwapChain()
 {
-    userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                           userSettings_, renderer_->GetRenderImage()));
+    if(userInterface_.get() == nullptr)
+    {
+        userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
+                                   userSettings_, renderer_->GetRenderImage()));
+    }
+    userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
 
 void NextRendererApplication::OnRendererDeleteSwapChain()
 {
-    userInterface_.reset();
+    if(userInterface_.get() != nullptr)
+    {
+        userInterface_->OnDestroySurface();
+    }
 }
 
 void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -692,9 +700,16 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-        userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
-        userSettings_.SunRotation = cameraInitialSate_.SunRotation;
-
+        if(cameraInitialSate_.HasSky)
+        {
+            userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
+            userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
+        }
+        if(cameraInitialSate_.HasSun)
+        {
+            userSettings_.SunRotation = cameraInitialSate_.SunRotation;
+            userSettings_.SunLuminance = cameraInitialSate_.SunIntensity;
+        }
         userSettings_.cameras = cameraInitialSate_.cameras;
         userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
 
