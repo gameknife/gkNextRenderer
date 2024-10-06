@@ -144,15 +144,6 @@ UserInterface::UserInterface(
 	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 256));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
 	
-	const auto& debugUtils = device.DebugUtils();
-	debugUtils.SetObjectName(renderPass_->Handle(), "UI RenderPass");
-	
-	for (const auto& imageView : swapChain.ImageViews())
-	{
-		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
-		debugUtils.SetObjectName(uiFrameBuffers_.back().Handle(), "UI FrameBuffer");
-	}
-	
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -300,6 +291,22 @@ VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
 		return imTextureIdMap_[globalTextureId];
 	}
 	return VK_NULL_HANDLE;
+}
+
+void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
+{
+	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	
+	for (const auto& imageView : swapChain.ImageViews())
+	{
+		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
+	}
+}
+
+void UserInterface::OnDestroySurface()
+{
+	renderPass_.reset();
+	uiFrameBuffers_.clear();
 }
 
 ImGuiID UserInterface::DockSpaceUI()
@@ -530,7 +537,7 @@ void UserInterface::DrawSettings()
 			if(prevCameraIdx != Settings().CameraIdx)
 			{
 				auto &cam = Settings().cameras[Settings().CameraIdx];
-				Settings().FieldOfView = cam.FieldOfView;
+				Settings().RawFieldOfView = cam.FieldOfView;
 				Settings().Aperture = cam.Aperture;
 				Settings().FocusDistance = cam.FocalDistance;
 			}
@@ -564,7 +571,7 @@ void UserInterface::DrawSettings()
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Camera"), ImGuiTreeNodeFlags_None) )
 		{
-			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
+			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 		

@@ -29,6 +29,7 @@ struct UserSettings final
 
 	// Camera
 	float FieldOfView;
+	float RawFieldOfView;
 	float Aperture;
 	float FocusDistance;
 	bool AutoFocus;
@@ -60,7 +61,7 @@ struct UserSettings final
 
 	float PaperWhiteNit;
 	
-	inline const static float FieldOfViewMinValue = 10.0f;
+	inline const static float FieldOfViewMinValue = 5.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;
 	
 	std::vector<Assets::Camera> cameras;

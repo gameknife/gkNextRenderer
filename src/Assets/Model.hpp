@@ -34,6 +34,9 @@ namespace Assets
         uint32_t SkyIdx, CameraIdx;
         float SunRotation;
 
+        float SkyIntensity = 100.0f;
+        float SunIntensity = 500.0f;
+
         std::vector<Camera> cameras;
     };
 

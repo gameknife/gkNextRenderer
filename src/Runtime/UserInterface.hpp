@@ -76,6 +76,10 @@ public:
 
 	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
 
+	void OnCreateSurface(const Vulkan::SwapChain& swapChain, 
+		const Vulkan::DepthBuffer& depthBuffer);
+	void OnDestroySurface();
+
 private:
 
 	ImGuiID DockSpaceUI();

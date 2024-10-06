@@ -12,6 +12,10 @@ void ModelViewController::Reset(const glm::mat4& modelView)
 	cameraRotY_ = 0;
 	modelRotX_ = 0;
 	modelRotY_ = 0;
+	rawModelRotX_ = 0;
+	rawModelRotY_ = 0;
+	rawCameraRotX_ = 0;
+	rawCameraRotY_ = 0;
 
 	mouseLeftPressed_ = false;
 	mouseRightPressed_ = false;
@@ -71,8 +75,8 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 
 	if (mouseRightPressed_)
 	{
-		modelRotX_ += deltaX;
-		modelRotY_ += deltaY;
+		rawModelRotX_ += deltaX;
+		rawModelRotY_ += deltaY;
 	}
 
 	mousePosX_ = xpos;
@@ -126,6 +130,9 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 	if (cameraMovingDown_) MoveUp(-d);
 	if (cameraMovingUp_) MoveUp(d);
 
+	modelRotX_ = glm::mix(modelRotX_, rawModelRotX_, 0.1);
+	modelRotY_ = glm::mix(modelRotY_, rawModelRotY_, 0.1);
+	
 	const double rotationDiv = 1200;
 	Rotate(static_cast<float>(cameraRotX_ / rotationDiv), static_cast<float>(cameraRotY_ / rotationDiv) );
 

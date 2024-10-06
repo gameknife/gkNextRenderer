@@ -388,6 +388,16 @@ namespace Assets
             cameraInit.HasSky = true;
             cameraInit.SkyIdx = root.extras.Get("SkyIdx").GetNumberAsInt();
         }
+        if(root.extras.Has("SkyIntensity"))
+        {
+            cameraInit.HasSky = true;
+            cameraInit.SkyIntensity = root.extras.Get("SkyIntensity").GetNumberAsDouble();
+        }
+        if(root.extras.Has("SunIntensity"))
+        {
+            cameraInit.HasSun = true;
+            cameraInit.SunIntensity = root.extras.Get("SunIntensity").GetNumberAsDouble();
+        }
         if(root.extras.Has("CamSpeed"))
         {
             cameraInit.ControlSpeed = static_cast<float>(root.extras.Get("CamSpeed").GetNumberAsDouble());
