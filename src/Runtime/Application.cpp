@@ -21,12 +21,16 @@
 
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
-#include "Editor/EditorCommand.hpp"
 #include "Utilities/Localization.hpp"
 #include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+
+#if WITH_EDITOR
+#include "Editor/EditorCommand.hpp"
+#include "Editor/EditorInterface.hpp"
+#endif
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -453,8 +457,12 @@ void NextRendererApplication::OnRendererCreateSwapChain()
 {
     if(userInterface_.get() == nullptr)
     {
+#if WITH_EDITOR
+        userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
+#else
         userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_, renderer_->GetRenderImage()));
+                                   userSettings_));
+#endif
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }

@@ -175,6 +175,8 @@ set_source_files_properties(
 endif()
 
 set(src_files_editor
+		Editor/EditorInterface.cpp
+		Editor/EditorInterface.hpp
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
         Editor/EditorGUI.h

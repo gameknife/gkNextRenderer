@@ -41,97 +41,14 @@
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
-namespace
-{
-	void CheckVulkanResultCallback(const VkResult err)
-	{
-		if (err != VK_SUCCESS)
-		{
-			Throw(std::runtime_error(std::string("ImGui Vulkan error (") + Vulkan::ToString(err) + ")"));
-		}
-	}
-
-	const ImWchar*  GetGlyphRangesFontAwesome()
-	{
-		static const ImWchar ranges[] =
-		{
-			ICON_MIN_FA, ICON_MAX_FA, // Basic Latin + Latin Supplement
-			0,
-		};
-		return &ranges[0];
-	}
-
-	
-	void MainWindowStyle()
-	{
-	    
-	    ImGuiIO &io = ImGui::GetIO();
-
-	    io.IniFilename              = NULL;
-
-		ImVec4 ActiveColor = true ? ImVec4(0.42f, 0.45f, 0.5f, 1.00f) : ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-
-	    ImGuiStyle* style = &ImGui::GetStyle();
-	    ImVec4* colors = style->Colors;
-	    ImGui::StyleColorsDark(style);
-	    colors[ImGuiCol_Text]                   = ImVec4(0.84f, 0.84f, 0.84f, 1.00f);
-	    colors[ImGuiCol_WindowBg]               = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-	    colors[ImGuiCol_ChildBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-	    colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
-	    colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
-	    colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
-	    colors[ImGuiCol_FrameBg]                = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
-	    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
-	    colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-	    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
-	    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-	    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-	    colors[ImGuiCol_CheckMark]              = ActiveColor;
-	    colors[ImGuiCol_SliderGrab]             = ActiveColor;
-	    colors[ImGuiCol_SliderGrabActive]       = ActiveColor;
-	    colors[ImGuiCol_Button]                 = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-	    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-	    colors[ImGuiCol_ButtonActive]           = ActiveColor;
-	    colors[ImGuiCol_Header]                 = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-	    colors[ImGuiCol_HeaderHovered]          = ActiveColor;
-	    colors[ImGuiCol_HeaderActive]           = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-	    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-	    colors[ImGuiCol_SeparatorHovered]       = ActiveColor;
-	    colors[ImGuiCol_SeparatorActive]        = ActiveColor;
-	    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
-	    colors[ImGuiCol_ResizeGripHovered]      = ActiveColor;
-	    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.19f, 0.39f, 0.69f, 1.00f);
-	    colors[ImGuiCol_Tab]                    = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-	    colors[ImGuiCol_TabHovered]             = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-	    colors[ImGuiCol_TabActive]              = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-	    colors[ImGuiCol_PlotHistogram]          = ActiveColor;
-	    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
-	    colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
-	    colors[ImGuiCol_NavHighlight]           = ActiveColor;
-	    style->WindowPadding                    = ImVec2(12.00f, 8.00f);
-	    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
-	    style->GrabMinSize                      = 20.00f;
-	    style->WindowRounding                   = 8.00f;
-	    style->FrameBorderSize                  = 0.00f;
-	    style->FrameRounding                    = 4.00f;
-	    style->GrabRounding                     = 12.00f;
-	}
-}
 
 UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings,
-	Vulkan::RenderImage& viewportImage) :
+	UserSettings& userSettings) :
 	userSettings_(userSettings)
-	
 {
-	editorGUI_.reset(new Editor::GUI());
-	
 	const auto& device = swapChain.Device();
 	const auto& window = device.Surface().Instance().Window();
 
@@ -150,12 +67,6 @@ UserInterface::UserInterface(
 	auto& io = ImGui::GetIO();
 	// No ini file.
 	io.IniFilename = "imgui.ini";
-#if WITH_EDITOR
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-#endif
 
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
@@ -179,7 +90,6 @@ UserInterface::UserInterface(
 	vulkanInit.MinImageCount = swapChain.MinImageCount();
 	vulkanInit.ImageCount = static_cast<uint32_t>(swapChain.Images().size());
 	vulkanInit.Allocator = nullptr;
-	vulkanInit.CheckVkResultFn = CheckVulkanResultCallback;
 	vulkanInit.RenderPass = renderPass_->Handle();
 
 	if (!ImGui_ImplVulkan_Init(&vulkanInit))
@@ -196,10 +106,9 @@ UserInterface::UserInterface(
     const auto scaleFactor = window.ContentScale();
 #endif
 
-	MainWindowStyle();
+	UserInterface::SetStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
-
-
+	
 	// Upload ImGui fonts (use ImGuiFreeType for better font rendering, see https://github.com/ocornut/imgui/tree/master/misc/freetype).
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
@@ -218,24 +127,6 @@ UserInterface::UserInterface(
 	}
 #endif
 	
-	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
-	ImFontConfig config;
-	config.MergeMode = true;
-	config.GlyphMinAdvanceX = 14.0f;
-	config.GlyphOffset = ImVec2(0, 0);
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
-	{
-		
-	}
-
-	fontIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 18 * scaleFactor, nullptr, glyphRange );
-	
-	config.GlyphMinAdvanceX = 20.0f;
-	config.GlyphOffset = ImVec2(0, 0);
-	io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 18 * scaleFactor, &config, iconRange );
-
-	fontBigIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr, iconRange );
-	
 	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
@@ -243,17 +134,11 @@ UserInterface::UserInterface(
 			Throw(std::runtime_error("failed to create ImGui font textures"));
 		}
 	});
-	
-	firstRun = true;
-
-	editorGUI_->fontIcon_ = fontIcon_;
-	editorGUI_->bigIcon_ = fontBigIcon_;
 }
 
 UserInterface::~UserInterface()
 {
 	uiFrameBuffers_.clear();
-	editorGUI_.reset();
 	
 	ImGui_ImplVulkan_Shutdown();
 #if !ANDROID
@@ -262,32 +147,6 @@ UserInterface::~UserInterface()
 	ImGui_ImplAndroid_Shutdown();
 #endif
 	ImGui::DestroyContext();
-}
-
-const float toolbarSize = 50;
-const float toolbarIconWidth = 32;
-const float toolbarIconHeight = 32;
-const float titleBarHeight = 55;
-const float footBarHeight = 40;
-float menuBarHeight = 0;
-
-
-VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
-{
-	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
-	{
-		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
-		if(texture)
-		{
-			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			return imTextureIdMap_[globalTextureId];
-		}
-	}
-	else
-	{
-		return imTextureIdMap_[globalTextureId];
-	}
-	return VK_NULL_HANDLE;
 }
 
 void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
@@ -306,107 +165,65 @@ void UserInterface::OnDestroySurface()
 	uiFrameBuffers_.clear();
 }
 
-ImGuiID UserInterface::DockSpaceUI()
+void UserInterface::SetStyle()
 {
-	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + toolbarSize + titleBarHeight - menuBarHeight));
-	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, viewport->Size.y - toolbarSize - titleBarHeight + menuBarHeight - footBarHeight));
-	ImGui::SetNextWindowViewport(viewport->ID);
-	ImGui::SetNextWindowBgAlpha(0);
-	ImGuiWindowFlags window_flags = 0
-		| ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking
-		| ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
-		| ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
-		| ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+    ImGuiIO &io = ImGui::GetIO();
 
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-	ImGui::Begin("Master DockSpace", NULL, window_flags);
-	ImGuiID dockMain = ImGui::GetID("MyDockspace");
-	
-	// Save off menu bar height for later.
-	menuBarHeight = ImGui::GetCurrentWindow()->MenuBarHeight;
+    io.IniFilename              = NULL;
 
-	ImGui::DockSpace(dockMain, ImVec2(0,0), ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
-	ImGui::End();
-	ImGui::PopStyleVar(3);
+	ImVec4 ActiveColor = true ? ImVec4(0.42f, 0.45f, 0.5f, 1.00f) : ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
 
-	return dockMain;
-}
-
-void UserInterface::ToolbarUI()
-{
-	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + titleBarHeight));
-	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, toolbarSize));
-	ImGui::SetNextWindowViewport(viewport->ID);
-
-	ImGuiWindowFlags window_flags = 0
-		| ImGuiWindowFlags_NoDocking 
-		| ImGuiWindowFlags_NoTitleBar 
-		| ImGuiWindowFlags_NoResize 
-		| ImGuiWindowFlags_NoMove 
-		| ImGuiWindowFlags_NoScrollbar 
-		| ImGuiWindowFlags_NoSavedSettings
-		;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-
-	ImGui::Begin("TOOLBAR", NULL, window_flags);
-	ImGui::PopStyleVar();
-	ImGui::PopStyleVar();
-	
-	ImGui::BeginGroup();
-	ImGui::PushFont(fontIcon_);
-	ImGui::Button(ICON_FA_FLOPPY_DISK, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
-	ImGui::Button(ICON_FA_FOLDER, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
-	ImGui::PopFont();
-	ImGui::EndGroup();ImGui::SameLine();
-
-	ImGui::BeginGroup();ImGui::SameLine(50);
-	ImGui::PushFont(fontIcon_);
-	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(80,210,0,255));
-	if( ImGui::Button(ICON_FA_PLAY, ImVec2(toolbarIconWidth, toolbarIconHeight)) )
-	{
-		std::filesystem::path currentPath = std::filesystem::current_path();
-		std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
-		std::system(cmdline.c_str());
-	}
-	ImGui::SameLine();
-	
-	ImGui::PopStyleColor();
-	ImGui::PopFont();
-	static int item = 3;
-	static float color[4] = { 0.4f, 0.7f, 0.0f, 0.5f };
-	ImGui::SetNextItemWidth(120);
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7,7));
-	ImGui::Combo("##Render", &item, "RTPipe\0ModernDeferred\0LegacyDeferred\0RayQuery\0HybirdRender\0\0");ImGui::SameLine();
-	ImGui::PopStyleVar();
-	ImGui::EndGroup();ImGui::SameLine();
-
-
-	ImGui::BeginGroup();ImGui::SameLine(50);
-	ImGui::PushFont(fontIcon_);
-	ImGui::Button(ICON_FA_FILE_IMPORT, ImVec2(toolbarIconWidth, toolbarIconHeight));ImGui::SameLine();
-	ImGui::PopFont();
-	ImGui::EndGroup();
-	
-	ImGui::End();
+    ImGuiStyle* style = &ImGui::GetStyle();
+    ImVec4* colors = style->Colors;
+    ImGui::StyleColorsDark(style);
+    colors[ImGuiCol_Text]                   = ImVec4(0.84f, 0.84f, 0.84f, 1.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+    colors[ImGuiCol_CheckMark]              = ActiveColor;
+    colors[ImGuiCol_SliderGrab]             = ActiveColor;
+    colors[ImGuiCol_SliderGrabActive]       = ActiveColor;
+    colors[ImGuiCol_Button]                 = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
+    colors[ImGuiCol_ButtonActive]           = ActiveColor;
+    colors[ImGuiCol_Header]                 = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
+    colors[ImGuiCol_HeaderHovered]          = ActiveColor;
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered]       = ActiveColor;
+    colors[ImGuiCol_SeparatorActive]        = ActiveColor;
+    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
+    colors[ImGuiCol_ResizeGripHovered]      = ActiveColor;
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.19f, 0.39f, 0.69f, 1.00f);
+    colors[ImGuiCol_Tab]                    = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+    colors[ImGuiCol_TabHovered]             = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+    colors[ImGuiCol_TabActive]              = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
+    colors[ImGuiCol_PlotHistogram]          = ActiveColor;
+    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
+    colors[ImGuiCol_NavHighlight]           = ActiveColor;
+    style->WindowPadding                    = ImVec2(12.00f, 8.00f);
+    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
+    style->GrabMinSize                      = 20.00f;
+    style->WindowRounding                   = 8.00f;
+    style->FrameBorderSize                  = 0.00f;
+    style->FrameRounding                    = 4.00f;
+    style->GrabRounding                     = 12.00f;
 }
 
 void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
-{
-	GUserInterface = this;
-
-#if WITH_EDITOR
-	uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
-	for ( uint32_t i = 0; i < count; ++i )
-	{
-		RequestImTextureId(i);
-	}
-#endif
-	
+{		
 	auto& io = ImGui::GetIO();
 	
 	ImGui_ImplVulkan_NewFrame();
@@ -417,20 +234,9 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChai
 #endif
 	ImGui::NewFrame();
 	
-
-#if WITH_EDITOR
-	editorGUI_->selected_obj_id = scene->GetSelectedId();
-	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGuiID id = DockSpaceUI();
-	ToolbarUI();
-	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
-	swapChain.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
-	MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
-#else
 	DrawSettings();
 	DrawOverlay(statistics, gpuTimer);
-#endif
-
+	
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 	
 	ImGui::Render();
@@ -447,17 +253,6 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChai
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	vkCmdEndRenderPass(commandBuffer);
-
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-		// TODO for OpenGL: restore current GL context.
-	}
-
-	firstRun = false;
-
-	GUserInterface = nullptr;
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const
