@@ -134,7 +134,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
 
-    userSettings.Denoiser = options.Denoiser;
+    userSettings.Denoiser = options.Benchmark ? false : !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
 
@@ -142,7 +142,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.SunLuminance = 500.f;
     userSettings.SkyIntensity = 100.f;
     
-    userSettings.AutoFocus = false;
+    userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
     userSettings.DenoiseSigmaLum = 10.0f;
@@ -341,7 +341,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
         Assets::RayCastResult rayResult {};
         renderer_->GetLastRaycastResult(rayResult);
     
-        if( userSettings_.AutoFocus )
+        if( userSettings_.RequestRayCast )
         {
             if(rayResult.Hitted )
             {
@@ -354,7 +354,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
             }
 
             // only active one frame
-            userSettings_.AutoFocus = false;
+            userSettings_.RequestRayCast = false;
         }
 
         userSettings_.HitResult = rayResult;
@@ -398,6 +398,11 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
+
+#if WITH_EDITOR
+    ubo.ShowEdge = true;
+#endif
+    
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -504,7 +509,7 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
 
     //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
     
-    userInterface_->Render(commandBuffer, imageIndex, stats, renderer_->GpuTimer(), scene_.get());
+    userInterface_->Render(commandBuffer, renderer_->SwapChain(), imageIndex, stats, renderer_->GpuTimer(), scene_.get());
 }
 
 void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
@@ -593,7 +598,7 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     {
         if( glm::distance(pressMousePos_, mousePos_) < 1.0f )
         {
-            userSettings_.AutoFocus = true;
+            userSettings_.RequestRayCast = true;
         }
     }
 #endif

@@ -32,7 +32,7 @@ struct UserSettings final
 	float RawFieldOfView;
 	float Aperture;
 	float FocusDistance;
-	bool AutoFocus;
+	bool RequestRayCast;
 
 	float SkyRotation;
 	float SunRotation;

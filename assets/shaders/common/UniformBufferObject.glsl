@@ -43,6 +43,7 @@ struct UniformBufferObject
 	uint AdaptiveSteps;
 	glbool TAA;
 	uint SelectedId;
+	glbool ShowEdge;
 		
 	float BFSigma;
 	float BFSigmaLum;

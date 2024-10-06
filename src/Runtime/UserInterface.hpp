@@ -67,7 +67,7 @@ public:
 		Vulkan::RenderImage& viewportImage);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
+	void Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
@@ -85,7 +85,6 @@ private:
 	ImGuiID DockSpaceUI();
 	void ToolbarUI();
 	
-	const Vulkan::SwapChain& swapChain_;
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);

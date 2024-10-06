@@ -187,7 +187,7 @@ namespace Vulkan::RayTracing
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 4), 1);
         }
 
         {
@@ -221,7 +221,7 @@ namespace Vulkan::RayTracing
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineNonDenoiser_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         composePipelineNonDenoiser_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-                vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 16, SwapChain().RenderExtent().height / 16, 1);
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 16), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 16), 1);
             }
             
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
@@ -264,6 +264,7 @@ namespace Vulkan::RayTracing
         }
     
 #if !ANDROID
+        if(supportRayCast_)
         {
             SCOPED_GPU_TIMER("raycast");
             
@@ -273,7 +274,7 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
-
+#if WITH_OIDN
         if (supportDenoiser_)
         {
             VkImageSubresourceRange subresourceRange = {};
@@ -306,6 +307,7 @@ namespace Vulkan::RayTracing
                                        VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
         }
+#endif
 #endif
 
         

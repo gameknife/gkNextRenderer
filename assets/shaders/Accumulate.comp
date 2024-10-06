@@ -42,14 +42,14 @@ void main() {
 
     vec4 src = imageLoad(NewSourceImage, ipos);
 
-    bool isEvenFrame = Camera.TotalFrames % 2 == 0;
+    bool isEvenFrame = Camera.TotalFrames % 2 == 0 ? true : false;
 
     bool useHistory = true;
     vec4 final = src;
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
 	ivec2 previpos = ivec2( floor(ipos + motion) );
-	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy)));
-    const bool check = length(motion) > 0.01;
+	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1,-1)));
+    const bool check = length(motion) > 0.01 ? true : false;
     // fetch visibility to validate the history
     uint current_primitive_index = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
     if(Camera.TotalFrames == 0 || !inside)
@@ -127,14 +127,17 @@ void main() {
         imageStore(AccumulateImage, ipos, final);
     }
 
-	uint realInstanceId = FetchPrimitiveIndex(current_primitive_index);
-	if(realInstanceId == Camera.SelectedId)
+	if(Camera.ShowEdge)
 	{
-		if( EdgeDetect(current_primitive_index, isEvenFrame, ipos ) )
+		uint realInstanceId = FetchPrimitiveIndex(current_primitive_index);
+		if(realInstanceId == Camera.SelectedId)
 		{
-			//final.rgb = vec3(1,0.05,0) * Camera.PaperWhiteNit;
+			if( EdgeDetect(current_primitive_index, isEvenFrame, ipos ) )
+			{
+				final.rgb = vec3(1,1,0.05) * Camera.PaperWhiteNit;
+			}
 		}
 	}
-
+	
     imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
 }

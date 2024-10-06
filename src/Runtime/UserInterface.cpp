@@ -127,7 +127,6 @@ UserInterface::UserInterface(
 	const Vulkan::DepthBuffer& depthBuffer,
 	UserSettings& userSettings,
 	Vulkan::RenderImage& viewportImage) :
-	swapChain_(swapChain),
 	userSettings_(userSettings)
 	
 {
@@ -197,8 +196,6 @@ UserInterface::UserInterface(
     const auto scaleFactor = window.ContentScale();
 #endif
 
-
-	//ImGui::StyleColorsDark();
 	MainWindowStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 
@@ -398,7 +395,7 @@ void UserInterface::ToolbarUI()
 	ImGui::End();
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
 	GUserInterface = this;
 
@@ -427,7 +424,7 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, uint32_t imageIdx, con
 	ImGuiID id = DockSpaceUI();
 	ToolbarUI();
 	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
-	swapChain_.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	swapChain.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 	MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
 #else
 	DrawSettings();
