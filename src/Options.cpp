@@ -23,7 +23,7 @@ Options::Options(const int argc, const char* argv[])
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The general limit number of bounces per ray.")
 		("max-bounces", value<uint32_t>(&MaxBounces)->default_value(10), "The maximum bounces per ray.")
 		("temporal", value<uint32_t>(&Temporal)->default_value(32), "The number of temporal frames.")
-		("denoiser", bool_switch(&Denoiser)->default_value(true), "Use Denoiser.")
+		("nodenoiser", bool_switch(&NoDenoiser)->default_value(false), "Not Use Denoiser.")
 		("adaptivesample", bool_switch(&AdaptiveSample)->default_value(false), "use adaptive sample to improve render quality.")
 	
     ;

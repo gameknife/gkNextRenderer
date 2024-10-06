@@ -303,6 +303,7 @@ namespace Vulkan
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
 		bool supportDenoiser_ {};
+		bool supportRayCast_ {};
 		int frameCount_{};
 		bool forceSDR_{};
 		bool visualDebug_{};

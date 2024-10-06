@@ -45,6 +45,7 @@ namespace Vulkan::RayTracing
                              const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
+        supportRayCast_ = true;
     }
 
     RayTraceBaseRenderer::~RayTraceBaseRenderer()
@@ -150,9 +151,16 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::AfterRenderCmd();
 
-        rayCastBuffer_->SetContext(cameraCenterCastContext_);
-        rayCastBuffer_->SyncWithGPU();
-        cameraCenterCastResult_ = rayCastBuffer_->GetResult();
+        if(supportRayCast_)
+        {
+            rayCastBuffer_->SetContext(cameraCenterCastContext_);
+            rayCastBuffer_->SyncWithGPU();
+            cameraCenterCastResult_ = rayCastBuffer_->GetResult();
+        }
+        else
+        {
+            cameraCenterCastResult_ = Assets::RayCastResult();
+        }
     }
 
 

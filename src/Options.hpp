@@ -24,7 +24,7 @@ public:
 	bool Benchmark{};
 	bool SaveFile{};
 	bool RenderDoc{};
-	bool Denoiser{};
+	bool NoDenoiser{};
 	bool ForceSDR{};
 	std::string locale{};
 	
