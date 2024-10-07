@@ -6,6 +6,7 @@
 #include "Runtime/UserInterface.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/TextureImage.hpp"
+#include "Editor/EditorInterface.hpp"
 #include "Vulkan/ImageView.hpp"
 
 namespace Nodes
@@ -64,9 +65,9 @@ namespace Nodes
     void NodeSetTexture::draw()
     {
         //ImGui::SetNextItemWidth(100.f);
-        // if(textureId != -1 && GUserInterface)
-        // {
-        //     ImGui::Image( GUserInterface->RequestImTextureId(textureId), ImVec2(128, 128));
-        // }
+        if(textureId != -1 && GUserInterface)
+        {
+            ImGui::Image( GUserInterface->RequestImTextureId(textureId), ImVec2(128, 128));
+        }
     }
 }

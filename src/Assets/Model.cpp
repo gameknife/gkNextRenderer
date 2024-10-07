@@ -451,10 +451,8 @@ namespace Assets
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
-        bool doFlatten = (GOption->RendererType == 1 || GOption->RendererType == 4);
-#if ANDROID
-        doFlatten = true;
-#endif
+        bool doFlatten = (GOption->RendererType == 1 || GOption->RendererType == 2);
+
         if(doFlatten) {
             std::vector<Vertex> vertices_flatten;
             std::vector<uint32_t> indices_flatten;
