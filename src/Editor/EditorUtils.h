@@ -1,4 +1,7 @@
+#if WIN32 && !defined(__MINGW32__)
 #pragma warning( disable : 4005)
+#endif
+
 #pragma once
 
 #include <string>
