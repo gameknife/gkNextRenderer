@@ -75,7 +75,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	int modelCount = static_cast<int>(models_.size());
 	for (int i = 0; i < modelCount; i++)
 	{	
-		uint32_t modelCount = 0;
+		uint32_t instanceCountOfThisModel = 0;
 		for (const auto& node : nodes_)
 		{
 			if(node.GetModel() == i)
@@ -91,7 +91,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 				cmd.instanceCount = 1;
 
 				indirectDrawBuffer.push_back(cmd);
-				modelCount++;
+				instanceCountOfThisModel++;
 				nodeOffset++;
 			}
 		}
@@ -101,14 +101,14 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		cmd.indexCount    = static_cast<uint32_t>(models_[i].Indices().size());
 		cmd.vertexOffset  = static_cast<int32_t>(vertexOffset);
 		cmd.firstInstance = nodeOffsetBatched;
-		cmd.instanceCount = modelCount;
+		cmd.instanceCount = instanceCountOfThisModel;
 
 		indirectDrawBufferInstanced.push_back(cmd);
 		
 		indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
 		vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
-		nodeOffsetBatched += modelCount;
-		model_instance_count_.push_back(modelCount);
+		nodeOffsetBatched += instanceCountOfThisModel;
+		model_instance_count_.push_back(instanceCountOfThisModel);
 	}
 	
 	int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
