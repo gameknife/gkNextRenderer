@@ -529,20 +529,12 @@ void VulkanBaseRenderer::DrawFrame()
 			BeforeNextFrame();
 		}
 
-		// wait the last frame command buffer to complete
-		if(fence)
-		{
-			SCOPED_CPU_TIMER("sync-wait");
-			fence->Wait(noTimeout);
-		}
-
 		{
 			SCOPED_CPU_TIMER("query-wait");
 			gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
 		}
 		
 		// next frame synchronization objects
-		fence = &(inFlightFences_[currentFrame_]);
 		const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
 		const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
 
@@ -559,7 +551,7 @@ void VulkanBaseRenderer::DrawFrame()
 			Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
 		}
 
-		const auto commandBuffer = commandBuffers_->Begin(currentImageIndex_);
+		const auto commandBuffer = commandBuffers_->Begin(currentFrame_);
 		gpuTimer_->Reset(commandBuffer);
 
 		{
@@ -574,7 +566,7 @@ void VulkanBaseRenderer::DrawFrame()
 			}
 		}
 
-		commandBuffers_->End(currentImageIndex_);
+		commandBuffers_->End(currentFrame_);
 		
 
 		{
@@ -582,6 +574,14 @@ void VulkanBaseRenderer::DrawFrame()
 			AfterRenderCmd();
 			UpdateUniformBuffer(currentImageIndex_);
 		}
+
+		// wait the last frame command buffer to complete
+		if(fence)
+		{
+			SCOPED_CPU_TIMER("sync-wait");
+			fence->Wait(noTimeout);
+		}
+		fence = &(inFlightFences_[currentFrame_]);
 		
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
