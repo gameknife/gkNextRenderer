@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "Platform.glsl"
 #include "common/UniformBufferObject.glsl"
-#include "common/Random.glsl"
+#include "common/Const_Func.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
 layout(binding = 1, rgba16f) uniform image2D AccumulateImage;

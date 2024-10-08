@@ -1,14 +1,7 @@
 #include "Scene.hpp"
 #include "Model.hpp"
 #include "Sphere.hpp"
-#include "Texture.hpp"
-#include "TextureImage.hpp"
-#include "UniformBuffer.hpp"
 #include "Vulkan/BufferUtil.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
-#include "Utilities/Exception.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
 
 
 namespace Assets {
@@ -41,12 +34,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		// Copy model data one after the other.
 		vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
 		indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
-
-		// Adjust the material id.
-		// for (size_t i = vertexOffset; i != vertices.size(); ++i)
-		// {
-		// 	vertices[i].MaterialIndex += materialOffset;
-		// }
 
 		// Add optional procedurals.
 		const auto* const sphere = dynamic_cast<const Sphere*>(model.Procedural());

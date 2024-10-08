@@ -1,3 +1,4 @@
+#pragma warning( disable : 4005)
 #pragma once
 
 #include <string>

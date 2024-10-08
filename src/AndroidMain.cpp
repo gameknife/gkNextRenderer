@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <fmt/format.h>
-#include <iostream>
 #include <filesystem>
 
 #include "Runtime/Platform/PlatformCommon.h"

@@ -20,7 +20,7 @@ float awiz_s = a * wi_.z / (1.0f + length(wi_.xy));
 b *= ((1.0f - a * a) / (1.0f + awiz_s * awiz_s));
 }
 
-float z = (1.0f - uv.y) * (1.0f + b) - b;
+float z = fma(1.0f - uv.y, 1.0f + b, -b);
 float phi  = M_TWO_PI * uv.x;
 vec3 o_std = vec3(sqrt(saturate(1.0f - z * z)) * vec2(cos(phi), sin(phi)), z);
 // Compute the microfacet normal m
@@ -31,11 +31,11 @@ return normalize(vec3(m_std.xy * alpha, m_std.z));
 vec3 ggxSampling(inout uvec4 RandomSeed, float roughness, vec3 normal)
 {
 vec3 tangent, bitangent;
-ONBAlignWithNormal(normal, tangent, bitangent);
+ONB(normal, tangent, bitangent);
 vec3 wm_ = ggx_sample_vndf(
-vec2(roughness),
-to_local(normal, tangent, bitangent, normal),
-RandomFloat2(RandomSeed)
+	vec2(roughness * roughness),
+	to_local(normal, tangent, bitangent, normal),
+	RandomFloat2(RandomSeed)
 );
 return to_world(wm_, tangent, bitangent, normal);
 }

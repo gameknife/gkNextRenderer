@@ -55,14 +55,13 @@ vec2 RandomInUnitDisk(inout uvec4 seed)
 	return concentric_sample_disk(RandomFloat2(seed));
 }
 
-vec3 RandomInCone(inout uvec4 seed, float cosAngle) {
+vec3 RandomInCone(inout uvec4 seed, float cos_theta) {
     const vec2 u = RandomFloat2(seed);
     float phi = M_TWO_PI * u.x;
-    float cos_theta = 1.0f - u.y + u.y * cosAngle;
-    float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
 
-    vec3 ret = vec3(sin_theta * vec2(cos(phi), sin(phi)), cos_theta);
-    return ret.xzy;
+    cos_theta = 1.0f + u.y * (cos_theta - 1.f);
+
+    return vec3(sqrt(1.0f - cos_theta * cos_theta) * vec2(cos(phi), sin(phi)), cos_theta);
 }
 
 vec3 RandomInHemiSphere(inout uvec4 seed)
@@ -70,8 +69,7 @@ vec3 RandomInHemiSphere(inout uvec4 seed)
     const vec2 u = RandomFloat2(seed);
     float phi = M_TWO_PI * u.x;
 
-    vec3 ret = vec3(sqrt(1.0f - u.y) * vec2(cos(phi), sin(phi)), sqrt(u.y));
-    return ret.xzy;
+    return vec3(sqrt(1.0f - u.y) * vec2(cos(phi), sin(phi)), sqrt(u.y));
 }
 
 vec3 RandomInHemiSphere1(inout uvec4 seed)
@@ -79,7 +77,6 @@ vec3 RandomInHemiSphere1(inout uvec4 seed)
     const vec2 u = RandomFloat2(seed);
     float phi = M_TWO_PI * u.x;
 
-    vec3 ret = vec3(sqrt(u.y) * vec2(cos(phi), sin(phi)), sqrt(1.0-u.y));
-    return ret.xzy;
+    return vec3(sqrt(u.y) * vec2(cos(phi), sin(phi)), sqrt(1.0-u.y));
 }
 #endif

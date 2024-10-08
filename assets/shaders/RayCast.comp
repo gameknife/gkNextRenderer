@@ -46,7 +46,7 @@ void main() {
         
         vec3 OutNormal;
         vec2 OutTexcoord;
-        int OutMaterialId;
+        uint OutMaterialId;
         SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, OutNormal, OutTexcoord, OutMaterialId);
 
         context.HitPoint = vec4(HitPos, 1.0);
