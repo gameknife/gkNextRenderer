@@ -101,17 +101,18 @@ bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColo
         outRayColor *= vec3(0);
         return true;
     }
-
-    origin = origin + scatterDir * Ray.Distance;
+    
+    origin = origin + scatterDir * (Ray.Distance - EPS * (Ray.HitRefract ? 0.0 : 2.0));
+    //origin = origin + scatterDir * Ray.Distance;
     scatterDir = Ray.ScatterDirection;
 
     outRayColor *= Ray.Exit ? Ray.EmitColor.rgb : Ray.Attenuation * Ray.pdf;
     
 #if USE_FIREFLY_FILTER
   float lum = luminance(outRayColor);
-  if(lum > 1600.0F)
+  if(lum > 1000.0F)
   {
-    outRayColor *= 1600.0F / lum;
+    outRayColor *= 1000.0F / lum;
   }
 #endif
 

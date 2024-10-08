@@ -13,6 +13,7 @@ struct RayPayload
 	uvec4 RandomSeed;
 	uint AdaptiveRay;
 	uint BounceCount;
+	bool HitRefract;
 	float pdf;
 	uint primitiveId;
 	bool Exit;
