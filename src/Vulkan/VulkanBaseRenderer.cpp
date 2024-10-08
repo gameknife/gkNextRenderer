@@ -520,118 +520,125 @@ void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint
 
 void VulkanBaseRenderer::DrawFrame()
 {
-	const auto noTimeout = std::numeric_limits<uint64_t>::max();
-
-	// wait the last frame command buffer to complete
-	if(fence)
 	{
-		SCOPED_CPU_TIMER("sync-wait");
-		fence->Wait(noTimeout);
-	}
-
-	{
-		SCOPED_CPU_TIMER("query-wait");
-		gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
-	}
-
-	{
-		SCOPED_CPU_TIMER("cpu-prepare");
-		BeforeNextFrame();
-	}
-
-	// next frame synchronization objects
-	fence = &(inFlightFences_[currentFrame_]);
-	const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
-	const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
-	
-	auto result = vkAcquireNextImageKHR(device_->Handle(), swapChain_->Handle(), noTimeout, imageAvailableSemaphore, nullptr, &currentImageIndex_);
-
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || isWireFrame_ != graphicsPipeline_->IsWireFrame())
-	{
-		RecreateSwapChain();
-		return;
-	}
-
-	if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-	{
-		Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
-	}
-
-	const auto commandBuffer = commandBuffers_->Begin(currentImageIndex_);
-	gpuTimer_->Reset(commandBuffer);
-
-	{
-		SCOPED_GPU_TIMER("gpu time");
+		SCOPED_CPU_TIMER("draw-frame");
+		const auto noTimeout = std::numeric_limits<uint64_t>::max();
 		
-		ClearViewport(commandBuffer, currentImageIndex_);
-		Render(commandBuffer, currentImageIndex_);
-		if(DelegatePostRender)
 		{
-			DelegatePostRender(commandBuffer, currentImageIndex_);
+			SCOPED_CPU_TIMER("cpu-prepare");
+			BeforeNextFrame();
 		}
+
+		// wait the last frame command buffer to complete
+		if(fence)
+		{
+			SCOPED_CPU_TIMER("sync-wait");
+			fence->Wait(noTimeout);
+		}
+
+		{
+			SCOPED_CPU_TIMER("query-wait");
+			gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
+		}
+		
+		// next frame synchronization objects
+		fence = &(inFlightFences_[currentFrame_]);
+		const auto imageAvailableSemaphore = imageAvailableSemaphores_[currentFrame_].Handle();
+		const auto renderFinishedSemaphore = renderFinishedSemaphores_[currentFrame_].Handle();
+
+		auto result = vkAcquireNextImageKHR(device_->Handle(), swapChain_->Handle(), noTimeout, imageAvailableSemaphore, nullptr, &currentImageIndex_);
+
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || isWireFrame_ != graphicsPipeline_->IsWireFrame())
+		{
+			RecreateSwapChain();
+			return;
+		}
+
+		if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+		{
+			Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
+		}
+
+		const auto commandBuffer = commandBuffers_->Begin(currentImageIndex_);
+		gpuTimer_->Reset(commandBuffer);
+
+		{
+			SCOPED_CPU_TIMER("render");
+			SCOPED_GPU_TIMER("gpu time");
+	
+			ClearViewport(commandBuffer, currentImageIndex_);
+			Render(commandBuffer, currentImageIndex_);
+			if(DelegatePostRender)
+			{
+				DelegatePostRender(commandBuffer, currentImageIndex_);
+			}
+		}
+
+		commandBuffers_->End(currentImageIndex_);
+		
+
+		{
+			SCOPED_CPU_TIMER("cpugpu-io");
+			AfterRenderCmd();
+			UpdateUniformBuffer(currentImageIndex_);
+		}
+		
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+		VkCommandBuffer commandBuffers[]{ commandBuffer };
+		VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+		{
+			SCOPED_CPU_TIMER("submit");
+
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = commandBuffers;
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signalSemaphores;
+
+			fence->Reset();
+
+			Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
+				"submit draw command buffer");
+		}
+		
+		{
+			SCOPED_CPU_TIMER("present");
+			VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
+			VkPresentInfoKHR presentInfo = {};
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = signalSemaphores;
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = swapChains;
+			presentInfo.pImageIndices = &currentImageIndex_;
+			presentInfo.pResults = nullptr; // Optional
+			
+			result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
+			
+			AfterPresent();
+	
+			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+			{
+				RecreateSwapChain();
+				return;
+			}
+	
+			if (result != VK_SUCCESS)
+			{
+				Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
+			}
+		}
+
+		currentFrame_ = (currentFrame_ + 1) % inFlightFences_.size();
+		frameCount_++;
 	}
-	
-	commandBuffers_->End(currentImageIndex_);
-
-	{
-		SCOPED_CPU_TIMER("cpugpu-io");
-		AfterRenderCmd();
-	}
-	
-	UpdateUniformBuffer(currentImageIndex_);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkCommandBuffer commandBuffers[]{ commandBuffer };
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
-
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
-	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = commandBuffers;
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
-
-	fence->Reset();
-
-	Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
-		"submit draw command buffer");
-	
-	VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &currentImageIndex_;
-	presentInfo.pResults = nullptr; // Optional
-
-	{
-		SCOPED_CPU_TIMER("present");
-		result = vkQueuePresentKHR(device_->PresentQueue(), &presentInfo);
-	}
-	
-
-	AfterPresent();
-	
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-	{
-		RecreateSwapChain();
-		return;
-	}
-	
-	if (result != VK_SUCCESS)
-	{
-		Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
-	}
-
-	currentFrame_ = (currentFrame_ + 1) % inFlightFences_.size();
-	frameCount_++;
+	gpuTimer_->CpuFrameEnd();
 }
 
 void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)

@@ -443,10 +443,17 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
 		
-		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
-		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
+		
+
+		
+		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
 		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
+		ImGui::Text(" render: %.2fms", gpuTimer->GetCpuTime("render"));
+		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
+		ImGui::Text(" submit: %.2fms", gpuTimer->GetCpuTime("submit"));
 		ImGui::Text(" cpugpu-io: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
+		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
+		
 		
 		ImGui::Text(" oidn: %.2fms", gpuTimer->GetCpuTime("OIDN"));
 		
