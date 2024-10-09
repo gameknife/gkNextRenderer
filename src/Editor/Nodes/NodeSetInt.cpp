@@ -6,6 +6,7 @@
 #include "Runtime/UserInterface.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/TextureImage.hpp"
+#include "Editor/EditorInterface.hpp"
 #include "Vulkan/ImageView.hpp"
 
 namespace Nodes

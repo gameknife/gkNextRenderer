@@ -1,6 +1,6 @@
 #include "Vertex.glsl"
 
-void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const int PrimitiveIndex, out vec3 HitNormal, out vec2 HitTexcoord, out int MaterialId )
+void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const int PrimitiveIndex, out vec3 HitNormal, out vec2 HitTexcoord, out uint MaterialId )
 {
     // Get the material.
     const uvec2 offsets = Offsets[InstCustIndex];
@@ -14,6 +14,6 @@ void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 T
 
     // Compute the ray hit point properties.
     const vec3 barycentrics = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
-    HitNormal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
+    HitNormal = normalize((Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics) * WorldToObject).xyz);
     HitTexcoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 }

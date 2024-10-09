@@ -54,6 +54,15 @@ namespace Vulkan
 			started_ = true;
 		}
 
+		void CpuFrameEnd()
+		{
+			// iterate the cpu_timer_query_map
+			for(auto& [name, query] : cpu_timer_query_map)
+			{
+				std::get<2>(cpu_timer_query_map[name]) = std::get<1>(cpu_timer_query_map[name]) - std::get<0>(cpu_timer_query_map[name]);
+			}
+		}
+
 		void FrameEnd(VkCommandBuffer commandBuffer)
 		{
 			BENCH_MARK_CHECK();
@@ -106,7 +115,7 @@ namespace Vulkan
 			BENCH_MARK_CHECK();
 			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
 			{
-				cpu_timer_query_map[name] = std::make_tuple(0, 0);
+				cpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
 			}
 			std::get<0>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
@@ -130,7 +139,7 @@ namespace Vulkan
 			{
 				return 0;
 			}
-			return (std::get<1>(cpu_timer_query_map[name]) - std::get<0>(cpu_timer_query_map[name])) * 1e-6f;
+			return std::get<2>(cpu_timer_query_map[name]) * 1e-6f;
 		}
 		std::vector<std::tuple<std::string, float> > FetchAllTimes()
 		{
@@ -165,7 +174,7 @@ namespace Vulkan
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
-		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > cpu_timer_query_map{};
+		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > cpu_timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;

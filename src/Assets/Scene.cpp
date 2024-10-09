@@ -1,14 +1,7 @@
 #include "Scene.hpp"
 #include "Model.hpp"
 #include "Sphere.hpp"
-#include "Texture.hpp"
-#include "TextureImage.hpp"
-#include "UniformBuffer.hpp"
 #include "Vulkan/BufferUtil.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
-#include "Utilities/Exception.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
 
 
 namespace Assets {
@@ -42,12 +35,6 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
 		indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
 
-		// Adjust the material id.
-		// for (size_t i = vertexOffset; i != vertices.size(); ++i)
-		// {
-		// 	vertices[i].MaterialIndex += materialOffset;
-		// }
-
 		// Add optional procedurals.
 		const auto* const sphere = dynamic_cast<const Sphere*>(model.Procedural());
 		if (sphere != nullptr)
@@ -75,7 +62,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	int modelCount = static_cast<int>(models_.size());
 	for (int i = 0; i < modelCount; i++)
 	{	
-		uint32_t modelCount = 0;
+		uint32_t instanceCountOfThisModel = 0;
 		for (const auto& node : nodes_)
 		{
 			if(node.GetModel() == i)
@@ -91,7 +78,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 				cmd.instanceCount = 1;
 
 				indirectDrawBuffer.push_back(cmd);
-				modelCount++;
+				instanceCountOfThisModel++;
 				nodeOffset++;
 			}
 		}
@@ -101,14 +88,14 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		cmd.indexCount    = static_cast<uint32_t>(models_[i].Indices().size());
 		cmd.vertexOffset  = static_cast<int32_t>(vertexOffset);
 		cmd.firstInstance = nodeOffsetBatched;
-		cmd.instanceCount = modelCount;
+		cmd.instanceCount = instanceCountOfThisModel;
 
 		indirectDrawBufferInstanced.push_back(cmd);
 		
 		indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
 		vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
-		nodeOffsetBatched += modelCount;
-		model_instance_count_.push_back(modelCount);
+		nodeOffsetBatched += instanceCountOfThisModel;
+		model_instance_count_.push_back(instanceCountOfThisModel);
 	}
 	
 	int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;

@@ -6,6 +6,7 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 #include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/Window.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 
@@ -87,7 +88,11 @@ private:
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::shared_ptr<Assets::Scene> scene_;
+#if WITH_EDITOR
+	std::unique_ptr<class EditorInterface> userInterface_;
+#else
 	std::unique_ptr<class UserInterface> userInterface_;
+#endif
 
 	NextRenderer::EApplicationStatus status_{};
 

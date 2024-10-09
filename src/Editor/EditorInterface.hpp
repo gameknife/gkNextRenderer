@@ -1,16 +1,24 @@
 #pragma once
 #include <imgui.h>
 #include <imgui_internal.h>
+
 #include "Vulkan/Vulkan.hpp"
 #include "Vulkan/FrameBuffer.hpp"
+#include "Runtime/UserInterface.hpp"
+
 #include <vector>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+
 namespace Assets
 {
 	class Scene;
+}
+namespace Editor
+{
+	struct GUI;
 }
 
 namespace Vulkan
@@ -26,61 +34,48 @@ namespace Vulkan
 	class RenderImage;
 }
 
-struct UserSettings;
-
-struct Statistics final
-{
-	VkExtent2D FramebufferSize;
-	float FrameRate;
-	float FrameTime;
-	float RayRate;
-	uint32_t TotalSamples;
-	uint32_t TotalFrames;
-	double RenderTime;
-	float CamPosX;
-	float CamPosY;
-	float CamPosZ;
-	uint32_t TriCount;
-	uint32_t InstanceCount;
-	uint32_t TextureCount;
-	uint32_t ComputePassCount;
-	bool LoadingStatus;
-
-	mutable std::unordered_map< std::string, std::string> Stats;
-};
-
-class UserInterface final
+class EditorInterface final
 {
 public:
 
-	VULKAN_NON_COPIABLE(UserInterface)
+	VULKAN_NON_COPIABLE(EditorInterface)
 
-	UserInterface(
+	EditorInterface(
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
-		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings);
-	~UserInterface();
+		const Vulkan::DepthBuffer& depthBuffer);
+	~EditorInterface();
 
 	void Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
-
-	UserSettings& Settings() { return userSettings_; }
+	
+	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
 
 	void OnCreateSurface(const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
 
-	static void SetStyle();
-
 private:
-	void DrawSettings();
-	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
+
+	ImGuiID DockSpaceUI();
+	void ToolbarUI();
+	
 	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
-	UserSettings& userSettings_;	
+
+	std::unique_ptr<Editor::GUI> editorGUI_;
+
+	ImFont* fontBigIcon_;
+	ImFont* fontIcon_;
+
+	bool firstRun;
+	
+	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	
 };
+
+inline EditorInterface* GUserInterface = nullptr;

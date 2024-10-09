@@ -175,6 +175,8 @@ set_source_files_properties(
 endif()
 
 set(src_files_editor
+		Editor/EditorInterface.cpp
+		Editor/EditorInterface.hpp
 		Editor/EditorMain.cpp
 		Editor/EditorMain.h
         Editor/EditorGUI.h
@@ -326,7 +328,13 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 	endif()
 
-	target_link_libraries(${target} PRIVATE fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+	if ( !ANDROID)
+	target_link_libraries(${target} PRIVATE fmt::fmt rapidjsond)
+	else()
+	target_link_libraries(${target} PRIVATE fmt::fmt)
+	endif()
+
+	target_link_libraries(${target} PRIVATE CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 
 	if ( ANDROID)
 	target_link_libraries(${target} PRIVATE game-activity::game-activity log android)

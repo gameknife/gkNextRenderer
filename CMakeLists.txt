@@ -61,6 +61,11 @@ find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
+
+if (!ANDROID)
+find_package(RapidJSON CONFIG REQUIRED)
+endif()
+
 find_package(fmt CONFIG REQUIRED)
 
 if ( WITH_AVIF )

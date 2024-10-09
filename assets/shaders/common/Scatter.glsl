@@ -120,6 +120,7 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 		ray.Attenuation = ray.Albedo.rgb;
 		ray.ScatterDirection = refracted;
 		ray.BounceCount--;
+		ray.HitRefract = true;
 	}
 	
 	ray.pdf = 1.0;
@@ -156,6 +157,7 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 	ray.Albedo = texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;
+	ray.HitRefract = false;
 
 	switch (m.MaterialModel)
 	{

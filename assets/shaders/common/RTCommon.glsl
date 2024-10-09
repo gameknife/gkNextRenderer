@@ -24,7 +24,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 	const vec3 normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 	
-    int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Lights.length()));
+    int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
     Ray.HitPos = HitPos; 
 	Ray.primitiveId = (InstanceID + 1) << 16 | v0.MaterialIndex;
 	Ray.BounceCount++;
@@ -98,20 +98,21 @@ bool GetRayColor(inout vec3 origin, inout vec3 scatterDir, inout vec3 outRayColo
     // out of limit, invalid sample, return
     if(Ray.BounceCount == Camera.NumberOfBounces)
     {
-        outRayColor *= vec3(0);
+        outRayColor = vec3(0);
         return true;
     }
-
-    origin = origin + scatterDir * Ray.Distance;
+    
+    origin += scatterDir * Ray.Distance;
+    if(!Ray.HitRefract) origin -= scatterDir * EPS2;
     scatterDir = Ray.ScatterDirection;
 
     outRayColor *= Ray.Exit ? Ray.EmitColor.rgb : Ray.Attenuation * Ray.pdf;
     
 #if USE_FIREFLY_FILTER
   float lum = luminance(outRayColor);
-  if(lum > 1600.0F)
+  if(lum > 1000.0F)
   {
-    outRayColor *= 1600.0F / lum;
+    outRayColor *= 1000.0F / lum;
   }
 #endif
 
