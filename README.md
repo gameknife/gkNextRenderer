@@ -44,33 +44,34 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 ## 特性
 
-* Vulkan Raytracing pipeline
+* Rendering
     * Importance Sampling
     * VNDF Sampling for GGX, by [tigrazone](https://github.com/tigrazone)
     * Adaptive Sampling, thanks [tigrazone](https://github.com/tigrazone)
     * Ground Truth Path Tracing
     * Phsyical Light Unit
-    * Samples Reproject
-    * RayQuery on PC & Android
-    * OpenImageDenoise
-* Non-Raytracing Pipeline
+    * Temporal Reproject
+    * High Performance Bilateral Filter Denoiser
+    * OpenImageDenoise Denoiser
+    * RayQuery on Android
     * Visibiliy Buffer Rendering
     * Legacy Rendering
-* Hybird Pipeline
-    * Visibility Buffer
-    * Indirect Hybird Shading
-    * Sample Reproject
-* Common Rendering Feature
-    * Compute Checkerbox Rendering
-    * Temporal Reproject
-* File Format support
+    * Hybird Shading
+    * GPU Draw
+    * GPU Raycast
+    
+* Scene Management
     * Wavefront OBJ File PBR Scene Support
-    * GLTF Scene File Support
-* CrossPlatform support for Windows/Linux/MacOS/Android
-* Global Bindless TexturePool
-* MultiThread Resource Loading
-* HDR Display Support
-* Screenshot HDR and encode to avif
+    * Full GLTF Scene File Support
+
+* System
+    * CrossPlatform support for Windows/Linux/MacOS/Android
+    * EditorApp including node based MaterialEditor
+    * Global Bindless TexturePool
+    * MultiThread Resource Loading
+    * HDR Display Support
+    * Benchmark System
+    * Screenshot HDR and encode to avif / jpg
 
 ## 构建方式
 
@@ -139,28 +140,12 @@ brew install ninja
 
 ## Next Todolist
 
-- [x] GLTF format load
-- [x] HDR AVIF write
-- [x] Benchmark Website & Ranking
-- [x] Full stastics
-- [x] Multi draw indirect
+- [ ] WireFrame Rendering
+- [ ] Realtime Renderer Switch
 - [ ] GPU Frustum / Occulusion Culling
 - [ ] GPU Lod Swtiching
-- [x] Android Non-Raytracing Rendering
-- [x] Android RayQuery Rendering
-- [ ] Android Input Handling
-- [x] Realtimg self statics system
-- [x] Auto release by Github action
-- [x] Global Dynamic Bindless Textures
-- [x] Hybrid rendering with ray query
-- [x] Blender Export Property as CustomProperty to glb
-- [x] OpenImageDenoise (Only windows)
-- [X] SDR / HDR competiable
-- [ ] Full scope refactor
 - [ ] Dynamic Scene Management
 - [ ] Multi Material Execution
-- [x] ImGUI Editor Mode
-- [ ] Material Node-based Edit
 - [ ] Huge Landscape
 
 ## References
