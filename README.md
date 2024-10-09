@@ -23,18 +23,19 @@
 ## 图库 (TrueHDR)
 
 https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
+*10 seconds Showcase Video*
 
 ![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 *RayTracing Renderer - QX50*
 
-![Alt text](gallery/LowpolyTrack.avif?raw=true "LowpolyTrack")
-*Hybrid Renderer - Lowpoly Track*
+![Alt text](gallery/city.glb.avif?raw=true "City")
+*RayTracing Renderer - City*
 
-![Alt text](gallery/Qx50_Android.avif?raw=true "Qx50Android")
-*Hybrid Renderer (Android) - QX50*
+![Alt text](gallery/Still.avif?raw=true "Still")
+*RayTracing Renderer - Still*
 
-![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
-*Hybrid Renderer (Android) - Complex Cubes*
+![Alt text](gallery/playground.glb.avif?raw=true "PlayGround")
+*RayTracing Renderer - PlayGround*
 
 ![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")
 *RayTracing Renderer - LuxBall*
@@ -42,11 +43,14 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ![Alt text](gallery/Kitchen.avif?raw=true "Kitchen")
 *RayTracing Renderer - Kitchen*
 
-![Alt text](gallery/Still.avif?raw=true "still")
-*RayTracing Renderer - Still*
+![Alt text](gallery/LivingRoom.avif?raw=true "Living Room")
+*RayTracing Renderer - Living Room*
 
-![Alt text](gallery/CornellBox.avif?raw=true "Cornell Box")
-*RayTracing Renderer - Cornell Box*
+![Alt text](gallery/Qx50_Android.avif?raw=true "Qx50Android")
+*Hybrid Renderer (Android) - QX50*
+
+![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
+*Hybrid Renderer (Android) - Complex Cubes*
 
 ## 特性
 
