@@ -6,6 +6,7 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 #include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/Window.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 

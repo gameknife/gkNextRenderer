@@ -5,7 +5,6 @@ void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& 
 {
     //////////////////////////////////
     Editor::GUI &gui = gui_r;
-    ImGuiIO &io = ImGui::GetIO();
 
     gui.current_scene = scene;
     

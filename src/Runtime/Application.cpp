@@ -13,7 +13,6 @@
 #include "Vulkan/Device.hpp"
 #include "BenchMark.hpp"
 
-#include <iostream>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>

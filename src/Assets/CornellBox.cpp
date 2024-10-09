@@ -22,7 +22,7 @@ void CornellBox::Create(
 	std::vector<Material>& materials,
 	std::vector<LightObject>& lights)
 {
-	int32_t prev_mat_id = static_cast<int32_t>(materials.size());
+	uint32_t prev_mat_id = static_cast<uint32_t>(materials.size());
 	
 	materials.push_back(Material::Lambertian(vec3(0.65f, 0.05f, 0.05f))); // red
 	materials.push_back(Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))); // green
@@ -44,7 +44,7 @@ void CornellBox::Create(
 	const vec3 r3(s, s, 0);
 
 	// Left green panel
-	auto i = static_cast<uint32_t>(vertices.size());
+	uint32_t i = static_cast<uint32_t>(vertices.size());
 	vertices.push_back(Vertex{ l0 - offset, vec3(1, 0, 0), vec2(0, 1), prev_mat_id + 1 });
 	vertices.push_back(Vertex{ l1 - offset, vec3(1, 0, 0), vec2(1, 1), prev_mat_id + 1 });
 	vertices.push_back(Vertex{ l2 - offset, vec3(1, 0, 0), vec2(1, 0), prev_mat_id + 1 });
@@ -127,6 +127,8 @@ void CornellBox::Create(
 	// 	const float z0 = s * (-555.0f + 442.0f) / 555.0f;
 	// 	const float z1 = s * (-555.0f + 312.0f) / 555.0f;
 	// 	const float y1 = s * 0.001f;
+	// 	
+	// 	materials.push_back(Material::DiffuseLight(vec3(2.0f))); // light
 	//
 	// 	vertices.push_back(Vertex{ vec3(x0, y1, z1), vec3(0, 1, 0), vec2(0, 1), 4 });
 	// 	vertices.push_back(Vertex{ vec3(x1, y1, z1), vec3(0, 1, 0), vec2(1, 1), 4 });
@@ -137,10 +139,10 @@ void CornellBox::Create(
 	// 	AddTriangle(indices, i, 0, 3, 2);
 	//
 	// 	LightObject light {};
-	// 	light.WorldPosMin = vec4(x0, y1, z1, 1);
-	// 	light.WorldPosMax = vec4(x1, y1, z0, 1);
-	// 	light.WorldDirection = vec4(0, 1, 0, 0);
-	// 	light.area = (x1 - x0) * (z0 - z1);
+	// 	light.p0 = vec4(vec3(x0, y1, z1) - offset, 1);
+	// 	light.p1 = vec4(vec3(x0, y1, z0) - offset, 1);
+	// 	light.p3 = vec4(vec3(x1, y1, z1) - offset, 1);
+	// 	light.normal_area = vec4(0, -1, 0, (x1 - x0) * (z0 - z1));
 	//
 	// 	lights.push_back(light);
 	// }

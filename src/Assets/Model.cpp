@@ -25,7 +25,17 @@
 
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_ENABLE_DRACO
-// #define STB_IMAGE_IMPLEMENTATION
+
+#if !ANDROID
+#define TINYGLTF_USE_RAPIDJSON
+#include <rapidjson/document.h>
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+#define TINYGLTF_NO_INCLUDE_RAPIDJSON
+#endif
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
 #include <fmt/format.h>
@@ -34,23 +44,6 @@
 #include "Texture.hpp"
 
 #define FLATTEN_VERTICE 1
-
-typedef std::unordered_map<std::string, int32_t> uo_map_tex_t;
-
-//map of textures names - better for fast search
-uo_map_tex_t tex_names;
-std::string tex_filename;
-
-int32_t get_tex_id(std::string fn, bool& isNew) {
-	uo_map_tex_t::const_iterator got = tex_names.find(fn);
-	if (got == tex_names.end()) {
-		isNew = true;
-		return -1;
-	} else {
-		isNew = false;
-		return got->second;
-	}
-}
 
 using namespace glm;
 
@@ -273,7 +266,6 @@ namespace Assets
         }
 
         // export whole scene into a big buffer, with vertice indices materials
-        int counter = 0;
         for (tinygltf::Mesh& mesh : model.meshes)
         {
             std::vector<Vertex> vertices;
@@ -525,14 +517,8 @@ namespace Assets
             });
         }
 
-        //clear map of textures names
-        tex_names.clear();
-        bool isNew, file_exists;
-        //fill with exists textures
-   //      for (size_t i = 0; i < textures.size(); i++)
-   //      {
-			// tex_names[textures[i].Loadname()] = i;
-   //      }
+        bool file_exists;
+        std::string loadname, fn;
 
         for (const auto& _material : objReader.GetMaterials())
         {
@@ -547,7 +533,6 @@ namespace Assets
                 material.diffuse[1] = 1.0f;
                 material.diffuse[2] = 1.0f;
 
-				std::string loadname = "", fn;
 				file_exists = false;
                 // find if textures contain texture with loadname equals diffuse_texname
 				for(size_t i=0; i< searchPaths.size() && !file_exists; i++) {
@@ -557,14 +542,8 @@ namespace Assets
 				}				
 
                 if(file_exists) {
-                	tex_filename = std::filesystem::canonical(loadname).generic_string();
-                	m.DiffuseTextureId = get_tex_id(tex_filename, isNew);
-                	if (isNew)
-                	{
-                		uint32_t texIdx = GlobalTexturePool::LoadTexture(tex_filename, Vulkan::SamplerConfig());
-                		m.DiffuseTextureId = static_cast<int32_t>(texIdx);
-                		tex_names[tex_filename] = m.DiffuseTextureId;
-                	}
+                	loadname = std::filesystem::canonical(loadname).generic_string();
+                	m.DiffuseTextureId = GlobalTexturePool::LoadTexture(loadname, Vulkan::SamplerConfig());
                 } else {
                 	fmt::print("\n{} NOT FOUND\n", material.diffuse_texname);
 				}
@@ -724,7 +703,7 @@ namespace Assets
     }
 
 
-    int Model::CreateCornellBox(const float scale,
+    uint32_t Model::CreateCornellBox(const float scale,
                                  std::vector<Model>& models,
                                  std::vector<Material>& materials,
                                  std::vector<LightObject>& lights)
@@ -733,7 +712,7 @@ namespace Assets
         std::vector<uint32_t> indices;
         std::vector<uint32_t> materialIds;
 
-        int32_t prev_mat_id = static_cast<int32_t>(materials.size());
+        uint32_t prev_mat_id = materials.size();
 
         materialIds.push_back(prev_mat_id + 0);
         materialIds.push_back(prev_mat_id + 1);
@@ -753,10 +732,10 @@ namespace Assets
             nullptr
         ));
 
-        return static_cast<int32_t>(models.size()) - 1;
+        return models.size() - 1;
     }
 
-    Model Model::CreateBox(const vec3& p0, const vec3& p1, int materialIdx)
+    Model Model::CreateBox(const vec3& p0, const vec3& p1, uint32_t materialIdx)
     {
         std::vector<Vertex> vertices =
         {
@@ -814,7 +793,7 @@ namespace Assets
             nullptr);
     }
 
-    Model Model::CreateSphere(const vec3& center, float radius, int materialIdx, const bool isProcedural)
+    Model Model::CreateSphere(const vec3& center, float radius, uint32_t materialIdx, const bool isProcedural)
     {
         const int slices = 32;
         const int stacks = 16;
@@ -902,14 +881,14 @@ namespace Assets
             isProcedural ? new Sphere(center, radius) : nullptr);
     }
 
-    int Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
+    uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
                                 const glm::vec3& dir, const glm::vec3& lightColor,
                                 std::vector<Model>& models,
                                 std::vector<Material>& materials,
                                 std::vector<LightObject>& lights)
     {
         materials.push_back(Material::DiffuseLight(lightColor));
-        int materialIdx = static_cast<int32_t>(materials.size()) - 1;
+        uint32_t materialIdx = materials.size() - 1;
         
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;

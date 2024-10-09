@@ -12,7 +12,7 @@ namespace Assets
 		glm::vec3 Position;
 		glm::vec3 Normal;
 		glm::vec2 TexCoord;
-		int32_t MaterialIndex;
+		glm::uint MaterialIndex;
 
 		bool operator==(const Vertex& other) const
 		{
@@ -53,7 +53,7 @@ namespace Assets
 
 			attributeDescriptions[3].binding = 0;
 			attributeDescriptions[3].location = 3;
-			attributeDescriptions[3].format = VK_FORMAT_R32_SINT;
+			attributeDescriptions[3].format = VK_FORMAT_R32_UINT;
 			attributeDescriptions[3].offset = offsetof(Vertex, MaterialIndex);
 
 			return attributeDescriptions;
