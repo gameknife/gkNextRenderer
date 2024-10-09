@@ -22,6 +22,8 @@
 
 ## 图库 (TrueHDR)
 
+https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
+
 ![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 *RayTracing Renderer - QX50*
 
