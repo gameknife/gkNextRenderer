@@ -46,7 +46,7 @@ namespace
 
                 if (length(center - vec3(4, 0.2f, 0)) > 0.9f)
                 {
-                    if (chooseMat < 0.8f) // Diffuse
+                    if (chooseMat < 0.7f) // Diffuse
                     {
                         const float b = random() * random();
                         const float g = random() * random();
@@ -57,7 +57,7 @@ namespace
                         nodes.push_back(
                             Assets::Node::CreateNode( Utilities::NameHelper::RandomName(6), glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
                     }
-                    else if (chooseMat < 0.95f) // Metal
+                    else if (chooseMat < 0.9f) // Metal
                     {
                         const float fuzziness = 0.5f * random();
                         const float b = 0.5f * (1 + random());
@@ -111,11 +111,11 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
 
     AddRayTracingInOneWeekendCommonScene(nodes, models, materials, isProc, random);
 
-    models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, CreateMaterial(materials,Material::Dielectric(1.5f, 0.5f)), isProc));
+    models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, CreateMaterial(materials,Material::Dielectric(1.5f, 0.0f)), isProc));
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
     models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, CreateMaterial(materials,Material::Lambertian(vec3(0.4f, 0.2f, 0.1f))), isProc));
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
-    models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, CreateMaterial(materials,Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.3f)),
+    models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, CreateMaterial(materials,Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.5f)),
                                          isProc));
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
 }
