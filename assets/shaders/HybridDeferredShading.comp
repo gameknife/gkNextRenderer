@@ -9,10 +9,10 @@
 #include "common/Random.glsl"
 #include "common/GGXSample.glsl"
 
-layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
-layout(binding = 1, rgba8) uniform image2D OutImage;
-layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-//layout(binding = 3) uniform sampler2D[] TextureSamplers;
+layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer0;
+layout(binding = 1, rg32ui) uniform uimage2D MiniGBuffer1;
+layout(binding = 2, rgba8) uniform image2D OutImage;
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
@@ -116,7 +116,7 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		
 		vec3 hitPos = origin + direction * PayloadData.HitDist;
 		vec4 hpos =  Camera.PrevViewProjection * vec4(hitPos, 1);
-		ivec2 size = imageSize(MiniGBuffer);
+		ivec2 size = imageSize(MiniGBuffer0);
 		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
 		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
 		{
@@ -135,19 +135,21 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 void main() {
 
     // checker box
-    int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
+	bool isEvenFrame = Camera.TotalFrames % 2 == 0;
+    //int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
     
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    if(Camera.UseCheckerBoard)
-    {
-        ipos = ipos * ivec2(2,1);
-        if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
-            ipos.x += 1;
-        }
-    }
 	
-	ivec2 size = imageSize(MiniGBuffer);
-    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
+//    if(Camera.UseCheckerBoard)
+//    {
+//        ipos = ipos * ivec2(2,1);
+//        if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
+//            ipos.x += 1;
+//        }
+//    }
+	
+	ivec2 size = imageSize(MiniGBuffer0);
+    uvec2 vBuffer = isEvenFrame ? imageLoad(MiniGBuffer0, ipos).rg : imageLoad(MiniGBuffer1, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -270,9 +272,9 @@ void main() {
 
 	//#if USE_FIREFLY_FILTER
  	 float lum = luminance(outColor.rgb);
-	if(lum > 1600.0F)
+	if(lum > 1000.0F)
 	{
-		outColor.rgb *= 1600.0F / lum;
+		outColor.rgb *= 1000.0F / lum;
 	}
 	//#endif
 	
