@@ -224,7 +224,7 @@ void main() {
 		
 		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		vec3 illumColor = vec3(0.0);
-		bool hit = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle, illumColor);
+		bool hit = TraceRay(ipos, v.Position - ray_dir * EPS2, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;
@@ -240,7 +240,7 @@ void main() {
 	bounceColor = bounceColor / sampleTimes;
 	
     vec4 outColor = vec4(irradianceColor,1);
-	outColor.a = sampleTimes;
+	outColor.a = sampleTimes / Camera.NumberOfSamples;
     
     if(Camera.HasSun)
     {
