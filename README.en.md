@@ -1,12 +1,14 @@
 # gkNextRenderer
 
+[English](README.en.md)\|[Simplified Chinese](README.md)
+
 ![windows ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/windows.yml/badge.svg)![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)![macOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/macos.yml/badge.svg)![android ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
 
 ## What kind of project is this?
 
 ### One sentence introduction
 
-This is a real-time path tracing renderer based on VULKAN. The goal is to achieve real-time path tracing rendering.
+A real-time path tracing renderer based on Vulkan that aims to achieve**quality**and**efficiency**can be used for**real time**Path tracing rendering.
 
 ### Technical features
 
@@ -21,25 +23,43 @@ The original intention of this project is: learning, verification, and progress.
 
 <https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7>
 
-_10 seconds Showcase Video_
+> _10 seconds Showcase Video_
 
-![Alt text](gallery/Qx50.avif?raw=true "Qx50")_RayTracing Renderer - QX50_
+![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 
-![Alt text](gallery/city.glb.avif?raw=true "City")_RayTracing Renderer - City_
+> _RayTracing Renderer - QX50_
 
-![Alt text](gallery/Still.avif?raw=true "Still")_RayTracing Renderer - Still_
+![Alt text](gallery/city.glb.avif?raw=true "City")
 
-![Alt text](gallery/playground.glb.avif?raw=true "PlayGround")_RayTracing Renderer - PlayGround_
+> _RayTracing Renderer - City_
 
-![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")_RayTracing Renderer - LuxBall_
+![Alt text](gallery/Still.avif?raw=true "Still")
 
-![Alt text](gallery/Kitchen.avif?raw=true "Kitchen")_RayTracing Renderer - Kitchen_
+> _RayTracing Renderer - Still_
 
-![Alt text](gallery/LivingRoom.avif?raw=true "Living Room")_RayTracing Renderer - Living Room_
+![Alt text](gallery/playground.glb.avif?raw=true "PlayGround")
 
-![Alt text](gallery/Qx50_Android.avif?raw=true "Qx50Android")_Hybrid Renderer (Android) - QX50_
+> _RayTracing Renderer - PlayGround_
 
-![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")_Hybrid Renderer (Android) - Complex Cubes_
+![Alt text](gallery/LuxBall.avif?raw=true "LuxBall")
+
+> _RayTracing Renderer - LuxBall_
+
+![Alt text](gallery/Kitchen.avif?raw=true "Kitchen")
+
+> _RayTracing Renderer - Kitchen_
+
+![Alt text](gallery/LivingRoom.avif?raw=true "Living Room")
+
+> _RayTracing Renderer - Living Room_
+
+![Alt text](gallery/Qx50_Android.avif?raw=true "Qx50Android")
+
+> _Hybrid Renderer (Android) - QX50_
+
+![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
+
+> _Hybrid Renderer (Android) - Complex Cubes_
 
 ## characteristic
 
@@ -76,7 +96,7 @@ _10 seconds Showcase Video_
 
 First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
 
-The project's github action contains automatic ci scripts for windows, linux, and android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
+project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
 
 After the local development environment is deployed, each platform can click the script to build
 
@@ -145,8 +165,12 @@ SteamDeck Archlinux
 -   [ ] Multi Material Execution
 -   [ ] Huge Landscape
 
-## References
+## Reference project
 
 -   [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
 -   [Vulkan Tutorial](https://vulkan-tutorial.com/)
 -   [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
+
+## Random thoughts
+
+The development of the project, learning experience, and some random thoughts are recorded in[Thoughts.md](doc/Thoughts.md), updated at any time.
