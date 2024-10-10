@@ -7,7 +7,15 @@
 
 ## 这是一个什么项目？
 
+### 一句话简介
 这是一个基于VULKAN实现的实时路径跟踪渲染器，目标是实现能用于实时的路径跟踪渲染。
+
+### 技术特点
+不同于目前游戏中实装的各种光追辅助技术，本项目的目标是最接近GroundTruth的路径跟踪，
+并提供最接近游戏的运行时环境，验证实时光追的可行性，并实验最新的GPU特性，为下一代渲染架构作准备。
+
+### 开发前提
+本项目的初衷是：学习，验证，进步。因此，会激进的使用最新技术，有意的规避陈旧技术，利用新c++规范和标准库，全时跨平台开发。
 
 ## 图库 (TrueHDR)
 
@@ -76,7 +84,10 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ## 构建方式
 
 首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
-github action包含windows和linux的自动ci，如有问题可参阅解决。
+
+项目的github action包含windows，linux，android的自动ci脚本，作者会维护其正确性。如有任何环境问题可参阅解决。
+
+本地开发环境部署完成后，各平台可按一下脚本构建
 
 **Windows (Visual Studio 2022)** 
 
@@ -87,9 +98,9 @@ build_windows.bat
 
 **Windows (MinGW)**
 
-init the MSYS2 MINGW64 shell with following packages
+init the MSYS2 MINGW64 shell with following packages，the MSYS2's cmake is not competible with vcpkg, so use cmake inside.
 ```
-pacman -S --needed git base-devel mingw-w64-x86_64-toolchain cmake ninja
+pacman -S --needed git base-devel mingw-w64-x86_64-toolchain ninja
 ```
 cmake's module FindVulkan has a little bug on MingGW, try modified FindVulkan.cmake as below
 set(_Vulkan_library_name vulkan) -> set(_Vulkan_library_name vulkan-1)
@@ -140,6 +151,7 @@ brew install ninja
 
 ## Next Todolist
 
+- [ ] Pure GPU AuxRenderer, display gpu helpers
 - [ ] WireFrame Rendering
 - [ ] Realtime Renderer Switch
 - [ ] GPU Frustum / Occulusion Culling
