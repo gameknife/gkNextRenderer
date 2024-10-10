@@ -203,6 +203,15 @@ void main() {
 		imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
 		return;
 	}
+
+	// calculate the motion vector
+	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 motion = prevfpos - currfpos;
+	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 	
 	// emit ray without any guidance
 	for (uint s = 0; s < sampleTimes; ++s)
@@ -237,6 +246,28 @@ void main() {
 		}
 		
 		bounceColor += albedoSingle.rgb * bounceSingle;
+
+		if(s == 0)
+		{
+			// after the first spp, we could judge if reproject miss with previous primitive buffer
+			vec2 prevfpos = vec2(ipos) + motion.rg;
+			ivec2 previpos = ivec2( floor(ipos + motion.rg) );
+
+			if( length(motion.xy) > 0.01 )
+			{
+				uint prev_primitive_index0 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 0)).r;
+				uint prev_primitive_index1 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 1)).r;
+				uint prev_primitive_index2 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 0)).r;
+				uint prev_primitive_index3 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 1)).r;
+
+				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(vBuffer.r)));
+
+				if (miss)
+				{
+					sampleTimes = max(min(32, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
+				}
+			}
+		}
 	}
 	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;
@@ -279,13 +310,4 @@ void main() {
 	//#endif
 	
     imageStore(OutImage, ipos, outColor);
-    
-    // calculate the motion vector
-	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
-	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
-
-	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
-	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
-	vec2 motion = prevfpos - currfpos;
-	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 }
