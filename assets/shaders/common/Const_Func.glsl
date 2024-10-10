@@ -43,10 +43,11 @@ float Schlick(const float cosine, const float refractionIndex)
 
 //onb revisited by Disney
 void Onb(vec3 n, out vec3 b1, out vec3 b2) {
-    float signZ = n.z > 0.f ? 1.f : -1.f;
-    float a = -1.f / (signZ + n.z);
-    b2 = vec3(n.x * n.y * a, signZ + n.y * n.y * a, -n.y);
-    b1 = vec3(1.f + signZ * n.x * n.x * a, signZ * b2.x, -signZ * n.x);
+    float signZ = n.z < 0.f ? -1.f : 1.f;
+    float a = -1.0f / (signZ + n.z);
+    float b = n.x * n.y * a;
+    b1 = vec3(1.0f + signZ * n.x * n.x * a, signZ * b, -signZ * n.x);
+    b2 = vec3(b, signZ + n.y * n.y * a, -n.y);
 }
 
 //from Apple Metal Raytracing demo
