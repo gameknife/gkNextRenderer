@@ -43,10 +43,10 @@ float Schlick(const float cosine, const float refractionIndex)
 
 //onb revisited by Disney
 void Onb(vec3 n, out vec3 b1, out vec3 b2) {
-    float sign = n.z > 0.f ? 1.f : -1.f;
-    float a = -1.f / (sign + n.z);
-    b2 = vec3(n.x * n.y * a, sign + n.y * n.y * a, -n.y);
-    b1 = vec3(1.f + sign * n.x * n.x * a, sign * b2.x, -sign * n.x);
+    float signZ = n.z > 0.f ? 1.f : -1.f;
+    float a = -1.f / (signZ + n.z);
+    b2 = vec3(n.x * n.y * a, signZ + n.y * n.y * a, -n.y);
+    b1 = vec3(1.f + signZ * n.x * n.x * a, signZ * b2.x, -signZ * n.x);
 }
 
 //from Apple Metal Raytracing demo
@@ -83,9 +83,9 @@ inline void orthonormalBasis(vec3 normal, OUT_TYPE(vec3) tangent, OUT_TYPE(vec3)
   bitangent = vec3(b, 1.0f - normal.y * normal.y * a, -normal.y);
 }
 
-//#define ONB Onb
+#define ONB Onb
 //#define ONB ONBAlignWithNormal
-#define ONB orthonormalBasis
+//#define ONB orthonormalBasis
 
 vec3 AlignWithNormal(vec3 ray, vec3 normal)
 {
