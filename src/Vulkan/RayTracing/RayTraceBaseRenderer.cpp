@@ -41,8 +41,13 @@ namespace Vulkan::RayTracing
         }
     }
 
+    LogicRendererBase::LogicRendererBase(RayTracing::RayTraceBaseRenderer& baseRender):baseRender_(baseRender)
+    {
+        
+    }
+
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                             const bool enableValidationLayers) :
+                                               const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
         supportRayCast_ = true;

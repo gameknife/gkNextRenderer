@@ -32,13 +32,13 @@ namespace Assets
 
 namespace Vulkan::HybridDeferred
 {
-	class HybridDeferredRenderer : public RayTracing::RayTraceBaseRenderer
+	class HybridDeferredRenderer : public RayTracing::LogicRendererBase
 	{
 	public:
 
 		VULKAN_NON_COPIABLE(HybridDeferredRenderer)
 		
-		HybridDeferredRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		HybridDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
 		~HybridDeferredRenderer();
 		
 		void CreateSwapChain() override;

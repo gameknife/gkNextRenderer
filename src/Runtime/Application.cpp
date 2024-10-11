@@ -51,7 +51,7 @@ namespace NextRenderer
             case 0:
                 return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 1:
-                return new Vulkan::HybridDeferred::HybridDeferredRenderer(window, presentMode, enableValidationLayers);
+                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 2:
                 return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
             case 3:

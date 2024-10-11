@@ -267,6 +267,7 @@ namespace Vulkan
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 
+		int FrameCount() const {return frameCount_;}
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
