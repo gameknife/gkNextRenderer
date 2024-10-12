@@ -16,7 +16,7 @@ struct UniformBufferObject
 
 	vec4 SunDirection;
 	vec4 SunColor;
-	vec4 BackGroundColor;
+	vec4 BackGroundColor;	//not used
 	
 	float Aperture;
 	float FocusDistance;
@@ -34,7 +34,7 @@ struct UniformBufferObject
 	uint LightCount;
 	glbool HasSky;
 	glbool ShowHeatmap;
-	glbool UseCheckerBoard;
+	glbool UseCheckerBoard;	//not used
 	uint TemporalFrames;
 	glbool HasSun;
 	glbool HDR;

@@ -18,7 +18,6 @@ struct UserSettings final
 	int SceneIndex;
 
 	// Renderer
-	bool IsRayTraced;
 	bool AccumulateRays;
 	int32_t NumberOfSamples;
 	int32_t NumberOfBounces;
