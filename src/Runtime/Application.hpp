@@ -78,6 +78,7 @@ private:
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 	std::unique_ptr<BenchMarker> benchMarker_;
 
+	int rendererType = 0;
 	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};
 	mutable UserSettings userSettings_{};
 	UserSettings previousSettings_{};

@@ -23,18 +23,25 @@ namespace Vulkan
 namespace Vulkan::RayTracing
 {
 	class RayQueryPipeline;
-
+	class RayTraceBaseRenderer;
+	class LogicRendererBase;
+	
 	class RayTraceBaseRenderer : public Vulkan::VulkanBaseRenderer
 	{
 	public:
 
 		VULKAN_NON_COPIABLE(RayTraceBaseRenderer);
-	
-	protected:
 
 		RayTraceBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayTraceBaseRenderer();
 
+		void RegisterLogicRenderer(ERendererType type) override;
+		void SwitchLogicRenderer(ERendererType type) override;
+		
+		std::vector<TopLevelAccelerationStructure>& TLAS() { return topAs_; }
+		std::vector<BottomLevelAccelerationStructure>& BLAS() { return bottomAs_; }
+
+	protected:
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,
 			VkPhysicalDeviceFeatures& deviceFeatures,
@@ -51,13 +58,19 @@ namespace Vulkan::RayTracing
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;
 
+		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+
 		virtual bool GetFocusDistance(float& distance) const override;
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
 		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const override;
 
+
 	protected:
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
 		void CreateTopLevelStructures(VkCommandBuffer commandBuffer);
+
+		std::vector< std::unique_ptr<LogicRendererBase> > logicRenderers_;
+		ERendererType currentLogicRenderer_;
 		
 		std::unique_ptr<class RayTracingProperties> rayTracingProperties_;
 	
@@ -78,6 +91,37 @@ namespace Vulkan::RayTracing
 		mutable Assets::RayCastContext cameraCenterCastContext_;
 		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
+	};
+
+	class LogicRendererBase
+	{
+	public:
+		LogicRendererBase( RayTracing::RayTraceBaseRenderer& baseRender );
+		virtual ~LogicRendererBase() {};
+		
+		virtual void CreateSwapChain() {};
+		virtual void DeleteSwapChain() {};
+		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
+		
+		RayTracing::RayTraceBaseRenderer& baseRender_;
+
+		const class SwapChain& SwapChain() const { return baseRender_.SwapChain(); }
+		class Window& Window() { return baseRender_.Window(); }
+		
+		const class Device& Device() const { return baseRender_.Device(); }
+		class CommandPool& CommandPool() { return baseRender_.CommandPool(); }
+		const class DepthBuffer& DepthBuffer() const { return baseRender_.DepthBuffer(); }
+		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return baseRender_.UniformBuffers(); }
+		class VulkanGpuTimer* GpuTimer() const {return baseRender_.GpuTimer();}
+		
+		const Assets::Scene& GetScene() {return baseRender_.GetScene();}
+
+		int FrameCount() const {return baseRender_.FrameCount();}
+
+		bool VisualDebug() const {return baseRender_.VisualDebug();}
+
+		std::vector<TopLevelAccelerationStructure>& TLAS() { return baseRender_.TLAS(); }
+		std::vector<BottomLevelAccelerationStructure>& BLAS() { return baseRender_.BLAS(); }
 	};
 
 }

@@ -4,6 +4,7 @@
 #include "Vulkan/WindowConfig.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
 
 #include <vector>
 #include <memory>
@@ -22,13 +23,13 @@ namespace Assets
 
 namespace Vulkan::LegacyDeferred
 {
-	class LegacyDeferredRenderer : public Vulkan::VulkanBaseRenderer
+	class LegacyDeferredRenderer final : public Vulkan::RayTracing::LogicRendererBase
 	{
 	public:
 
 		VULKAN_NON_COPIABLE(LegacyDeferredRenderer)
 		
-		LegacyDeferredRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		LegacyDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
 		~LegacyDeferredRenderer();
 
 		void CreateSwapChain() override;

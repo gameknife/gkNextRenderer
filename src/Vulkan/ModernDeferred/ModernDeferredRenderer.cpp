@@ -19,8 +19,7 @@
 
 namespace Vulkan::ModernDeferred {
 
-ModernDeferredRenderer::ModernDeferredRenderer(Vulkan::Window* window,const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
+ModernDeferredRenderer::ModernDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }
@@ -32,8 +31,6 @@ ModernDeferredRenderer::~ModernDeferredRenderer()
 
 void ModernDeferredRenderer::CreateSwapChain()
 {
-	Vulkan::VulkanBaseRenderer::CreateSwapChain();
-	
 	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
@@ -64,8 +61,6 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	rtVisibilityBuffer_.reset();
 	rtOutput_.reset();
 	rtMotionVector_.reset();
-
-	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 }
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -142,9 +137,9 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 								 1, GlobalDescriptorSets, 0, nullptr );
 		
 #if ANDROID
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 32, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32, SwapChain().Extent().height / 32, 1);	
 #else
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
 #endif
 
 		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
