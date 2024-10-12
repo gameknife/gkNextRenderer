@@ -115,8 +115,7 @@ UserSettings CreateUserSettings(const Options& options)
             userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
         }
     }
-    
-    userSettings.IsRayTraced = true;
+
     userSettings.AccumulateRays = false;
     
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
