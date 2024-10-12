@@ -293,6 +293,8 @@ namespace Vulkan
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
+		bool VisualDebug() const {return visualDebug_;}
+
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;
 		std::function<void()> DelegateCreateSwapChain;

@@ -28,6 +28,7 @@ namespace Vulkan::RayTracing
 
 	enum ERendererType
 	{
+		PathTracing,
 		Hybrid,
 	};
 	
@@ -121,6 +122,8 @@ namespace Vulkan::RayTracing
 		const Assets::Scene& GetScene() {return baseRender_.GetScene();}
 
 		int FrameCount() const {return baseRender_.FrameCount();}
+
+		bool VisualDebug() const {return baseRender_.VisualDebug();}
 
 		std::vector<TopLevelAccelerationStructure>& TLAS() { return baseRender_.TLAS(); }
 		std::vector<BottomLevelAccelerationStructure>& BLAS() { return baseRender_.BLAS(); }

@@ -22,6 +22,7 @@
 
 #include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 
 namespace Vulkan::RayTracing
 {
@@ -65,7 +66,17 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
-        logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
+        switch (type)
+        {
+            case ERendererType::PathTracing:
+                logicRenderers_.push_back( std::make_unique<RayQueryRenderer>(*this) );
+                break;
+            case ERendererType::Hybrid:
+                logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
+                break;
+            default:
+                assert(false);
+        }
         currentLogicRenderer_ = type;
     }
 
@@ -232,6 +243,17 @@ namespace Vulkan::RayTracing
         if( currentLogicRenderer_ < logicRenderers_.size() )
         {
             logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+        }
+
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("raycast");
+            
+            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
     }
 

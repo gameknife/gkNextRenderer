@@ -49,11 +49,12 @@ namespace NextRenderer
         switch(rendererType)
         {
             case 0:
-                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 1:
                 {
                     auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    ptr->RegisterLogicRenderer(Vulkan::RayTracing::PathTracing);
                     ptr->RegisterLogicRenderer(Vulkan::RayTracing::Hybrid);
+                    ptr->SwitchLogicRenderer(Vulkan::RayTracing::PathTracing);
                     return ptr;    
                 }
             case 2:
