@@ -20,6 +20,12 @@
 #include <fmt/format.h>
 #include <numeric>
 
+#include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+
 namespace Vulkan::RayTracing
 {
     namespace
@@ -41,8 +47,13 @@ namespace Vulkan::RayTracing
         }
     }
 
+    LogicRendererBase::LogicRendererBase(RayTracing::RayTraceBaseRenderer& baseRender):baseRender_(baseRender)
+    {
+        
+    }
+
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                             const bool enableValidationLayers) :
+                                               const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
         supportRayCast_ = true;
@@ -53,6 +64,33 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
+    }
+
+    void RayTraceBaseRenderer::RegisterLogicRenderer(ERendererType type)
+    {
+        switch (type)
+        {
+            case ERendererType::ERT_PathTracing:
+                logicRenderers_.push_back( std::make_unique<RayQueryRenderer>(*this) );
+                break;
+            case ERendererType::ERT_Hybrid:
+                logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
+                break;
+        case ERendererType::ERT_ModernDeferred:
+                logicRenderers_.push_back( std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this) );
+                break;
+        case ERendererType::ERT_LegacyDeferred:
+                logicRenderers_.push_back( std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this) );
+                break;
+            default:
+                assert(false);
+        }
+        currentLogicRenderer_ = type;
+    }
+
+    void RayTraceBaseRenderer::SwitchLogicRenderer(ERendererType type)
+    {
+        currentLogicRenderer_ = type;
     }
 
     void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
@@ -137,10 +175,20 @@ namespace Vulkan::RayTracing
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
+
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->CreateSwapChain();
+        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
     {
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->DeleteSwapChain();
+        }
+        
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 
         rayCastBuffer_.reset();
@@ -196,6 +244,25 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::OnPostLoadScene();
         CreateAccelerationStructures();
+    }
+
+    void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if( currentLogicRenderer_ < logicRenderers_.size() )
+        {
+            logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+        }
+
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("raycast");
+            
+            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
+        }
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

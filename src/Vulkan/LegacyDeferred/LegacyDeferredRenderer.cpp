@@ -18,8 +18,7 @@
 
 namespace Vulkan::LegacyDeferred {
 
-LegacyDeferredRenderer::LegacyDeferredRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-	Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
+LegacyDeferredRenderer::LegacyDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }
@@ -31,8 +30,6 @@ LegacyDeferredRenderer::~LegacyDeferredRenderer()
 	
 void LegacyDeferredRenderer::CreateSwapChain()
 {
-	Vulkan::VulkanBaseRenderer::CreateSwapChain();
-	
 	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
@@ -65,8 +62,6 @@ void LegacyDeferredRenderer::DeleteSwapChain()
 	rtGBuffer1_.reset();
 	rtGBuffer2_.reset();
 	rtOutput_.reset();
-
-	Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 }
 
 void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -151,7 +146,7 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 #if ANDROID
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 32, 1);	
 #else
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 4, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
 #endif
 		// copy to swap-buffer
 		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
