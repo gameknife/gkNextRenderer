@@ -57,7 +57,7 @@ namespace Assets
     {
         static const uint32_t k_bindless_texture_binding = 0;
         // The maximum number of bindless resources is limited by the device.
-        static const uint32_t k_max_bindless_resources = device.DeviceProperties().limits.maxPerStageDescriptorSamplers;
+        static const uint32_t k_max_bindless_resources = std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
 
         // Create bindless descriptor pool
         VkDescriptorPoolSize pool_sizes_bindless[] =
