@@ -25,12 +25,6 @@ namespace Vulkan::RayTracing
 	class RayQueryPipeline;
 	class RayTraceBaseRenderer;
 	class LogicRendererBase;
-
-	enum ERendererType
-	{
-		PathTracing,
-		Hybrid,
-	};
 	
 	class RayTraceBaseRenderer : public Vulkan::VulkanBaseRenderer
 	{
@@ -41,8 +35,8 @@ namespace Vulkan::RayTracing
 		RayTraceBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayTraceBaseRenderer();
 
-		void RegisterLogicRenderer(ERendererType type);
-		void SwitchLogicRenderer(ERendererType type);
+		void RegisterLogicRenderer(ERendererType type) override;
+		void SwitchLogicRenderer(ERendererType type) override;
 		
 		std::vector<TopLevelAccelerationStructure>& TLAS() { return topAs_; }
 		std::vector<BottomLevelAccelerationStructure>& BLAS() { return bottomAs_; }

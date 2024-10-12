@@ -38,6 +38,14 @@ namespace Assets
 
 namespace Vulkan 
 {
+	enum ERendererType
+	{
+		ERT_PathTracing,
+		ERT_Hybrid,
+		ERT_ModernDeferred,
+		ERT_LegacyDeferred,
+	};
+	
 	class VulkanGpuTimer
 	{
 	public:
@@ -294,6 +302,9 @@ namespace Vulkan
 		virtual void OnPostLoadScene() {}
 
 		bool VisualDebug() const {return visualDebug_;}
+
+		virtual void RegisterLogicRenderer(ERendererType type) {};
+		virtual void SwitchLogicRenderer(ERendererType type) {};
 
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;
