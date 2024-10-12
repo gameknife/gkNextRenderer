@@ -49,13 +49,18 @@ namespace NextRenderer
         switch(rendererType)
         {
             case 0:
-                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 1:
-                return new Vulkan::HybridDeferred::HybridDeferredRenderer(window, presentMode, enableValidationLayers);
             case 2:
-                return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
             case 3:
-                return new Vulkan::LegacyDeferred::LegacyDeferredRenderer(window, presentMode, enableValidationLayers);
+                {
+                    auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+                    ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+                    return ptr;    
+                }
             default:
                 return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
         }
@@ -85,6 +90,7 @@ UserSettings CreateUserSettings(const Options& options)
     
     UserSettings userSettings{};
 
+    userSettings.RendererType = options.RendererType;
     userSettings.Benchmark = options.Benchmark;
     userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
     userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
@@ -188,6 +194,8 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
     
     // Initialize Renderer
     renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
+    rendererType = options.RendererType;
+    
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
     renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
@@ -248,6 +256,12 @@ void NextRendererApplication::Start()
 
 bool NextRendererApplication::Tick()
 {
+    if(rendererType != userSettings_.RendererType)
+    {
+        rendererType = userSettings_.RendererType;
+        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+    }
+    
     // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();

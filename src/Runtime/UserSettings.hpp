@@ -5,6 +5,7 @@
 
 struct UserSettings final
 {
+	int RendererType;
 	// Application
 	bool Benchmark;
 

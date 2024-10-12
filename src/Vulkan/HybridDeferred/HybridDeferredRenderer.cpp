@@ -23,20 +23,16 @@
 
 namespace Vulkan::HybridDeferred
 {
-    HybridDeferredRenderer::HybridDeferredRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers) :
-        RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
+    HybridDeferredRenderer::HybridDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
     {
     }
 
     HybridDeferredRenderer::~HybridDeferredRenderer()
     {
-        HybridDeferredRenderer::DeleteSwapChain();
     }
 
     void HybridDeferredRenderer::CreateSwapChain()
     {
-        RayTracing::RayTraceBaseRenderer::CreateSwapChain();
-
         const auto extent = SwapChain().Extent();
         const auto format = SwapChain().Format();
 
@@ -103,7 +99,7 @@ namespace Vulkan::HybridDeferred
         deferredFrameBuffer0_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
         deferredFrameBuffer1_.reset(new FrameBuffer(rtVisibility1->GetImageView(), visibilityPipeline1_->RenderPass()));
         
-        deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), topAs_[0],
+        deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), TLAS()[0],
                                                          rtVisibility0->GetImageView(),
                                                          rtVisibility1->GetImageView(),
                                                          rtAccumlation->GetImageView(),
@@ -172,13 +168,11 @@ namespace Vulkan::HybridDeferred
 
         rtAlbedo_.reset();
         rtNormal_.reset();
-        
-        RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
     }
 
     void HybridDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        //rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         std::array<VkClearValue, 2> clearValues = {};
         clearValues[0].color = {{0, 0, 0, 0}};
@@ -189,7 +183,7 @@ namespace Vulkan::HybridDeferred
 
             VkRenderPassBeginInfo renderPassInfo = {};
             renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            if(frameCount_ % 2 == 0)
+            if(FrameCount() % 2 == 0)
             {
                 renderPassInfo.renderPass = visibilityPipeline0_->RenderPass().Handle();
                 renderPassInfo.framebuffer = deferredFrameBuffer0_->Handle();  
@@ -210,13 +204,12 @@ namespace Vulkan::HybridDeferred
             {
             const auto& scene = GetScene();
 
-            VkDescriptorSet descriptorSets[] = { (frameCount_ % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->DescriptorSet(imageIndex)};
+            VkDescriptorSet descriptorSets[] = { (FrameCount() % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->DescriptorSet(imageIndex)};
             VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
             const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
             VkDeviceSize offsets[] = {0};
-
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (frameCount_ % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (frameCount_ % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (FrameCount() % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (FrameCount() % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -225,7 +218,8 @@ namespace Vulkan::HybridDeferred
             }
             vkCmdEndRenderPass(commandBuffer);
 
-            (frameCount_ % 2 == 0 ? rtVisibility0 : rtVisibility1)->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+            (FrameCount() % 2 == 0 ? rtVisibility0 : rtVisibility1)->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+            (FrameCount() % 2 == 1 ? rtVisibility0 : rtVisibility1)->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
@@ -256,10 +250,10 @@ namespace Vulkan::HybridDeferred
             vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
                                      1, GlobalDescriptorSets, 0, nullptr );
             
-            uint32_t workGroupSizeXDivider = 8 * (CheckerboxRendering() ? 2 : 1);
+            uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 4;
 #if ANDROID
-            workGroupSizeXDivider = 32 * (CheckerboxRendering() ? 2 : 1);
+            workGroupSizeXDivider = 32;
             workGroupSizeYDivider = 32;
 #endif
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, workGroupSizeXDivider),
@@ -310,7 +304,7 @@ namespace Vulkan::HybridDeferred
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
-        if (visualDebug_)
+        if (VisualDebug())
         {
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -324,7 +318,7 @@ namespace Vulkan::HybridDeferred
             ImageMemoryBarrier::Insert(commandBuffer, rtOutput->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
-
+        
             {
                 VkDescriptorSet DescriptorSets[] = {visualDebugPipeline_->DescriptorSet(imageIndex)};
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebugPipeline_->Handle());
@@ -332,7 +326,7 @@ namespace Vulkan::HybridDeferred
                                         visualDebugPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
                 vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);
             }
-
+        
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
                                        VK_ACCESS_TRANSFER_WRITE_BIT,
                                        0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);

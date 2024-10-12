@@ -300,6 +300,17 @@ void UserInterface::DrawSettings()
 			ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
 			ImGui::NewLine();
 		}
+
+		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
+		{
+			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred"};
+			
+			ImGui::Text("%s", LOCTEXT("Renderer"));
+			
+			ImGui::PushItemWidth(-1);
+			ImGui::Combo("##RendererList", &Settings().RendererType, renderers.data(), static_cast<int>(renderers.size()));
+			ImGui::PopItemWidth();
+		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
@@ -366,7 +377,10 @@ void UserInterface::DrawSettings()
 			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+		}
 		
+		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
+		{
 			ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
 			ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");

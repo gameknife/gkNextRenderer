@@ -38,6 +38,14 @@ namespace Assets
 
 namespace Vulkan 
 {
+	enum ERendererType
+	{
+		ERT_PathTracing,
+		ERT_Hybrid,
+		ERT_ModernDeferred,
+		ERT_LegacyDeferred,
+	};
+	
 	class VulkanGpuTimer
 	{
 	public:
@@ -267,6 +275,7 @@ namespace Vulkan
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 
+		int FrameCount() const {return frameCount_;}
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
@@ -291,6 +300,11 @@ namespace Vulkan
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
+
+		bool VisualDebug() const {return visualDebug_;}
+
+		virtual void RegisterLogicRenderer(ERendererType type) {};
+		virtual void SwitchLogicRenderer(ERendererType type) {};
 
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;

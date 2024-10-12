@@ -450,7 +450,8 @@ namespace Assets
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
-        bool doFlatten = (GOption->RendererType == 1 || GOption->RendererType == 2);
+        // TODO: change to use povoking vertex later
+        bool doFlatten = true;//(GOption->RendererType == 1 || GOption->RendererType == 2);
 
         if(doFlatten) {
             std::vector<Vertex> vertices_flatten;
