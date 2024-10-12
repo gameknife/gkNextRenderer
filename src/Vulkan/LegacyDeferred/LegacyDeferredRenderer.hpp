@@ -23,7 +23,7 @@ namespace Assets
 
 namespace Vulkan::LegacyDeferred
 {
-	class LegacyDeferredRenderer : public Vulkan::RayTracing::LogicRendererBase
+	class LegacyDeferredRenderer final : public Vulkan::RayTracing::LogicRendererBase
 	{
 	public:
 

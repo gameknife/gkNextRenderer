@@ -137,7 +137,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 								 1, GlobalDescriptorSets, 0, nullptr );
 		
 #if ANDROID
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32 / ( CheckerboxRendering() ? 2 : 1 ), SwapChain().Extent().height / 32, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32, SwapChain().Extent().height / 32, 1);	
 #else
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
 #endif

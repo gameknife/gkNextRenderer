@@ -32,7 +32,7 @@ namespace Assets
 
 namespace Vulkan::HybridDeferred
 {
-	class HybridDeferredRenderer : public RayTracing::LogicRendererBase
+	class HybridDeferredRenderer final : public RayTracing::LogicRendererBase
 	{
 	public:
 

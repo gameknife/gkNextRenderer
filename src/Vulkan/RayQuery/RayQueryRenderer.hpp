@@ -28,7 +28,7 @@ namespace Vulkan::RayTracing
 {
 	class RayQueryPipeline;
 
-	class RayQueryRenderer : public Vulkan::RayTracing::LogicRendererBase
+	class RayQueryRenderer final : public Vulkan::RayTracing::LogicRendererBase
 	{
 	public:
 

@@ -97,6 +97,7 @@ namespace Vulkan::RayTracing
 	{
 	public:
 		LogicRendererBase( RayTracing::RayTraceBaseRenderer& baseRender );
+		virtual ~LogicRendererBase() {};
 		
 		virtual void CreateSwapChain() {};
 		virtual void DeleteSwapChain() {};

@@ -160,7 +160,7 @@ namespace Vulkan::RayTracing
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 4;
 #if ANDROID
-            workGroupSizeXDivider = 32 * (CheckerboxRendering() ? 2 : 1);
+            workGroupSizeXDivider = 32;
             workGroupSizeYDivider = 32;
 #endif
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, workGroupSizeXDivider),

@@ -28,7 +28,7 @@ namespace Assets
 
 namespace Vulkan::ModernDeferred
 {
-	class ModernDeferredRenderer : public Vulkan::RayTracing::LogicRendererBase
+	class ModernDeferredRenderer final : public Vulkan::RayTracing::LogicRendererBase
 	{
 	public:
 
