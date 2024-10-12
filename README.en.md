@@ -1,4 +1,4 @@
-# gkNextRenderer
+# gkNextRenders
 
 [English](README.en.md)\|[Simplified Chinese](README.md)
 
@@ -61,7 +61,7 @@ The original intention of this project is: learning, verification, and progress.
 
 > _Hybrid Renderer (Android) - Complex Cubes_
 
-## characteristic
+## Technical characteristics
 
 -   Rendering
     -   Importance Sampling
@@ -75,7 +75,8 @@ The original intention of this project is: learning, verification, and progress.
     -   RayQuery on Android
     -   Visibiliy Buffer Rendering
     -   Legacy Rendering
-    -   Hybird Shading
+    -   RayTraced Hybrid Rendering
+    -   Realtime Renderer Switch
     -   GPU Draw
     -   GPU Raycast
 
@@ -96,7 +97,7 @@ The original intention of this project is: learning, verification, and progress.
 
 First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
 
-project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
+project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
 
 After the local development environment is deployed, each platform can click the script to build
 
@@ -159,7 +160,7 @@ SteamDeck Archlinux
 -   [ ] Pure GPU AuxRenderer, display gpu helpers
 -   [ ] WireFrame Rendering
 -   [ ] Realtime Renderer Switch
--   [ ] GPU Block / Occlusion Culling
+-   [ ] GPU Frustum / Occlusion Culling
 -   [ ] GPU Lod Swtiching
 -   [ ] Dynamic Scene Management
 -   [ ] Multi Material Execution
@@ -168,8 +169,8 @@ SteamDeck Archlinux
 ## Reference project
 
 -   [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
--   [Vulkan Tutorial](https://vulkan-tutorial.com/)
--   [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
+-   [Volcano tutorial](https://vulkan-tutorial.com/)
+-   [Volcano Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
 ## Random thoughts
 
