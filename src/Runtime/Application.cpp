@@ -51,7 +51,11 @@ namespace NextRenderer
             case 0:
                 return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 1:
-                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
+                {
+                    auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    ptr->RegisterLogicRenderer(Vulkan::RayTracing::Hybrid);
+                    return ptr;    
+                }
             case 2:
                 return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
             case 3:

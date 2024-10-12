@@ -20,6 +20,9 @@
 #include <fmt/format.h>
 #include <numeric>
 
+#include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+
 namespace Vulkan::RayTracing
 {
     namespace
@@ -58,6 +61,17 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
+    }
+
+    void RayTraceBaseRenderer::RegisterLogicRenderer(ERendererType type)
+    {
+        logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
+        currentLogicRenderer_ = type;
+    }
+
+    void RayTraceBaseRenderer::SwitchLogicRenderer(ERendererType type)
+    {
+        currentLogicRenderer_ = type;
     }
 
     void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
@@ -142,10 +156,20 @@ namespace Vulkan::RayTracing
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
+
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->CreateSwapChain();
+        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
     {
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->DeleteSwapChain();
+        }
+        
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 
         rayCastBuffer_.reset();
@@ -201,6 +225,14 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::OnPostLoadScene();
         CreateAccelerationStructures();
+    }
+
+    void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if( currentLogicRenderer_ < logicRenderers_.size() )
+        {
+            logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+        }
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

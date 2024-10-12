@@ -25,6 +25,11 @@ namespace Vulkan::RayTracing
 	class RayQueryPipeline;
 	class RayTraceBaseRenderer;
 	class LogicRendererBase;
+
+	enum ERendererType
+	{
+		Hybrid,
+	};
 	
 	class RayTraceBaseRenderer : public Vulkan::VulkanBaseRenderer
 	{
@@ -34,6 +39,9 @@ namespace Vulkan::RayTracing
 
 		RayTraceBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
 		virtual ~RayTraceBaseRenderer();
+
+		void RegisterLogicRenderer(ERendererType type);
+		void SwitchLogicRenderer(ERendererType type);
 		
 		std::vector<TopLevelAccelerationStructure>& TLAS() { return topAs_; }
 		std::vector<BottomLevelAccelerationStructure>& BLAS() { return bottomAs_; }
@@ -55,6 +63,8 @@ namespace Vulkan::RayTracing
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;
 
+		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+
 		virtual bool GetFocusDistance(float& distance) const override;
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
 		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const override;
@@ -63,6 +73,9 @@ namespace Vulkan::RayTracing
 	protected:
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
 		void CreateTopLevelStructures(VkCommandBuffer commandBuffer);
+
+		std::vector< std::unique_ptr<LogicRendererBase> > logicRenderers_;
+		ERendererType currentLogicRenderer_;
 		
 		std::unique_ptr<class RayTracingProperties> rayTracingProperties_;
 	
