@@ -11,7 +11,7 @@
 
 ### 一句话简介
 
-一个基于Vulkan的实时路径跟踪渲染器，目标是实现**质量**和**效率**能用于**实时**的路径跟踪渲染。
+一个基于Vulkan的实时路径跟踪渲染器，目标是实现 **质量** 和 **效率** 能用于 **实时** 的路径跟踪渲染。
 
 ### 技术特点
 
@@ -55,7 +55,7 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
 > *Hybrid Renderer (Android) - Complex Cubes*
 
-## 特性
+## 技术特性
 
 * Rendering
     * Importance Sampling
@@ -69,7 +69,8 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
     * RayQuery on Android
     * Visibiliy Buffer Rendering
     * Legacy Rendering
-    * Hybird Shading
+    * RayTraced Hybrid Rendering
+    * Realtime Renderer Switch
     * GPU Draw
     * GPU Raycast
     
@@ -173,4 +174,4 @@ brew install ninja
 
 ## 随感
 
-项目的发展，学习心得，一些随感，记录于[Thoughts.md](doc/Thoughts.md)，随时更新。
+项目的发展，学习心得，一些随感，记录于 [Thoughts.md](doc/Thoughts.md)，随时更新。
