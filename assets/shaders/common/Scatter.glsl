@@ -9,7 +9,7 @@
 #ifndef scatter_inc
 #define scatter_inc
 
-#define cos_0_5degree 0.99996192306417128873735516482698
+#define cos_0_5degree 0.99996192306417128873735516482698f
 
 void ScatterDiffuseLight(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
@@ -147,10 +147,19 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 	}
 }
 
-void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
+void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? srgbToLinear(texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord)) : vec4(1);
 	const vec4 mra = m.MRATextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.MRATextureId)], texCoord) : vec4(1);
+
+	if(m.NormalTextureId >= 0)
+	{
+		vec3 tangent, bitangent;
+		ONB(normal, tangent, bitangent);
+		vec3 normal_vector = texture(TextureSamplers[nonuniformEXT(m.NormalTextureId)], texCoord).xyz;
+		normal_vector     += normal_vector - vec3(1.0F);
+		normal = normalize(mat3(tangent, bitangent, normal) * (normal_vector * vec3(m.NormalTextureScale, m.NormalTextureScale, 1.0F)));
+	}
 
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);

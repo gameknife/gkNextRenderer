@@ -192,6 +192,7 @@ namespace Assets
             m.DiffuseTextureId = -1;
             m.MRATextureId = -1;
             m.NormalTextureId = -1;
+            m.NormalTextureScale = 1.0f;
 
             m.MaterialModel = Material::Enum::Mixture;
             m.Fuzziness = static_cast<float>(mat.pbrMetallicRoughness.roughnessFactor);
@@ -209,6 +210,12 @@ namespace Assets
             {
                 m.MRATextureId = textureIdMap[ model.textures[mraTexture].source ];
                 m.Fuzziness = 1.0;
+            }
+            int normalTexture = mat.normalTexture.index;
+            if(normalTexture != -1)
+            {
+                m.NormalTextureId = textureIdMap[ model.textures[normalTexture].source ];
+                m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
             }
             
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()
