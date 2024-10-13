@@ -34,7 +34,9 @@ struct UserSettings final
 	float FocusDistance;
 	bool RequestRayCast;
 
+	bool HasSky;
 	float SkyRotation;
+	bool HasSun;
 	float SunRotation;
 	float SunLuminance;
 	float SkyIntensity;

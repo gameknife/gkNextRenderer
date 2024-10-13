@@ -310,6 +310,7 @@ void UserInterface::DrawSettings()
 			ImGui::PushItemWidth(-1);
 			ImGui::Combo("##RendererList", &Settings().RendererType, renderers.data(), static_cast<int>(renderers.size()));
 			ImGui::PopItemWidth();
+			ImGui::NewLine();
 		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
@@ -377,15 +378,26 @@ void UserInterface::DrawSettings()
 			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+			ImGui::NewLine();
 		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
 		{
-			ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
-			ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-			ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+			
+			ImGui::Checkbox(LOCTEXT("HasSky"), &userSettings_.HasSky);
+			if(userSettings_.HasSky)
+			{
+				ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
+				ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+			}
+			
+			ImGui::Checkbox(LOCTEXT("HasSun"), &userSettings_.HasSun);
+			if(userSettings_.HasSun)
+			{
+				ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+			}
 
 			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
 			ImGui::NewLine();

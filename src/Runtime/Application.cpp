@@ -399,8 +399,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.SkyIntensity = userSettings_.SkyIntensity;
     ubo.SkyIdx = userSettings_.SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
-    ubo.HasSky = init.HasSky;
-    ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
+    ubo.HasSky = userSettings_.HasSky;
+    ubo.HasSun =userSettings_.HasSun && userSettings_.SunLuminance > 0;
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -727,11 +727,13 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+        userSettings_.HasSky = cameraInitialSate_.HasSky;
         if(cameraInitialSate_.HasSky)
         {
             userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
             userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
         }
+        userSettings_.HasSun = cameraInitialSate_.HasSun;
         if(cameraInitialSate_.HasSun)
         {
             userSettings_.SunRotation = cameraInitialSate_.SunRotation;
