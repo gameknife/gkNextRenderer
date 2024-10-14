@@ -732,6 +732,7 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         {
             userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
             userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
+            userSettings_.SkyRotation = cameraInitialSate_.SkyRotation;
         }
         userSettings_.HasSun = cameraInitialSate_.HasSun;
         if(cameraInitialSate_.HasSun)

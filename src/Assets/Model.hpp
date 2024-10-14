@@ -33,7 +33,8 @@ namespace Assets
         bool HasSun;
         uint32_t SkyIdx, CameraIdx;
         float SunRotation;
-
+        float SkyRotation;
+        
         float SkyIntensity = 100.0f;
         float SunIntensity = 500.0f;
 

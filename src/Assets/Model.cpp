@@ -392,6 +392,11 @@ namespace Assets
             cameraInit.HasSky = true;
             cameraInit.SkyIntensity = root.extras.Get("SkyIntensity").GetNumberAsDouble();
         }
+        if(root.extras.Has("SkyRotation"))
+        {
+            cameraInit.HasSky = true;
+            cameraInit.SkyRotation = root.extras.Get("SkyRotation").GetNumberAsDouble();
+        }
         if(root.extras.Has("SunIntensity"))
         {
             cameraInit.HasSun = true;
