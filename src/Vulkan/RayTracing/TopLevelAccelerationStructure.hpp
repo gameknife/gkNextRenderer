@@ -33,8 +33,7 @@ namespace Vulkan::RayTracing
 
 		void Update(
 			VkCommandBuffer commandBuffer,
-			Buffer& scratchBuffer,
-			VkDeviceSize scratchOffset);
+			uint32_t instanceCount);
 
 		static VkAccelerationStructureInstanceKHR CreateInstance(
 			const BottomLevelAccelerationStructure& bottomLevelAs,

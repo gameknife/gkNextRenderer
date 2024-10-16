@@ -260,7 +260,7 @@ void VulkanBaseRenderer::End()
 	gpuTimer_.reset();
 }
 
-const Assets::Scene& VulkanBaseRenderer::GetScene()
+Assets::Scene& VulkanBaseRenderer::GetScene()
 {
 	return *scene_.lock();
 }
@@ -658,7 +658,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 	
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		const auto& scene = GetScene();
+		auto& scene = GetScene();
 
 		VkDescriptorSet descriptorSets[] = { graphicsPipeline_->DescriptorSet(imageIndex) };
 		VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };

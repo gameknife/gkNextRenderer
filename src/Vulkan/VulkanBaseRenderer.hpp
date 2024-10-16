@@ -271,7 +271,7 @@ namespace Vulkan
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
-		const Assets::Scene& GetScene();
+		Assets::Scene& GetScene();
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 

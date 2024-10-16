@@ -73,11 +73,10 @@ void TopLevelAccelerationStructure::Generate(
 
 void TopLevelAccelerationStructure::Update(
 		VkCommandBuffer commandBuffer,
-				Buffer& scratchBuffer,
-				VkDeviceSize scratchOffset)
+				uint32_t instanceCount)
 {
 	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
-	buildOffsetInfo.primitiveCount = instancesCount_;
+	buildOffsetInfo.primitiveCount = instanceCount;
 	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
 }

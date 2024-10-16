@@ -215,9 +215,29 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::BeforeNextFrame();
 
-        SingleTimeCommands::Submit(CommandPool(), [this](VkCommandBuffer commandBuffer)
+         auto& scene = GetScene();
+
+        // rebuild all instance
+        std::vector<VkAccelerationStructureInstanceKHR> instances;
+        for (const auto& node : scene.Nodes())
         {
-            topAs_[0].Update(commandBuffer, *topScratchBuffer_, 0);
+            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
+        }
+
+        // upload to gpu
+        int instanceCount = static_cast<int>(instances.size());
+        if(instanceCount  >  0)
+        {
+            VkAccelerationStructureInstanceKHR* data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(instancesBufferMemory_->Map(0, instances.size() * sizeof(VkAccelerationStructureInstanceKHR)));
+            std::memcpy(data, instances.data(), instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+            instancesBufferMemory_->Unmap();
+        }
+
+        // request tlas update
+        SingleTimeCommands::Submit(CommandPool(), [this, instanceCount](VkCommandBuffer commandBuffer)
+        {
+            topAs_[0].Update(commandBuffer, instanceCount);
         });
     }
 
@@ -349,29 +369,29 @@ namespace Vulkan::RayTracing
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
-
-        // Top level acceleration structure
-        std::vector<VkAccelerationStructureInstanceKHR> instances;
-
-        // Hit group 0: triangles
-        // Hit group 1: procedurals
-        for (const auto& node : scene.Nodes())
-        {
-            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
-        }
-
+        const uint32_t kMaxInstanceCount = 65535;
+        
         // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).
-        BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
-                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
-                                       instancesBufferMemory_);
+        // BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
+        //                                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+        //                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
+        //                                instancesBufferMemory_);
+
+        // buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        // memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
+        instancesBuffer_.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
+                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT ));
+        instancesBufferMemory_.reset(new DeviceMemory(
+            instancesBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
 
         // Memory barrier for the bottom level acceleration structure builds.
         AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
         topAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
-                            static_cast<uint32_t>(instances.size()));
+                           kMaxInstanceCount);
 
         // Allocate the structure memory.
         const auto total = GetTotalRequirements(topAs_);
