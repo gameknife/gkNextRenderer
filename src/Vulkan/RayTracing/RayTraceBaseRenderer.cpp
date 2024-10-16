@@ -139,8 +139,8 @@ namespace Vulkan::RayTracing
             CreateTopLevelStructures(commandBuffer);
         });
 
-        topScratchBuffer_.reset();
-        topScratchBufferMemory_.reset();
+        //topScratchBuffer_.reset();
+        //topScratchBufferMemory_.reset();
         bottomScratchBuffer_.reset();
         bottomScratchBufferMemory_.reset();
 
@@ -209,6 +209,16 @@ namespace Vulkan::RayTracing
         {
             cameraCenterCastResult_ = Assets::RayCastResult();
         }
+    }
+
+    void RayTraceBaseRenderer::BeforeNextFrame()
+    {
+        VulkanBaseRenderer::BeforeNextFrame();
+
+        SingleTimeCommands::Submit(CommandPool(), [this](VkCommandBuffer commandBuffer)
+        {
+            topAs_[0].Update(commandBuffer, *topScratchBuffer_, 0);
+        });
     }
 
 
