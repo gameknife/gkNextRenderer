@@ -144,4 +144,16 @@ void Scene::UpdateMaterial()
 {
 	// update value after binding, like the bindless textures, try
 }
+
+Node* Scene::GetNode(std::string name)
+{
+	for (auto& node : nodes_)
+	{
+		if (node.GetName() == name)
+		{
+			return &node;
+		}
+	}
+	return nullptr;
+}
 }

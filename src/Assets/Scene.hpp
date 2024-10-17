@@ -2,6 +2,7 @@
 
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 #include <glm/vec2.hpp>
 
@@ -68,6 +69,8 @@ namespace Assets
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
 		void UpdateMaterial();
+
+		Node* GetNode(std::string name);
 		
 	private:
 		std::vector<Material> materials_;

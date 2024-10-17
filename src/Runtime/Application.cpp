@@ -363,10 +363,19 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
             {
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
+                
                 // temp add last instance, make dynamic scene
-                // Assets::Node last = scene_->Nodes().back();
-                // last.Transform( glm::translate(glm::mat4(1.0f), glm::vec3(rayResult.HitPoint)) );
-                // scene_->Nodes().push_back(last);
+                Assets::Node* origin = scene_->GetNode("Block1x1");
+                if(origin)
+                {
+                    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
+                    // align with x: 0.08, y 0.08, z 0.095
+                    newLocation.x = round(newLocation.x / 0.08f) * 0.08f;
+                    newLocation.z = round(newLocation.z / 0.08f) * 0.08f;
+                    newLocation.y = round((newLocation.y - 0.0475f) / 0.095f) * 0.095f;
+                    Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), newLocation), origin->GetModel(), false);
+                    scene_->Nodes().push_back(newNode);
+                }
             }
             else
             {
@@ -620,7 +629,7 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
-        if( glm::distance(pressMousePos_, mousePos_) < 1.0f )
+        if( glm::distance(pressMousePos_, mousePos_) < 2.0f )
         {
             userSettings_.RequestRayCast = true;
         }

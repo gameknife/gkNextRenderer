@@ -54,7 +54,8 @@ void main() {
     const bool check = length(motion) > 0.01 ? true : false;
     // fetch visibility to validate the history
     uint current_primitive_index = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
-    if(Camera.TotalFrames == 0 || !inside)
+	const bool miss = current_primitive_index == 65535 << 16 ? true : false;
+    if(miss || Camera.TotalFrames == 0 || !inside)
     {
         useHistory = false;
     }
