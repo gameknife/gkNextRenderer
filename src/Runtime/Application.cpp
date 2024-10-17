@@ -364,9 +364,9 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
                 // temp add last instance, make dynamic scene
-                Assets::Node last = scene_->Nodes().back();
-                last.Transform( glm::translate(glm::mat4(1.0f), glm::vec3(rayResult.HitPoint)) );
-                scene_->Nodes().push_back(last);
+                // Assets::Node last = scene_->Nodes().back();
+                // last.Transform( glm::translate(glm::mat4(1.0f), glm::vec3(rayResult.HitPoint)) );
+                // scene_->Nodes().push_back(last);
             }
             else
             {
