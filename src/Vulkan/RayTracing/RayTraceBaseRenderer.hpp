@@ -54,6 +54,7 @@ namespace Vulkan::RayTracing
 		void DeleteSwapChain() override;
 
 		virtual void AfterRenderCmd() override;
+		virtual void BeforeNextFrame() override;
 
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;

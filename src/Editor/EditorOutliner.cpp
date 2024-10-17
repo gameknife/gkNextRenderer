@@ -3,7 +3,7 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 
-void Editor::GUI::ShowSidebar(const Assets::Scene* scene)
+void Editor::GUI::ShowSidebar(Assets::Scene* scene)
 {
     //ImGui::SetNextWindowPos(sb_P);
     //ImGui::SetNextWindowSizeConstraints(ImVec2(0, -1), ImVec2(FLT_MAX, -1));

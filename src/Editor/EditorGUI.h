@@ -37,7 +37,7 @@ namespace Editor
         void                    ShowMenubar();         
 
         bool                    sidebar                    = true;                 // Sidebar State
-        void                    ShowSidebar(const Assets::Scene* scene);         
+        void                    ShowSidebar(Assets::Scene* scene);         
 
         bool                    properties                 = true;                 // Properties State
         void                    ShowProperties();      
