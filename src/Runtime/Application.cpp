@@ -37,6 +37,13 @@
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
+#if !WITH_GAME
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance()
+{
+    return std::make_unique<NextGameInstanceVoid>();
+}
+#endif
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -237,6 +244,8 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         return true;
     });
 #endif
+
+    gameInstance_ = CreateGameInstance();
 }
 
 NextRendererApplication::~NextRendererApplication()
@@ -252,6 +261,7 @@ NextRendererApplication::~NextRendererApplication()
 void NextRendererApplication::Start()
 {
     renderer_->Start();
+    gameInstance_->OnInit();
 }
 
 bool NextRendererApplication::Tick()
@@ -293,6 +303,9 @@ bool NextRendererApplication::Tick()
     return false;
 #else
     glfwPollEvents();
+
+    gameInstance_->OnTick();
+    
     renderer_->DrawFrame();
     window_->attemptDragWindow();
     totalFrames_ += 1;
@@ -302,6 +315,7 @@ bool NextRendererApplication::Tick()
 
 void NextRendererApplication::End()
 {
+    gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
 }
@@ -363,19 +377,20 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
             {
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
-                
+
+                gameInstance_->OnRayHitResponse(rayResult);
                 // temp add last instance, make dynamic scene
-                Assets::Node* origin = scene_->GetNode("Block1x1");
-                if(origin)
-                {
-                    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-                    // align with x: 0.08, y 0.08, z 0.095
-                    newLocation.x = round(newLocation.x / 0.08f) * 0.08f;
-                    newLocation.z = round(newLocation.z / 0.08f) * 0.08f;
-                    newLocation.y = round((newLocation.y - 0.0475f) / 0.095f) * 0.095f;
-                    Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), newLocation), origin->GetModel(), false);
-                    scene_->Nodes().push_back(newNode);
-                }
+                // Assets::Node* origin = scene_->GetNode("Block1x1");
+                // if(origin)
+                // {
+                //     glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
+                //     // align with x: 0.08, y 0.08, z 0.095
+                //     newLocation.x = round(newLocation.x / 0.08f) * 0.08f;
+                //     newLocation.z = round(newLocation.z / 0.08f) * 0.08f;
+                //     newLocation.y = round((newLocation.y - 0.0475f) / 0.095f) * 0.095f;
+                //     Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), newLocation), origin->GetModel(), false);
+                //     scene_->Nodes().push_back(newNode);
+                // }
             }
             else
             {

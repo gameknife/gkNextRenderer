@@ -12,6 +12,39 @@
 
 class BenchMarker;
 
+class NextGameInstanceBase
+{
+public:
+	virtual ~NextGameInstanceBase() {}
+	virtual void OnInit() =0;
+	virtual void OnTick() =0;
+	virtual void OnDestroy() =0;
+	virtual void OnRenderUI() =0;
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
+
+	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
+	virtual bool OnCursorPosition(double xpos, double ypos) =0;
+	virtual bool OnMouseButton(int button, int action, int mods) =0;
+};
+
+class NextGameInstanceVoid : public NextGameInstanceBase
+{
+public:
+	~NextGameInstanceVoid() {}
+	
+	void OnInit() override {}
+	void OnTick() override {}
+	void OnDestroy() override {}
+	void OnRenderUI() override {}
+	void OnRayHitResponse(Assets::RayCastResult& result) override {}
+	
+	bool OnKey(int key, int scancode, int action, int mods) override {return false;}
+	bool OnCursorPosition(double xpos, double ypos) override {return false;}
+	bool OnMouseButton(int button, int action, int mods) override {return false;}
+};
+
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance();
+
 namespace NextRenderer
 {
 	enum class EApplicationStatus
@@ -101,4 +134,6 @@ private:
 	double time_{};
 
 	glm::vec2 mousePos_ {};
+
+	std::unique_ptr<NextGameInstanceBase> gameInstance_;
 };
