@@ -118,6 +118,19 @@ UserInterface::UserInterface(
 		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
 
+	static const ImWchar iconRange[] =
+		{
+		ICON_MIN_FA, ICON_MAX_FA, // Basic Latin + Latin Supplement
+		0,
+	};
+	ImFontConfig config;
+	config.MergeMode = true;
+	config.GlyphMinAdvanceX = 14.0f;
+	config.GlyphOffset = ImVec2(0, 0);
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
+	{
+		
+	}
 #if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
@@ -222,10 +235,8 @@ void UserInterface::SetStyle()
     style->GrabRounding                     = 12.00f;
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
-{		
-	auto& io = ImGui::GetIO();
-	
+void UserInterface::PreRender()
+{
 	ImGui_ImplVulkan_NewFrame();
 #if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
@@ -233,11 +244,17 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChai
 	ImGui_ImplAndroid_NewFrame();
 #endif
 	ImGui::NewFrame();
-	
+}
+
+void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+{
 	DrawSettings();
 	DrawOverlay(statistics, gpuTimer);
-	
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
+}
+
+void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
+{		
 	
 	ImGui::Render();
 
@@ -468,10 +485,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
-		
-		
 
-		
 		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
 		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
 		ImGui::Text(" render: %.2fms", gpuTimer->GetCpuTime("render"));

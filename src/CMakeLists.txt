@@ -223,6 +223,10 @@ set(src_files
 	Options.hpp
 )
 
+set(src_files_magicalego
+	MagicaLego/MagicaLegoGameInstance.hpp
+	MagicaLego/MagicaLegoGameInstance.cpp
+)
 source_group("Assets" FILES ${src_files_assets})
 source_group("Utilities" FILES ${src_files_utilities})
 source_group("Vulkan" FILES ${src_files_vulkan})
@@ -235,6 +239,9 @@ source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
+source_group("MagicaLego" FILES ${src_files_magicalego})
+
+
 
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
@@ -285,6 +292,22 @@ add_executable(gkNextEditor
 	${src_files}
 	DesktopMain.cpp
 )
+add_executable(MagicaLego
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_vulkan} 
+	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_moderndeferred} 
+	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
+	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
+	${src_files_runtime}
+	${src_files}
+	${src_files_magicalego}
+	DesktopMain.cpp
+)
 endif()
 
 
@@ -306,6 +329,7 @@ else()
 set(AllTargets 
 gkNextRenderer 
 gkNextEditor
+MagicaLego 
 )
 endif()
 # common setup
@@ -381,6 +405,10 @@ foreach(target IN LISTS AllTargets)
 	# specific for targets
 	if ( ${target} STREQUAL gkNextRenderer )
 	target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
+	endif()
+
+	if ( ${target} STREQUAL MagicaLego )
+	target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )

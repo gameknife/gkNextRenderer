@@ -62,6 +62,8 @@ struct UserSettings final
 	int DenoiseSize;
 
 	float PaperWhiteNit;
+
+	bool ShowEdge;
 	
 	inline const static float FieldOfViewMinValue = 5.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;

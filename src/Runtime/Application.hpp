@@ -11,15 +11,17 @@
 #include "Options.hpp"
 
 class BenchMarker;
+class NextRendererApplication;
 
 class NextGameInstanceBase
 {
 public:
+	NextGameInstanceBase(Vulkan::WindowConfig& config, NextRendererApplication* engine){}
 	virtual ~NextGameInstanceBase() {}
 	virtual void OnInit() =0;
 	virtual void OnTick() =0;
 	virtual void OnDestroy() =0;
-	virtual void OnRenderUI() =0;
+	virtual bool OnRenderUI() =0;
 	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
 
 	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
@@ -30,12 +32,13 @@ public:
 class NextGameInstanceVoid : public NextGameInstanceBase
 {
 public:
-	~NextGameInstanceVoid() {}
+	NextGameInstanceVoid(Vulkan::WindowConfig& config, NextRendererApplication* engine):NextGameInstanceBase(config,engine){}
+	~NextGameInstanceVoid() override = default;
 	
 	void OnInit() override {}
 	void OnTick() override {}
 	void OnDestroy() override {}
-	void OnRenderUI() override {}
+	bool OnRenderUI() override {return false;}
 	void OnRayHitResponse(Assets::RayCastResult& result) override {}
 	
 	bool OnKey(int key, int scancode, int action, int mods) override {return false;}
@@ -43,7 +46,7 @@ public:
 	bool OnMouseButton(int button, int action, int mods) override {return false;}
 };
 
-extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance();
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine);
 
 namespace NextRenderer
 {
@@ -74,10 +77,12 @@ public:
 	void Start();
 	bool Tick();
 	void End();
-
-public:
+	
 	void OnTouch(bool down, double xpos, double ypos);
 	void OnTouchMove(double xpos, double ypos);
+
+	Assets::Scene& GetScene() { return *scene_; }
+	UserSettings& GetUserSettings() { return userSettings_; }
 	
 protected:
 	

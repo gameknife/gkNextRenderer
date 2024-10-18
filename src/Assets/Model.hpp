@@ -50,13 +50,13 @@ namespace Assets
     {
     public:
         static Node CreateNode(std::string name, glm::mat4 transform, int id, bool procedural);
-        Node& operator =(const Node&) = delete;
-        Node& operator =(Node&&) = delete;
+        //Node& operator =(const Node&) = delete;
+        //Node& operator =(Node&&) = delete;
 
-        Node() = default;
-        Node(const Node&) = default;
-        Node(Node&&) = default;
-        ~Node() = default;
+        // Node() = default;
+        // Node(const Node&) = default;
+        // Node(Node&&) = default;
+        // ~Node() = default;
 
         void Transform(const glm::mat4& transform) { transform_ = transform; }
         const glm::mat4& WorldTransform() const { return transform_; }

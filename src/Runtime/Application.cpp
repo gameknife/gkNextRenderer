@@ -38,9 +38,9 @@
 #include "build.version"
 
 #if !WITH_GAME
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance()
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine)
 {
-    return std::make_unique<NextGameInstanceVoid>();
+    return std::make_unique<NextGameInstanceVoid>(config,engine);
 }
 #endif
 
@@ -164,6 +164,12 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
+    userSettings.ShowEdge = false;
+
+#if WITH_EDITOR
+    userSettings.ShowEdge = true;
+#endif
+
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -177,7 +183,7 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     // Create Window
-    const Vulkan::WindowConfig windowConfig
+    Vulkan::WindowConfig windowConfig
     {
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
         options.Width,
@@ -189,6 +195,7 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         userdata,
         options.ForceSDR
     };
+    gameInstance_ = CreateGameInstance(windowConfig, this);
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
@@ -244,8 +251,6 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         return true;
     });
 #endif
-
-    gameInstance_ = CreateGameInstance();
 }
 
 NextRendererApplication::~NextRendererApplication()
@@ -379,18 +384,6 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
                 scene_->SetSelectedId(rayResult.InstanceId);
 
                 gameInstance_->OnRayHitResponse(rayResult);
-                // temp add last instance, make dynamic scene
-                // Assets::Node* origin = scene_->GetNode("Block1x1");
-                // if(origin)
-                // {
-                //     glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-                //     // align with x: 0.08, y 0.08, z 0.095
-                //     newLocation.x = round(newLocation.x / 0.08f) * 0.08f;
-                //     newLocation.z = round(newLocation.z / 0.08f) * 0.08f;
-                //     newLocation.y = round((newLocation.y - 0.0475f) / 0.095f) * 0.095f;
-                //     Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), newLocation), origin->GetModel(), false);
-                //     scene_->Nodes().push_back(newNode);
-                // }
             }
             else
             {
@@ -442,11 +435,9 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
-
-#if WITH_EDITOR
-    ubo.ShowEdge = true;
-#endif
     
+    ubo.ShowEdge = userSettings_.ShowEdge;
+
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -556,8 +547,12 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-    
-    userInterface_->Render(commandBuffer, renderer_->SwapChain(), imageIndex, stats, renderer_->GpuTimer(), scene_.get());
+    userInterface_->PreRender();
+    if( !gameInstance_->OnRenderUI() )
+    {
+        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
+    }
+    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
 }
 
 void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
