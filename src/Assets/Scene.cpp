@@ -156,4 +156,22 @@ Node* Scene::GetNode(std::string name)
 	}
 	return nullptr;
 }
+
+const Model* Scene::GetModel(uint32_t id) const
+{
+	if( id < models_.size() )
+	{
+		return &models_[id];
+	}
+	return nullptr;
+}
+
+const Material* Scene::GetMaterial(uint32_t id) const
+{
+	if( id < materials_.size() )
+	{
+		return &materials_[id];
+	}
+	return nullptr;
+}
 }

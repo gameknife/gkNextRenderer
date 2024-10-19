@@ -735,6 +735,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         const auto timer = std::chrono::high_resolution_clock::now();
         
         cameraInitialSate_ = *cameraState;
+
+        gameInstance_->OnSceneUnloaded();
         
         renderer_->Device().WaitIdle();
         renderer_->DeleteSwapChain();
@@ -778,6 +780,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
 
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
+
+        gameInstance_->OnSceneLoaded();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 

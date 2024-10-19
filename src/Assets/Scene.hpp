@@ -71,6 +71,8 @@ namespace Assets
 		void UpdateMaterial();
 
 		Node* GetNode(std::string name);
+		const Model* GetModel(uint32_t id) const;
+		const Material* GetMaterial(uint32_t id) const;
 		
 	private:
 		std::vector<Material> materials_;

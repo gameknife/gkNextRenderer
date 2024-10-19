@@ -24,6 +24,9 @@ public:
 	virtual bool OnRenderUI() =0;
 	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
 
+	virtual void OnSceneLoaded() {}
+	virtual void OnSceneUnloaded() {}
+
 	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
 	virtual bool OnCursorPosition(double xpos, double ypos) =0;
 	virtual bool OnMouseButton(int button, int action, int mods) =0;
