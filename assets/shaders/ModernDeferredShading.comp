@@ -46,7 +46,7 @@ void main() {
     }
 	
 	ivec2 size = imageSize(MiniGBuffer);
-    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
+    uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).gr;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));

@@ -316,7 +316,11 @@ void EditorInterface::ToolbarUI()
 	ImGui::End();
 }
 
-void EditorInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+void EditorInterface::PreRender()
+{
+}
+
+void EditorInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
 	GUserInterface = this;
 	
@@ -326,21 +330,28 @@ void EditorInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapCh
 		RequestImTextureId(i);
 	}
 	
-	auto& io = ImGui::GetIO();
-	
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 	
 	editorGUI_->selected_obj_id = scene->GetSelectedId();
-	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	
 	ImGuiID id = DockSpaceUI();
 	ToolbarUI();
-	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
-	swapChain.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	
 	MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
 	
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
+}
+
+void EditorInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
+{
+	ImGuiID id = DockSpaceUI();
+	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	swapChain.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	
+	auto& io = ImGui::GetIO();
 	
 	ImGui::Render();
 

@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "Platform.glsl"
 #include "common/UniformBufferObject.glsl"
-#include "common/Random.glsl"
+#include "common/Const_Func.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
 layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
@@ -49,10 +49,13 @@ void main() {
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
 	ivec2 previpos = ivec2( floor(ipos + motion) );
 	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1,-1)));
+	// 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
+	// after, motionvector calculate last frame position
     const bool check = length(motion) > 0.01 ? true : false;
     // fetch visibility to validate the history
     uint current_primitive_index = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
-    if(Camera.TotalFrames == 0 || !inside)
+	const bool miss = current_primitive_index == 65535 << 16 ? true : false;
+    if(miss || Camera.TotalFrames == 0 || !inside)
     {
         useHistory = false;
     }
@@ -66,11 +69,11 @@ void main() {
 			uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r;
 			uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r;
 
-			bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index) ));
-
-			if( miss)
+			bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index, current_primitive_index, current_primitive_index, current_primitive_index) ));
+			if( miss )
 			{
-				useHistory = false;
+				//useHistory = false;
+				src.w = Camera.TemporalFrames * 0.75;
 			}
 		}
 
@@ -91,7 +94,11 @@ void main() {
 			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
-			final = mix(history, src, currKeep);
+			final = mix(history, src, clamp(currKeep,0.0,1.0));
+			
+			// clip in history
+			
+			
 
             // 这里我们希望评估的是噪点密集的区域，就是肉眼看上去十分闪烁的区域
             // 应该类似SVGF一样，评估时间，空间域内的方差

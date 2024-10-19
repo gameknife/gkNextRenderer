@@ -28,7 +28,7 @@ TopLevelAccelerationStructure::TopLevelAccelerationStructure(
 	topASGeometry_.geometry.instances = instancesVk_;
 	
 	buildGeometryInfo_.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-	buildGeometryInfo_.flags = flags_;
+	buildGeometryInfo_.flags = flags_ | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
 	buildGeometryInfo_.geometryCount = 1;
 	buildGeometryInfo_.pGeometries = &topASGeometry_;
 	buildGeometryInfo_.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
@@ -64,9 +64,20 @@ void TopLevelAccelerationStructure::Generate(
 	
 	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 
+	buildGeometryInfo_.srcAccelerationStructure = Handle();
 	buildGeometryInfo_.dstAccelerationStructure = Handle();
 	buildGeometryInfo_.scratchData.deviceAddress = scratchBuffer.GetDeviceAddress() + scratchOffset;
 
+	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
+}
+
+void TopLevelAccelerationStructure::Update(
+		VkCommandBuffer commandBuffer,
+				uint32_t instanceCount)
+{
+	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
+	buildOffsetInfo.primitiveCount = instanceCount;
+	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
 }
 

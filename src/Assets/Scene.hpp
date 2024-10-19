@@ -2,6 +2,7 @@
 
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 #include <glm/vec2.hpp>
 
@@ -39,7 +40,7 @@ namespace Assets
 			bool supportRayTracing);
 		~Scene();
 
-		const std::vector<Node>& Nodes() const { return nodes_; }
+		std::vector<Node>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
@@ -68,11 +69,15 @@ namespace Assets
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
 		void UpdateMaterial();
+
+		Node* GetNode(std::string name);
+		const Model* GetModel(uint32_t id) const;
+		const Material* GetMaterial(uint32_t id) const;
 		
 	private:
 		std::vector<Material> materials_;
 		const std::vector<Model> models_;
-		const std::vector<Node> nodes_;
+		std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
 

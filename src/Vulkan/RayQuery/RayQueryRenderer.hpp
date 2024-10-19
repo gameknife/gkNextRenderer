@@ -28,7 +28,7 @@ namespace Vulkan::RayTracing
 {
 	class RayQueryPipeline;
 
-	class RayQueryRenderer : public Vulkan::RayTracing::RayTraceBaseRenderer
+	class RayQueryRenderer final : public Vulkan::RayTracing::LogicRendererBase
 	{
 	public:
 
@@ -36,19 +36,19 @@ namespace Vulkan::RayTracing
 	
 	public:
 
-		RayQueryRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayQueryRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
 		virtual ~RayQueryRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,
 			VkPhysicalDeviceFeatures& deviceFeatures,
-			void* nextDeviceFeatures) override;
+			void* nextDeviceFeatures);// override;
 		
-		void OnDeviceSet() override;
+		void OnDeviceSet();// override;
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		void BeforeNextFrame() override;
+		void BeforeNextFrame();// override;
 	
 	private:
 		void CreateOutputImage();

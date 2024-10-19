@@ -28,5 +28,6 @@ git checkout 2024.08.23
 	curl:x64-mingw-static \
 	tinygltf:x64-mingw-static \
 	draco:x64-mingw-static \
+	rapidjson:x64-mingw-static \
 	fmt:x64-mingw-static \
 	cpp-base64:x64-mingw-static

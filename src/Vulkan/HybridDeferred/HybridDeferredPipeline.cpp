@@ -18,7 +18,8 @@
 namespace Vulkan::HybridDeferred
 {
     HybridShadingPipeline::HybridShadingPipeline(const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-                                                 const ImageView& miniGBufferImageView, 
+                                                const ImageView& miniGBuffer0ImageView,
+                                                const ImageView& miniGBuffer1ImageView,
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
                                                  const ImageView& directLight0ImageView, const ImageView& directLight1ImageView,
                                                  const ImageView& albedoImageView, const ImageView& normalImageView,
@@ -32,8 +33,10 @@ namespace Vulkan::HybridDeferred
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
+            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
             // Others like in frag
-            {2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             // all buffer here
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -66,8 +69,9 @@ namespace Vulkan::HybridDeferred
             structureInfo.accelerationStructureCount = 1;
             structureInfo.pAccelerationStructures = &accelerationStructureHandle;
 
-            VkDescriptorImageInfo Info0 = {NULL, miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info0 = {NULL, miniGBuffer0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL, miniGBuffer1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info2 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
 
             VkDescriptorImageInfo Info11 = {NULL, directLight0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
@@ -108,7 +112,8 @@ namespace Vulkan::HybridDeferred
             {
                 descriptorSets.Bind(i, 0, Info0),
                 descriptorSets.Bind(i, 1, Info1),
-                descriptorSets.Bind(i, 2, uniformBufferInfo),
+                descriptorSets.Bind(i, 2, Info2),
+                descriptorSets.Bind(i, 3, uniformBufferInfo),
                 descriptorSets.Bind(i, 4, vertexBufferInfo),
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),

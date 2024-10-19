@@ -38,6 +38,14 @@ namespace Assets
 
 namespace Vulkan 
 {
+	enum ERendererType
+	{
+		ERT_PathTracing,
+		ERT_Hybrid,
+		ERT_ModernDeferred,
+		ERT_LegacyDeferred,
+	};
+	
 	class VulkanGpuTimer
 	{
 	public:
@@ -52,6 +60,15 @@ namespace Vulkan
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 			started_ = true;
+		}
+
+		void CpuFrameEnd()
+		{
+			// iterate the cpu_timer_query_map
+			for(auto& [name, query] : cpu_timer_query_map)
+			{
+				std::get<2>(cpu_timer_query_map[name]) = std::get<1>(cpu_timer_query_map[name]) - std::get<0>(cpu_timer_query_map[name]);
+			}
 		}
 
 		void FrameEnd(VkCommandBuffer commandBuffer)
@@ -106,7 +123,7 @@ namespace Vulkan
 			BENCH_MARK_CHECK();
 			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
 			{
-				cpu_timer_query_map[name] = std::make_tuple(0, 0);
+				cpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
 			}
 			std::get<0>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
@@ -130,7 +147,7 @@ namespace Vulkan
 			{
 				return 0;
 			}
-			return (std::get<1>(cpu_timer_query_map[name]) - std::get<0>(cpu_timer_query_map[name])) * 1e-6f;
+			return std::get<2>(cpu_timer_query_map[name]) * 1e-6f;
 		}
 		std::vector<std::tuple<std::string, float> > FetchAllTimes()
 		{
@@ -165,7 +182,7 @@ namespace Vulkan
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
-		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > cpu_timer_query_map{};
+		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > cpu_timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
@@ -254,10 +271,11 @@ namespace Vulkan
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
-		const Assets::Scene& GetScene();
+		Assets::Scene& GetScene();
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 
+		int FrameCount() const {return frameCount_;}
 
 		virtual void SetPhysicalDeviceImpl(
 			VkPhysicalDevice physicalDevice, 
@@ -282,6 +300,11 @@ namespace Vulkan
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
+
+		bool VisualDebug() const {return visualDebug_;}
+
+		virtual void RegisterLogicRenderer(ERendererType type) {};
+		virtual void SwitchLogicRenderer(ERendererType type) {};
 
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;

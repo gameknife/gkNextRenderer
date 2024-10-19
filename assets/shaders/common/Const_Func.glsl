@@ -11,8 +11,9 @@
 #define M_2_PI			0.636619772367581343076	// 2/pi
 #define M_1_OVER_TWO_PI	0.159154943091895335768	// 1/ (2*pi)
 
-#define INF 1e32
-#define EPS 1e-3
+#define INF 1e32f
+#define EPS 1e-3f
+#define EPS2 2e-3f
 
 #define NEARzero 1e-35f
 #define isZERO(x) ((x)>-NEARzero && (x)<NEARzero)
@@ -21,7 +22,7 @@
 #define sum_is_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) < NEARzero)
 #define sum_is_not_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) >= NEARzero)
 
-#define Mix(a, b, c, barycentrics) ( (a) * (barycentrics).x + (b) * (barycentrics).y + (c) * (barycentrics).z )
+#define Mix(a, b, c, bary) ( (a) + ((b) - (a)) * (bary).y + ((c) - (a)) * (bary).z )
 #define luminance(rgb) (dot((rgb), vec3(0.212671F, 0.715160F, 0.072169F)))
 
 #define saturate(x) ( clamp((x), 0.0F, 1.0F) )
@@ -40,18 +41,57 @@ float Schlick(const float cosine, const float refractionIndex)
 	return r0 + (1 - cosine - r0) * pow4(1 - cosine);
 }
 
-vec3 AlignWithNormal(vec3 ray, vec3 up)
-{
-    vec3 right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
-    vec3 forward = cross(right, up);
-    return to_world(ray, right, up, forward);
+//onb revisited by Disney
+void Onb(vec3 n, out vec3 b1, out vec3 b2) {
+    float signZ = n.z < 0.f ? -1.f : 1.f;
+    float a = -1.0f / (signZ + n.z);
+    b2 = vec3(n.x * n.y * a, signZ + n.y * n.y * a, -n.y);
+    b1 = vec3(1.0f + signZ * n.x * n.x * a, signZ * b2.x, -signZ * n.x);
 }
 
+//from Apple Metal Raytracing demo
 void ONBAlignWithNormal(vec3 up, out vec3 right, out vec3 forward)
 {
     right = normalize(cross(up, vec3(0.0072f, 1.0f, 0.0034f)));
     forward = cross(right, up);
 }
 
+//from nvpro_core
+#define OUT_TYPE(T) out T
+#define inline
+//-----------------------------------------------------------------------------
+// Builds an orthonormal basis: given only a normal vector, returns a
+// tangent and bitangent.
+//
+// This uses the technique from "Improved accuracy when building an orthonormal
+// basis" by Nelson Max, https://jcgt.org/published/0006/01/02.
+// Any tangent-generating algorithm must produce at least one discontinuity
+// when operating on a sphere (due to the hairy ball theorem); this has a
+// small ring-shaped discontinuity at normal.z == -0.99998796.
+//-----------------------------------------------------------------------------
+inline void orthonormalBasis(vec3 normal, OUT_TYPE(vec3) tangent, OUT_TYPE(vec3) bitangent)
+{
+  if(normal.z < -0.99998796F)  // Handle the singularity
+  {
+    tangent   = vec3(0.0F, -1.0F, 0.0F);
+    bitangent = vec3(-1.0F, 0.0F, 0.0F);
+    return;
+  }
+  float a   = 1.0F / (1.0F + normal.z);
+  float b   = -normal.x * normal.y * a;
+  tangent   = vec3(1.0F - normal.x * normal.x * a, b, -normal.x);
+  bitangent = vec3(b, 1.0f - normal.y * normal.y * a, -normal.y);
+}
+
+#define ONB Onb
+//#define ONB ONBAlignWithNormal
+//#define ONB orthonormalBasis
+
+vec3 AlignWithNormal(vec3 ray, vec3 normal)
+{
+    vec3 T, B;
+    ONB(normal, T, B);
+    return to_world(ray, T, B, normal);
+}
 #define Const_Func
 #endif

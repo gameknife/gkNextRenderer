@@ -5,6 +5,7 @@
 
 struct UserSettings final
 {
+	int RendererType;
 	// Application
 	bool Benchmark;
 
@@ -17,7 +18,6 @@ struct UserSettings final
 	int SceneIndex;
 
 	// Renderer
-	bool IsRayTraced;
 	bool AccumulateRays;
 	int32_t NumberOfSamples;
 	int32_t NumberOfBounces;
@@ -34,7 +34,9 @@ struct UserSettings final
 	float FocusDistance;
 	bool RequestRayCast;
 
+	bool HasSky;
 	float SkyRotation;
+	bool HasSun;
 	float SunRotation;
 	float SunLuminance;
 	float SkyIntensity;
@@ -60,6 +62,8 @@ struct UserSettings final
 	int DenoiseSize;
 
 	float PaperWhiteNit;
+
+	bool ShowEdge;
 	
 	inline const static float FieldOfViewMinValue = 5.0f;
 	inline const static float FieldOfViewMaxValue = 90.0f;

@@ -13,7 +13,6 @@
 #include "Vulkan/Device.hpp"
 #include "BenchMark.hpp"
 
-#include <iostream>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
@@ -38,6 +37,13 @@
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
+#if !WITH_GAME
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+{
+    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
+}
+#endif
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -50,13 +56,18 @@ namespace NextRenderer
         switch(rendererType)
         {
             case 0:
-                return new Vulkan::RayTracing::RayQueryRenderer(window, presentMode, enableValidationLayers);
             case 1:
-                return new Vulkan::HybridDeferred::HybridDeferredRenderer(window, presentMode, enableValidationLayers);
             case 2:
-                return new Vulkan::ModernDeferred::ModernDeferredRenderer(window, presentMode, enableValidationLayers);
             case 3:
-                return new Vulkan::LegacyDeferred::LegacyDeferredRenderer(window, presentMode, enableValidationLayers);
+                {
+                    auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+                    ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+                    return ptr;    
+                }
             default:
                 return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
         }
@@ -86,6 +97,7 @@ UserSettings CreateUserSettings(const Options& options)
     
     UserSettings userSettings{};
 
+    userSettings.RendererType = options.RendererType;
     userSettings.Benchmark = options.Benchmark;
     userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
     userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
@@ -116,8 +128,7 @@ UserSettings CreateUserSettings(const Options& options)
             userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
         }
     }
-    
-    userSettings.IsRayTraced = true;
+
     userSettings.AccumulateRays = false;
     
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
@@ -153,6 +164,12 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
+    userSettings.ShowEdge = false;
+
+#if WITH_EDITOR
+    userSettings.ShowEdge = true;
+#endif
+
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -161,12 +178,12 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(const Options& options, void* userdata)
+NextRendererApplication::NextRendererApplication(Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     // Create Window
-    const Vulkan::WindowConfig windowConfig
+    Vulkan::WindowConfig windowConfig
     {
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
         options.Width,
@@ -178,6 +195,7 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         userdata,
         options.ForceSDR
     };
+    gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
@@ -190,6 +208,8 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
     
     // Initialize Renderer
     renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
+    rendererType = options.RendererType;
+    
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
     renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
@@ -246,10 +266,17 @@ NextRendererApplication::~NextRendererApplication()
 void NextRendererApplication::Start()
 {
     renderer_->Start();
+    gameInstance_->OnInit();
 }
 
 bool NextRendererApplication::Tick()
 {
+    if(rendererType != userSettings_.RendererType)
+    {
+        rendererType = userSettings_.RendererType;
+        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+    }
+    
     // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
@@ -281,6 +308,9 @@ bool NextRendererApplication::Tick()
     return false;
 #else
     glfwPollEvents();
+
+    gameInstance_->OnTick();
+    
     renderer_->DrawFrame();
     window_->attemptDragWindow();
     totalFrames_ += 1;
@@ -290,6 +320,7 @@ bool NextRendererApplication::Tick()
 
 void NextRendererApplication::End()
 {
+    gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
 }
@@ -351,6 +382,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
             {
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
+
+                gameInstance_->OnRayHitResponse(rayResult);
             }
             else
             {
@@ -387,8 +420,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.SkyIntensity = userSettings_.SkyIntensity;
     ubo.SkyIdx = userSettings_.SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
-    ubo.HasSky = init.HasSky;
-    ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
+    ubo.HasSky = userSettings_.HasSky;
+    ubo.HasSun =userSettings_.HasSun && userSettings_.SunLuminance > 0;
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -402,11 +435,9 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
-
-#if WITH_EDITOR
-    ubo.ShowEdge = true;
-#endif
     
+    ubo.ShowEdge = userSettings_.ShowEdge;
+
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -516,8 +547,12 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-    
-    userInterface_->Render(commandBuffer, renderer_->SwapChain(), imageIndex, stats, renderer_->GpuTimer(), scene_.get());
+    userInterface_->PreRender();
+    if( !gameInstance_->OnRenderUI() )
+    {
+        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
+    }
+    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
 }
 
 void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
@@ -604,7 +639,7 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
-        if( glm::distance(pressMousePos_, mousePos_) < 1.0f )
+        if( glm::distance(pressMousePos_, mousePos_) < 2.0f )
         {
             userSettings_.RequestRayCast = true;
         }
@@ -700,6 +735,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         const auto timer = std::chrono::high_resolution_clock::now();
         
         cameraInitialSate_ = *cameraState;
+
+        gameInstance_->OnSceneUnloaded();
         
         renderer_->Device().WaitIdle();
         renderer_->DeleteSwapChain();
@@ -715,11 +752,14 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+        userSettings_.HasSky = cameraInitialSate_.HasSky;
         if(cameraInitialSate_.HasSky)
         {
             userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
             userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
+            userSettings_.SkyRotation = cameraInitialSate_.SkyRotation;
         }
+        userSettings_.HasSun = cameraInitialSate_.HasSun;
         if(cameraInitialSate_.HasSun)
         {
             userSettings_.SunRotation = cameraInitialSate_.SunRotation;
@@ -740,6 +780,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
 
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
+
+        gameInstance_->OnSceneLoaded();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 

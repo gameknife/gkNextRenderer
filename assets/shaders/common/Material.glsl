@@ -18,7 +18,7 @@ struct Material
 	float Metalness;
 
 	float RefractionIndex2;
-	float Reserverd1;
+	float NormalTextureScale;
 	float Reserverd2;
 };
 

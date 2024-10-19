@@ -33,7 +33,8 @@ namespace Assets
         bool HasSun;
         uint32_t SkyIdx, CameraIdx;
         float SunRotation;
-
+        float SkyRotation;
+        
         float SkyIntensity = 100.0f;
         float SunIntensity = 500.0f;
 
@@ -49,13 +50,13 @@ namespace Assets
     {
     public:
         static Node CreateNode(std::string name, glm::mat4 transform, int id, bool procedural);
-        Node& operator =(const Node&) = delete;
-        Node& operator =(Node&&) = delete;
+        //Node& operator =(const Node&) = delete;
+        //Node& operator =(Node&&) = delete;
 
-        Node() = default;
-        Node(const Node&) = default;
-        Node(Node&&) = default;
-        ~Node() = default;
+        // Node() = default;
+        // Node(const Node&) = default;
+        // Node(Node&&) = default;
+        // ~Node() = default;
 
         void Transform(const glm::mat4& transform) { transform_ = transform; }
         const glm::mat4& WorldTransform() const { return transform_; }
@@ -83,11 +84,11 @@ namespace Assets
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode = true);
 
-        static int CreateCornellBox(const float scale,
+        static uint32_t CreateCornellBox(const float scale,
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static int CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
+        static uint32_t CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
                                      const glm::vec3& dir, const glm::vec3& lightColor,
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
@@ -96,8 +97,8 @@ namespace Assets
                                   std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
 
         // basic geometry
-        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, int materialIdx);
-        static Model CreateSphere(const glm::vec3& center, float radius, int materialIdx, bool isProcedural);
+        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, uint32_t materialIdx);
+        static Model CreateSphere(const glm::vec3& center, float radius, uint32_t materialIdx, bool isProcedural);
 
         Model& operator =(const Model&) = delete;
         Model& operator =(Model&&) = delete;

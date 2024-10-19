@@ -20,9 +20,7 @@
 
 namespace Vulkan::RayTracing
 {
-    RayQueryRenderer::RayQueryRenderer(Vulkan::Window* window,const VkPresentModeKHR presentMode,
-                             const bool enableValidationLayers) :
-        Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers)
+    RayQueryRenderer::RayQueryRenderer(RayTracing::RayTraceBaseRenderer& baseRender) : LogicRendererBase(baseRender)
     {
     }
 
@@ -37,7 +35,6 @@ namespace Vulkan::RayTracing
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        supportRayTracing_ = true;
 #if WITH_OIDN
         // Required extensions.
         requiredExtensions.insert(requiredExtensions.end(),
@@ -49,7 +46,6 @@ namespace Vulkan::RayTracing
 #endif
         
 #endif
-        RayTraceBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nextDeviceFeatures);
     }
 
     void RayQueryRenderer::OnDeviceSet()
@@ -70,15 +66,12 @@ namespace Vulkan::RayTracing
         device = oidn::newDevice(uuid); // CPU or GPU if available
         device.commit();
 #endif
-        
-        Vulkan::RayTracing::RayTraceBaseRenderer::OnDeviceSet();
     }
 
     void RayQueryRenderer::CreateSwapChain()
     {
-        Vulkan::RayTracing::RayTraceBaseRenderer::CreateSwapChain();
         CreateOutputImage();
-        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), topAs_[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
+        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), TLAS()[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
                                                          rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));
@@ -126,8 +119,6 @@ namespace Vulkan::RayTracing
 
         rtDenoise0_.reset();
         rtDenoise1_.reset();
-        
-        Vulkan::RayTracing::RayTraceBaseRenderer::DeleteSwapChain();
     }
 
     void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -166,10 +157,10 @@ namespace Vulkan::RayTracing
             vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->PipelineLayout().Handle(), k_bindless_set,
                                      1, GlobalDescriptorSets, 0, nullptr );
             
-            uint32_t workGroupSizeXDivider = 8 * (CheckerboxRendering() ? 2 : 1);
+            uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 4;
 #if ANDROID
-            workGroupSizeXDivider = 32 * (CheckerboxRendering() ? 2 : 1);
+            workGroupSizeXDivider = 32;
             workGroupSizeYDivider = 32;
 #endif
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, workGroupSizeXDivider),
@@ -229,7 +220,7 @@ namespace Vulkan::RayTracing
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
-        if (visualDebug_)
+        if (VisualDebug())
         {
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -262,18 +253,7 @@ namespace Vulkan::RayTracing
                                        VK_ACCESS_TRANSFER_WRITE_BIT,
                                        0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
-    
-#if !ANDROID
-        if(supportRayCast_)
-        {
-            SCOPED_GPU_TIMER("raycast");
-            
-            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, 1, 1, 1);
-        }
+
 #if WITH_OIDN
         if (supportDenoiser_)
         {
@@ -308,14 +288,10 @@ namespace Vulkan::RayTracing
                                        VK_IMAGE_LAYOUT_GENERAL);
         }
 #endif
-#endif
-
-        
     }
 
     void RayQueryRenderer::BeforeNextFrame()
     {
-        Vulkan::RayTracing::RayTraceBaseRenderer::BeforeNextFrame();
         {
             SCOPED_CPU_TIMER("OIDN");
 #if WITH_OIDN

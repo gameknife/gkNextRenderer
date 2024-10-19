@@ -20,6 +20,12 @@
 #include <fmt/format.h>
 #include <numeric>
 
+#include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
+#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+
 namespace Vulkan::RayTracing
 {
     namespace
@@ -41,8 +47,13 @@ namespace Vulkan::RayTracing
         }
     }
 
+    LogicRendererBase::LogicRendererBase(RayTracing::RayTraceBaseRenderer& baseRender):baseRender_(baseRender)
+    {
+        
+    }
+
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                             const bool enableValidationLayers) :
+                                               const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
         supportRayCast_ = true;
@@ -53,6 +64,33 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
+    }
+
+    void RayTraceBaseRenderer::RegisterLogicRenderer(ERendererType type)
+    {
+        switch (type)
+        {
+            case ERendererType::ERT_PathTracing:
+                logicRenderers_.push_back( std::make_unique<RayQueryRenderer>(*this) );
+                break;
+            case ERendererType::ERT_Hybrid:
+                logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
+                break;
+        case ERendererType::ERT_ModernDeferred:
+                logicRenderers_.push_back( std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this) );
+                break;
+        case ERendererType::ERT_LegacyDeferred:
+                logicRenderers_.push_back( std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this) );
+                break;
+            default:
+                assert(false);
+        }
+        currentLogicRenderer_ = type;
+    }
+
+    void RayTraceBaseRenderer::SwitchLogicRenderer(ERendererType type)
+    {
+        currentLogicRenderer_ = type;
     }
 
     void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
@@ -101,8 +139,8 @@ namespace Vulkan::RayTracing
             CreateTopLevelStructures(commandBuffer);
         });
 
-        topScratchBuffer_.reset();
-        topScratchBufferMemory_.reset();
+        //topScratchBuffer_.reset();
+        //topScratchBufferMemory_.reset();
         bottomScratchBuffer_.reset();
         bottomScratchBufferMemory_.reset();
 
@@ -137,10 +175,20 @@ namespace Vulkan::RayTracing
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
+
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->CreateSwapChain();
+        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
     {
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->DeleteSwapChain();
+        }
+        
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 
         rayCastBuffer_.reset();
@@ -161,6 +209,36 @@ namespace Vulkan::RayTracing
         {
             cameraCenterCastResult_ = Assets::RayCastResult();
         }
+    }
+
+    void RayTraceBaseRenderer::BeforeNextFrame()
+    {
+        VulkanBaseRenderer::BeforeNextFrame();
+
+         auto& scene = GetScene();
+
+        // rebuild all instance
+        std::vector<VkAccelerationStructureInstanceKHR> instances;
+        for (const auto& node : scene.Nodes())
+        {
+            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
+        }
+
+        // upload to gpu
+        int instanceCount = static_cast<int>(instances.size());
+        if(instanceCount  >  0)
+        {
+            VkAccelerationStructureInstanceKHR* data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(instancesBufferMemory_->Map(0, instances.size() * sizeof(VkAccelerationStructureInstanceKHR)));
+            std::memcpy(data, instances.data(), instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+            instancesBufferMemory_->Unmap();
+        }
+
+        // request tlas update
+        SingleTimeCommands::Submit(CommandPool(), [this, instanceCount](VkCommandBuffer commandBuffer)
+        {
+            topAs_[0].Update(commandBuffer, instanceCount);
+        });
     }
 
 
@@ -196,6 +274,25 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::OnPostLoadScene();
         CreateAccelerationStructures();
+    }
+
+    void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if( currentLogicRenderer_ < logicRenderers_.size() )
+        {
+            logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+        }
+
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("raycast");
+            
+            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
+        }
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
@@ -272,29 +369,29 @@ namespace Vulkan::RayTracing
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
-
-        // Top level acceleration structure
-        std::vector<VkAccelerationStructureInstanceKHR> instances;
-
-        // Hit group 0: triangles
-        // Hit group 1: procedurals
-        for (const auto& node : scene.Nodes())
-        {
-            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
-        }
-
+        const uint32_t kMaxInstanceCount = 65535;
+        
         // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).
-        BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
-                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
-                                       instancesBufferMemory_);
+        // BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
+        //                                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+        //                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
+        //                                instancesBufferMemory_);
+
+        // buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        // memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
+        instancesBuffer_.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
+                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT ));
+        instancesBufferMemory_.reset(new DeviceMemory(
+            instancesBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
 
         // Memory barrier for the bottom level acceleration structure builds.
         AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
         topAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
-                            static_cast<uint32_t>(instances.size()));
+                           kMaxInstanceCount);
 
         // Allocate the structure memory.
         const auto total = GetTotalRequirements(topAs_);
