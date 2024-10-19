@@ -38,9 +38,9 @@
 #include "build.version"
 
 #if !WITH_GAME
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
-    return std::make_unique<NextGameInstanceVoid>(config,engine);
+    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
 }
 #endif
 
@@ -178,7 +178,7 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(const Options& options, void* userdata)
+NextRendererApplication::NextRendererApplication(Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -195,7 +195,7 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         userdata,
         options.ForceSDR
     };
-    gameInstance_ = CreateGameInstance(windowConfig, this);
+    gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));

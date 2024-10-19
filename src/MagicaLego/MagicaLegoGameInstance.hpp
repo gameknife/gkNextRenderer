@@ -24,7 +24,7 @@ struct FPlacedBlock
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:
-	MagicaLegoGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine);
+	MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
     ~MagicaLegoGameInstance() {}
 	
     void OnInit() override {}
@@ -43,6 +43,9 @@ public:
 protected:
 	void AddBasicBlock(std::string blockName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
+
+	void PlaceDynamicBlock(FPlacedBlock Block);
+	void RemoveDynamicBlock(FPlacedBlock Block);
 	
 	void RebuildScene();
 	
@@ -57,11 +60,14 @@ private:
 
 	int currentBlockIdx_ {};
 
+	// 起始的方块位置，之后的instance都是rebuild出来的
+	int instanceCountBeforeDynamics_ {};
+
 	// 起始的方块，静态，无需加速结构，不会被重建
 	std::vector<FPlacedBlock> BlocksFromScene;
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
-	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
+	std::unordered_map<glm::ivec3, FPlacedBlock> BlocksDynamics;
 
 
 

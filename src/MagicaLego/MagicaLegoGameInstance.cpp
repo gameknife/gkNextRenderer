@@ -7,14 +7,21 @@
 
 const int ICON_SIZE = 64;
 const int PALATE_SIZE = 48;
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
-    return std::make_unique<MagicaLegoGameInstance>(config,engine);
+    return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
 }
 
-MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine):NextGameInstanceBase(config,engine),engine_(engine)
+MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
     config.Title = "MagicaLego";
+    config.Height = 1080;
+    config.Width = 2160;
+    
+    options.SceneName = "legobricks.glb";
+    options.Samples = 4;
+    options.Temporal = 16;
+    options.ForceSDR = true;
     currentMode_ = ELM_Place;
 }
 
@@ -110,9 +117,36 @@ FBasicBlock* MagicaLegoGameInstance::GetBasicBlock(uint32_t BlockIdx)
     return nullptr;
 }
 
+void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
+{
+    if( BlocksDynamics.find( Block.location ) != BlocksDynamics.end() )
+    {
+        if( BlocksDynamics[Block.location].modelId_ < 0 )
+        {
+            // exist, skip
+            return;
+        }
+    }
+
+    // Add it
+    BlocksDynamics[Block.location] = Block;
+}
+
+void MagicaLegoGameInstance::RemoveDynamicBlock(FPlacedBlock Block)
+{
+    if( BlocksDynamics.find( Block.location ) != BlocksDynamics.end() )
+    {
+        BlocksDynamics[Block.location].modelId_ = -1;
+    }
+}
+
 void MagicaLegoGameInstance::RebuildScene()
 {
     
+    for ( auto& Block : BlocksDynamics )
+    {
+        
+    }
 }
 
 bool SelectButton(const char* label, bool selected)

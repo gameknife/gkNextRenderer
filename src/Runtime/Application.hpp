@@ -16,7 +16,7 @@ class NextRendererApplication;
 class NextGameInstanceBase
 {
 public:
-	NextGameInstanceBase(Vulkan::WindowConfig& config, NextRendererApplication* engine){}
+	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine){}
 	virtual ~NextGameInstanceBase() {}
 	virtual void OnInit() =0;
 	virtual void OnTick() =0;
@@ -35,7 +35,7 @@ public:
 class NextGameInstanceVoid : public NextGameInstanceBase
 {
 public:
-	NextGameInstanceVoid(Vulkan::WindowConfig& config, NextRendererApplication* engine):NextGameInstanceBase(config,engine){}
+	NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine){}
 	~NextGameInstanceVoid() override = default;
 	
 	void OnInit() override {}
@@ -49,7 +49,7 @@ public:
 	bool OnMouseButton(int button, int action, int mods) override {return false;}
 };
 
-extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, NextRendererApplication* engine);
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
 
 namespace NextRenderer
 {
@@ -72,7 +72,7 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(const Options& options, void* userdata = nullptr);
+	NextRendererApplication(Options& options, void* userdata = nullptr);
 	~NextRendererApplication();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
