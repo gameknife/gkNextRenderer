@@ -17,7 +17,7 @@ int main(int argc, const char* argv[]) noexcept
     try
     {
         // Handle command line options.
-        const Options options(argc, argv);
+        Options options(argc, argv);
         // Global GOption, can access from everywhere
         GOption = &options;
         
