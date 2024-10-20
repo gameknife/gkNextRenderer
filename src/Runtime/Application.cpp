@@ -337,6 +337,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     Assets::UniformBufferObject ubo = {};
 
     ubo.ModelView = modelViewController_.ModelView();
+    gameInstance_->OverrideModelView(ubo.ModelView);
+    
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
@@ -616,6 +618,11 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
         userInterface_->WantsToCaptureKeyboard() ||
         userInterface_->WantsToCaptureMouse()
         )
+    {
+        return;
+    }
+
+    if(gameInstance_->OnCursorPosition(xpos, ypos))
     {
         return;
     }

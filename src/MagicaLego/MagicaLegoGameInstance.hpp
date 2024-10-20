@@ -33,11 +33,13 @@ public:
 	bool OnRenderUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
 
+	bool OverrideModelView(glm::mat4& OutMatrix) const override;
+
 	void OnSceneLoaded() override;
 	void OnSceneUnloaded() override;
 	
     bool OnKey(int key, int scancode, int action, int mods) override;
-    bool OnCursorPosition(double xpos, double ypos) override {return false;}
+    bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(int button, int action, int mods) override;
 
 	void CleanUp();
@@ -86,5 +88,12 @@ private:
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 	NextRendererApplication* engine_;
+
+	bool resetMouse_ {};
+	glm::dvec2 mousePos_;
+
+	float cameraRotX_ {};
+	float cameraRotY_ {};
+	float cameraMultiplier_ {};
 };
 

@@ -13,7 +13,7 @@ const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
 const int SIDE_BAR_WIDTH = 240;
 
-#pragma optimize("", off)
+//#pragma optimize("", off)
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
@@ -53,10 +53,12 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     config.Width = 2160;
     
     options.SceneName = "legobricks.glb";
-    options.Samples = 4;
+    options.Samples = 8;
     options.Temporal = 16;
     options.ForceSDR = true;
     SetBuildMode(ELM_Place);
+
+    resetMouse_ = true;
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -85,6 +87,23 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
 }
 
+bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
+{
+    float xRotation = cameraRotX_; // 例如绕X轴旋转45度
+    float yRotation = cameraRotY_; // 例如上下偏转30度
+    float armLength = 5.0f;
+    
+    glm::vec3 center = glm::vec3(0.0f, 0.0f, 0.0f);
+    
+    glm::vec3 cameraPos;
+    cameraPos.x = center.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
+    cameraPos.y = center.y + armLength * sin(glm::radians(yRotation));
+    cameraPos.z = center.z + armLength * cos(glm::radians(yRotation)) * sin(glm::radians(xRotation));
+    
+    OutMatrix = glm::lookAtRH(cameraPos, center, glm::vec3(0.0f, 1.0f, 0.0f));
+    return true;
+}
+
 void MagicaLegoGameInstance::OnSceneLoaded()
 {
     NextGameInstanceBase::OnSceneLoaded();
@@ -99,7 +118,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     AddBasicBlock("Block1x1_Glass");
     AddBasicBlock("Block1x1_Light");
 
-    instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size() - 1);
+    instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -130,6 +149,23 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
     return true;
 }
 
+bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
+{
+    if(resetMouse_)
+    {
+        mousePos_ = glm::dvec2(xpos, ypos);
+        resetMouse_ = false;
+    }
+    
+    glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
+    
+    cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
+    cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
+    
+    mousePos_ = glm::dvec2(xpos, ypos);
+    return true;
+}
+
 bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
@@ -141,7 +177,16 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         return true;
     }
-    return false;
+
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    {
+        cameraMultiplier_ = 0.1f;
+    }
+    else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
+    {
+        cameraMultiplier_ = 0.0f;
+    }
+    return true;
 }
 
 void MagicaLegoGameInstance::CleanUp()
@@ -560,4 +605,4 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
 }
-#pragma optimize("", on)
+//#pragma optimize("", on)
