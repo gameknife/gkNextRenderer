@@ -28,14 +28,9 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/TextureImage.hpp"
-#include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
 
@@ -195,8 +190,8 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
     colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
     colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
-    colors[ImGuiCol_FrameBg]                = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
     colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
     colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
     colors[ImGuiCol_TitleBgActive]          = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
@@ -227,12 +222,13 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
     colors[ImGuiCol_NavHighlight]           = ActiveColor;
     style->WindowPadding                    = ImVec2(12.00f, 8.00f);
-    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
+    style->ItemSpacing                      = ImVec2(6.00f, 6.00f);
     style->GrabMinSize                      = 20.00f;
     style->WindowRounding                   = 8.00f;
     style->FrameBorderSize                  = 0.00f;
     style->FrameRounding                    = 4.00f;
     style->GrabRounding                     = 12.00f;
+	style->SeparatorTextBorderSize			= 1.0f;
 }
 
 void UserInterface::PreRender()

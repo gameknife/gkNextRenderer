@@ -561,6 +561,12 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
     {
         return;
     }
+
+    if( gameInstance_->OnKey(key, scancode, action, mods) )
+    {
+        return;
+    }
+    
 #if !ANDROID
     if (action == GLFW_PRESS)
     {
@@ -625,6 +631,11 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
+    {
+        return;
+    }
+
+    if(gameInstance_->OnMouseButton(button, action, mods))
     {
         return;
     }

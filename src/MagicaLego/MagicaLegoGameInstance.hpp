@@ -36,21 +36,28 @@ public:
 	void OnSceneLoaded() override;
 	void OnSceneUnloaded() override;
 	
-    bool OnKey(int key, int scancode, int action, int mods) override {return false;}
+    bool OnKey(int key, int scancode, int action, int mods) override;
     bool OnCursorPosition(double xpos, double ypos) override {return false;}
-    bool OnMouseButton(int button, int action, int mods) override {return false;}
+    bool OnMouseButton(int button, int action, int mods) override;
+
+	void CleanUp();
+	void SaveRecord(std::string filename);
+	void LoadRecord(std::string filename);
 
 protected:
 	void AddBasicBlock(std::string blockName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
 	void PlaceDynamicBlock(FPlacedBlock Block);
-	void RemoveDynamicBlock(FPlacedBlock Block);
 	
-	void RebuildScene();
+	void RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source);
+	void RebuildFromRecord(int timelapse);
 	
 	void DrawLeftBar();
 	void DrawRightBar();
+	void DrawTimeline();
+
+	void SetBuildMode(ELegoMode mode);
 	
 private:
 	ELegoMode currentMode_;
@@ -60,17 +67,24 @@ private:
 
 	int currentBlockIdx_ {};
 
+	int currentPreviewStep {};
+
 	// 起始的方块位置，之后的instance都是rebuild出来的
 	int instanceCountBeforeDynamics_ {};
+
+	bool playReview_ {};
 
 	// 起始的方块，静态，无需加速结构，不会被重建
 	std::vector<FPlacedBlock> BlocksFromScene;
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
-	std::unordered_map<glm::ivec3, FPlacedBlock> BlocksDynamics;
+	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
+
+	std::vector<FPlacedBlock> BlockRecords;
 
 
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 	NextRendererApplication* engine_;
 };
+
