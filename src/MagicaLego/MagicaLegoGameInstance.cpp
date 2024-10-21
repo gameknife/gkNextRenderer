@@ -53,10 +53,11 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     config.Width = 2160;
     
     options.SceneName = "legobricks.glb";
-    options.Samples = 8;
+    options.Samples = 4;
     options.Temporal = 16;
     options.ForceSDR = true;
     SetBuildMode(ELM_Place);
+    SetCameraMode(ECM_Orbit);
 
     resetMouse_ = true;
 }
@@ -92,15 +93,22 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
     float xRotation = cameraRotX_; // 例如绕X轴旋转45度
     float yRotation = cameraRotY_; // 例如上下偏转30度
     float armLength = 5.0f;
-    
-    glm::vec3 center = glm::vec3(0.0f, 0.0f, 0.0f);
-    
+        
     glm::vec3 cameraPos;
-    cameraPos.x = center.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
-    cameraPos.y = center.y + armLength * sin(glm::radians(yRotation));
-    cameraPos.z = center.z + armLength * cos(glm::radians(yRotation)) * sin(glm::radians(xRotation));
+    cameraPos.x = cameraCenter_.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
+    cameraPos.y = cameraCenter_.y + armLength * sin(glm::radians(yRotation));
+    cameraPos.z = cameraCenter_.z + armLength * cos(glm::radians(yRotation)) * sin(glm::radians(xRotation));
+
+    // calcate the view forward and left
+    glm::vec3 forward = glm::normalize(cameraCenter_ - cameraPos);
+    forward.y = 0.0f;
+    glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
+    left.y = 0.0f;
     
-    OutMatrix = glm::lookAtRH(cameraPos, center, glm::vec3(0.0f, 1.0f, 0.0f));
+    panForward_ = glm::normalize(forward);
+    panLeft_ = glm::normalize(left);
+    
+    OutMatrix = glm::lookAtRH(cameraPos, cameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     return true;
 }
 
@@ -139,6 +147,10 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
             case GLFW_KEY_Q: SetBuildMode(ELM_Dig); break;
             case GLFW_KEY_W: SetBuildMode(ELM_Place); break;
             case GLFW_KEY_E: SetBuildMode(ELM_Select); break;
+
+            case GLFW_KEY_A: SetCameraMode(ECM_Pan); break;
+            case GLFW_KEY_S: SetCameraMode(ECM_Orbit); break;
+            case GLFW_KEY_D: SetCameraMode(ECM_AutoFocus); break;
             default: break;
         }
     }
@@ -158,9 +170,18 @@ bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
     }
     
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
-    
-    cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
-    cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
+
+    if(currentCamMode_ == ECM_Orbit)
+    {
+        cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
+        cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
+    }
+
+    if(currentCamMode_ == ECM_Pan)
+    {
+        cameraCenter_ += panForward_ * static_cast<float>(delta.y) * cameraMultiplier_ * 0.01f;
+        cameraCenter_ += panLeft_ * static_cast<float>(delta.x) * cameraMultiplier_ * 0.01f;
+    }
     
     mousePos_ = glm::dvec2(xpos, ypos);
     return true;
@@ -412,17 +433,17 @@ void MagicaLegoGameInstance::DrawLeftBar()
             SetBuildMode(ELM_Select);
         }
         ImGui::SeparatorText("Camera");
-        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, true) )
+        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, currentCamMode_ == ECM_Pan))
         {
 
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CAMERA_ROTATE, false) )
+        if( SelectButton(ICON_FA_CAMERA_ROTATE, currentCamMode_ == ECM_Orbit))
         {
 
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CIRCLE_DOT, false) )
+        if( SelectButton(ICON_FA_CIRCLE_DOT, currentCamMode_ == ECM_AutoFocus))
         {
 
         }
@@ -605,4 +626,10 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
 }
+
+void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
+{
+    currentCamMode_ = mode;
+}
+
 //#pragma optimize("", on)

@@ -622,6 +622,8 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
         return;
     }
 
+    mousePos_ = glm::vec2(xpos, ypos);
+    
     if(gameInstance_->OnCursorPosition(xpos, ypos))
     {
         return;
@@ -629,8 +631,6 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
 
     // Camera motions
     modelViewController_.OnCursorPosition(xpos, ypos);
-
-    mousePos_ = glm::vec2(xpos, ypos);
 }
 
 void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)

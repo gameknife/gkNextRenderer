@@ -7,6 +7,13 @@ enum ELegoMode
 	ELM_Select,
 };
 
+enum ECamMode
+{
+	ECM_Pan,
+	ECM_Orbit,
+	ECM_AutoFocus,
+};
+
 struct FBasicBlock
 {
 	// just need modelIdNow
@@ -60,10 +67,11 @@ protected:
 	void DrawTimeline();
 
 	void SetBuildMode(ELegoMode mode);
+	void SetCameraMode(ECamMode mode);
 	
 private:
 	ELegoMode currentMode_;
-
+	ECamMode currentCamMode_;
 	// 基础的方块
 	std::vector<FBasicBlock> BasicNodes;
 
@@ -90,8 +98,11 @@ private:
 	NextRendererApplication* engine_;
 
 	bool resetMouse_ {};
-	glm::dvec2 mousePos_;
+	glm::dvec2 mousePos_ {};
 
+	glm::vec3 cameraCenter_ {};
+	mutable glm::vec3 panForward_ {};
+	mutable glm::vec3 panLeft_ {};
 	float cameraRotX_ {};
 	float cameraRotY_ {};
 	float cameraMultiplier_ {};
