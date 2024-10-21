@@ -13,7 +13,7 @@ const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
 const int SIDE_BAR_WIDTH = 240;
 
-//#pragma optimize("", off)
+#pragma optimize("", off)
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
@@ -659,4 +659,4 @@ void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
     currentCamMode_ = mode;
 }
 
-//#pragma optimize("", on)
+#pragma optimize("", on)
