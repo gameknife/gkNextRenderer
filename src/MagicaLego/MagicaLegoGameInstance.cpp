@@ -54,12 +54,15 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     
     options.SceneName = "legobricks.glb";
     options.Samples = 4;
-    options.Temporal = 16;
+    options.Temporal = 32;
     options.ForceSDR = true;
     SetBuildMode(ELM_Place);
     SetCameraMode(ECM_Orbit);
 
     resetMouse_ = true;
+
+    cameraRotX_ = 45;
+    cameraRotY_ = 30;
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -86,6 +89,16 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         FPlacedBlock block { blockLocation, currentBlockIdx_ };
         PlaceDynamicBlock(block);
     }
+    if( currentMode_ == ELM_Select )
+    {
+        auto& Node = GetEngine().GetScene().Nodes()[instanceId];
+        {
+            glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.001f;
+            glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
+            if(currentCamMode_ == ECM_AutoFocus)
+                cameraCenter_ = GetRenderLocationFromBlockLocation(blockLocation);
+        }
+    }
 }
 
 bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
@@ -95,12 +108,12 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
     float armLength = 5.0f;
         
     glm::vec3 cameraPos;
-    cameraPos.x = cameraCenter_.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
-    cameraPos.y = cameraCenter_.y + armLength * sin(glm::radians(yRotation));
-    cameraPos.z = cameraCenter_.z + armLength * cos(glm::radians(yRotation)) * sin(glm::radians(xRotation));
+    cameraPos.x = realCameraCenter_.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
+    cameraPos.y = realCameraCenter_.y + armLength * sin(glm::radians(yRotation));
+    cameraPos.z = realCameraCenter_.z + armLength * cos(glm::radians(yRotation)) * sin(glm::radians(xRotation));
 
     // calcate the view forward and left
-    glm::vec3 forward = glm::normalize(cameraCenter_ - cameraPos);
+    glm::vec3 forward = glm::normalize(realCameraCenter_ - cameraPos);
     forward.y = 0.0f;
     glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     left.y = 0.0f;
@@ -108,7 +121,7 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
     panForward_ = glm::normalize(forward);
     panLeft_ = glm::normalize(left);
     
-    OutMatrix = glm::lookAtRH(cameraPos, cameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
+    OutMatrix = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     return true;
 }
 
@@ -171,7 +184,7 @@ bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
     
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
 
-    if(currentCamMode_ == ECM_Orbit)
+    if((currentCamMode_ == ECM_Orbit) || (currentCamMode_ == ECM_AutoFocus))
     {
         cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
         cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
@@ -269,6 +282,8 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName)
             newBlock.color = mat->Diffuse;
         }
         BasicNodes.push_back(newBlock);
+
+        Node->SetVisible(false);
     }
 }
 
@@ -289,6 +304,9 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     BlockRecords.push_back(Block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
     RebuildScene(BlocksDynamics);
+
+    if(currentCamMode_ == ECM_AutoFocus)
+        cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
 }
 
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source)
@@ -306,6 +324,11 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
             }
         }
     }
+}
+
+void MagicaLegoGameInstance::OnTick()
+{
+    realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
 }
 
 bool MagicaLegoGameInstance::OnRenderUI()
@@ -345,6 +368,9 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
     {
         auto& Block = BlockRecords[i];
         TempBlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
+
+        if(currentCamMode_ == ECM_AutoFocus)
+            cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
     }
     RebuildScene(TempBlocksDynamics);
 }
@@ -435,17 +461,17 @@ void MagicaLegoGameInstance::DrawLeftBar()
         ImGui::SeparatorText("Camera");
         if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, currentCamMode_ == ECM_Pan))
         {
-
+            SetCameraMode(ECM_Pan);
         }
         ImGui::SameLine();
         if( SelectButton(ICON_FA_CAMERA_ROTATE, currentCamMode_ == ECM_Orbit))
         {
-
+            SetCameraMode(ECM_Orbit);
         }
         ImGui::SameLine();
         if( SelectButton(ICON_FA_CIRCLE_DOT, currentCamMode_ == ECM_AutoFocus))
         {
-
+            SetCameraMode(ECM_AutoFocus);
         }
         
         ImGui::SeparatorText("Files");

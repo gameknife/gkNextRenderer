@@ -35,7 +35,7 @@ public:
     ~MagicaLegoGameInstance() {}
 	
     void OnInit() override {}
-    void OnTick() override {}
+    void OnTick() override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
@@ -98,8 +98,10 @@ private:
 	NextRendererApplication* engine_;
 
 	bool resetMouse_ {};
+	
 	glm::dvec2 mousePos_ {};
 
+	glm::vec3 realCameraCenter_ {};
 	glm::vec3 cameraCenter_ {};
 	mutable glm::vec3 panForward_ {};
 	mutable glm::vec3 panLeft_ {};

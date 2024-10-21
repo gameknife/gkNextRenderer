@@ -221,8 +221,11 @@ namespace Vulkan::RayTracing
         std::vector<VkAccelerationStructureInstanceKHR> instances;
         for (const auto& node : scene.Nodes())
         {
-            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
+            if(node.IsVisible())
+            {
+                instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+    bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
+            }
         }
 
         // upload to gpu

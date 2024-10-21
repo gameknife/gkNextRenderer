@@ -967,7 +967,7 @@ namespace Assets
     }
 
     Node::Node(std::string name, glm::mat4 transform, int id, bool procedural): name_(name), transform_(transform), modelId_(id),
-                                                              procedural_(procedural)
+                                                              procedural_(procedural), visible_(true)
     {
     }
 }
