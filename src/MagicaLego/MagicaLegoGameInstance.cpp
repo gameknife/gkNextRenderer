@@ -51,6 +51,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     config.Title = "MagicaLego";
     config.Height = 1080;
     config.Width = 2160;
+    config.ForceSDR = true;
     
     options.SceneName = "legobricks.glb";
     options.Samples = 4;
@@ -130,14 +131,14 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     NextGameInstanceBase::OnSceneLoaded();
 
     // Add the pre-defined blocks from assets
-    AddBasicBlock("Block1x1_Yellow");
-    AddBasicBlock("Block1x1_Blue");
-    AddBasicBlock("Block1x1_Red");
-    AddBasicBlock("Block1x1_White");
-    
-    AddBasicBlock("Block1x1_Metal");
-    AddBasicBlock("Block1x1_Glass");
-    AddBasicBlock("Block1x1_Light");
+    auto& allNodes = GetEngine().GetScene().Nodes();
+    for ( auto& Node : allNodes )
+    {
+        if(Node.GetName()._Starts_with("Block1x1_"))
+        {
+            AddBasicBlock(Node.GetName());
+        }
+    }
 
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 }
