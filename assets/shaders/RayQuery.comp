@@ -79,7 +79,7 @@ void main() {
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = min(16, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps);
+		sampleTimes = min(16, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps));
 	}
 
     #if MOBILE
@@ -146,7 +146,7 @@ void main() {
         
                 if (miss)
                 {
-                    sampleTimes = max(min(16, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
+                    sampleTimes = max(min(16, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps)), sampleTimes);
                     multisamplecount = Camera.AdaptiveSteps;
                 }
             }
