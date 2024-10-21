@@ -64,16 +64,27 @@ void main() {
     {
 		if( check )
 		{
+			uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, previpos).r : imageLoad(Visibility1Buffer, previpos).r;
+			uint current_primitive_index1 = isEvenFrame ? imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r : imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r;
+			uint current_primitive_index2 = isEvenFrame ? imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r : imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r;
+			uint current_primitive_index3 = isEvenFrame ? imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r : imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r;
+			
+			uint current_total = current_primitive_index0 + current_primitive_index1 + current_primitive_index2 + current_primitive_index3;
+			
 			uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
 			uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r;
 			uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r;
 			uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r;
 
-			bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index, current_primitive_index, current_primitive_index, current_primitive_index) ));
+			uint prev_total = prev_primitive_index0 + prev_primitive_index1 + prev_primitive_index2 + prev_primitive_index3;
+			
+			
+			//bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index, current_primitive_index, current_primitive_index, current_primitive_index) ));
+			bool miss = current_total != prev_total ? true : false;
 			if( miss )
 			{
-				//useHistory = false;
-				src.w = Camera.TemporalFrames * 0.75;
+				useHistory = false;
+				//src.w = Camera.TemporalFrames * 0.75;
 			}
 		}
 
