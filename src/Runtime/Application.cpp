@@ -160,7 +160,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 10.0f;
+    userSettings.DenoiseSigmaLum = 50.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 

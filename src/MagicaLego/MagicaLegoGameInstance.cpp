@@ -7,13 +7,14 @@
 #include "Assets/Scene.hpp"
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
+#include "Runtime/Platform/PlatformCommon.h"
 
 const int ICON_SIZE = 64;
 const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
 const int SIDE_BAR_WIDTH = 240;
 
-#pragma optimize("", off)
+DISABLE_OPTIMIZATION
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
@@ -49,12 +50,12 @@ uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
     config.Title = "MagicaLego";
-    config.Height = 1080;
-    config.Width = 2160;
+    config.Height = 640;
+    config.Width = 1280;
     config.ForceSDR = true;
     
     options.SceneName = "legobricks.glb";
-    options.Samples = 4;
+    options.Samples = 1;
     options.Temporal = 32;
     options.ForceSDR = true;
     
@@ -690,4 +691,4 @@ void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
     currentCamMode_ = mode;
 }
 
-#pragma optimize("", on)
+ENABLE_OPTIMIZATION

@@ -17,7 +17,7 @@ layout(binding = 6, r32ui) uniform uimage2D InVisibility1;
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 const int WORK_GROUP_AXIS_SIZE = 16;
-const int WINDOW_R = 4;
+const int WINDOW_R = 6;
 const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
 
 // thread group is 16 x 16 = 256
@@ -129,6 +129,22 @@ void main() {
                 visibility[row][col] = isEvenFrame ? imageLoad(InVisibility0, coord).r : imageLoad(InVisibility1, coord).r;
             }
         }
+
+        if (WINDOW_R > 5)
+        {
+            idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
+            if (idx < WINDOW_LEN * WINDOW_LEN)
+            {
+                row = idx / WINDOW_LEN;
+                col = idx % WINDOW_LEN;
+                coord = ivec2(gl_WorkGroupID.xy) * WORK_GROUP_AXIS_SIZE + ivec2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
+                window[row][col] = imageLoad(InImage, coord).rgb;
+                albedo[row][col] = imageLoad(InAlbedo, coord).rgb;
+                normal[row][col] = imageLoad(InNormal, coord).rgb;
+                visibility[row][col] = isEvenFrame ? imageLoad(InVisibility0, coord).r : imageLoad(InVisibility1, coord).r;
+            }
+        }
+
         
         barrier();
         // now, the WINDOW_R + WINDOW_R range pixel is in the shared memory
@@ -147,9 +163,9 @@ void main() {
 
         float Weight = 0;
 
-        for (int i = -WINDOW_R; i <= WINDOW_R; ++i)
+        for (int i = -WINDOW_R; i <= WINDOW_R; i += 2)
         {
-            for (int j = -WINDOW_R; j <= WINDOW_R; ++j)
+            for (int j = -WINDOW_R; j <= WINDOW_R; j += 2)
             {
                 JBF(coord.xy + ivec2(i,j), ivec2(i,j), Total, Weight, CenterLum, Normal, current_primitive_index);
             }
