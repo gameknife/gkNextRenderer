@@ -155,7 +155,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     auto& allNodes = GetEngine().GetScene().Nodes();
     for ( auto& Node : allNodes )
     {
-        if(Node.GetName()._Starts_with("Block1x1_"))
+        if(Node.GetName().find("Block1x1_", 0) == 0)
         {
             AddBasicBlock(Node.GetName());
         }
