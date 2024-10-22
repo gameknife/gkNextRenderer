@@ -24,6 +24,8 @@ public:
 	virtual bool OnRenderUI() =0;
 	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
 
+	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
+
 	virtual void OnSceneLoaded() {}
 	virtual void OnSceneUnloaded() {}
 

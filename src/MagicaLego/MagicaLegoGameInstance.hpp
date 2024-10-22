@@ -7,6 +7,13 @@ enum ELegoMode
 	ELM_Select,
 };
 
+enum ECamMode
+{
+	ECM_Pan,
+	ECM_Orbit,
+	ECM_AutoFocus,
+};
+
 struct FBasicBlock
 {
 	// just need modelIdNow
@@ -28,16 +35,18 @@ public:
     ~MagicaLegoGameInstance() {}
 	
     void OnInit() override {}
-    void OnTick() override {}
+    void OnTick() override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
+
+	bool OverrideModelView(glm::mat4& OutMatrix) const override;
 
 	void OnSceneLoaded() override;
 	void OnSceneUnloaded() override;
 	
     bool OnKey(int key, int scancode, int action, int mods) override;
-    bool OnCursorPosition(double xpos, double ypos) override {return false;}
+    bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(int button, int action, int mods) override;
 
 	void CleanUp();
@@ -58,10 +67,11 @@ protected:
 	void DrawTimeline();
 
 	void SetBuildMode(ELegoMode mode);
+	void SetCameraMode(ECamMode mode);
 	
 private:
 	ELegoMode currentMode_;
-
+	ECamMode currentCamMode_;
 	// 基础的方块
 	std::vector<FBasicBlock> BasicNodes;
 
@@ -70,7 +80,7 @@ private:
 	int currentPreviewStep {};
 
 	// 起始的方块位置，之后的instance都是rebuild出来的
-	int instanceCountBeforeDynamics_ {};
+	uint32_t instanceCountBeforeDynamics_ {};
 
 	bool playReview_ {};
 
@@ -79,6 +89,7 @@ private:
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
+	std::vector<uint64_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
 
@@ -86,5 +97,21 @@ private:
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 	NextRendererApplication* engine_;
+
+	bool resetMouse_ {};
+	
+	glm::dvec2 mousePos_ {};
+
+	glm::vec3 realCameraCenter_ {};
+	glm::vec3 cameraCenter_ {};
+	mutable glm::vec3 panForward_ {};
+	mutable glm::vec3 panLeft_ {};
+	float cameraRotX_ {};
+	float cameraRotY_ {};
+	float cameraMultiplier_ {};
+
+	bool bMouseLeftDown_ {};
+	int lastDownFrameNum_ {};
+	std::vector<uint64_t> oneLinePlacedInstance_ {};
 };
 

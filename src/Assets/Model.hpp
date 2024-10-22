@@ -64,6 +64,9 @@ namespace Assets
         bool IsProcedural() const { return procedural_; }
         const std::string& GetName() const {return name_; }
 
+        void SetVisible(bool visible) { visible_ = visible; }
+        bool IsVisible() const { return visible_; }
+
     private:
         Node(std::string name, glm::mat4 transform, int id, bool procedural);
 
@@ -71,6 +74,7 @@ namespace Assets
         glm::mat4 transform_;
         int modelId_;
         bool procedural_;
+        bool visible_;
     };
     
     class Model final

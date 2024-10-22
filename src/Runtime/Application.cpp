@@ -138,7 +138,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
-    userSettings.TAA = true;
+    userSettings.TAA = false; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -160,7 +160,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 10.0f;
+    userSettings.DenoiseSigmaLum = 50.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
@@ -337,6 +337,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     Assets::UniformBufferObject ubo = {};
 
     ubo.ModelView = modelViewController_.ModelView();
+    gameInstance_->OverrideModelView(ubo.ModelView);
+    
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
@@ -620,10 +622,15 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
         return;
     }
 
+    mousePos_ = glm::vec2(xpos, ypos);
+    
+    if(gameInstance_->OnCursorPosition(xpos, ypos))
+    {
+        return;
+    }
+
     // Camera motions
     modelViewController_.OnCursorPosition(xpos, ypos);
-
-    mousePos_ = glm::vec2(xpos, ypos);
 }
 
 void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)

@@ -39,7 +39,7 @@ namespace Vulkan::RayTracing
 			const BottomLevelAccelerationStructure& bottomLevelAs,
 			const glm::mat4& transform,
 			uint32_t instanceId,
-			uint32_t hitGroupId);
+			bool visible);
 
 	private:
 

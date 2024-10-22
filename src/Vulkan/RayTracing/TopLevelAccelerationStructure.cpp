@@ -85,7 +85,7 @@ VkAccelerationStructureInstanceKHR TopLevelAccelerationStructure::CreateInstance
 	const BottomLevelAccelerationStructure& bottomLevelAs,
 	const glm::mat4& transform,
 	const uint32_t modelId,
-	const uint32_t hitGroupId)
+	const bool visible)
 {
 	const auto& device = bottomLevelAs.Device();
 	const auto& deviceProcedure = bottomLevelAs.DeviceProcedures();
@@ -98,8 +98,8 @@ VkAccelerationStructureInstanceKHR TopLevelAccelerationStructure::CreateInstance
 
 	VkAccelerationStructureInstanceKHR instance = {};
 	instance.instanceCustomIndex = modelId;
-	instance.mask = 0xFF; // The visibility mask is always set of 0xFF, but if some instances would need to be ignored in some cases, this flag should be passed by the application.
-	instance.instanceShaderBindingTableRecordOffset = hitGroupId; // Set the hit group index, that will be used to find the shader code to execute when hitting the geometry.
+	instance.mask = visible ? 0xFF : 0x0; // The visibility mask is always set of 0xFF, but if some instances would need to be ignored in some cases, this flag should be passed by the application.
+	instance.instanceShaderBindingTableRecordOffset = 0; // Set the hit group index, that will be used to find the shader code to execute when hitting the geometry.
 	instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR; // Disable culling - more fine control could be provided by the application
 	instance.accelerationStructureReference = address;
 
