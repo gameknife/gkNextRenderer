@@ -5,7 +5,7 @@
 
 namespace NextRenderer
 {
-    void PlatformInit()
+    inline void PlatformInit()
     {
         
     }
