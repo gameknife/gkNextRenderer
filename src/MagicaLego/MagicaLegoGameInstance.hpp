@@ -108,5 +108,9 @@ private:
 	float cameraRotX_ {};
 	float cameraRotY_ {};
 	float cameraMultiplier_ {};
+
+	bool bMouseLeftDown_ {};
+	int lastDownFrameNum_ {};
+	std::vector<uint32_t> oneLinePlacedInstance_ {};
 };
 

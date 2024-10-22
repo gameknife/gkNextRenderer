@@ -57,6 +57,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.Samples = 4;
     options.Temporal = 32;
     options.ForceSDR = true;
+    
     SetBuildMode(ELM_Place);
     SetCameraMode(ECM_Orbit);
 
@@ -70,6 +71,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
     uint32_t instanceId = rayResult.InstanceId;
 
+    if(!bMouseLeftDown_)
+    {
+        return;
+    }
+    
     if( currentMode_ == ELM_Dig )
     {
         auto& Node = GetEngine().GetScene().Nodes()[instanceId];
@@ -85,10 +91,21 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
     if( currentMode_ == ELM_Place )
     {
+        // check if instanceId in oneLinePlacedInstance_
+        for( auto& id : oneLinePlacedInstance_ )
+        {
+            if( instanceId == id)
+            {
+                return;
+            }
+        }
+
         glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
         glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
         FPlacedBlock block { blockLocation, currentBlockIdx_ };
         PlaceDynamicBlock(block);
+
+        oneLinePlacedInstance_.push_back(static_cast<uint32_t>(GetEngine().GetScene().Nodes().size() - 1));
     }
     if( currentMode_ == ELM_Select )
     {
@@ -205,11 +222,14 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        GetEngine().GetUserSettings().RequestRayCast = true;
+        bMouseLeftDown_ = true;
+        lastDownFrameNum_ = GetEngine().GetRenderer().FrameCount();
         return true;
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
+        bMouseLeftDown_ = false;
+        oneLinePlacedInstance_.clear();
         return true;
     }
 
@@ -313,6 +333,7 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
+    // unordered_map是不保证顺序的，所以加入进去的instanceid是不确定的，这里需要处理
     for ( auto& Block : Source )
     {
         if(Block.second.modelId_ >= 0)
@@ -330,6 +351,11 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
 void MagicaLegoGameInstance::OnTick()
 {
     realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
+
+    if( bMouseLeftDown_ )
+    {
+        GetEngine().GetUserSettings().RequestRayCast = true;
+    }
 }
 
 bool MagicaLegoGameInstance::OnRenderUI()

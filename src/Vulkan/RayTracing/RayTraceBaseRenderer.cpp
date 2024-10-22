@@ -241,6 +241,8 @@ namespace Vulkan::RayTracing
         {
             topAs_[0].Update(commandBuffer, instanceCount);
         });
+
+        
     }
 
 
@@ -288,6 +290,18 @@ namespace Vulkan::RayTracing
         if(supportRayCast_)
         {
             SCOPED_GPU_TIMER("raycast");
+
+            VkMemoryBarrier memoryBarrier = {};
+            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            memoryBarrier.pNext = nullptr;
+            memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+            memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
             
             VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
