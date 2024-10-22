@@ -80,7 +80,7 @@ private:
 	int currentPreviewStep {};
 
 	// 起始的方块位置，之后的instance都是rebuild出来的
-	int instanceCountBeforeDynamics_ {};
+	uint32_t instanceCountBeforeDynamics_ {};
 
 	bool playReview_ {};
 
@@ -89,6 +89,7 @@ private:
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
+	std::vector<uint64_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
 
@@ -111,6 +112,6 @@ private:
 
 	bool bMouseLeftDown_ {};
 	int lastDownFrameNum_ {};
-	std::vector<uint32_t> oneLinePlacedInstance_ {};
+	std::vector<uint64_t> oneLinePlacedInstance_ {};
 };
 

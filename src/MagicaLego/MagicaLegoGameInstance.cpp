@@ -91,21 +91,24 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
     if( currentMode_ == ELM_Place )
     {
-        // check if instanceId in oneLinePlacedInstance_
-        for( auto& id : oneLinePlacedInstance_ )
+        if(instanceId > instanceCountBeforeDynamics_)
         {
-            if( instanceId == id)
+            uint64_t hitHash = hashByInstance[instanceId - instanceCountBeforeDynamics_];
+            for( auto& id : oneLinePlacedInstance_ )
             {
-                return;
-            }
+                if( hitHash == id)
+                {
+                    return;
+                }
+            } 
         }
-
+        
         glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
         glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
         FPlacedBlock block { blockLocation, currentBlockIdx_ };
         PlaceDynamicBlock(block);
 
-        oneLinePlacedInstance_.push_back(static_cast<uint32_t>(GetEngine().GetScene().Nodes().size() - 1));
+        oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) );
     }
     if( currentMode_ == ELM_Select )
     {
@@ -333,6 +336,7 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
+    hashByInstance.clear();
     // unordered_map是不保证顺序的，所以加入进去的instanceid是不确定的，这里需要处理
     for ( auto& Block : Source )
     {
@@ -343,6 +347,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
             {
                 Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, false);
                 GetEngine().GetScene().Nodes().push_back(newNode);
+                hashByInstance.push_back(Block.first);
             }
         }
     }
