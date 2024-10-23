@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Runtime/Application.hpp"
 
 enum ELegoMode
@@ -28,11 +30,13 @@ struct FPlacedBlock
 	int modelId_; // 如果为-1，表示已经被挖掉了
 };
 
+class MagicaLegoUserInterface;
+
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:
 	MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
-    ~MagicaLegoGameInstance() {}
+    ~MagicaLegoGameInstance() override = default;
 	
     void OnInit() override {}
     void OnTick() override;
@@ -53,6 +57,24 @@ public:
 	void SaveRecord(std::string filename);
 	void LoadRecord(std::string filename);
 
+	ELegoMode GetBuildMode() const {return currentMode_;}
+	ECamMode GetCameraMode() const {return currentCamMode_;}
+
+	void SetBuildMode(ELegoMode mode);
+	void SetCameraMode(ECamMode mode);
+
+	std::vector<FBasicBlock>& GetBasicNodes() {return BasicNodes;}
+
+	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
+	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
+
+	int GetCurrentStep() const {return currentPreviewStep;}
+	int GetMaxStep() const {return static_cast<int>(BlockRecords.size());}
+	void SetPlayStep(int step);
+
+	bool IsPlayReview() const {return playReview_;}
+	void SetPlayReview(bool b) {playReview_ = b;}
+	
 protected:
 	void AddBasicBlock(std::string blockName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
@@ -61,14 +83,7 @@ protected:
 	
 	void RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source);
 	void RebuildFromRecord(int timelapse);
-	
-	void DrawLeftBar();
-	void DrawRightBar();
-	void DrawTimeline();
 
-	void SetBuildMode(ELegoMode mode);
-	void SetCameraMode(ECamMode mode);
-	
 private:
 	ELegoMode currentMode_;
 	ECamMode currentCamMode_;
@@ -84,16 +99,11 @@ private:
 
 	bool playReview_ {};
 
-	// 起始的方块，静态，无需加速结构，不会被重建
-	std::vector<FPlacedBlock> BlocksFromScene;
-
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
 	std::vector<uint64_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
-
-
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 	NextRendererApplication* engine_;
@@ -113,5 +123,8 @@ private:
 	bool bMouseLeftDown_ {};
 	int lastDownFrameNum_ {};
 	std::vector<uint64_t> oneLinePlacedInstance_ {};
+	glm::ivec3 lastPlacedLocation_ {};
+
+	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 };
 
