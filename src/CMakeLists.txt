@@ -226,6 +226,8 @@ set(src_files
 set(src_files_magicalego
 	MagicaLego/MagicaLegoGameInstance.hpp
 	MagicaLego/MagicaLegoGameInstance.cpp
+	MagicaLego/MagicaLegoUserInterface.hpp
+	MagicaLego/MagicaLegoUserInterface.cpp
 )
 source_group("Assets" FILES ${src_files_assets})
 source_group("Utilities" FILES ${src_files_utilities})
