@@ -30,6 +30,7 @@ set(src_files_utilities
 	Utilities/StbImage.hpp
 	Utilities/Localization.hpp
 	Utilities/Localization.cpp
+	Utilities/ImGui.hpp
 )
 
 set(src_files_vulkan
