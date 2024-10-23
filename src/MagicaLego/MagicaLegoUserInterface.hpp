@@ -18,6 +18,8 @@ private:
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
 
+	bool showLeftBar_ = false;
+	bool showRightBar_ = false;
 	bool showTimeline_ = false;
 };
 

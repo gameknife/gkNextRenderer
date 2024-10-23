@@ -66,18 +66,20 @@ bool MaterialButton(FBasicBlock& block, float WindowWidth, bool selected)
 
 MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance):gameInstance_(gameInstance)
 {
-    
+    showLeftBar_ = true;
+    showRightBar_ = true;
+    showTimeline_ = false;
 }
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
     // TotalSwitch
     DrawMainToolBar();
-    
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
-    DrawLeftBar();
-    DrawRightBar();
+    if( showLeftBar_ ) DrawLeftBar();
+    if( showRightBar_ ) DrawRightBar();
     ImGui::PopStyleVar(2);
 
     if(showTimeline_)
@@ -96,24 +98,39 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     
     const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, 0);
     const ImVec2 posPivot = ImVec2(0.5f, 0.0f);
-    
+
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(200,viewportSize.y));
-    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::SetNextWindowSize(ImVec2(0,0));
+    ImGui::SetNextWindowBgAlpha(0.2f);
     const int flags =
         ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoSavedSettings;
-    
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
     if (ImGui::Begin("MainToolBar", 0, flags))
     {
-        if( ImGui::Button(ICON_FA_TIMELINE, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
+        if( ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
+        {
+            showLeftBar_ = !showLeftBar_;
+        }
+        ImGui::SameLine();
+        if( ImGui::Button(ICON_FA_SQUARE_CARET_DOWN, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
             showTimeline_ = !showTimeline_;
         }
+        ImGui::SameLine();
+        if( ImGui::Button(ICON_FA_SQUARE_CARET_RIGHT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
+        {
+            showRightBar_ = !showRightBar_;
+        }
+        ImGui::SameLine();
     }
+    ImGui::PopStyleColor();
+    ImGui::End();
 }
 
 void MagicaLegoUserInterface::DrawLeftBar()
@@ -276,13 +293,13 @@ void MagicaLegoUserInterface::DrawRightBar()
 void MagicaLegoUserInterface::DrawTimeline()
 {
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - 100);
-    const ImVec2 posPivot = ImVec2(0.5f, 0.5f);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - 20);
+    const ImVec2 posPivot = ImVec2(0.5f, 1.0f);
     const float width = viewportSize.x - SIDE_BAR_WIDTH * 2 - 100;
     ImGuiStyle& style = ImGui::GetStyle();
     
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(width, 90));
+    ImGui::SetNextWindowSize(ImVec2(width, 80));
     ImGui::SetNextWindowBgAlpha(0.5f);
     const int flags =
         ImGuiWindowFlags_NoTitleBar |

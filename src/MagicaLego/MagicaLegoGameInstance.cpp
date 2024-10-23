@@ -53,6 +53,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.Samples = 4;
     options.Temporal = 16;
     options.ForceSDR = true;
+    options.RendererType = 0;
 
     // mode init
     SetBuildMode(ELM_Place);
