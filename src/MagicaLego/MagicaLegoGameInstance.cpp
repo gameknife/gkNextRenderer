@@ -33,11 +33,16 @@ glm::ivec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
 
 uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
 {
-    uint64_t hash = 17;
-    hash = hash * 31 + BlockLocation.x;
-    hash = hash * 31 + BlockLocation.y;
-    hash = hash * 31 + BlockLocation.z;
-    return hash;
+    // uint64_t hash = 17;
+    // hash = hash * 31 + BlockLocation.x;
+    // hash = hash * 31 + BlockLocation.y;
+    // hash = hash * 31 + BlockLocation.z;
+    // return hash;
+
+    uint64_t hx = std::hash<int>()(BlockLocation.x);
+    uint64_t hy = std::hash<int>()(BlockLocation.y);
+    uint64_t hz = std::hash<int>()(BlockLocation.z);
+    return hx ^ (hy << 1) ^ (hz << 2); 
 }
 
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
@@ -85,7 +90,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
             if( Node.GetName() == "blockInst" )
             {
                 // 这里可以从Node上取到location，但是WorldMatrix需要Decompose，简单点，直接反向normal，找一个内部位置
-                glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.001f;
+                glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
                 glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
                 FPlacedBlock block { blockLocation, -1 };
                 PlaceDynamicBlock(block);
@@ -95,34 +100,40 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
     if( currentMode_ == ELM_Place )
     {
-        if(instanceId > instanceCountBeforeDynamics_)
+        if( GetEngine().GetRenderer().FrameCount() % 2 == 0 )
         {
-            uint64_t hitHash = hashByInstance[instanceId - instanceCountBeforeDynamics_];
-            for( auto& id : oneLinePlacedInstance_ )
+            if(instanceId > instanceCountBeforeDynamics_)
             {
-                if( hitHash == id)
+                uint64_t hitHash = hashByInstance[instanceId - instanceCountBeforeDynamics_];
+                for( auto& id : oneLinePlacedInstance_ )
                 {
-                    return;
-                }
-            } 
-        }
+                    if( hitHash == id)
+                    {
+                        return;
+                    }
+                } 
+            }
         
-        glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-        glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
-        FPlacedBlock block { blockLocation, currentBlockIdx_ };
-        PlaceDynamicBlock(block);
-
-        oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) );
+            glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
+            glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
+            FPlacedBlock block { blockLocation, currentBlockIdx_ };
+            PlaceDynamicBlock(block);
+            oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) );
+        }
     }
     if( currentMode_ == ELM_Select )
     {
-        auto& Node = GetEngine().GetScene().Nodes()[instanceId];
+        glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
+        if(instanceId > instanceCountBeforeDynamics_)
         {
-            glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.001f;
-            glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
-            if(currentCamMode_ == ECM_AutoFocus)
-                cameraCenter_ = GetRenderLocationFromBlockLocation(blockLocation);
+            lastSelectLocation_ = GetBlockLocationFromRenderLocation(inLocation);
         }
+        else
+        {
+            lastSelectLocation_ = glm::ivec3(0);
+        }
+        if(currentCamMode_ == ECM_AutoFocus)
+            cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
     }
 }
 
@@ -252,12 +263,39 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     return true;
 }
 
+void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int idx)
+{
+    if( currentMode_ == ELM_Select )
+    {
+        if(lastSelectLocation_ != glm::ivec3(0))
+        {
+            FPlacedBlock block { lastSelectLocation_, idx };
+            PlaceDynamicBlock(block);
+        }
+    }
+}
+
 void MagicaLegoGameInstance::SetPlayStep(int step)
 {
-    if( step >= 0 && step < BlockRecords.size() )
+    if( step >= 0 && step <= BlockRecords.size() )
     {
         currentPreviewStep = step;
         RebuildFromRecord(currentPreviewStep);
+    }
+}
+
+void MagicaLegoGameInstance::DumpReplayStep(int step)
+{
+    if(step <= BlockRecords.size())
+    {
+        BlockRecords.erase( BlockRecords.begin() + step, BlockRecords.end());
+    
+        BlocksDynamics.clear();
+        for( auto& Block : BlockRecords )
+        {
+            BlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
+        }
+        RebuildScene(BlocksDynamics);
     }
 }
 
@@ -268,6 +306,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName)
     if(Node)
     {
         FBasicBlock newBlock;
+        newBlock.name = "#" + blockName.substr(strlen("Block1x1_"));
         newBlock.modelId_ = Node->GetModel();
         uint32_t mat_id = Scene.GetModel(newBlock.modelId_)->Materials()[0];
         auto mat = Scene.GetMaterial(mat_id);
@@ -335,13 +374,7 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
         inFile.close();
 
         BlockRecords = TempVector;
-
-        BlocksDynamics.clear();
-        for( auto& Block : BlockRecords )
-        {
-            BlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
-        }
-        RebuildScene(BlocksDynamics);
+        DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
     }
 }
 
@@ -414,6 +447,7 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 {
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
+    lastSelectLocation_ = glm::ivec3(0);
 }
 
 void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)

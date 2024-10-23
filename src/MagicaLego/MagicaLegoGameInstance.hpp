@@ -22,6 +22,7 @@ struct FBasicBlock
 	int modelId_;
 	int matType;
 	glm::vec4 color;
+	std::string name;
 };
 
 struct FPlacedBlock
@@ -67,14 +68,22 @@ public:
 
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
 	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
+	void TryChangeSelectionBrushIdx(int idx);
 
+	// Handle
+	glm::ivec3 GetCurrentSeletionBlock() const {return lastSelectLocation_;}
+	
+	// Replay
 	int GetCurrentStep() const {return currentPreviewStep;}
-	int GetMaxStep() const {return static_cast<int>(BlockRecords.size());}
+	int GetMaxStep() const {return std::max(0, static_cast<int>(BlockRecords.size()));}
 	void SetPlayStep(int step);
 
 	bool IsPlayReview() const {return playReview_;}
 	void SetPlayReview(bool b) {playReview_ = b;}
-	
+
+	void DumpReplayStep(int step);
+
+	NextRendererApplication& GetEngine() {return *engine_;}
 protected:
 	void AddBasicBlock(std::string blockName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
@@ -104,8 +113,7 @@ private:
 	std::vector<uint64_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
-
-	NextRendererApplication& GetEngine() {return *engine_;}
+	
 	NextRendererApplication* engine_;
 
 	bool resetMouse_ {};
@@ -124,7 +132,7 @@ private:
 	int lastDownFrameNum_ {};
 	std::vector<uint64_t> oneLinePlacedInstance_ {};
 	glm::ivec3 lastPlacedLocation_ {};
-
+	glm::ivec3 lastSelectLocation_ {};
 	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 };
 

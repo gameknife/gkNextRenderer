@@ -7,13 +7,15 @@
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoGameInstance.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Utilities/ImGui.hpp"
 
 const int ICON_SIZE = 64;
 const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
-const int SIDE_BAR_WIDTH = 242;
+const int BUILD_BAR_WIDTH = 240;
+const int SIDE_BAR_WIDTH = 300;
 
-bool SelectButton(const char* label, bool selected)
+bool SelectButton(const char* label, const char* shortcut, bool selected)
 {
     if(selected)
     {
@@ -21,7 +23,10 @@ bool SelectButton(const char* label, bool selected)
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f,0.6f,0.8f,1));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f,0.6f,0.8f,1));
     }
+    ImGui::BeginGroup();
     bool result = ImGui::Button(label, ImVec2(ICON_SIZE, ICON_SIZE));
+    Utilities::UI::TextCentered(shortcut, ICON_SIZE);
+    ImGui::EndGroup();
     if(selected)
     {
         ImGui::PopStyleColor(3);
@@ -44,10 +49,13 @@ bool MaterialButton(FBasicBlock& block, float WindowWidth, bool selected)
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
 
+    ImGui::BeginGroup();
     ImGui::PushID(block.modelId_);
     bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
     ImGui::PopID();
-
+    Utilities::UI::TextCentered(block.name, PALATE_SIZE);
+    ImGui::EndGroup();
+    
     float last_button_x2 = ImGui::GetItemRectMax().x;
     float next_button_x2 = last_button_x2 + style.ItemSpacing.x + PALATE_SIZE; // Expected position if next button was on same line
     if (next_button_x2 < WindowWidth)
@@ -130,6 +138,9 @@ void MagicaLegoUserInterface::DrawMainToolBar()
         ImGui::SameLine();
     }
     ImGui::PopStyleColor();
+
+    auto location = GetGameInstance()->GetCurrentSeletionBlock();
+    ImGui::Text( "%d, %d, %d", location.x, location.y, location.z );
     ImGui::End();
 }
 
@@ -139,7 +150,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
     const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(SIDE_BAR_WIDTH,viewportSize.y));
+    ImGui::SetNextWindowSize(ImVec2(BUILD_BAR_WIDTH,viewportSize.y));
     ImGui::SetNextWindowBgAlpha(0.9f);
     const int flags =
         ImGuiWindowFlags_NoTitleBar |
@@ -151,35 +162,48 @@ void MagicaLegoUserInterface::DrawLeftBar()
     if (ImGui::Begin("Place & Dig", 0, flags))
     {
         ImGui::SeparatorText("Mode");
-        if( SelectButton(ICON_FA_PERSON_DIGGING, GetGameInstance()->GetBuildMode() == ELM_Dig) )
+        if( SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELM_Dig) )
         {
             GetGameInstance()->SetBuildMode(ELM_Dig);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CUBES_STACKED, GetGameInstance()->GetBuildMode() == ELM_Place) )
+        if( SelectButton(ICON_FA_CUBES_STACKED, "W", GetGameInstance()->GetBuildMode() == ELM_Place) )
         {
             GetGameInstance()->SetBuildMode(ELM_Place);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_HAND_POINTER, GetGameInstance()->GetBuildMode() == ELM_Select) )
+        if( SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELM_Select) )
         {
             GetGameInstance()->SetBuildMode(ELM_Select);
         }
         ImGui::SeparatorText("Camera");
-        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, GetGameInstance()->GetCameraMode() == ECM_Pan))
+        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECM_Pan))
         {
             GetGameInstance()->SetCameraMode(ECM_Pan);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CAMERA_ROTATE, GetGameInstance()->GetCameraMode() == ECM_Orbit))
+        if( SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECM_Orbit))
         {
             GetGameInstance()->SetCameraMode(ECM_Orbit);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CIRCLE_DOT, GetGameInstance()->GetCameraMode() == ECM_AutoFocus))
+        if( SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECM_AutoFocus))
         {
             GetGameInstance()->SetCameraMode(ECM_AutoFocus);
         }
+
+        ImGui::Dummy(ImVec2(0,50));
+        ImGui::SeparatorText("Light");
+
+        ImGui::Checkbox("Sun", &GetGameInstance()->GetEngine().GetUserSettings().HasSun);
+        if(GetGameInstance()->GetEngine().GetUserSettings().HasSun)
+        {
+            ImGui::SliderFloat("Dir", &GetGameInstance()->GetEngine().GetUserSettings().SunRotation, 0, 2);
+        }
+        ImGui::SliderInt("Sky", &GetGameInstance()->GetEngine().GetUserSettings().SkyIdx, 0, 10);
+        ImGui::SliderFloat("Lum", &GetGameInstance()->GetEngine().GetUserSettings().SkyIntensity, 0, 100);
+
+        ImGui::Dummy(ImVec2(0,50));
         
         ImGui::SeparatorText("Files");
         static std::string selected_filename = "";
@@ -284,6 +308,7 @@ void MagicaLegoUserInterface::DrawRightBar()
             if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == i) )
             {
                 GetGameInstance()->SetCurrentBrushIdx(static_cast<int>(i));
+                GetGameInstance()->TryChangeSelectionBrushIdx(static_cast<int>(i));
             }
         }
     }
@@ -299,7 +324,7 @@ void MagicaLegoUserInterface::DrawTimeline()
     ImGuiStyle& style = ImGui::GetStyle();
     
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(width, 80));
+    ImGui::SetNextWindowSize(ImVec2(width, 90));
     ImGui::SetNextWindowBgAlpha(0.5f);
     const int flags =
         ImGuiWindowFlags_NoTitleBar |
@@ -311,7 +336,6 @@ void MagicaLegoUserInterface::DrawTimeline()
     if (ImGui::Begin("Timeline", 0, flags))
     {
         ImGui::PushItemWidth(width - 20);
-        static int timeline = 0;
         int step = GetGameInstance()->GetCurrentStep();
         if( ImGui::SliderInt("##Timeline", &step, 0, GetGameInstance()->GetMaxStep()) )
         {
@@ -324,7 +348,7 @@ void MagicaLegoUserInterface::DrawTimeline()
         ImGui::BeginGroup();
         if( ImGui::Button(ICON_FA_BACKWARD_STEP, ImVec2(BUTTON_SIZE,BUTTON_SIZE)) )
         {
-            GetGameInstance()->SetPlayStep(step + 1);
+            GetGameInstance()->SetPlayStep(step - 1);
         }
         ImGui::SameLine();
         if( ImGui::Button(GetGameInstance()->IsPlayReview() ? ICON_FA_PAUSE : ICON_FA_PLAY, ImVec2(BUTTON_SIZE,BUTTON_SIZE)))
@@ -334,7 +358,7 @@ void MagicaLegoUserInterface::DrawTimeline()
         ImGui::SameLine();
         if( ImGui::Button(ICON_FA_FORWARD_STEP, ImVec2(BUTTON_SIZE,BUTTON_SIZE)))
         {
-            GetGameInstance()->SetPlayStep(step - 1);
+            GetGameInstance()->SetPlayStep(step + 1);
         }
         ImGui::EndGroup();
     
@@ -342,7 +366,7 @@ void MagicaLegoUserInterface::DrawTimeline()
         ImGui::BeginGroup();
         if( ImGui::Button(ICON_FA_CLOCK_ROTATE_LEFT, ImVec2(BUTTON_SIZE,BUTTON_SIZE)) )
         {
-            
+            GetGameInstance()->DumpReplayStep(step);
         }
         ImGui::EndGroup();
     }
