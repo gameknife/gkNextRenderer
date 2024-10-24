@@ -301,14 +301,20 @@ void MagicaLegoUserInterface::DrawRightBar()
     if (ImGui::Begin("Color Pallete", 0, flags))
     {
         ImGui::SeparatorText("Blocks");
+
+        static int current_type = 0;
+        std::vector<const char*> types {"Block1x1", "Plate1x1"};
+        ImGui::Combo("Type", &current_type, types.data(), static_cast<int>(types.size()));
+
         float WindowWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-        for( size_t i = 0; i < GetGameInstance()->GetBasicNodes().size(); i++ )
+        auto& blocks = GetGameInstance()->GetBasicNodeByType(types[current_type]);
+        for( size_t i = 0; i < blocks.size(); i++ )
         {
-            auto& block = GetGameInstance()->GetBasicNodes()[i];
-            if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == i) )
+            auto& block = blocks[i];
+            if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
             {
-                GetGameInstance()->SetCurrentBrushIdx(static_cast<int>(i));
-                GetGameInstance()->TryChangeSelectionBrushIdx(static_cast<int>(i));
+                GetGameInstance()->SetCurrentBrushIdx(static_cast<int>(block.brushId_));
+                GetGameInstance()->TryChangeSelectionBrushIdx(static_cast<int>(block.brushId_));
             }
         }
     }

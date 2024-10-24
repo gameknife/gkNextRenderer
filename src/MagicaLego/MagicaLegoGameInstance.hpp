@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include "Runtime/Application.hpp"
 
 enum ELegoMode
@@ -19,10 +21,12 @@ enum ECamMode
 struct FBasicBlock
 {
 	// just need modelIdNow
+	int brushId_;
 	int modelId_;
 	int matType;
 	glm::vec4 color;
 	std::string name;
+	std::string type;
 };
 
 struct FPlacedBlock
@@ -65,6 +69,7 @@ public:
 	void SetCameraMode(ECamMode mode);
 
 	std::vector<FBasicBlock>& GetBasicNodes() {return BasicNodes;}
+	std::vector<FBasicBlock>& GetBasicNodeByType(std::string type) {return BasicBlockTypeMap[type];}
 
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
 	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
@@ -85,7 +90,8 @@ public:
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 protected:
-	void AddBasicBlock(std::string blockName);
+	void AddBlockGroup(std::string typeName);
+	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
 	void PlaceDynamicBlock(FPlacedBlock Block);
@@ -93,11 +99,14 @@ protected:
 	void RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source);
 	void RebuildFromRecord(int timelapse);
 
+	void CleanDynamicBlocks();
+
 private:
 	ELegoMode currentMode_;
 	ECamMode currentCamMode_;
 	// 基础的方块
 	std::vector<FBasicBlock> BasicNodes;
+	std::map<std::string, std::vector<FBasicBlock> > BasicBlockTypeMap;
 
 	int currentBlockIdx_ {};
 

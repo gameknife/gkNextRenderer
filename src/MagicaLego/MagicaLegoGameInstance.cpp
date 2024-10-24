@@ -164,14 +164,8 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     NextGameInstanceBase::OnSceneLoaded();
 
     // Add the pre-defined blocks from assets
-    auto& allNodes = GetEngine().GetScene().Nodes();
-    for ( auto& Node : allNodes )
-    {
-        if(Node.GetName().find("Block1x1_", 0) == 0)
-        {
-            AddBasicBlock(Node.GetName());
-        }
-    }
+    AddBlockGroup("Block1x1");
+    AddBlockGroup("Plate1x1");
 
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 }
@@ -290,7 +284,7 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
     {
         BlockRecords.erase( BlockRecords.begin() + step, BlockRecords.end());
     
-        BlocksDynamics.clear();
+        CleanDynamicBlocks();
         for( auto& Block : BlockRecords )
         {
             BlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
@@ -299,15 +293,29 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
     }
 }
 
-void MagicaLegoGameInstance::AddBasicBlock(std::string blockName)
+void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
+{
+    auto& allNodes = GetEngine().GetScene().Nodes();
+    for ( auto& Node : allNodes )
+    {
+        if(Node.GetName().find(typeName, 0) == 0)
+        {
+            AddBasicBlock(Node.GetName(), typeName);
+        }
+    }
+}
+
+void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string typeName)
 {
     auto& Scene = GetEngine().GetScene();
     auto Node = Scene.GetNode(blockName);
     if(Node)
     {
         FBasicBlock newBlock;
-        newBlock.name = "#" + blockName.substr(strlen("Block1x1_"));
+        newBlock.name = "#" + blockName.substr(strlen(typeName.c_str()) + 1);
+        newBlock.type = typeName;
         newBlock.modelId_ = Node->GetModel();
+        newBlock.brushId_ = static_cast<int>(BasicNodes.size());
         uint32_t mat_id = Scene.GetModel(newBlock.modelId_)->Materials()[0];
         auto mat = Scene.GetMaterial(mat_id);
         if(mat)
@@ -316,6 +324,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName)
             newBlock.color = mat->Diffuse;
         }
         BasicNodes.push_back(newBlock);
+        BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
     }
 }
@@ -344,7 +353,7 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
 void MagicaLegoGameInstance::CleanUp()
 {
     BlockRecords.clear();
-    BlocksDynamics.clear();
+    CleanDynamicBlocks();
     RebuildScene(BlocksDynamics);
 }
 
@@ -382,7 +391,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
     hashByInstance.clear();
-
+    
     for ( auto& Block : Source )
     {
         if(Block.second.modelId_ >= 0)
@@ -411,6 +420,11 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
             cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
     }
     RebuildScene(TempBlocksDynamics);
+}
+
+void MagicaLegoGameInstance::CleanDynamicBlocks()
+{
+    BlocksDynamics.clear();
 }
 
 void MagicaLegoGameInstance::OnTick()
