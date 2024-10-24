@@ -37,6 +37,8 @@ struct FPlacedBlock
 
 class MagicaLegoUserInterface;
 
+typedef std::map<std::string, std::vector<FBasicBlock> > FBasicBlockLibrary;
+
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:
@@ -69,7 +71,7 @@ public:
 	void SetCameraMode(ECamMode mode);
 
 	std::vector<FBasicBlock>& GetBasicNodes() {return BasicNodes;}
-	std::vector<FBasicBlock>& GetBasicNodeByType(std::string type) {return BasicBlockTypeMap[type];}
+	FBasicBlockLibrary& GetBasicNodeLibrary() {return BasicBlockTypeMap;}
 
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
 	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
@@ -106,7 +108,7 @@ private:
 	ECamMode currentCamMode_;
 	// 基础的方块
 	std::vector<FBasicBlock> BasicNodes;
-	std::map<std::string, std::vector<FBasicBlock> > BasicBlockTypeMap;
+	FBasicBlockLibrary BasicBlockTypeMap;
 
 	int currentBlockIdx_ {};
 

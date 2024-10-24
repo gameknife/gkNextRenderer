@@ -15,6 +15,13 @@ const int BUTTON_SIZE = 36;
 const int BUILD_BAR_WIDTH = 240;
 const int SIDE_BAR_WIDTH = 300;
 
+const int PANELFLAGS =
+    ImGuiWindowFlags_NoTitleBar |
+    ImGuiWindowFlags_NoCollapse |
+    ImGuiWindowFlags_NoMove |
+    ImGuiWindowFlags_NoResize |
+    ImGuiWindowFlags_NoSavedSettings;
+
 bool SelectButton(const char* label, const char* shortcut, bool selected)
 {
     if(selected)
@@ -110,16 +117,9 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(0,0));
     ImGui::SetNextWindowBgAlpha(0.2f);
-    const int flags =
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_NoBackground;
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
-    if (ImGui::Begin("MainToolBar", 0, flags))
+    if (ImGui::Begin("MainToolBar", 0, PANELFLAGS | ImGuiWindowFlags_NoBackground))
     {
         if( ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
@@ -152,14 +152,8 @@ void MagicaLegoUserInterface::DrawLeftBar()
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(BUILD_BAR_WIDTH,viewportSize.y));
     ImGui::SetNextWindowBgAlpha(0.9f);
-    const int flags =
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoSavedSettings;
     
-    if (ImGui::Begin("Place & Dig", 0, flags))
+    if (ImGui::Begin("Place & Dig", 0, PANELFLAGS))
     {
         ImGui::SeparatorText("Mode");
         if( SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELM_Dig) )
@@ -219,7 +213,6 @@ void MagicaLegoUserInterface::DrawLeftBar()
                     break;
                 }
                 std::string filename = entry.path().filename().string();
-                // remove extension
                 filename = filename.substr(0, filename.size() - 4);
 
                 bool is_selected = (selected_filename == filename);
@@ -229,9 +222,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
                     selected_filename = filename;
                     new_filename = filename;
                 }
-                // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-                if (is_selected)
-                    ImGui::SetItemDefaultFocus();
+                if (is_selected) ImGui::SetItemDefaultFocus();
             }
             ImGui::EndListBox();
         }
@@ -291,30 +282,38 @@ void MagicaLegoUserInterface::DrawRightBar()
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(SIDE_BAR_WIDTH,viewportSize.y));
     ImGui::SetNextWindowBgAlpha(0.9f);
-    const int flags =
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoSavedSettings;
-
-    if (ImGui::Begin("Color Pallete", 0, flags))
+    
+    if (ImGui::Begin("Color Pallete", 0, PANELFLAGS))
     {
-        ImGui::SeparatorText("Blocks");
-
+        std::vector<const char*> types;
         static int current_type = 0;
-        std::vector<const char*> types {"Block1x1", "Plate1x1"};
-        ImGui::Combo("Type", &current_type, types.data(), static_cast<int>(types.size()));
-
-        float WindowWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-        auto& blocks = GetGameInstance()->GetBasicNodeByType(types[current_type]);
-        for( size_t i = 0; i < blocks.size(); i++ )
+        
+        auto& BasicNodeLibrary = GetGameInstance()->GetBasicNodeLibrary();
+        if(BasicNodeLibrary.size() > 0)
         {
-            auto& block = blocks[i];
-            if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
+            for ( auto& Type : BasicNodeLibrary )
             {
-                GetGameInstance()->SetCurrentBrushIdx(static_cast<int>(block.brushId_));
-                GetGameInstance()->TryChangeSelectionBrushIdx(static_cast<int>(block.brushId_));
+                types.push_back(Type.first.c_str());
+            }
+        
+            ImGui::SeparatorText("Blocks");
+            ImGui::Dummy(ImVec2(0,5));
+
+            ImGui::SetNextItemWidth( SIDE_BAR_WIDTH - 46 );
+            ImGui::Combo("##Type", &current_type, types.data(), static_cast<int>(types.size()));
+            ImGui::Dummy(ImVec2(0,5));
+        
+            float WindowWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+            auto& BasicBlocks = BasicNodeLibrary[types[current_type]];
+        
+            for( size_t i = 0; i < BasicBlocks.size(); i++ )
+            {
+                auto& block = BasicBlocks[i];
+                if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
+                {
+                    GetGameInstance()->SetCurrentBrushIdx(block.brushId_);
+                    GetGameInstance()->TryChangeSelectionBrushIdx(block.brushId_);
+                }
             }
         }
     }
@@ -332,14 +331,8 @@ void MagicaLegoUserInterface::DrawTimeline()
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(width, 90));
     ImGui::SetNextWindowBgAlpha(0.5f);
-    const int flags =
-        ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoSavedSettings;
     
-    if (ImGui::Begin("Timeline", 0, flags))
+    if (ImGui::Begin("Timeline", 0, PANELFLAGS))
     {
         ImGui::PushItemWidth(width - 20);
         int step = GetGameInstance()->GetCurrentStep();

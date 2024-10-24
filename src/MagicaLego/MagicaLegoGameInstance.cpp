@@ -7,7 +7,6 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "MagicaLegoUserInterface.hpp"
 
-DISABLE_OPTIMIZATION
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
@@ -33,12 +32,6 @@ glm::ivec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
 
 uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
 {
-    // uint64_t hash = 17;
-    // hash = hash * 31 + BlockLocation.x;
-    // hash = hash * 31 + BlockLocation.y;
-    // hash = hash * 31 + BlockLocation.z;
-    // return hash;
-
     uint64_t hx = std::hash<int>()(BlockLocation.x);
     uint64_t hy = std::hash<int>()(BlockLocation.y);
     uint64_t hz = std::hash<int>()(BlockLocation.z);
@@ -166,6 +159,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     // Add the pre-defined blocks from assets
     AddBlockGroup("Block1x1");
     AddBlockGroup("Plate1x1");
+    AddBlockGroup("Plate2x2");
 
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 }
@@ -468,5 +462,3 @@ void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
 {
     currentCamMode_ = mode;
 }
-
-ENABLE_OPTIMIZATION
