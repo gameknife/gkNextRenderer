@@ -48,8 +48,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // options
     options.SceneName = "legobricks.glb";
-    options.Samples = 4;
-    options.Temporal = 16;
+    options.Samples = 8;
+    options.Temporal = 8;
     options.ForceSDR = true;
     options.RendererType = 0;
 
@@ -159,8 +159,14 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     // Add the pre-defined blocks from assets
     AddBlockGroup("Block1x1");
     AddBlockGroup("Plate1x1");
-    AddBlockGroup("Plate2x2");
+    AddBlockGroup("Flat1x1");
+    AddBlockGroup("Button1x1");
+    AddBlockGroup("Slope1x2");
+    AddBlockGroup("Cylinder1x1");
 
+    AddBlockGroup("Plate2x2");
+    AddBlockGroup("Corner2x2");
+    
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 }
 
