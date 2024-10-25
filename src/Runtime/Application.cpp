@@ -494,7 +494,9 @@ void NextRendererApplication::OnRendererCreateSwapChain()
         userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
 #else
         userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_));
+                                   userSettings_, [this]()->void{
+            gameInstance_->OnInitUI();
+        }));
 #endif
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());

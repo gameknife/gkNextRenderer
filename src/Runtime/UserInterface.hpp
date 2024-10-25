@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Vulkan/Vulkan.hpp"
@@ -59,7 +60,7 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings);
+		UserSettings& userSettings, std::function<void()> func);
 	~UserInterface();
 
 	void PreRender();

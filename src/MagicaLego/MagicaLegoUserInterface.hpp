@@ -1,12 +1,15 @@
 #pragma once
 
+struct ImFont;
 class MagicaLegoGameInstance;
 
 class MagicaLegoUserInterface final
 {
 public:
 	MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
-	
+
+	void OnInitUI();
+	void DrawOpening();
 	void OnRenderUI();
 
 private:
@@ -21,5 +24,8 @@ private:
 	bool showLeftBar_ = false;
 	bool showRightBar_ = false;
 	bool showTimeline_ = false;
+
+	ImFont* bigFont_ {};
+	float openingTimer_ = 2.0f;
 };
 

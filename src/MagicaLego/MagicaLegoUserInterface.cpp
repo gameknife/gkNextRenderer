@@ -86,8 +86,49 @@ MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameIns
     showTimeline_ = false;
 }
 
+void MagicaLegoUserInterface::OnInitUI()
+{
+    if(bigFont_ == nullptr)
+    {
+        ImFontGlyphRangesBuilder builder;
+        builder.AddText("MagicaLego");
+        const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
+        bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange );
+    }
+}
+
+void MagicaLegoUserInterface::DrawOpening()
+{
+    if(openingTimer_ >= 0)
+    {
+        openingTimer_ = openingTimer_ - 0.016f;
+        
+        // 获取窗口的大小
+        ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    
+        // 设置背景颜色
+        ImVec4 bgColor = ImVec4(0.1f, 0.1f, 0.1f, openingTimer_);
+        ImVec4 fgColor = ImVec4(1.0f, 1.0f, 1.0f, openingTimer_);
+        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, ImGui::ColorConvertFloat4ToU32(bgColor));
+
+        ImGui::PushFont(bigFont_);
+        
+        // 设置文字格式
+        auto TextSize = ImGui::CalcTextSize("for my son's MAGICALEGO");
+        auto TextPos = windowSize * 0.5f - TextSize * 0.5f;
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, ImGui::ColorConvertFloat4ToU32(fgColor), "for my son's MAGICALEGO");
+
+        ImGui::PopFont();
+    }
+}
+
 void MagicaLegoUserInterface::OnRenderUI()
 {
+    if( GetGameInstance()->ShowBanner() )
+    {
+        openingTimer_ = 2.0f;
+    }
+    
     // TotalSwitch
     DrawMainToolBar();
 
@@ -105,6 +146,8 @@ void MagicaLegoUserInterface::OnRenderUI()
         DrawTimeline();
         ImGui::PopStyleVar(3); 
     }
+    
+    DrawOpening();
 }
 
 void MagicaLegoUserInterface::DrawMainToolBar()
@@ -210,7 +253,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
             {
                 if( entry.path().extension() != ".mls" )
                 {
-                    break;
+                    continue;
                 }
                 std::string filename = entry.path().filename().string();
                 filename = filename.substr(0, filename.size() - 4);

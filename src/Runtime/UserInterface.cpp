@@ -41,7 +41,7 @@ UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings) :
+	UserSettings& userSettings, std::function<void()> func) :
 	userSettings_(userSettings)
 {
 	const auto& device = swapChain.Device();
@@ -134,7 +134,12 @@ UserInterface::UserInterface(
 		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}
 #endif
-	
+
+	if(func != nullptr)
+	{
+		func();
+	}
+
 	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())

@@ -62,6 +62,7 @@ public:
     void OnTick() override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
+	void OnInitUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
 
 	bool OverrideModelView(glm::mat4& OutMatrix) const override;
@@ -104,6 +105,8 @@ public:
 	void DumpReplayStep(int step);
 
 	NextRendererApplication& GetEngine() {return *engine_;}
+
+	bool ShowBanner() const {return !firstShow_;}
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
@@ -158,5 +161,7 @@ private:
 	glm::ivec3 lastPlacedLocation_ {};
 	glm::ivec3 lastSelectLocation_ {};
 	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
+
+	bool firstShow_ {};
 };
 
