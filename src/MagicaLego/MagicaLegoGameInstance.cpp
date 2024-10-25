@@ -38,6 +38,7 @@ uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
     return hx ^ (hy << 1) ^ (hz << 2); 
 }
 
+
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
     // windows config
@@ -49,7 +50,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     // options
     options.SceneName = "legobricks.glb";
     options.Samples = 8;
-    options.Temporal = 8;
+    options.Temporal = 32;
     options.ForceSDR = true;
     options.RendererType = 0;
 
@@ -163,7 +164,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     AddBlockGroup("Button1x1");
     AddBlockGroup("Slope1x2");
     AddBlockGroup("Cylinder1x1");
-
+    
     AddBlockGroup("Plate2x2");
     AddBlockGroup("Corner2x2");
     
@@ -312,8 +313,10 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
     if(Node)
     {
         FBasicBlock newBlock;
-        newBlock.name = "#" + blockName.substr(strlen(typeName.c_str()) + 1);
-        newBlock.type = typeName;
+        std::string name = "#" + blockName.substr(strlen(typeName.c_str()) + 1);
+        std::strcpy(newBlock.name, name.c_str());
+        std::string type = typeName;
+        std::strcpy(newBlock.type, type.c_str());
         newBlock.modelId_ = Node->GetModel();
         newBlock.brushId_ = static_cast<int>(BasicNodes.size());
         uint32_t mat_id = Scene.GetModel(newBlock.modelId_)->Materials()[0];
@@ -357,34 +360,85 @@ void MagicaLegoGameInstance::CleanUp()
     RebuildScene(BlocksDynamics);
 }
 
-void MagicaLegoGameInstance::SaveRecord(std::string filename)
+void FMagicaLegoSave::Save(std::string filename)
 {
     std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/") + filename + ".mls";;
     
     // direct save records to file
     std::ofstream outFile(path, std::ios::binary);
-    size_t size = BlockRecords.size();
+    
+    outFile.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    size_t size = brushs.size();
     outFile.write(reinterpret_cast<const char*>(&size), sizeof(size));
-    outFile.write(reinterpret_cast<const char*>(BlockRecords.data()), size * sizeof(FPlacedBlock));
+    outFile.write(reinterpret_cast<const char*>(brushs.data()), size * sizeof(FBasicBlock));    
+    size = records.size();
+    outFile.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    outFile.write(reinterpret_cast<const char*>(records.data()), size * sizeof(FPlacedBlock));
     outFile.close();
 }
 
-void MagicaLegoGameInstance::LoadRecord(std::string filename)
+void FMagicaLegoSave::Load(std::string filename)
 {
     std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/") + filename + ".mls";;
     
     std::ifstream inFile(path, std::ios::binary);
     if(inFile.is_open())
     {
-        size_t size;
-        inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
-        std::vector<FPlacedBlock> TempVector(size);
-        inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FPlacedBlock));
-        inFile.close();
+        int ver = 0;
+        inFile.read(reinterpret_cast<char*>(&ver), sizeof(ver));
+        if(ver == MAGICALEGO_SAVE_VERSION)
+        {
+            inFile.seekg(0);
+            inFile.read(reinterpret_cast<char*>(&version), sizeof(version));
+            size_t size;
+            inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+            std::vector<FBasicBlock> TempVector(size);
+            inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FBasicBlock));
+            brushs = TempVector;
+            inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+            std::vector<FPlacedBlock> TempRecord(size);
+            inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlock));
+            records = TempRecord;
 
-        BlockRecords = TempVector;
-        DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
+            // 根据目前的BrushBlocks，和文件读取出来的，做一个转换，将Record内的modelId转换到正确的
+            // for( auto& Record : records )
+            // {
+            //     if(Record.modelId_ >= 0)
+            //     {
+            //         auto& Brush = brushs[Record.modelId_];
+            //         Record.modelId_ = Brush.modelId_;
+            //     }
+            // }
+        }
+        else
+        {
+            inFile.seekg(0);
+            size_t size;
+            inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+            std::vector<FPlacedBlock> TempVector(size);
+            inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FPlacedBlock));
+            records = TempVector;
+        }
+
+        inFile.close();
     }
+}
+
+void MagicaLegoGameInstance::SaveRecord(std::string filename)
+{
+    FMagicaLegoSave save;
+    save.records = BlockRecords;
+    save.brushs = BasicNodes;
+    save.version = MAGICALEGO_SAVE_VERSION;
+    save.Save(filename);
+}
+
+void MagicaLegoGameInstance::LoadRecord(std::string filename)
+{
+    FMagicaLegoSave save;
+    save.Load(filename);
+    BlockRecords = save.records;
+    DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
 }
 
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source)

@@ -1,8 +1,9 @@
 #pragma once
 
 #include <map>
-
 #include "Runtime/Application.hpp"
+
+#define MAGICALEGO_SAVE_VERSION 1
 
 enum ELegoMode
 {
@@ -25,8 +26,8 @@ struct FBasicBlock
 	int modelId_;
 	int matType;
 	glm::vec4 color;
-	std::string name;
-	std::string type;
+	char name[128];
+	char type[128];
 };
 
 struct FPlacedBlock
@@ -37,7 +38,19 @@ struct FPlacedBlock
 
 class MagicaLegoUserInterface;
 
-typedef std::map<std::string, std::vector<FBasicBlock> > FBasicBlockLibrary;
+using FBasicBlockStack = std::vector<FBasicBlock>;
+using FBasicBlockLibrary = std::map<std::string, FBasicBlockStack >;
+using FPlacedBlockDatabase = std::unordered_map<uint64_t, FPlacedBlock>;
+
+struct FMagicaLegoSave
+{
+	int version = MAGICALEGO_SAVE_VERSION;
+	FBasicBlockStack brushs;
+	std::vector<FPlacedBlock> records;
+
+	void Save(std::string filename);
+	void Load(std::string filename);
+};
 
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
@@ -70,7 +83,7 @@ public:
 	void SetBuildMode(ELegoMode mode);
 	void SetCameraMode(ECamMode mode);
 
-	std::vector<FBasicBlock>& GetBasicNodes() {return BasicNodes;}
+	FBasicBlockStack& GetBasicNodes() {return BasicNodes;}
 	FBasicBlockLibrary& GetBasicNodeLibrary() {return BasicBlockTypeMap;}
 
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
@@ -98,7 +111,7 @@ protected:
 
 	void PlaceDynamicBlock(FPlacedBlock Block);
 	
-	void RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source);
+	void RebuildScene(FPlacedBlockDatabase& Source);
 	void RebuildFromRecord(int timelapse);
 
 	void CleanDynamicBlocks();
@@ -106,12 +119,12 @@ protected:
 private:
 	ELegoMode currentMode_;
 	ECamMode currentCamMode_;
+	
 	// 基础的方块
-	std::vector<FBasicBlock> BasicNodes;
+	FBasicBlockStack BasicNodes;
 	FBasicBlockLibrary BasicBlockTypeMap;
 
 	int currentBlockIdx_ {};
-
 	int currentPreviewStep {};
 
 	// 起始的方块位置，之后的instance都是rebuild出来的
@@ -120,7 +133,7 @@ private:
 	bool playReview_ {};
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
-	std::unordered_map<uint64_t, FPlacedBlock> BlocksDynamics;
+	FPlacedBlockDatabase BlocksDynamics;
 	std::vector<uint64_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
