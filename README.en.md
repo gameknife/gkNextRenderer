@@ -19,7 +19,7 @@ It also provides a runtime environment closest to the game, verifies the feasibi
 
 The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technology, intentionally avoid obsolete technologies, use new C++ specifications and standard libraries, and develop cross-platform full-time.
 
-### 子项目
+### Subproject
 
 -   **Renderer**: Main project, path tracing, benchmark
 -   **Editor**: Editor framework based on imgui, used for editing scenarios, completely dependent on glb reading and writing
@@ -108,7 +108,7 @@ The original intention of this project is: learning, verification, and progress.
 
 First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
 
-project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
+project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
 
 After the local development environment is deployed, each platform can click the script to build
 
