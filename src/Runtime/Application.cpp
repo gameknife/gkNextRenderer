@@ -61,6 +61,9 @@ namespace NextRenderer
             case 3:
                 {
                     auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    if(!ptr->supportRayTracing_) {
+                        break;
+                    }
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
@@ -68,9 +71,10 @@ namespace NextRenderer
                     ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
                     return ptr;    
                 }
-            default:
-                return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+            default: break;
         }
+        // fallback renderer
+        return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
     }
 
 }

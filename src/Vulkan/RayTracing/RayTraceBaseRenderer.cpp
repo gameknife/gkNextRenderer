@@ -99,8 +99,6 @@ namespace Vulkan::RayTracing
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        supportRayTracing_ = true;
-        
         // Required extensions.
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
