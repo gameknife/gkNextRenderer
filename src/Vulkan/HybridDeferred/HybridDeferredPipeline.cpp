@@ -53,6 +53,8 @@ namespace Vulkan::HybridDeferred
 
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
+{15, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -108,6 +110,10 @@ namespace Vulkan::HybridDeferred
             nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
             nodesBufferInfo.range = VK_WHOLE_SIZE;
 
+            VkDescriptorBufferInfo nodesSimpleBufferInfo = {};
+            nodesSimpleBufferInfo.buffer = scene.NodeSimpleMatrixBuffer().Handle();
+            nodesSimpleBufferInfo.range = VK_WHOLE_SIZE;
+
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -124,7 +130,8 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 11, Info11),
                 descriptorSets.Bind(i, 12, Info12),
                 descriptorSets.Bind(i, 13, Info13),
-                descriptorSets.Bind(i, 14, Info14)
+                descriptorSets.Bind(i, 14, Info14),
+                descriptorSets.Bind(i, 15, nodesSimpleBufferInfo)
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

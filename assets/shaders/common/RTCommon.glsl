@@ -11,7 +11,8 @@
 void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float RayDist, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const vec3 HitPos, const int PrimitiveIndex, const int InstanceID)
 {
     // Get the material.
-	const uvec2 offsets = Offsets[InstCustIndex];
+    const NodeSimpleProxy node = NodeProxies[InstanceID];
+	const uvec2 offsets = Offsets[node.modelId];
 	const uint indexOffset = offsets.x + PrimitiveIndex * 3;
 	const uint vertexOffset = offsets.y;
 	const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
@@ -26,7 +27,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
     Ray.HitPos = HitPos; 
-	Ray.primitiveId = (InstanceID + 1) << 16 | v0.MaterialIndex;
+	Ray.primitiveId = InstCustIndex; // node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
 	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);
@@ -36,7 +37,7 @@ void ProcessMiss(const vec3 RayDirection)
 {
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
-	Ray.primitiveId = 65535 << 16 | 0;
+	Ray.primitiveId = 65535;
 	Ray.Exit = true;
 	Ray.Distance = 1000.0;
 	Ray.pdf = 1.0;

@@ -219,10 +219,8 @@ namespace Vulkan::RayTracing
         std::vector<VkAccelerationStructureInstanceKHR> instances;
         for (const auto& node : scene.Nodes())
         {
-            {
-                instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                    bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsVisible()));
-            }
+            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetInstanceId(),  node.IsVisible()));
         }
 
         // upload to gpu
@@ -280,6 +278,25 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        {
+            VkMemoryBarrier memoryBarrier{};
+            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT; // 从主机写入
+            memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // 渲染所需的读取
+        
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_HOST_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0,
+                sizeof(memoryBarrier) / sizeof(VkMemoryBarrier),
+                &memoryBarrier, 
+                0, 
+                nullptr, 
+                0,
+                nullptr); 
+        }
+        
         if( currentLogicRenderer_ < logicRenderers_.size() )
         {
             logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);

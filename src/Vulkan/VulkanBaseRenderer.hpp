@@ -14,6 +14,7 @@
 
 #include "Image.hpp"
 #include "Options.hpp"
+#include "Assets/Scene.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
@@ -290,6 +291,9 @@ namespace Vulkan
 
 		virtual void BeforeNextFrame()
 		{
+			// update node structure
+			GetScene().UpdateNodes();
+			
 			if(DelegateBeforeNextTick)
 			{
 				DelegateBeforeNextTick();

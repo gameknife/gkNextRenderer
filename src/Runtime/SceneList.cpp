@@ -55,7 +55,7 @@ namespace
                         models.push_back(
                             Model::CreateSphere(center, 0.2f, CreateMaterial( materials, Material::Lambertian(vec3(r, g, b)) ), isProc));
                         nodes.push_back(
-                            Assets::Node::CreateNode( Utilities::NameHelper::RandomName(6), glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+                            Assets::Node::CreateNode( Utilities::NameHelper::RandomName(6), glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
                     }
                     else if (chooseMat < 0.9f) // Metal
                     {
@@ -67,7 +67,7 @@ namespace
                         models.push_back(Model::CreateSphere(center, 0.2f, CreateMaterial(materials, Material::Metallic(vec3(r, g, b), fuzziness)),
                                                              isProc));
                         nodes.push_back(
-                            Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+                            Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
                     }
                     else // Glass
                     {
@@ -75,7 +75,7 @@ namespace
                         models.push_back(
                             Model::CreateSphere(center, 0.2f, CreateMaterial(materials,Material::Dielectric(1.45f, fuzziness)), isProc));
                         nodes.push_back(
-                            Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+                            Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
                     }
                 }
             }
@@ -107,17 +107,17 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
     materials.push_back(Material::Lambertian(vec3(0.4f, 0.4f, 0.4f)));
     models.push_back(Model::CreateBox(vec3(-1000, -0.5, -1000), vec3(1000, 0, 1000),
                                       static_cast<int>(materials.size() - 1)));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), false));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), false));
 
     AddRayTracingInOneWeekendCommonScene(nodes, models, materials, isProc, random);
 
     models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, CreateMaterial(materials,Material::Dielectric(1.5f, 0.0f)), isProc));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
     models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, CreateMaterial(materials,Material::Lambertian(vec3(0.4f, 0.2f, 0.1f))), isProc));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
     models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, CreateMaterial(materials,Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.5f)),
                                          isProc));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), isProc));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
 }
 
 void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
@@ -135,7 +135,7 @@ void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& no
 
 
     int cbox_model = Model::CreateCornellBox(555, models, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),mat4(1), cbox_model, false));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),mat4(1), cbox_model, static_cast<uint32_t>(nodes.size()), false));
 
     
     materials.push_back( Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)) );
@@ -146,8 +146,8 @@ void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& no
     glm::mat4 ts1 = (rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
                                           radians(15.0f), vec3(0, 1, 0)));
    
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),ts0, 1, false));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),ts1, 1, false));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),ts0, 1, static_cast<uint32_t>(nodes.size()), false));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),ts1, 1, static_cast<uint32_t>(nodes.size()), false));
 }
 
 // procedural scene without assets

@@ -24,6 +24,7 @@ layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
 layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
 layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
+layout(binding = 15) readonly buffer NodeSimpleProxyArray { NodeSimpleProxy[] NodeSimpleProxies; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -96,7 +97,8 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
 		PayloadData.BaryCoords = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 
-		const uvec2 offsets = Offsets[PayloadData.InstCustIndex];
+		const NodeSimpleProxy node = NodeSimpleProxies[PayloadData.InstanceID];
+		const uvec2 offsets = Offsets[node.modelId];
 		const uint indexOffset = offsets.x + PayloadData.PrimitiveIndex * 3;
 		const uint vertexOffset = offsets.y;
 		const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);

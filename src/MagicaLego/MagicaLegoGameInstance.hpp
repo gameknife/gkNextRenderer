@@ -30,9 +30,15 @@ struct FBasicBlock
 	char type[128];
 };
 
-struct FPlacedBlock
+struct FPlacedBlockOld
 {
 	glm::ivec3 location; // 对应一个hash
+	int modelId_; // 如果为-1，表示已经被挖掉了
+};
+
+struct FPlacedBlock
+{
+	glm::i16vec3 location; // 对应一个hash
 	int modelId_; // 如果为-1，表示已经被挖掉了
 };
 
@@ -40,7 +46,7 @@ class MagicaLegoUserInterface;
 
 using FBasicBlockStack = std::vector<FBasicBlock>;
 using FBasicBlockLibrary = std::map<std::string, FBasicBlockStack >;
-using FPlacedBlockDatabase = std::unordered_map<uint64_t, FPlacedBlock>;
+using FPlacedBlockDatabase = std::unordered_map<uint32_t, FPlacedBlock>;
 
 struct FMagicaLegoSave
 {
@@ -92,7 +98,7 @@ public:
 	void TryChangeSelectionBrushIdx(int idx);
 
 	// Handle
-	glm::ivec3 GetCurrentSeletionBlock() const {return lastSelectLocation_;}
+	glm::i16vec3 GetCurrentSeletionBlock() const {return lastSelectLocation_;}
 	
 	// Replay
 	int GetCurrentStep() const {return currentPreviewStep;}
@@ -107,12 +113,14 @@ public:
 	NextRendererApplication& GetEngine() {return *engine_;}
 
 	bool ShowBanner() const {return !firstShow_;}
+
+	void PlaceDynamicBlock(FPlacedBlock Block);
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
-	void PlaceDynamicBlock(FPlacedBlock Block);
+	
 	
 	void RebuildScene(FPlacedBlockDatabase& Source);
 	void RebuildFromRecord(int timelapse);
@@ -137,7 +145,7 @@ private:
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	FPlacedBlockDatabase BlocksDynamics;
-	std::vector<uint64_t> hashByInstance;
+	std::vector<uint32_t> hashByInstance;
 
 	std::vector<FPlacedBlock> BlockRecords;
 	
@@ -157,11 +165,13 @@ private:
 
 	bool bMouseLeftDown_ {};
 	int lastDownFrameNum_ {};
-	std::vector<uint64_t> oneLinePlacedInstance_ {};
-	glm::ivec3 lastPlacedLocation_ {};
-	glm::ivec3 lastSelectLocation_ {};
+	std::vector<uint32_t> oneLinePlacedInstance_ {};
+	glm::i16vec3 lastPlacedLocation_ {};
+	glm::i16vec3 lastSelectLocation_ {};
 	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 
 	bool firstShow_ {};
+
+	uint32_t runtimeInstanceId_ {};
 };
 

@@ -99,27 +99,22 @@ void MagicaLegoUserInterface::OnInitUI()
 
 void MagicaLegoUserInterface::DrawOpening()
 {
-    if(openingTimer_ >= 0)
-    {
-        openingTimer_ = openingTimer_ - 0.016f;
-        
-        // 获取窗口的大小
-        ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    // 获取窗口的大小
+    ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+
+    // 设置背景颜色
+    ImVec4 bgColor = ImVec4(0.1f, 0.1f, 0.1f, openingTimer_);
+    ImVec4 fgColor = ImVec4(1.0f, 1.0f, 1.0f, openingTimer_);
+    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, ImGui::ColorConvertFloat4ToU32(bgColor));
+
+    ImGui::PushFont(bigFont_);
     
-        // 设置背景颜色
-        ImVec4 bgColor = ImVec4(0.1f, 0.1f, 0.1f, openingTimer_);
-        ImVec4 fgColor = ImVec4(1.0f, 1.0f, 1.0f, openingTimer_);
-        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, ImGui::ColorConvertFloat4ToU32(bgColor));
+    // 设置文字格式
+    auto TextSize = ImGui::CalcTextSize("for my son's MAGICALEGO");
+    auto TextPos = windowSize * 0.5f - TextSize * 0.5f;
+    ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, ImGui::ColorConvertFloat4ToU32(fgColor), "for my son's MAGICALEGO");
 
-        ImGui::PushFont(bigFont_);
-        
-        // 设置文字格式
-        auto TextSize = ImGui::CalcTextSize("for my son's MAGICALEGO");
-        auto TextPos = windowSize * 0.5f - TextSize * 0.5f;
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, ImGui::ColorConvertFloat4ToU32(fgColor), "for my son's MAGICALEGO");
-
-        ImGui::PopFont();
-    }
+    ImGui::PopFont();
 }
 
 void MagicaLegoUserInterface::OnRenderUI()
@@ -136,6 +131,8 @@ void MagicaLegoUserInterface::OnRenderUI()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
     if( showLeftBar_ ) DrawLeftBar();
     if( showRightBar_ ) DrawRightBar();
+
+    DrawStatusBar();
     ImGui::PopStyleVar(2);
 
     if(showTimeline_)
@@ -146,8 +143,58 @@ void MagicaLegoUserInterface::OnRenderUI()
         DrawTimeline();
         ImGui::PopStyleVar(3); 
     }
+
+    DrawIndicator();
     
-    DrawOpening();
+
+    // ugly opening guiding, optimze later
+    if(openingTimer_ > -5)
+    {
+        openingTimer_ = openingTimer_ - 0.016f;
+    }
+    if(openingTimer_ >= 0)
+    {
+        DrawOpening();
+    }
+    if(openingTimer_ < 0 && openingTimer_ > -1)
+    {
+        auto screenSize = ImGui::GetMainViewport()->Size;
+        auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.75, screenSize.y * 0.75), glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), -openingTimer_);
+        glfwSetCursorPos( GetGameInstance()->GetEngine().GetRenderer().Window().Handle(), lerpedPos.x, lerpedPos.y);
+    }
+    if(openingTimer_ < -1 && openingTimer_ > -3)
+    {
+        GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
+        openingTimer_ = -10;
+    }
+}
+
+void MagicaLegoUserInterface::DrawIndicator()
+{
+    // draw aux on ray hit plane
+}
+
+void MagicaLegoUserInterface::DrawStatusBar()
+{
+    // Draw a bottom bar
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    const ImVec2 pos = ImVec2(BUILD_BAR_WIDTH , viewportSize.y);
+    const ImVec2 posPivot = ImVec2(0.0f, 1.0f);
+    const float width = viewportSize.x - BUILD_BAR_WIDTH - SIDE_BAR_WIDTH;
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
+    ImGui::SetNextWindowSize(ImVec2(width, 20));
+    ImGui::SetNextWindowBgAlpha(0.9f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0,0));
+    ImGui::Begin("StatusBar", 0, PANELFLAGS);
+    ImGui::Text("MagicaLego %s", NextRenderer::GetBuildVersion().c_str());
+    ImGui::SameLine();
+    ImGui::Text("| %d %d %d", 0, 0, 0);
+    ImGui::SameLine();
+    ImGui::Text("| %d | %d | %d", GetGameInstance()->GetBasicNodeLibrary().size(), GetGameInstance()->GetCurrentStep(), 0);
+    ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 void MagicaLegoUserInterface::DrawMainToolBar()

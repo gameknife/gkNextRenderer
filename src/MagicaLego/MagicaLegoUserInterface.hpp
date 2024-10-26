@@ -9,7 +9,7 @@ public:
 	MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
 
 	void OnInitUI();
-	void DrawOpening();
+	
 	void OnRenderUI();
 
 private:
@@ -17,6 +17,9 @@ private:
 	void DrawLeftBar();
 	void DrawRightBar();
 	void DrawTimeline();
+	void DrawOpening();
+	void DrawIndicator();
+	void DrawStatusBar();
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;

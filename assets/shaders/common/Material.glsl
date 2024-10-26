@@ -36,6 +36,14 @@ struct NodeProxy
 	mat4 World;
 };
 
+struct NodeSimpleProxy
+{
+	uint instanceId;
+	uint modelId;
+	uint materialId;
+	uint reserved2;
+};
+
 struct RayCastContext
 {
 	// in

@@ -596,7 +596,6 @@ void VulkanBaseRenderer::DrawFrame()
 
 		{
 			SCOPED_CPU_TIMER("cpugpu-io");
-			AfterRenderCmd();
 			UpdateUniformBuffer(currentImageIndex_);
 		}
 
@@ -606,6 +605,7 @@ void VulkanBaseRenderer::DrawFrame()
 			SCOPED_CPU_TIMER("sync-wait");
 			fence->Wait(noTimeout);
 		}
+		AfterRenderCmd();
 		fence = &(inFlightFences_[currentFrame_]);
 		
 		VkSubmitInfo submitInfo = {};
@@ -723,7 +723,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 	}
 	vkCmdEndRenderPass(commandBuffer);
 }
-
+	
 void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
 {
 	lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->RenderExtent());

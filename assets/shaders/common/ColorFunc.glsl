@@ -79,6 +79,20 @@ vec3 yuv2rgb(vec3 yuv) {
     return vec3(R, G, B);
 }
 
+float hash(float n) {
+	return fract(sin(n) * 43758.5453123);
+}
+
+vec3 uintToColor(uint id) {
+	// 将 id 转换为 float 并应用散列
+	float h = hash(float(id) * 0.0001);
+	float hue = fract(h * 0.95); // 取 [0, 1) 范围内的色相
+	float saturation = 0.6 + hash(float(id + 1)) * 0.3; // 保持较高的饱和度 [0.6, 0.9)
+	float value = 0.8 + hash(float(id + 2)) * 0.2; // 保持较高的亮度 [0.8, 1.0)
+
+	return hsv2rgb(vec3(hue, saturation, value));
+}
+
 // sRGB to linear approximation, see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
 vec4 srgbToLinear(in vec4 sRgb)
 {

@@ -45,11 +45,20 @@ namespace Assets
 	{
         glm::mat4 transform;
     };
+    
+    struct alignas(16) NodeSimpleProxy final
+    {
+        uint32_t instanceId;
+        uint32_t modelId;
+        uint32_t matId;
+        uint32_t reserved2;
+    };
 
     class Node final
     {
     public:
-        static Node CreateNode(std::string name, glm::mat4 transform, int id, bool procedural);
+        static Node CreateNode(std::string name, glm::mat4 transform, uint32_t modelId, uint32_t instanceId, bool procedural);
+        
         //Node& operator =(const Node&) = delete;
         //Node& operator =(Node&&) = delete;
 
@@ -60,19 +69,22 @@ namespace Assets
 
         void Transform(const glm::mat4& transform) { transform_ = transform; }
         const glm::mat4& WorldTransform() const { return transform_; }
-        int GetModel() const { return modelId_; }
+        uint32_t GetModel() const { return modelId_; }
         bool IsProcedural() const { return procedural_; }
         const std::string& GetName() const {return name_; }
 
         void SetVisible(bool visible) { visible_ = visible; }
         bool IsVisible() const { return visible_; }
 
+        uint32_t GetInstanceId() const { return instanceId_; }
+
     private:
-        Node(std::string name, glm::mat4 transform, int id, bool procedural);
+        Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural);
 
         std::string name_;
         glm::mat4 transform_;
-        int modelId_;
+        uint32_t modelId_;
+        uint32_t instanceId_;
         bool procedural_;
         bool visible_;
     };

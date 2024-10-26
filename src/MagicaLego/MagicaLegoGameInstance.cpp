@@ -12,7 +12,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
 }
 
-glm::vec3 GetRenderLocationFromBlockLocation( glm::ivec3 BlockLocation )
+glm::vec3 GetRenderLocationFromBlockLocation( glm::i16vec3 BlockLocation )
 {
     glm::vec3 newLocation;
     newLocation.x = static_cast<float>(BlockLocation.x) * 0.08f;
@@ -21,23 +21,35 @@ glm::vec3 GetRenderLocationFromBlockLocation( glm::ivec3 BlockLocation )
     return newLocation;
 }
 
-glm::ivec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
+glm::i16vec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
 {
-    glm::ivec3 newLocation;
-    newLocation.x = static_cast<int>(round(RenderLocation.x / 0.08f));
-    newLocation.y = static_cast<int>(round((RenderLocation.y - 0.0475f) / 0.095f));
-    newLocation.z = static_cast<int>(round(RenderLocation.z / 0.08f));
+    glm::i16vec3 newLocation;
+    newLocation.x = static_cast<int16_t>(round(RenderLocation.x / 0.08f));
+    newLocation.y = static_cast<int16_t>(round((RenderLocation.y - 0.0475f) / 0.095f));
+    newLocation.z = static_cast<int16_t>(round(RenderLocation.z / 0.08f));
     return newLocation;
 }
 
-uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
-{
-    uint64_t hx = std::hash<int>()(BlockLocation.x);
-    uint64_t hy = std::hash<int>()(BlockLocation.y);
-    uint64_t hz = std::hash<int>()(BlockLocation.z);
-    return hx ^ (hy << 1) ^ (hz << 2); 
-}
+// uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
+// {
+//     uint64_t hx = std::hash<int>()(BlockLocation.x);
+//     uint64_t hy = std::hash<int>()(BlockLocation.y);
+//     uint64_t hz = std::hash<int>()(BlockLocation.z);
+//     return hx ^ (hy << 1) ^ (hz << 2); 
+// }
 
+uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
+    uint32_t x = static_cast<uint32_t>(BlockLocation.x) & 0xFFFF; // 取 16 位
+    uint32_t y = static_cast<uint32_t>(BlockLocation.y) & 0xFFFF; // 取 16 位
+    uint32_t z = static_cast<uint32_t>(BlockLocation.z) & 0xFFFF; // 取 16 位
+
+    // 混合三个 16 位分量
+    uint32_t hash = x;
+    hash = hash * 31 + y; // 使用质数 31 增加分布性
+    hash = hash * 31 + z; 
+
+    return hash;
+}
 
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
@@ -69,23 +81,23 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
-    uint32_t instanceId = rayResult.InstanceId;
-
     if(!bMouseLeftDown_)
     {
         return;
     }
+
+    uint32_t instanceId = rayResult.InstanceId;
+    auto* Node = GetEngine().GetScene().GetNodeByInstanceId(instanceId);
     
     if( currentMode_ == ELM_Dig )
     {
         if( lastDownFrameNum_ == GetEngine().GetRenderer().FrameCount())
         {
-            auto& Node = GetEngine().GetScene().Nodes()[instanceId];
-            if( Node.GetName() == "blockInst" )
+            if( Node && Node->GetName() == "blockInst" )
             {
                 // 这里可以从Node上取到location，但是WorldMatrix需要Decompose，简单点，直接反向normal，找一个内部位置
                 glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
-                glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
+                glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
                 FPlacedBlock block { blockLocation, -1 };
                 PlaceDynamicBlock(block);
             }
@@ -96,35 +108,31 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     {
         if( GetEngine().GetRenderer().FrameCount() % 2 == 0 )
         {
-            if(instanceId > instanceCountBeforeDynamics_)
+            for( auto& id : oneLinePlacedInstance_ )
             {
-                uint64_t hitHash = hashByInstance[instanceId - instanceCountBeforeDynamics_];
-                for( auto& id : oneLinePlacedInstance_ )
+                if( instanceId == id)
                 {
-                    if( hitHash == id)
-                    {
-                        return;
-                    }
-                } 
-            }
-        
+                    return;
+                }
+            } 
+            
             glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-            glm::ivec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
+            glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
             FPlacedBlock block { blockLocation, currentBlockIdx_ };
             PlaceDynamicBlock(block);
-            oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) );
+            oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
         }
     }
     if( currentMode_ == ELM_Select )
     {
         glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
-        if(instanceId > instanceCountBeforeDynamics_)
+        if( Node->GetName() == "blockInst")
         {
             lastSelectLocation_ = GetBlockLocationFromRenderLocation(inLocation);
         }
         else
         {
-            lastSelectLocation_ = glm::ivec3(0);
+            lastSelectLocation_ = glm::i16vec3(0);
         }
         if(currentCamMode_ == ECM_AutoFocus)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
@@ -171,6 +179,8 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 
     firstShow_ = true;
+
+    //GetEngine().GetUserSettings().ShowVisualDebug = true;
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -242,10 +252,10 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         bMouseLeftDown_ = false;
         oneLinePlacedInstance_.clear();
-        if(currentCamMode_ == ECM_AutoFocus && lastPlacedLocation_ != glm::ivec3(0))
+        if(currentCamMode_ == ECM_AutoFocus && lastPlacedLocation_ != glm::i16vec3(0))
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
 
-        lastPlacedLocation_ = glm::ivec3(0);
+        lastPlacedLocation_ = glm::i16vec3(0);
         return true;
     }
 
@@ -264,7 +274,7 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int idx)
 {
     if( currentMode_ == ELM_Select )
     {
-        if(lastSelectLocation_ != glm::ivec3(0))
+        if(lastSelectLocation_ != glm::i16vec3(0))
         {
             FPlacedBlock block { lastSelectLocation_, idx };
             PlaceDynamicBlock(block);
@@ -347,7 +357,13 @@ FBasicBlock* MagicaLegoGameInstance::GetBasicBlock(uint32_t BlockIdx)
 
 void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
 {
-    uint64_t blockHash = GetHashFromBlockLocation(Block.location);
+    if(Block.location.y < 0)
+    {
+        return;
+    }
+    
+    uint32_t blockHash = GetHashFromBlockLocation(Block.location);
+    
     // Place it
     BlocksDynamics[blockHash] = Block;
     BlockRecords.push_back(Block);
@@ -400,6 +416,17 @@ void FMagicaLegoSave::Load(std::string filename)
             inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FBasicBlock));
             brushs = TempVector;
             inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+            
+            // std::vector<FPlacedBlockOld> TempRecord(size);
+            // inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlockOld));
+            // for( auto& Record : TempRecord )
+            // {
+            //     FPlacedBlock newRecord;
+            //     newRecord.location = Record.location;
+            //     newRecord.modelId_ = Record.modelId_;
+            //     records.push_back(newRecord);
+            // }
+
             std::vector<FPlacedBlock> TempRecord(size);
             inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlock));
             records = TempRecord;
@@ -463,11 +490,12 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
     DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
 }
 
-void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBlock>& Source)
+void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
     hashByInstance.clear();
-    
+
+    uint32_t counter = 0;
     for ( auto& Block : Source )
     {
         if(Block.second.modelId_ >= 0)
@@ -475,7 +503,8 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
             auto BasicBlock = GetBasicBlock(Block.second.modelId_);
             if(BasicBlock)
             {
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, false);
+                // with stable instance id
+                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), false);
                 GetEngine().GetScene().Nodes().push_back(newNode);
                 hashByInstance.push_back(Block.first);
             }
@@ -486,7 +515,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint64_t, FPlacedBl
 void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
 {
     // 从record中临时重建出一个Dynamics然后用来重建scene
-    std::unordered_map<uint64_t, FPlacedBlock> TempBlocksDynamics;
+    std::unordered_map<uint32_t, FPlacedBlock> TempBlocksDynamics;
     for( int i = 0; i < timelapse; i++ )
     {
         auto& Block = BlockRecords[i];
@@ -542,7 +571,7 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 {
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
-    lastSelectLocation_ = glm::ivec3(0);
+    lastSelectLocation_ = glm::i16vec3(0);
 }
 
 void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)

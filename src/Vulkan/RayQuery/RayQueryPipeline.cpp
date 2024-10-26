@@ -48,6 +48,7 @@ namespace Vulkan::RayTracing
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -101,6 +102,11 @@ namespace Vulkan::RayTracing
             offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
             offsetsBufferInfo.range = VK_WHOLE_SIZE;
 
+            // Nodes buffer
+            VkDescriptorBufferInfo nodesBufferInfo = {};
+            nodesBufferInfo.buffer = scene.NodeSimpleMatrixBuffer().Handle();
+            nodesBufferInfo.range = VK_WHOLE_SIZE;
+
             // Light buffer
             VkDescriptorBufferInfo lightBufferInfo = {};
             lightBufferInfo.buffer = scene.LightBuffer().Handle();
@@ -149,6 +155,7 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
                 descriptorSets.Bind(i, 7, offsetsBufferInfo),
+                descriptorSets.Bind(i, 8, nodesBufferInfo),
                 descriptorSets.Bind(i, 10, accumulationImageInfo),
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
                 descriptorSets.Bind(i, 12, visibilityBufferImageInfo),

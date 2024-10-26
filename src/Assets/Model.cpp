@@ -107,7 +107,7 @@ namespace Assets
         {
             if( node.extras.Has("arealight") )
             {
-                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, out_nodes.size(), false));
 
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
@@ -127,7 +127,7 @@ namespace Assets
             }
             else
             {
-                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, false));
+                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, out_nodes.size(), false));
             }
         }
         else
@@ -700,7 +700,7 @@ namespace Assets
             models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
             if(autoNode)
             {
-                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, false));
+                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, nodes.size(), false));
             }
         }
         
@@ -961,12 +961,12 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(std::string name, glm::mat4 transform, int id, bool procedural)
+    Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural)
     {
-        return Node(name, transform, id, procedural);
+        return Node(name, transform, id, instanceId, procedural);
     }
 
-    Node::Node(std::string name, glm::mat4 transform, int id, bool procedural): name_(name), transform_(transform), modelId_(id),
+    Node::Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural): name_(name), transform_(transform), modelId_(id), instanceId_(instanceId),
                                                               procedural_(procedural), visible_(true)
     {
     }
