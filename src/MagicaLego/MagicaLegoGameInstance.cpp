@@ -165,6 +165,27 @@ void MagicaLegoGameInstance::OnSceneLoaded()
 {
     NextGameInstanceBase::OnSceneLoaded();
 
+    // BasePlane Root
+    Assets::Node* Base = GetEngine().GetScene().GetNode("BasePlane12x12");
+    Base->SetVisible(false);
+    uint32_t modelId = Base->GetModel();
+    uint32_t instanceId = Base->GetInstanceId();
+
+    // one is 12 x 12, we support 252 x 252 (21 x 21), so duplicate and create
+    if(true)
+    {
+        for( int x = 0; x < 21; x++ )
+        {
+            for( int z = 0; z < 21; z++ )
+            {
+                glm::vec3 location = glm::vec3((x - 10) * 0.96f, 0.0f, (z - 10) * 0.96f);
+                // make a same instanceid, to prevent anti-aliasing
+                Assets::Node newNode = Assets::Node::CreateNode("BasePane12x12", glm::translate( glm::mat4(1), location), modelId, instanceId, false);
+                GetEngine().GetScene().Nodes().push_back(newNode);
+            }
+        }
+    }
+    
     // Add the pre-defined blocks from assets
     AddBlockGroup("Block1x1");
     AddBlockGroup("Plate1x1");
@@ -175,12 +196,15 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     
     AddBlockGroup("Plate2x2");
     AddBlockGroup("Corner2x2");
+
+    
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
 
     firstShow_ = true;
 
     //GetEngine().GetUserSettings().ShowVisualDebug = true;
+    GetEngine().GetUserSettings().TAA = true;
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()

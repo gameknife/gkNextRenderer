@@ -93,6 +93,7 @@ void main() {
         // anti aliasing
 		if( Camera.TAA )
 		{
+            // here should offset a non-random offset and consider in motion vector
 			//vec2 uvOffset = RandomFloat2(Ray.RandomSeed) / isize;
             //uv += uvOffset;
 		}
