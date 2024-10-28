@@ -45,10 +45,10 @@ void CornellBox::Create(
 
 	// Left green panel
 	uint32_t i = static_cast<uint32_t>(vertices.size());
-	vertices.push_back(Vertex{ l0 - offset, vec3(1, 0, 0), vec2(0, 1), prev_mat_id + 1 });
-	vertices.push_back(Vertex{ l1 - offset, vec3(1, 0, 0), vec2(1, 1), prev_mat_id + 1 });
-	vertices.push_back(Vertex{ l2 - offset, vec3(1, 0, 0), vec2(1, 0), prev_mat_id + 1 });
-	vertices.push_back(Vertex{ l3 - offset, vec3(1, 0, 0), vec2(0, 0), prev_mat_id + 1 });
+	vertices.push_back(Vertex{ l0 - offset, vec3(1, 0, 0), vec4(1,0,0,0), vec2(0, 1), prev_mat_id + 1 });
+	vertices.push_back(Vertex{ l1 - offset, vec3(1, 0, 0), vec4(1,0,0,0), vec2(1, 1), prev_mat_id + 1 });
+	vertices.push_back(Vertex{ l2 - offset, vec3(1, 0, 0), vec4(1,0,0,0), vec2(1, 0), prev_mat_id + 1 });
+	vertices.push_back(Vertex{ l3 - offset, vec3(1, 0, 0), vec4(1,0,0,0), vec2(0, 0), prev_mat_id + 1 });
 
 	AddTriangle(indices, i, 0, 1, 2);
 	AddTriangle(indices, i, 0, 2, 3);

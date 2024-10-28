@@ -11,6 +11,7 @@ namespace Assets
 	{
 		glm::vec3 Position;
 		glm::vec3 Normal;
+		glm::vec4 Tangent;
 		glm::vec2 TexCoord;
 		glm::uint MaterialIndex;
 
