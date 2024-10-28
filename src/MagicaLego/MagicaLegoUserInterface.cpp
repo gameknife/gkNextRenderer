@@ -192,7 +192,7 @@ void MagicaLegoUserInterface::DrawStatusBar()
     ImGui::SameLine();
     ImGui::Text("| %d %d %d", 0, 0, 0);
     ImGui::SameLine();
-    ImGui::Text("| %d | %d | %d", GetGameInstance()->GetBasicNodeLibrary().size(), GetGameInstance()->GetCurrentStep(), 0);
+    ImGui::Text("| %zu | %d | %d", GetGameInstance()->GetBasicNodeLibrary().size(), GetGameInstance()->GetCurrentStep(), 0);
     ImGui::End();
     ImGui::PopStyleVar(2);
 }
