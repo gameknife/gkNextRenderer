@@ -30,8 +30,8 @@ namespace Vulkan
 			const std::vector<T>& content,
 			std::unique_ptr<Buffer>& buffer,
 			std::unique_ptr<DeviceMemory>& memory);
-
-		static void BufferUtil::CreateDeviceBufferViolate(
+		
+		static void CreateDeviceBufferViolate(
 			CommandPool& commandPool,
 			const char* const name,
 			const VkBufferUsageFlags usage, 
@@ -111,7 +111,7 @@ namespace Vulkan
 			CopyFromStagingBuffer(commandPool, *buffer, content);
 		}
 	}
-
+	
 	inline void BufferUtil::CreateDeviceBufferViolate(
 	CommandPool& commandPool,
 	const char* const name,

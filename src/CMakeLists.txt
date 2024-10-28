@@ -385,11 +385,11 @@ foreach(target IN LISTS AllTargets)
 	target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
 	target_link_libraries(${target} PRIVATE OpenImageDenoise OpenImageDenoise_core )
 
-	add_custom_command(
-				TARGET ${target} POST_BUILD
-				COMMAND echo \"copy oidn dlls...\"
-				COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-			)
+	#add_custom_command(
+	#			TARGET ${target} POST_BUILD
+	#			COMMAND echo \"copy oidn dlls...\"
+	#			COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+	#		)
 	endif()
 
 	if( WIN32 )

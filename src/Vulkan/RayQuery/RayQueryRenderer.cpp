@@ -188,7 +188,7 @@ namespace Vulkan::RayTracing
                                  VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                  VK_IMAGE_LAYOUT_GENERAL);
 #if WITH_OIDN
-            if (supportDenoiser_)
+            if (baseRender_.supportDenoiser_)
             {
                 ImageMemoryBarrier::Insert(commandBuffer, rtDenoise1_->GetImage().Handle(), subresourceRange, 0,
                                            VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -255,7 +255,7 @@ namespace Vulkan::RayTracing
         }
 
 #if WITH_OIDN
-        if (supportDenoiser_)
+        if (baseRender_.supportDenoiser_)
         {
             VkImageSubresourceRange subresourceRange = {};
             subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -295,7 +295,7 @@ namespace Vulkan::RayTracing
         {
             SCOPED_CPU_TIMER("OIDN");
 #if WITH_OIDN
-            if (supportDenoiser_)
+            if (baseRender_.supportDenoiser_)
             {
                 filter.executeAsync();
                 device.sync();

@@ -99,10 +99,12 @@ namespace Vulkan::RayTracing
 	public:
 		LogicRendererBase( RayTracing::RayTraceBaseRenderer& baseRender );
 		virtual ~LogicRendererBase() {};
-		
+
+		virtual void OnDeviceSet() {};
 		virtual void CreateSwapChain() {};
 		virtual void DeleteSwapChain() {};
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
+		virtual void BeforeNextFrame() {};
 		
 		RayTracing::RayTraceBaseRenderer& baseRender_;
 

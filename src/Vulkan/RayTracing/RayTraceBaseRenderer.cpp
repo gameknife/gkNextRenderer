@@ -107,6 +107,14 @@ namespace Vulkan::RayTracing
                                       VK_KHR_RAY_QUERY_EXTENSION_NAME
                                   });
 
+#if WITH_OIDN
+        // Required extensions.
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+#if WIN32 && !defined(__MINGW32__)
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+#endif
+#endif
+
         // Required device features.
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
         accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
@@ -125,6 +133,11 @@ namespace Vulkan::RayTracing
     {
         rayTracingProperties_.reset(new RayTracingProperties(Device()));
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
+        
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->OnDeviceSet();
+        }
     }
 
     void RayTraceBaseRenderer::CreateAccelerationStructures()
@@ -212,6 +225,11 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::BeforeNextFrame()
     {
         VulkanBaseRenderer::BeforeNextFrame();
+
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->BeforeNextFrame();
+        }
 
          auto& scene = GetScene();
 

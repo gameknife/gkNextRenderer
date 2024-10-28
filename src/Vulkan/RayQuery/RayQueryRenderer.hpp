@@ -44,11 +44,11 @@ namespace Vulkan::RayTracing
 			VkPhysicalDeviceFeatures& deviceFeatures,
 			void* nextDeviceFeatures);// override;
 		
-		void OnDeviceSet();// override;
+		void OnDeviceSet() override;
 		void CreateSwapChain() override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		void BeforeNextFrame();// override;
+		void BeforeNextFrame() override;
 	
 	private:
 		void CreateOutputImage();
