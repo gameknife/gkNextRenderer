@@ -154,11 +154,11 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 
 	if(m.NormalTextureId >= 0)
 	{
-		vec3 tangent, bitangent;
-		ONB(normal, tangent, bitangent);
-		vec3 normal_vector = texture(TextureSamplers[nonuniformEXT(m.NormalTextureId)], texCoord).xyz;
-		normal_vector     += normal_vector - vec3(1.0F);
-		normal = normalize(mat3(tangent, bitangent, normal) * (normal_vector * vec3(m.NormalTextureScale, m.NormalTextureScale, 1.0F)));
+		//vec3 tangent, bitangent;
+		//ONB(normal, tangent, bitangent);
+		//vec3 normal_vector = texture(TextureSamplers[nonuniformEXT(m.NormalTextureId)], texCoord).xyz;
+		//normal_vector     += normal_vector - vec3(1.0F);
+		//normal = normalize(mat3(tangent, bitangent, normal) * (normal_vector * vec3(m.NormalTextureScale, m.NormalTextureScale, 1.0F)));
 	}
 
 	ray.Distance = t;

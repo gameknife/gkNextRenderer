@@ -159,7 +159,7 @@ void main() {
     }
     imageStore(OutAlbedoBuffer, ipos, albedo);
 
-    if(Camera.ShowHeatmap) gbuffer.rgb = uintToColor(primitiveId);
+    //if(Camera.ShowHeatmap) gbuffer.rgb = uintToColor(primitiveId);
     imageStore(OutNormalBuffer, ipos, gbuffer);
 
     // record adaptivesamplebuffer
