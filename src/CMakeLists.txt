@@ -30,6 +30,7 @@ set(src_files_utilities
 	Utilities/StbImage.hpp
 	Utilities/Localization.hpp
 	Utilities/Localization.cpp
+	Utilities/ImGui.hpp
 )
 
 set(src_files_vulkan
@@ -160,6 +161,10 @@ set(src_files_thirdparty_json11
 	ThirdParty/json11/json11.hpp
 )
 
+set(src_files_common
+	Common/CoreMinimal.hpp
+)
+
 if (MSVC)
 set_source_files_properties(
   ${src_files_thirdparty_json11}
@@ -223,7 +228,14 @@ set(src_files
 	Options.hpp
 )
 
+set(src_files_magicalego
+	MagicaLego/MagicaLegoGameInstance.hpp
+	MagicaLego/MagicaLegoGameInstance.cpp
+	MagicaLego/MagicaLegoUserInterface.hpp
+	MagicaLego/MagicaLegoUserInterface.cpp
+)
 source_group("Assets" FILES ${src_files_assets})
+source_group("Assets" FILES ${src_files_common})
 source_group("Utilities" FILES ${src_files_utilities})
 source_group("Vulkan" FILES ${src_files_vulkan})
 source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
@@ -235,9 +247,13 @@ source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
+source_group("MagicaLego" FILES ${src_files_magicalego})
+
+
 
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -255,6 +271,7 @@ add_library(gkNextRenderer SHARED
 )
 else()
 add_executable(gkNextRenderer
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -270,6 +287,7 @@ add_executable(gkNextRenderer
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -283,6 +301,23 @@ add_executable(gkNextEditor
 	${src_files_editor}
 	${src_files_runtime}
 	${src_files}
+	DesktopMain.cpp
+)
+add_executable(MagicaLego
+	${src_files_common}
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_vulkan} 
+	${src_files_vulkan_raytracing} 
+	${src_files_vulkan_rayquery}
+	${src_files_vulkan_moderndeferred} 
+	${src_files_vulkan_legacydeferred} 
+	${src_files_vulkan_hybriddeferred}
+	${src_files_common_compute_pipeline}
+	${src_files_thirdparty_json11}
+	${src_files_runtime}
+	${src_files}
+	${src_files_magicalego}
 	DesktopMain.cpp
 )
 endif()
@@ -306,6 +341,7 @@ else()
 set(AllTargets 
 gkNextRenderer 
 gkNextEditor
+MagicaLego 
 )
 endif()
 # common setup
@@ -358,11 +394,11 @@ foreach(target IN LISTS AllTargets)
 	target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
 	target_link_libraries(${target} PRIVATE OpenImageDenoise OpenImageDenoise_core )
 
-	add_custom_command(
-				TARGET ${target} POST_BUILD
-				COMMAND echo \"copy oidn dlls...\"
-				COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-			)
+	#add_custom_command(
+	#			TARGET ${target} POST_BUILD
+	#			COMMAND echo \"copy oidn dlls...\"
+	#			COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/oidn/bin/*.dll\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+	#		)
 	endif()
 
 	if( WIN32 )
@@ -381,6 +417,10 @@ foreach(target IN LISTS AllTargets)
 	# specific for targets
 	if ( ${target} STREQUAL gkNextRenderer )
 	target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
+	endif()
+
+	if ( ${target} STREQUAL MagicaLego )
+	target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
