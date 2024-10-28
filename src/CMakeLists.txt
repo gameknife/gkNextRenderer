@@ -161,6 +161,10 @@ set(src_files_thirdparty_json11
 	ThirdParty/json11/json11.hpp
 )
 
+set(src_files_common
+	Common/CoreMinimal.hpp
+)
+
 if (MSVC)
 set_source_files_properties(
   ${src_files_thirdparty_json11}
@@ -231,6 +235,7 @@ set(src_files_magicalego
 	MagicaLego/MagicaLegoUserInterface.cpp
 )
 source_group("Assets" FILES ${src_files_assets})
+source_group("Assets" FILES ${src_files_common})
 source_group("Utilities" FILES ${src_files_utilities})
 source_group("Vulkan" FILES ${src_files_vulkan})
 source_group("Vulkan.RayTracing" FILES ${src_files_vulkan_raytracing})
@@ -248,6 +253,7 @@ source_group("MagicaLego" FILES ${src_files_magicalego})
 
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -265,6 +271,7 @@ add_library(gkNextRenderer SHARED
 )
 else()
 add_executable(gkNextRenderer
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -280,6 +287,7 @@ add_executable(gkNextRenderer
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
@@ -296,6 +304,7 @@ add_executable(gkNextEditor
 	DesktopMain.cpp
 )
 add_executable(MagicaLego
+	${src_files_common}
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_vulkan} 
