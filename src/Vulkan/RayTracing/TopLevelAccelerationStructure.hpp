@@ -1,8 +1,7 @@
 #pragma once
-
+#include "Common/CoreMinimal.hpp"
 #include "AccelerationStructure.hpp"
 #include "Utilities/Glm.hpp"
-#include <vector>
 
 namespace Vulkan::RayTracing
 {

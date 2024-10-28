@@ -4,7 +4,6 @@
 
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "Runtime/Platform/PlatformCommon.h"
 #include "MagicaLegoUserInterface.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
@@ -349,7 +348,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
     if(Node)
     {
         FBasicBlock newBlock;
-        std::string name = "#" + blockName.substr(std::strlen(typeName.c_str()) + 1);
+        std::string name = "#" + blockName.substr(strlen(typeName.c_str()) + 1);
         std::strcpy(newBlock.name, name.c_str());
         newBlock.name[127] = 0;
         std::string type = typeName;
@@ -492,7 +491,7 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
         {
             for( auto& newbrush : BasicNodes )
             {
-                if( std::strcmp(brush.name, newbrush.name) == 0 && std::strcmp(brush.type, newbrush.type) == 0 )
+                if( strcmp(brush.name, newbrush.name) == 0 && strcmp(brush.type, newbrush.type) == 0 )
                 {
                     BrushMapping[brush.brushId_] = newbrush.brushId_;
                     break;
