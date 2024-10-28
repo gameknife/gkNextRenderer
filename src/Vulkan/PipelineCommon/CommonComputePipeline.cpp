@@ -324,6 +324,7 @@ namespace Vulkan::PipelineCommon
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
@@ -366,6 +367,11 @@ namespace Vulkan::PipelineCommon
         VkDescriptorBufferInfo offsetsBufferInfo = {};
         offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
         offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+        // Nodes buffer
+        VkDescriptorBufferInfo nodesBufferInfo = {};
+        nodesBufferInfo.buffer = scene.NodeSimpleMatrixBuffer().Handle();
+        nodesBufferInfo.range = VK_WHOLE_SIZE;
         
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
@@ -375,6 +381,7 @@ namespace Vulkan::PipelineCommon
             descriptorSets.Bind(0, 5, indexBufferInfo),
             descriptorSets.Bind(0, 6, materialBufferInfo),
             descriptorSets.Bind(0, 7, offsetsBufferInfo),
+            descriptorSets.Bind(0, 8, nodesBufferInfo),
         };
 
         descriptorSets.UpdateDescriptors(0, descriptorWrites);

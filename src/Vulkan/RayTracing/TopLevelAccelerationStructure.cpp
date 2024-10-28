@@ -4,7 +4,6 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/Device.hpp"
-#include <cstring>
 
 namespace Vulkan::RayTracing {
 
@@ -28,7 +27,7 @@ TopLevelAccelerationStructure::TopLevelAccelerationStructure(
 	topASGeometry_.geometry.instances = instancesVk_;
 	
 	buildGeometryInfo_.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-	buildGeometryInfo_.flags = flags_;
+	buildGeometryInfo_.flags = flags_ | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
 	buildGeometryInfo_.geometryCount = 1;
 	buildGeometryInfo_.pGeometries = &topASGeometry_;
 	buildGeometryInfo_.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
@@ -64,9 +63,20 @@ void TopLevelAccelerationStructure::Generate(
 	
 	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 
+	buildGeometryInfo_.srcAccelerationStructure = Handle();
 	buildGeometryInfo_.dstAccelerationStructure = Handle();
 	buildGeometryInfo_.scratchData.deviceAddress = scratchBuffer.GetDeviceAddress() + scratchOffset;
 
+	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
+}
+
+void TopLevelAccelerationStructure::Update(
+		VkCommandBuffer commandBuffer,
+				uint32_t instanceCount)
+{
+	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
+	buildOffsetInfo.primitiveCount = instanceCount;
+	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = &buildOffsetInfo;
 	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
 }
 
@@ -74,7 +84,7 @@ VkAccelerationStructureInstanceKHR TopLevelAccelerationStructure::CreateInstance
 	const BottomLevelAccelerationStructure& bottomLevelAs,
 	const glm::mat4& transform,
 	const uint32_t modelId,
-	const uint32_t hitGroupId)
+	const bool visible)
 {
 	const auto& device = bottomLevelAs.Device();
 	const auto& deviceProcedure = bottomLevelAs.DeviceProcedures();
@@ -87,8 +97,8 @@ VkAccelerationStructureInstanceKHR TopLevelAccelerationStructure::CreateInstance
 
 	VkAccelerationStructureInstanceKHR instance = {};
 	instance.instanceCustomIndex = modelId;
-	instance.mask = 0xFF; // The visibility mask is always set of 0xFF, but if some instances would need to be ignored in some cases, this flag should be passed by the application.
-	instance.instanceShaderBindingTableRecordOffset = hitGroupId; // Set the hit group index, that will be used to find the shader code to execute when hitting the geometry.
+	instance.mask = visible ? 0xFF : 0x0; // The visibility mask is always set of 0xFF, but if some instances would need to be ignored in some cases, this flag should be passed by the application.
+	instance.instanceShaderBindingTableRecordOffset = 0; // Set the hit group index, that will be used to find the shader code to execute when hitting the geometry.
 	instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR; // Disable culling - more fine control could be provided by the application
 	instance.accelerationStructureReference = address;
 

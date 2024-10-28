@@ -14,6 +14,7 @@
 
 #include "Image.hpp"
 #include "Options.hpp"
+#include "Assets/Scene.hpp"
 
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
@@ -271,7 +272,7 @@ namespace Vulkan
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
-		const Assets::Scene& GetScene();
+		Assets::Scene& GetScene();
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 
@@ -290,6 +291,9 @@ namespace Vulkan
 
 		virtual void BeforeNextFrame()
 		{
+			// update node structure
+			GetScene().UpdateNodes();
+			
 			if(DelegateBeforeNextTick)
 			{
 				DelegateBeforeNextTick();

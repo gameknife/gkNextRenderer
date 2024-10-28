@@ -30,6 +30,14 @@ namespace Vulkan
 			const std::vector<T>& content,
 			std::unique_ptr<Buffer>& buffer,
 			std::unique_ptr<DeviceMemory>& memory);
+		
+		static void CreateDeviceBufferViolate(
+			CommandPool& commandPool,
+			const char* const name,
+			const VkBufferUsageFlags usage, 
+			const size_t size,
+			std::unique_ptr<Buffer>& buffer,
+			std::unique_ptr<DeviceMemory>& memory);
 	};
 
 	template <class T>
@@ -103,4 +111,27 @@ namespace Vulkan
 			CopyFromStagingBuffer(commandPool, *buffer, content);
 		}
 	}
+	
+	inline void BufferUtil::CreateDeviceBufferViolate(
+	CommandPool& commandPool,
+	const char* const name,
+	const VkBufferUsageFlags usage, 
+	const size_t size,
+	std::unique_ptr<Buffer>& buffer,
+	std::unique_ptr<DeviceMemory>& memory)
+	{
+		const auto& device = commandPool.Device();
+		const auto& debugUtils = device.DebugUtils();
+		const auto contentSize = size; // judge if contentSize == 0
+		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+			: 0;
+		
+		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+
+		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
+		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());
+	}
+        
 }

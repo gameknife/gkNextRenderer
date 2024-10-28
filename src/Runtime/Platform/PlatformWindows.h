@@ -2,7 +2,7 @@
 
 namespace NextRenderer
 {
-    void PlatformInit()
+    inline void PlatformInit()
     {
         // Windows console color support
 #if WIN32 && !defined(__MINGW32__)
@@ -15,4 +15,5 @@ namespace NextRenderer
 #endif
     }
 }
-  
+
+

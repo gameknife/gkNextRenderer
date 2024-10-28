@@ -24,6 +24,7 @@
 #include <array>
 #include <fmt/format.h>
 
+#include "Enumerate.hpp"
 #include "ImageMemoryBarrier.hpp"
 #include "Options.hpp"
 #include "RenderImage.hpp"
@@ -97,9 +98,33 @@ namespace
             fmt::print("- [{}] {} '{}' ({}: vulkan {} driver {} {} - {})\n",
                         prop.deviceID, Vulkan::Strings::VendorId(prop.vendorID), prop.deviceName, Vulkan::Strings::DeviceType(prop.deviceType),
                         to_string(vulkanVersion), driverProp.driverName, driverProp.driverInfo, to_string(driverVersion));
+
+        	const auto extensions = Vulkan::GetEnumerateVector(device, static_cast<const char*>(nullptr), vkEnumerateDeviceExtensionProperties);
+        	const auto hasRayTracing = std::any_of(extensions.begin(), extensions.end(), [](const VkExtensionProperties& extension)
+			{
+				return strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
+			});
+
+        	fmt::print("RayTracing: {}", hasRayTracing);
         }
 
         puts("");
+    }
+
+	bool SupportRayQuery(const Vulkan::VulkanBaseRenderer& application) {
+
+    	bool SupportRayQuery = false;
+    	for (const auto& device : application.PhysicalDevices())
+    	{
+    		const auto extensions = Vulkan::GetEnumerateVector(device, static_cast<const char*>(nullptr), vkEnumerateDeviceExtensionProperties);
+    		const auto hasRayTracing = std::any_of(extensions.begin(), extensions.end(), [](const VkExtensionProperties& extension)
+			{
+				return strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
+			});
+
+    		SupportRayQuery = SupportRayQuery | hasRayTracing;
+    	}
+    	return SupportRayQuery;
     }
 
     void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
@@ -141,6 +166,8 @@ VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentMo
 	forceSDR_ = GOption->ForceSDR;
 
 	uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+
+	supportRayTracing_ = SupportRayQuery(*this);
 }
 
 VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
@@ -211,8 +238,6 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 		Throw(std::logic_error("physical device has already been set"));
 	}
 
-	supportRayTracing_ = false;
-
 	std::vector<const char*> requiredExtensions = 
 	{
 		// VK_KHR_swapchain
@@ -260,7 +285,7 @@ void VulkanBaseRenderer::End()
 	gpuTimer_.reset();
 }
 
-const Assets::Scene& VulkanBaseRenderer::GetScene()
+Assets::Scene& VulkanBaseRenderer::GetScene()
 {
 	return *scene_.lock();
 }
@@ -571,7 +596,6 @@ void VulkanBaseRenderer::DrawFrame()
 
 		{
 			SCOPED_CPU_TIMER("cpugpu-io");
-			AfterRenderCmd();
 			UpdateUniformBuffer(currentImageIndex_);
 		}
 
@@ -581,6 +605,7 @@ void VulkanBaseRenderer::DrawFrame()
 			SCOPED_CPU_TIMER("sync-wait");
 			fence->Wait(noTimeout);
 		}
+		AfterRenderCmd();
 		fence = &(inFlightFences_[currentFrame_]);
 		
 		VkSubmitInfo submitInfo = {};
@@ -658,7 +683,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 	
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	{
-		const auto& scene = GetScene();
+		auto& scene = GetScene();
 
 		VkDescriptorSet descriptorSets[] = { graphicsPipeline_->DescriptorSet(imageIndex) };
 		VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
@@ -698,7 +723,7 @@ void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t im
 	}
 	vkCmdEndRenderPass(commandBuffer);
 }
-
+	
 void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
 {
 	lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->RenderExtent());

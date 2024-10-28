@@ -9,7 +9,7 @@
 
 #include "Runtime/Platform/PlatformCommon.h"
 
-const Options* GOption = nullptr;
+Options* GOption = nullptr;
 
 int main(int argc, const char* argv[]) noexcept
 {
@@ -17,7 +17,7 @@ int main(int argc, const char* argv[]) noexcept
     try
     {
         // Handle command line options.
-        const Options options(argc, argv);
+        Options options(argc, argv);
         // Global GOption, can access from everywhere
         GOption = &options;
         

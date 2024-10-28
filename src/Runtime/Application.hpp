@@ -11,6 +11,48 @@
 #include "Options.hpp"
 
 class BenchMarker;
+class NextRendererApplication;
+
+class NextGameInstanceBase
+{
+public:
+	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine){}
+	virtual ~NextGameInstanceBase() {}
+	virtual void OnInit() =0;
+	virtual void OnTick() =0;
+	virtual void OnDestroy() =0;
+	virtual bool OnRenderUI() =0;
+	virtual void OnInitUI() {}
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
+
+	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
+
+	virtual void OnSceneLoaded() {}
+	virtual void OnSceneUnloaded() {}
+
+	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
+	virtual bool OnCursorPosition(double xpos, double ypos) =0;
+	virtual bool OnMouseButton(int button, int action, int mods) =0;
+};
+
+class NextGameInstanceVoid : public NextGameInstanceBase
+{
+public:
+	NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine){}
+	~NextGameInstanceVoid() override = default;
+	
+	void OnInit() override {}
+	void OnTick() override {}
+	void OnDestroy() override {}
+	bool OnRenderUI() override {return false;}
+	void OnRayHitResponse(Assets::RayCastResult& result) override {}
+	
+	bool OnKey(int key, int scancode, int action, int mods) override {return false;}
+	bool OnCursorPosition(double xpos, double ypos) override {return false;}
+	bool OnMouseButton(int button, int action, int mods) override {return false;}
+};
+
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
 
 namespace NextRenderer
 {
@@ -33,7 +75,7 @@ public:
 
 	VULKAN_NON_COPIABLE(NextRendererApplication)
 
-	NextRendererApplication(const Options& options, void* userdata = nullptr);
+	NextRendererApplication(Options& options, void* userdata = nullptr);
 	~NextRendererApplication();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
@@ -41,10 +83,12 @@ public:
 	void Start();
 	bool Tick();
 	void End();
-
-public:
+	
 	void OnTouch(bool down, double xpos, double ypos);
 	void OnTouchMove(double xpos, double ypos);
+
+	Assets::Scene& GetScene() { return *scene_; }
+	UserSettings& GetUserSettings() { return userSettings_; }
 	
 protected:
 	
@@ -101,4 +145,6 @@ private:
 	double time_{};
 
 	glm::vec2 mousePos_ {};
+
+	std::unique_ptr<NextGameInstanceBase> gameInstance_;
 };

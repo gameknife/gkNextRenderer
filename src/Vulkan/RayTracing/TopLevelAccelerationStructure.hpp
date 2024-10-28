@@ -1,8 +1,7 @@
 #pragma once
-
+#include "Common/CoreMinimal.hpp"
 #include "AccelerationStructure.hpp"
 #include "Utilities/Glm.hpp"
-#include <vector>
 
 namespace Vulkan::RayTracing
 {
@@ -31,11 +30,15 @@ namespace Vulkan::RayTracing
 			Buffer& resultBuffer,
 			VkDeviceSize resultOffset);
 
+		void Update(
+			VkCommandBuffer commandBuffer,
+			uint32_t instanceCount);
+
 		static VkAccelerationStructureInstanceKHR CreateInstance(
 			const BottomLevelAccelerationStructure& bottomLevelAs,
 			const glm::mat4& transform,
 			uint32_t instanceId,
-			uint32_t hitGroupId);
+			bool visible);
 
 	private:
 

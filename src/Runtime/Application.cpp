@@ -37,6 +37,13 @@
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
+#if !WITH_GAME
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+{
+    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
+}
+#endif
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -54,6 +61,9 @@ namespace NextRenderer
             case 3:
                 {
                     auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
+                    if(!ptr->supportRayTracing_) {
+                        break;
+                    }
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
@@ -61,9 +71,10 @@ namespace NextRenderer
                     ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
                     return ptr;    
                 }
-            default:
-                return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+            default: break;
         }
+        // fallback renderer
+        return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
     }
 
 }
@@ -121,8 +132,7 @@ UserSettings CreateUserSettings(const Options& options)
             userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
         }
     }
-    
-    userSettings.IsRayTraced = true;
+
     userSettings.AccumulateRays = false;
     
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
@@ -132,7 +142,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
-    userSettings.TAA = true;
+    userSettings.TAA = false; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -154,9 +164,15 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 10.0f;
+    userSettings.DenoiseSigmaLum = 50.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
+
+    userSettings.ShowEdge = false;
+
+#if WITH_EDITOR
+    userSettings.ShowEdge = true;
+#endif
 
 #if ANDROID
     userSettings.NumberOfSamples = 1;
@@ -166,12 +182,12 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(const Options& options, void* userdata)
+NextRendererApplication::NextRendererApplication(Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     // Create Window
-    const Vulkan::WindowConfig windowConfig
+    Vulkan::WindowConfig windowConfig
     {
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
         options.Width,
@@ -183,6 +199,7 @@ NextRendererApplication::NextRendererApplication(const Options& options, void* u
         userdata,
         options.ForceSDR
     };
+    gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
@@ -253,6 +270,7 @@ NextRendererApplication::~NextRendererApplication()
 void NextRendererApplication::Start()
 {
     renderer_->Start();
+    gameInstance_->OnInit();
 }
 
 bool NextRendererApplication::Tick()
@@ -294,6 +312,9 @@ bool NextRendererApplication::Tick()
     return false;
 #else
     glfwPollEvents();
+
+    gameInstance_->OnTick();
+    
     renderer_->DrawFrame();
     window_->attemptDragWindow();
     totalFrames_ += 1;
@@ -303,6 +324,7 @@ bool NextRendererApplication::Tick()
 
 void NextRendererApplication::End()
 {
+    gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
 }
@@ -319,6 +341,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     Assets::UniformBufferObject ubo = {};
 
     ubo.ModelView = modelViewController_.ModelView();
+    gameInstance_->OverrideModelView(ubo.ModelView);
+    
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
@@ -364,6 +388,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
             {
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
+
+                gameInstance_->OnRayHitResponse(rayResult);
             }
             else
             {
@@ -400,8 +426,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.SkyIntensity = userSettings_.SkyIntensity;
     ubo.SkyIdx = userSettings_.SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
-    ubo.HasSky = init.HasSky;
-    ubo.HasSun = init.HasSun && userSettings_.SunLuminance > 0;
+    ubo.HasSky = userSettings_.HasSky;
+    ubo.HasSun =userSettings_.HasSun && userSettings_.SunLuminance > 0;
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -415,11 +441,9 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
-
-#if WITH_EDITOR
-    ubo.ShowEdge = true;
-#endif
     
+    ubo.ShowEdge = userSettings_.ShowEdge;
+
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -474,7 +498,9 @@ void NextRendererApplication::OnRendererCreateSwapChain()
         userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
 #else
         userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_));
+                                   userSettings_, [this]()->void{
+            gameInstance_->OnInitUI();
+        }));
 #endif
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
@@ -529,8 +555,12 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-    
-    userInterface_->Render(commandBuffer, renderer_->SwapChain(), imageIndex, stats, renderer_->GpuTimer(), scene_.get());
+    userInterface_->PreRender();
+    if( !gameInstance_->OnRenderUI() )
+    {
+        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
+    }
+    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
 }
 
 void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
@@ -539,6 +569,12 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
     {
         return;
     }
+
+    if( gameInstance_->OnKey(key, scancode, action, mods) )
+    {
+        return;
+    }
+    
 #if !ANDROID
     if (action == GLFW_PRESS)
     {
@@ -592,10 +628,15 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
         return;
     }
 
+    mousePos_ = glm::vec2(xpos, ypos);
+    
+    if(gameInstance_->OnCursorPosition(xpos, ypos))
+    {
+        return;
+    }
+
     // Camera motions
     modelViewController_.OnCursorPosition(xpos, ypos);
-
-    mousePos_ = glm::vec2(xpos, ypos);
 }
 
 void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)
@@ -603,6 +644,11 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
+    {
+        return;
+    }
+
+    if(gameInstance_->OnMouseButton(button, action, mods))
     {
         return;
     }
@@ -617,7 +663,7 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
     {
-        if( glm::distance(pressMousePos_, mousePos_) < 1.0f )
+        if( glm::distance(pressMousePos_, mousePos_) < 2.0f )
         {
             userSettings_.RequestRayCast = true;
         }
@@ -713,6 +759,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         const auto timer = std::chrono::high_resolution_clock::now();
         
         cameraInitialSate_ = *cameraState;
+
+        gameInstance_->OnSceneUnloaded();
         
         renderer_->Device().WaitIdle();
         renderer_->DeleteSwapChain();
@@ -728,11 +776,14 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.Aperture = cameraInitialSate_.Aperture;
         userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
+        userSettings_.HasSky = cameraInitialSate_.HasSky;
         if(cameraInitialSate_.HasSky)
         {
             userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
             userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
+            userSettings_.SkyRotation = cameraInitialSate_.SkyRotation;
         }
+        userSettings_.HasSun = cameraInitialSate_.HasSun;
         if(cameraInitialSate_.HasSun)
         {
             userSettings_.SunRotation = cameraInitialSate_.SunRotation;
@@ -753,6 +804,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
 
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
+
+        gameInstance_->OnSceneLoaded();
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 

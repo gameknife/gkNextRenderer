@@ -208,7 +208,6 @@ namespace Vulkan::HybridDeferred
             VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
             const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
             VkDeviceSize offsets[] = {0};
-
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (FrameCount() % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (FrameCount() % 2 == 0 ? visibilityPipeline0_ : visibilityPipeline1_)->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);

@@ -67,7 +67,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 		{
 			if(node.GetModel() == i)
 			{
-				nodeProxys.push_back(NodeProxy{ node.WorldTransform() });
+				nodeProxys.push_back({ node.WorldTransform() });
 
 				// draw indirect buffer, one by one
 				VkDrawIndexedIndirectCommand cmd{};
@@ -111,7 +111,11 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights, lightBuffer_, lightBufferMemory_);
 
-	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
+	//Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Nodes", flags, nodeProxys, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
+	Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
+	Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "SimpleNodes", flags, sizeof(NodeSimpleProxy) * 65535, nodeSimpleMatrixBuffer_, nodeSimpleMatrixBufferMemory_); // support 65535 nodes
+	
+	
 	Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, indirectDrawBufferInstanced, indirectDrawBuffer_, indirectDrawBufferMemory_);
 	
 	lightCount_ = static_cast<uint32_t>(lights.size());
@@ -138,10 +142,94 @@ Scene::~Scene()
 	lightBufferMemory_.reset();
 	indirectDrawBuffer_.reset();
 	indirectDrawBufferMemory_.reset();
+	
+	nodeSimpleMatrixBuffer_.reset();
+	nodeSimpleMatrixBufferMemory_.reset();
+	nodeMatrixBuffer_.reset();
+	nodeMatrixBufferMemory_.reset();
 }
 
 void Scene::UpdateMaterial()
 {
 	// update value after binding, like the bindless textures, try
+}
+
+void Scene::UpdateNodes()
+{
+	if(nodes_.size() > 0)
+	{
+		{
+			std::vector<NodeSimpleProxy> nodeSimpleProxys;
+			nodeSimpleProxys.reserve(nodes_.size());
+			for (const auto& node : nodes_)
+			{
+				nodeSimpleProxys.push_back({ node.GetInstanceId(), node.GetModel(), 0u, 0u });
+			}
+			NodeSimpleProxy* data = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
+			std::memcpy(data, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
+			nodeSimpleMatrixBufferMemory_->Unmap();
+		}
+
+		{
+			std::vector<NodeProxy> nodeProxys;
+			nodeProxys.reserve(nodes_.size());
+			for (int i = 0; i < models_.size(); i++)
+			{
+				for (const auto& node : nodes_)
+				{
+					if(node.GetModel() == i)
+					{
+						nodeProxys.push_back({ node.WorldTransform() });
+					}
+				}
+			};
+
+			NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+			std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+			nodeMatrixBufferMemory_->Unmap();
+		}
+	}
+}
+
+Node* Scene::GetNode(std::string name)
+{
+	for (auto& node : nodes_)
+	{
+		if (node.GetName() == name)
+		{
+			return &node;
+		}
+	}
+	return nullptr;
+}
+
+Node* Scene::GetNodeByInstanceId(uint32_t id)
+{
+	for (auto& node : nodes_)
+	{
+		if (node.GetInstanceId() == id)
+		{
+			return &node;
+		}
+	}
+	return nullptr;
+}
+
+const Model* Scene::GetModel(uint32_t id) const
+{
+	if( id < models_.size() )
+	{
+		return &models_[id];
+	}
+	return nullptr;
+}
+
+const Material* Scene::GetMaterial(uint32_t id) const
+{
+	if( id < materials_.size() )
+	{
+		return &materials_[id];
+	}
+	return nullptr;
 }
 }

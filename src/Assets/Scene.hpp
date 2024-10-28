@@ -2,6 +2,7 @@
 
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 #include <glm/vec2.hpp>
 
@@ -39,7 +40,7 @@ namespace Assets
 			bool supportRayTracing);
 		~Scene();
 
-		const std::vector<Node>& Nodes() const { return nodes_; }
+		std::vector<Node>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
@@ -55,6 +56,7 @@ namespace Assets
 		const Vulkan::Buffer& ProceduralBuffer() const { return *proceduralBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
+		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
 
 		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
@@ -68,11 +70,17 @@ namespace Assets
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
 		void UpdateMaterial();
+		void UpdateNodes();
+
+		Node* GetNode(std::string name);
+		Node* GetNodeByInstanceId(uint32_t id);
+		const Model* GetModel(uint32_t id) const;
+		const Material* GetMaterial(uint32_t id) const;
 		
 	private:
 		std::vector<Material> materials_;
 		const std::vector<Model> models_;
-		const std::vector<Node> nodes_;
+		std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
 
@@ -99,6 +107,9 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> nodeSimpleMatrixBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> nodeSimpleMatrixBufferMemory_;
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;

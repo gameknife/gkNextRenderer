@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Vulkan/Vulkan.hpp"
@@ -59,10 +60,12 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings);
+		UserSettings& userSettings, std::function<void()> func);
 	~UserInterface();
 
-	void Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
+	void PreRender();
+	void Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
+	void PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx);
 
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;

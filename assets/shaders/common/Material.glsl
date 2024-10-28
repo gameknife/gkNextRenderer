@@ -18,7 +18,7 @@ struct Material
 	float Metalness;
 
 	float RefractionIndex2;
-	float Reserverd1;
+	float NormalTextureScale;
 	float Reserverd2;
 };
 
@@ -34,6 +34,14 @@ struct LightObject
 struct NodeProxy
 {
 	mat4 World;
+};
+
+struct NodeSimpleProxy
+{
+	uint instanceId;
+	uint modelId;
+	uint materialId;
+	uint reserved2;
 };
 
 struct RayCastContext

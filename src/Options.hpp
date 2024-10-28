@@ -57,4 +57,4 @@ public:
 	bool Fullscreen{};
 };
 
-extern const Options* GOption;
+extern Options* GOption;

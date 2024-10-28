@@ -63,7 +63,7 @@ namespace Assets
 
         // Second IOR for calculating refraction
         float RefractionIndex2;
-        float Reserverd1;
+        float NormalTextureScale;
         float Reserverd2;
     };
 }

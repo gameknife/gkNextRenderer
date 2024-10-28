@@ -99,8 +99,6 @@ namespace Vulkan::RayTracing
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        supportRayTracing_ = true;
-        
         // Required extensions.
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
@@ -108,6 +106,14 @@ namespace Vulkan::RayTracing
                                       VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
                                       VK_KHR_RAY_QUERY_EXTENSION_NAME
                                   });
+
+#if WITH_OIDN
+        // Required extensions.
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+#if WIN32 && !defined(__MINGW32__)
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+#endif
+#endif
 
         // Required device features.
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
@@ -127,6 +133,11 @@ namespace Vulkan::RayTracing
     {
         rayTracingProperties_.reset(new RayTracingProperties(Device()));
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
+        
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->OnDeviceSet();
+        }
     }
 
     void RayTraceBaseRenderer::CreateAccelerationStructures()
@@ -139,8 +150,8 @@ namespace Vulkan::RayTracing
             CreateTopLevelStructures(commandBuffer);
         });
 
-        topScratchBuffer_.reset();
-        topScratchBufferMemory_.reset();
+        //topScratchBuffer_.reset();
+        //topScratchBufferMemory_.reset();
         bottomScratchBuffer_.reset();
         bottomScratchBufferMemory_.reset();
 
@@ -211,6 +222,43 @@ namespace Vulkan::RayTracing
         }
     }
 
+    void RayTraceBaseRenderer::BeforeNextFrame()
+    {
+        VulkanBaseRenderer::BeforeNextFrame();
+
+        for( auto& logicRenderer : logicRenderers_ )
+        {
+            logicRenderer->BeforeNextFrame();
+        }
+
+         auto& scene = GetScene();
+
+        // rebuild all instance
+        std::vector<VkAccelerationStructureInstanceKHR> instances;
+        for (const auto& node : scene.Nodes())
+        {
+            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetInstanceId(),  node.IsVisible()));
+        }
+
+        // upload to gpu
+        int instanceCount = static_cast<int>(instances.size());
+        if(instanceCount  >  0)
+        {
+            VkAccelerationStructureInstanceKHR* data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(instancesBufferMemory_->Map(0, instances.size() * sizeof(VkAccelerationStructureInstanceKHR)));
+            std::memcpy(data, instances.data(), instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+            instancesBufferMemory_->Unmap();
+        }
+
+        // request tlas update
+        SingleTimeCommands::Submit(CommandPool(), [this, instanceCount](VkCommandBuffer commandBuffer)
+        {
+            topAs_[0].Update(commandBuffer, instanceCount);
+        });
+
+        
+    }
+
 
     bool RayTraceBaseRenderer::GetFocusDistance(float& distance) const
     {
@@ -248,6 +296,25 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        {
+            VkMemoryBarrier memoryBarrier{};
+            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT; // 从主机写入
+            memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // 渲染所需的读取
+        
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_HOST_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0,
+                sizeof(memoryBarrier) / sizeof(VkMemoryBarrier),
+                &memoryBarrier, 
+                0, 
+                nullptr, 
+                0,
+                nullptr); 
+        }
+        
         if( currentLogicRenderer_ < logicRenderers_.size() )
         {
             logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
@@ -256,6 +323,18 @@ namespace Vulkan::RayTracing
         if(supportRayCast_)
         {
             SCOPED_GPU_TIMER("raycast");
+
+            VkMemoryBarrier memoryBarrier = {};
+            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            memoryBarrier.pNext = nullptr;
+            memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+            memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
             
             VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
@@ -339,29 +418,29 @@ namespace Vulkan::RayTracing
     {
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
-
-        // Top level acceleration structure
-        std::vector<VkAccelerationStructureInstanceKHR> instances;
-
-        // Hit group 0: triangles
-        // Hit group 1: procedurals
-        for (const auto& node : scene.Nodes())
-        {
-            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetModel(),  node.IsProcedural() ? 1 : 0));
-        }
-
+        const uint32_t kMaxInstanceCount = 65535;
+        
         // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).
-        BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
-                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
-                                       instancesBufferMemory_);
+        // BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
+        //                                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+        //                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
+        //                                instancesBufferMemory_);
+
+        // buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        // memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
+        instancesBuffer_.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
+                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT ));
+        instancesBufferMemory_.reset(new DeviceMemory(
+            instancesBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        
 
         // Memory barrier for the bottom level acceleration structure builds.
         AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
         topAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, instancesBuffer_->GetDeviceAddress(),
-                            static_cast<uint32_t>(instances.size()));
+                           kMaxInstanceCount);
 
         // Allocate the structure memory.
         const auto total = GetTotalRequirements(topAs_);

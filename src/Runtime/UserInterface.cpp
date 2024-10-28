@@ -28,14 +28,9 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/TextureImage.hpp"
-#include "Editor/EditorMain.h"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
 
@@ -46,7 +41,7 @@ UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings) :
+	UserSettings& userSettings, std::function<void()> func) :
 	userSettings_(userSettings)
 {
 	const auto& device = swapChain.Device();
@@ -118,6 +113,19 @@ UserInterface::UserInterface(
 		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
 
+	static const ImWchar iconRange[] =
+		{
+		ICON_MIN_FA, ICON_MAX_FA, // Basic Latin + Latin Supplement
+		0,
+	};
+	ImFontConfig config;
+	config.MergeMode = true;
+	config.GlyphMinAdvanceX = 14.0f;
+	config.GlyphOffset = ImVec2(0, 0);
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
+	{
+		
+	}
 #if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
@@ -126,7 +134,12 @@ UserInterface::UserInterface(
 		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}
 #endif
-	
+
+	if(func != nullptr)
+	{
+		func();
+	}
+
 	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
 	{
 		if (!ImGui_ImplVulkan_CreateFontsTexture())
@@ -182,8 +195,8 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
     colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
     colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
-    colors[ImGuiCol_FrameBg]                = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
     colors[ImGuiCol_FrameBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
     colors[ImGuiCol_TitleBg]                = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
     colors[ImGuiCol_TitleBgActive]          = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
@@ -214,18 +227,17 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
     colors[ImGuiCol_NavHighlight]           = ActiveColor;
     style->WindowPadding                    = ImVec2(12.00f, 8.00f);
-    //style->ItemSpacing                      = ImVec2(7.00f, 6.00f);
+    style->ItemSpacing                      = ImVec2(6.00f, 6.00f);
     style->GrabMinSize                      = 20.00f;
     style->WindowRounding                   = 8.00f;
     style->FrameBorderSize                  = 0.00f;
     style->FrameRounding                    = 4.00f;
     style->GrabRounding                     = 12.00f;
+	style->SeparatorTextBorderSize			= 1.0f;
 }
 
-void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx, const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
-{		
-	auto& io = ImGui::GetIO();
-	
+void UserInterface::PreRender()
+{
 	ImGui_ImplVulkan_NewFrame();
 #if !ANDROID
 	ImGui_ImplGlfw_NewFrame();
@@ -233,11 +245,17 @@ void UserInterface::Render(VkCommandBuffer commandBuffer, const Vulkan::SwapChai
 	ImGui_ImplAndroid_NewFrame();
 #endif
 	ImGui::NewFrame();
-	
+}
+
+void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+{
 	DrawSettings();
 	DrawOverlay(statistics, gpuTimer);
-	
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
+}
+
+void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
+{		
 	
 	ImGui::Render();
 
@@ -310,6 +328,7 @@ void UserInterface::DrawSettings()
 			ImGui::PushItemWidth(-1);
 			ImGui::Combo("##RendererList", &Settings().RendererType, renderers.data(), static_cast<int>(renderers.size()));
 			ImGui::PopItemWidth();
+			ImGui::NewLine();
 		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
@@ -377,15 +396,26 @@ void UserInterface::DrawSettings()
 			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
 			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+			ImGui::NewLine();
 		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
 		{
-			ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
-			ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-			ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+			
+			ImGui::Checkbox(LOCTEXT("HasSky"), &userSettings_.HasSky);
+			if(userSettings_.HasSky)
+			{
+				ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
+				ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+			}
+			
+			ImGui::Checkbox(LOCTEXT("HasSun"), &userSettings_.HasSun);
+			if(userSettings_.HasSun)
+			{
+				ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+			}
 
 			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
 			ImGui::NewLine();
@@ -456,10 +486,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
-		
-		
 
-		
 		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
 		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
 		ImGui::Text(" render: %.2fms", gpuTimer->GetCpuTime("render"));
