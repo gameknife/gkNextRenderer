@@ -101,10 +101,10 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 
 	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
 	bool isReflection = sum_is_not_empty_abs(refracted) 
-								? (
-									RandomFloat(ray.RandomSeed) < Schlick( ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal), m.RefractionIndex)
-									) 
-								: true;
+	? (
+		RandomFloat(ray.RandomSeed) < Schlick( ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal), m.RefractionIndex)
+		) 
+	: true;
 	
 	if( isReflection )
 	{
@@ -147,23 +147,11 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 	}
 }
 
-void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, vec3 normal, vec4 tangent, const vec2 texCoord, const float t, uint MaterialIndex)
+void Scatter(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, vec3 normal, const vec2 texCoord, const float t, uint MaterialIndex)
 {
 	const vec4 texColor = m.DiffuseTextureId >= 0 ? srgbToLinear(texture(TextureSamplers[nonuniformEXT(m.DiffuseTextureId)], texCoord)) : vec4(1);
 	const vec4 mra = m.MRATextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(m.MRATextureId)], texCoord) : vec4(1);
-
-	if(m.NormalTextureId >= 0)
-	{
-		//vec3 tangent, bitangent;
-		//ONB(normal, tangent, bitangent);
-		vec3 vNt = texture(TextureSamplers[nonuniformEXT(m.NormalTextureId)], texCoord).xyz;
-		vNt = vNt * 2.0 - 1.0;
-		//normal = normalize(mat3(tangent, bitangent, normal) * (normal_vector * vec3(m.NormalTextureScale, m.NormalTextureScale, 1.0F)));
-
-		vec3 vB = tangent.w * cross(normal, tangent.xyz);
-		normal = normalize( vNt.x * tangent.xyz + vNt.y * vB + vNt.z * normal );
-	}
-
+	
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
 	ray.Albedo = texColor * m.Diffuse;

@@ -8,6 +8,14 @@
 #include "Scatter.glsl"
 #include "RTSimple.glsl"
 
+vec3 mikkTSpace(vec3 vNt, vec3 normal, vec4 tangent)
+{
+    vNt = vNt * 2.0 - 1.0;
+    vec3 vB = tangent.w * cross(normal, tangent.xyz);
+    normal = normalize( vNt.x * tangent.xyz + vNt.y * vB + vNt.z * normal );
+    return normal;
+}
+
 void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float RayDist, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const vec3 HitPos, const int PrimitiveIndex, const int InstanceID)
 {
     // Get the material.
@@ -22,16 +30,45 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 
 	// Compute the ray hit point properties.
 	const vec3 barycentrics = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
-	const vec3 normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
-    const vec4 tangent = vec4( normalize((to_world(barycentrics, v0.Tangent, v1.Tangent, v2.Tangent) * WorldToObject).xyz), v0.Tangent.w);
-	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
+    const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
+    
+    vec3 normal;
+    if(material.NormalTextureId >= 0)
+    {
+        // normal mapping use interpolated normal
+        vec3 vNt = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], texCoord).xyz;
+        vNt.y = 1.0 - vNt.y;
+        vec3 localnormal = Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics);
+        vec4 localtangent = Mix(v0.Tangent, v1.Tangent, v2.Tangent, barycentrics);
+        normal = mikkTSpace(vNt, localnormal, localtangent);
+        normal = normalize(normal * WorldToObject).xyz;
+        
+        // normal mapping per vertex
+//        vec3 vNt1 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v0.TexCoord).xyz;
+//        vec3 vNt2 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v1.TexCoord).xyz;
+//        vec3 vNt3 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v2.TexCoord).xyz;
+//        
+//        vec3 n1 = mikkTSpace(vNt1, v0.Normal, v0.Tangent);
+//        vec3 n2 = mikkTSpace(vNt2, v1.Normal, v1.Tangent);
+//        vec3 n3 = mikkTSpace(vNt3, v2.Normal, v2.Tangent);
+//        
+//        normal = normalize(Mix(n1, n2, n3, barycentrics) * WorldToObject).xyz;
+
+        //normal = normalize((to_world(barycentrics, n1, n2, n3) * WorldToObject).xyz);
+    }
+    else
+    {
+        normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
+    }
+
+	
 	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
     Ray.HitPos = HitPos; 
 	Ray.primitiveId = InstCustIndex; // node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
-	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, tangent, texCoord, RayDist, v0.MaterialIndex);
+	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);
 }
 
 void ProcessMiss(const vec3 RayDirection)
