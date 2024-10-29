@@ -23,7 +23,7 @@ Scene::Scene(Vulkan::CommandPool& commandPool,
 	std::vector<glm::vec4> procedurals;
 	std::vector<VkAabbPositionsKHR> aabbs;
 	
-	for (const auto& model : models_)
+	for (auto& model : models_)
 	{
 		// Remember the index, vertex offsets.
 		const auto indexOffset = static_cast<uint32_t>(indices.size());

@@ -79,7 +79,7 @@ namespace Assets
 		
 	private:
 		std::vector<Material> materials_;
-		const std::vector<Model> models_;
+		std::vector<Model> models_;
 		std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
 		std::vector<uint32_t> model_instance_count_;
