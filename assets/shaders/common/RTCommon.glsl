@@ -23,6 +23,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 	// Compute the ray hit point properties.
 	const vec3 barycentrics = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 	const vec3 normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
+    const vec4 tangent = vec4( normalize((to_world(barycentrics, v0.Tangent, v1.Tangent, v2.Tangent) * WorldToObject).xyz), v0.Tangent.w);
 	const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
 	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
@@ -30,7 +31,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 	Ray.primitiveId = InstCustIndex; // node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
-	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);
+	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, tangent, texCoord, RayDist, v0.MaterialIndex);
 }
 
 void ProcessMiss(const vec3 RayDirection)
