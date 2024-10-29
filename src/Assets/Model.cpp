@@ -106,7 +106,7 @@ namespace Assets
 
 	    fvNormOut[0] = m->Vertices()[v1].Normal.x;
 	    fvNormOut[1] = m->Vertices()[v1].Normal.y;
-	    fvNormOut[2] = m->Vertices()[v1].Normal.x;
+	    fvNormOut[2] = m->Vertices()[v1].Normal.z;
     }
 
     static void mikktspace_get_tex_coord(const SMikkTSpaceContext *pContext, float fvTexcOut[],
