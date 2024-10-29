@@ -124,7 +124,7 @@ namespace Assets
         Model(Model&&) = default;
         ~Model() = default;
 
-        const std::vector<Vertex>& Vertices() const { return vertices_; }
+        std::vector<Vertex>& Vertices() { return vertices_; }
         const std::vector<uint32_t>& Indices() const { return indices_; }
         const std::vector<uint32_t>& Materials() const { return materialIdx_; }
 

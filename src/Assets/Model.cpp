@@ -6,6 +6,7 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Math.hpp"
+#include "ThirdParty/mikktspace/mikktspace.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_inverse.hpp>
@@ -71,6 +72,86 @@ namespace std
 
 namespace Assets
 {
+    
+    /* Functions to allow mikktspace library to interface with our mesh representation */
+    static int mikktspace_get_num_faces(const SMikkTSpaceContext *pContext)
+    {
+	    Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
+	    return m->NumberOfIndices() / 3;
+    }
+
+    static int mikktspace_get_num_vertices_of_face(
+		    const SMikkTSpaceContext *pContext,
+		    const int iFace)
+    {
+	    return 3;
+    }
+
+    static void mikktspace_get_position(const SMikkTSpaceContext *pContext, float fvPosOut[],
+					    const int iFace, const int iVert)
+    {
+        Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
+	    auto v1 = m->Indices()[iFace * 3 + iVert];
+
+	    fvPosOut[0] = m->Vertices()[v1].Position.x;
+	    fvPosOut[1] = m->Vertices()[v1].Position.y;
+	    fvPosOut[2] = m->Vertices()[v1].Position.z;
+    }
+
+    static void mikktspace_get_normal(const SMikkTSpaceContext *pContext, float fvNormOut[],
+					    const int iFace, const int iVert)
+    {
+        Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
+        auto v1 = m->Indices()[iFace * 3 + iVert];
+
+	    fvNormOut[0] = m->Vertices()[v1].Normal.x;
+	    fvNormOut[1] = m->Vertices()[v1].Normal.y;
+	    fvNormOut[2] = m->Vertices()[v1].Normal.z;
+    }
+
+    static void mikktspace_get_tex_coord(const SMikkTSpaceContext *pContext, float fvTexcOut[],
+					    const int iFace, const int iVert)
+    {
+        Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
+        auto v1 = m->Indices()[iFace * 3 + iVert];
+
+	    fvTexcOut[0] = m->Vertices()[v1].TexCoord.x;
+	    fvTexcOut[1] = m->Vertices()[v1].TexCoord.y;
+    }
+
+    static void mikktspace_set_t_space_basic(const SMikkTSpaceContext *pContext, const float fvTangent[],
+				    const float fSign, const int iFace, const int iVert)
+    {
+        Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
+        auto v1 = m->Indices()[iFace * 3 + iVert];
+        
+        m->Vertices()[v1].Tangent = glm::vec4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
+    }
+
+    static SMikkTSpaceInterface mikktspace_interface = {
+        .m_getNumFaces			= mikktspace_get_num_faces,
+        .m_getNumVerticesOfFace		= mikktspace_get_num_vertices_of_face,
+        .m_getPosition			= mikktspace_get_position,
+        .m_getNormal			= mikktspace_get_normal,
+        .m_getTexCoord			= mikktspace_get_tex_coord,
+        .m_setTSpaceBasic		= mikktspace_set_t_space_basic,
+    #if 0
+        /* TODO: fill this in if needed */
+        .m_setTSpace			= mikktspace_set_t_space,
+    #else
+        .m_setTSpace			= NULL,
+    #endif
+    };
+    
+    void GenerateMikkTSpace(Assets::Model *m)
+    {
+        SMikkTSpaceContext mikktspace_context;
+
+        mikktspace_context.m_pInterface = &mikktspace_interface;
+        mikktspace_context.m_pUserData = m;
+        genTangSpaceDefault(&mikktspace_context);
+    }
+    
     void ParseGltfNode(std::vector<Assets::Node>& out_nodes, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
         glm::mat4 parentTransform, tinygltf::Model& model, int node_idx, int modelIdx)
     {
@@ -456,7 +537,7 @@ namespace Assets
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
         // TODO: change to use povoking vertex later
-        bool doFlatten = true;//(GOption->RendererType == 1 || GOption->RendererType == 2);
+        bool doFlatten = false;//(GOption->RendererType == 1 || GOption->RendererType == 2);
 
         if(doFlatten) {
             std::vector<Vertex> vertices_flatten;
@@ -752,35 +833,35 @@ namespace Assets
     {
         std::vector<Vertex> vertices =
         {
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
 
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
 
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
 
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
         };
 
         std::vector<uint32_t> indices =
@@ -848,7 +929,7 @@ namespace Assets
                     static_cast<float>(i) / slices,
                     static_cast<float>(j) / stacks);
 
-                vertices.push_back(Vertex{position, normal, texCoord, materialIdx});
+                vertices.push_back(Vertex{position, normal, vec4(1,0,0,0), texCoord, materialIdx});
 
                 i0 += i0_delta;
             }
@@ -906,10 +987,10 @@ namespace Assets
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         
-        vertices.push_back(Vertex{p0, dir, vec2(0, 1), materialIdx});
-        vertices.push_back(Vertex{p1, dir, vec2(1, 1), materialIdx});
-        vertices.push_back(Vertex{p2, dir, vec2(1, 0), materialIdx});
-        vertices.push_back(Vertex{p3, dir, vec2(0, 0), materialIdx});
+        vertices.push_back(Vertex{p0, dir, vec4(1,0,0,0),vec2(0, 1), materialIdx});
+        vertices.push_back(Vertex{p1, dir, vec4(1,0,0,0),vec2(1, 1), materialIdx});
+        vertices.push_back(Vertex{p2, dir, vec4(1,0,0,0),vec2(1, 0), materialIdx});
+        vertices.push_back(Vertex{p3, dir, vec4(1,0,0,0),vec2(0, 0), materialIdx});
 
         indices.push_back(0);
         indices.push_back(1);
@@ -959,6 +1040,9 @@ namespace Assets
             local_aabb_min = glm::min(local_aabb_min, vertex.Position);
             local_aabb_max = glm::max(local_aabb_max, vertex.Position);
         }
+
+        // generate mikktspace
+        GenerateMikkTSpace(this);
     }
 
     Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural)
