@@ -137,7 +137,7 @@ namespace Assets
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
 
     private:
-        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, const class Procedural* procedural);
+        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, bool needGenTSpace = true);
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;

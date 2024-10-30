@@ -37,32 +37,16 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
     {
         // normal mapping use interpolated normal
         vec3 vNt = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], texCoord).xyz;
-        vNt.y = 1.0 - vNt.y;
         vec3 localnormal = Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics);
         vec4 localtangent = Mix(v0.Tangent, v1.Tangent, v2.Tangent, barycentrics);
         normal = mikkTSpace(vNt, localnormal, localtangent);
-        normal = normalize(normal * WorldToObject).xyz;
-        
-        // normal mapping per vertex
-//        vec3 vNt1 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v0.TexCoord).xyz;
-//        vec3 vNt2 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v1.TexCoord).xyz;
-//        vec3 vNt3 = texture(TextureSamplers[nonuniformEXT(material.NormalTextureId)], v2.TexCoord).xyz;
-//        
-//        vec3 n1 = mikkTSpace(vNt1, v0.Normal, v0.Tangent);
-//        vec3 n2 = mikkTSpace(vNt2, v1.Normal, v1.Tangent);
-//        vec3 n3 = mikkTSpace(vNt3, v2.Normal, v2.Tangent);
-//        
-//        normal = normalize(Mix(n1, n2, n3, barycentrics) * WorldToObject).xyz;
-
-        //normal = normalize((to_world(barycentrics, n1, n2, n3) * WorldToObject).xyz);
+        normal = normalize((normal * WorldToObject).xyz);
     }
     else
     {
-        normal = normalize((to_world(barycentrics, v0.Normal, v1.Normal, v2.Normal) * WorldToObject).xyz);
+        normal = normalize((Mix(v0.Normal, v1.Normal, v2.Normal, barycentrics) * WorldToObject).xyz);
     }
 
-	
-	
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
     Ray.HitPos = HitPos; 
 	Ray.primitiveId = InstCustIndex; // node.instanceId;
