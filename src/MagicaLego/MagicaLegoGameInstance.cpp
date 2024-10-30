@@ -68,6 +68,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
+
+    previewWindowTimer_ = 0.1;
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -163,29 +165,22 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     uint32_t instanceId = Base->GetInstanceId();
 
     // one is 12 x 12, we support 252 x 252 (21 x 21), so duplicate and create
-    if(true)
+    for( int x = 0; x < 21; x++ )
     {
-        for( int x = 0; x < 21; x++ )
+        for( int z = 0; z < 21; z++ )
         {
-            for( int z = 0; z < 21; z++ )
+            std::string NodeName = "BigBase";
+            if( x >= 7 && x <= 13 && z >= 7 && z <= 13 )
             {
-                std::string NodeName = "BigBase";
-
-                if( x >= 7 && x <= 13 && z >= 7 && z <= 13 )
-                {
-                    NodeName = "MidBase";
-                }
-               
-                if( x == 10 && z == 10 )
-                {
-                    NodeName = "SmallBase";
-                }
-                
-                glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
-                // make a same instanceid, to prevent anti-aliasing
-                Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate( glm::mat4(1), location), modelId, instanceId, false);
-                GetEngine().GetScene().Nodes().push_back(newNode);
+                NodeName = "MidBase";
             }
+            if( x == 10 && z == 10 )
+            {
+                NodeName = "SmallBase";
+            }
+            glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
+            Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate( glm::mat4(1), location), modelId, instanceId, false);
+            GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
     
@@ -199,16 +194,9 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     
     AddBlockGroup("Plate2x2");
     AddBlockGroup("Corner2x2");
-
-    
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
-
     firstShow_ = true;
-
-    //GetEngine().GetUserSettings().ShowVisualDebug = true;
-    GetEngine().GetUserSettings().TAA = true;
-
     SwitchBasePlane(EBP_Small);
 }
 
@@ -607,7 +595,7 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
     BlocksDynamics.clear();
 }
 
-void MagicaLegoGameInstance::OnTick()
+void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 {
     realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
 
@@ -615,12 +603,12 @@ void MagicaLegoGameInstance::OnTick()
     {
         GetEngine().GetUserSettings().RequestRayCast = true;
     }
-}
 
-bool MagicaLegoGameInstance::OnRenderUI()
-{
-    if(playReview_ && GetEngine().GetRenderer().frameCount_ % 30 == 0)
+    previewWindowElapsed_ += deltaSeconds;
+    if(playReview_ && previewWindowElapsed_ > previewWindowTimer_)
     {
+        previewWindowElapsed_ = 0.0;
+        
         if(currentPreviewStep < BlockRecords.size())
         {
             currentPreviewStep = currentPreviewStep + 1;
@@ -631,9 +619,11 @@ bool MagicaLegoGameInstance::OnRenderUI()
             playReview_ = false;
         }
     }
+}
 
+bool MagicaLegoGameInstance::OnRenderUI()
+{
     UserInterface_->OnRenderUI();
-    
     return true;
 }
 

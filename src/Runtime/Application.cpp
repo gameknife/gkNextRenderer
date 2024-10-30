@@ -284,11 +284,11 @@ bool NextRendererApplication::Tick()
     // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
-    const auto timeDelta = time_ - prevTime;
+    deltaSeconds_ = time_ - prevTime;
 
     // Camera Update
     userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
-    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
+    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
     // Handle Scene Switching
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
@@ -313,7 +313,7 @@ bool NextRendererApplication::Tick()
 #else
     glfwPollEvents();
 
-    gameInstance_->OnTick();
+    gameInstance_->OnTick(deltaSeconds_);
     
     renderer_->DrawFrame();
     window_->attemptDragWindow();

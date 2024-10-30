@@ -71,7 +71,7 @@ public:
     ~MagicaLegoGameInstance() override = default;
 	
     void OnInit() override {}
-    void OnTick() override;
+    void OnTick(double deltaSeconds) override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
 	void OnInitUI() override;
@@ -183,5 +183,8 @@ private:
 	bool firstShow_ {};
 
 	uint32_t runtimeInstanceId_ {};
+
+	double previewWindowTimer_ {};
+	double previewWindowElapsed_ {};
 };
 

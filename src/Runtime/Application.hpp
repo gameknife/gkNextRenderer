@@ -19,7 +19,7 @@ public:
 	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine){}
 	virtual ~NextGameInstanceBase() {}
 	virtual void OnInit() =0;
-	virtual void OnTick() =0;
+	virtual void OnTick(double deltaSeconds) =0;
 	virtual void OnDestroy() =0;
 	virtual bool OnRenderUI() =0;
 	virtual void OnInitUI() {}
@@ -42,7 +42,7 @@ public:
 	~NextGameInstanceVoid() override = default;
 	
 	void OnInit() override {}
-	void OnTick() override {}
+	void OnTick(double deltaSeconds) override {}
 	void OnDestroy() override {}
 	bool OnRenderUI() override {return false;}
 	void OnRayHitResponse(Assets::RayCastResult& result) override {}
@@ -89,7 +89,11 @@ public:
 
 	Assets::Scene& GetScene() { return *scene_; }
 	UserSettings& GetUserSettings() { return userSettings_; }
-	
+
+	float GetTime() const { return static_cast<float>(time_); }
+	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
+	uint32_t GetTotalFrames() const { return totalFrames_; }
+
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
@@ -143,6 +147,7 @@ private:
 
 	uint32_t totalFrames_{};
 	double time_{};
+	double deltaSeconds_{};
 
 	glm::vec2 mousePos_ {};
 

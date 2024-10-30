@@ -150,7 +150,7 @@ void MagicaLegoUserInterface::OnRenderUI()
     // ugly opening guiding, optimze later
     if(openingTimer_ > -5)
     {
-        openingTimer_ = openingTimer_ - 0.016f;
+        openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
     }
     if(openingTimer_ >= 0)
     {
