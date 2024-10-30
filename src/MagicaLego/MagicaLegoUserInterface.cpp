@@ -275,6 +275,21 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->SetCameraMode(ECM_AutoFocus);
         }
+        ImGui::SeparatorText("Base");
+        if( SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBP_Big))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Big);
+        }
+        ImGui::SameLine();
+        if( SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBP_Mid))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Mid);
+        }
+        ImGui::SameLine();
+        if( SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBP_Small))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Small);
+        }
 
         ImGui::Dummy(ImVec2(0,50));
         ImGui::SeparatorText("Light");

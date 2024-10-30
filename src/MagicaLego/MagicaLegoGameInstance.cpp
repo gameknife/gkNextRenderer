@@ -29,14 +29,6 @@ glm::i16vec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
     return newLocation;
 }
 
-// uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
-// {
-//     uint64_t hx = std::hash<int>()(BlockLocation.x);
-//     uint64_t hy = std::hash<int>()(BlockLocation.y);
-//     uint64_t hz = std::hash<int>()(BlockLocation.z);
-//     return hx ^ (hy << 1) ^ (hz << 2); 
-// }
-
 uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
     uint32_t x = static_cast<uint32_t>(BlockLocation.x) & 0xFFFF; // 取 16 位
     uint32_t y = static_cast<uint32_t>(BlockLocation.y) & 0xFFFF; // 取 16 位
@@ -177,9 +169,21 @@ void MagicaLegoGameInstance::OnSceneLoaded()
         {
             for( int z = 0; z < 21; z++ )
             {
-                glm::vec3 location = glm::vec3((x - 10) * 0.96f, 0.0f, (z - 10) * 0.96f);
+                std::string NodeName = "BigBase";
+
+                if( x >= 7 && x <= 13 && z >= 7 && z <= 13 )
+                {
+                    NodeName = "MidBase";
+                }
+               
+                if( x == 10 && z == 10 )
+                {
+                    NodeName = "SmallBase";
+                }
+                
+                glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
                 // make a same instanceid, to prevent anti-aliasing
-                Assets::Node newNode = Assets::Node::CreateNode("BasePane12x12", glm::translate( glm::mat4(1), location), modelId, instanceId, false);
+                Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate( glm::mat4(1), location), modelId, instanceId, false);
                 GetEngine().GetScene().Nodes().push_back(newNode);
             }
         }
@@ -204,6 +208,8 @@ void MagicaLegoGameInstance::OnSceneLoaded()
 
     //GetEngine().GetUserSettings().ShowVisualDebug = true;
     GetEngine().GetUserSettings().TAA = true;
+
+    SwitchBasePlane(EBP_Small);
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -394,6 +400,52 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     RebuildScene(BlocksDynamics);
 
     lastPlacedLocation_ = Block.location;
+}
+
+void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
+{
+    currentBaseSize_ = Type;
+    // BigBase, MidBase, SmallBase
+    // first hide all
+    auto& allNodes = GetEngine().GetScene().Nodes();
+    for ( auto& Node : allNodes )
+    {
+        if(Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+        {
+            Node.SetVisible(false);
+        }
+    }
+
+    switch (Type)
+    {
+        case EBP_Big:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+        case EBP_Mid:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+        case EBP_Small:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+    }
 }
 
 void MagicaLegoGameInstance::CleanUp()

@@ -18,6 +18,13 @@ enum ECamMode
 	ECM_AutoFocus,
 };
 
+enum EBasePlane
+{
+	EBP_Big,
+	EBP_Mid,
+	EBP_Small,
+};
+
 struct FBasicBlock
 {
 	// just need modelIdNow
@@ -114,6 +121,9 @@ public:
 	bool ShowBanner() const {return !firstShow_;}
 
 	void PlaceDynamicBlock(FPlacedBlock Block);
+
+	void SwitchBasePlane(EBasePlane Type);
+	EBasePlane GetCurrentBasePlane() const {return currentBaseSize_;}
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
@@ -129,6 +139,7 @@ protected:
 private:
 	ELegoMode currentMode_;
 	ECamMode currentCamMode_;
+	EBasePlane currentBaseSize_;
 	
 	// 基础的方块
 	FBasicBlockStack BasicNodes;
