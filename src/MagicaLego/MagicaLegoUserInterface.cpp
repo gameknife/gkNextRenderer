@@ -1,5 +1,6 @@
 #include "MagicaLegoUserInterface.hpp"
 
+#include <fstream>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <fmt/printf.h>
@@ -97,20 +98,45 @@ void MagicaLegoUserInterface::OnInitUI()
         bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange );
     }
 
-    static int counter = 3;
-    GetGameInstance()->GetEngine().AddTimerTask( 1.0, [this]() -> bool
+    introStep_ = EIS_Entry;
+    openingTimer_ = 1.0f;
+}
+
+void MagicaLegoUserInterface::OnSceneLoaded()
+{
+    if( !std::filesystem::exists(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt")) )
     {
-        // introStep_ = (EIntroStep)((int)introStep_ + 1);
-        //
-        // if(introStep_ == EIS_Finish)
-        // {
-            return true;
-        //}
-    });
+        // write the record.txt
+        std::ofstream recordFile(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt"));
+        // write timestamp
+        recordFile << fmt::format("{}", std::time(nullptr));
+        recordFile.close();
+
+        // start intro
+        GetGameInstance()->GetEngine().AddTimerTask( 1.0, [this]() -> bool
+       {
+           introStep_ = static_cast<EIntroStep>(static_cast<int>(introStep_) + 1);
+           openingTimer_ = 1.0f;
+
+           if(introStep_ == EIS_Finish)
+           {
+               return true;
+           }
+           return false;
+       });
+    }
+    else
+    {
+        introStep_ = EIS_InGame;
+    }
 }
 
 void MagicaLegoUserInterface::DrawOpening()
 {
+    if(introStep_ >= EIS_GuideBuild)
+    {
+        return;
+    }
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
 
@@ -131,11 +157,6 @@ void MagicaLegoUserInterface::DrawOpening()
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
-    if( GetGameInstance()->ShowBanner() )
-    {
-        openingTimer_ = 2.0f;
-    }
-    
     // TotalSwitch
     DrawMainToolBar();
 
@@ -157,30 +178,32 @@ void MagicaLegoUserInterface::OnRenderUI()
     }
 
     DrawIndicator();
-    
 
-    // ugly opening guiding, optimze later
-
-    
-    
-    if(openingTimer_ > -5)
+    switch (introStep_)
     {
-        openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
-    }
-    if(openingTimer_ >= 0)
-    {
-        DrawOpening();
-    }
-    if(openingTimer_ < 0 && openingTimer_ > -0.5)
-    {
-        auto screenSize = ImGui::GetMainViewport()->Size;
-        auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.75, screenSize.y * 0.75), glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), -openingTimer_);
-        glfwSetCursorPos( GetGameInstance()->GetEngine().GetRenderer().Window().Handle(), lerpedPos.x, lerpedPos.y);
-    }
-    if(openingTimer_ < -1 && openingTimer_ > -3)
-    {
-        GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
-        openingTimer_ = -10;
+        case EIS_Entry:
+            DrawOpening();
+            break;
+        case EIS_Opening:
+            openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
+            DrawOpening();
+            break;
+        case EIS_GuideBuild:
+            {
+                openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
+                auto screenSize = ImGui::GetMainViewport()->Size;
+                auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), glm::vec2(screenSize.x * 0.6, screenSize.y * 0.75), openingTimer_);
+                glfwSetCursorPos( GetGameInstance()->GetEngine().GetRenderer().Window().Handle(), lerpedPos.x, lerpedPos.y);
+            }
+            break;
+        case EIS_Finish:
+            GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
+            introStep_ = EIS_InGame;
+            break;
+        case EIS_InGame:
+            break;
+        default:
+            break;
     }
 }
 

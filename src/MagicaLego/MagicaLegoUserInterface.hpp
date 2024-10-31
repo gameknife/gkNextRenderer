@@ -9,6 +9,8 @@ enum EIntroStep
 	EIS_Opening,
 	EIS_GuideBuild,
 	EIS_Finish,
+
+	EIS_InGame,
 };
 
 class MagicaLegoUserInterface final
@@ -17,8 +19,8 @@ public:
 	MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
 
 	void OnInitUI();
-	
 	void OnRenderUI();
+	void OnSceneLoaded();
 
 private:
 	void DrawMainToolBar();

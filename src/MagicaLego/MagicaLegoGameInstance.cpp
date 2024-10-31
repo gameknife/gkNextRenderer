@@ -206,6 +206,8 @@ void MagicaLegoGameInstance::OnSceneUnloaded()
 
     BasicNodes.clear();
     CleanUp();
+
+    UserInterface_->OnSceneLoaded();
 }
 
 bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
