@@ -3,6 +3,14 @@
 struct ImFont;
 class MagicaLegoGameInstance;
 
+enum EIntroStep
+{
+	EIS_Entry,
+	EIS_Opening,
+	EIS_GuideBuild,
+	EIS_Finish,
+};
+
 class MagicaLegoUserInterface final
 {
 public:
@@ -30,5 +38,7 @@ private:
 
 	ImFont* bigFont_ {};
 	float openingTimer_ = 2.0f;
+
+	EIntroStep introStep_ = EIS_Entry;
 };
 

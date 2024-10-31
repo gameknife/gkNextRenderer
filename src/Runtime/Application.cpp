@@ -313,7 +313,45 @@ bool NextRendererApplication::Tick()
 #else
     glfwPollEvents();
 
+    // tick
     gameInstance_->OnTick(deltaSeconds_);
+
+    // iterate the tickedTasks_, if return true, remove it
+    for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
+    {
+        if( (*it)(deltaSeconds_) )
+        {
+            it = tickedTasks_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
+    for( auto it = delayedTasks_.begin(); it != delayedTasks_.end(); )
+    {
+        if( time_ > it->triggerTime )
+        {
+            // update the next trigger time
+            it->triggerTime = time_ + it->loopTime;
+
+            // execute
+            if( it->task() )
+            {
+                it = delayedTasks_.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        else
+        {
+            ++it;
+        }
+    }
     
     renderer_->DrawFrame();
     window_->attemptDragWindow();
@@ -327,6 +365,11 @@ void NextRendererApplication::End()
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
+}
+
+void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
+{
+    delayedTasks_.push_back( { time_ + delay, delay, task} );
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const

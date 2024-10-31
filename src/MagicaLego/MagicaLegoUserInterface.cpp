@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <fmt/printf.h>
 
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
@@ -95,6 +96,17 @@ void MagicaLegoUserInterface::OnInitUI()
         const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
         bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange );
     }
+
+    static int counter = 3;
+    GetGameInstance()->GetEngine().AddTimerTask( 1.0, [this]() -> bool
+    {
+        // introStep_ = (EIntroStep)((int)introStep_ + 1);
+        //
+        // if(introStep_ == EIS_Finish)
+        // {
+            return true;
+        //}
+    });
 }
 
 void MagicaLegoUserInterface::DrawOpening()
@@ -148,6 +160,9 @@ void MagicaLegoUserInterface::OnRenderUI()
     
 
     // ugly opening guiding, optimze later
+
+    
+    
     if(openingTimer_ > -5)
     {
         openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
@@ -156,7 +171,7 @@ void MagicaLegoUserInterface::OnRenderUI()
     {
         DrawOpening();
     }
-    if(openingTimer_ < 0 && openingTimer_ > -1)
+    if(openingTimer_ < 0 && openingTimer_ > -0.5)
     {
         auto screenSize = ImGui::GetMainViewport()->Size;
         auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.75, screenSize.y * 0.75), glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), -openingTimer_);

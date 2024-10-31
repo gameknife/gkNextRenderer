@@ -69,6 +69,17 @@ namespace NextRenderer
 	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 }
 
+
+typedef std::function<bool (double DeltaSeconds)> TickedTask;
+typedef std::function<bool ()> DelayedTask;
+
+struct FDelayTaskContext
+{
+	double triggerTime;
+	double loopTime;
+	DelayedTask task;
+};
+
 class NextRendererApplication final
 {
 public:
@@ -93,6 +104,11 @@ public:
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
 	uint32_t GetTotalFrames() const { return totalFrames_; }
+
+	// remove till return true
+	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
+
+	void AddTimerTask( double delay, DelayedTask task );
 
 protected:
 	
@@ -152,4 +168,7 @@ private:
 	glm::vec2 mousePos_ {};
 
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
+
+	std::vector<TickedTask> tickedTasks_;
+	std::vector<FDelayTaskContext> delayedTasks_;
 };
