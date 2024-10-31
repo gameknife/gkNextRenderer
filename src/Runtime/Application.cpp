@@ -21,10 +21,10 @@
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
-#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+
+#define MINIAUDIO_IMPLEMENTATION
+#include "ThirdParty/miniaudio/miniaudio.h"
 
 #if WITH_EDITOR
 #include "Editor/EditorCommand.hpp"
@@ -35,6 +35,8 @@
 #include <math.h>
 
 #define BUILDVER(X) std::string buildver(#X);
+#include <fmt/printf.h>
+
 #include "build.version"
 
 #if !WITH_GAME
@@ -271,6 +273,15 @@ void NextRendererApplication::Start()
 {
     renderer_->Start();
     gameInstance_->OnInit();
+
+    ma_result result;
+
+    audioEngine_.reset( new ma_engine() );
+
+    result = ma_engine_init(NULL, audioEngine_.get());
+    if (result != MA_SUCCESS) {
+        return;
+    }
 }
 
 bool NextRendererApplication::Tick()
@@ -362,6 +373,7 @@ bool NextRendererApplication::Tick()
 
 void NextRendererApplication::End()
 {
+    ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
@@ -370,6 +382,11 @@ void NextRendererApplication::End()
 void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
 {
     delayedTasks_.push_back( { time_ + delay, delay, task} );
+}
+
+void NextRendererApplication::PlaySound(const std::string& soundName)
+{
+    ma_engine_play_sound(audioEngine_.get(), Utilities::FileHelper::GetPlatformFilePath(soundName.c_str()).c_str(), NULL);
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const

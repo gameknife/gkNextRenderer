@@ -390,6 +390,12 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     RebuildScene(BlocksDynamics);
 
     lastPlacedLocation_ = Block.location;
+
+    // random put1 or put2
+    if( rand() % 2 == 0 )
+        GetEngine().PlaySound("assets/sfx/put2.mp3");
+    else
+        GetEngine().PlaySound("assets/sfx/put1.mp3");
 }
 
 void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)

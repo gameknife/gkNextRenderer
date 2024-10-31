@@ -107,8 +107,10 @@ public:
 
 	// remove till return true
 	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
-
 	void AddTimerTask( double delay, DelayedTask task );
+
+	// sound
+	void PlaySound(const std::string& soundName);
 
 protected:
 	
@@ -171,4 +173,6 @@ private:
 
 	std::vector<TickedTask> tickedTasks_;
 	std::vector<FDelayTaskContext> delayedTasks_;
+
+	std::unique_ptr<struct ma_engine> audioEngine_;
 };

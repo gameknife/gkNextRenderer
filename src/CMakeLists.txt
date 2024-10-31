@@ -166,6 +166,10 @@ set(src_files_thirdparty_mikktspace
 	ThirdParty/mikktspace/mikktspace.h
 )
 
+set(src_files_thirdparty_miniaudio
+	ThirdParty/miniaudio/miniaudio.h
+)
+
 set(src_files_common
 	Common/CoreMinimal.hpp
 )
@@ -251,6 +255,7 @@ source_group("Vulkan.RayQuery" FILES ${src_files_vulkan_rayquery})
 source_group("Vulkan.HybridDeferred" FILES ${src_files_vulkan_hybriddeferred})
 source_group("ThirdParty.json11" FILES ${src_files_thirdparty_json11})
 source_group("ThirdParty.mikkstpace" FILES ${src_files_thirdparty_mikktspace})
+source_group("ThirdParty.miniaudio" FILES ${src_files_thirdparty_miniaudio})
 source_group("Editor" FILES ${src_files_editor})
 source_group("Main" FILES ${src_files})
 source_group("MagicaLego" FILES ${src_files_magicalego})
@@ -270,6 +275,7 @@ add_library(gkNextRenderer SHARED
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_thirdparty_mikktspace}
+	${src_files_thirdparty_miniaudio}
 	${src_files_runtime}
 	${src_files}
 	AndroidMain.cpp
@@ -289,6 +295,7 @@ add_executable(gkNextRenderer
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_thirdparty_mikktspace}
+	${src_files_thirdparty_miniaudio}
 	${src_files_runtime}
 	${src_files}
 	DesktopMain.cpp
@@ -306,6 +313,7 @@ add_executable(gkNextEditor
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_thirdparty_mikktspace}
+	${src_files_thirdparty_miniaudio}
 	${src_files_editor}
 	${src_files_runtime}
 	${src_files}
@@ -324,6 +332,7 @@ add_executable(MagicaLego
 	${src_files_common_compute_pipeline}
 	${src_files_thirdparty_json11}
 	${src_files_thirdparty_mikktspace}
+	${src_files_thirdparty_miniaudio}
 	${src_files_runtime}
 	${src_files}
 	${src_files_magicalego}
