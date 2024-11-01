@@ -155,8 +155,6 @@ private:
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	FPlacedBlockDatabase BlocksDynamics;
-	std::vector<uint32_t> hashByInstance;
-
 	std::vector<FPlacedBlock> BlockRecords;
 	
 	NextRendererApplication* engine_;
@@ -186,5 +184,7 @@ private:
 
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};
+
+	uint32_t lastHitInstanceId_ {};
 };
 

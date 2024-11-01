@@ -10,6 +10,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
+#include "ThirdParty/miniaudio/miniaudio.h"
 
 class BenchMarker;
 class NextRendererApplication;
@@ -111,7 +112,7 @@ public:
 	void AddTimerTask( double delay, DelayedTask task );
 
 	// sound
-	void PlaySound(const std::string& soundName);
+	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
 
 protected:
 	
@@ -176,4 +177,5 @@ private:
 	std::vector<FDelayTaskContext> delayedTasks_;
 
 	std::unique_ptr<struct ma_engine> audioEngine_;
+	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
 };

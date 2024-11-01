@@ -1,6 +1,7 @@
 #include "MagicaLegoGameInstance.hpp"
 
 #include <fstream>
+#include <fmt/printf.h>
 
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -99,22 +100,26 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
     if( currentMode_ == ELM_Place )
     {
-        if( GetEngine().GetRenderer().FrameCount() % 2 == 0 )
+        for( auto& id : oneLinePlacedInstance_ )
         {
-            for( auto& id : oneLinePlacedInstance_ )
+            if( instanceId == id)
             {
-                if( instanceId == id)
-                {
-                    return;
-                }
-            } 
-            
-            glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-            glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
-            FPlacedBlock block { blockLocation, currentBlockIdx_ };
-            PlaceDynamicBlock(block);
-            oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
+                return;
+            }
         }
+        
+        glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
+        glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
+
+        // do not replace the same block
+        if(blockLocation == lastPlacedLocation_)
+        {
+            return;
+        }
+        
+        FPlacedBlock block { blockLocation, currentBlockIdx_ };
+        PlaceDynamicBlock(block);
+        oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
     }
     if( currentMode_ == ELM_Select )
     {
@@ -130,6 +135,8 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         if(currentCamMode_ == ECM_AutoFocus)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
     }
+
+    lastHitInstanceId_ = instanceId;
 }
 
 bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
@@ -198,6 +205,8 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     firstShow_ = true;
     SwitchBasePlane(EBP_Small);
+
+    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -388,14 +397,20 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     BlockRecords.push_back(Block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
     RebuildScene(BlocksDynamics);
-
     lastPlacedLocation_ = Block.location;
-
+    
     // random put1 or put2
-    if( rand() % 2 == 0 )
-        GetEngine().PlaySound("assets/sfx/put2.mp3");
-    else
-        GetEngine().PlaySound("assets/sfx/put1.mp3");
+    if(Block.modelId_ >= 0)
+    {
+        int random = rand();
+        if( random % 3 == 0 )
+            GetEngine().PlaySound("assets/sfx/put2.wav");
+        else if( random % 3 == 1 )
+            GetEngine().PlaySound("assets/sfx/put1.wav");
+        else
+            GetEngine().PlaySound("assets/sfx/put3.wav");
+    }
+
 }
 
 void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
@@ -564,7 +579,6 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
-    hashByInstance.clear();
 
     uint32_t counter = 0;
     for ( auto& Block : Source )
@@ -577,7 +591,6 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 // with stable instance id
                 Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), false);
                 GetEngine().GetScene().Nodes().push_back(newNode);
-                hashByInstance.push_back(Block.first);
             }
         }
     }

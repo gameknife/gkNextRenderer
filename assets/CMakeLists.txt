@@ -2,7 +2,7 @@
 file(GLOB font_files fonts/*.ttf)
 file(GLOB locale_files locale/*.txt)
 file(GLOB lego_files legos/*.mls)
-file(GLOB sfx_files sfx/*.mp3)
+file(GLOB sfx_files sfx/*.mp3 sfx/*.wav)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)

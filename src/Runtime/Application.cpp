@@ -387,9 +387,23 @@ void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
     delayedTasks_.push_back( { time_ + delay, delay, task} );
 }
 
-void NextRendererApplication::PlaySound(const std::string& soundName)
+void NextRendererApplication::PlaySound(const std::string& soundName, bool loop, float volume)
 {
-    ma_engine_play_sound(audioEngine_.get(), Utilities::FileHelper::GetPlatformFilePath(soundName.c_str()).c_str(), NULL);
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        auto sound = new ma_sound();
+        ma_sound_init_from_file(audioEngine_.get(), Utilities::FileHelper::GetPlatformFilePath(soundName.c_str()).c_str(), 0, NULL, NULL, sound);
+        soundMaps_[soundName].reset(sound);
+    }
+
+    ma_sound* sound = soundMaps_[soundName].get();
+
+    // restart the sound
+    ma_sound_stop(sound);
+    ma_sound_set_looping(sound, loop);
+    ma_sound_set_volume(sound, volume);
+    ma_sound_seek_to_pcm_frame(sound, 0);
+    ma_sound_start(sound);
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
