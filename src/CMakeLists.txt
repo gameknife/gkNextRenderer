@@ -425,6 +425,9 @@ foreach(target IN LISTS AllTargets)
 
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 
+	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
+	
+
 	# warning as error
 	if (MSVC)
 	target_compile_options(${target} PRIVATE /WX)
