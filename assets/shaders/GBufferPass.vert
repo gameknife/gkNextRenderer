@@ -10,8 +10,9 @@ layout(binding = 2) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 
 layout(location = 0) in vec3 InPosition;
 layout(location = 1) in vec3 InNormal;
-layout(location = 2) in vec2 InTexCoord;
-layout(location = 3) in uint InMaterialIndex;
+layout(location = 2) in vec3 InTangent;
+layout(location = 3) in vec2 InTexCoord;
+layout(location = 4) in uint InMaterialIndex;
 
 layout(location = 0) out vec3 FragColor;
 layout(location = 1) out vec3 FragNormal;

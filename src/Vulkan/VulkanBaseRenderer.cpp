@@ -104,8 +104,6 @@ namespace
 			{
 				return strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
 			});
-
-        	fmt::print("RayTracing: {}", hasRayTracing);
         }
 
         puts("");

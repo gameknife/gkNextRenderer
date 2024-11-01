@@ -13,6 +13,7 @@
 #include "Vulkan/Device.hpp"
 #include "BenchMark.hpp"
 
+#include <iostream>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
@@ -34,9 +35,8 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-#define BUILDVER(X) std::string buildver(#X);
-#include <fmt/printf.h>
 
+#define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
 #if !WITH_GAME
@@ -286,6 +286,9 @@ void NextRendererApplication::Start()
 
 bool NextRendererApplication::Tick()
 {
+    // make sure the output is flushed
+    std::cout << std::flush;
+    
     if(rendererType != userSettings_.RendererType)
     {
         rendererType = userSettings_.RendererType;

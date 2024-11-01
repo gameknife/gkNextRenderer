@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
 #include "ModelViewController.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
