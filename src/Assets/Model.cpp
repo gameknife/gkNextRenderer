@@ -995,8 +995,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIdxs),
-            isProcedural ? new Sphere(center, radius) : nullptr);
+            std::move(materialIdxs));
     }
 
     uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
