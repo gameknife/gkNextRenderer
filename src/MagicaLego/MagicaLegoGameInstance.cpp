@@ -283,7 +283,7 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
         if(currentCamMode_ == ECM_AutoFocus && lastPlacedLocation_ != glm::i16vec3(0))
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
 
-        lastPlacedLocation_ = glm::i16vec3(0);
+        //lastPlacedLocation_ = glm::i16vec3(0);
         return true;
     }
 

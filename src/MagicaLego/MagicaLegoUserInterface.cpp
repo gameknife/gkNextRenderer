@@ -226,11 +226,10 @@ void MagicaLegoUserInterface::DrawStatusBar()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0,0));
     ImGui::Begin("StatusBar", 0, PANELFLAGS);
-    ImGui::Text("MagicaLego %s", NextRenderer::GetBuildVersion().c_str());
-    ImGui::SameLine();
-    ImGui::Text("| %d %d %d", 0, 0, 0);
-    ImGui::SameLine();
-    ImGui::Text("| %zu | %d | %d", GetGameInstance()->GetBasicNodeLibrary().size(), GetGameInstance()->GetCurrentStep(), 0);
+    std::string status = fmt::format("Lib: {} | Step: {} / {} | Last: {} {} {}",
+        GetGameInstance()->GetBasicNodes().size(), GetGameInstance()->GetCurrentStep(), GetGameInstance()->GetMaxStep(),
+        GetGameInstance()->GetLastPlacedLocation().x, GetGameInstance()->GetLastPlacedLocation().y, GetGameInstance()->GetLastPlacedLocation().z);
+    Utilities::UI::TextCentered(status);
     ImGui::End();
     ImGui::PopStyleVar(2);
 }
@@ -266,9 +265,7 @@ void MagicaLegoUserInterface::DrawMainToolBar()
         ImGui::SameLine();
     }
     ImGui::PopStyleColor();
-
-    auto location = GetGameInstance()->GetCurrentSeletionBlock();
-    ImGui::Text( "%d, %d, %d", location.x, location.y, location.z );
+    
     ImGui::End();
 }
 

@@ -595,6 +595,8 @@ void VulkanBaseRenderer::DrawFrame()
 		{
 			SCOPED_CPU_TIMER("cpugpu-io");
 			UpdateUniformBuffer(currentImageIndex_);
+			// update node structure
+			GetScene().UpdateNodes();
 		}
 
 		// wait the last frame command buffer to complete

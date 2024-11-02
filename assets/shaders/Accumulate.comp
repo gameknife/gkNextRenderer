@@ -18,7 +18,7 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 uint FetchPrimitiveIndex(in uint InstanceID)
 {
-	return (InstanceID >> 16) - 1;
+	return InstanceID;
 }
 
 bool EdgeDetect(in uint current_primitive_index, in bool isEvenFrame, in ivec2 ipos)

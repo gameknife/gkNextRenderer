@@ -49,7 +49,8 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 
     int lightIdx = int(floor(RandomFloat(Ray.RandomSeed) * .99999 * Camera.LightCount));
     Ray.HitPos = HitPos; 
-	Ray.primitiveId = InstCustIndex; // node.instanceId;
+	//Ray.primitiveId = InstCustIndex; // node.instanceId;
+    Ray.primitiveId = node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
 	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);

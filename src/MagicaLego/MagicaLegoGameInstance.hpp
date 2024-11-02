@@ -124,6 +124,9 @@ public:
 
 	void SwitchBasePlane(EBasePlane Type);
 	EBasePlane GetCurrentBasePlane() const {return currentBaseSize_;}
+
+	glm::i16vec3 GetLastPlacedLocation() const {return lastPlacedLocation_;}
+	
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
