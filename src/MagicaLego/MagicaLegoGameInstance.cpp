@@ -7,6 +7,8 @@
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
 
+const glm::i16vec3 INVALID_POS(0,-10,0);
+
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config,options,engine);
@@ -71,6 +73,9 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
 
     previewWindowTimer_ = 0.1;
+
+    lastSelectLocation_ = INVALID_POS;
+    lastPlacedLocation_ = INVALID_POS;
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -130,13 +135,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         }
         else
         {
-            lastSelectLocation_ = glm::i16vec3(0);
+            lastSelectLocation_ = INVALID_POS;
         }
-        if(currentCamMode_ == ECM_AutoFocus)
+        if(currentCamMode_ == ECM_AutoFocus && lastSelectLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
     }
-
-    lastHitInstanceId_ = instanceId;
 }
 
 bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
@@ -203,7 +206,6 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     AddBlockGroup("Corner2x2");
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
-    firstShow_ = true;
     SwitchBasePlane(EBP_Small);
 
     GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
@@ -280,14 +282,11 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         bMouseLeftDown_ = false;
         oneLinePlacedInstance_.clear();
-        if(currentCamMode_ == ECM_AutoFocus && lastPlacedLocation_ != glm::i16vec3(0))
+        if(currentCamMode_ == ECM_AutoFocus && currentMode_ == ELM_Place && lastPlacedLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
-
-        //lastPlacedLocation_ = glm::i16vec3(0);
         return true;
     }
-
-    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
         cameraMultiplier_ = 0.1f;
     }
@@ -302,7 +301,7 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int idx)
 {
     if( currentMode_ == ELM_Select )
     {
-        if(lastSelectLocation_ != glm::i16vec3(0))
+        if(lastSelectLocation_ != INVALID_POS)
         {
             FPlacedBlock block { lastSelectLocation_, idx };
             PlaceDynamicBlock(block);
@@ -502,32 +501,14 @@ void FMagicaLegoSave::Load(std::string filename)
             inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FBasicBlock));
             brushs = TempVector;
             inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
-            
-            // std::vector<FPlacedBlockOld> TempRecord(size);
-            // inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlockOld));
-            // for( auto& Record : TempRecord )
-            // {
-            //     FPlacedBlock newRecord;
-            //     newRecord.location = Record.location;
-            //     newRecord.modelId_ = Record.modelId_;
-            //     records.push_back(newRecord);
-            // }
-
             std::vector<FPlacedBlock> TempRecord(size);
             inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlock));
             records = TempRecord;
         }
         else
         {
-            version = 0;
-            inFile.seekg(0);
-            size_t size;
-            inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
-            std::vector<FPlacedBlock> TempVector(size);
-            inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FPlacedBlock));
-            records = TempVector;
+           // version competible code...
         }
-
         inFile.close();
     }
 }
@@ -657,7 +638,7 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 {
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
-    lastSelectLocation_ = glm::i16vec3(0);
+    lastSelectLocation_ = INVALID_POS;
 }
 
 void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)

@@ -36,12 +36,6 @@ struct FBasicBlock
 	char type[128];
 };
 
-struct FPlacedBlockOld
-{
-	glm::ivec3 location; // 对应一个hash
-	int modelId_; // 如果为-1，表示已经被挖掉了
-};
-
 struct FPlacedBlock
 {
 	glm::i16vec3 location; // 对应一个hash
@@ -118,8 +112,6 @@ public:
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 
-	bool ShowBanner() const {return !firstShow_;}
-
 	void PlaceDynamicBlock(FPlacedBlock Block);
 
 	void SwitchBasePlane(EBasePlane Type);
@@ -132,8 +124,6 @@ protected:
 	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
-	
-	
 	void RebuildScene(FPlacedBlockDatabase& Source);
 	void RebuildFromRecord(int timelapse);
 
@@ -144,10 +134,10 @@ private:
 	ECamMode currentCamMode_;
 	EBasePlane currentBaseSize_;
 	
-	// 基础的方块
+	// base blocks library
 	FBasicBlockStack BasicNodes;
 	FBasicBlockLibrary BasicBlockTypeMap;
-
+	
 	int currentBlockIdx_ {};
 	int currentPreviewStep {};
 
@@ -181,13 +171,7 @@ private:
 	glm::i16vec3 lastSelectLocation_ {};
 	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 
-	bool firstShow_ {};
-
-	uint32_t runtimeInstanceId_ {};
-
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};
-
-	uint32_t lastHitInstanceId_ {};
 };
 
