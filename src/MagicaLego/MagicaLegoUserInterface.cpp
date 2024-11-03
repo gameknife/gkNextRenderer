@@ -342,7 +342,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
         ImGui::SeparatorText("Files");
         static std::string selected_filename = "";
         static std::string new_filename = "magicalego";
-        if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 11 * ImGui::GetTextLineHeightWithSpacing())))
+        if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing())))
         {
             
             std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/");

@@ -82,8 +82,8 @@ void main() {
 			bool miss = current_total != prev_total ? true : false;
 			if( miss )
 			{
-				//useHistory = false;
-				src.w = Camera.TemporalFrames * 0.75;
+				useHistory = false;
+				//src.w = Camera.TemporalFrames * 0.75;
 			}
 		}
 
