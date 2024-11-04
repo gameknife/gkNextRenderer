@@ -2,6 +2,7 @@
 file(GLOB font_files fonts/*.ttf)
 file(GLOB locale_files locale/*.txt)
 file(GLOB lego_files legos/*.mls)
+file(GLOB sfx_files sfx/*.mp3 sfx/*.wav)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.rgen shaders/*.rchit shaders/*.rint shaders/*.rmiss shaders/*.comp)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
@@ -44,6 +45,7 @@ endmacro()
 copy_assets(font_files fonts copied_fonts)
 copy_assets(locale_files locale copied_locale)
 copy_assets(lego_files legos copied_legos)
+copy_assets(sfx_files sfx copied_sfx)
 copy_assets(model_files models copied_models)
 copy_assets(texture_files textures copied_textures)
 
@@ -56,8 +58,8 @@ source_group("Textures" FILES ${texture_files})
 
 add_custom_target(
 	Assets 
-	DEPENDS ${copied_fonts} ${copied_legos} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
-	SOURCES ${font_files} ${lego_files} ${locale_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
+	DEPENDS ${copied_fonts} ${copied_legos} ${copied_sfx} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
+	SOURCES ${font_files} ${lego_files} ${sfx_files} ${locale_files} ${model_files} ${shader_files} ${shader_extra_files} ${texture_files} ${shader_common_files})
 
 
 # Shader compilation -> POST_BUILD
