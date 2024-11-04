@@ -1,7 +1,9 @@
 #include "MagicaLegoUserInterface.hpp"
 
+#include <fstream>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <fmt/printf.h>
 
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
@@ -14,6 +16,7 @@ const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
 const int BUILD_BAR_WIDTH = 240;
 const int SIDE_BAR_WIDTH = 300;
+const int SHORTCUT_SIZE = 10;
 
 const int PANELFLAGS =
     ImGuiWindowFlags_NoTitleBar |
@@ -32,7 +35,11 @@ bool SelectButton(const char* label, const char* shortcut, bool selected)
     }
     ImGui::BeginGroup();
     bool result = ImGui::Button(label, ImVec2(ICON_SIZE, ICON_SIZE));
-    Utilities::UI::TextCentered(shortcut, ICON_SIZE);
+
+    
+    
+    ImVec2 cursor = Utilities::UI::TextCentered(shortcut, ICON_SIZE);
+    ImGui::GetForegroundDrawList()->AddRect( cursor - ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), cursor + ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), IM_COL32(255,255,255,128), 4.0f );
     ImGui::EndGroup();
     if(selected)
     {
@@ -95,10 +102,46 @@ void MagicaLegoUserInterface::OnInitUI()
         const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
         bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange );
     }
+
+    introStep_ = EIS_Entry;
+    openingTimer_ = 1.0f;
+}
+
+void MagicaLegoUserInterface::OnSceneLoaded()
+{
+    if( !std::filesystem::exists(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt")) )
+    {
+        // write the record.txt
+        std::ofstream recordFile(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt"));
+        // write timestamp
+        recordFile << fmt::format("{}", std::time(nullptr));
+        recordFile.close();
+
+        // start intro
+        GetGameInstance()->GetEngine().AddTimerTask( 1.0, [this]() -> bool
+       {
+           introStep_ = static_cast<EIntroStep>(static_cast<int>(introStep_) + 1);
+           openingTimer_ = 1.0f;
+
+           if(introStep_ == EIS_Finish)
+           {
+               return true;
+           }
+           return false;
+       });
+    }
+    else
+    {
+        introStep_ = EIS_InGame;
+    }
 }
 
 void MagicaLegoUserInterface::DrawOpening()
 {
+    if(introStep_ >= EIS_GuideBuild)
+    {
+        return;
+    }
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
 
@@ -119,11 +162,6 @@ void MagicaLegoUserInterface::DrawOpening()
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
-    if( GetGameInstance()->ShowBanner() )
-    {
-        openingTimer_ = 2.0f;
-    }
-    
     // TotalSwitch
     DrawMainToolBar();
 
@@ -145,27 +183,32 @@ void MagicaLegoUserInterface::OnRenderUI()
     }
 
     DrawIndicator();
-    
 
-    // ugly opening guiding, optimze later
-    if(openingTimer_ > -5)
+    switch (introStep_)
     {
-        openingTimer_ = openingTimer_ - 0.016f;
-    }
-    if(openingTimer_ >= 0)
-    {
-        DrawOpening();
-    }
-    if(openingTimer_ < 0 && openingTimer_ > -1)
-    {
-        auto screenSize = ImGui::GetMainViewport()->Size;
-        auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.75, screenSize.y * 0.75), glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), -openingTimer_);
-        glfwSetCursorPos( GetGameInstance()->GetEngine().GetRenderer().Window().Handle(), lerpedPos.x, lerpedPos.y);
-    }
-    if(openingTimer_ < -1 && openingTimer_ > -3)
-    {
-        GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
-        openingTimer_ = -10;
+        case EIS_Entry:
+            DrawOpening();
+            break;
+        case EIS_Opening:
+            openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
+            DrawOpening();
+            break;
+        case EIS_GuideBuild:
+            {
+                openingTimer_ = openingTimer_ - GetGameInstance()->GetEngine().GetDeltaSeconds();
+                auto screenSize = ImGui::GetMainViewport()->Size;
+                auto lerpedPos = glm::mix(glm::vec2(screenSize.x * 0.5, screenSize.y * 0.5), glm::vec2(screenSize.x * 0.6, screenSize.y * 0.75), openingTimer_);
+                glfwSetCursorPos( GetGameInstance()->GetEngine().GetRenderer().Window().Handle(), lerpedPos.x, lerpedPos.y);
+            }
+            break;
+        case EIS_Finish:
+            GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
+            introStep_ = EIS_InGame;
+            break;
+        case EIS_InGame:
+            break;
+        default:
+            break;
     }
 }
 
@@ -188,11 +231,10 @@ void MagicaLegoUserInterface::DrawStatusBar()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0,0));
     ImGui::Begin("StatusBar", 0, PANELFLAGS);
-    ImGui::Text("MagicaLego %s", NextRenderer::GetBuildVersion().c_str());
-    ImGui::SameLine();
-    ImGui::Text("| %d %d %d", 0, 0, 0);
-    ImGui::SameLine();
-    ImGui::Text("| %zu | %d | %d", GetGameInstance()->GetBasicNodeLibrary().size(), GetGameInstance()->GetCurrentStep(), 0);
+    std::string status = fmt::format("Lib: {} | Step: {} / {} | Last: {} {} {}",
+        GetGameInstance()->GetBasicNodes().size(), GetGameInstance()->GetCurrentStep(), GetGameInstance()->GetMaxStep(),
+        GetGameInstance()->GetLastPlacedLocation().x, GetGameInstance()->GetLastPlacedLocation().y, GetGameInstance()->GetLastPlacedLocation().z);
+    Utilities::UI::TextCentered(status);
     ImGui::End();
     ImGui::PopStyleVar(2);
 }
@@ -228,9 +270,7 @@ void MagicaLegoUserInterface::DrawMainToolBar()
         ImGui::SameLine();
     }
     ImGui::PopStyleColor();
-
-    auto location = GetGameInstance()->GetCurrentSeletionBlock();
-    ImGui::Text( "%d, %d, %d", location.x, location.y, location.z );
+    
     ImGui::End();
 }
 
@@ -275,6 +315,21 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->SetCameraMode(ECM_AutoFocus);
         }
+        ImGui::SeparatorText("Base");
+        if( SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBP_Big))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Big);
+        }
+        ImGui::SameLine();
+        if( SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBP_Mid))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Mid);
+        }
+        ImGui::SameLine();
+        if( SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBP_Small))
+        {
+            GetGameInstance()->SwitchBasePlane(EBP_Small);
+        }
 
         ImGui::Dummy(ImVec2(0,50));
         ImGui::SeparatorText("Light");
@@ -292,7 +347,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
         ImGui::SeparatorText("Files");
         static std::string selected_filename = "";
         static std::string new_filename = "magicalego";
-        if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 11 * ImGui::GetTextLineHeightWithSpacing())))
+        if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing())))
         {
             
             std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/");

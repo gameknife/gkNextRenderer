@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
 #include "ModelViewController.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
@@ -9,6 +10,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
+#include "ThirdParty/miniaudio/miniaudio.h"
 
 class BenchMarker;
 class NextRendererApplication;
@@ -19,7 +21,7 @@ public:
 	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine){}
 	virtual ~NextGameInstanceBase() {}
 	virtual void OnInit() =0;
-	virtual void OnTick() =0;
+	virtual void OnTick(double deltaSeconds) =0;
 	virtual void OnDestroy() =0;
 	virtual bool OnRenderUI() =0;
 	virtual void OnInitUI() {}
@@ -42,7 +44,7 @@ public:
 	~NextGameInstanceVoid() override = default;
 	
 	void OnInit() override {}
-	void OnTick() override {}
+	void OnTick(double deltaSeconds) override {}
 	void OnDestroy() override {}
 	bool OnRenderUI() override {return false;}
 	void OnRayHitResponse(Assets::RayCastResult& result) override {}
@@ -69,6 +71,17 @@ namespace NextRenderer
 	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 }
 
+
+typedef std::function<bool (double DeltaSeconds)> TickedTask;
+typedef std::function<bool ()> DelayedTask;
+
+struct FDelayTaskContext
+{
+	double triggerTime;
+	double loopTime;
+	DelayedTask task;
+};
+
 class NextRendererApplication final
 {
 public:
@@ -89,10 +102,21 @@ public:
 
 	Assets::Scene& GetScene() { return *scene_; }
 	UserSettings& GetUserSettings() { return userSettings_; }
-	
+
+	float GetTime() const { return static_cast<float>(time_); }
+	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
+	uint32_t GetTotalFrames() const { return totalFrames_; }
+
+	// remove till return true
+	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
+	void AddTimerTask( double delay, DelayedTask task );
+
+	// sound
+	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
+
 protected:
 	
-	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
 	void OnRendererDeviceSet();
 	void OnRendererCreateSwapChain();
 	void OnRendererDeleteSwapChain();
@@ -143,8 +167,15 @@ private:
 
 	uint32_t totalFrames_{};
 	double time_{};
+	double deltaSeconds_{};
 
 	glm::vec2 mousePos_ {};
 
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
+
+	std::vector<TickedTask> tickedTasks_;
+	std::vector<FDelayTaskContext> delayedTasks_;
+
+	std::unique_ptr<struct ma_engine> audioEngine_;
+	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
 };

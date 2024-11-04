@@ -291,9 +291,6 @@ namespace Vulkan
 
 		virtual void BeforeNextFrame()
 		{
-			// update node structure
-			GetScene().UpdateNodes();
-			
 			if(DelegateBeforeNextTick)
 			{
 				DelegateBeforeNextTick();

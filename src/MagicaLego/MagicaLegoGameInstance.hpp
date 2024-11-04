@@ -18,6 +18,13 @@ enum ECamMode
 	ECM_AutoFocus,
 };
 
+enum EBasePlane
+{
+	EBP_Big,
+	EBP_Mid,
+	EBP_Small,
+};
+
 struct FBasicBlock
 {
 	// just need modelIdNow
@@ -27,12 +34,6 @@ struct FBasicBlock
 	glm::vec4 color;
 	char name[128];
 	char type[128];
-};
-
-struct FPlacedBlockOld
-{
-	glm::ivec3 location; // 对应一个hash
-	int modelId_; // 如果为-1，表示已经被挖掉了
 };
 
 struct FPlacedBlock
@@ -64,7 +65,7 @@ public:
     ~MagicaLegoGameInstance() override = default;
 	
     void OnInit() override {}
-    void OnTick() override;
+    void OnTick(double deltaSeconds) override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
 	void OnInitUI() override;
@@ -111,16 +112,18 @@ public:
 
 	NextRendererApplication& GetEngine() {return *engine_;}
 
-	bool ShowBanner() const {return !firstShow_;}
-
 	void PlaceDynamicBlock(FPlacedBlock Block);
+
+	void SwitchBasePlane(EBasePlane Type);
+	EBasePlane GetCurrentBasePlane() const {return currentBaseSize_;}
+
+	glm::i16vec3 GetLastPlacedLocation() const {return lastPlacedLocation_;}
+	
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
-	
-	
 	void RebuildScene(FPlacedBlockDatabase& Source);
 	void RebuildFromRecord(int timelapse);
 
@@ -129,11 +132,12 @@ protected:
 private:
 	ELegoMode currentMode_;
 	ECamMode currentCamMode_;
+	EBasePlane currentBaseSize_;
 	
-	// 基础的方块
+	// base blocks library
 	FBasicBlockStack BasicNodes;
 	FBasicBlockLibrary BasicBlockTypeMap;
-
+	
 	int currentBlockIdx_ {};
 	int currentPreviewStep {};
 
@@ -144,8 +148,6 @@ private:
 
 	// 基础加速结构，location -> uint64_t，存储已经放置的方块
 	FPlacedBlockDatabase BlocksDynamics;
-	std::vector<uint32_t> hashByInstance;
-
 	std::vector<FPlacedBlock> BlockRecords;
 	
 	NextRendererApplication* engine_;
@@ -169,8 +171,7 @@ private:
 	glm::i16vec3 lastSelectLocation_ {};
 	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 
-	bool firstShow_ {};
-
-	uint32_t runtimeInstanceId_ {};
+	double previewWindowTimer_ {};
+	double previewWindowElapsed_ {};
 };
 

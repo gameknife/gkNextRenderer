@@ -356,6 +356,7 @@ namespace Assets
         // export whole scene into a big buffer, with vertice indices materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
+            bool hasTangent = false;
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
             std::vector<uint32_t> materials;
@@ -372,6 +373,19 @@ namespace Assets
                 tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
                 tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
                 tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
+
+                tinygltf::Accessor tangentAccessor;
+                tinygltf::BufferView tangentView;
+                int tangentStride = 0;
+                
+                if(primtive.attributes.find("TANGENT") != primtive.attributes.end())
+                {
+                    hasTangent = true;
+
+                    tangentAccessor = model.accessors[primtive.attributes["TANGENT"]];
+                    tangentView = model.bufferViews[tangentAccessor.bufferView];
+                    tangentStride = tangentAccessor.ByteStride(tangentView);
+                }
 
                 tinygltf::BufferView positionView = model.bufferViews[positionAccessor.bufferView];
                 tinygltf::BufferView normalView = model.bufferViews[normalAccessor.bufferView];
@@ -398,6 +412,18 @@ namespace Assets
                         normal[1],
                         normal[2]
                     );
+
+                    if(hasTangent)
+                    {
+                        float* tangent = reinterpret_cast<float*>(&model.buffers[tangentView.buffer].data[tangentView.byteOffset + tangentAccessor.byteOffset + i *
+                       tangentStride]);
+                        vertex.Tangent = vec4(
+                            tangent[0],
+                            tangent[1],
+                            tangent[2],
+                            tangent[3]
+                        );
+                    }
 
                     if(texcoordView.byteOffset + i *
                         texcoordStride < model.buffers[texcoordView.buffer].data.size())
@@ -448,7 +474,7 @@ namespace Assets
                 FlattenVertices(vertices, indices);
             #endif
             
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), !hasTangent));
         }
 
         // default auto camera
@@ -537,7 +563,7 @@ namespace Assets
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
     {
         // TODO: change to use povoking vertex later
-        bool doFlatten = false;//(GOption->RendererType == 1 || GOption->RendererType == 2);
+        bool doFlatten = true;//(GOption->RendererType == 1 || GOption->RendererType == 2);
 
         if(doFlatten) {
             std::vector<Vertex> vertices_flatten;
@@ -778,7 +804,7 @@ namespace Assets
             FlattenVertices(vertices, indices);
 #endif
 
-            models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials), nullptr));
+            models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials)));
             if(autoNode)
             {
                 nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, nodes.size(), false));
@@ -822,8 +848,7 @@ namespace Assets
         models.push_back(Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIds),
-            nullptr
+            std::move(materialIds)
         ));
 
         return models.size() - 1;
@@ -883,8 +908,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialids),
-            nullptr);
+            std::move(materialids));
     }
 
     Model Model::CreateSphere(const vec3& center, float radius, uint32_t materialIdx, const bool isProcedural)
@@ -971,8 +995,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIdxs),
-            isProcedural ? new Sphere(center, radius) : nullptr);
+            std::move(materialIdxs));
     }
 
     uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
@@ -1018,18 +1041,17 @@ namespace Assets
         models.push_back( Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIds),
-            nullptr));
+            std::move(materialIds)));
 
         return static_cast<int32_t>(models.size()) - 1;
     }
 
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
-                 const class Procedural* procedural) :
+                 bool needGenTSpace) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
         materialIdx_(std::move(materials)),
-        procedural_(procedural)
+        procedural_(nullptr)
     {
         // calculate local aabb
         local_aabb_min = glm::vec3(999999, 999999, 999999);
@@ -1041,8 +1063,10 @@ namespace Assets
             local_aabb_max = glm::max(local_aabb_max, vertex.Position);
         }
 
-        // generate mikktspace
-        GenerateMikkTSpace(this);
+        if(needGenTSpace)
+        {
+            GenerateMikkTSpace(this);
+        }
     }
 
     Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural)

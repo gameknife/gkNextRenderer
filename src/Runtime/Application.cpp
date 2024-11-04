@@ -13,6 +13,7 @@
 #include "Vulkan/Device.hpp"
 #include "BenchMark.hpp"
 
+#include <iostream>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
@@ -21,10 +22,10 @@
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
-#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
+
+#define MINIAUDIO_IMPLEMENTATION
+#include "ThirdParty/miniaudio/miniaudio.h"
 
 #if WITH_EDITOR
 #include "Editor/EditorCommand.hpp"
@@ -200,7 +201,6 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
         options.ForceSDR
     };
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
-    
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
 
@@ -271,10 +271,22 @@ void NextRendererApplication::Start()
 {
     renderer_->Start();
     gameInstance_->OnInit();
+
+    ma_result result;
+
+    audioEngine_.reset( new ma_engine() );
+
+    result = ma_engine_init(NULL, audioEngine_.get());
+    if (result != MA_SUCCESS) {
+        return;
+    }
 }
 
 bool NextRendererApplication::Tick()
 {
+    // make sure the output is flushed
+    std::cout << std::flush;
+    
     if(rendererType != userSettings_.RendererType)
     {
         rendererType = userSettings_.RendererType;
@@ -284,11 +296,11 @@ bool NextRendererApplication::Tick()
     // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
-    const auto timeDelta = time_ - prevTime;
+    deltaSeconds_ = time_ - prevTime;
 
     // Camera Update
     userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
-    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, timeDelta);
+    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
     // Handle Scene Switching
     if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
@@ -313,7 +325,45 @@ bool NextRendererApplication::Tick()
 #else
     glfwPollEvents();
 
-    gameInstance_->OnTick();
+    // tick
+    gameInstance_->OnTick(deltaSeconds_);
+
+    // iterate the tickedTasks_, if return true, remove it
+    for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
+    {
+        if( (*it)(deltaSeconds_) )
+        {
+            it = tickedTasks_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
+    for( auto it = delayedTasks_.begin(); it != delayedTasks_.end(); )
+    {
+        if( time_ > it->triggerTime )
+        {
+            // update the next trigger time
+            it->triggerTime = time_ + it->loopTime;
+
+            // execute
+            if( it->task() )
+            {
+                it = delayedTasks_.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        else
+        {
+            ++it;
+        }
+    }
     
     renderer_->DrawFrame();
     window_->attemptDragWindow();
@@ -324,12 +374,37 @@ bool NextRendererApplication::Tick()
 
 void NextRendererApplication::End()
 {
+    ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
 }
 
-Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
+void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
+{
+    delayedTasks_.push_back( { time_ + delay, delay, task} );
+}
+
+void NextRendererApplication::PlaySound(const std::string& soundName, bool loop, float volume)
+{
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        auto sound = new ma_sound();
+        ma_sound_init_from_file(audioEngine_.get(), Utilities::FileHelper::GetPlatformFilePath(soundName.c_str()).c_str(), 0, NULL, NULL, sound);
+        soundMaps_[soundName].reset(sound);
+    }
+
+    ma_sound* sound = soundMaps_[soundName].get();
+
+    // restart the sound
+    ma_sound_stop(sound);
+    ma_sound_set_looping(sound, loop);
+    ma_sound_set_volume(sound, volume);
+    ma_sound_seek_to_pcm_frame(sound, 0);
+    ma_sound_start(sound);
+}
+
+Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
     {
@@ -389,7 +464,13 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
 
-                gameInstance_->OnRayHitResponse(rayResult);
+                AddTickedTask([this, rayResult](double DeltaTimes)->bool
+                {
+                    Assets::RayCastResult ray = rayResult;
+                    gameInstance_->OnRayHitResponse(ray);
+                    return true;
+                });
+                
             }
             else
             {

@@ -1,10 +1,13 @@
 #include "MagicaLegoGameInstance.hpp"
 
 #include <fstream>
+#include <fmt/printf.h>
 
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
+
+const glm::i16vec3 INVALID_POS(0,-10,0);
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {
@@ -28,14 +31,6 @@ glm::i16vec3 GetBlockLocationFromRenderLocation( glm::vec3 RenderLocation )
     newLocation.z = static_cast<int16_t>(round(RenderLocation.z / 0.08f));
     return newLocation;
 }
-
-// uint64_t GetHashFromBlockLocation( glm::ivec3 BlockLocation )
-// {
-//     uint64_t hx = std::hash<int>()(BlockLocation.x);
-//     uint64_t hy = std::hash<int>()(BlockLocation.y);
-//     uint64_t hz = std::hash<int>()(BlockLocation.z);
-//     return hx ^ (hy << 1) ^ (hz << 2); 
-// }
 
 uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
     uint32_t x = static_cast<uint32_t>(BlockLocation.x) & 0xFFFF; // 取 16 位
@@ -76,6 +71,11 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
+
+    previewWindowTimer_ = 0.1;
+
+    lastSelectLocation_ = INVALID_POS;
+    lastPlacedLocation_ = INVALID_POS;
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -90,13 +90,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     
     if( currentMode_ == ELM_Dig )
     {
-        if( lastDownFrameNum_ == GetEngine().GetRenderer().FrameCount())
+        if( lastDownFrameNum_ + 1 == GetEngine().GetRenderer().FrameCount())
         {
             if( Node && Node->GetName() == "blockInst" )
             {
-                // 这里可以从Node上取到location，但是WorldMatrix需要Decompose，简单点，直接反向normal，找一个内部位置
-                glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
-                glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
+                glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation( glm::vec3((Node->WorldTransform() * glm::vec4(0,0.0475f,0,1))) );
                 FPlacedBlock block { blockLocation, -1 };
                 PlaceDynamicBlock(block);
             }
@@ -105,35 +103,31 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
     if( currentMode_ == ELM_Place )
     {
-        if( GetEngine().GetRenderer().FrameCount() % 2 == 0 )
+        for( auto& id : oneLinePlacedInstance_ )
         {
-            for( auto& id : oneLinePlacedInstance_ )
+            if( instanceId == id)
             {
-                if( instanceId == id)
-                {
-                    return;
-                }
-            } 
-            
-            glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
-            glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
-            FPlacedBlock block { blockLocation, currentBlockIdx_ };
-            PlaceDynamicBlock(block);
-            oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
+                return;
+            }
         }
+        
+        glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
+        glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
+        if(blockLocation == lastPlacedLocation_) return;
+        PlaceDynamicBlock({ blockLocation, currentBlockIdx_ });
+        oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
     }
     if( currentMode_ == ELM_Select )
     {
-        glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
         if( Node->GetName() == "blockInst")
         {
-            lastSelectLocation_ = GetBlockLocationFromRenderLocation(inLocation);
+            lastSelectLocation_ = GetBlockLocationFromRenderLocation( glm::vec3((Node->WorldTransform() * glm::vec4(0,0.0475f,0,1))) );
         }
         else
         {
-            lastSelectLocation_ = glm::i16vec3(0);
+            lastSelectLocation_ = INVALID_POS;
         }
-        if(currentCamMode_ == ECM_AutoFocus)
+        if(currentCamMode_ == ECM_AutoFocus && lastSelectLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
     }
 }
@@ -171,17 +165,22 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     uint32_t instanceId = Base->GetInstanceId();
 
     // one is 12 x 12, we support 252 x 252 (21 x 21), so duplicate and create
-    if(true)
+    for( int x = 0; x < 21; x++ )
     {
-        for( int x = 0; x < 21; x++ )
+        for( int z = 0; z < 21; z++ )
         {
-            for( int z = 0; z < 21; z++ )
+            std::string NodeName = "BigBase";
+            if( x >= 7 && x <= 13 && z >= 7 && z <= 13 )
             {
-                glm::vec3 location = glm::vec3((x - 10) * 0.96f, 0.0f, (z - 10) * 0.96f);
-                // make a same instanceid, to prevent anti-aliasing
-                Assets::Node newNode = Assets::Node::CreateNode("BasePane12x12", glm::translate( glm::mat4(1), location), modelId, instanceId, false);
-                GetEngine().GetScene().Nodes().push_back(newNode);
+                NodeName = "MidBase";
             }
+            if( x == 10 && z == 10 )
+            {
+                NodeName = "SmallBase";
+            }
+            glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
+            Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate( glm::mat4(1), location), modelId, instanceId, false);
+            GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
     
@@ -195,15 +194,11 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     
     AddBlockGroup("Plate2x2");
     AddBlockGroup("Corner2x2");
-
-    
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
+    SwitchBasePlane(EBP_Small);
 
-    firstShow_ = true;
-
-    //GetEngine().GetUserSettings().ShowVisualDebug = true;
-    GetEngine().GetUserSettings().TAA = true;
+    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -212,6 +207,8 @@ void MagicaLegoGameInstance::OnSceneUnloaded()
 
     BasicNodes.clear();
     CleanUp();
+
+    UserInterface_->OnSceneLoaded();
 }
 
 bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
@@ -227,6 +224,10 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
             case GLFW_KEY_A: SetCameraMode(ECM_Pan); break;
             case GLFW_KEY_S: SetCameraMode(ECM_Orbit); break;
             case GLFW_KEY_D: SetCameraMode(ECM_AutoFocus); break;
+
+            case GLFW_KEY_1: SwitchBasePlane(EBP_Big); break;
+            case GLFW_KEY_2: SwitchBasePlane(EBP_Mid); break;
+            case GLFW_KEY_3: SwitchBasePlane(EBP_Small); break;
             default: break;
         }
     }
@@ -275,14 +276,11 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         bMouseLeftDown_ = false;
         oneLinePlacedInstance_.clear();
-        if(currentCamMode_ == ECM_AutoFocus && lastPlacedLocation_ != glm::i16vec3(0))
+        if(currentCamMode_ == ECM_AutoFocus && currentMode_ == ELM_Place && lastPlacedLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
-
-        lastPlacedLocation_ = glm::i16vec3(0);
         return true;
     }
-
-    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+    else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
         cameraMultiplier_ = 0.1f;
     }
@@ -297,7 +295,7 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int idx)
 {
     if( currentMode_ == ELM_Select )
     {
-        if(lastSelectLocation_ != glm::i16vec3(0))
+        if(lastSelectLocation_ != INVALID_POS)
         {
             FPlacedBlock block { lastSelectLocation_, idx };
             PlaceDynamicBlock(block);
@@ -392,8 +390,66 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     BlockRecords.push_back(Block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
     RebuildScene(BlocksDynamics);
-
     lastPlacedLocation_ = Block.location;
+    
+    // random put1 or put2
+    if(Block.modelId_ >= 0)
+    {
+        int random = rand();
+        if( random % 3 == 0 )
+            GetEngine().PlaySound("assets/sfx/put2.wav");
+        else if( random % 3 == 1 )
+            GetEngine().PlaySound("assets/sfx/put1.wav");
+        else
+            GetEngine().PlaySound("assets/sfx/put3.wav");
+    }
+
+}
+
+void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
+{
+    currentBaseSize_ = Type;
+    // BigBase, MidBase, SmallBase
+    // first hide all
+    auto& allNodes = GetEngine().GetScene().Nodes();
+    for ( auto& Node : allNodes )
+    {
+        if(Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+        {
+            Node.SetVisible(false);
+        }
+    }
+
+    switch (Type)
+    {
+        case EBP_Big:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+        case EBP_Mid:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+        case EBP_Small:
+            for ( auto& Node : allNodes )
+            {
+                if(Node.GetName() == "SmallBase")
+                {
+                    Node.SetVisible(true);
+                }
+            }
+            break;
+    }
 }
 
 void MagicaLegoGameInstance::CleanUp()
@@ -439,32 +495,14 @@ void FMagicaLegoSave::Load(std::string filename)
             inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FBasicBlock));
             brushs = TempVector;
             inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
-            
-            // std::vector<FPlacedBlockOld> TempRecord(size);
-            // inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlockOld));
-            // for( auto& Record : TempRecord )
-            // {
-            //     FPlacedBlock newRecord;
-            //     newRecord.location = Record.location;
-            //     newRecord.modelId_ = Record.modelId_;
-            //     records.push_back(newRecord);
-            // }
-
             std::vector<FPlacedBlock> TempRecord(size);
             inFile.read(reinterpret_cast<char*>(TempRecord.data()), size * sizeof(FPlacedBlock));
             records = TempRecord;
         }
         else
         {
-            version = 0;
-            inFile.seekg(0);
-            size_t size;
-            inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
-            std::vector<FPlacedBlock> TempVector(size);
-            inFile.read(reinterpret_cast<char*>(TempVector.data()), size * sizeof(FPlacedBlock));
-            records = TempVector;
+           // version competible code...
         }
-
         inFile.close();
     }
 }
@@ -516,7 +554,6 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
-    hashByInstance.clear();
 
     uint32_t counter = 0;
     for ( auto& Block : Source )
@@ -529,7 +566,6 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 // with stable instance id
                 Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), false);
                 GetEngine().GetScene().Nodes().push_back(newNode);
-                hashByInstance.push_back(Block.first);
             }
         }
     }
@@ -555,7 +591,7 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
     BlocksDynamics.clear();
 }
 
-void MagicaLegoGameInstance::OnTick()
+void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 {
     realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
 
@@ -563,12 +599,12 @@ void MagicaLegoGameInstance::OnTick()
     {
         GetEngine().GetUserSettings().RequestRayCast = true;
     }
-}
 
-bool MagicaLegoGameInstance::OnRenderUI()
-{
-    if(playReview_ && GetEngine().GetRenderer().frameCount_ % 30 == 0)
+    previewWindowElapsed_ += deltaSeconds;
+    if(playReview_ && previewWindowElapsed_ > previewWindowTimer_)
     {
+        previewWindowElapsed_ = 0.0;
+        
         if(currentPreviewStep < BlockRecords.size())
         {
             currentPreviewStep = currentPreviewStep + 1;
@@ -579,9 +615,11 @@ bool MagicaLegoGameInstance::OnRenderUI()
             playReview_ = false;
         }
     }
+}
 
+bool MagicaLegoGameInstance::OnRenderUI()
+{
     UserInterface_->OnRenderUI();
-    
     return true;
 }
 
@@ -594,7 +632,7 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 {
     currentMode_ = mode;
     GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
-    lastSelectLocation_ = glm::i16vec3(0);
+    lastSelectLocation_ = INVALID_POS;
 }
 
 void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
