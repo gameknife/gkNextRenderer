@@ -114,6 +114,9 @@ public:
 	// sound
 	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
 
+	// screen shot
+	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
+
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
@@ -138,9 +141,6 @@ private:
 
 	void LoadScene(uint32_t sceneIndex);
 	void TickBenchMarker();
-	void CheckFramebufferSize();
-
-	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
 
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;

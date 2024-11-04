@@ -404,6 +404,11 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
+void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
+{
+    BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)

@@ -6,6 +6,7 @@
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 const glm::i16vec3 INVALID_POS(0,-10,0);
 
@@ -199,6 +200,8 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     SwitchBasePlane(EBP_Small);
 
     GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
+
+    GeneratingThmubnail();
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -325,6 +328,18 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
         }
         RebuildScene(BlocksDynamics);
     }
+}
+
+void MagicaLegoGameInstance::GeneratingThmubnail()
+{
+    GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - 128,960 / 2 - 128,256,256);
+    GetEngine().AddTimerTask(5, [this]()->bool
+    {
+        GetEngine().SaveScreenShot("thmubnail", 1920 / 2 - 128,960 / 2 - 128,256,256);
+        GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(0,0,1920,960);
+        return true;
+    });
+    
 }
 
 void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)

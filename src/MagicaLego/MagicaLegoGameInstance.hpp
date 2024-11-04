@@ -119,6 +119,8 @@ public:
 	EBasePlane GetCurrentBasePlane() const {return currentBaseSize_;}
 
 	glm::i16vec3 GetLastPlacedLocation() const {return lastPlacedLocation_;}
+
+	void GeneratingThmubnail();
 	
 protected:
 	void AddBlockGroup(std::string typeName);
