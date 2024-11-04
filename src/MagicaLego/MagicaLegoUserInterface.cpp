@@ -445,7 +445,13 @@ void MagicaLegoUserInterface::DrawRightBar()
             ImGui::Dummy(ImVec2(0,5));
 
             ImGui::SetNextItemWidth( SIDE_BAR_WIDTH - 46 );
-            ImGui::Combo("##Type", &current_type, types.data(), static_cast<int>(types.size()));
+            if( ImGui::Combo("##Type", &current_type, types.data(), static_cast<int>(types.size())) )
+            {
+                if( int newIdx = GetGameInstance()->ConvertBrushIdxToNextType(types[current_type], GetGameInstance()->GetCurrentBrushIdx() ) )
+                {
+                    GetGameInstance()->SetCurrentBrushIdx(newIdx);
+                }
+            }
             ImGui::Dummy(ImVec2(0,5));
         
             float WindowWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;

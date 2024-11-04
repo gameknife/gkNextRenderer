@@ -93,6 +93,7 @@ public:
 	FBasicBlockStack& GetBasicNodes() {return BasicNodes;}
 	FBasicBlockLibrary& GetBasicNodeLibrary() {return BasicBlockTypeMap;}
 
+	int ConvertBrushIdxToNextType(const std::string& prefix, int idx ) const;
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
 	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
 	void TryChangeSelectionBrushIdx(int idx);

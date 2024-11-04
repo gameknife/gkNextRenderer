@@ -639,3 +639,19 @@ void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
 {
     currentCamMode_ = mode;
 }
+
+int MagicaLegoGameInstance::ConvertBrushIdxToNextType(const std::string& prefix, int idx) const
+{
+    std::string subName = BasicNodes[idx].name;
+    if( BasicBlockTypeMap.find(prefix) != BasicBlockTypeMap.end() )
+    {
+        for( auto& block : BasicBlockTypeMap.at(prefix) )
+        {
+            if( strcmp(block.name, subName.c_str()) == 0 )
+            {
+                return block.brushId_;
+            }
+        }
+    }
+    return -1;
+}
