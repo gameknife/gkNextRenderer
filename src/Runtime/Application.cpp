@@ -35,7 +35,6 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
@@ -202,7 +201,6 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
         options.ForceSDR
     };
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
-    
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
 
@@ -406,7 +404,7 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
-Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const
+Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
     {
@@ -466,7 +464,13 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
                 userSettings_.FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
 
-                gameInstance_->OnRayHitResponse(rayResult);
+                AddTickedTask([this, rayResult](double DeltaTimes)->bool
+                {
+                    Assets::RayCastResult ray = rayResult;
+                    gameInstance_->OnRayHitResponse(ray);
+                    return true;
+                });
+                
             }
             else
             {

@@ -90,13 +90,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     
     if( currentMode_ == ELM_Dig )
     {
-        if( lastDownFrameNum_ == GetEngine().GetRenderer().FrameCount())
+        if( lastDownFrameNum_ + 1 == GetEngine().GetRenderer().FrameCount())
         {
             if( Node && Node->GetName() == "blockInst" )
             {
-                // 这里可以从Node上取到location，但是WorldMatrix需要Decompose，简单点，直接反向normal，找一个内部位置
-                glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
-                glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(inLocation);
+                glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation( glm::vec3((Node->WorldTransform() * glm::vec4(0,0.0475f,0,1))) );
                 FPlacedBlock block { blockLocation, -1 };
                 PlaceDynamicBlock(block);
             }
@@ -115,23 +113,15 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         
         glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
         glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
-
-        // do not replace the same block
-        if(blockLocation == lastPlacedLocation_)
-        {
-            return;
-        }
-        
-        FPlacedBlock block { blockLocation, currentBlockIdx_ };
-        PlaceDynamicBlock(block);
+        if(blockLocation == lastPlacedLocation_) return;
+        PlaceDynamicBlock({ blockLocation, currentBlockIdx_ });
         oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
     }
     if( currentMode_ == ELM_Select )
     {
-        glm::vec3 inLocation = glm::vec3(rayResult.HitPoint) - glm::vec3(rayResult.Normal) * 0.01f;
         if( Node->GetName() == "blockInst")
         {
-            lastSelectLocation_ = GetBlockLocationFromRenderLocation(inLocation);
+            lastSelectLocation_ = GetBlockLocationFromRenderLocation( glm::vec3((Node->WorldTransform() * glm::vec4(0,0.0475f,0,1))) );
         }
         else
         {
@@ -234,6 +224,10 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
             case GLFW_KEY_A: SetCameraMode(ECM_Pan); break;
             case GLFW_KEY_S: SetCameraMode(ECM_Orbit); break;
             case GLFW_KEY_D: SetCameraMode(ECM_AutoFocus); break;
+
+            case GLFW_KEY_1: SwitchBasePlane(EBP_Big); break;
+            case GLFW_KEY_2: SwitchBasePlane(EBP_Mid); break;
+            case GLFW_KEY_3: SwitchBasePlane(EBP_Small); break;
             default: break;
         }
     }

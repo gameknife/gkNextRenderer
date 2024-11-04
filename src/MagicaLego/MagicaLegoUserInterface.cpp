@@ -16,6 +16,7 @@ const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
 const int BUILD_BAR_WIDTH = 240;
 const int SIDE_BAR_WIDTH = 300;
+const int SHORTCUT_SIZE = 10;
 
 const int PANELFLAGS =
     ImGuiWindowFlags_NoTitleBar |
@@ -34,7 +35,11 @@ bool SelectButton(const char* label, const char* shortcut, bool selected)
     }
     ImGui::BeginGroup();
     bool result = ImGui::Button(label, ImVec2(ICON_SIZE, ICON_SIZE));
-    Utilities::UI::TextCentered(shortcut, ICON_SIZE);
+
+    
+    
+    ImVec2 cursor = Utilities::UI::TextCentered(shortcut, ICON_SIZE);
+    ImGui::GetForegroundDrawList()->AddRect( cursor - ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), cursor + ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), IM_COL32(255,255,255,128), 4.0f );
     ImGui::EndGroup();
     if(selected)
     {

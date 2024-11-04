@@ -116,7 +116,7 @@ public:
 
 protected:
 	
-	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
 	void OnRendererDeviceSet();
 	void OnRendererCreateSwapChain();
 	void OnRendererDeleteSwapChain();
