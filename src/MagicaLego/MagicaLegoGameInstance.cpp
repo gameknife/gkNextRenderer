@@ -69,6 +69,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     resetMouse_ = true;
     cameraRotX_ = 45;
     cameraRotY_ = 30;
+    cameraArm_ = 5.0;
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
@@ -137,7 +138,7 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
 {
     float xRotation = cameraRotX_; // 例如绕X轴旋转45度
     float yRotation = cameraRotY_; // 例如上下偏转30度
-    float armLength = 5.0f;
+    float armLength = cameraArm_;
         
     glm::vec3 cameraPos;
     cameraPos.x = realCameraCenter_.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
@@ -201,7 +202,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
 
     GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
 
-    GeneratingThmubnail();
+    //GeneratingThmubnail();
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -330,14 +331,50 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
     }
 }
 
+const int THUMB_SIZE = 92;
+
 void MagicaLegoGameInstance::GeneratingThmubnail()
 {
-    GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - 128,960 / 2 - 128,256,256);
-    GetEngine().AddTimerTask(5, [this]()->bool
+    cameraArm_ = 0.7f;
+    cameraCenter_ = glm::vec3(0,0.045f,0);
+    realCameraCenter_ = cameraCenter_;
+    GetEngine().GetUserSettings().TemporalFrames = 8;
+    GetEngine().GetUserSettings().NumberOfSamples = 256;
+    GetEngine().GetUserSettings().Denoiser = false;
+    GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
+    PlaceDynamicBlock({{0,0,0}, BasicNodes[0].brushId_});
+
+    int totalTask = static_cast<int>(BasicNodes.size());
+    static int currTask = 0;
+    GetEngine().AddTimerTask(0.5, [this, totalTask]()->bool
     {
-        GetEngine().SaveScreenShot("thmubnail", 1920 / 2 - 128,960 / 2 - 128,256,256);
-        GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(0,0,1920,960);
-        return true;
+        PlaceDynamicBlock({{0,0,0}, BasicNodes[currTask+1].brushId_});
+        std::string nodeName = BasicNodes[currTask+1].type;
+        if(nodeName.find("1x1") == std::string::npos )
+        {
+            cameraArm_ = 1.2f;
+        }
+        else
+        {
+            cameraArm_ = 0.7f;
+        }
+        GetEngine().SaveScreenShot(std::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name), 1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
+        currTask = currTask+1;
+        
+        if(currTask >= totalTask)
+        {
+            PlaceDynamicBlock({{0,0,0}, -1});
+            GetEngine().GetUserSettings().TemporalFrames = 16;
+            GetEngine().GetUserSettings().NumberOfSamples = 8;
+            GetEngine().GetUserSettings().Denoiser = true;
+            cameraArm_ = 5.0f;
+            cameraCenter_ = glm::vec3(0,0.0f,0);
+            realCameraCenter_ = cameraCenter_;
+            GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(0,0,1920,960);
+            return true;
+        }
+
+        return false;
     });
     
 }

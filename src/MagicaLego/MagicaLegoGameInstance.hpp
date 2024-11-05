@@ -165,6 +165,7 @@ private:
 	mutable glm::vec3 panLeft_ {};
 	float cameraRotX_ {};
 	float cameraRotY_ {};
+	float cameraArm_ {};
 	float cameraMultiplier_ {};
 
 	bool bMouseLeftDown_ {};

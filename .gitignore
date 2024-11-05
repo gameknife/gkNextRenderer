@@ -334,6 +334,7 @@ build
 
 assets/shaders/Platform.glsl
 assets/package
+assets/textures/thumb
 android/.gradle/
 android/app/src/main/assets/
 android/local.properties
