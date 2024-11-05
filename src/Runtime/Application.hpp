@@ -117,6 +117,9 @@ public:
 	// screen shot
 	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
 
+#if !WITH_EDITOR
+	class UserInterface* GetUserInterface() {return userInterface_.get();};
+#endif
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);

@@ -50,6 +50,25 @@ namespace Assets
         return nullptr;
     }
 
+    TextureImage* GlobalTexturePool::GetTextureImageByName(const std::string& name)
+    {
+        uint32_t id = GetTextureIndexByName(name);
+        if( id != -1 )
+        {
+            return  GetInstance()->textureImages_[id].get();
+        }
+        return nullptr;
+    }
+
+    uint32_t GlobalTexturePool::GetTextureIndexByName(const std::string& name)
+    {
+        if( GetInstance()->textureNameMap_.find(name) != GetInstance()->textureNameMap_.end() )
+        {
+            return GetInstance()->textureNameMap_[name];
+        }
+        return -1;
+    }
+
     GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt) :
         device_(device),
         commandPool_(command_pool),
@@ -204,14 +223,16 @@ namespace Assets
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
             stbi_image_free(pixels);
 
+            taskContext.textureId = newTextureIdx;
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
             std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", filename, width, height, channels, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
-        }, [](ResTask& task)
+        }, [this](ResTask& task)
         {
             TextureTaskContext taskContext {};
             task.GetContext( taskContext );
+            textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
             if(!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
         }, 0);
 

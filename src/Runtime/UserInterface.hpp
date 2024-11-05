@@ -76,6 +76,9 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
 
+	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
+	VkDescriptorSet RequestImTextureByName(const std::string& name);
+	
 	static void SetStyle();
 
 private:
@@ -86,4 +89,7 @@ private:
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	UserSettings& userSettings_;	
+	
+		
+	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
 };

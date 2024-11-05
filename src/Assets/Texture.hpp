@@ -40,6 +40,8 @@ namespace Assets
 		static void UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig);
 
 		static TextureImage* GetTextureImage(uint32_t idx);
+		static TextureImage* GetTextureImageByName(const std::string& name);
+		static uint32_t GetTextureIndexByName(const std::string& name);
 	private:
 		static GlobalTexturePool* instance_;
 

@@ -416,6 +416,9 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         BasicNodes.push_back(newBlock);
         BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
+
+        //std::string filename = Utilities::FileHelper::GetPlatformFilePath(fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name).c_str());
+        //Assets::GlobalTexturePool::LoadTexture( filename, Vulkan::SamplerConfig() );
     }
 }
 
