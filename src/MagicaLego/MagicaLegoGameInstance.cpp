@@ -78,6 +78,10 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     lastSelectLocation_ = INVALID_POS;
     lastPlacedLocation_ = INVALID_POS;
+
+    PackageFileSystem_.reset(new Utilities::Package::FPackageFileSystem( Utilities::Package::EPackageRunMode::EPM_PakFile) );
+    PackageFileSystem_->PakAll("test.pak", "assets/textures", "");
+    PackageFileSystem_->MountPak("test.pak");
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -417,8 +421,12 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
 
+        std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
+        std::vector<uint8_t> outData;
+        PackageFileSystem_->LoadFile(fileName, outData);
+        
         //std::string filename = Utilities::FileHelper::GetPlatformFilePath(fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name).c_str());
-        //Assets::GlobalTexturePool::LoadTexture( filename, Vulkan::SamplerConfig() );
+        Assets::GlobalTexturePool::LoadTexture( fileName, outData.data(), outData.size(), Vulkan::SamplerConfig() );
     }
 }
 

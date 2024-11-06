@@ -1,6 +1,8 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Application.hpp"
+#include "Utilities/Console.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #define MAGICALEGO_SAVE_VERSION 1
 
@@ -173,9 +175,11 @@ private:
 	std::vector<uint32_t> oneLinePlacedInstance_ {};
 	glm::i16vec3 lastPlacedLocation_ {};
 	glm::i16vec3 lastSelectLocation_ {};
-	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
+	std::unique_ptr<MagicaLegoUserInterface> UserInterface_;
 
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};
+
+	std::unique_ptr<Utilities::Package::FPackageFileSystem> PackageFileSystem_;
 };
 

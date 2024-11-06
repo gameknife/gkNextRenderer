@@ -66,12 +66,12 @@ bool MaterialButton(FBasicBlock& block, ImTextureID texId, float WindowWidth, bo
 
     ImGui::BeginGroup();
     ImGui::PushID(block.modelId_);
-     ImGui::PushStyleColor(ImGuiCol_Button, color);
-     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
-     ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
-    bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
-    ImGui::PopStyleColor(3);
-    //bool result = ImGui::ImageButton("##Block", texId, ImVec2(PALATE_SIZE, PALATE_SIZE));
+    //  ImGui::PushStyleColor(ImGuiCol_Button, color);
+    //  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
+    //  ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+    // bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
+    // ImGui::PopStyleColor(3);
+    bool result = ImGui::ImageButton("##Block", texId, ImVec2(PALATE_SIZE, PALATE_SIZE));
     ImGui::PopID();
     Utilities::UI::TextCentered(block.name, PALATE_SIZE);
     
@@ -468,7 +468,7 @@ void MagicaLegoUserInterface::DrawRightBar()
             for( size_t i = 0; i < BasicBlocks.size(); i++ )
             {
                 auto& block = BasicBlocks[i];
-                std::string filename = Utilities::FileHelper::GetPlatformFilePath(fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name).c_str());
+                std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
                 ImTextureID id = GetGameInstance()->GetEngine().GetUserInterface()->RequestImTextureByName(filename);
                 if( MaterialButton(block, id, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
                 {

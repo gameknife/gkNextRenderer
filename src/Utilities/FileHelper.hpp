@@ -2,52 +2,13 @@
 #include <random>
 #include <filesystem>
 #include <string>
+#include <map>
+#include <fstream>
+#include <fmt/printf.h>
+#include <assert.h>
 
 namespace Utilities
 {
-    namespace Package
-    {
-        enum EPackageRunMode
-        {
-            EPM_OsFile,
-            EPM_PakFile
-        };
-        
-        struct FPakEntry
-        {
-            uint32_t hash;   
-            uint32_t offset;
-            uint32_t size;
-        };
-        
-        // PackageFileSystem for Mostly User Oriented Resource, like Texture, Model, etc.
-        // Package mass files to one pak
-        class FPackageFileSystem
-        {
-            // Construct
-            FPackageFileSystem(EPackageRunMode RunMode, const std::string& pakFile, const std::string& recordFile);
-            
-            // Loading
-            void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
-
-            // Recording
-            void RecordUsage(const std::string& entry);
-            void SaveRecord(const std::string& recordFile);
-
-            // Paking
-            void PakAll(const std::string& pakFile);
-            void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
-
-            // UnPak
-            void UnPak();
-
-            // pak index
-            std::vector<std::string> names;
-            std::vector<FPakEntry> entries;
-        };
-    }
-
-    
     namespace FileHelper
     {
         static std::string GetPlatformFilePath( const char* srcPath )
@@ -97,6 +58,182 @@ namespace Utilities
             }
 
             return randomName;
+        }
+    }
+
+    namespace Package
+    {
+        enum EPackageRunMode
+        {
+            EPM_OsFile,
+            EPM_PakFile
+        };
+        
+        struct FPakEntry
+        {
+            std::string name;
+            uint32_t pkgIdx;
+            uint32_t offset;
+            uint32_t size;
+        };
+        
+        // PackageFileSystem for Mostly User Oriented Resource, like Texture, Model, etc.
+        // Package mass files to one pak
+        class FPackageFileSystem
+        {
+        public:
+            // Construct
+            FPackageFileSystem(EPackageRunMode RunMode);
+            
+            // Loading
+            void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
+
+            // Recording
+            //void RecordUsage(const std::string& entry);
+            //void SaveRecord(const std::string& recordFile);
+
+            // Paking
+            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath);
+            //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
+
+            // UnPak
+            void MountPak(const std::string& pakFile);
+        private:
+            // pak index
+            std::map<std::string, FPakEntry> filemaps;
+        };
+
+        inline FPackageFileSystem::FPackageFileSystem(EPackageRunMode RunMode)
+        {
+        }
+
+        inline void FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
+        {
+            // pak mounted, read through offset and size
+            if (filemaps.find(entry) != filemaps.end()) {
+                FPakEntry pakEntry = filemaps[entry];
+                std::ifstream reader("test.pak", std::ios::binary);
+                if (!reader.is_open()) {
+                    fmt::print("LoadFile: Failed to open pak file: {}\n", "pakfile");
+                    return;
+                }
+
+                reader.seekg(pakEntry.offset, std::ios::beg);
+                outData.resize(pakEntry.size);
+                reader.read(reinterpret_cast<char*>(outData.data()), pakEntry.size);
+                reader.close();
+            }
+            else {
+                // read from os file
+                std::string absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
+                std::ifstream reader(absEntry, std::ios::binary);
+                if (!reader.is_open()) {
+                    fmt::print("LoadFile: Failed to open file: {}\n", entry);
+                    return;
+                }
+
+                outData = std::vector<uint8_t>(std::istreambuf_iterator<char>(reader), {});
+                reader.close();
+            }
+        }
+
+        inline void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath)
+        {
+            std::string absSrcPath = FileHelper::GetPlatformFilePath(srcDir.c_str());
+            std::string absRootPath = FileHelper::GetPlatformFilePath(rootPath.c_str());
+
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(absSrcPath)) {
+                if (entry.is_regular_file()) {
+                    std::string entryPath = entry.path().string();
+                    std::string entryRelativePath = entryPath.substr(absRootPath.size());
+                    std::ranges::replace(entryRelativePath.begin(), entryRelativePath.end(), '\\', '/');
+
+                    std::ifstream reader(entryPath, std::ios::binary);
+                    if (!reader.is_open()) {
+                        fmt::print("PakAll: Failed to open file: {}\n", entryPath);
+                        continue;
+                    }
+                    reader.seekg(0, std::ios::end);
+                    size_t fileSize = reader.tellg();
+                    reader.close();
+                    
+                    filemaps[entryRelativePath] = {entryRelativePath, 0, 0, static_cast<uint32_t>(fileSize)};
+                    fmt::print("PakAll: {} -> {}\n", entryRelativePath, entryPath);
+                }
+            }
+
+            std::ofstream writer(pakFile, std::ios::binary);
+            if (!writer.is_open()) {
+                fmt::print("PakAll: Failed to open pak file: {}\n", pakFile);
+                return;
+            }
+
+            writer.write("GNP", 3);
+            uint32_t entryCount = static_cast<uint32_t>(filemaps.size());
+            writer.write(reinterpret_cast<const char*>(&entryCount), sizeof(uint32_t));
+
+            for (const auto& [key, value] : filemaps) {
+                writer.write(value.name.c_str(), value.name.size());
+                writer.write("\0", 1);
+            }
+
+            uint32_t offset = static_cast<uint32_t>(writer.tellp()) + entryCount * 8;
+            for (const auto& [key, value] : filemaps) {
+                writer.write(reinterpret_cast<const char*>(&offset), sizeof(uint32_t));
+                writer.write(reinterpret_cast<const char*>(&value.size), sizeof(uint32_t));
+                offset += value.size;
+            }
+            
+            for (const auto& [key, value] : filemaps) {
+                std::ifstream reader(absRootPath + value.name, std::ios::binary);
+                if (!reader.is_open()) {
+                    fmt::print("PakAll: Failed to open file: {}\n", absRootPath + value.name);
+                    continue;
+                }
+
+                std::vector<uint8_t> buffer(std::istreambuf_iterator<char>(reader), {});
+                writer.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+            }
+
+            writer.close();
+        }
+
+        inline void FPackageFileSystem::MountPak(const std::string& pakFile)
+        {
+            std::ifstream reader(pakFile, std::ios::binary);
+            if (!reader.is_open()) {
+                fmt::print("MountPak: Failed to open pak file: {}\n", pakFile);
+                return;
+            }
+
+            reader.seekg(0, std::ios::end);
+            size_t fileSize = reader.tellg();
+            reader.seekg(0, std::ios::beg);
+
+            char header[4];
+            reader.read(header, 3);
+            header[3] = '\0';
+            if (std::string(header) != "GNP") {
+                fmt::print("MountPak: Invalid pak file: {}\n", pakFile);
+                return;
+            }
+
+            uint32_t entryCount;
+            reader.read(reinterpret_cast<char*>(&entryCount), sizeof(uint32_t));
+            for (uint32_t i = 0; i < entryCount; ++i) {
+                FPakEntry pakEntry;
+                char name[256];
+                reader.getline(name, 256, '\0');
+                pakEntry.name = name;
+                filemaps[pakEntry.name] = pakEntry;
+            }
+
+            for (auto& [key, value] : filemaps) {
+                reader.read(reinterpret_cast<char*>(&value.offset), sizeof(uint32_t));
+                reader.read(reinterpret_cast<char*>(&value.size), sizeof(uint32_t));
+            }
+
+            reader.close();
         }
     }
 }
