@@ -5,6 +5,49 @@
 
 namespace Utilities
 {
+    namespace Package
+    {
+        enum EPackageRunMode
+        {
+            EPM_OsFile,
+            EPM_PakFile
+        };
+        
+        struct FPakEntry
+        {
+            uint32_t hash;   
+            uint32_t offset;
+            uint32_t size;
+        };
+        
+        // PackageFileSystem for Mostly User Oriented Resource, like Texture, Model, etc.
+        // Package mass files to one pak
+        class FPackageFileSystem
+        {
+            // Construct
+            FPackageFileSystem(EPackageRunMode RunMode, const std::string& pakFile, const std::string& recordFile);
+            
+            // Loading
+            void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
+
+            // Recording
+            void RecordUsage(const std::string& entry);
+            void SaveRecord(const std::string& recordFile);
+
+            // Paking
+            void PakAll(const std::string& pakFile);
+            void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
+
+            // UnPak
+            void UnPak();
+
+            // pak index
+            std::vector<std::string> names;
+            std::vector<FPakEntry> entries;
+        };
+    }
+
+    
     namespace FileHelper
     {
         static std::string GetPlatformFilePath( const char* srcPath )
