@@ -6,6 +6,7 @@
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
+#include "Runtime/Platform/PlatformCommon.h"
 #include "Vulkan/SwapChain.hpp"
 
 const glm::i16vec3 INVALID_POS(0,-10,0);
@@ -48,6 +49,8 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
 
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
+    NextRenderer::HideConsole();
+    
     // windows config
     config.Title = "MagicaLego";
     config.Height = 960;
