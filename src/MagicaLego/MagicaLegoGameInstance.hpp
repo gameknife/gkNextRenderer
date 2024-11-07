@@ -179,7 +179,5 @@ private:
 
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};
-
-	std::unique_ptr<Utilities::Package::FPackageFileSystem> PackageFileSystem_;
 };
 

@@ -11,6 +11,7 @@
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 #include "ThirdParty/miniaudio/miniaudio.h"
+#include "Utilities/FileHelper.hpp"
 
 class BenchMarker;
 class NextRendererApplication;
@@ -117,6 +118,9 @@ public:
 	// screen shot
 	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
 
+	// pak
+	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
+
 #if !WITH_EDITOR
 	class UserInterface* GetUserInterface() {return userInterface_.get();};
 #endif
@@ -181,4 +185,6 @@ private:
 
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
+	
+	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 };

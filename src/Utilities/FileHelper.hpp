@@ -87,6 +87,8 @@ namespace Utilities
         public:
             // Construct
             FPackageFileSystem(EPackageRunMode RunMode);
+
+            void SetRunMode(EPackageRunMode RunMode) { runMode_ = RunMode; }
             
             // Loading
             void Reset();
@@ -104,37 +106,18 @@ namespace Utilities
             // pak index
             std::map<std::string, FPakEntry> filemaps;
             std::vector<std::string> mountedPaks;
+            EPackageRunMode runMode_;
         };
 
-        inline FPackageFileSystem::FPackageFileSystem(EPackageRunMode RunMode)
+        inline FPackageFileSystem::FPackageFileSystem(EPackageRunMode RunMode): runMode_(RunMode)
         {
         }
 
         inline void FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
             // pak mounted, read through offset and size
-            if (filemaps.find(entry) != filemaps.end()) {
-                FPakEntry pakEntry = filemaps[entry];
-
-                auto pakFile = mountedPaks[pakEntry.pkgIdx];
-                
-                std::ifstream reader(pakFile, std::ios::binary);
-                if (!reader.is_open()) {
-                    fmt::print("LoadFile: Failed to open pak file: {}\n", "pakfile");
-                    return;
-                }
-
-                void* comp_buf = malloc( pakEntry.size );
-                reader.seekg(pakEntry.offset, std::ios::beg);
-                reader.read(reinterpret_cast<char*>(comp_buf), pakEntry.size);
-                reader.close();
-
-                outData.resize(pakEntry.uncompressSize);
-                int l = lzav_decompress( comp_buf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
-
-                free(comp_buf);
-            }
-            else {
+            if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
+            {
                 // read from os file
                 std::string absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
                 std::ifstream reader(absEntry, std::ios::binary);
@@ -145,7 +128,28 @@ namespace Utilities
 
                 outData = std::vector<uint8_t>(std::istreambuf_iterator<char>(reader), {});
                 reader.close();
+                return;
             }
+
+            // from pak
+            FPakEntry pakEntry = filemaps[entry];
+            auto pakFile = mountedPaks[pakEntry.pkgIdx];
+            
+            std::ifstream reader(pakFile, std::ios::binary);
+            if (!reader.is_open()) {
+                fmt::print("LoadFile: Failed to open pak file: {}\n", "pakfile");
+                return;
+            }
+
+            void* comp_buf = malloc( pakEntry.size );
+            reader.seekg(pakEntry.offset, std::ios::beg);
+            reader.read(reinterpret_cast<char*>(comp_buf), pakEntry.size);
+            reader.close();
+
+            outData.resize(pakEntry.uncompressSize);
+            int l = lzav_decompress( comp_buf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
+            free(comp_buf);
+
         }
 
         inline void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex )
@@ -284,6 +288,8 @@ namespace Utilities
             }
 
             reader.close();
+
+            fmt::printf("Pak: mount %s with %d entries\n", pakFile.c_str(), entryCount);
         }
     }
 }

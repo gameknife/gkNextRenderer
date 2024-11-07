@@ -78,18 +78,11 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     lastSelectLocation_ = INVALID_POS;
     lastPlacedLocation_ = INVALID_POS;
-
-    PackageFileSystem_.reset(new Utilities::Package::FPackageFileSystem( Utilities::Package::EPackageRunMode::EPM_PakFile) );
     
-    // PackageFileSystem_->PakAll("textures.pak", "assets/textures", "");
-    // PackageFileSystem_->PakAll("models.pak", "assets/models", "");
-    // PackageFileSystem_->PakAll("shaders.pak", "assets/shaders", "");
-
-    PackageFileSystem_->Reset();
-    
-    PackageFileSystem_->MountPak("shaders.pak");
-    PackageFileSystem_->MountPak("models.pak");
-    PackageFileSystem_->MountPak("textures.pak");
+    GetEngine().GetPakSystem().SetRunMode(Utilities::Package::EPM_PakFile);
+    GetEngine().GetPakSystem().Reset();
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -431,9 +424,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
 
         std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
         std::vector<uint8_t> outData;
-        PackageFileSystem_->LoadFile(fileName, outData);
-        
-        //std::string filename = Utilities::FileHelper::GetPlatformFilePath(fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name).c_str());
+        GetEngine().GetPakSystem().LoadFile(fileName, outData);
         Assets::GlobalTexturePool::LoadTexture( fileName, outData.data(), outData.size(), Vulkan::SamplerConfig() );
     }
 }

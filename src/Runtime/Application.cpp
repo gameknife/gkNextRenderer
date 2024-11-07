@@ -187,6 +187,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
+    packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     // Create Window
     Vulkan::WindowConfig windowConfig
     {
