@@ -80,9 +80,10 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     lastPlacedLocation_ = INVALID_POS;
 
     PackageFileSystem_.reset(new Utilities::Package::FPackageFileSystem( Utilities::Package::EPackageRunMode::EPM_PakFile) );
-    PackageFileSystem_->PakAll("textures.pak", "assets/textures", "");
-    PackageFileSystem_->PakAll("models.pak", "assets/models", "");
-    PackageFileSystem_->PakAll("shaders.pak", "assets/shaders", "");
+    
+    // PackageFileSystem_->PakAll("textures.pak", "assets/textures", "");
+    // PackageFileSystem_->PakAll("models.pak", "assets/models", "");
+    // PackageFileSystem_->PakAll("shaders.pak", "assets/shaders", "");
 
     PackageFileSystem_->Reset();
     

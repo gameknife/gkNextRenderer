@@ -338,6 +338,12 @@ add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+
+add_executable(Packager
+	${src_files_utilities} 
+	Packager/PackagerMain.cpp
+)
+
 endif()
 
 
@@ -360,6 +366,7 @@ set(AllTargets
 gkNextRenderer 
 gkNextEditor
 MagicaLego 
+Packager
 )
 endif()
 # common setup

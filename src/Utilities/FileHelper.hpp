@@ -7,6 +7,7 @@
 #include <fmt/printf.h>
 #include "ThirdParty/lzav/lzav.h"
 #include <assert.h>
+#include <regex>
 
 namespace Utilities
 {
@@ -88,19 +89,17 @@ namespace Utilities
             FPackageFileSystem(EPackageRunMode RunMode);
             
             // Loading
+            void Reset();
+            void MountPak(const std::string& pakFile);
             void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
-
+            
             // Recording
             //void RecordUsage(const std::string& entry);
             //void SaveRecord(const std::string& recordFile);
-
-            // Paking
-            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath);
             //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
-
-            void Reset();
-            // UnPak
-            void MountPak(const std::string& pakFile);
+            
+            // Paking
+            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "");
         private:
             // pak index
             std::map<std::string, FPakEntry> filemaps;
@@ -125,10 +124,15 @@ namespace Utilities
                     return;
                 }
 
+                void* comp_buf = malloc( pakEntry.size );
                 reader.seekg(pakEntry.offset, std::ios::beg);
-                outData.resize(pakEntry.size);
-                reader.read(reinterpret_cast<char*>(outData.data()), pakEntry.size);
+                reader.read(reinterpret_cast<char*>(comp_buf), pakEntry.size);
                 reader.close();
+
+                outData.resize(pakEntry.uncompressSize);
+                int l = lzav_decompress( comp_buf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
+
+                free(comp_buf);
             }
             else {
                 // read from os file
@@ -144,7 +148,7 @@ namespace Utilities
             }
         }
 
-        inline void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath)
+        inline void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex )
         {
             filemaps.clear();
             
@@ -157,6 +161,10 @@ namespace Utilities
                     std::string entryRelativePath = entryPath.substr(absRootPath.size());
                     std::ranges::replace(entryRelativePath.begin(), entryRelativePath.end(), '\\', '/');
 
+                    if (!regex.empty() && !std::regex_match(entryRelativePath, std::regex(regex))) {
+                        continue;
+                    }
+                    
                     std::ifstream reader(entryPath, std::ios::binary);
                     if (!reader.is_open()) {
                         fmt::print("PakAll: Failed to open file: {}\n", entryPath);
@@ -167,7 +175,7 @@ namespace Utilities
                     reader.close();
                                         
                     filemaps[entryRelativePath] = {entryRelativePath, 0, 0, static_cast<uint32_t>(fileSize), static_cast<uint32_t>(fileSize)};
-                    fmt::print("PakAll: {} -> {}\n", entryRelativePath, entryPath);
+                    fmt::print("entry: {} <- {}\n", entryRelativePath, entryPath);
                 }
             }
 
@@ -193,7 +201,7 @@ namespace Utilities
 
             writer.seekp(offset);
             // compress and write data
-            for (const auto& [key, value] : filemaps) {
+            for (auto& [key, value] : filemaps) {
                 std::ifstream reader(absRootPath + value.name, std::ios::binary);
                 if (!reader.is_open()) {
                     fmt::print("PakAll: Failed to open file: {}\n", absRootPath + value.name);
@@ -201,7 +209,15 @@ namespace Utilities
                 }
 
                 std::vector<uint8_t> buffer(std::istreambuf_iterator<char>(reader), {});
-                writer.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+                
+                int max_len = lzav_compress_bound_hi( static_cast<int>(buffer.size()) );
+                void* comp_buf = malloc( max_len );
+                int comp_len = lzav_compress_hi( buffer.data(), comp_buf, static_cast<int>(buffer.size()), max_len );
+
+                writer.write(reinterpret_cast<const char*>(comp_buf), comp_len);
+                value.size = comp_len;
+
+                free(comp_buf);
             }
 
             // rewrite offset and size
