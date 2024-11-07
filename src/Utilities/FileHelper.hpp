@@ -5,6 +5,7 @@
 #include <map>
 #include <fstream>
 #include <fmt/printf.h>
+#include "ThirdParty/lzav/lzav.h"
 #include <assert.h>
 
 namespace Utilities
@@ -75,6 +76,7 @@ namespace Utilities
             uint32_t pkgIdx;
             uint32_t offset;
             uint32_t size;
+            uint32_t uncompressSize;
         };
         
         // PackageFileSystem for Mostly User Oriented Resource, like Texture, Model, etc.
@@ -96,11 +98,13 @@ namespace Utilities
             void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath);
             //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
 
+            void Reset();
             // UnPak
             void MountPak(const std::string& pakFile);
         private:
             // pak index
             std::map<std::string, FPakEntry> filemaps;
+            std::vector<std::string> mountedPaks;
         };
 
         inline FPackageFileSystem::FPackageFileSystem(EPackageRunMode RunMode)
@@ -112,7 +116,10 @@ namespace Utilities
             // pak mounted, read through offset and size
             if (filemaps.find(entry) != filemaps.end()) {
                 FPakEntry pakEntry = filemaps[entry];
-                std::ifstream reader("test.pak", std::ios::binary);
+
+                auto pakFile = mountedPaks[pakEntry.pkgIdx];
+                
+                std::ifstream reader(pakFile, std::ios::binary);
                 if (!reader.is_open()) {
                     fmt::print("LoadFile: Failed to open pak file: {}\n", "pakfile");
                     return;
@@ -139,6 +146,8 @@ namespace Utilities
 
         inline void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath)
         {
+            filemaps.clear();
+            
             std::string absSrcPath = FileHelper::GetPlatformFilePath(srcDir.c_str());
             std::string absRootPath = FileHelper::GetPlatformFilePath(rootPath.c_str());
 
@@ -156,8 +165,8 @@ namespace Utilities
                     reader.seekg(0, std::ios::end);
                     size_t fileSize = reader.tellg();
                     reader.close();
-                    
-                    filemaps[entryRelativePath] = {entryRelativePath, 0, 0, static_cast<uint32_t>(fileSize)};
+                                        
+                    filemaps[entryRelativePath] = {entryRelativePath, 0, 0, static_cast<uint32_t>(fileSize), static_cast<uint32_t>(fileSize)};
                     fmt::print("PakAll: {} -> {}\n", entryRelativePath, entryPath);
                 }
             }
@@ -177,13 +186,13 @@ namespace Utilities
                 writer.write("\0", 1);
             }
 
-            uint32_t offset = static_cast<uint32_t>(writer.tellp()) + entryCount * 8;
-            for (const auto& [key, value] : filemaps) {
-                writer.write(reinterpret_cast<const char*>(&offset), sizeof(uint32_t));
-                writer.write(reinterpret_cast<const char*>(&value.size), sizeof(uint32_t));
-                offset += value.size;
-            }
-            
+            auto pos = writer.tellp();
+
+            // pre-write offset and size
+            uint32_t offset = static_cast<uint32_t>(pos) + entryCount * 4 * 3;
+
+            writer.seekp(offset);
+            // compress and write data
             for (const auto& [key, value] : filemaps) {
                 std::ifstream reader(absRootPath + value.name, std::ios::binary);
                 if (!reader.is_open()) {
@@ -195,7 +204,22 @@ namespace Utilities
                 writer.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
             }
 
+            // rewrite offset and size
+            writer.seekp(pos);
+            for (const auto& [key, value] : filemaps) {
+                writer.write(reinterpret_cast<const char*>(&offset), sizeof(uint32_t));
+                writer.write(reinterpret_cast<const char*>(&value.size), sizeof(uint32_t));
+                writer.write(reinterpret_cast<const char*>(&value.uncompressSize), sizeof(uint32_t));
+                offset += value.size;
+            }
+            
             writer.close();
+        }
+
+        inline void FPackageFileSystem::Reset()
+        {
+            filemaps.clear();
+            mountedPaks.clear();
         }
 
         inline void FPackageFileSystem::MountPak(const std::string& pakFile)
@@ -218,19 +242,29 @@ namespace Utilities
                 return;
             }
 
+            mountedPaks.push_back(pakFile);
+            uint32_t pakIdx = static_cast<uint32_t>(mountedPaks.size()) - 1;
+
             uint32_t entryCount;
             reader.read(reinterpret_cast<char*>(&entryCount), sizeof(uint32_t));
+
+            std::vector<FPakEntry> entries(entryCount); 
             for (uint32_t i = 0; i < entryCount; ++i) {
-                FPakEntry pakEntry;
                 char name[256];
                 reader.getline(name, 256, '\0');
-                pakEntry.name = name;
-                filemaps[pakEntry.name] = pakEntry;
+                entries[i].name = name;
+                entries[i].pkgIdx = pakIdx;
             }
 
-            for (auto& [key, value] : filemaps) {
-                reader.read(reinterpret_cast<char*>(&value.offset), sizeof(uint32_t));
-                reader.read(reinterpret_cast<char*>(&value.size), sizeof(uint32_t));
+            for (auto& entry : entries) {
+                reader.read(reinterpret_cast<char*>(&entry.offset), sizeof(uint32_t));
+                reader.read(reinterpret_cast<char*>(&entry.size), sizeof(uint32_t));
+                reader.read(reinterpret_cast<char*>(&entry.uncompressSize), sizeof(uint32_t));
+            }
+
+            // add to maps
+            for (auto entry : entries) {
+                filemaps[entry.name] = entry;
             }
 
             reader.close();

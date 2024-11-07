@@ -80,8 +80,15 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     lastPlacedLocation_ = INVALID_POS;
 
     PackageFileSystem_.reset(new Utilities::Package::FPackageFileSystem( Utilities::Package::EPackageRunMode::EPM_PakFile) );
-    PackageFileSystem_->PakAll("test.pak", "assets/textures", "");
-    PackageFileSystem_->MountPak("test.pak");
+    PackageFileSystem_->PakAll("textures.pak", "assets/textures", "");
+    PackageFileSystem_->PakAll("models.pak", "assets/models", "");
+    PackageFileSystem_->PakAll("shaders.pak", "assets/shaders", "");
+
+    PackageFileSystem_->Reset();
+    
+    PackageFileSystem_->MountPak("shaders.pak");
+    PackageFileSystem_->MountPak("models.pak");
+    PackageFileSystem_->MountPak("textures.pak");
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
