@@ -150,8 +150,8 @@ namespace Vulkan::ModernDeferred
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32G32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
         // Load shaders.
-        const ShaderModule vertShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/VisibilityPass.vert.spv"));
-        const ShaderModule fragShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/VisibilityPass.frag.spv"));
+        const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.spv");
+        const ShaderModule fragShader(device, "assets/shaders/VisibilityPass.frag.spv");
 
         VkPipelineShaderStageCreateInfo shaderStages[] =
         {
@@ -282,7 +282,7 @@ namespace Vulkan::ModernDeferred
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/ModernDeferredShading.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/ModernDeferredShading.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

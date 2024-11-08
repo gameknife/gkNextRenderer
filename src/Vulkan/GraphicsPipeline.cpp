@@ -158,8 +158,8 @@ GraphicsPipeline::GraphicsPipeline(
 	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.
-	const ShaderModule vertShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/Graphics.vert.spv"));
-	const ShaderModule fragShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/Graphics.frag.spv"));
+	const ShaderModule vertShader(device, "assets/shaders/Graphics.vert.spv");
+	const ShaderModule fragShader(device, "assets/shaders/Graphics.frag.spv");
 
 	VkPipelineShaderStageCreateInfo shaderStages[] =
 	{

@@ -23,6 +23,7 @@ set(src_files_utilities
 	Utilities/Console.cpp
 	Utilities/Console.hpp
 	Utilities/Exception.hpp
+	Utilities/FileHelper.cpp
 	Utilities/FileHelper.hpp
 	Utilities/Math.hpp
 	Utilities/Glm.hpp

@@ -4,6 +4,8 @@
 #include <fmt/format.h>
 
 #include "Options.hpp"
+#include "Utilities/Console.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #if ANDROID
 #include <time.h>
@@ -114,7 +116,9 @@ Window::Window(const WindowConfig& config) :
 	}
 
 	GLFWimage icon;
-	icon.pixels = stbi_load("../assets/textures/Vulkan.png", &icon.width, &icon.height, nullptr, 4);
+	std::vector<uint8_t> data;
+	Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/textures/Vulkan.png", data);
+	icon.pixels = stbi_load_from_memory(data.data(), static_cast<int>(data.size()), &icon.width, &icon.height, nullptr, 4);
 	if (icon.pixels == nullptr)
 	{
 		Throw(std::runtime_error("failed to load icon"));

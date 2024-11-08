@@ -138,7 +138,7 @@ namespace Vulkan::HybridDeferred
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/HybridDeferredShading.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
