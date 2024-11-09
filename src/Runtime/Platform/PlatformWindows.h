@@ -14,6 +14,11 @@ namespace NextRenderer
         SetConsoleMode(hOutput, dwMode);
 #endif
     }
+
+    inline void HideConsole()
+    {
+        FreeConsole();
+    }
 }
 
 

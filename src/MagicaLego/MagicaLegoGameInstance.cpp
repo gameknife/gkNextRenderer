@@ -6,6 +6,7 @@
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
+#include "Runtime/Platform/PlatformCommon.h"
 #include "Vulkan/SwapChain.hpp"
 
 const glm::i16vec3 INVALID_POS(0,-10,0);
@@ -48,6 +49,8 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
 
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
+    NextRenderer::HideConsole();
+    
     // windows config
     config.Title = "MagicaLego";
     config.Height = 960;
@@ -78,6 +81,11 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     lastSelectLocation_ = INVALID_POS;
     lastPlacedLocation_ = INVALID_POS;
+    
+    GetEngine().GetPakSystem().SetRunMode(Utilities::Package::EPM_PakFile);
+    GetEngine().GetPakSystem().Reset();
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -417,8 +425,10 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
 
-        //std::string filename = Utilities::FileHelper::GetPlatformFilePath(fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name).c_str());
-        //Assets::GlobalTexturePool::LoadTexture( filename, Vulkan::SamplerConfig() );
+        std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
+        std::vector<uint8_t> outData;
+        GetEngine().GetPakSystem().LoadFile(fileName, outData);
+        Assets::GlobalTexturePool::LoadTexture( fileName, outData.data(), outData.size(), Vulkan::SamplerConfig() );
     }
 }
 

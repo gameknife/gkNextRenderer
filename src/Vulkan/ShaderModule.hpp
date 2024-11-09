@@ -15,7 +15,7 @@ namespace Vulkan
 		VULKAN_NON_COPIABLE(ShaderModule)
 
 		ShaderModule(const Device& device, const std::string& filename);
-		ShaderModule(const Device& device, const std::vector<char>& code);
+		ShaderModule(const Device& device, const std::vector<uint8_t>& code);
 		~ShaderModule();
 
 		const class Device& Device() const { return device_; }
@@ -24,7 +24,7 @@ namespace Vulkan
 
 	private:
 
-		static std::vector<char> ReadFile(const std::string& filename);
+		static std::vector<uint8_t> ReadFile(const std::string& filename);
 
 		const class Device& device_;
 

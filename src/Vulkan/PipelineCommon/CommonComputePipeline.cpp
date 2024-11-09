@@ -73,7 +73,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/Accumulate.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/Accumulate.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -154,7 +154,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/FinalCompose.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/FinalCompose.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -209,7 +209,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/BufferClear.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/BufferClear.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -278,7 +278,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/VisualDebugger.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/VisualDebugger.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -387,7 +387,7 @@ namespace Vulkan::PipelineCommon
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, Utilities::FileHelper::GetPlatformFilePath("assets/shaders/RayCast.comp.spv"));
+        const ShaderModule denoiseShader(device, "assets/shaders/RayCast.comp.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
