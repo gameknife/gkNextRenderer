@@ -416,9 +416,9 @@ glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
     transformed = transformed / transformed.w;
     // from ndc to screenspace
     transformed.x += 1.0f;
-    transformed.x *= GetWindow().FramebufferSize().width * 0.5;
+    transformed.x *= GetWindow().FramebufferSize().width / 2;
     transformed.y += 1.0f;
-    transformed.y *= GetWindow().FramebufferSize().height * 0.5;
+    transformed.y *= GetWindow().FramebufferSize().height / 2;
 
     return transformed;
 }
