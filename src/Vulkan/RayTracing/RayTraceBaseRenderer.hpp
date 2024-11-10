@@ -55,6 +55,7 @@ namespace Vulkan::RayTracing
 
 		virtual void AfterRenderCmd() override;
 		virtual void BeforeNextFrame() override;
+		virtual void AfterUpdateScene() override;
 
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;

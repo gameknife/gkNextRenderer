@@ -53,6 +53,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
     Ray.primitiveId = node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
+    Ray.Velocity = node.velocityWS.xyz;
 	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);
 }
 
@@ -64,6 +65,7 @@ void ProcessMiss(const vec3 RayDirection)
 	Ray.Exit = true;
 	Ray.Distance = 1000.0;
 	Ray.pdf = 1.0;
+    Ray.Velocity = vec3(0,0,0);
 	if (Camera.HasSky)
 	{
 		// Sky color
@@ -151,7 +153,7 @@ void FetchPrimaryRayInfo(in vec2 size, in vec3 origin, in vec3 scatterDir, out v
 	albedo = vec4(Ray.Albedo.rgb, Ray.GBuffer.w);
 	
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
-	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin, 1);
+	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin - Ray.Velocity, 1);
 	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size,0,0);
 	primitiveId = Ray.primitiveId;
 }

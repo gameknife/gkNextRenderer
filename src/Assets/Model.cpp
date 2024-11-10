@@ -1069,13 +1069,34 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural)
+    Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace)
     {
-        return Node(name, transform, id, instanceId, procedural);
+        return Node(name, transform, id, instanceId, replace);
     }
 
-    Node::Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural): name_(name), transform_(transform), modelId_(id), instanceId_(instanceId),
-                                                              procedural_(procedural), visible_(true)
+    glm::vec3 Node::TickVelocity()
     {
+        // calculate velocity
+        glm::vec3 velocity = glm::vec3(0);
+        glm::vec3 prevPos = glm::vec3(prevTransform_[3]);
+        glm::vec3 currentPos = glm::vec3(transform_[3]);
+        velocity = currentPos - prevPos;
+
+        prevTransform_ = transform_;
+
+        return velocity;
+    }
+
+    Node::Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace): name_(name), transform_(transform), modelId_(id), instanceId_(instanceId),
+                                                                                                          visible_(true)
+    {
+        if(replace)
+        {
+            prevTransform_ = transform_;
+        }
+        else
+        {
+            prevTransform_ = translate(glm::mat4(1), vec3(0,-100,0));
+        }
     }
 }

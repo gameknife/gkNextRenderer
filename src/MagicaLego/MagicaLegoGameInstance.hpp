@@ -42,6 +42,11 @@ struct FPlacedBlock
 {
 	glm::i16vec3 location; // 对应一个hash
 	int modelId_; // 如果为-1，表示已经被挖掉了
+
+	bool operator == (const FPlacedBlock& Other) const
+	{
+		return location == Other.location && modelId_ == Other.modelId_;
+	}
 };
 
 class MagicaLegoUserInterface;
@@ -66,7 +71,7 @@ public:
 	MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
     ~MagicaLegoGameInstance() override = default;
 	
-    void OnInit() override {}
+    void OnInit() override;
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
@@ -129,7 +134,7 @@ protected:
 	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
-	void RebuildScene(FPlacedBlockDatabase& Source);
+	void RebuildScene(FPlacedBlockDatabase& Source, uint32_t newhash);
 	void RebuildFromRecord(int timelapse);
 
 	void CleanDynamicBlocks();

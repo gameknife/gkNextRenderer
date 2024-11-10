@@ -143,7 +143,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
-    userSettings.TAA = false; // makes reproject failed
+    userSettings.TAA = true; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -271,16 +271,16 @@ NextRendererApplication::~NextRendererApplication()
 void NextRendererApplication::Start()
 {
     renderer_->Start();
-    gameInstance_->OnInit();
 
     ma_result result;
-
     audioEngine_.reset( new ma_engine() );
 
     result = ma_engine_init(NULL, audioEngine_.get());
     if (result != MA_SUCCESS) {
         return;
     }
+
+    gameInstance_->OnInit();
 }
 
 bool NextRendererApplication::Tick()

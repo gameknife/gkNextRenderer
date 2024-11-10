@@ -208,8 +208,6 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBP_Small);
 
-    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
-
     //GeneratingThmubnail();
 }
 
@@ -335,7 +333,7 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
         {
             BlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
         }
-        RebuildScene(BlocksDynamics);
+        RebuildScene(BlocksDynamics, -1);
     }
 }
 
@@ -454,7 +452,7 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     BlocksDynamics[blockHash] = Block;
     BlockRecords.push_back(Block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
-    RebuildScene(BlocksDynamics);
+    RebuildScene(BlocksDynamics, blockHash);
     lastPlacedLocation_ = Block.location;
     
     // random put1 or put2
@@ -521,7 +519,7 @@ void MagicaLegoGameInstance::CleanUp()
 {
     BlockRecords.clear();
     CleanDynamicBlocks();
-    RebuildScene(BlocksDynamics);
+    RebuildScene(BlocksDynamics, -1);
 }
 
 void FMagicaLegoSave::Save(std::string filename)
@@ -616,7 +614,7 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
     DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
 }
 
-void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source)
+void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source, uint32_t newhash)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
 
@@ -628,8 +626,9 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
             auto BasicBlock = GetBasicBlock(Block.second.modelId_);
             if(BasicBlock)
             {
-                // with stable instance id
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), false);
+                // 这里要区分一下，因为目前rebuild流程是清理后重建，因此所有node都会被认为是首次放置，都会有一个单帧的velocity
+                // 所以如果没有modelid的改变的话，采用原位替换
+                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
             }
         }
@@ -648,12 +647,17 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
         if(currentCamMode_ == ECM_AutoFocus)
             cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
     }
-    RebuildScene(TempBlocksDynamics);
+    RebuildScene(TempBlocksDynamics, -1);
 }
 
 void MagicaLegoGameInstance::CleanDynamicBlocks()
 {
     BlocksDynamics.clear();
+}
+
+void MagicaLegoGameInstance::OnInit()
+{
+    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)

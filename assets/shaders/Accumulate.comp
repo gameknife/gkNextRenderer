@@ -3,6 +3,7 @@
 #include "Platform.glsl"
 #include "common/UniformBufferObject.glsl"
 #include "common/Const_Func.glsl"
+#include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
 layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
@@ -51,7 +52,7 @@ void main() {
 	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1,-1)));
 	// 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
 	// after, motionvector calculate last frame position
-    const bool check = true;//length(motion) > 0.01 ? true : false;
+    const bool check = length(motion) > 0.01 ? true : false;
     // fetch visibility to validate the history
     uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
 	const bool miss = current_primitive_index0 == 65535 ? true : false;
@@ -101,6 +102,22 @@ void main() {
 				subpixel.y
 			);
 
+			// color clamping
+			vec3 minCol = vec3(99999.);
+			vec3 maxCol = vec3(0.);
+			const int kernelSize = 2;
+			for(int x=-kernelSize; x<=kernelSize; x++){
+				for(int y=-kernelSize; y<=kernelSize; y++){
+					vec4 c = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(x,y)) : imageLoad(Accumulate1Image, previpos  + ivec2(x,y));
+					c.rgb = rgb2ycocg(c.rgb);
+					minCol = min(minCol, c.rgb);
+					maxCol = max(maxCol, c.rgb);
+				}
+			}
+			history.rgb = rgb2ycocg(history.rgb);
+			history.rgb = clamp(history.rgb, minCol, maxCol);
+			history.rgb = ycocg2rgb(history.rgb);
+
 			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
@@ -134,7 +151,7 @@ void main() {
 			}
 		}
     }
-
+	
     if(isEvenFrame)
     {
         imageStore(Accumulate1Image, ipos, final);
