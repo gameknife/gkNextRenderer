@@ -240,7 +240,11 @@ void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
 	{
 		// VK_KHR_swapchain
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+#if __APPLE__
+		"VK_KHR_portability_subset",
+#endif
 	};
+
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 
