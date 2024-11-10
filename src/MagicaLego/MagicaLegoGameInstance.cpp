@@ -90,11 +90,28 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
+    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
+    glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
+
+    if(lastHoverLocation_ != blockLocation)
+    {
+        indicatorTimer_ = 0.0f;
+    }
+    lastHoverLocation_ = blockLocation;
+    
+    glm::vec3 renderLocation = GetRenderLocationFromBlockLocation(blockLocation);
+    
     if(!bMouseLeftDown_)
     {
+        if( currentMode_ == ELM_Place )
+        {
+            float alpha = glm::mix(0.0f,0.75f, glm::clamp(indicatorTimer_ * 5.0f, 0.0, 1.0));
+            GetEngine().DrawAuxBox( renderLocation + glm::vec3(-0.04f, 0.00f, -0.04f), renderLocation + glm::vec3(0.04f, 0.096f, 0.04f), glm::vec4(1,1,0.7,alpha), 2.0);
+        }
         return;
     }
-
+    
+    
     uint32_t instanceId = rayResult.InstanceId;
     auto* Node = GetEngine().GetScene().GetNodeByInstanceId(instanceId);
     
@@ -121,8 +138,6 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
             }
         }
         
-        glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
-        glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
         if(blockLocation == lastPlacedLocation_) return;
         PlaceDynamicBlock({ blockLocation, currentBlockIdx_ });
         oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
@@ -271,6 +286,7 @@ bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
     }
     
     mousePos_ = glm::dvec2(xpos, ypos);
+    
     return true;
 }
 
@@ -662,12 +678,14 @@ void MagicaLegoGameInstance::OnInit()
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 {
-    realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
-
-    if( bMouseLeftDown_ )
+    // hover indicator
+    if(GetBuildMode() == ELM_Place || bMouseLeftDown_)
     {
         GetEngine().GetUserSettings().RequestRayCast = true;
+        indicatorTimer_ += deltaSeconds;
     }
+    
+    realCameraCenter_ = glm::mix( realCameraCenter_, cameraCenter_, 0.1f );
 
     previewWindowElapsed_ += deltaSeconds;
     if(playReview_ && previewWindowElapsed_ > previewWindowTimer_)

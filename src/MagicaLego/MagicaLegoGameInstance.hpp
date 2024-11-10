@@ -180,9 +180,12 @@ private:
 	std::vector<uint32_t> oneLinePlacedInstance_ {};
 	glm::i16vec3 lastPlacedLocation_ {};
 	glm::i16vec3 lastSelectLocation_ {};
+	glm::i16vec3 lastHoverLocation_ {};
 	std::unique_ptr<MagicaLegoUserInterface> UserInterface_;
 
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};
+
+	double indicatorTimer_ {};
 };
 

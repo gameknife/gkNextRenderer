@@ -423,7 +423,7 @@ glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
     return transformed;
 }
 
-void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to)
+void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
 {
     auto transformedFrom = ProjectWorldToScreen(from);
     auto transformedTo = ProjectWorldToScreen(to);
@@ -431,36 +431,36 @@ void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to)
     // should clip with z == 1, clip to new point
     if(transformedFrom.z < 1 && transformedTo.z < 1)
     {
-        GetUserInterface()->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y);
+        userInterface_->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y, size, color );
     }
 }
 
-void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max)
+void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
 {
     // Draw the box with 12 lines
-    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z));
-    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z));
-    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z));
-    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z));
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z), color, size);
 
-    DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z));
-    DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z));
-    DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z));
-    DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z));
+    DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z), color, size);
 
-    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z));
-    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z));
-    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z));
-    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z));
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
 }
 
-void NextRendererApplication::DrawAuxPoint(glm::vec3 location, float size)
+void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
 {
     auto transformed = ProjectWorldToScreen(location);
     // center as 0,0
     if(transformed.z < 1)
     {
-        GetUserInterface()->DrawPoint(transformed.x, transformed.y);
+        userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
     }
 }
 

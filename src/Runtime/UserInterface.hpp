@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <glm/vec4.hpp>
 
 namespace Assets
 {
@@ -81,8 +82,8 @@ public:
 	
 	static void SetStyle();
 
-	void DrawPoint(float x, float y);
-	void DrawLine(float fromx, float fromy,float tox, float toy);
+	void DrawPoint(float x, float y, float size, glm::vec4 color);
+	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
 
 private:
 	void DrawSettings();
