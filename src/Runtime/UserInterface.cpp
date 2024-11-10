@@ -266,6 +266,20 @@ void UserInterface::SetStyle()
 	style->SeparatorTextBorderSize			= 1.0f;
 }
 
+void UserInterface::DrawPoint(float x, float y)
+{
+	auxDrawRequest_.push_back( [=]() {
+		ImGui::GetForegroundDrawList()->AddRectFilled({x - 2, y - 2}, {x + 2, y + 2}, IM_COL32(255,0,0,255));
+	});
+}
+
+void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy)
+{
+	auxDrawRequest_.push_back( [=]() {
+		ImGui::GetForegroundDrawList()->AddLine( ImVec2(fromx, fromy), ImVec2(tox, toy), IM_COL32(255,0,0,255), 1.0f);
+	});
+}
+
 void UserInterface::PreRender()
 {
 	ImGui_ImplVulkan_NewFrame();
@@ -282,6 +296,12 @@ void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer*
 	DrawSettings();
 	DrawOverlay(statistics, gpuTimer);
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
+
+	for( auto& req : auxDrawRequest_) {
+		req();
+	}
+
+	auxDrawRequest_.clear();
 }
 
 void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)

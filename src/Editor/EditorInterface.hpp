@@ -59,6 +59,8 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
 
+	void DrawPoint(float x, float y) {};
+	void DrawLine(float fromx, float fromy,float tox, float toy) {};
 private:
 
 	ImGuiID DockSpaceUI();

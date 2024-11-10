@@ -410,6 +410,60 @@ void NextRendererApplication::SaveScreenShot(const std::string& filename, int x,
     BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
 }
 
+glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
+{
+    glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
+    transformed = transformed / transformed.w;
+    // from ndc to screenspace
+    transformed.x += 1.0f;
+    transformed.x *= GetWindow().FramebufferSize().width * 0.5;
+    transformed.y += 1.0f;
+    transformed.y *= GetWindow().FramebufferSize().height * 0.5;
+
+    return transformed;
+}
+
+void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to)
+{
+    auto transformedFrom = ProjectWorldToScreen(from);
+    auto transformedTo = ProjectWorldToScreen(to);
+
+    // should clip with z == 1, clip to new point
+    if(transformedFrom.z < 1 && transformedTo.z < 1)
+    {
+        GetUserInterface()->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y);
+    }
+}
+
+void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max)
+{
+    // Draw the box with 12 lines
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z));
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z));
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z));
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z));
+
+    DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z));
+    DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z));
+    DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z));
+    DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z));
+
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z));
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z));
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z));
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z));
+}
+
+void NextRendererApplication::DrawAuxPoint(glm::vec3 location, float size)
+{
+    auto transformed = ProjectWorldToScreen(location);
+    // center as 0,0
+    if(transformed.z < 1)
+    {
+        GetUserInterface()->DrawPoint(transformed.x, transformed.y);
+    }
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)

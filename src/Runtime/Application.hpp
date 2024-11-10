@@ -121,6 +121,12 @@ public:
 	// pak
 	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
 
+	// fast aux drawing using interface
+	glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS);
+	void DrawAuxLine( glm::vec3 from, glm::vec3 to );
+	void DrawAuxBox( glm::vec3 min, glm::vec3 max );
+	void DrawAuxPoint( glm::vec3 location, float size );
+
 #if !WITH_EDITOR
 	class UserInterface* GetUserInterface() {return userInterface_.get();};
 #endif
