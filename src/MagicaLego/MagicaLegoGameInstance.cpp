@@ -364,7 +364,7 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
         {
             cameraArm_ = 0.7f;
         }
-        GetEngine().SaveScreenShot(std::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name), 1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
+        GetEngine().SaveScreenShot(fmt::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name), 1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
         currTask = currTask+1;
         
         if(currTask >= totalTask)

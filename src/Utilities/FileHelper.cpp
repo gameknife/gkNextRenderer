@@ -61,7 +61,7 @@ namespace Utilities
                 if (entry.is_regular_file()) {
                     std::string entryPath = entry.path().string();
                     std::string entryRelativePath = entryPath.substr(absRootPath.size());
-                    std::ranges::replace(entryRelativePath.begin(), entryRelativePath.end(), '\\', '/');
+                    std::replace(entryRelativePath.begin(), entryRelativePath.end(), '\\', '/');
 
                     if (!regex.empty() && !std::regex_match(entryRelativePath, std::regex(regex))) {
                         continue;
