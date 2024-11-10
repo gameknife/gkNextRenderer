@@ -161,9 +161,10 @@ void Scene::UpdateNodes()
 		{
 			std::vector<NodeSimpleProxy> nodeSimpleProxys;
 			nodeSimpleProxys.reserve(nodes_.size());
-			for (const auto& node : nodes_)
+			for (auto& node : nodes_)
 			{
-				nodeSimpleProxys.push_back({ node.GetInstanceId(), node.GetModel(), 0u, 0u });
+				glm::vec3 delta = node.TickVelocity();
+				nodeSimpleProxys.push_back({ node.GetInstanceId(), node.GetModel(), 0u, 0u, glm::vec4(delta, 0) });
 			}
 			NodeSimpleProxy* data = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
 			std::memcpy(data, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));

@@ -52,12 +52,13 @@ namespace Assets
         uint32_t modelId;
         uint32_t matId;
         uint32_t reserved2;
+        glm::vec4 velocityWS;
     };
 
     class Node final
     {
     public:
-        static Node CreateNode(std::string name, glm::mat4 transform, uint32_t modelId, uint32_t instanceId, bool procedural);
+        static Node CreateNode(std::string name, glm::mat4 transform, uint32_t modelId, uint32_t instanceId, bool replace);
         
         //Node& operator =(const Node&) = delete;
         //Node& operator =(Node&&) = delete;
@@ -67,10 +68,9 @@ namespace Assets
         // Node(Node&&) = default;
         // ~Node() = default;
 
-        void Transform(const glm::mat4& transform) { transform_ = transform; }
+        //void Transform(const glm::mat4& transform) { transform_ = transform; }
         const glm::mat4& WorldTransform() const { return transform_; }
         uint32_t GetModel() const { return modelId_; }
-        bool IsProcedural() const { return procedural_; }
         const std::string& GetName() const {return name_; }
 
         void SetVisible(bool visible) { visible_ = visible; }
@@ -78,14 +78,16 @@ namespace Assets
 
         uint32_t GetInstanceId() const { return instanceId_; }
 
+        glm::vec3 TickVelocity();
+
     private:
-        Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool procedural);
+        Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace);
 
         std::string name_;
         glm::mat4 transform_;
+        glm::mat4 prevTransform_;
         uint32_t modelId_;
         uint32_t instanceId_;
-        bool procedural_;
         bool visible_;
     };
     

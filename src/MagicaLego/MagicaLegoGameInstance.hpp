@@ -1,6 +1,8 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Application.hpp"
+#include "Utilities/Console.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #define MAGICALEGO_SAVE_VERSION 1
 
@@ -40,6 +42,11 @@ struct FPlacedBlock
 {
 	glm::i16vec3 location; // 对应一个hash
 	int modelId_; // 如果为-1，表示已经被挖掉了
+
+	bool operator == (const FPlacedBlock& Other) const
+	{
+		return location == Other.location && modelId_ == Other.modelId_;
+	}
 };
 
 class MagicaLegoUserInterface;
@@ -64,7 +71,7 @@ public:
 	MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
     ~MagicaLegoGameInstance() override = default;
 	
-    void OnInit() override {}
+    void OnInit() override;
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override {}
 	bool OnRenderUI() override;
@@ -93,6 +100,7 @@ public:
 	FBasicBlockStack& GetBasicNodes() {return BasicNodes;}
 	FBasicBlockLibrary& GetBasicNodeLibrary() {return BasicBlockTypeMap;}
 
+	int ConvertBrushIdxToNextType(const std::string& prefix, int idx ) const;
 	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
 	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
 	void TryChangeSelectionBrushIdx(int idx);
@@ -118,13 +126,15 @@ public:
 	EBasePlane GetCurrentBasePlane() const {return currentBaseSize_;}
 
 	glm::i16vec3 GetLastPlacedLocation() const {return lastPlacedLocation_;}
+
+	void GeneratingThmubnail();
 	
 protected:
 	void AddBlockGroup(std::string typeName);
 	void AddBasicBlock(std::string blockName, std::string typeName);
 	FBasicBlock* GetBasicBlock(uint32_t BlockIdx);
 
-	void RebuildScene(FPlacedBlockDatabase& Source);
+	void RebuildScene(FPlacedBlockDatabase& Source, uint32_t newhash);
 	void RebuildFromRecord(int timelapse);
 
 	void CleanDynamicBlocks();
@@ -162,6 +172,7 @@ private:
 	mutable glm::vec3 panLeft_ {};
 	float cameraRotX_ {};
 	float cameraRotY_ {};
+	float cameraArm_ {};
 	float cameraMultiplier_ {};
 
 	bool bMouseLeftDown_ {};
@@ -169,7 +180,7 @@ private:
 	std::vector<uint32_t> oneLinePlacedInstance_ {};
 	glm::i16vec3 lastPlacedLocation_ {};
 	glm::i16vec3 lastSelectLocation_ {};
-	std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
+	std::unique_ptr<MagicaLegoUserInterface> UserInterface_;
 
 	double previewWindowTimer_ {};
 	double previewWindowElapsed_ {};

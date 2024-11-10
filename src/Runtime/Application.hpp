@@ -11,6 +11,7 @@
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 #include "ThirdParty/miniaudio/miniaudio.h"
+#include "Utilities/FileHelper.hpp"
 
 class BenchMarker;
 class NextRendererApplication;
@@ -114,6 +115,15 @@ public:
 	// sound
 	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
 
+	// screen shot
+	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
+
+	// pak
+	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
+
+#if !WITH_EDITOR
+	class UserInterface* GetUserInterface() {return userInterface_.get();};
+#endif
 protected:
 	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
@@ -138,9 +148,6 @@ private:
 
 	void LoadScene(uint32_t sceneIndex);
 	void TickBenchMarker();
-	void CheckFramebufferSize();
-
-	void Report(int fps, const std::string& sceneName, bool upload_screen, bool save_screen);
 
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
@@ -178,4 +185,6 @@ private:
 
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
+	
+	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 };

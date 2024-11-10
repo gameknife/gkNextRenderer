@@ -8,6 +8,7 @@
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoGameInstance.hpp"
+#include "Runtime/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Utilities/ImGui.hpp"
 
@@ -48,26 +49,32 @@ bool SelectButton(const char* label, const char* shortcut, bool selected)
     return result;
 }
 
-bool MaterialButton(FBasicBlock& block, float WindowWidth, bool selected)
+bool MaterialButton(FBasicBlock& block, ImTextureID texId, float WindowWidth, bool selected)
 {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec4 color = ImVec4(block.color.r, block.color.g, block.color.b, block.color.a);
 
     if(selected)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 4);
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.6f,0.85f,1.0f,1));
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Button, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0,0));
 
     ImGui::BeginGroup();
     ImGui::PushID(block.modelId_);
-    bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
+    //  ImGui::PushStyleColor(ImGuiCol_Button, color);
+    //  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
+    //  ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+    // bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
+    // ImGui::PopStyleColor(3);
+    bool result = ImGui::ImageButton("##Block", texId, ImVec2(PALATE_SIZE, PALATE_SIZE));
     ImGui::PopID();
     Utilities::UI::TextCentered(block.name, PALATE_SIZE);
+    
     ImGui::EndGroup();
     
     float last_button_x2 = ImGui::GetItemRectMax().x;
@@ -75,8 +82,9 @@ bool MaterialButton(FBasicBlock& block, float WindowWidth, bool selected)
     if (next_button_x2 < WindowWidth)
         ImGui::SameLine();
     
-    ImGui::PopStyleColor(3);
 
+    ImGui::PopStyleVar();
+    
     if(selected)
     {
         ImGui::PopStyleColor();
@@ -445,7 +453,13 @@ void MagicaLegoUserInterface::DrawRightBar()
             ImGui::Dummy(ImVec2(0,5));
 
             ImGui::SetNextItemWidth( SIDE_BAR_WIDTH - 46 );
-            ImGui::Combo("##Type", &current_type, types.data(), static_cast<int>(types.size()));
+            if( ImGui::Combo("##Type", &current_type, types.data(), static_cast<int>(types.size())) )
+            {
+                if( int newIdx = GetGameInstance()->ConvertBrushIdxToNextType(types[current_type], GetGameInstance()->GetCurrentBrushIdx() ) )
+                {
+                    GetGameInstance()->SetCurrentBrushIdx(newIdx);
+                }
+            }
             ImGui::Dummy(ImVec2(0,5));
         
             float WindowWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
@@ -454,7 +468,9 @@ void MagicaLegoUserInterface::DrawRightBar()
             for( size_t i = 0; i < BasicBlocks.size(); i++ )
             {
                 auto& block = BasicBlocks[i];
-                if( MaterialButton(block, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
+                std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
+                ImTextureID id = GetGameInstance()->GetEngine().GetUserInterface()->RequestImTextureByName(filename);
+                if( MaterialButton(block, id, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_) )
                 {
                     GetGameInstance()->SetCurrentBrushIdx(block.brushId_);
                     GetGameInstance()->TryChangeSelectionBrushIdx(block.brushId_);

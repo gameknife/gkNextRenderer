@@ -6,6 +6,8 @@
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
+#include "Runtime/Platform/PlatformCommon.h"
+#include "Vulkan/SwapChain.hpp"
 
 const glm::i16vec3 INVALID_POS(0,-10,0);
 
@@ -47,6 +49,8 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation) {
 
 MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
 {
+    NextRenderer::HideConsole();
+    
     // windows config
     config.Title = "MagicaLego";
     config.Height = 960;
@@ -68,6 +72,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     resetMouse_ = true;
     cameraRotX_ = 45;
     cameraRotY_ = 30;
+    cameraArm_ = 5.0;
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
@@ -76,6 +81,11 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     lastSelectLocation_ = INVALID_POS;
     lastPlacedLocation_ = INVALID_POS;
+    
+    GetEngine().GetPakSystem().SetRunMode(Utilities::Package::EPM_PakFile);
+    GetEngine().GetPakSystem().Reset();
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
+    GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -136,7 +146,7 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
 {
     float xRotation = cameraRotX_; // 例如绕X轴旋转45度
     float yRotation = cameraRotY_; // 例如上下偏转30度
-    float armLength = 5.0f;
+    float armLength = cameraArm_;
         
     glm::vec3 cameraPos;
     cameraPos.x = realCameraCenter_.x + armLength * cos(glm::radians(yRotation)) * cos(glm::radians(xRotation));
@@ -198,7 +208,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBP_Small);
 
-    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
+    //GeneratingThmubnail();
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
@@ -323,8 +333,56 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
         {
             BlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
         }
-        RebuildScene(BlocksDynamics);
+        RebuildScene(BlocksDynamics, -1);
     }
+}
+
+const int THUMB_SIZE = 92;
+
+void MagicaLegoGameInstance::GeneratingThmubnail()
+{
+    cameraArm_ = 0.7f;
+    cameraCenter_ = glm::vec3(0,0.045f,0);
+    realCameraCenter_ = cameraCenter_;
+    GetEngine().GetUserSettings().TemporalFrames = 8;
+    GetEngine().GetUserSettings().NumberOfSamples = 256;
+    GetEngine().GetUserSettings().Denoiser = false;
+    GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
+    PlaceDynamicBlock({{0,0,0}, BasicNodes[0].brushId_});
+
+    int totalTask = static_cast<int>(BasicNodes.size());
+    static int currTask = 0;
+    GetEngine().AddTimerTask(0.5, [this, totalTask]()->bool
+    {
+        PlaceDynamicBlock({{0,0,0}, BasicNodes[currTask+1].brushId_});
+        std::string nodeName = BasicNodes[currTask+1].type;
+        if(nodeName.find("1x1") == std::string::npos )
+        {
+            cameraArm_ = 1.2f;
+        }
+        else
+        {
+            cameraArm_ = 0.7f;
+        }
+        GetEngine().SaveScreenShot(fmt::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name), 1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
+        currTask = currTask+1;
+        
+        if(currTask >= totalTask)
+        {
+            PlaceDynamicBlock({{0,0,0}, -1});
+            GetEngine().GetUserSettings().TemporalFrames = 16;
+            GetEngine().GetUserSettings().NumberOfSamples = 8;
+            GetEngine().GetUserSettings().Denoiser = true;
+            cameraArm_ = 5.0f;
+            cameraCenter_ = glm::vec3(0,0.0f,0);
+            realCameraCenter_ = cameraCenter_;
+            GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(0,0,1920,960);
+            return true;
+        }
+
+        return false;
+    });
+    
 }
 
 void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
@@ -364,6 +422,11 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         BasicNodes.push_back(newBlock);
         BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
+
+        std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
+        std::vector<uint8_t> outData;
+        GetEngine().GetPakSystem().LoadFile(fileName, outData);
+        Assets::GlobalTexturePool::LoadTexture( fileName, outData.data(), outData.size(), Vulkan::SamplerConfig() );
     }
 }
 
@@ -389,7 +452,7 @@ void MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock Block)
     BlocksDynamics[blockHash] = Block;
     BlockRecords.push_back(Block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
-    RebuildScene(BlocksDynamics);
+    RebuildScene(BlocksDynamics, blockHash);
     lastPlacedLocation_ = Block.location;
     
     // random put1 or put2
@@ -456,7 +519,7 @@ void MagicaLegoGameInstance::CleanUp()
 {
     BlockRecords.clear();
     CleanDynamicBlocks();
-    RebuildScene(BlocksDynamics);
+    RebuildScene(BlocksDynamics, -1);
 }
 
 void FMagicaLegoSave::Save(std::string filename)
@@ -551,7 +614,7 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
     DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
 }
 
-void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source)
+void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source, uint32_t newhash)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
 
@@ -563,8 +626,9 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
             auto BasicBlock = GetBasicBlock(Block.second.modelId_);
             if(BasicBlock)
             {
-                // with stable instance id
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), false);
+                // 这里要区分一下，因为目前rebuild流程是清理后重建，因此所有node都会被认为是首次放置，都会有一个单帧的velocity
+                // 所以如果没有modelid的改变的话，采用原位替换
+                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
             }
         }
@@ -583,12 +647,17 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
         if(currentCamMode_ == ECM_AutoFocus)
             cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
     }
-    RebuildScene(TempBlocksDynamics);
+    RebuildScene(TempBlocksDynamics, -1);
 }
 
 void MagicaLegoGameInstance::CleanDynamicBlocks()
 {
     BlocksDynamics.clear();
+}
+
+void MagicaLegoGameInstance::OnInit()
+{
+    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)
@@ -638,4 +707,20 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
 {
     currentCamMode_ = mode;
+}
+
+int MagicaLegoGameInstance::ConvertBrushIdxToNextType(const std::string& prefix, int idx) const
+{
+    std::string subName = BasicNodes[idx].name;
+    if( BasicBlockTypeMap.find(prefix) != BasicBlockTypeMap.end() )
+    {
+        for( auto& block : BasicBlockTypeMap.at(prefix) )
+        {
+            if( strcmp(block.name, subName.c_str()) == 0 )
+            {
+                return block.brushId_;
+            }
+        }
+    }
+    return -1;
 }

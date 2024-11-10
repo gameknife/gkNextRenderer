@@ -28,11 +28,13 @@
 #include <fmt/chrono.h>
 
 #include "Options.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
+#include "Vulkan/ImageView.hpp"
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
@@ -52,7 +54,7 @@ UserInterface::UserInterface(
 	{
 		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
 	};
-	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 256));
+	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
 	
 	// Initialise ImGui
@@ -176,6 +178,34 @@ void UserInterface::OnDestroySurface()
 {
 	renderPass_.reset();
 	uiFrameBuffers_.clear();
+}
+
+VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
+{
+	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
+	{
+		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
+		if(texture)
+		{
+			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			return imTextureIdMap_[globalTextureId];
+		}
+	}
+	else
+	{
+		return imTextureIdMap_[globalTextureId];
+	}
+	return VK_NULL_HANDLE;
+}
+
+VkDescriptorSet UserInterface::RequestImTextureByName(const std::string& name)
+{
+	uint32_t id = Assets::GlobalTexturePool::GetTextureIndexByName(name);
+	if( id == -1)
+	{
+		return VK_NULL_HANDLE;
+	}
+	return RequestImTextureId(id);
 }
 
 void UserInterface::SetStyle()

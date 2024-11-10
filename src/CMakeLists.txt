@@ -23,6 +23,7 @@ set(src_files_utilities
 	Utilities/Console.cpp
 	Utilities/Console.hpp
 	Utilities/Exception.hpp
+	Utilities/FileHelper.cpp
 	Utilities/FileHelper.hpp
 	Utilities/Math.hpp
 	Utilities/Glm.hpp
@@ -338,6 +339,12 @@ add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+
+add_executable(Packager
+	${src_files_utilities} 
+	Packager/PackagerMain.cpp
+)
+
 endif()
 
 
@@ -360,6 +367,7 @@ set(AllTargets
 gkNextRenderer 
 gkNextEditor
 MagicaLego 
+Packager
 )
 endif()
 # common setup

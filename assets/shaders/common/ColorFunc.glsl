@@ -79,6 +79,23 @@ vec3 yuv2rgb(vec3 yuv) {
     return vec3(R, G, B);
 }
 
+vec3 rgb2ycocg(vec3 rgb) {
+	float Y  =  0.25 * rgb.r + 0.5 * rgb.g + 0.25 * rgb.b;
+	float Co =  0.5 * rgb.r - 0.5 * rgb.b;
+	float Cg = -0.25 * rgb.r + 0.5 * rgb.g - 0.25 * rgb.b;
+	return vec3(Y, Co, Cg);
+}
+
+vec3 ycocg2rgb(vec3 ycocg) {
+	float Y  = ycocg.r;
+	float Co = ycocg.g;
+	float Cg = ycocg.b;
+	float R = Y + Co - Cg;
+	float G = Y + Cg;
+	float B = Y - Co - Cg;
+	return vec3(R, G, B);
+}
+
 float hash(float n) {
 	return fract(sin(n) * 43758.5453123);
 }

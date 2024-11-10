@@ -143,7 +143,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 8;
-    userSettings.TAA = false; // makes reproject failed
+    userSettings.TAA = true; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -187,6 +187,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
+    packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     // Create Window
     Vulkan::WindowConfig windowConfig
     {
@@ -270,16 +271,16 @@ NextRendererApplication::~NextRendererApplication()
 void NextRendererApplication::Start()
 {
     renderer_->Start();
-    gameInstance_->OnInit();
 
     ma_result result;
-
     audioEngine_.reset( new ma_engine() );
 
     result = ma_engine_init(NULL, audioEngine_.get());
     if (result != MA_SUCCESS) {
         return;
     }
+
+    gameInstance_->OnInit();
 }
 
 bool NextRendererApplication::Tick()
@@ -402,6 +403,11 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_set_volume(sound, volume);
     ma_sound_seek_to_pcm_frame(sound, 0);
     ma_sound_start(sound);
+}
+
+void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
+{
+    BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -540,19 +546,19 @@ void NextRendererApplication::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/std_env.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr", Vulkan::SamplerConfig());
     
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/canary_wharf_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_01_puresky_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/kloppenheim_07_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/river_road_2.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/rainforest_trail_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr", Vulkan::SamplerConfig());
 
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_03_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/studio_small_09_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/sunset_fairway_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/umhlanga_sunrise_1k.hdr"), Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture(Utilities::FileHelper::GetPlatformFilePath("assets/textures/shanghai_bund_1k.hdr"), Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr", Vulkan::SamplerConfig());
 
     if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
     

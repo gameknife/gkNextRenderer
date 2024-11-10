@@ -42,6 +42,7 @@ struct NodeSimpleProxy
 	uint modelId;
 	uint materialId;
 	uint reserved2;
+	vec4 velocityWS;
 };
 
 struct RayCastContext

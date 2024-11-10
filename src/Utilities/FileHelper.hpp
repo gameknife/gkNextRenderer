@@ -2,6 +2,12 @@
 #include <random>
 #include <filesystem>
 #include <string>
+#include <map>
+#include <fstream>
+#include <fmt/printf.h>
+#include "ThirdParty/lzav/lzav.h"
+#include <assert.h>
+#include <regex>
 
 namespace Utilities
 {
@@ -55,5 +61,59 @@ namespace Utilities
 
             return randomName;
         }
+    }
+
+    namespace Package
+    {
+        enum EPackageRunMode
+        {
+            EPM_OsFile,
+            EPM_PakFile
+        };
+        
+        struct FPakEntry
+        {
+            std::string name;
+            uint32_t pkgIdx;
+            uint32_t offset;
+            uint32_t size;
+            uint32_t uncompressSize;
+        };
+        
+        // PackageFileSystem for Mostly User Oriented Resource, like Texture, Model, etc.
+        // Package mass files to one pak
+        class FPackageFileSystem
+        {
+        public:
+            // Construct
+            FPackageFileSystem(EPackageRunMode RunMode);
+
+            void SetRunMode(EPackageRunMode RunMode) { runMode_ = RunMode; }
+            
+            // Loading
+            void Reset();
+            void MountPak(const std::string& pakFile);
+            void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
+            
+            // Recording
+            //void RecordUsage(const std::string& entry);
+            //void SaveRecord(const std::string& recordFile);
+            //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
+            
+            // Paking
+            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "");
+
+            static FPackageFileSystem& GetInstance()
+            {
+                return *instance_;
+            }
+        private:
+            // pak index
+            std::map<std::string, FPakEntry> filemaps;
+            std::vector<std::string> mountedPaks;
+            EPackageRunMode runMode_;
+
+            static FPackageFileSystem* instance_;
+        };
     }
 }

@@ -6,6 +6,11 @@ namespace NextRenderer
     {
         
     }
+
+    inline void HideConsole()
+    {
+
+    }
 }
 #if ANDROID
 #include <imgui_impl_android.h>

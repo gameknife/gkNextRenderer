@@ -230,8 +230,13 @@ namespace Vulkan::RayTracing
         {
             logicRenderer->BeforeNextFrame();
         }
+    }
 
-         auto& scene = GetScene();
+    void RayTraceBaseRenderer::AfterUpdateScene()
+    {
+        VulkanBaseRenderer::AfterUpdateScene();
+
+        auto& scene = GetScene();
 
         // rebuild all instance
         std::vector<VkAccelerationStructureInstanceKHR> instances;
@@ -255,8 +260,6 @@ namespace Vulkan::RayTracing
         {
             topAs_[0].Update(commandBuffer, instanceCount);
         });
-
-        
     }
 
 

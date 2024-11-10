@@ -298,6 +298,7 @@ namespace Vulkan
 		}
 		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
+		virtual void AfterUpdateScene() {}
 
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}

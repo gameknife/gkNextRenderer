@@ -8,6 +8,8 @@
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
+#include "Utilities/Console.hpp"
+#include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
 
@@ -23,7 +25,9 @@ namespace Assets
     
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
     {
-        return GetInstance()->RequestNewTextureFileAsync(filename, false);
+        std::vector<uint8_t> data;
+        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+        return GetInstance()->RequestNewTextureMemAsync(filename, false, data.data(), data.size());
     }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
@@ -33,7 +37,9 @@ namespace Assets
 
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
     {
-        return GetInstance()->RequestNewTextureFileAsync(filename, true);
+        std::vector<uint8_t> data;
+        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+        return GetInstance()->RequestNewTextureMemAsync(filename, true, data.data(), data.size());
     }
 
     void GlobalTexturePool::UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
@@ -48,6 +54,25 @@ namespace Assets
             return GetInstance()->textureImages_[idx].get();
         }
         return nullptr;
+    }
+
+    TextureImage* GlobalTexturePool::GetTextureImageByName(const std::string& name)
+    {
+        uint32_t id = GetTextureIndexByName(name);
+        if( id != -1 )
+        {
+            return  GetInstance()->textureImages_[id].get();
+        }
+        return nullptr;
+    }
+
+    uint32_t GlobalTexturePool::GetTextureIndexByName(const std::string& name)
+    {
+        if( GetInstance()->textureNameMap_.find(name) != GetInstance()->textureNameMap_.end() )
+        {
+            return GetInstance()->textureNameMap_[name];
+        }
+        return -1;
     }
 
     GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt) :
@@ -168,58 +193,6 @@ namespace Assets
         return -1;
     }
     
-    uint32_t GlobalTexturePool::RequestNewTextureFileAsync(const std::string& filename, bool hdr)
-    {
-        if (textureNameMap_.find(filename) != textureNameMap_.end())
-        {
-            return textureNameMap_[filename];
-        }
-
-        textureImages_.emplace_back(nullptr);
-        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
-        
-        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, newTextureIdx](ResTask& task)
-        {
-            TextureTaskContext taskContext {};
-            const auto timer = std::chrono::high_resolution_clock::now();
-            
-            // Load the texture in normal host memory.
-            int width, height, channels;
-            void* pixels = nullptr;
-            if(hdr)
-            {
-                pixels = stbi_loadf(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-            }
-            else
-            {
-                pixels = stbi_load(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-            }
-
-            if (!pixels)
-            {
-                Throw(std::runtime_error("failed to load texture image '" + filename + "'"));
-            }
-
-            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
-            BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
-            stbi_image_free(pixels);
-
-            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", filename, width, height, channels, taskContext.elapsed * 1000.f);
-            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
-            task.SetContext( taskContext );
-        }, [](ResTask& task)
-        {
-            TextureTaskContext taskContext {};
-            task.GetContext( taskContext );
-            if(!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
-        }, 0);
-
-        // cache in namemap
-        textureNameMap_[filename] = newTextureIdx;
-        return newTextureIdx;
-    }
-
     void GlobalTexturePool::RequestUpdateTextureFileAsync(uint32_t textureIdx, const std::string& filename, bool hdr)
     {
         TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, textureIdx](ResTask& task)
@@ -276,22 +249,31 @@ namespace Assets
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);
-        TaskCoordinator::GetInstance()->AddTask([this, texname, copyedData, bytelength, newTextureIdx](ResTask& task)
+        TaskCoordinator::GetInstance()->AddTask([this, hdr, texname, copyedData, bytelength, newTextureIdx](ResTask& task)
         {
             TextureTaskContext taskContext {};
             const auto timer = std::chrono::high_resolution_clock::now();
             
             // Load the texture in normal host memory.
             int width, height, channels;
-            const auto pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+            void* pixels = nullptr;
 
+            if(hdr)
+            {
+                pixels = stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+            }
+            else
+            {
+                pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+            }
+            
             if (!pixels)
             {
                 Throw(std::runtime_error("failed to load texture image "));
             }
 
             // create texture image
-            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, false, static_cast<unsigned char*>((void*)pixels));
+            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
             stbi_image_free(pixels);
 
