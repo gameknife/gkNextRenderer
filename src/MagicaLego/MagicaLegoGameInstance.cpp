@@ -649,6 +649,8 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
             }
         }
     }
+
+    GetEngine().GetScene().MarkDirty();
 }
 
 void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)

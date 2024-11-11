@@ -598,8 +598,10 @@ void VulkanBaseRenderer::DrawFrame()
 
 		{
 			SCOPED_CPU_TIMER("cpugpu-io");
-			GetScene().UpdateNodes();
-			AfterUpdateScene();
+			if( GetScene().UpdateNodes() )
+			{
+				AfterUpdateScene();
+			}
 			UpdateUniformBuffer(currentImageIndex_);
 		}
 

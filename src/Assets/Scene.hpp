@@ -70,12 +70,14 @@ namespace Assets
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
 		void UpdateMaterial();
-		void UpdateNodes();
+		bool UpdateNodes();
 
 		Node* GetNode(std::string name);
 		Node* GetNodeByInstanceId(uint32_t id);
 		const Model* GetModel(uint32_t id) const;
 		const Material* GetMaterial(uint32_t id) const;
+
+		void MarkDirty() {sceneDirty_ = true;}
 		
 	private:
 		std::vector<Material> materials_;
@@ -120,6 +122,8 @@ namespace Assets
 		uint32_t indirectDrawBatchCount_ {};
 
 		mutable uint32_t selectedId_ = -1;
+
+		bool sceneDirty_ = true;
 	};
 
 }

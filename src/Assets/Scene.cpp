@@ -154,42 +154,52 @@ void Scene::UpdateMaterial()
 	// update value after binding, like the bindless textures, try
 }
 
-void Scene::UpdateNodes()
+bool Scene::UpdateNodes()
 {
 	if(nodes_.size() > 0)
 	{
+		if(sceneDirty_)
 		{
-			std::vector<NodeSimpleProxy> nodeSimpleProxys;
-			nodeSimpleProxys.reserve(nodes_.size());
-			for (auto& node : nodes_)
+			sceneDirty_ = false;
 			{
-				glm::vec3 delta = node.TickVelocity();
-				nodeSimpleProxys.push_back({ node.GetInstanceId(), node.GetModel(), 0u, 0u, glm::vec4(delta, 0) });
-			}
-			NodeSimpleProxy* data = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
-			std::memcpy(data, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
-			nodeSimpleMatrixBufferMemory_->Unmap();
-		}
-
-		{
-			std::vector<NodeProxy> nodeProxys;
-			nodeProxys.reserve(nodes_.size());
-			for (int i = 0; i < models_.size(); i++)
-			{
-				for (const auto& node : nodes_)
+				std::vector<NodeSimpleProxy> nodeSimpleProxys;
+				nodeSimpleProxys.reserve(nodes_.size());
+				for (auto& node : nodes_)
 				{
-					if(node.GetModel() == i)
+					glm::vec3 delta = node.TickVelocity();
+					if(glm::length(delta) > 0.01f)
 					{
-						nodeProxys.push_back({ node.WorldTransform() });
+						sceneDirty_ = true;
 					}
+					nodeSimpleProxys.push_back({ node.GetInstanceId(), node.GetModel(), 0u, 0u, glm::vec4(delta, 0) });
 				}
-			};
+				NodeSimpleProxy* data = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
+				std::memcpy(data, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
+				nodeSimpleMatrixBufferMemory_->Unmap();
+			}
 
-			NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
-			std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
-			nodeMatrixBufferMemory_->Unmap();
+			{
+				std::vector<NodeProxy> nodeProxys;
+				nodeProxys.reserve(nodes_.size());
+				for (int i = 0; i < models_.size(); i++)
+				{
+					for (const auto& node : nodes_)
+					{
+						if(node.GetModel() == i)
+						{
+							nodeProxys.push_back({ node.WorldTransform() });
+						}
+					}
+				};
+
+				NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+				std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+				nodeMatrixBufferMemory_->Unmap();
+			}
+			return true;
 		}
 	}
+	return false;
 }
 
 Node* Scene::GetNode(std::string name)
