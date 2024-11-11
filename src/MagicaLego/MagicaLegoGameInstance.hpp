@@ -51,9 +51,11 @@ struct FPlacedBlock
 
 class MagicaLegoUserInterface;
 
+using FBasicBlockIndicatorLibrary = std::map<std::string, std::tuple<glm::vec3, glm::vec3>>;
 using FBasicBlockStack = std::vector<FBasicBlock>;
 using FBasicBlockLibrary = std::map<std::string, FBasicBlockStack >;
 using FPlacedBlockDatabase = std::unordered_map<uint32_t, FPlacedBlock>;
+
 
 struct FMagicaLegoSave
 {
@@ -147,6 +149,7 @@ private:
 	// base blocks library
 	FBasicBlockStack BasicNodes;
 	FBasicBlockLibrary BasicBlockTypeMap;
+	FBasicBlockIndicatorLibrary BasicNodeIndicatorMap;
 	
 	int currentBlockIdx_ {};
 	int currentPreviewStep {};

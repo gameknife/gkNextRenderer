@@ -105,8 +105,12 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     {
         if( currentMode_ == ELM_Place )
         {
-            float alpha = glm::mix(0.0f,0.75f, glm::clamp(indicatorTimer_ * 5.0f, 0.0, 1.0));
-            GetEngine().DrawAuxBox( renderLocation + glm::vec3(-0.04f, 0.00f, -0.04f), renderLocation + glm::vec3(0.04f, 0.096f, 0.04f), glm::vec4(1,1,0.7,alpha), 2.0);
+            if(BasicNodeIndicatorMap.size() > 0 && BasicNodes.size() > 0)
+            {
+                float alpha = glm::mix(0.0f,0.75f, glm::clamp(indicatorTimer_ * 5.0f, 0.0, 1.0));
+                auto& indicator = BasicNodeIndicatorMap[BasicNodes[currentBlockIdx_].type];
+                GetEngine().DrawAuxBox( renderLocation + std::get<0>(indicator), renderLocation + std::get<1>(indicator), glm::vec4(1,1,0.7,alpha), 2.0);
+            }
         }
         return;
     }
@@ -219,6 +223,14 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     
     AddBlockGroup("Plate2x2");
     AddBlockGroup("Corner2x2");
+
+    BasicNodeIndicatorMap["Flat1x1"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.04f)};
+    BasicNodeIndicatorMap["Button1x1"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.04f)};
+    BasicNodeIndicatorMap["Plate1x1"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.04f)};
+    
+    BasicNodeIndicatorMap["Slope1x2"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.04f, 0.096f, 0.12f)};
+    BasicNodeIndicatorMap["Plate2x2"] = {glm::vec3(-0.12f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.12f)};
+    BasicNodeIndicatorMap["Corner2x2"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.12f, 0.032f, 0.12f)};
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBP_Small);
@@ -411,6 +423,8 @@ void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
             AddBasicBlock(Node.GetName(), typeName);
         }
     }
+
+    BasicNodeIndicatorMap[typeName] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.04f, 0.096f, 0.04f)};
 }
 
 void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string typeName)
