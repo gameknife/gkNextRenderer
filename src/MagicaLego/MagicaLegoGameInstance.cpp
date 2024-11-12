@@ -90,7 +90,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
-    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.01f;
+    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
     glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
 
     if(lastHoverLocation_ != blockLocation)
@@ -107,9 +107,10 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         {
             if(BasicNodeIndicatorMap.size() > 0 && BasicNodes.size() > 0)
             {
-                float alpha = glm::mix(0.0f,0.75f, glm::clamp(indicatorTimer_ * 5.0f, 0.0, 1.0));
                 auto& indicator = BasicNodeIndicatorMap[BasicNodes[currentBlockIdx_].type];
-                GetEngine().DrawAuxBox( renderLocation + std::get<0>(indicator), renderLocation + std::get<1>(indicator), glm::vec4(1,1,0.7,alpha), 2.0);
+                indicatorMinTarget_ = renderLocation + std::get<0>(indicator);
+                indicatorMaxTarget_ = renderLocation + std::get<1>(indicator);
+                indicatorDrawRequest_ = true;
             }
         }
         return;
@@ -694,6 +695,8 @@ void MagicaLegoGameInstance::OnInit()
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 {
+    float invDelta = static_cast<float>(deltaSeconds) / 60.0f;
+    
     // hover indicator
     if(GetBuildMode() == ELM_Place || bMouseLeftDown_)
     {
@@ -717,6 +720,16 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         {
             playReview_ = false;
         }
+    }
+
+    indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
+    indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
+
+    if(indicatorDrawRequest_)
+    {
+        float alpha = glm::mix(0.0f,0.75f, glm::clamp(indicatorTimer_ * 5.0f, 0.0, 1.0));
+        GetEngine().DrawAuxBox( indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5,0.65,1,0.75), 2.0);
+        indicatorDrawRequest_ = false;
     }
 }
 

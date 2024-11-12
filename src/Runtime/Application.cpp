@@ -301,6 +301,10 @@ bool NextRendererApplication::Tick()
 
     // Camera Update
     userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
+    if ( glm::abs(userSettings_.RawFieldOfView - userSettings_.FieldOfView) < 0.05f)
+    {
+        userSettings_.FieldOfView = userSettings_.RawFieldOfView;
+    }
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
     // Handle Scene Switching

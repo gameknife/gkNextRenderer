@@ -190,5 +190,10 @@ private:
 	double previewWindowElapsed_ {};
 
 	double indicatorTimer_ {};
+	bool indicatorDrawRequest_ {};
+	glm::vec3 indicatorMinTarget_ {};
+	glm::vec3 indicatorMaxTarget_ {};
+	glm::vec3 indicatorMinCurrent_ {};
+	glm::vec3 indicatorMaxCurrent_ {};
 };
 
