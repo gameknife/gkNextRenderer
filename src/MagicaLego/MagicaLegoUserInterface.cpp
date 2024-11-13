@@ -210,7 +210,7 @@ void MagicaLegoUserInterface::OnRenderUI()
             }
             break;
         case EIS_Finish:
-            GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), 12});
+            GetGameInstance()->PlaceDynamicBlock({glm::i16vec3(0,0,0), EOrientation::EO_North, 0, 12});
             introStep_ = EIS_InGame;
             break;
         case EIS_InGame:
@@ -294,49 +294,54 @@ void MagicaLegoUserInterface::DrawLeftBar()
     if (ImGui::Begin("Place & Dig", 0, PANELFLAGS))
     {
         ImGui::SeparatorText("Mode");
-        if( SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELM_Dig) )
+        if( SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Dig) )
         {
-            GetGameInstance()->SetBuildMode(ELM_Dig);
+            GetGameInstance()->SetBuildMode(ELegoMode::ELM_Dig);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CUBES_STACKED, "W", GetGameInstance()->GetBuildMode() == ELM_Place) )
+        if( SelectButton(ICON_FA_CUBES_STACKED, "W", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Place) )
         {
-            GetGameInstance()->SetBuildMode(ELM_Place);
+            GetGameInstance()->SetBuildMode(ELegoMode::ELM_Place);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELM_Select) )
+        if( SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Select) )
         {
-            GetGameInstance()->SetBuildMode(ELM_Select);
+            GetGameInstance()->SetBuildMode(ELegoMode::ELM_Select);
         }
         ImGui::SeparatorText("Camera");
-        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECM_Pan))
+        if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Pan))
         {
-            GetGameInstance()->SetCameraMode(ECM_Pan);
+            GetGameInstance()->SetCameraMode(ECamMode::ECM_Pan);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECM_Orbit))
+        if( SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Orbit))
         {
-            GetGameInstance()->SetCameraMode(ECM_Orbit);
+            GetGameInstance()->SetCameraMode(ECamMode::ECM_Orbit);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECM_AutoFocus))
+        if( SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECamMode::ECM_AutoFocus))
         {
-            GetGameInstance()->SetCameraMode(ECM_AutoFocus);
+            GetGameInstance()->SetCameraMode(ECamMode::ECM_AutoFocus);
         }
         ImGui::SeparatorText("Base");
-        if( SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBP_Big))
+        if( SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Big))
         {
-            GetGameInstance()->SwitchBasePlane(EBP_Big);
+            GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Big);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBP_Mid))
+        if( SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Mid))
         {
-            GetGameInstance()->SwitchBasePlane(EBP_Mid);
+            GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Mid);
         }
         ImGui::SameLine();
-        if( SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBP_Small))
+        if( SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Small))
         {
-            GetGameInstance()->SwitchBasePlane(EBP_Small);
+            GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Small);
+        }
+
+        if( SelectButton( fmt::format("{}", GetGameInstance()->GetCurrentOrientation()).c_str(), "R", false))
+        {
+            GetGameInstance()->ChangeOrientation();
         }
 
         ImGui::Dummy(ImVec2(0,50));

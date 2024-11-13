@@ -6,31 +6,60 @@
 
 #define MAGICALEGO_SAVE_VERSION 1
 
-enum ELegoMode
+enum class ELegoMode : uint8_t
 {
 	ELM_Dig,
 	ELM_Place,
 	ELM_Select,
 };
 
-enum ECamMode
+enum class ECamMode : uint8_t
 {
 	ECM_Pan,
 	ECM_Orbit,
 	ECM_AutoFocus,
 };
 
-enum EBasePlane
+enum class EBasePlane : uint8_t
 {
 	EBP_Big,
 	EBP_Mid,
 	EBP_Small,
 };
 
+enum class EOrientation : uint8_t
+{
+	EO_North,
+	EO_East,
+	EO_South,
+	EO_West,
+};
+
+static constexpr glm::mat4 GetOrientationMatrix(EOrientation orientation)
+{
+	switch(orientation)
+	{
+	case EOrientation::EO_North: return glm::mat4(1.0f);
+	case EOrientation::EO_East: return glm::rotate(glm::mat4(1.0f), -glm::pi<float>() * 0.5f, glm::vec3(0,1,0));
+	case EOrientation::EO_South: return glm::rotate(glm::mat4(1.0f), -glm::pi<float>() * 1.0f, glm::vec3(0,1,0));
+	case EOrientation::EO_West: return glm::rotate(glm::mat4(1.0f), -glm::pi<float>() * 1.5f, glm::vec3(0,1,0));
+	}
+	return glm::mat4(1.0f);
+};
+
+template <> class fmt::formatter<EOrientation> {
+public:
+	constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
+	template <typename Context>
+	constexpr auto format (EOrientation const& foo, Context& ctx) const {
+		return format_to(ctx.out(), "{}", static_cast<uint8_t>(foo)); 
+	}
+};
+
 struct FBasicBlock
 {
 	// just need modelIdNow
-	int brushId_;
+	int16_t brushId_;
 	int modelId_;
 	int matType;
 	glm::vec4 color;
@@ -38,11 +67,15 @@ struct FBasicBlock
 	char type[128];
 };
 
+// 基础record，12byte, 带有多个reserved字段，方便后续扩展
 struct FPlacedBlock
 {
 	glm::i16vec3 location; // 对应一个hash
-	int modelId_; // 如果为-1，表示已经被挖掉了
-
+	EOrientation orientation;
+	uint8_t reserved0;
+	int16_t modelId_; // 如果为-1，表示已经被挖掉了
+	uint8_t reserved1;
+	uint8_t reserved2;
 	bool operator == (const FPlacedBlock& Other) const
 	{
 		return location == Other.location && modelId_ == Other.modelId_;
@@ -103,9 +136,9 @@ public:
 	FBasicBlockLibrary& GetBasicNodeLibrary() {return BasicBlockTypeMap;}
 
 	int ConvertBrushIdxToNextType(const std::string& prefix, int idx ) const;
-	int GetCurrentBrushIdx() const {return currentBlockIdx_;}
-	void SetCurrentBrushIdx(int idx) {currentBlockIdx_ = idx;}
-	void TryChangeSelectionBrushIdx(int idx);
+	int16_t GetCurrentBrushIdx() const {return currentBlockIdx_;}
+	void SetCurrentBrushIdx(int16_t idx) {currentBlockIdx_ = idx;}
+	void TryChangeSelectionBrushIdx(int16_t idx);
 
 	// Handle
 	glm::i16vec3 GetCurrentSeletionBlock() const {return lastSelectLocation_;}
@@ -130,6 +163,9 @@ public:
 	glm::i16vec3 GetLastPlacedLocation() const {return lastPlacedLocation_;}
 
 	void GeneratingThmubnail();
+
+	EOrientation GetCurrentOrientation() const {return currentOrientation_;}
+	void ChangeOrientation() {currentOrientation_ = static_cast<EOrientation>((static_cast<uint8_t>(currentOrientation_) + 1) % 4);}
 	
 protected:
 	void AddBlockGroup(std::string typeName);
@@ -142,16 +178,17 @@ protected:
 	void CleanDynamicBlocks();
 
 private:
-	ELegoMode currentMode_;
-	ECamMode currentCamMode_;
-	EBasePlane currentBaseSize_;
+	ELegoMode currentMode_ {};
+	ECamMode currentCamMode_ {};
+	EBasePlane currentBaseSize_ {};
+	EOrientation currentOrientation_ {};
 	
 	// base blocks library
 	FBasicBlockStack BasicNodes;
 	FBasicBlockLibrary BasicBlockTypeMap;
 	FBasicBlockIndicatorLibrary BasicNodeIndicatorMap;
 	
-	int currentBlockIdx_ {};
+	int16_t currentBlockIdx_ {};
 	int currentPreviewStep {};
 
 	// 起始的方块位置，之后的instance都是rebuild出来的

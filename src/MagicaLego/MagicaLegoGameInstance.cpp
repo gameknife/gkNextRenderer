@@ -65,8 +65,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.RendererType = 0;
 
     // mode init
-    SetBuildMode(ELM_Place);
-    SetCameraMode(ECM_Orbit);
+    SetBuildMode(ELegoMode::ELM_Place);
+    SetCameraMode(ECamMode::ECM_Orbit);
 
     // control init
     resetMouse_ = true;
@@ -103,11 +103,14 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     
     if(!bMouseLeftDown_)
     {
-        if( currentMode_ == ELM_Place )
+        if( currentMode_ == ELegoMode::ELM_Place )
         {
             if(BasicNodeIndicatorMap.size() > 0 && BasicNodes.size() > 0)
             {
                 auto& indicator = BasicNodeIndicatorMap[BasicNodes[currentBlockIdx_].type];
+
+                glm::mat4 orientation = GetOrientationMatrix(currentOrientation_);
+                
                 indicatorMinTarget_ = renderLocation + std::get<0>(indicator);
                 indicatorMaxTarget_ = renderLocation + std::get<1>(indicator);
                 indicatorDrawRequest_ = true;
@@ -120,20 +123,20 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     uint32_t instanceId = rayResult.InstanceId;
     auto* Node = GetEngine().GetScene().GetNodeByInstanceId(instanceId);
     
-    if( currentMode_ == ELM_Dig )
+    if( currentMode_ == ELegoMode::ELM_Dig )
     {
         if( lastDownFrameNum_ + 1 == GetEngine().GetRenderer().FrameCount())
         {
             if( Node && Node->GetName() == "blockInst" )
             {
                 glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation( glm::vec3((Node->WorldTransform() * glm::vec4(0,0.0475f,0,1))) );
-                FPlacedBlock block { blockLocation, -1 };
+                FPlacedBlock block { blockLocation, EOrientation::EO_North,0,-1 };
                 PlaceDynamicBlock(block);
             }
         }
         return;
     }
-    if( currentMode_ == ELM_Place )
+    if( currentMode_ == ELegoMode::ELM_Place )
     {
         for( auto& id : oneLinePlacedInstance_ )
         {
@@ -144,10 +147,10 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         }
         
         if(blockLocation == lastPlacedLocation_) return;
-        PlaceDynamicBlock({ blockLocation, currentBlockIdx_ });
+        PlaceDynamicBlock({ blockLocation, currentOrientation_,0,currentBlockIdx_ });
         oneLinePlacedInstance_.push_back( GetHashFromBlockLocation(blockLocation) + instanceCountBeforeDynamics_ );
     }
-    if( currentMode_ == ELM_Select )
+    if( currentMode_ == ELegoMode::ELM_Select )
     {
         if( Node->GetName() == "blockInst")
         {
@@ -157,7 +160,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         {
             lastSelectLocation_ = INVALID_POS;
         }
-        if(currentCamMode_ == ECM_AutoFocus && lastSelectLocation_ != INVALID_POS)
+        if(currentCamMode_ == ECamMode::ECM_AutoFocus && lastSelectLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
     }
 }
@@ -234,7 +237,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     BasicNodeIndicatorMap["Corner2x2"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.12f, 0.032f, 0.12f)};
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
-    SwitchBasePlane(EBP_Small);
+    SwitchBasePlane(EBasePlane::EBP_Small);
 
     //GeneratingThmubnail();
 }
@@ -255,17 +258,17 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
     {
         switch (key)
         {
-            case GLFW_KEY_Q: SetBuildMode(ELM_Dig); break;
-            case GLFW_KEY_W: SetBuildMode(ELM_Place); break;
-            case GLFW_KEY_E: SetBuildMode(ELM_Select); break;
+            case GLFW_KEY_Q: SetBuildMode(ELegoMode::ELM_Dig); break;
+            case GLFW_KEY_W: SetBuildMode(ELegoMode::ELM_Place); break;
+            case GLFW_KEY_E: SetBuildMode(ELegoMode::ELM_Select); break;
 
-            case GLFW_KEY_A: SetCameraMode(ECM_Pan); break;
-            case GLFW_KEY_S: SetCameraMode(ECM_Orbit); break;
-            case GLFW_KEY_D: SetCameraMode(ECM_AutoFocus); break;
+            case GLFW_KEY_A: SetCameraMode(ECamMode::ECM_Pan); break;
+            case GLFW_KEY_S: SetCameraMode(ECamMode::ECM_Orbit); break;
+            case GLFW_KEY_D: SetCameraMode(ECamMode::ECM_AutoFocus); break;
 
-            case GLFW_KEY_1: SwitchBasePlane(EBP_Big); break;
-            case GLFW_KEY_2: SwitchBasePlane(EBP_Mid); break;
-            case GLFW_KEY_3: SwitchBasePlane(EBP_Small); break;
+            case GLFW_KEY_1: SwitchBasePlane(EBasePlane::EBP_Big); break;
+            case GLFW_KEY_2: SwitchBasePlane(EBasePlane::EBP_Mid); break;
+            case GLFW_KEY_3: SwitchBasePlane(EBasePlane::EBP_Small); break;
             default: break;
         }
     }
@@ -286,13 +289,13 @@ bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
     
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
 
-    if((currentCamMode_ == ECM_Orbit) || (currentCamMode_ == ECM_AutoFocus))
+    if((currentCamMode_ == ECamMode::ECM_Orbit) || (currentCamMode_ == ECamMode::ECM_AutoFocus))
     {
         cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
         cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
     }
 
-    if(currentCamMode_ == ECM_Pan)
+    if(currentCamMode_ == ECamMode::ECM_Pan)
     {
         cameraCenter_ += panForward_ * static_cast<float>(delta.y) * cameraMultiplier_ * 0.01f;
         cameraCenter_ += panLeft_ * static_cast<float>(delta.x) * cameraMultiplier_ * 0.01f;
@@ -315,7 +318,7 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         bMouseLeftDown_ = false;
         oneLinePlacedInstance_.clear();
-        if(currentCamMode_ == ECM_AutoFocus && currentMode_ == ELM_Place && lastPlacedLocation_ != INVALID_POS)
+        if(currentCamMode_ == ECamMode::ECM_AutoFocus && currentMode_ == ELegoMode::ELM_Place && lastPlacedLocation_ != INVALID_POS)
             cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
         return true;
     }
@@ -330,13 +333,13 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     return true;
 }
 
-void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int idx)
+void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
 {
-    if( currentMode_ == ELM_Select )
+    if( currentMode_ == ELegoMode::ELM_Select )
     {
         if(lastSelectLocation_ != INVALID_POS)
         {
-            FPlacedBlock block { lastSelectLocation_, idx };
+            FPlacedBlock block { lastSelectLocation_, EOrientation::EO_North,0,idx };
             PlaceDynamicBlock(block);
         }
     }
@@ -377,13 +380,13 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
     GetEngine().GetUserSettings().NumberOfSamples = 256;
     GetEngine().GetUserSettings().Denoiser = false;
     GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - THUMB_SIZE / 2,960 / 2 - THUMB_SIZE / 2,THUMB_SIZE,THUMB_SIZE);
-    PlaceDynamicBlock({{0,0,0}, BasicNodes[0].brushId_});
+    PlaceDynamicBlock({{0,0,0}, EOrientation::EO_North, 0, BasicNodes[0].brushId_});
 
     int totalTask = static_cast<int>(BasicNodes.size());
     static int currTask = 0;
     GetEngine().AddTimerTask(0.5, [this, totalTask]()->bool
     {
-        PlaceDynamicBlock({{0,0,0}, BasicNodes[currTask+1].brushId_});
+        PlaceDynamicBlock({{0,0,0}, EOrientation::EO_North, 0, BasicNodes[currTask+1].brushId_});
         std::string nodeName = BasicNodes[currTask+1].type;
         if(nodeName.find("1x1") == std::string::npos )
         {
@@ -398,7 +401,7 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
         
         if(currTask >= totalTask)
         {
-            PlaceDynamicBlock({{0,0,0}, -1});
+            PlaceDynamicBlock({{0,0,0}, EOrientation::EO_North,0,-1});
             GetEngine().GetUserSettings().TemporalFrames = 16;
             GetEngine().GetUserSettings().NumberOfSamples = 8;
             GetEngine().GetUserSettings().Denoiser = true;
@@ -516,7 +519,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
 
     switch (Type)
     {
-        case EBP_Big:
+        case EBasePlane::EBP_Big:
             for ( auto& Node : allNodes )
             {
                 if(Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
@@ -525,7 +528,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
                 }
             }
             break;
-        case EBP_Mid:
+        case EBasePlane::EBP_Mid:
             for ( auto& Node : allNodes )
             {
                 if(Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
@@ -534,7 +537,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
                 }
             }
             break;
-        case EBP_Small:
+        case EBasePlane::EBP_Small:
             for ( auto& Node : allNodes )
             {
                 if(Node.GetName() == "SmallBase")
@@ -659,7 +662,8 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
             {
                 // 这里要区分一下，因为目前rebuild流程是清理后重建，因此所有node都会被认为是首次放置，都会有一个单帧的velocity
                 // 所以如果没有modelid的改变的话，采用原位替换
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)), BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), newhash != Block.first);
+                glm::mat4 orientation = GetOrientationMatrix(Block.second.orientation);
+                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)) * orientation, BasicBlock->modelId_, instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
             }
         }
@@ -677,7 +681,7 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
         auto& Block = BlockRecords[i];
         TempBlocksDynamics[GetHashFromBlockLocation(Block.location)] = Block;
 
-        if(currentCamMode_ == ECM_AutoFocus)
+        if(currentCamMode_ == ECamMode::ECM_AutoFocus)
             cameraCenter_ = GetRenderLocationFromBlockLocation(Block.location);
     }
     RebuildScene(TempBlocksDynamics, -1);
@@ -698,7 +702,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     float invDelta = static_cast<float>(deltaSeconds) / 60.0f;
     
     // hover indicator
-    if(GetBuildMode() == ELM_Place || bMouseLeftDown_)
+    if(GetBuildMode() == ELegoMode::ELM_Place || bMouseLeftDown_)
     {
         GetEngine().GetUserSettings().RequestRayCast = true;
         indicatorTimer_ += deltaSeconds;
@@ -747,7 +751,7 @@ void MagicaLegoGameInstance::OnInitUI()
 void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
 {
     currentMode_ = mode;
-    GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELM_Select);
+    GetEngine().GetUserSettings().ShowEdge = (currentMode_ == ELegoMode::ELM_Select);
     lastSelectLocation_ = INVALID_POS;
 }
 
