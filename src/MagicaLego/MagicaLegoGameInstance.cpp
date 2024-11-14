@@ -90,7 +90,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
-    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.001f;
+    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.005f;
     glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
 
     if(lastHoverLocation_ != blockLocation)
@@ -111,8 +111,8 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 
                 glm::mat4 orientation = GetOrientationMatrix(currentOrientation_);
                 
-                indicatorMinTarget_ = renderLocation + std::get<0>(indicator);
-                indicatorMaxTarget_ = renderLocation + std::get<1>(indicator);
+                indicatorMinTarget_ = renderLocation + glm::vec3( orientation * glm::vec4( std::get<0>(indicator), 1.0f) );
+                indicatorMaxTarget_ = renderLocation + glm::vec3( orientation * glm::vec4( std::get<1>(indicator), 1.0f) );
                 indicatorDrawRequest_ = true;
             }
         }
@@ -266,6 +266,8 @@ bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
             case GLFW_KEY_S: SetCameraMode(ECamMode::ECM_Orbit); break;
             case GLFW_KEY_D: SetCameraMode(ECamMode::ECM_AutoFocus); break;
 
+            case GLFW_KEY_R: ChangeOrientation(); break;
+
             case GLFW_KEY_1: SwitchBasePlane(EBasePlane::EBP_Big); break;
             case GLFW_KEY_2: SwitchBasePlane(EBasePlane::EBP_Mid); break;
             case GLFW_KEY_3: SwitchBasePlane(EBasePlane::EBP_Small); break;
@@ -339,7 +341,9 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
     {
         if(lastSelectLocation_ != INVALID_POS)
         {
-            FPlacedBlock block { lastSelectLocation_, EOrientation::EO_North,0,idx };
+            uint32_t currentHash = GetHashFromBlockLocation(lastSelectLocation_);
+            FPlacedBlock currentBlock = BlocksDynamics[currentHash];
+            FPlacedBlock block { lastSelectLocation_, currentBlock.orientation,0,idx };
             PlaceDynamicBlock(block);
         }
     }
@@ -547,6 +551,8 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
             }
             break;
     }
+
+    GetEngine().GetScene().MarkDirty();
 }
 
 void MagicaLegoGameInstance::CleanUp()
