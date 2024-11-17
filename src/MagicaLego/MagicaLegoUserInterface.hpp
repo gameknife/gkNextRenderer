@@ -32,6 +32,8 @@ private:
 	void DrawOpening();
 	void DrawIndicator();
 	void DrawStatusBar();
+
+	void DrawWaiting();
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
@@ -41,6 +43,9 @@ private:
 	void PopLayout();
 	uint32_t uiStatus_ {};
 	std::vector<uint32_t> uiStatusStack_ {};
+
+	bool waiting_ {};
+	std::string waitingText_ {};
 
 	ImFont* bigFont_ {};
 	ImFont* boldFont_ {};

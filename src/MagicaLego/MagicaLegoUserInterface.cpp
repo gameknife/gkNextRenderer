@@ -222,17 +222,24 @@ void MagicaLegoUserInterface::DrawTitleBar()
             {
             case 1:
                 PushLayout(0x0);
+                GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 512;
+                GetGameInstance()->GetEngine().GetUserSettings().Denoiser = false;
+                waiting_ = true;
+                waitingText_ = "Rendering...";
                 return false;
-            case 2:
+            case 512:
+                waiting_ = false;
+            case 513:
                 GetGameInstance()->GetEngine().RequestScreenShot("");
                 return false;
-            case 3:
+            case 514:
                 PopLayout();
+                GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
+                GetGameInstance()->GetEngine().GetUserSettings().Denoiser = true;
                 counter = 0;
                 return true;
             }
-            counter = 0;
-            return true;
+            return false;
         });
     }
     ImGui::SameLine();
@@ -307,7 +314,7 @@ void MagicaLegoUserInterface::OnRenderUI()
     }
     
 
-    DrawStatusBar();
+    //DrawStatusBar();
     ImGui::PopStyleVar(2);
 
     if(uiStatus_ & 0x4)
@@ -347,6 +354,11 @@ void MagicaLegoUserInterface::OnRenderUI()
         default:
             break;
     }
+
+    if (waiting_)
+    {
+        DrawWaiting();
+    }
 }
 
 void MagicaLegoUserInterface::DrawIndicator()
@@ -374,6 +386,20 @@ void MagicaLegoUserInterface::DrawStatusBar()
     Utilities::UI::TextCentered(status);
     ImGui::End();
     ImGui::PopStyleVar(2);
+}
+
+void MagicaLegoUserInterface::DrawWaiting()
+{
+    ImGui::OpenPopup("Waiting");
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Waiting", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings))
+    {
+        ImGui::TextUnformatted(waitingText_.c_str());
+        //ImGui::Separator();
+        //if (ImGui::Button("Cancel")) { ImGui::CloseCurrentPopup();}
+        ImGui::EndPopup();
+    }
 }
 
 void MagicaLegoUserInterface::DirectSetLayout(uint32_t layout)

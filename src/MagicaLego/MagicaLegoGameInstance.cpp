@@ -328,10 +328,14 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
         cameraMultiplier_ = 0.1f;
+        //GetEngine().GetUserSettings().Denoiser = true;
+        //GetEngine().GetUserSettings().TemporalFrames = 16;
     }
     else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
     {
         cameraMultiplier_ = 0.0f;
+        //GetEngine().GetUserSettings().Denoiser = false;
+        //GetEngine().GetUserSettings().TemporalFrames = 256;
     }
     return true;
 }
