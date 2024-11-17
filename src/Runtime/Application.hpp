@@ -127,6 +127,15 @@ public:
 	void DrawAuxBox( glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1 );
 	void DrawAuxPoint( glm::vec3 location, glm::vec4 color, float size = 1 );
 
+	// life cycle
+	void RequestClose();
+	void RequestMinimize();
+	bool IsMaximumed();
+	void ToggleMaximize();
+
+	// capture
+	void RequestScreenShot(std::string filename);
+	
 #if !WITH_EDITOR
 	class UserInterface* GetUserInterface() {return userInterface_.get();};
 #endif

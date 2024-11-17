@@ -101,8 +101,10 @@ UserInterface::UserInterface(
 #elif __APPLE__
 	const auto scaleFactor = 1.0;
 #else
-    const auto scaleFactor = window.ContentScale();
+    const auto scaleFactor = 1.0;//window.ContentScale();
 #endif
+
+	const auto fontSize = 16;
 
 	UserInterface::SetStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
@@ -111,7 +113,7 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), fontSize * scaleFactor, nullptr, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
@@ -123,16 +125,24 @@ UserInterface::UserInterface(
 	};
 	ImFontConfig config;
 	config.MergeMode = true;
-	config.GlyphMinAdvanceX = 14.0f;
+	config.GlyphMinAdvanceX = fontSize;
 	config.GlyphOffset = ImVec2(0, 0);
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-regular-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
+	{
+		
+	}
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
+	{
+		
+	}
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-brands-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
 	{
 		
 	}
 #if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), fontSize * scaleFactor, &configLocale, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}

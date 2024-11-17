@@ -56,6 +56,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     config.Height = 960;
     config.Width = 1920;
     config.ForceSDR = true;
+    config.HideTitleBar = true;
 
     // options
     options.SceneName = "legobricks.glb";

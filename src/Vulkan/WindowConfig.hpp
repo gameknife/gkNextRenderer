@@ -16,5 +16,6 @@ namespace Vulkan
 		bool NeedScreenShot;
 		void* AndroidNativeWindow;
 		bool ForceSDR;
+		bool HideTitleBar {};
 	};
 }

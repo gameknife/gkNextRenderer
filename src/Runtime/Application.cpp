@@ -468,6 +468,39 @@ void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, 
     }
 }
 
+void NextRendererApplication::RequestClose()
+{
+    window_->Close();
+}
+
+void NextRendererApplication::RequestMinimize()
+{
+    window_->Minimize();
+}
+
+bool NextRendererApplication::IsMaximumed()
+{
+    return window_->IsMaximumed();
+}
+
+void NextRendererApplication::ToggleMaximize()
+{
+    if (window_->IsMaximumed())
+    {
+        window_->Restore();
+    }
+    else
+    {
+        window_->Maximum();
+    }
+}
+
+void NextRendererApplication::RequestScreenShot(std::string filename)
+{
+    std::string screenshot_filename = filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr))) : filename;
+    SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)

@@ -12,6 +12,8 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Utilities/ImGui.hpp"
 
+const int TITLEBAR_SIZE = 40;
+const int TITLEBAR_CONTROL_SIZE = TITLEBAR_SIZE * 3;
 const int ICON_SIZE = 64;
 const int PALATE_SIZE = 46;
 const int BUTTON_SIZE = 36;
@@ -96,9 +98,8 @@ bool MaterialButton(FBasicBlock& block, ImTextureID texId, float WindowWidth, bo
 
 MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance):gameInstance_(gameInstance)
 {
-    showLeftBar_ = true;
-    showRightBar_ = true;
-    showTimeline_ = false;
+    // set the uiStatus_ 1,2,3 bit to show the left, right, timeline
+    DirectSetLayout(0x1 | 0x2);
 }
 
 void MagicaLegoUserInterface::OnInitUI()
@@ -109,6 +110,13 @@ void MagicaLegoUserInterface::OnInitUI()
         builder.AddText("MagicaLego");
         const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
         bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange );
+    }
+
+    if(boldFont_ == nullptr)
+    {
+        ImFontGlyphRangesBuilder builder;
+        const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
+        boldFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 20, nullptr, glyphRange );
     }
 
     introStep_ = EIS_Entry;
@@ -144,6 +152,116 @@ void MagicaLegoUserInterface::OnSceneLoaded()
     }
 }
 
+void MagicaLegoUserInterface::DrawTitleBar()
+{
+    // 获取窗口的大小
+    ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+    bgColor.w = 0.9f;
+    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(windowSize.x, TITLEBAR_SIZE), ImGui::ColorConvertFloat4ToU32(bgColor));
+
+    ImGui::PushFont(boldFont_);
+    
+    auto textSize = ImGui::CalcTextSize("MagicaLEGO");
+    ImGui::GetForegroundDrawList()->AddText(ImVec2((windowSize.x - textSize.x) * 0.5f, (TITLEBAR_SIZE - textSize.y) * 0.5f), IM_COL32(255,255,255,255), "MagicaLEGO");
+
+    ImGui::PopFont();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0,0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,0));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    
+    ImGui::SetNextWindowPos(ImVec2(windowSize.x - TITLEBAR_CONTROL_SIZE ,0), ImGuiCond_Always, ImVec2(0,0));
+    ImGui::SetNextWindowSize(ImVec2(TITLEBAR_CONTROL_SIZE, TITLEBAR_SIZE));
+    
+    ImGui::Begin(  "TitleBarRight", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    
+    if ( ImGui::Button(ICON_FA_MINUS, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        GetGameInstance()->GetEngine().RequestMinimize();
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button( GetGameInstance()->GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        GetGameInstance()->GetEngine().ToggleMaximize();
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_XMARK, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        GetGameInstance()->GetEngine().RequestClose();
+    }
+    ImGui::End();
+
+    ImGui::SetNextWindowPos(ImVec2(0,0), ImGuiCond_Always, ImVec2(0,0));
+    ImGui::SetNextWindowSize(ImVec2(TITLEBAR_SIZE * 10, TITLEBAR_SIZE));
+    
+    ImGui::Begin(  "TitleBarLeft", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    if ( ImGui::Button(ICON_FA_GITHUB, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        system("start https://github.com/gameknife/gkNextRenderer");
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_TWITTER, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        system("start https://x.com/gKNIFE_");
+    }
+    ImGui::SameLine();
+    ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
+    ImGui::Dummy(ImVec2(10,10));
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_CAMERA, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        // hide and request screenshot then unhide
+        GetGameInstance()->GetEngine().AddTickedTask([this](double deltaSeconds)->bool
+        {
+            static int counter = 0;
+            counter++;
+            switch (counter)
+            {
+            case 1:
+                PushLayout(0x0);
+                return false;
+            case 2:
+                GetGameInstance()->GetEngine().RequestScreenShot("");
+                return false;
+            case 3:
+                PopLayout();
+                counter = 0;
+                return true;
+            }
+            counter = 0;
+            return true;
+        });
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_VIDEO, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+        // hide and request screenshot frame by frame, then ffmpeg to mp4
+    }
+    ImGui::SameLine();
+    ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
+    ImGui::Dummy(ImVec2(10,10));
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_VOLUME_XMARK, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+
+    }
+    ImGui::SameLine();
+    ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
+    ImGui::Dummy(ImVec2(10,10));
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_CIRCLE_QUESTION, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    {
+
+    }
+    ImGui::End();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
+}
+
 void MagicaLegoUserInterface::DrawOpening()
 {
     if(introStep_ >= EIS_GuideBuild)
@@ -170,18 +288,29 @@ void MagicaLegoUserInterface::DrawOpening()
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
+    DrawTitleBar();
+    
     // TotalSwitch
     DrawMainToolBar();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
-    if( showLeftBar_ ) DrawLeftBar();
-    if( showRightBar_ ) DrawRightBar();
+    // if uiStatus_ bit 1 is set
+    if (uiStatus_ & 0x1)
+    {
+        DrawLeftBar();
+    }
+    // if uiStatus_ bit 2 is set
+    if (uiStatus_ & 0x2)
+    {
+        DrawRightBar();
+    }
+    
 
     DrawStatusBar();
     ImGui::PopStyleVar(2);
 
-    if(showTimeline_)
+    if(uiStatus_ & 0x4)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 18);
         ImGui::PushStyleVar( ImGuiStyleVar_FrameRounding, 18);
@@ -247,11 +376,30 @@ void MagicaLegoUserInterface::DrawStatusBar()
     ImGui::PopStyleVar(2);
 }
 
+void MagicaLegoUserInterface::DirectSetLayout(uint32_t layout)
+{
+    uiStatus_ = layout;
+    uiStatusStack_.clear();
+    uiStatusStack_.push_back(layout);
+}
+
+void MagicaLegoUserInterface::PushLayout(uint32_t layout)
+{
+    uiStatusStack_.push_back(layout);
+    uiStatus_ = layout;
+}
+
+void MagicaLegoUserInterface::PopLayout()
+{
+    uiStatusStack_.pop_back();
+    uiStatus_ = uiStatusStack_.back();
+}
+
 void MagicaLegoUserInterface::DrawMainToolBar()
 {
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
     
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, 0);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, TITLEBAR_SIZE);
     const ImVec2 posPivot = ImVec2(0.5f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
@@ -263,17 +411,17 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     {
         if( ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            showLeftBar_ = !showLeftBar_;
+            DirectSetLayout(uiStatus_ ^ 0x1);
         }
         ImGui::SameLine();
         if( ImGui::Button(ICON_FA_SQUARE_CARET_DOWN, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            showTimeline_ = !showTimeline_;
+            DirectSetLayout(uiStatus_ ^ 0x4);
         }
         ImGui::SameLine();
         if( ImGui::Button(ICON_FA_SQUARE_CARET_RIGHT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            showRightBar_ = !showRightBar_;
+            DirectSetLayout(uiStatus_ ^ 0x2);
         }
         ImGui::SameLine();
     }
@@ -284,11 +432,11 @@ void MagicaLegoUserInterface::DrawMainToolBar()
 
 void MagicaLegoUserInterface::DrawLeftBar()
 {
-    const ImVec2 pos = ImVec2(0, 0);
+    const ImVec2 pos = ImVec2(0, TITLEBAR_SIZE);
     const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(BUILD_BAR_WIDTH,viewportSize.y));
+    ImGui::SetNextWindowSize(ImVec2(BUILD_BAR_WIDTH,viewportSize.y - TITLEBAR_SIZE));
     ImGui::SetNextWindowBgAlpha(0.9f);
     
     if (ImGui::Begin("Place & Dig", 0, PANELFLAGS))
@@ -344,7 +492,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
             GetGameInstance()->ChangeOrientation();
         }
 
-        ImGui::Dummy(ImVec2(0,50));
+        ImGui::Dummy(ImVec2(0,20));
         ImGui::SeparatorText("Light");
 
         ImGui::Checkbox("Sun", &GetGameInstance()->GetEngine().GetUserSettings().HasSun);
@@ -355,7 +503,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
         ImGui::SliderInt("Sky", &GetGameInstance()->GetEngine().GetUserSettings().SkyIdx, 0, 10);
         ImGui::SliderFloat("Lum", &GetGameInstance()->GetEngine().GetUserSettings().SkyIntensity, 0, 100);
 
-        ImGui::Dummy(ImVec2(0,50));
+        ImGui::Dummy(ImVec2(0,20));
         
         ImGui::SeparatorText("Files");
         static std::string selected_filename = "";
@@ -434,11 +582,11 @@ void MagicaLegoUserInterface::DrawLeftBar()
 void MagicaLegoUserInterface::DrawRightBar()
 {
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x, 0);
+    const ImVec2 pos = ImVec2(viewportSize.x, TITLEBAR_SIZE);
     const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
     
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(SIDE_BAR_WIDTH,viewportSize.y));
+    ImGui::SetNextWindowSize(ImVec2(SIDE_BAR_WIDTH,viewportSize.y - TITLEBAR_SIZE));
     ImGui::SetNextWindowBgAlpha(0.9f);
     
     if (ImGui::Begin("Color Pallete", 0, PANELFLAGS))

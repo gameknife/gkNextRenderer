@@ -99,9 +99,12 @@ Window::Window(const WindowConfig& config) :
 	}
 
 	// hide title bar, handle in ImGUI Later
-#if WITH_EDITOR
+
+	if (config.HideTitleBar)
+	{
 		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-#endif
+	}
+
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, config.Resizable ? GLFW_TRUE : GLFW_FALSE);
 
@@ -235,6 +238,11 @@ bool Window::IsMinimized() const
 	return size.height == 0 && size.width == 0;
 }
 
+bool Window::IsMaximumed() const
+{
+	return glfwGetWindowAttrib(window_, GLFW_MAXIMIZED);
+}
+
 void Window::WaitForEvents() const
 {
 #if !ANDROID
@@ -250,12 +258,22 @@ void Window::Show() const
 }
 
 void Window::Minimize() {
+#if !ANDROID
 	//glfwSetWindowSize(window_, 0,0);
+	glfwIconifyWindow(window_);
+#endif
 }
 
 void Window::Maximum() {
 #if !ANDROID
 	glfwMaximizeWindow(window_);
+#endif
+}
+
+void Window::Restore()
+{
+#if !ANDROID
+	glfwRestoreWindow(window_);
 #endif
 }
 

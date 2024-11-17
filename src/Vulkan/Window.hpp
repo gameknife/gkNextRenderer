@@ -42,12 +42,13 @@ namespace Vulkan
 		// Methods
 		void Close();
 		bool IsMinimized() const;
-		void Run();
+		bool IsMaximumed() const;
 		void WaitForEvents() const;
 		void Show() const;
 
 		void Minimize();
 		void Maximum();
+		void Restore();
 
 		void attemptDragWindow();
 	private:

@@ -102,7 +102,7 @@ inline const std::string versionToString(const uint32_t version)
     return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
-void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, const std::string& sceneName, int inX, int inY, int inWidth, int inHeight)
+void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
 {
     // screenshot stuffs
     const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
@@ -270,7 +270,7 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
         img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
     // save to file with scenename
-    std::string filename = sceneName + ".jpg";
+    std::string filename = filePathWithoutExtension + ".jpg";
         
     // if hdr, transcode 16bit to 8bit
     if(swapChain.IsHDR())

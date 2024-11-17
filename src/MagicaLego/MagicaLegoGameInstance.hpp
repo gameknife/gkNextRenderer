@@ -1,7 +1,6 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Application.hpp"
-#include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
 
 #define MAGICALEGO_SAVE_VERSION 1

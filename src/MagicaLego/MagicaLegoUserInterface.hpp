@@ -1,4 +1,5 @@
 #pragma once
+#include "Common/CoreMinimal.hpp"
 
 struct ImFont;
 class MagicaLegoGameInstance;
@@ -23,6 +24,7 @@ public:
 	void OnSceneLoaded();
 
 private:
+	void DrawTitleBar();
 	void DrawMainToolBar();
 	void DrawLeftBar();
 	void DrawRightBar();
@@ -34,11 +36,14 @@ private:
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
 
-	bool showLeftBar_ = false;
-	bool showRightBar_ = false;
-	bool showTimeline_ = false;
+	void DirectSetLayout(uint32_t layout);
+	void PushLayout(uint32_t layout);
+	void PopLayout();
+	uint32_t uiStatus_ {};
+	std::vector<uint32_t> uiStatusStack_ {};
 
 	ImFont* bigFont_ {};
+	ImFont* boldFont_ {};
 	float openingTimer_ = 2.0f;
 
 	EIntroStep introStep_ = EIS_Entry;
