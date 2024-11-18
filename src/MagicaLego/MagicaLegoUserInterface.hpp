@@ -14,6 +14,15 @@ enum EIntroStep
 	EIS_InGame,
 };
 
+enum EUILayout
+{
+	EULUT_LeftBar = 0x1,
+	EULUT_RightBar = 0x2,
+	EULUT_Timeline = 0x4,
+	EULUT_TitleBar = 0x8,
+	EULUT_LayoutIndicator = 0x10,
+};
+
 class MagicaLegoUserInterface final
 {
 public:
@@ -35,6 +44,10 @@ private:
 
 	void DrawWaiting();
 	void DrawNotify();
+
+	void DrawWatermark();
+
+	void RecordTimeline();
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
@@ -45,6 +58,7 @@ private:
 	uint32_t uiStatus_ {};
 	std::vector<uint32_t> uiStatusStack_ {};
 
+	bool capture_ {};
 	bool waiting_ {};
 	std::string waitingText_ {};
 

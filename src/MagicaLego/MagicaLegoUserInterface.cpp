@@ -100,7 +100,7 @@ bool MaterialButton(FBasicBlock& block, ImTextureID texId, float WindowWidth, bo
 MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance):gameInstance_(gameInstance)
 {
     // set the uiStatus_ 1,2,3 bit to show the left, right, timeline
-    DirectSetLayout(0x1 | 0x2);
+    DirectSetLayout(EULUT_TitleBar | EULUT_LayoutIndicator | EULUT_LeftBar | EULUT_RightBar);
 }
 
 void MagicaLegoUserInterface::OnInitUI()
@@ -227,9 +227,11 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 GetGameInstance()->GetEngine().GetUserSettings().Denoiser = false;
                 waiting_ = true;
                 waitingText_ = "Rendering...";
+                capture_ = true;
                 return false;
             case 512:
                 waiting_ = false;
+                return false;
             case 513:
                 {
                     std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
@@ -244,6 +246,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
                 GetGameInstance()->GetEngine().GetUserSettings().Denoiser = true;
                 counter = 0;
+                capture_ = false;
                 notify_ = true;
                 notifyTimer_ = 0;
                 notifyText_ = "Screenshot captured, open in explorer?";
@@ -264,7 +267,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::SameLine();
     if ( ImGui::Button(ICON_FA_VIDEO, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
-       
+        RecordTimeline();
     }
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
@@ -314,20 +317,25 @@ void MagicaLegoUserInterface::DrawOpening()
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
-    DrawTitleBar();
-    
+    if(uiStatus_ & EULUT_TitleBar)
+    {
+        DrawTitleBar();
+    }
     // TotalSwitch
-    DrawMainToolBar();
-
+    if(uiStatus_ & EULUT_LayoutIndicator)
+    {
+        DrawMainToolBar();
+    }
+    
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
     // if uiStatus_ bit 1 is set
-    if (uiStatus_ & 0x1)
+    if (uiStatus_ & EULUT_LeftBar)
     {
         DrawLeftBar();
     }
     // if uiStatus_ bit 2 is set
-    if (uiStatus_ & 0x2)
+    if (uiStatus_ & EULUT_RightBar)
     {
         DrawRightBar();
     }
@@ -336,7 +344,7 @@ void MagicaLegoUserInterface::OnRenderUI()
     //DrawStatusBar();
     ImGui::PopStyleVar(2);
 
-    if(uiStatus_ & 0x4)
+    if(uiStatus_ & EULUT_Timeline)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 18);
         ImGui::PushStyleVar( ImGuiStyleVar_FrameRounding, 18);
@@ -377,6 +385,11 @@ void MagicaLegoUserInterface::OnRenderUI()
     if (waiting_)
     {
         DrawWaiting();
+    }
+
+    if (capture_)
+    {
+        DrawWatermark();
     }
 
     if (notify_)
@@ -449,6 +462,65 @@ void MagicaLegoUserInterface::DrawNotify()
     }
 }
 
+void MagicaLegoUserInterface::DrawWatermark()
+{
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    ImGui::SetNextWindowPos(ImVec2(30, viewportSize.y - 30), ImGuiCond_Always, ImVec2(0, 1));
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    
+    ImGui::Begin("Watermark", 0, PANELFLAGS | ImGuiWindowFlags_NoBackground);
+    ImGui::PushFont(bigFont_);
+    ImGui::TextUnformatted("MagicaLEGO");
+    ImGui::PopFont();
+    ImGui::Text("%s %s", ICON_FA_GITHUB, "https://github.com/gameknife/gkNextRenderer");
+    ImGui::End();
+    
+}
+
+void MagicaLegoUserInterface::RecordTimeline()
+{
+    auto MaxStep = GetGameInstance()->GetMaxStep();
+    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
+    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
+    Utilities::FileHelper::EnsureDirectoryExists(absPath);
+    std::string filename = fmt::format("{}/video_{:%Y-%m-%d-%H-%M-%S}", localPath, fmt::localtime(std::time(nullptr)));
+    PushLayout(0x0);
+    capture_ = true;
+    GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localPath, filename](double DeltaSeconds)->bool
+    {
+        static int count = 0;
+        int FramePerStep = 16;
+        count++;
+
+       
+        if (count > MaxStep * FramePerStep)
+        {
+            capture_ = false;
+            waiting_ = false;
+            PopLayout();
+            // sleep os for a while
+            system(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 {}.mp4", localPath, filename).c_str());
+            return true;
+        }
+        if (count > MaxStep * FramePerStep - FramePerStep + 1)
+        {
+            waiting_ = true;
+            waitingText_ = "Generating Video...";
+            return false;
+        }
+        int Step = count / FramePerStep;
+        GetGameInstance()->SetPlayStep(Step);
+
+        if (count % FramePerStep == 0)
+        {
+           std::string filename = fmt::format("video_{}", Step);
+           GetGameInstance()->GetEngine().RequestScreenShot(localPath + "/" + filename);
+        }
+        
+        return false;
+    });
+}
+
 void MagicaLegoUserInterface::DirectSetLayout(uint32_t layout)
 {
     uiStatus_ = layout;
@@ -484,17 +556,17 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     {
         if( ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            DirectSetLayout(uiStatus_ ^ 0x1);
+            DirectSetLayout(uiStatus_ ^ EULUT_LeftBar);
         }
         ImGui::SameLine();
         if( ImGui::Button(ICON_FA_SQUARE_CARET_DOWN, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            DirectSetLayout(uiStatus_ ^ 0x4);
+            DirectSetLayout(uiStatus_ ^ EULUT_Timeline);
         }
         ImGui::SameLine();
         if( ImGui::Button(ICON_FA_SQUARE_CARET_RIGHT, ImVec2(BUTTON_SIZE, BUTTON_SIZE)) )
         {
-            DirectSetLayout(uiStatus_ ^ 0x2);
+            DirectSetLayout(uiStatus_ ^ EULUT_RightBar);
         }
         ImGui::SameLine();
     }
