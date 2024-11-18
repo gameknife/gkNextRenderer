@@ -3,6 +3,7 @@
 #include <fstream>
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include <fmt/chrono.h>
 #include <fmt/printf.h>
 
 #include "Editor/IconsFontAwesome6.h"
@@ -230,13 +231,31 @@ void MagicaLegoUserInterface::DrawTitleBar()
             case 512:
                 waiting_ = false;
             case 513:
-                GetGameInstance()->GetEngine().RequestScreenShot("");
+                {
+                    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+                    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
+                    Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                    std::string filename = fmt::format("shot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr)));
+                    GetGameInstance()->GetEngine().RequestScreenShot(localPath + "/" + filename);
+                }
                 return false;
             case 514:
                 PopLayout();
                 GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
                 GetGameInstance()->GetEngine().GetUserSettings().Denoiser = true;
                 counter = 0;
+                notify_ = true;
+                notifyTimer_ = 0;
+                notifyText_ = "Screenshot captured, open in explorer?";
+                notifyCallback_ = []()->void
+                {
+                    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+                    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
+                    Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                    
+                    std::string command = "explorer "; command += absPath.string();
+                    system(command.c_str());
+                };
                 return true;
             }
             return false;
@@ -245,7 +264,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::SameLine();
     if ( ImGui::Button(ICON_FA_VIDEO, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
-        // hide and request screenshot frame by frame, then ffmpeg to mp4
+       
     }
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
@@ -359,6 +378,14 @@ void MagicaLegoUserInterface::OnRenderUI()
     {
         DrawWaiting();
     }
+
+    if (notify_)
+    {
+        ImGui::OpenPopup("Notify");
+        notify_ = false;
+    }
+
+    DrawNotify();
 }
 
 void MagicaLegoUserInterface::DrawIndicator()
@@ -398,6 +425,26 @@ void MagicaLegoUserInterface::DrawWaiting()
         ImGui::TextUnformatted(waitingText_.c_str());
         //ImGui::Separator();
         //if (ImGui::Button("Cancel")) { ImGui::CloseCurrentPopup();}
+        ImGui::EndPopup();
+    }
+}
+
+void MagicaLegoUserInterface::DrawNotify()
+{
+    notifyTimer_ += GetGameInstance()->GetEngine().GetDeltaSeconds();
+    if(notifyTimer_ > 1.0f)
+    {
+        notifyTimer_ = 1.0f;
+    }
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    ImGui::SetNextWindowPos(viewportSize - ImVec2(10,-(ImGui::GetTextLineHeight() * 3.f + 20.f) * (1.0f - notifyTimer_) + 5.0f), ImGuiCond_Always, ImVec2(1.f, 1.f));
+    if (ImGui::BeginPopup("Notify", ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings))
+    {
+        ImGui::TextUnformatted(notifyText_.c_str());
+        ImGui::Separator();
+        if (ImGui::Button("Ok")) { ImGui::CloseCurrentPopup();}
+        ImGui::SameLine();
+        if (ImGui::Button("Open")) { ImGui::CloseCurrentPopup(); notifyCallback_(); }
         ImGui::EndPopup();
     }
 }

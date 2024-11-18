@@ -34,6 +34,7 @@ private:
 	void DrawStatusBar();
 
 	void DrawWaiting();
+	void DrawNotify();
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
@@ -46,6 +47,11 @@ private:
 
 	bool waiting_ {};
 	std::string waitingText_ {};
+
+	bool notify_ {};
+	float notifyTimer_ {};
+	std::string notifyText_ {};
+	std::function<void()> notifyCallback_ {};
 
 	ImFont* bigFont_ {};
 	ImFont* boldFont_ {};

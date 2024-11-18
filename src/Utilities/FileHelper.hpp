@@ -13,6 +13,16 @@ namespace Utilities
 {
     namespace FileHelper
     {
+        static void EnsureDirectoryExists(const std::filesystem::path& path)
+        {
+            std::filesystem::create_directories(path);
+        }
+        
+        static std::filesystem::path GetAbsolutePath( const std::filesystem::path& srcPath )
+        {
+            return std::filesystem::absolute(srcPath);
+        }
+        
         static std::string GetPlatformFilePath( const char* srcPath )
         {
 #if ANDROID
