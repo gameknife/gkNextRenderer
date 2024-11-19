@@ -235,8 +235,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
             case 513:
                 {
                     std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-                    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
-                    Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
                     std::string filename = fmt::format("shot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr)));
                     GetGameInstance()->GetEngine().RequestScreenShot(localPath + "/" + filename);
                 }
@@ -479,14 +478,15 @@ void MagicaLegoUserInterface::DrawWatermark()
 
 void MagicaLegoUserInterface::RecordTimeline()
 {
-    auto MaxStep = GetGameInstance()->GetMaxStep();
+    auto MaxStep = GetGameInstance()->GetMaxStep() + 5; // add 5 step to stop the final still
     std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
-    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
-    Utilities::FileHelper::EnsureDirectoryExists(absPath);
-    std::string filename = fmt::format("{}/video_{:%Y-%m-%d-%H-%M-%S}", localPath, fmt::localtime(std::time(nullptr)));
+    std::string localTempPath = Utilities::FileHelper::GetPlatformFilePath("temps");
+    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
+    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localTempPath));
+    std::string filename = fmt::format("{}/magicalLego_{:%Y-%m-%d-%H-%M-%S}", localPath, fmt::localtime(std::time(nullptr)));
     PushLayout(0x0);
     capture_ = true;
-    GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localPath, filename](double DeltaSeconds)->bool
+    GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localTempPath, filename](double DeltaSeconds)->bool
     {
         static int count = 0;
         int FramePerStep = 16;
@@ -499,7 +499,9 @@ void MagicaLegoUserInterface::RecordTimeline()
             waiting_ = false;
             PopLayout();
             // sleep os for a while
-            system(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 {}.mp4", localPath, filename).c_str());
+            system(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
+            // delete all *.jpg using std::filesystem
+            std::filesystem::remove_all(localTempPath);
             return true;
         }
         if (count > MaxStep * FramePerStep - FramePerStep + 1)
@@ -514,7 +516,7 @@ void MagicaLegoUserInterface::RecordTimeline()
         if (count % FramePerStep == 0)
         {
            std::string filename = fmt::format("video_{}", Step);
-           GetGameInstance()->GetEngine().RequestScreenShot(localPath + "/" + filename);
+           GetGameInstance()->GetEngine().RequestScreenShot(localTempPath + "/" + filename);
         }
         
         return false;
