@@ -409,6 +409,27 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
+void NextRendererApplication::PauseSound(const std::string& soundName, bool pause)
+{
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        return;
+    }
+
+    ma_sound* sound = soundMaps_[soundName].get();
+    pause ? ma_sound_stop(sound) : ma_sound_start(sound);
+}
+
+bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
+{
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        return false;
+    }
+    ma_sound* sound = soundMaps_[soundName].get();
+    return ma_sound_is_playing(sound);
+}
+
 void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
     BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);

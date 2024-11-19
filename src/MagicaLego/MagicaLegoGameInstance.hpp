@@ -54,10 +54,10 @@ public:
 		std::string result;
 		switch(foo)
 		{
-			case EOrientation::EO_North: result = "North"; break;
-			case EOrientation::EO_East: result = "East"; break;
-			case EOrientation::EO_South: result = "South"; break;
-			case EOrientation::EO_West: result = "West"; break;
+			case EOrientation::EO_North: result = "NORTH"; break;
+			case EOrientation::EO_East: result = "EAST"; break;
+			case EOrientation::EO_South: result = "SOUTH"; break;
+			case EOrientation::EO_West: result = "WEST"; break;
 		}
 		return format_to(ctx.out(), "{}", result); 
 	}
@@ -173,6 +173,11 @@ public:
 
 	EOrientation GetCurrentOrientation() const {return currentOrientation_;}
 	void ChangeOrientation() {currentOrientation_ = static_cast<EOrientation>((static_cast<uint8_t>(currentOrientation_) + 1) % 4);}
+
+	void PlayNextBGM();
+	bool IsBGMPaused();
+	void PauseBGM(bool pause);
+	std::string GetCurrentBGMName();
 	
 protected:
 	void AddBlockGroup(std::string typeName);
@@ -239,5 +244,8 @@ private:
 	glm::vec3 indicatorMaxTarget_ {};
 	glm::vec3 indicatorMinCurrent_ {};
 	glm::vec3 indicatorMaxCurrent_ {};
+
+	uint32_t currentBGM_ = 0;
+	std::vector< std::tuple<std::string, std::string> > bgmArray_;
 };
 

@@ -34,3 +34,10 @@ namespace Utilities
         }
     }
 }
+
+#define BUTTON_TOOLTIP( text ) if (ImGui::IsItemHovered()) {\
+ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8,8));\
+ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);\
+ImGui::BeginTooltip(); ImGui::TextUnformatted( text ); ImGui::EndTooltip();\
+ImGui::PopStyleVar(2);\
+}

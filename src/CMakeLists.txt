@@ -450,6 +450,11 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
+	add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND echo \"copy ffmpeg exe...\"
+			COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
+		)
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )

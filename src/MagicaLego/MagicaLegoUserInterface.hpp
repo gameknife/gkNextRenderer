@@ -47,6 +47,8 @@ private:
 
 	void DrawWatermark();
 
+	void DrawHUD();
+
 	void RecordTimeline();
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}

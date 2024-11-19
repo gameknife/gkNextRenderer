@@ -426,6 +426,27 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
     
 }
 
+void MagicaLegoGameInstance::PlayNextBGM()
+{
+    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), true);
+    currentBGM_ = (currentBGM_ + 1) % bgmArray_.size();
+    GetEngine().PlaySound(std::get<1>(bgmArray_[currentBGM_]), true, 0.5f);
+}
+
+bool MagicaLegoGameInstance::IsBGMPaused()
+{
+    return !GetEngine().IsSoundPlaying(std::get<1>(bgmArray_[currentBGM_]));
+}
+
+void MagicaLegoGameInstance::PauseBGM(bool pause)
+{
+    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), pause);
+}
+
+std::string MagicaLegoGameInstance::GetCurrentBGMName()
+{
+	return std::get<0>(bgmArray_[currentBGM_]);
+}
 void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
 {
     auto& allNodes = GetEngine().GetScene().Nodes();
@@ -705,7 +726,9 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
 
 void MagicaLegoGameInstance::OnInit()
 {
-    GetEngine().PlaySound("assets/sfx/bgm.mp3", true, 0.5f);
+    bgmArray_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
+    bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
+    PlayNextBGM();
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)

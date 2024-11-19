@@ -114,6 +114,8 @@ public:
 
 	// sound
 	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
+	void PauseSound(const std::string& soundName, bool pause);
+	bool IsSoundPlaying(const std::string& soundName);
 
 	// screen shot
 	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
