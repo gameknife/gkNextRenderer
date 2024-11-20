@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fstream>
+#include <string>
 #include "Vulkan/VulkanBaseRenderer.hpp"
 
 class BenchMarker final
@@ -22,6 +23,6 @@ public:
 	uint32_t periodTotalFrames_{};
 	uint32_t benchmarkTotalFrames_{};
 	std::ofstream benchmarkCsvReportFile;
-	
-    std::string img_encoded {};
 };
+	
+static std::string img_encoded;
