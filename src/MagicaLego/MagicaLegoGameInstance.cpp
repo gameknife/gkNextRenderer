@@ -760,6 +760,11 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         }
     }
 
+    if (bCaptureing_)
+    {
+        return;
+    }
+
     indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
     indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
 

@@ -432,7 +432,7 @@ bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
 
 void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
-    BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
+    BenchMarker::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
 glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)

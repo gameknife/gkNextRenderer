@@ -49,7 +49,9 @@ private:
 
 	void DrawHUD();
 
-	void RecordTimeline();
+	void RecordTimeline(bool autoRotate);
+
+	void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;

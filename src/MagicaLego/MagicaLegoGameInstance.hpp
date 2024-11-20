@@ -178,6 +178,10 @@ public:
 	bool IsBGMPaused();
 	void PauseBGM(bool pause);
 	std::string GetCurrentBGMName();
+
+	float& GetCameraRotX() {return cameraRotX_;}
+
+	void SetCaptureing(bool b) {bCaptureing_ = b;}
 	
 protected:
 	void AddBlockGroup(std::string typeName);
@@ -247,5 +251,7 @@ private:
 
 	uint32_t currentBGM_ = 0;
 	std::vector< std::tuple<std::string, std::string> > bgmArray_;
+
+	bool bCaptureing_ = false;
 };
 

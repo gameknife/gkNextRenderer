@@ -202,7 +202,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(0,0), ImGuiCond_Always, ImVec2(0,0));
-    ImGui::SetNextWindowSize(ImVec2(TITLEBAR_SIZE * 10, TITLEBAR_SIZE));
+    ImGui::SetNextWindowSize(ImVec2(TITLEBAR_SIZE * 18, TITLEBAR_SIZE));
     
     ImGui::Begin(  "TitleBarLeft", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
     if ( ImGui::Button(ICON_FA_GITHUB, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
@@ -222,10 +222,11 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::SameLine();
     if ( ImGui::Button(ICON_FA_CAMERA, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
+        static int counter = 0;
+        counter = 0;
         // hide and request screenshot then unhide
         GetGameInstance()->GetEngine().AddTickedTask([this](double deltaSeconds)->bool
         {
-            static int counter = 0;
             counter++;
             switch (counter)
             {
@@ -236,6 +237,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 waiting_ = true;
                 waitingText_ = "Rendering...";
                 capture_ = true;
+                GetGameInstance()->SetCaptureing(true);
                 return false;
             case 512:
                 waiting_ = false;
@@ -254,6 +256,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 GetGameInstance()->GetEngine().GetUserSettings().Denoiser = true;
                 counter = 0;
                 capture_ = false;
+                GetGameInstance()->SetCaptureing(false);
                 notify_ = true;
                 notifyTimer_ = 0;
                 notifyText_ = "Screenshot captured, open in explorer?";
@@ -273,11 +276,17 @@ void MagicaLegoUserInterface::DrawTitleBar()
     }
     BUTTON_TOOLTIP("Take a Screenshot into the screenshots folder")
     ImGui::SameLine();
-    if ( ImGui::Button(ICON_FA_VIDEO, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
+    if ( ImGui::Button(ICON_FA_VIDEO " auto", ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
     {
-        RecordTimeline();
+        RecordTimeline(true);
     }
-    BUTTON_TOOLTIP("Record build timeline video into the captures folder")
+    BUTTON_TOOLTIP("Record build timeline video, auto rotate")
+    ImGui::SameLine();
+    if ( ImGui::Button(ICON_FA_VIDEO " hand", ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
+    {
+        RecordTimeline(false);
+    }
+    BUTTON_TOOLTIP("Record build timeline video, manual rotate")
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine( ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255,255,255,160), 2.0f );
     ImGui::Dummy(ImVec2(10,10));
@@ -522,9 +531,11 @@ void MagicaLegoUserInterface::DrawHUD()
     
 }
 
-void MagicaLegoUserInterface::RecordTimeline()
+void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 {
-    auto MaxStep = GetGameInstance()->GetMaxStep() + 5; // add 5 step to stop the final still
+    auto MaxStep = GetGameInstance()->GetMaxStep(); // add 5 step to stop the final still
+    // round to latest 360 degree
+    MaxStep = MaxStep + (autoRotate ? 360 : 30);
     std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
     std::string localTempPath = Utilities::FileHelper::GetPlatformFilePath("temps");
     Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
@@ -532,18 +543,20 @@ void MagicaLegoUserInterface::RecordTimeline()
     std::string filename = fmt::format("{}/magicalLego_{:%Y-%m-%d-%H-%M-%S}", localPath, fmt::localtime(std::time(nullptr)));
     PushLayout(0x0);
     capture_ = true;
+    GetGameInstance()->SetCaptureing(true);
 
+    static int count = 0;
+    count = 0;
     GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 4;
     GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 32;
-    GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localTempPath, filename](double DeltaSeconds)->bool
+    GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localTempPath, filename, autoRotate](double DeltaSeconds)->bool
     {
-        static int count = 0;
         int FramePerStep = 4;
         count++;
-
-       
+        
         if (count > MaxStep * FramePerStep)
         {
+            GetGameInstance()->SetCaptureing(false);
             capture_ = false;
             waiting_ = false;
             PopLayout();
@@ -566,12 +579,21 @@ void MagicaLegoUserInterface::RecordTimeline()
 
         if (count % FramePerStep == 0)
         {
+            if (autoRotate)
+            {
+                GetGameInstance()->GetCameraRotX() += 1.0f;
+            }
            std::string filename = fmt::format("video_{}", Step);
            GetGameInstance()->GetEngine().RequestScreenShot(localTempPath + "/" + filename);
         }
         
         return false;
     });
+}
+
+void MagicaLegoUserInterface::ShowNotify(const std::string& text, std::function<void()> callback)
+{
+    
 }
 
 void MagicaLegoUserInterface::DirectSetLayout(uint32_t layout)
