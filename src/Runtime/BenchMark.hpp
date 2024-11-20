@@ -22,4 +22,6 @@ public:
 	uint32_t periodTotalFrames_{};
 	uint32_t benchmarkTotalFrames_{};
 	std::ofstream benchmarkCsvReportFile;
+	
+    std::string img_encoded {};
 };

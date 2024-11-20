@@ -304,7 +304,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer_, int fps, const s
     VkPhysicalDeviceProperties deviceProp1{};
     vkGetPhysicalDeviceProperties(renderer_->Device().PhysicalDevice(), &deviceProp1);
 
-    std::string img_encoded {};
+    img_encoded = "";
     if (upload_screen || save_screen)
     {
         SaveSwapChainToFile(renderer_, sceneName, 0, 0, 0, 0);
