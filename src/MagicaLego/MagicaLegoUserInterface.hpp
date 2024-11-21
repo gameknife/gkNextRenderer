@@ -49,6 +49,8 @@ private:
 
 	void DrawHUD();
 
+	void DrawHelp();
+
 	void RecordTimeline(bool autoRotate);
 
 	void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
@@ -74,6 +76,8 @@ private:
 	ImFont* bigFont_ {};
 	ImFont* boldFont_ {};
 	float openingTimer_ = 2.0f;
+
+	bool showHelp_ {};
 
 	EIntroStep introStep_ = EIS_Entry;
 };

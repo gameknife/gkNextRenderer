@@ -1,6 +1,7 @@
 #include "MagicaLegoUserInterface.hpp"
 
 #include <fstream>
+#include <utility>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <fmt/chrono.h>
@@ -207,13 +208,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::Begin(  "TitleBarLeft", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
     if ( ImGui::Button(ICON_FA_GITHUB, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
-        system("start https://github.com/gameknife/gkNextRenderer");
+        NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
     }
     BUTTON_TOOLTIP("Open Project Page in OS Browser")
     ImGui::SameLine();
     if ( ImGui::Button(ICON_FA_TWITTER, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
-        system("start https://x.com/gKNIFE_");
+        NextRenderer::OSCommand("https://x.com/gKNIFE_");
     }
     BUTTON_TOOLTIP("Open Twitter Page in OS Browser")
     ImGui::SameLine();
@@ -257,18 +258,14 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 counter = 0;
                 capture_ = false;
                 GetGameInstance()->SetCaptureing(false);
-                notify_ = true;
-                notifyTimer_ = 0;
-                notifyText_ = "Screenshot captured, open in explorer?";
-                notifyCallback_ = []()->void
+                ShowNotify("Screenshot captured, open in explorer?", []()->void
                 {
                     std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
                     auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
                     Utilities::FileHelper::EnsureDirectoryExists(absPath);
                     
-                    std::string command = "explorer "; command += absPath.string();
-                    system(command.c_str());
-                };
+                    NextRenderer::OSCommand(absPath.string().c_str());
+                });
                 return true;
             }
             return false;
@@ -309,7 +306,11 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::SameLine();
     if ( ImGui::Button(ICON_FA_CIRCLE_QUESTION, ImVec2(TITLEBAR_SIZE,TITLEBAR_SIZE)))
     {
-
+        if (!showHelp_)
+        {
+            showHelp_ = true;
+            GetGameInstance()->SetCaptureing(true);   
+        }
     }
     BUTTON_TOOLTIP("Request Help")
     ImGui::End();
@@ -423,6 +424,11 @@ void MagicaLegoUserInterface::OnRenderUI()
         DrawHUD();
     }
 
+    if (showHelp_)
+    {
+        DrawHelp();
+    }
+
     if (notify_)
     {
         ImGui::OpenPopup("Notify");
@@ -531,6 +537,58 @@ void MagicaLegoUserInterface::DrawHUD()
     
 }
 
+void MagicaLegoUserInterface::DrawHelp()
+{
+    // forbid other input
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always, ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::Begin("Help", 0, PANELFLAGS | ImGuiWindowFlags_NoBackground);
+
+    ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    
+    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, IM_COL32(80, 80, 80, 200));
+
+    {
+        auto TextSize = ImGui::CalcTextSize("Use LMB to handle blocks, RMB to rotate");
+        auto TextPos = windowSize * 0.5f - TextSize * 0.5f;
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, IM_COL32(255, 255, 255, 255), "Use LMB to handle blocks, RMB to rotate");
+    }
+
+    {
+        auto TextSize = ImGui::CalcTextSize("Layout Bar, toggle Left/Right/Bottom Panel.");
+        ImGui::GetForegroundDrawList()->AddLine(ImVec2(BUILD_BAR_WIDTH, 180), ImVec2(100, 60), IM_COL32(255, 255, 255, 255));
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH, 200), IM_COL32(255, 255, 255, 255), "Function Bar, hover to get help.");
+    }
+
+
+    {
+        auto TextSize = ImGui::CalcTextSize("Layout Bar, toggle Left/Right/Bottom Panel.");
+        ImGui::GetForegroundDrawList()->AddLine(ImVec2(windowSize.x * 0.5f, 180), ImVec2(windowSize.x * 0.5f, 80), IM_COL32(255, 255, 255, 255));
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2((windowSize.x - TextSize.x) * 0.5f, 200), IM_COL32(255, 255, 255, 255), "Layout Bar, toggle Left/Right/Bottom Panel.");
+    }
+
+    {
+        ImGui::GetForegroundDrawList()->AddLine(ImVec2(BUILD_BAR_WIDTH + 40, windowSize.y * 0.6f), ImVec2(BUILD_BAR_WIDTH, windowSize.y * 0.5f), IM_COL32(255, 255, 255, 255));
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH + 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), "Build Bar, switch build / camera / base mode. Handle file save.");
+    }
+
+    {
+        auto TextSize = ImGui::CalcTextSize("Brush Bar, switch Block, select Color to build.");
+        ImGui::GetForegroundDrawList()->AddLine(ImVec2(windowSize.x - SIDE_BAR_WIDTH, windowSize.y * 0.5f), ImVec2(windowSize.x - SIDE_BAR_WIDTH - 40, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255));
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+            ImVec2(windowSize.x - SIDE_BAR_WIDTH - TextSize.x - 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), "Brush Bar, switch Block, select Color to build.");
+    }
+    // if hit any where, close the help
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        showHelp_ = false;
+        GetGameInstance()->SetCaptureing(false);
+    }
+
+    ImGui::End();
+}
+
 void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 {
     auto MaxStep = GetGameInstance()->GetMaxStep(); // add 5 step to stop the final still
@@ -563,9 +621,18 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
             GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
             GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 8;
             // sleep os for a while
-            system(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
+            NextRenderer::OSProcess(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
             // delete all *.jpg using std::filesystem
             std::filesystem::remove_all(localTempPath);
+
+            ShowNotify("Video recorded, open in explorer?", []()->void
+            {
+                std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
+                auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
+                Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                NextRenderer::OSCommand(absPath.string().c_str());
+            });
+            
             return true;
         }
         if (count > MaxStep * FramePerStep - FramePerStep + 1)
@@ -593,7 +660,10 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 
 void MagicaLegoUserInterface::ShowNotify(const std::string& text, std::function<void()> callback)
 {
-    
+    notify_ = true;
+    notifyTimer_ = 0;
+    notifyText_ = text;
+    notifyCallback_ = std::move(callback);
 }
 
 void MagicaLegoUserInterface::DirectSetLayout(uint32_t layout)
@@ -732,8 +802,8 @@ void MagicaLegoUserInterface::DrawLeftBar()
         static std::string new_filename = "magicalego";
         if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing())))
         {
-            
             std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/");
+            Utilities::FileHelper::EnsureDirectoryExists(path);
             for (const auto & entry : std::filesystem::directory_iterator(path))
             {
                 if( entry.path().extension() != ".mls" )
