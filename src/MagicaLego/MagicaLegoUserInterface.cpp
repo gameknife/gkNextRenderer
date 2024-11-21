@@ -13,6 +13,7 @@
 #include "Runtime/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Utilities/ImGui.hpp"
+#include "Utilities/Localization.hpp"
 
 const int TITLEBAR_SIZE = 40;
 const int TITLEBAR_CONTROL_SIZE = TITLEBAR_SIZE * 3;
@@ -273,13 +274,17 @@ void MagicaLegoUserInterface::DrawTitleBar()
     }
     BUTTON_TOOLTIP("Take a Screenshot into the screenshots folder")
     ImGui::SameLine();
-    if ( ImGui::Button(ICON_FA_VIDEO " auto", ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
+    std::string recordAText = ICON_FA_VIDEO " ";
+    recordAText += LOCTEXT("auto");
+    if ( ImGui::Button(recordAText.c_str(), ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
     {
         RecordTimeline(true);
     }
     BUTTON_TOOLTIP("Record build timeline video, auto rotate")
     ImGui::SameLine();
-    if ( ImGui::Button(ICON_FA_VIDEO " hand", ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
+    std::string recordMText = ICON_FA_VIDEO " ";
+    recordMText += LOCTEXT("manual");
+    if ( ImGui::Button(recordMText.c_str(), ImVec2(TITLEBAR_SIZE * 2,TITLEBAR_SIZE)))
     {
         RecordTimeline(false);
     }
@@ -550,34 +555,34 @@ void MagicaLegoUserInterface::DrawHelp()
     ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, IM_COL32(80, 80, 80, 200));
 
     {
-        auto TextSize = ImGui::CalcTextSize("Use LMB to handle blocks, RMB to rotate");
+        auto TextSize = ImGui::CalcTextSize(LOCTEXT("Use LMB to handle blocks, RMB to rotate"));
         auto TextPos = windowSize * 0.5f - TextSize * 0.5f;
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, IM_COL32(255, 255, 255, 255), "Use LMB to handle blocks, RMB to rotate");
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), TextPos, IM_COL32(255, 255, 255, 255), LOCTEXT("Use LMB to handle blocks, RMB to rotate"));
     }
 
     {
-        auto TextSize = ImGui::CalcTextSize("Layout Bar, toggle Left/Right/Bottom Panel.");
+        auto TextSize = ImGui::CalcTextSize(LOCTEXT("Function Bar, hover to get help."));
         ImGui::GetForegroundDrawList()->AddLine(ImVec2(BUILD_BAR_WIDTH, 180), ImVec2(100, 60), IM_COL32(255, 255, 255, 255));
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH, 200), IM_COL32(255, 255, 255, 255), "Function Bar, hover to get help.");
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH, 200), IM_COL32(255, 255, 255, 255), LOCTEXT("Function Bar, hover to get help."));
     }
 
 
     {
-        auto TextSize = ImGui::CalcTextSize("Layout Bar, toggle Left/Right/Bottom Panel.");
+        auto TextSize = ImGui::CalcTextSize(LOCTEXT("Layout Bar, toggle Left/Right/Bottom Panel."));
         ImGui::GetForegroundDrawList()->AddLine(ImVec2(windowSize.x * 0.5f, 180), ImVec2(windowSize.x * 0.5f, 80), IM_COL32(255, 255, 255, 255));
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2((windowSize.x - TextSize.x) * 0.5f, 200), IM_COL32(255, 255, 255, 255), "Layout Bar, toggle Left/Right/Bottom Panel.");
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2((windowSize.x - TextSize.x) * 0.5f, 200), IM_COL32(255, 255, 255, 255), LOCTEXT("Layout Bar, toggle Left/Right/Bottom Panel."));
     }
 
     {
         ImGui::GetForegroundDrawList()->AddLine(ImVec2(BUILD_BAR_WIDTH + 40, windowSize.y * 0.6f), ImVec2(BUILD_BAR_WIDTH, windowSize.y * 0.5f), IM_COL32(255, 255, 255, 255));
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH + 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), "Build Bar, switch build / camera / base mode. Handle file save.");
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(BUILD_BAR_WIDTH + 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), LOCTEXT("Build Bar, switch build / camera / base mode. Handle file save."));
     }
 
     {
-        auto TextSize = ImGui::CalcTextSize("Brush Bar, switch Block, select Color to build.");
+        auto TextSize = ImGui::CalcTextSize(LOCTEXT("Brush Bar, switch Block, select Color to build."));
         ImGui::GetForegroundDrawList()->AddLine(ImVec2(windowSize.x - SIDE_BAR_WIDTH, windowSize.y * 0.5f), ImVec2(windowSize.x - SIDE_BAR_WIDTH - 40, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255));
         ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-            ImVec2(windowSize.x - SIDE_BAR_WIDTH - TextSize.x - 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), "Brush Bar, switch Block, select Color to build.");
+            ImVec2(windowSize.x - SIDE_BAR_WIDTH - TextSize.x - 50, windowSize.y * 0.6f), IM_COL32(255, 255, 255, 255), LOCTEXT("Brush Bar, switch Block, select Color to build."));
     }
     // if hit any where, close the help
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
@@ -733,7 +738,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
     
     if (ImGui::Begin("Place & Dig", 0, PANELFLAGS))
     {
-        ImGui::SeparatorText("Mode");
+        ImGui::SeparatorText(LOCTEXT("Mode"));
         if( SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Dig) )
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Dig);
@@ -748,7 +753,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Select);
         }
-        ImGui::SeparatorText("Camera");
+        ImGui::SeparatorText(LOCTEXT("Camera"));
         if( SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Pan))
         {
             GetGameInstance()->SetCameraMode(ECamMode::ECM_Pan);
@@ -763,7 +768,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->SetCameraMode(ECamMode::ECM_AutoFocus);
         }
-        ImGui::SeparatorText("Base");
+        ImGui::SeparatorText(LOCTEXT("Base"));
         if( SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Big))
         {
             GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Big);
@@ -778,26 +783,26 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Small);
         }
-        ImGui::SeparatorText("Orientation");
+        ImGui::SeparatorText(LOCTEXT("Orientation"));
         if( SelectButton( fmt::format("{}", GetGameInstance()->GetCurrentOrientation()).c_str(), "R", false))
         {
             GetGameInstance()->ChangeOrientation();
         }
 
         ImGui::Dummy(ImVec2(0,20));
-        ImGui::SeparatorText("Light");
+        ImGui::SeparatorText(LOCTEXT("Light"));
 
-        ImGui::Checkbox("Sun", &GetGameInstance()->GetEngine().GetUserSettings().HasSun);
+        ImGui::Checkbox(LOCTEXT("Sun"), &GetGameInstance()->GetEngine().GetUserSettings().HasSun);
         if(GetGameInstance()->GetEngine().GetUserSettings().HasSun)
         {
-            ImGui::SliderFloat("Dir", &GetGameInstance()->GetEngine().GetUserSettings().SunRotation, 0, 2);
+            ImGui::SliderFloat(LOCTEXT("Dir"), &GetGameInstance()->GetEngine().GetUserSettings().SunRotation, 0, 2);
         }
-        ImGui::SliderInt("Sky", &GetGameInstance()->GetEngine().GetUserSettings().SkyIdx, 0, 10);
-        ImGui::SliderFloat("Lum", &GetGameInstance()->GetEngine().GetUserSettings().SkyIntensity, 0, 100);
+        ImGui::SliderInt(LOCTEXT("Sky"), &GetGameInstance()->GetEngine().GetUserSettings().SkyIdx, 0, 10);
+        ImGui::SliderFloat(LOCTEXT("Lum"), &GetGameInstance()->GetEngine().GetUserSettings().SkyIntensity, 0, 100);
 
         ImGui::Dummy(ImVec2(0,20));
         
-        ImGui::SeparatorText("Files");
+        ImGui::SeparatorText(LOCTEXT("Files"));
         static std::string selected_filename = "";
         static std::string new_filename = "magicalego";
         if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing())))
@@ -894,7 +899,7 @@ void MagicaLegoUserInterface::DrawRightBar()
                 types.push_back(Type.first.c_str());
             }
         
-            ImGui::SeparatorText("Blocks");
+            ImGui::SeparatorText(LOCTEXT("Blocks"));
             ImGui::Dummy(ImVec2(0,5));
 
             ImGui::SetNextItemWidth( SIDE_BAR_WIDTH - 46 );

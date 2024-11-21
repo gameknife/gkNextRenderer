@@ -142,7 +142,7 @@ UserInterface::UserInterface(
 #if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), fontSize * scaleFactor, &configLocale, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), (fontSize + 2) * scaleFactor, &configLocale, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}

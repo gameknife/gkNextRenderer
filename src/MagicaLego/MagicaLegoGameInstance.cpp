@@ -64,6 +64,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.Temporal = 16;
     options.ForceSDR = true;
     options.RendererType = 0;
+    options.locale = "zhCN";
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);
