@@ -334,7 +334,7 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
         }
 
         // save to file with scenename
-        std::string filename = sceneName + ".avif";
+        std::string filename = filePathWithoutExtension + ".avif";
         std::ofstream file(filename, std::ios::out | std::ios::binary);
         if(file.is_open())
         {
@@ -343,7 +343,7 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
         file.close();
 
         // send to server
-        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
     // save to file with scenename
     std::string filename = filePathWithoutExtension + ".jpg";

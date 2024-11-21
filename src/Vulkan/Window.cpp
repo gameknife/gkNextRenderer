@@ -247,7 +247,10 @@ bool Window::IsMinimized() const
 
 bool Window::IsMaximumed() const
 {
+#if !ANDROID
 	return glfwGetWindowAttrib(window_, GLFW_MAXIMIZED);
+#endif
+	return false;
 }
 
 void Window::WaitForEvents() const
