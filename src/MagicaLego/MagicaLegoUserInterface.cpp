@@ -551,7 +551,7 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
     GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 32;
     GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localTempPath, filename, autoRotate](double DeltaSeconds)->bool
     {
-        int FramePerStep = 4;
+        int FramePerStep = 16;
         count++;
         
         if (count > MaxStep * FramePerStep)
