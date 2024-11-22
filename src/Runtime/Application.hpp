@@ -114,6 +114,8 @@ public:
 
 	// sound
 	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
+	void PauseSound(const std::string& soundName, bool pause);
+	bool IsSoundPlaying(const std::string& soundName);
 
 	// screen shot
 	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
@@ -121,6 +123,21 @@ public:
 	// pak
 	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
 
+	// fast aux drawing using interface
+	glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS);
+	void DrawAuxLine( glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1 );
+	void DrawAuxBox( glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1 );
+	void DrawAuxPoint( glm::vec3 location, glm::vec4 color, float size = 1 );
+
+	// life cycle
+	void RequestClose();
+	void RequestMinimize();
+	bool IsMaximumed();
+	void ToggleMaximize();
+
+	// capture
+	void RequestScreenShot(std::string filename);
+	
 #if !WITH_EDITOR
 	class UserInterface* GetUserInterface() {return userInterface_.get();};
 #endif

@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <glm/vec4.hpp>
 
 namespace Assets
 {
@@ -81,6 +82,9 @@ public:
 	
 	static void SetStyle();
 
+	void DrawPoint(float x, float y, float size, glm::vec4 color);
+	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
+
 private:
 	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
@@ -92,4 +96,6 @@ private:
 	
 		
 	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+
+	std::vector< std::function<void ()> > auxDrawRequest_;
 };

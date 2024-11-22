@@ -1,4 +1,5 @@
 #pragma once
+#include "Common/CoreMinimal.hpp"
 
 struct ImFont;
 class MagicaLegoGameInstance;
@@ -13,6 +14,15 @@ enum EIntroStep
 	EIS_InGame,
 };
 
+enum EUILayout
+{
+	EULUT_LeftBar = 0x1,
+	EULUT_RightBar = 0x2,
+	EULUT_Timeline = 0x4,
+	EULUT_TitleBar = 0x8,
+	EULUT_LayoutIndicator = 0x10,
+};
+
 class MagicaLegoUserInterface final
 {
 public:
@@ -23,6 +33,7 @@ public:
 	void OnSceneLoaded();
 
 private:
+	void DrawTitleBar();
 	void DrawMainToolBar();
 	void DrawLeftBar();
 	void DrawRightBar();
@@ -30,16 +41,43 @@ private:
 	void DrawOpening();
 	void DrawIndicator();
 	void DrawStatusBar();
+
+	void DrawWaiting();
+	void DrawNotify();
+
+	void DrawWatermark();
+
+	void DrawHUD();
+
+	void DrawHelp();
+
+	void RecordTimeline(bool autoRotate);
+
+	void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
 	
 	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
 
-	bool showLeftBar_ = false;
-	bool showRightBar_ = false;
-	bool showTimeline_ = false;
+	void DirectSetLayout(uint32_t layout);
+	void PushLayout(uint32_t layout);
+	void PopLayout();
+	uint32_t uiStatus_ {};
+	std::vector<uint32_t> uiStatusStack_ {};
+
+	bool capture_ {};
+	bool waiting_ {};
+	std::string waitingText_ {};
+
+	bool notify_ {};
+	float notifyTimer_ {};
+	std::string notifyText_ {};
+	std::function<void()> notifyCallback_ {};
 
 	ImFont* bigFont_ {};
+	ImFont* boldFont_ {};
 	float openingTimer_ = 2.0f;
+
+	bool showHelp_ {};
 
 	EIntroStep introStep_ = EIS_Entry;
 };

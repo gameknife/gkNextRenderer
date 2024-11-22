@@ -1,5 +1,8 @@
 #pragma once
 
+#include <windows.h>
+#include <shellapi.h>
+
 namespace NextRenderer
 {
     inline void PlatformInit()
@@ -19,6 +22,41 @@ namespace NextRenderer
     {
         FreeConsole();
     }
+
+    inline void OSCommand(const char* command)
+    {
+        ::ShellExecuteA(NULL, "open",
+                        command,
+                        "",NULL,SW_SHOWNORMAL
+        );
+    }
+
+    inline void OSProcess(const char* commandline)
+    {
+        STARTUPINFOA si;
+        PROCESS_INFORMATION pi;
+        ZeroMemory(&si, sizeof(si));
+        si.cb = sizeof(si);
+        ZeroMemory(&pi, sizeof(pi));
+        
+        if (!CreateProcessA(
+            NULL,
+            const_cast<char*>(commandline),
+            NULL,
+            NULL,
+            FALSE,
+            0,
+            NULL,
+            NULL,
+            &si,
+            &pi
+        ))
+        {
+            return;
+        }
+        
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
 }
-
-

@@ -34,6 +34,7 @@
 #include "Utilities/Math.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
+#include "Utilities/ImGui.hpp"
 #include "Vulkan/ImageView.hpp"
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
@@ -100,8 +101,10 @@ UserInterface::UserInterface(
 #elif __APPLE__
 	const auto scaleFactor = 1.0;
 #else
-    const auto scaleFactor = window.ContentScale();
+    const auto scaleFactor = 1.0;//window.ContentScale();
 #endif
+
+	const auto fontSize = 16;
 
 	UserInterface::SetStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
@@ -110,7 +113,7 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), fontSize * scaleFactor, nullptr, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
@@ -122,16 +125,24 @@ UserInterface::UserInterface(
 	};
 	ImFontConfig config;
 	config.MergeMode = true;
-	config.GlyphMinAdvanceX = 14.0f;
+	config.GlyphMinAdvanceX = fontSize;
 	config.GlyphOffset = ImVec2(0, 0);
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor, &config, iconRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-regular-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
+	{
+		
+	}
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
+	{
+		
+	}
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-brands-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
 	{
 		
 	}
 #if !ANDROID
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
+	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), (fontSize + 2) * scaleFactor, &configLocale, glyphRange ))
 	{
 		Throw(std::runtime_error("failed to load locale ImGui Text font"));
 	}
@@ -222,7 +233,7 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_Text]                   = ImVec4(0.84f, 0.84f, 0.84f, 1.00f);
     colors[ImGuiCol_WindowBg]               = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
     colors[ImGuiCol_ChildBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-    colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 1.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
     colors[ImGuiCol_Border]                 = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
     colors[ImGuiCol_BorderShadow]           = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
     colors[ImGuiCol_FrameBg]                = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
@@ -266,6 +277,20 @@ void UserInterface::SetStyle()
 	style->SeparatorTextBorderSize			= 1.0f;
 }
 
+void UserInterface::DrawPoint(float x, float y, float size, glm::vec4 color)
+{
+	auxDrawRequest_.push_back( [=]() {
+		ImGui::GetForegroundDrawList()->AddRectFilled({x - size, y - size}, {x + size, y + size}, Utilities::UI::Vec4ToImU32(color));
+	});
+}
+
+void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, float size, glm::vec4 color)
+{
+	auxDrawRequest_.push_back( [=]() {
+		ImGui::GetForegroundDrawList()->AddLine( ImVec2(fromx, fromy), ImVec2(tox, toy), Utilities::UI::Vec4ToImU32(color), size);
+	});
+}
+
 void UserInterface::PreRender()
 {
 	ImGui_ImplVulkan_NewFrame();
@@ -285,7 +310,12 @@ void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer*
 }
 
 void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
-{		
+{
+	// aux
+	for( auto& req : auxDrawRequest_) {
+		req();
+	}
+	auxDrawRequest_.clear();
 	
 	ImGui::Render();
 

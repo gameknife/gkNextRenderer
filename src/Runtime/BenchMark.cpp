@@ -15,6 +15,7 @@
 #include <math.h>
 
 #include "Application.hpp"
+#include "TaskCoordinator.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/Device.hpp"
@@ -96,13 +97,86 @@ void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::stri
     Report(renderer, static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
 }
 
+void BenchMarker::SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
+{
+    // screenshot stuffs
+    const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
+    auto orgExtent = swapChain.Extent();
+    auto extent = swapChain.Extent();
+
+    if(inWidth > 0 && inHeight > 0)
+    {
+        extent.width = inWidth;
+        extent.height = inHeight;
+    }
+
+    // capture and export
+    renderer_->CaptureScreenShot();
+    
+    uint32_t dataBytes = 0;
+    uint32_t rowBytes = 0;
+    constexpr uint32_t kCompCnt = 3;
+    dataBytes = extent.width * extent.height * kCompCnt;
+    uint32_t rawDataBytes = extent.width * extent.height * 4;
+    rowBytes = extent.width * 3 * sizeof(uint8_t);
+    
+    Vulkan::DeviceMemory* vkMemory = renderer_->GetScreenShotMemory();
+    uint8_t* mappedGPUData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+    uint8_t* mappedData = (uint8_t*)malloc(rawDataBytes);
+    memcpy(mappedData, mappedGPUData, rawDataBytes);
+    vkMemory->Unmap();
+    TaskCoordinator::GetInstance()->AddTask([=](ResTask& task)->void
+    {
+        uint8_t* dataview = (uint8_t*)malloc(dataBytes);
+        {
+            uint32_t yDelta = extent.width * kCompCnt;
+            uint32_t xDelta = kCompCnt;
+            uint32_t srcYDelta = orgExtent.width * 4;
+            uint32_t srcXDelta = 4;
+            
+            uint32_t yy = 0;
+            uint32_t xx = 0;
+            uint32_t srcY = inY * srcYDelta;
+            uint32_t srcX = inX * srcXDelta;
+            
+            for (uint32_t y = 0; y < extent.height; y++)
+            {
+                xx = 0;
+                srcX = inX * srcXDelta;
+                for (uint32_t x = 0; x < extent.width; x++)
+                {
+                    uint32_t* pInPixel = (uint32_t*)&mappedData[srcY + srcX];
+                    uint32_t uInPixel = *pInPixel;
+                    dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
+                    dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                    dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
+        
+                    srcX += srcXDelta;
+                    xx += xDelta;
+                }
+                srcY += srcYDelta;
+                yy += yDelta;
+            }
+        }
+        std::string filename = filePathWithoutExtension + ".jpg";
+        stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, dataview, 91);
+        
+        free(dataview);
+        free(mappedData);
+    },
+    [](ResTask& task)
+    {
+
+    },1);
+}
+
 
 inline const std::string versionToString(const uint32_t version)
 {
     return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
-void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, const std::string& sceneName, int inX, int inY, int inWidth, int inHeight)
+void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
 {
     // screenshot stuffs
     const Vulkan::SwapChain& swapChain = renderer_->SwapChain();
@@ -119,6 +193,8 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
     // capture and export
     renderer_->CaptureScreenShot();
 
+    // too slow on main thread, copy out buffer and use thread to save
+    
     // prepare data
     void* data = nullptr;
     uint32_t dataBytes = 0;
@@ -258,7 +334,7 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
         }
 
         // save to file with scenename
-        std::string filename = sceneName + ".avif";
+        std::string filename = filePathWithoutExtension + ".avif";
         std::ofstream file(filename, std::ios::out | std::ios::binary);
         if(file.is_open())
         {
@@ -267,10 +343,10 @@ void BenchMarker::SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, con
         file.close();
 
         // send to server
-        img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
+        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
 #else
     // save to file with scenename
-    std::string filename = sceneName + ".jpg";
+    std::string filename = filePathWithoutExtension + ".jpg";
         
     // if hdr, transcode 16bit to 8bit
     if(swapChain.IsHDR())

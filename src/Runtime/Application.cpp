@@ -301,6 +301,10 @@ bool NextRendererApplication::Tick()
 
     // Camera Update
     userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
+    if ( glm::abs(userSettings_.RawFieldOfView - userSettings_.FieldOfView) < 0.05f)
+    {
+        userSettings_.FieldOfView = userSettings_.RawFieldOfView;
+    }
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
     // Handle Scene Switching
@@ -405,9 +409,117 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
+void NextRendererApplication::PauseSound(const std::string& soundName, bool pause)
+{
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        return;
+    }
+
+    ma_sound* sound = soundMaps_[soundName].get();
+    pause ? ma_sound_stop(sound) : ma_sound_start(sound);
+}
+
+bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
+{
+    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    {
+        return false;
+    }
+    ma_sound* sound = soundMaps_[soundName].get();
+    return ma_sound_is_playing(sound);
+}
+
 void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
-    BenchMarker::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
+    BenchMarker::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
+}
+
+glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
+{
+    glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
+    transformed = transformed / transformed.w;
+    // from ndc to screenspace
+    transformed.x += 1.0f;
+    transformed.x *= GetWindow().FramebufferSize().width / 2;
+    transformed.y += 1.0f;
+    transformed.y *= GetWindow().FramebufferSize().height / 2;
+
+    return transformed;
+}
+
+void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
+{
+    auto transformedFrom = ProjectWorldToScreen(from);
+    auto transformedTo = ProjectWorldToScreen(to);
+
+    // should clip with z == 1, clip to new point
+    if(transformedFrom.z < 1 && transformedTo.z < 1)
+    {
+        userInterface_->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y, size, color );
+    }
+}
+
+void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
+{
+    // Draw the box with 12 lines
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z), color, size);
+
+    DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z), color, size);
+
+    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z), color, size);
+    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
+}
+
+void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
+{
+    auto transformed = ProjectWorldToScreen(location);
+    // center as 0,0
+    if(transformed.z < 1)
+    {
+        userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+    }
+}
+
+void NextRendererApplication::RequestClose()
+{
+    window_->Close();
+}
+
+void NextRendererApplication::RequestMinimize()
+{
+    window_->Minimize();
+}
+
+bool NextRendererApplication::IsMaximumed()
+{
+    return window_->IsMaximumed();
+}
+
+void NextRendererApplication::ToggleMaximize()
+{
+    if (window_->IsMaximumed())
+    {
+        window_->Restore();
+    }
+    else
+    {
+        window_->Maximum();
+    }
+}
+
+void NextRendererApplication::RequestScreenShot(std::string filename)
+{
+    std::string screenshot_filename = filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr))) : filename;
+    SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)

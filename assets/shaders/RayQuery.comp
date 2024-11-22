@@ -94,7 +94,7 @@ void main() {
 		if( Camera.TAA )
 		{
             // here should offset a non-random offset and consider in motion vector
-			vec2 uvOffset = RandomFloat2(Ray.RandomSeed) / isize;
+			vec2 uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
             uv += uvOffset;
 		}
 		

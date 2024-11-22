@@ -11,5 +11,15 @@ namespace NextRenderer
     {
 
     }
+
+    inline void OSCommand(const char* command)
+    {
+
+    }
+
+    inline void OSProcess(const char* exe)
+    {
+
+    }
 }
 

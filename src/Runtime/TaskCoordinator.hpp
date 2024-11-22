@@ -261,17 +261,7 @@ public:
         completeTaskQueue_.enqueue(task);
     }
     
-    uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0) const
-    {
-        static uint32_t task_id = 0;
-        ResTask task;
-        task.task_id = task_id++;
-        task.priority = priority;
-        task.task_func = std::move(task_func);
-        task.complete_func = std::move(complete_func);
-        threads_[priority]->taskQueue_.enqueue(task);
-        return task.task_id;
-    }
+    uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
 
     void WaitForTask(uint32_t task_id)
     {
@@ -279,15 +269,7 @@ public:
         // if task_id not found, it has been down, return immediately.
     }
 
-    void Tick()
-    {
-        ResTask task;
-        if( completeTaskQueue_.dequeue(task, false) )
-        {
-            task.complete_func(task);
-        }
-    }
-    
+    void Tick();
 
     static TaskCoordinator* GetInstance()
     {
@@ -300,6 +282,7 @@ public:
 
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
+    tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
 
 

@@ -6,6 +6,7 @@
 #include <map>
 #include <unordered_map>
 #include <memory>
+#include <functional>
 
 #if WIN32 && !defined(__MINGW32__)
 #define DISABLE_OPTIMIZATION __pragma(optimize("", off))

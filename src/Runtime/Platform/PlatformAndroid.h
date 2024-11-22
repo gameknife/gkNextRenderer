@@ -11,6 +11,16 @@ namespace NextRenderer
     {
 
     }
+
+    inline void OSCommand(const char* command)
+    {
+
+    }
+
+    inline void OSProcess(const char* exe)
+    {
+
+    }
 }
 #if ANDROID
 #include <imgui_impl_android.h>

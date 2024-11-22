@@ -2,17 +2,29 @@ AdaptiveSample;自适应采样
 AdaptiveVariance;自适应采样阈值
 AntiAlias;抗锯齿
 Aperture;光圈
+Base;基座
+Blocks;基础块
+Brush Bar, switch Block, select Color to build.;笔刷区，切换方块，选择颜色建造
+Build Bar, switch build / camera / base mode. Handle file save.;建造区，切换建造/相机/基础模式，处理文件保存
 Camera;相机
 Click: Click Object to Focus.;点击物件对焦
 DebugDraw;可视化调试
 Denoiser;降噪器
+Dir;阳光方向
 DropFile: if glb file, load it.;拖入文件：加载支持的模型文件
 F1: toggle Settings.;F1：切换设置面板
 F2: toggle Statistics.;F2：切换统计面板
+Files;文件
 FoV;焦距
 Focus(cm);对焦距离（厘米）
+Function Bar, hover to get help.;功能区，悬停获取帮助
 Help;帮助
+Layout Bar, toggle Left/Right/Bottom Panel.;布局区，切换左/右/底部面板
+Light;灯光
+Lum;亮度
 Misc;杂项
+Mode;模式
+Orientation;旋转
 PaperWhitNit;HDR峰值亮度
 Performance;性能
 Profiler;可视化
@@ -23,12 +35,17 @@ Samples;采样数
 Scaling;缩放
 Scene;场景
 ShaderTime;Shader耗时
+Sky;天光
 SkyIdx;天空盒Id
 SkyLum;天空盒亮度
 SkyRotation;天空盒旋转
+Sun;太阳光
 SunLum;太阳亮度
 SunRotation;太阳旋转
 Temporal Frames;时域收敛总帧数
 TemporalSteps;时域收敛步数
 Time Scaling;耗时缩放
 Use JBF;使用联合双边滤波
+Use LMB to handle blocks, RMB to rotate;使用鼠标左键操作方块，右键旋转
+auto;自动
+manual;手动
