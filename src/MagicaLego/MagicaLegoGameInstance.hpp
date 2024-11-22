@@ -51,15 +51,15 @@ public:
 	constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
 	template <typename Context>
 	constexpr auto format (EOrientation const& foo, Context& ctx) const {
-		std::string result;
+		
 		switch(foo)
 		{
-			case EOrientation::EO_North: result = "NORTH"; break;
-			case EOrientation::EO_East: result = "EAST"; break;
-			case EOrientation::EO_South: result = "SOUTH"; break;
-			case EOrientation::EO_West: result = "WEST"; break;
+			case EOrientation::EO_North: return format_to(ctx.out(), "{}", "NORTH");
+			case EOrientation::EO_East: return format_to(ctx.out(), "{}", "EAST");
+			case EOrientation::EO_South: return format_to(ctx.out(), "{}", "SOUTH");
+			case EOrientation::EO_West: return format_to(ctx.out(), "{}", "WEST");
 		}
-		return format_to(ctx.out(), "{}", result); 
+		return format_to(ctx.out(), "{}", "UNKNOWN"); 
 	}
 };
 
