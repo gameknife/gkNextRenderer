@@ -10,6 +10,7 @@ Camera;相机
 Click: Click Object to Focus.;点击物件对焦
 DebugDraw;可视化调试
 Denoiser;降噪器
+Dig a block;挖掉一个块
 Dir;阳光方向
 DropFile: if glb file, load it.;拖入文件：加载支持的模型文件
 F1: toggle Settings.;F1：切换设置面板
@@ -24,17 +25,29 @@ Light;灯光
 Lum;亮度
 Misc;杂项
 Mode;模式
+New scene;新建场景
+Open Project Page in OS Browser;打开项目的主页
+Open Twitter Page in OS Browser;打开开发者推文页面
+Open select scene;打开选择的场景
 Orientation;旋转
 PaperWhitNit;HDR峰值亮度
 Performance;性能
+Place a block with selected brush;用选择的基础块摆一个块
 Profiler;可视化
 RR Start;俄罗斯轮盘起始步
 Ray Tracing;光线追踪
+Record build timeline video, auto rotate;录制搭建过程录像，自动旋转
+Record build timeline video, manual rotate;录制搭建过程录像，手动控制
+Request Help;打开帮助界面
+Rotate current block;旋转下一个摆块
 SPACE: hold to auto focus.;空格：按住自动对焦
 Samples;采样数
+Save current scene;保存到当前场景文件
 Scaling;缩放
 Scene;场景
+Select a block to modify;选择一个块来调整
 ShaderTime;Shader耗时
+Shuffle BGM;切换背景音乐
 Sky;天光
 SkyIdx;天空盒Id
 SkyLum;天空盒亮度
@@ -42,9 +55,17 @@ SkyRotation;天空盒旋转
 Sun;太阳光
 SunLum;太阳亮度
 SunRotation;太阳旋转
+Switch base plane big;切换到大基座
+Switch base plane middle;切换到中基座
+Switch base plane small;切换到小基座
+Switch camera to auto focus mode;将相机切换为自动聚焦模式
+Switch camera to orbit mode;将相机切换为环绕模式
+Switch camera to pan mode;将相机切换为平移模式
+Take a Screenshot into the screenshots folder;截图到screenshots文件夹
 Temporal Frames;时域收敛总帧数
 TemporalSteps;时域收敛步数
 Time Scaling;耗时缩放
+Toggle BGM;开关背景音乐
 Use JBF;使用联合双边滤波
 Use LMB to handle blocks, RMB to rotate;使用鼠标左键操作方块，右键旋转
 auto;自动
