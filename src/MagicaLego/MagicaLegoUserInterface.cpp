@@ -31,7 +31,7 @@ namespace
     ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoSavedSettings;
     
-    static bool SelectButton(const char* label, const char* shortcut, bool selected)
+    static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
         if (selected)
         {
@@ -41,7 +41,7 @@ namespace
         }
         ImGui::BeginGroup();
         bool result = ImGui::Button(label, ImVec2(ICON_SIZE, ICON_SIZE));
-
+        BUTTON_TOOLTIP( LOCTEXT(tooltip) )
 
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, ICON_SIZE);
         ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), cursor + ImVec2(SHORTCUT_SIZE, SHORTCUT_SIZE), IM_COL32(255, 255, 255, 128), 4.0f);
@@ -199,13 +199,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
     }
-    BUTTON_TOOLTIP("Open Project Page in OS Browser")
+    BUTTON_TOOLTIP(LOCTEXT("Open Project Page in OS Browser"))
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_TWITTER, ImVec2(TITLEBAR_SIZE, TITLEBAR_SIZE)))
     {
         NextRenderer::OSCommand("https://x.com/gKNIFE_");
     }
-    BUTTON_TOOLTIP("Open Twitter Page in OS Browser")
+    BUTTON_TOOLTIP(LOCTEXT("Open Twitter Page in OS Browser"))
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
@@ -261,7 +261,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
             }
         });
     }
-    BUTTON_TOOLTIP("Take a Screenshot into the screenshots folder")
+    BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
     ImGui::SameLine();
     std::string recordAText = ICON_FA_VIDEO " ";
     recordAText += LOCTEXT("auto");
@@ -269,7 +269,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         RecordTimeline(true);
     }
-    BUTTON_TOOLTIP("Record build timeline video, auto rotate")
+    BUTTON_TOOLTIP(LOCTEXT("Record build timeline video, auto rotate"))
     ImGui::SameLine();
     std::string recordMText = ICON_FA_VIDEO " ";
     recordMText += LOCTEXT("manual");
@@ -277,7 +277,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         RecordTimeline(false);
     }
-    BUTTON_TOOLTIP("Record build timeline video, manual rotate")
+    BUTTON_TOOLTIP(LOCTEXT("Record build timeline video, manual rotate"))
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
@@ -287,13 +287,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         Paused ? GetGameInstance()->PauseBGM(false) : GetGameInstance()->PauseBGM(true);
     }
-    BUTTON_TOOLTIP("Toggle BGM")
+    BUTTON_TOOLTIP(LOCTEXT("Toggle BGM"))
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_SHUFFLE, ImVec2(TITLEBAR_SIZE, TITLEBAR_SIZE)))
     {
         GetGameInstance()->PlayNextBGM();
     }
-    BUTTON_TOOLTIP("Shuffle BGM")
+    BUTTON_TOOLTIP(LOCTEXT("Shuffle BGM"))
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
@@ -306,7 +306,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
             GetGameInstance()->SetCapturing(true);
         }
     }
-    BUTTON_TOOLTIP("Request Help")
+    BUTTON_TOOLTIP(LOCTEXT("Request Help"))
     ImGui::End();
 
     ImGui::PopStyleColor();
@@ -693,52 +693,52 @@ void MagicaLegoUserInterface::DrawLeftBar()
     if (ImGui::Begin("Place & Dig", nullptr, PANEL_FLAGS))
     {
         ImGui::SeparatorText(LOCTEXT("Mode"));
-        if (SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Dig))
+        if (SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Dig, "Dig a block"))
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Dig);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_CUBES_STACKED, "W", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Place))
+        if (SelectButton(ICON_FA_CUBES_STACKED, "W", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Place, "Place a block with selected brush"))
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Place);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Select))
+        if (SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Select, "Select a block to modify"))
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Select);
         }
         ImGui::SeparatorText(LOCTEXT("Camera"));
-        if (SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Pan))
+        if (SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Pan, "Switch camera to pan mode"))
         {
             GetGameInstance()->SetCameraMode(ECamMode::ECM_Pan);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Orbit))
+        if (SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Orbit, "Switch camera to orbit mode"))
         {
             GetGameInstance()->SetCameraMode(ECamMode::ECM_Orbit);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECamMode::ECM_AutoFocus))
+        if (SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECamMode::ECM_AutoFocus, "Switch camera to auto focus mode"))
         {
             GetGameInstance()->SetCameraMode(ECamMode::ECM_AutoFocus);
         }
         ImGui::SeparatorText(LOCTEXT("Base"));
-        if (SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Big))
+        if (SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Big, "Switch base plane big"))
         {
             GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Big);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Mid))
+        if (SelectButton(ICON_FA_M, "2", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Mid, "Switch base plane middle"))
         {
             GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Mid);
         }
         ImGui::SameLine();
-        if (SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Small))
+        if (SelectButton(ICON_FA_S, "3", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Small, "Switch base plane small"))
         {
             GetGameInstance()->SwitchBasePlane(EBasePlane::EBP_Small);
         }
         ImGui::SeparatorText(LOCTEXT("Orientation"));
-        if (SelectButton(fmt::format("{}", GetGameInstance()->GetCurrentOrientation()).c_str(), "R", false))
+        if (SelectButton(fmt::format("{}", GetGameInstance()->GetCurrentOrientation()).c_str(), "R", false, "Rotate current block"))
         {
             GetGameInstance()->ChangeOrientation();
         }
@@ -788,20 +788,24 @@ void MagicaLegoUserInterface::DrawLeftBar()
         {
             GetGameInstance()->CleanUp();
         }
+        BUTTON_TOOLTIP(LOCTEXT("New scene"))
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_FOLDER_OPEN, ImVec2(BUTTON_SIZE, BUTTON_SIZE)))
         {
             GetGameInstance()->LoadRecord(selected_filename);
         }
+        BUTTON_TOOLTIP(LOCTEXT("Open select scene"))
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_FLOPPY_DISK, ImVec2(BUTTON_SIZE, BUTTON_SIZE)))
         {
             if (selected_filename != "") GetGameInstance()->SaveRecord(selected_filename);
         }
+        BUTTON_TOOLTIP(LOCTEXT("Save current scene"))
         ImGui::SameLine();
         // 模态新保存
         if (ImGui::Button(ICON_FA_DOWNLOAD, ImVec2(BUTTON_SIZE, BUTTON_SIZE)))
             ImGui::OpenPopup(ICON_FA_DOWNLOAD);
+        BUTTON_TOOLTIP(LOCTEXT("Save as..."))
 
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
