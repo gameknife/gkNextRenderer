@@ -4,17 +4,16 @@
 struct ImFont;
 class MagicaLegoGameInstance;
 
-enum EIntroStep
+enum EIntroStep : uint8_t
 {
 	EIS_Entry,
 	EIS_Opening,
 	EIS_GuideBuild,
 	EIS_Finish,
-
 	EIS_InGame,
 };
 
-enum EUILayout
+enum EUILayout : uint8_t
 {
 	EULUT_LeftBar = 0x1,
 	EULUT_RightBar = 0x2,
@@ -38,9 +37,7 @@ private:
 	void DrawLeftBar();
 	void DrawRightBar();
 	void DrawTimeline();
-	void DrawOpening();
-	void DrawIndicator();
-	void DrawStatusBar();
+	void DrawOpening() const;
 
 	void DrawWaiting();
 	void DrawNotify();
@@ -55,7 +52,7 @@ private:
 
 	void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
 	
-	MagicaLegoGameInstance* GetGameInstance() {return gameInstance_;}
+	MagicaLegoGameInstance* GetGameInstance() const {return gameInstance_;}
 	MagicaLegoGameInstance* gameInstance_;
 
 	void DirectSetLayout(uint32_t layout);
@@ -79,6 +76,6 @@ private:
 
 	bool showHelp_ {};
 
-	EIntroStep introStep_ = EIS_Entry;
+	EIntroStep introStep_ = EIntroStep::EIS_Entry;
 };
 
