@@ -298,6 +298,8 @@ bool NextRendererApplication::Tick()
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
     deltaSeconds_ = time_ - prevTime;
+    float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
+    smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
 
     // Camera Update
     userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);

@@ -58,7 +58,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     // options
     options.SceneName = "legobricks.glb";
     options.Samples = 8;
-    options.Temporal = 16;
+    options.Temporal = 8;
     options.ForceSDR = true;
     options.RendererType = 0;
     options.locale = "zhCN";

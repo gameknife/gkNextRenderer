@@ -307,6 +307,29 @@ void MagicaLegoUserInterface::DrawTitleBar()
         }
     }
     BUTTON_TOOLTIP(LOCTEXT("Request Help"))
+    ImGui::SameLine();
+    ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TITLEBAR_SIZE / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
+    ImGui::Dummy(ImVec2(10, 10));
+    ImGui::SameLine();
+    float deltaSeconds = GetGameInstance()->GetEngine().GetSmoothDeltaSeconds();
+    int32_t samples = GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples;
+    if (ImGui::Button(samples > 1 ? ICON_FA_TRUCK : ICON_FA_TRUCK_FAST, ImVec2(TITLEBAR_SIZE, TITLEBAR_SIZE)))
+    {
+        if (samples > 1)
+        {
+            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 1;
+            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 64;
+        }
+        else
+        {
+            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 8;
+            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 8;
+        }
+    }
+    BUTTON_TOOLTIP(LOCTEXT("Switch Render Quality"))
+    ImGui::SameLine();
+    ImGui::SetCursorPosY((TITLEBAR_SIZE - ImGui::GetTextLineHeight()) / 2);
+    ImGui::TextUnformatted(fmt::format("{:.0f}fps", 1.0f / deltaSeconds).c_str());
     ImGui::End();
 
     ImGui::PopStyleColor();

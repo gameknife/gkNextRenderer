@@ -77,5 +77,7 @@ private:
 	bool showHelp_ {};
 
 	EIntroStep introStep_ = EIntroStep::EIS_Entry;
+
+	bool qualityMode_ {};
 };
 
