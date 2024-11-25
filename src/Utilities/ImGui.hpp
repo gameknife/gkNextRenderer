@@ -15,7 +15,7 @@ namespace Utilities
             ImGui::TextUnformatted(text.c_str());
         }
 
-        inline ImVec2 TextCentered(std::string text, int FixedWidth)
+        inline ImVec2 TextCentered(std::string text, float FixedWidth)
         {
             auto textWidth   = ImGui::CalcTextSize(text.c_str()).x;
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (FixedWidth - textWidth) * 0.5f);

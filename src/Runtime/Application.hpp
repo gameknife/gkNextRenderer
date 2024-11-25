@@ -106,6 +106,7 @@ public:
 
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
+	float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
 	uint32_t GetTotalFrames() const { return totalFrames_; }
 
 	// remove till return true
@@ -192,7 +193,7 @@ private:
 	uint32_t totalFrames_{};
 	double time_{};
 	double deltaSeconds_{};
-
+	double smoothedDeltaSeconds_{};
 	glm::vec2 mousePos_ {};
 
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;

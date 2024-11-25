@@ -8,7 +8,7 @@
 
 ### One sentence introduction
 
-A real-time path tracing renderer based on Vulkan that aims to achieve**quality**and**efficiency**can be used for**real time**Path tracing rendering.
+A real-time path tracing renderer based on Vulkan that aims to achieve**"quality"**and**"efficiency"**can be used for**"real time"**Path tracing rendering.
 
 ### Technical features
 
@@ -26,6 +26,10 @@ The original intention of this project is: learning, verification, and progress.
 -   **MagicaLego**: A Lego building game similar to MagicaVoxel, with full real-time path tracing rendering to verify goals
 
 ## Gallery (TrueHDR)
+
+<https://github.com/user-attachments/assets/2d1c61ab-8daa-4f1f-ad14-1f211fca19b0>
+
+> _MegicaLego Games_
 
 <https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7>
 
@@ -101,14 +105,15 @@ The original intention of this project is: learning, verification, and progress.
 
 ## run
 
-1.  Download the latest Release version and start it directly through bin/\*.exe
-2.  Build and run from scratch
+1.  Download the latest MagicaLego game version and launch it through bin/MagicaLego.exe
+2.  Download the latest Release version and start it directly through bin/\*.exe
+3.  Build and run from scratch
 
 ## How to build
 
 First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
 
-project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
+project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
 
 After the local development environment is deployed, each platform can click the script to build
 
