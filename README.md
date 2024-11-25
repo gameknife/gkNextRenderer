@@ -11,7 +11,7 @@
 
 ### 一句话简介
 
-一个基于Vulkan的实时路径跟踪渲染器，目标是实现 **质量** 和 **效率** 能用于 **实时** 的路径跟踪渲染。
+一个基于Vulkan的实时路径跟踪渲染器，目标是实现 **"质量"** 和 **"效率"** 能用于 **"实时"** 的路径跟踪渲染。
 
 ### 技术特点
 
@@ -29,6 +29,10 @@
 - **MagicaLego**: 类似MagicaVoxel的乐高搭建游戏，全实时路径追踪渲染，用以验证目标
 
 ## 图库 (TrueHDR)
+
+https://github.com/user-attachments/assets/2d1c61ab-8daa-4f1f-ad14-1f211fca19b0
+
+> *MegicaLego Games*
 
 https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
@@ -95,6 +99,7 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 ## 运行
 
+1. 下载最新的MagicaLego游戏版本，通过bin/MagicaLego.exe启动
 1. 下载最新Release版本，通过bin/*.exe直接启动
 1. 从头构建运行
 
