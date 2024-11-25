@@ -125,6 +125,7 @@ public:
 	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
 
 	// fast aux drawing using interface
+	glm::vec3 ProjectScreenToWorld(glm::vec2 locationSS);
 	glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS);
 	void DrawAuxLine( glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1 );
 	void DrawAuxBox( glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1 );

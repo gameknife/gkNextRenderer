@@ -437,6 +437,20 @@ void NextRendererApplication::SaveScreenShot(const std::string& filename, int x,
     BenchMarker::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
+glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
+{
+    glm::vec2 offset = glm::vec2(0.0, 0.0);
+    glm::vec2 extent = glm::vec2(GetWindow().FramebufferSize().width, GetWindow().FramebufferSize().height);
+    glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
+    glm::vec2 uv = pixel / extent * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+    glm::vec4 origin = prevUBO_.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+    glm::vec4 target = prevUBO_.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+    glm::vec3 raydir = prevUBO_.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+    glm::vec3 rayorg = glm::vec3(origin);
+
+    return raydir;
+}
+
 glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
 {
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
