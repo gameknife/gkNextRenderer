@@ -47,11 +47,8 @@ jobs:
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        build_windows_magicalego.bat ${{ github.ref_name }}
+        package_magicalego.bat ${{ github.ref_name }}
       shell: cmd
-    - name: Create zip file
-      run: |
-        package_magicalego.bat
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
