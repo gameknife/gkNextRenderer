@@ -6,11 +6,13 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Vulkan/SwapChain.hpp"
 
+#if WITH_CPURAYCAST
 // a cpu ray-cast if hardware not support
 // a cpu way to find the block location with simple bounds
 #define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 static tinybvh::BVH GCpuBvh;
+#endif
 
 const glm::i16vec3 INVALID_POS(0, -10, 0);
 
@@ -163,7 +165,6 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
 
     // calcate the view forward and left
     glm::vec3 forward = glm::normalize(realCameraCenter_ - cameraPos);
-    cachedCameraForward_ = forward;
     cachedCameraPos_ = cameraPos;
     forward.y = 0.0f;
     glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
@@ -211,8 +212,9 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         GetEngine().DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5, 0.65, 1, 0.75), 2.0);
         indicatorDrawRequest_ = false;
     }
-
+#if WITH_CPURAYCAST
     GetEngine().DrawAuxPoint(cpuHit, glm::vec4(1, 0, 0, 1), 2.0f);
+#endif
 }
 
 bool MagicaLegoGameInstance::OnRenderUI()
@@ -371,7 +373,7 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         bMouseLeftDown_ = true;
         lastDownFrameNum_ = GetEngine().GetRenderer().FrameCount();
-
+#if WITH_CPURAYCAST
         if (GCpuBvh.triCount > 0)
         {
             tinybvh::bvhvec3 O( cachedCameraPos_.x, cachedCameraPos_.y, cachedCameraPos_.z );
@@ -388,7 +390,7 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
                 cpuHit = cachedCameraPos_ + dir * ray.hit.t;
             }
         }
-        
+#endif
         return true;
     }
     else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
@@ -684,8 +686,9 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
 
-
+#if WITH_CPURAYCAST
     std::vector<tinybvh::bvhvec4> triangles;
+#endif
     
     for (auto& Block : Source)
     {
@@ -701,6 +704,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                                                                 instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location), newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 
+#if WITH_CPURAYCAST
                 // add bounds triangles for bvh
                 glm::vec3 min = GetRenderLocationFromBlockLocation(Block.second.location) + glm::vec3(orientation * glm::vec4(std::get<0>(BasicNodeIndicatorMap[BasicBlock->type]), 1.0f));
                 glm::vec3 max = GetRenderLocationFromBlockLocation(Block.second.location) + glm::vec3(orientation * glm::vec4(std::get<1>(BasicNodeIndicatorMap[BasicBlock->type]), 1.0f));
@@ -714,8 +718,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 tinybvh::bvhvec4 v5 = tinybvh::bvhvec4(max.x, min.y, max.z, 0);
                 tinybvh::bvhvec4 v6 = tinybvh::bvhvec4(max.x, max.y, max.z, 0);
                 tinybvh::bvhvec4 v7 = tinybvh::bvhvec4(min.x, max.y, max.z, 0);
- 
-
+                
                 triangles.push_back(v0);
                 triangles.push_back(v1);
                 triangles.push_back(v2);
@@ -763,20 +766,21 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 triangles.push_back(v0);
                 triangles.push_back(v5);
                 triangles.push_back(v1);
+#endif
             }
         }
     }
 
     GetEngine().GetScene().MarkDirty();
 
-    //std::vector<tinybvh::bvhvec4> triangles;
-    //triangles.reserve(  )
+#if WITH_CPURAYCAST
     if (triangles.size() > 3)
     {
         GCpuBvh.BuildAVX( triangles.data(), static_cast<int>(triangles.size()) / 3 );
         GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
         GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
     }
+#endif
 }
 
 void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
