@@ -255,4 +255,8 @@ private:
 
     // Status
     bool bCapturing_ = false;
+
+    // cpu hit
+    mutable glm::vec3 cachedCameraPos_;
+    glm::vec3 cpuHit;
 };

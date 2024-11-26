@@ -448,6 +448,8 @@ void MagicaLegoUserInterface::OnRenderUI()
     }
 
     DrawNotify();
+
+    DrawVersionWatermark();
 }
 
 void MagicaLegoUserInterface::DrawWaiting()
@@ -495,6 +497,20 @@ void MagicaLegoUserInterface::DrawWatermark()
     ImGui::TextUnformatted("MagicaLEGO");
     ImGui::PopFont();
     ImGui::Text("%s %s", ICON_FA_GITHUB, "https://github.com/gameknife/gkNextRenderer");
+    ImGui::End();
+}
+
+void MagicaLegoUserInterface::DrawVersionWatermark()
+{
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    ImGui::SetNextWindowPos(ImVec2(viewportSize.x / 2, viewportSize.y), ImGuiCond_Always, ImVec2(0.5, 1));
+    ImGui::SetNextWindowBgAlpha(0.0f);
+
+    ImGui::Begin("VersionWatermark", nullptr, PANEL_FLAGS | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
+    //auto Size = ImGui::CalcTextSize(NextRenderer::GetBuildVersion().c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
+    ImGui::TextUnformatted(NextRenderer::GetBuildVersion().c_str());
+    ImGui::PopStyleColor();
     ImGui::End();
 }
 

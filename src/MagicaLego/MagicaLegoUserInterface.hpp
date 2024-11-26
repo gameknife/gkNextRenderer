@@ -43,6 +43,7 @@ private:
 	void DrawNotify();
 
 	void DrawWatermark();
+	void DrawVersionWatermark();
 
 	void DrawHUD();
 
