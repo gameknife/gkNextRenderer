@@ -75,7 +75,10 @@ namespace NextRenderer
             default: break;
         }
         // fallback renderer
-        return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+        auto fallbackptr =  new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
+        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+        return fallbackptr;
     }
 
 }

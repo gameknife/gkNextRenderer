@@ -28,7 +28,7 @@ namespace Vulkan::RayTracing
 {
 	class RayQueryPipeline;
 
-	class RayQueryRenderer final : public Vulkan::RayTracing::LogicRendererBase
+	class RayQueryRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
 
@@ -36,7 +36,7 @@ namespace Vulkan::RayTracing
 	
 	public:
 
-		RayQueryRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
+		RayQueryRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		virtual ~RayQueryRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,

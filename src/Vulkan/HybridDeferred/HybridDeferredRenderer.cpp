@@ -23,7 +23,7 @@
 
 namespace Vulkan::HybridDeferred
 {
-    HybridDeferredRenderer::HybridDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
+    HybridDeferredRenderer::HybridDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
     {
     }
 
@@ -98,8 +98,10 @@ namespace Vulkan::HybridDeferred
         
         deferredFrameBuffer0_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
         deferredFrameBuffer1_.reset(new FrameBuffer(rtVisibility1->GetImageView(), visibilityPipeline1_->RenderPass()));
+
+        //baseRender_
         
-        deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), TLAS()[0],
+        deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
                                                          rtVisibility0->GetImageView(),
                                                          rtVisibility1->GetImageView(),
                                                          rtAccumlation->GetImageView(),

@@ -19,7 +19,7 @@
 
 namespace Vulkan::ModernDeferred {
 
-ModernDeferredRenderer::ModernDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
+ModernDeferredRenderer::ModernDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }

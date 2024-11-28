@@ -28,13 +28,13 @@ namespace Assets
 
 namespace Vulkan::ModernDeferred
 {
-	class ModernDeferredRenderer final : public Vulkan::RayTracing::LogicRendererBase
+	class ModernDeferredRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
 
 		VULKAN_NON_COPIABLE(ModernDeferredRenderer)
 		
-		ModernDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
+		ModernDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		~ModernDeferredRenderer();
 		
 		void CreateSwapChain() override;

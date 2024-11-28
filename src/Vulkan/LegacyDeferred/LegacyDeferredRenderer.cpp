@@ -18,7 +18,7 @@
 
 namespace Vulkan::LegacyDeferred {
 
-LegacyDeferredRenderer::LegacyDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender):LogicRendererBase(baseRender)
+LegacyDeferredRenderer::LegacyDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }
