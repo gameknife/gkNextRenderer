@@ -6,12 +6,15 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Vulkan/SwapChain.hpp"
 
+#define WITH_CPURAYCAST 1
+
 #if WITH_CPURAYCAST
 // a cpu ray-cast if hardware not support
 // a cpu way to find the block location with simple bounds
 #define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 static tinybvh::BVH GCpuBvh;
+static std::vector<tinybvh::bvhvec4> GTriangles;
 #endif
 
 const glm::i16vec3 INVALID_POS(0, -10, 0);
@@ -681,13 +684,80 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
     }
     DumpReplayStep(static_cast<int>(BlockRecords.size()) - 1);
 }
+#if WITH_CPURAYCAST
+void BuildBox(std::vector<tinybvh::bvhvec4>& triangles, glm::vec3 min, glm::vec3 max)
+{
+    // min max shows a box, build the 12 triangles of it
+    tinybvh::bvhvec4 v0 = tinybvh::bvhvec4(min.x, min.y, min.z, 0);
+    tinybvh::bvhvec4 v1 = tinybvh::bvhvec4(max.x, min.y, min.z, 0);
+    tinybvh::bvhvec4 v2 = tinybvh::bvhvec4(max.x, max.y, min.z, 0);
+    tinybvh::bvhvec4 v3 = tinybvh::bvhvec4(min.x, max.y, min.z, 0);
+    tinybvh::bvhvec4 v4 = tinybvh::bvhvec4(min.x, min.y, max.z, 0);
+    tinybvh::bvhvec4 v5 = tinybvh::bvhvec4(max.x, min.y, max.z, 0);
+    tinybvh::bvhvec4 v6 = tinybvh::bvhvec4(max.x, max.y, max.z, 0);
+    tinybvh::bvhvec4 v7 = tinybvh::bvhvec4(min.x, max.y, max.z, 0);
+    
+    triangles.push_back(v0);
+    triangles.push_back(v1);
+    triangles.push_back(v2);
 
+    triangles.push_back(v0);
+    triangles.push_back(v2);
+    triangles.push_back(v3);
+
+    triangles.push_back(v4);
+    triangles.push_back(v6);
+    triangles.push_back(v5);
+
+    triangles.push_back(v4);
+    triangles.push_back(v7);
+    triangles.push_back(v6);
+    
+    triangles.push_back(v0);
+    triangles.push_back(v3);
+    triangles.push_back(v7);
+
+    triangles.push_back(v0);
+    triangles.push_back(v7);
+    triangles.push_back(v4);
+
+    triangles.push_back(v1);
+    triangles.push_back(v5);
+    triangles.push_back(v6);
+
+    triangles.push_back(v1);
+    triangles.push_back(v6);
+    triangles.push_back(v2);
+
+    triangles.push_back(v3);
+    triangles.push_back(v2);
+    triangles.push_back(v6);
+
+    triangles.push_back(v3);
+    triangles.push_back(v6);
+    triangles.push_back(v7);
+    
+    triangles.push_back(v0);
+    triangles.push_back(v4);
+    triangles.push_back(v5);
+
+    triangles.push_back(v0);
+    triangles.push_back(v5);
+    triangles.push_back(v1);
+}
+#endif
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& Source, uint32_t newhash)
 {
     GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
 
 #if WITH_CPURAYCAST
-    std::vector<tinybvh::bvhvec4> triangles;
+    GTriangles.clear();
+    // base
+    {
+        glm::vec3 min {-0.8,-0.08,-0.8};
+        glm::vec3 max {0.8,0,0.8};
+        BuildBox(GTriangles, min, max);
+    }
 #endif
     
     for (auto& Block : Source)
@@ -709,63 +779,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 glm::vec3 min = GetRenderLocationFromBlockLocation(Block.second.location) + glm::vec3(orientation * glm::vec4(std::get<0>(BasicNodeIndicatorMap[BasicBlock->type]), 1.0f));
                 glm::vec3 max = GetRenderLocationFromBlockLocation(Block.second.location) + glm::vec3(orientation * glm::vec4(std::get<1>(BasicNodeIndicatorMap[BasicBlock->type]), 1.0f));
 
-                // min max shows a box, build the 12 triangles of it
-                tinybvh::bvhvec4 v0 = tinybvh::bvhvec4(min.x, min.y, min.z, 0);
-                tinybvh::bvhvec4 v1 = tinybvh::bvhvec4(max.x, min.y, min.z, 0);
-                tinybvh::bvhvec4 v2 = tinybvh::bvhvec4(max.x, max.y, min.z, 0);
-                tinybvh::bvhvec4 v3 = tinybvh::bvhvec4(min.x, max.y, min.z, 0);
-                tinybvh::bvhvec4 v4 = tinybvh::bvhvec4(min.x, min.y, max.z, 0);
-                tinybvh::bvhvec4 v5 = tinybvh::bvhvec4(max.x, min.y, max.z, 0);
-                tinybvh::bvhvec4 v6 = tinybvh::bvhvec4(max.x, max.y, max.z, 0);
-                tinybvh::bvhvec4 v7 = tinybvh::bvhvec4(min.x, max.y, max.z, 0);
-                
-                triangles.push_back(v0);
-                triangles.push_back(v1);
-                triangles.push_back(v2);
-
-                triangles.push_back(v0);
-                triangles.push_back(v2);
-                triangles.push_back(v3);
-
-                triangles.push_back(v4);
-                triangles.push_back(v6);
-                triangles.push_back(v5);
-
-                triangles.push_back(v4);
-                triangles.push_back(v7);
-                triangles.push_back(v6);
-                
-                triangles.push_back(v0);
-                triangles.push_back(v3);
-                triangles.push_back(v7);
-
-                triangles.push_back(v0);
-                triangles.push_back(v7);
-                triangles.push_back(v4);
-
-                triangles.push_back(v1);
-                triangles.push_back(v5);
-                triangles.push_back(v6);
-
-                triangles.push_back(v1);
-                triangles.push_back(v6);
-                triangles.push_back(v2);
-
-                triangles.push_back(v3);
-                triangles.push_back(v2);
-                triangles.push_back(v6);
-
-                triangles.push_back(v3);
-                triangles.push_back(v6);
-                triangles.push_back(v7);
-                
-                triangles.push_back(v0);
-                triangles.push_back(v4);
-                triangles.push_back(v5);
-
-                triangles.push_back(v0);
-                triangles.push_back(v5);
-                triangles.push_back(v1);
+                BuildBox(GTriangles, min, max);
 #endif
             }
         }
@@ -774,11 +788,11 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
     GetEngine().GetScene().MarkDirty();
 
 #if WITH_CPURAYCAST
-    if (triangles.size() > 3)
+    if (GTriangles.size() > 3)
     {
-        GCpuBvh.BuildAVX( triangles.data(), static_cast<int>(triangles.size()) / 3 );
-        GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
-        GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
+        GCpuBvh.BuildAVX( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
+        // GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
+        // GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
     }
 #endif
 }
