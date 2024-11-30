@@ -440,7 +440,14 @@ foreach(target IN LISTS AllTargets)
 	if (MSVC)
 	target_compile_options(${target} PRIVATE /WX)
 	else()
-	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-stringop-overflow -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+	
+	if (APPLE)
+	#target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
+	else()
+	target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
+	endif()
+	
 	endif()
 
 	# specific for targets
@@ -450,8 +457,8 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	if (MSVC)
 	add_custom_command(
 			TARGET ${target} POST_BUILD
