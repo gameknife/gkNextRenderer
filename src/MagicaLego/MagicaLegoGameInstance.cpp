@@ -483,10 +483,14 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         BasicBlockTypeMap[typeName].push_back(newBlock);
         Node->SetVisible(false);
 
+#ifdef __APPLE__
+
+#else
         std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
         std::vector<uint8_t> outData;
         GetEngine().GetPakSystem().LoadFile(fileName, outData);
         Assets::GlobalTexturePool::LoadTexture(fileName, outData.data(), outData.size(), Vulkan::SamplerConfig());
+#endif
     }
 }
 
