@@ -226,9 +226,6 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         GetEngine().DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5, 0.65, 1, 0.75), 2.0);
         indicatorDrawRequest_ = false;
     }
-#if WITH_CPURAYCAST
-    GetEngine().DrawAuxPoint(cpuHit, glm::vec4(1, 0, 0, 1), 2.0f);
-#endif
 }
 
 bool MagicaLegoGameInstance::OnRenderUI()
