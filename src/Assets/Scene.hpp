@@ -6,6 +6,8 @@
 #include <vector>
 #include <glm/vec2.hpp>
 
+#include "Model.hpp"
+
 namespace Vulkan
 {
 	class Buffer;
@@ -59,8 +61,6 @@ namespace Assets
 		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
 
-		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
-
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
 		const uint32_t GetVerticeCount() const {return verticeCount_;}
@@ -78,13 +78,15 @@ namespace Assets
 		const Material* GetMaterial(uint32_t id) const;
 
 		void MarkDirty() {sceneDirty_ = true;}
+
+		std::vector<NodeSimpleProxy>& GetNodeSimpleProxys() { return nodeSimpleProxys; }
+		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 		
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
 		std::vector<Node> nodes_;
 		std::vector<glm::uvec2> offsets_;
-		std::vector<uint32_t> model_instance_count_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
@@ -124,6 +126,10 @@ namespace Assets
 		mutable uint32_t selectedId_ = -1;
 
 		bool sceneDirty_ = true;
+		
+		std::vector<NodeSimpleProxy> nodeSimpleProxys;
+		std::vector<NodeProxy> nodeProxys;
+		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
 	};
 
 }

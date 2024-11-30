@@ -187,10 +187,14 @@ namespace Vulkan::RayTracing
 
         // rebuild all instance
         std::vector<VkAccelerationStructureInstanceKHR> instances;
-        for (const auto& node : scene.Nodes())
+        auto& nodeTrans = scene.GetNodeProxys();
+        auto& nodeProxys = scene.GetNodeSimpleProxys();
+        for ( size_t i = 0; i < nodeTrans.size(); i++)
         {
+            auto& transform = nodeTrans[i];
+            auto& nodeProxy = nodeProxys[i];
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetInstanceId(),  node.IsVisible()));
+                bottomAs_[nodeProxy.modelId], glm::transpose(transform.transform), nodeProxy.instanceId, true));
         }
 
         // upload to gpu
