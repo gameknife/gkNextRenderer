@@ -232,7 +232,7 @@ namespace Assets
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
                               std::vector<Assets::Model>& models,
-                              std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
+                              std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
@@ -246,7 +246,7 @@ namespace Assets
         {
             return;
         }
-
+        
         // load all textures
         std::vector<uint32_t> textureIdMap;
 
@@ -528,6 +528,58 @@ namespace Assets
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);
+        }
+
+        // load all animations
+        for ( auto& animation : model.animations )
+        {
+            for ( auto& track : animation.channels )
+            {
+                if (track.target_path == "translation")
+                {
+                    AnimationTrack CreateTrack;
+
+                    CreateTrack.NodeName_ = model.nodes[track.target_node].name;
+                    
+                    tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
+                    tinygltf::Accessor outputAccessor = model.accessors[animation.samplers[track.sampler].output];
+
+                    tinygltf::BufferView inputView = model.bufferViews[inputAccessor.bufferView];
+                    tinygltf::BufferView outputView = model.bufferViews[outputAccessor.bufferView];
+              
+                    int inputStride = inputAccessor.ByteStride(inputView);
+                    int outputStride = outputAccessor.ByteStride(outputView);
+
+                    for (size_t i = 0; i < inputAccessor.count; ++i)
+                    {
+                        float time;
+                        glm::vec3 translation;
+                        if ( inputAccessor.type == TINYGLTF_TYPE_SCALAR )
+                        {
+                            
+                            float* position = reinterpret_cast<float*>(&model.buffers[inputView.buffer].data[inputView.byteOffset + inputAccessor.byteOffset + i *
+                                inputStride]);
+                            time = position[0];
+                        }
+
+                        if ( outputAccessor.type == TINYGLTF_TYPE_VEC3 )
+                        {
+                            float* position = reinterpret_cast<float*>(&model.buffers[outputView.buffer].data[outputView.byteOffset + outputAccessor.byteOffset + i *
+                                outputStride]);
+                            translation = vec3(
+                                position[0],
+                                position[1],
+                                position[2]
+                            );
+                        }
+
+                        AnimationKey key{time, translation, vec3(1), quat(1, 0, 0, 0)};
+                        CreateTrack.KeyFrames_.emplace_back(key);
+                    }
+
+                    tracks.emplace_back(CreateTrack);
+                }
+            }
         }
 
         // if we got camera in the scene

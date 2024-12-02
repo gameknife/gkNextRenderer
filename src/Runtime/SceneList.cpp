@@ -184,7 +184,8 @@ void SceneList::ScanScenes()
         {
             if(ext == ".glb")
             {
-                Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, materials, lights);
+                std::vector<Assets::AnimationTrack> tracks;
+                Model::LoadGLTFScene(absolute(entry.path()).string(), camera, nodes, models, materials, lights, tracks);
             }
             else if(ext == ".obj")
             {
@@ -220,7 +221,8 @@ int32_t SceneList::AddExternalScene(std::string absPath)
         {
             if(ext == ".glb")
             {
-                Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, materials, lights);
+                std::vector<Assets::AnimationTrack> tracks;
+                Model::LoadGLTFScene(absolute(filename).string(), camera, nodes, models, materials, lights, tracks);
             }
             else if(ext == ".obj")
             {

@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <glm/detail/type_quat.hpp>
 
 namespace Assets
 {
@@ -90,6 +91,20 @@ namespace Assets
         uint32_t instanceId_;
         bool visible_;
     };
+
+    struct AnimationKey
+    {
+        float Time;
+        glm::vec3 Translation;
+        glm::vec3 Scale;
+        glm::quat Rotation;
+    };
+    
+    struct AnimationTrack
+    {
+        std::string NodeName_;
+        std::vector<AnimationKey> KeyFrames_;
+    };
     
     class Model final
     {
@@ -112,7 +127,7 @@ namespace Assets
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
         static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<class Node>& nodes,
-                                  std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights);
+                                  std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, uint32_t materialIdx);
@@ -145,6 +160,8 @@ namespace Assets
         std::vector<uint32_t> indices_;
         std::vector<uint32_t> materialIdx_;
         std::shared_ptr<const class Procedural> procedural_;
+
+        std::vector<AnimationTrack> AnimationTracks_;
         
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
