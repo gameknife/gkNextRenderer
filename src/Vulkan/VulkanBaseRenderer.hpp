@@ -10,6 +10,7 @@
 #include <cassert>
 #include <chrono>
 #include <functional>
+#include <map>
 #include <glm/vec2.hpp>
 
 #include "Image.hpp"
@@ -289,13 +290,8 @@ namespace Vulkan
 		virtual void DeleteSwapChain();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		virtual void BeforeNextFrame()
-		{
-			if(DelegateBeforeNextTick)
-			{
-				DelegateBeforeNextTick();
-			}
-		}
+		virtual void BeforeNextFrame();
+
 		virtual void AfterRenderCmd() {}
 		virtual void AfterPresent() {}
 		virtual void AfterUpdateScene() {}
@@ -305,8 +301,8 @@ namespace Vulkan
 
 		bool VisualDebug() const {return visualDebug_;}
 
-		virtual void RegisterLogicRenderer(ERendererType type) {};
-		virtual void SwitchLogicRenderer(ERendererType type) {};
+		virtual void RegisterLogicRenderer(ERendererType type);
+		virtual void SwitchLogicRenderer(ERendererType type);
 
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;
@@ -342,6 +338,9 @@ namespace Vulkan
 		void RecreateSwapChain();
 
 		const VkPresentModeKHR presentMode_;
+
+		std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > logicRenderers_;
+		ERendererType currentLogicRenderer_;
 		
 		class Window* window_;
 		std::unique_ptr<class Instance> instance_;
@@ -376,6 +375,38 @@ namespace Vulkan
 		Fence* fence;
 
 		uint64_t uptime {};
+	};
+	
+	class LogicRendererBase
+	{
+	public:
+		LogicRendererBase( VulkanBaseRenderer& baseRender );
+		virtual ~LogicRendererBase() {};
+
+		virtual void OnDeviceSet() {};
+		virtual void CreateSwapChain() {};
+		virtual void DeleteSwapChain() {};
+		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
+		virtual void BeforeNextFrame() {};
+		
+		VulkanBaseRenderer& baseRender_;
+		template<typename T>
+		T& GetBaseRender() { return static_cast<T&>(baseRender_); }
+
+		const class SwapChain& SwapChain() const { return baseRender_.SwapChain(); }
+		class Window& Window() { return baseRender_.Window(); }
+		
+		const class Device& Device() const { return baseRender_.Device(); }
+		class CommandPool& CommandPool() { return baseRender_.CommandPool(); }
+		const class DepthBuffer& DepthBuffer() const { return baseRender_.DepthBuffer(); }
+		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return baseRender_.UniformBuffers(); }
+		class VulkanGpuTimer* GpuTimer() const {return baseRender_.GpuTimer();}
+		
+		const Assets::Scene& GetScene() {return baseRender_.GetScene();}
+
+		int FrameCount() const {return baseRender_.FrameCount();}
+
+		bool VisualDebug() const {return baseRender_.VisualDebug();}
 	};
 
 }

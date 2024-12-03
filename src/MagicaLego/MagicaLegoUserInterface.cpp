@@ -67,7 +67,12 @@ namespace
 
         ImGui::BeginGroup();
         ImGui::PushID(static_cast<int>(block.modelId_));
-        bool result = ImGui::ImageButton("##Block", texId, ImVec2(PALATE_SIZE, PALATE_SIZE));
+        #ifdef __APPLE__
+bool result = ImGui::Button("##Block", ImVec2(PALATE_SIZE, PALATE_SIZE));
+        #else
+bool result = ImGui::ImageButton("##Block", texId, ImVec2(PALATE_SIZE, PALATE_SIZE));
+        #endif
+        
         ImGui::PopID();
         Utilities::UI::TextCentered(block.name, PALATE_SIZE);
         ImGui::EndGroup();

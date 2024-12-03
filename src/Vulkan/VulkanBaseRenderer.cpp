@@ -31,6 +31,10 @@
 #include "SingleTimeCommands.hpp"
 #include "Strings.hpp"
 #include "Version.hpp"
+#include "HybridDeferred/HybridDeferredRenderer.hpp"
+#include "LegacyDeferred/LegacyDeferredRenderer.hpp"
+#include "ModernDeferred/ModernDeferredRenderer.hpp"
+#include "RayQuery/RayQueryRenderer.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace
@@ -366,6 +370,11 @@ void VulkanBaseRenderer::SetPhysicalDeviceImpl(
 
 void VulkanBaseRenderer::OnDeviceSet()
 {
+	for( auto& logicRenderer : logicRenderers_ )
+	{
+		logicRenderer.second->OnDeviceSet();
+	}
+	
 	if(DelegateOnDeviceSet)
 	{
 		DelegateOnDeviceSet();
@@ -408,6 +417,11 @@ void VulkanBaseRenderer::CreateSwapChain()
 
 	rtEditorViewport_.reset(new RenderImage(*device_, {1280,720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 
+	for( auto& logicRenderer : logicRenderers_ )
+	{
+		logicRenderer.second->CreateSwapChain();
+	}
+	
 	if(DelegateCreateSwapChain)
 	{
 		DelegateCreateSwapChain();
@@ -416,6 +430,11 @@ void VulkanBaseRenderer::CreateSwapChain()
 
 void VulkanBaseRenderer::DeleteSwapChain()
 {
+	for( auto& logicRenderer : logicRenderers_ )
+	{
+		logicRenderer.second->DeleteSwapChain();
+	}
+	
 	if(DelegateDeleteSwapChain)
 	{
 		DelegateDeleteSwapChain();
@@ -672,62 +691,108 @@ void VulkanBaseRenderer::DrawFrame()
 	gpuTimer_->CpuFrameEnd();
 }
 
+void VulkanBaseRenderer::BeforeNextFrame()
+{
+	for( auto& logicRenderer : logicRenderers_ )
+	{
+		logicRenderer.second->BeforeNextFrame();
+	}
+			
+	if(DelegateBeforeNextTick)
+	{
+		DelegateBeforeNextTick();
+	}
+}
+
+void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
+{
+	
+	switch (type)
+	{
+	case ERendererType::ERT_PathTracing:
+		logicRenderers_[type] = std::make_unique<RayTracing::RayQueryRenderer>(*this);
+		break;
+	case ERendererType::ERT_Hybrid:
+		logicRenderers_[type] = std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this);
+		break;
+	case ERendererType::ERT_ModernDeferred:
+		logicRenderers_[type] = std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this);
+		break;
+	case ERendererType::ERT_LegacyDeferred:
+		logicRenderers_[type] = std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this);
+		break;
+	default:
+		assert(false);
+	}
+	currentLogicRenderer_ = type;
+}
+
+void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
+{
+	currentLogicRenderer_ = type;
+}
+	
 void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
 {
-	std::array<VkClearValue, 2> clearValues = {};
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = graphicsPipeline_->RenderPass().Handle();
-	renderPassInfo.framebuffer = swapChainFramebuffers_[imageIndex].Handle();
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapChain_->Extent();
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-	
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	if( logicRenderers_.find(currentLogicRenderer_) != logicRenderers_.end() )
 	{
-		auto& scene = GetScene();
-
-		VkDescriptorSet descriptorSets[] = { graphicsPipeline_->DescriptorSet(imageIndex) };
-		VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
-		const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-		VkDeviceSize offsets[] = { 0 };
-
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-		// bind the global bindless set
-		static const uint32_t k_bindless_set = 1;
-		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), k_bindless_set,
-								 1, GlobalDescriptorSets, 0, nullptr );
-		
-		uint32_t vertexOffset = 0;
-		uint32_t indexOffset = 0;
-
-		// drawcall one by one
-		for (const auto& node : scene.Nodes())
-		{
-			auto& model = scene.Models()[node.GetModel()];
-			auto& offset = scene.Offsets()[node.GetModel()];
-			const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
-			const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
-
-			// use push constants to set world matrix
-			glm::mat4 worldMatrix = node.WorldTransform();
-
-			vkCmdPushConstants(commandBuffer, graphicsPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_VERTEX_BIT,
-				   0, sizeof(glm::mat4), &worldMatrix);
-			
-			vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.r, offset.g, 0);
-		}
+		logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
 	}
-	vkCmdEndRenderPass(commandBuffer);
+	//
+	// std::array<VkClearValue, 2> clearValues = {};
+	// clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+	// clearValues[1].depthStencil = { 1.0f, 0 };
+	//
+	// VkRenderPassBeginInfo renderPassInfo = {};
+	// renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	// renderPassInfo.renderPass = graphicsPipeline_->RenderPass().Handle();
+	// renderPassInfo.framebuffer = swapChainFramebuffers_[imageIndex].Handle();
+	// renderPassInfo.renderArea.offset = { 0, 0 };
+	// renderPassInfo.renderArea.extent = swapChain_->Extent();
+	// renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	// renderPassInfo.pClearValues = clearValues.data();
+	//
+	// vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	// {
+	// 	auto& scene = GetScene();
+	//
+	// 	VkDescriptorSet descriptorSets[] = { graphicsPipeline_->DescriptorSet(imageIndex) };
+	// 	VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
+	// 	const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+	// 	VkDeviceSize offsets[] = { 0 };
+	//
+	// 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->Handle());
+	// 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+	// 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	// 	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	//
+	// 	// bind the global bindless set
+	// 	static const uint32_t k_bindless_set = 1;
+	// 	VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+	// 	vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->PipelineLayout().Handle(), k_bindless_set,
+	// 							 1, GlobalDescriptorSets, 0, nullptr );
+	// 	
+	// 	uint32_t vertexOffset = 0;
+	// 	uint32_t indexOffset = 0;
+	//
+	// 	// drawcall one by one
+	// 	for (const auto& node : scene.Nodes())
+	// 	{
+	// 		auto& model = scene.Models()[node.GetModel()];
+	// 		auto& offset = scene.Offsets()[node.GetModel()];
+	// 		const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
+	// 		const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
+	//
+	// 		// use push constants to set world matrix
+	// 		glm::mat4 worldMatrix = node.WorldTransform();
+	//
+	// 		vkCmdPushConstants(commandBuffer, graphicsPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_VERTEX_BIT,
+	// 			   0, sizeof(glm::mat4), &worldMatrix);
+	// 		
+	// 		vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.r, offset.g, 0);
+	// 	}
+	// }
+	// vkCmdEndRenderPass(commandBuffer);
 }
 	
 void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
@@ -741,6 +806,10 @@ void VulkanBaseRenderer::RecreateSwapChain()
 	device_->WaitIdle();
 	DeleteSwapChain();
 	CreateSwapChain();
+}
+
+LogicRendererBase::LogicRendererBase(VulkanBaseRenderer& baseRender): baseRender_(baseRender)
+{
 }
 
 }

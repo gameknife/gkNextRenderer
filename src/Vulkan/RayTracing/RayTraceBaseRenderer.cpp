@@ -46,12 +46,7 @@ namespace Vulkan::RayTracing
             return total;
         }
     }
-
-    LogicRendererBase::LogicRendererBase(RayTracing::RayTraceBaseRenderer& baseRender):baseRender_(baseRender)
-    {
-        
-    }
-
+    
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                                const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
@@ -64,33 +59,6 @@ namespace Vulkan::RayTracing
         RayTraceBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rayTracingProperties_.reset();
-    }
-
-    void RayTraceBaseRenderer::RegisterLogicRenderer(ERendererType type)
-    {
-        switch (type)
-        {
-            case ERendererType::ERT_PathTracing:
-                logicRenderers_.push_back( std::make_unique<RayQueryRenderer>(*this) );
-                break;
-            case ERendererType::ERT_Hybrid:
-                logicRenderers_.push_back( std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this) );
-                break;
-        case ERendererType::ERT_ModernDeferred:
-                logicRenderers_.push_back( std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this) );
-                break;
-        case ERendererType::ERT_LegacyDeferred:
-                logicRenderers_.push_back( std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this) );
-                break;
-            default:
-                assert(false);
-        }
-        currentLogicRenderer_ = type;
-    }
-
-    void RayTraceBaseRenderer::SwitchLogicRenderer(ERendererType type)
-    {
-        currentLogicRenderer_ = type;
     }
 
     void RayTraceBaseRenderer::SetPhysicalDeviceImpl(
@@ -133,11 +101,6 @@ namespace Vulkan::RayTracing
     {
         rayTracingProperties_.reset(new RayTracingProperties(Device()));
         Vulkan::VulkanBaseRenderer::OnDeviceSet();
-        
-        for( auto& logicRenderer : logicRenderers_ )
-        {
-            logicRenderer->OnDeviceSet();
-        }
     }
 
     void RayTraceBaseRenderer::CreateAccelerationStructures()
@@ -181,25 +144,14 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
         
-
         rayCastBuffer_.reset(new Assets::RayCastBuffer(Device()));
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
-
-        for( auto& logicRenderer : logicRenderers_ )
-        {
-            logicRenderer->CreateSwapChain();
-        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
     {
-        for( auto& logicRenderer : logicRenderers_ )
-        {
-            logicRenderer->DeleteSwapChain();
-        }
-        
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
 
         rayCastBuffer_.reset();
@@ -225,11 +177,6 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::BeforeNextFrame()
     {
         VulkanBaseRenderer::BeforeNextFrame();
-
-        for( auto& logicRenderer : logicRenderers_ )
-        {
-            logicRenderer->BeforeNextFrame();
-        }
     }
 
     void RayTraceBaseRenderer::AfterUpdateScene()
@@ -240,10 +187,14 @@ namespace Vulkan::RayTracing
 
         // rebuild all instance
         std::vector<VkAccelerationStructureInstanceKHR> instances;
-        for (const auto& node : scene.Nodes())
+        auto& nodeTrans = scene.GetNodeProxys();
+        auto& nodeProxys = scene.GetNodeSimpleProxys();
+        for ( size_t i = 0; i < nodeTrans.size(); i++)
         {
+            auto& transform = nodeTrans[i];
+            auto& nodeProxy = nodeProxys[i];
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[node.GetModel()], glm::transpose(node.WorldTransform()), node.GetInstanceId(),  node.IsVisible()));
+                bottomAs_[nodeProxy.modelId], glm::transpose(transform.transform), nodeProxy.instanceId, true));
         }
 
         // upload to gpu
@@ -299,6 +250,8 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        VulkanBaseRenderer::Render(commandBuffer, imageIndex);
+        
         {
             VkMemoryBarrier memoryBarrier{};
             memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
@@ -316,11 +269,6 @@ namespace Vulkan::RayTracing
                 nullptr, 
                 0,
                 nullptr); 
-        }
-        
-        if( currentLogicRenderer_ < logicRenderers_.size() )
-        {
-            logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
         }
 
         if(supportRayCast_)
@@ -369,11 +317,7 @@ namespace Vulkan::RayTracing
             const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
             const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
             BottomLevelGeometry geometries;
-
-            model.Procedural()
-                ? geometries.AddGeometryAabb(scene, aabbOffset, 1, true)
-                : geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
-
+            geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
             vertexOffset += vertexCount * sizeof(Assets::Vertex);

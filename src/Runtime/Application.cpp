@@ -75,7 +75,11 @@ namespace NextRenderer
             default: break;
         }
         // fallback renderer
-        return new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+        auto fallbackptr =  new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
+        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
+        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+        fallbackptr->SwitchLogicRenderer(Vulkan::ERT_ModernDeferred);
+        return fallbackptr;
     }
 
 }
@@ -111,27 +115,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     if(options.SceneName != "")
     {
-        std::string mappedSceneName = "";
-        bool foundInAssets = false;
-
-        //if found options.SceneName in key of Assets::sceneNames - set mappedSceneName to compare and find scene
-        Assets::uo_string_string_t::const_iterator got = Assets::sceneNames.find(options.SceneName);
-        if (got != Assets::sceneNames.end()) mappedSceneName = got->second;
-
-        for( uint32_t i = 0; i < SceneList::AllScenes.size(); i++ )
-        {
-            if( SceneList::AllScenes[i].first == options.SceneName || SceneList::AllScenes[i].first == mappedSceneName )
-            {
-                userSettings.SceneIndex = i;
-                foundInAssets = true;
-                break;
-            }
-        }
-
-        if(!foundInAssets)
-        {
-            userSettings.SceneIndex = SceneList::AddExternalScene(options.SceneName);
-        }
+        userSettings.SceneIndex = SceneList::AddExternalScene(Utilities::FileHelper::GetPlatformFilePath(("assets/models/" + options.SceneName).c_str()));
     }
 
     userSettings.AccumulateRays = false;
@@ -247,7 +231,8 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
         return true;
     });
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
-        userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        RequestLoadScene(args);
         return true;
     });
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
@@ -281,6 +266,8 @@ void NextRendererApplication::Start()
     }
 
     gameInstance_->OnInit();
+
+    RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
 bool NextRendererApplication::Tick()
@@ -310,10 +297,10 @@ bool NextRendererApplication::Tick()
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
     // Handle Scene Switching
-    if (status_ == NextRenderer::EApplicationStatus::Running && sceneIndex_ != static_cast<uint32_t>(userSettings_.SceneIndex))
-    {
-        LoadScene(userSettings_.SceneIndex);
-    }
+    // if (status_ == NextRenderer::EApplicationStatus::Running && currentSceneName_ != SceneList::AllScenes[userSettings_.SceneIndex])
+    // {
+    //     LoadScene( userSettings_.SceneIndex);
+    // }
 
     // Setting Update
     previousSettings_ = userSettings_;
@@ -689,16 +676,9 @@ void NextRendererApplication::OnRendererDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr", Vulkan::SamplerConfig());
 
     if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
+        
+    scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
     
-    std::vector<Assets::Model> models;
-    std::vector<Assets::Node> nodes;
-    std::vector<Assets::Material> materials;
-    std::vector<Assets::LightObject> lights;
-    Assets::CameraInitialSate cameraState;
-    
-    scene_.reset(new Assets::Scene(renderer_->CommandPool(), nodes, models,
-                                  materials, lights, renderer_->supportRayTracing_));
-
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
 
@@ -712,7 +692,7 @@ void NextRendererApplication::OnRendererCreateSwapChain()
 #if WITH_EDITOR
         userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
 #else
-        userInterface_.reset(new UserInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
+        userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
                                    userSettings_, [this]()->void{
             gameInstance_->OnInitUI();
         }));
@@ -938,7 +918,21 @@ void NextRendererApplication::OnTouchMove(double xpos, double ypos)
     modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
-void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
+void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
+{
+    AddTickedTask([this, sceneFileName](double DeltaSeconds)->bool
+    {
+        if ( status_ != NextRenderer::EApplicationStatus::Running )
+        {
+            return false;
+        }
+        
+        LoadScene(sceneFileName);
+        return true;
+    });
+}
+
+void NextRendererApplication::LoadScene(std::string sceneFileName)
 {
     status_ = NextRenderer::EApplicationStatus::Loading;
     
@@ -952,20 +946,20 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
     cameraInitialSate_.CameraIdx = -1;
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        SceneList::AllScenes[sceneIndex].second(*cameraState, *nodes, *models, *materials, *lights);
+        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights);
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
-        std::string info = fmt::format("parsed scene #{} on cpu in {:.2f}ms", sceneIndex, taskContext.elapsed * 1000.f);
+        std::string info = fmt::format("parsed scene [{}] on cpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneIndex, models, nodes, materials, lights](ResTask& task)
+    [this, cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
@@ -980,12 +974,11 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         renderer_->Device().WaitIdle();
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
-
-        scene_.reset(new Assets::Scene(renderer_->CommandPool(), *nodes, *models,
-                                *materials, *lights, renderer_->supportRayTracing_));
-        renderer_->SetScene(scene_);
         
-        sceneIndex_ = sceneIndex;
+        scene_->Reload(*nodes, *models, *materials, *lights);
+        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+        
+        renderer_->SetScene(scene_);
 
         userSettings_.RawFieldOfView = cameraInitialSate_.FieldOfView;
         userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
@@ -1024,9 +1017,8 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
 
         float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
-        fmt::print("{} uploaded scene #{} to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, sceneIndex, elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
+        fmt::print("{} uploaded scene [{}] to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
         
-        sceneIndex_ = sceneIndex;
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
@@ -1037,7 +1029,7 @@ void NextRendererApplication::TickBenchMarker()
     if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
     {
         // Benchmark is done, report the results.
-        benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex].first);
+        benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex]);
         
         if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
             SceneList::AllScenes.size() - 1)
@@ -1046,5 +1038,6 @@ void NextRendererApplication::TickBenchMarker()
         }
         
         userSettings_.SceneIndex += 1;
+        RequestLoadScene(SceneList::AllScenes[userSettings_.SceneIndex]);
     }
 }

@@ -6,6 +6,8 @@
 #include <vector>
 #include <glm/vec2.hpp>
 
+#include "Model.hpp"
+
 namespace Vulkan
 {
 	class Buffer;
@@ -32,34 +34,29 @@ namespace Assets
 		Scene& operator = (const Scene&) = delete;
 		Scene& operator = (Scene&&) = delete;
 
-		Scene(Vulkan::CommandPool& commandPool,
-			std::vector<Node>& nodes,
+		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
+		~Scene();
+
+		void Reload(std::vector<Node>& nodes,
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
-			std::vector<LightObject>& lights,
+			std::vector<LightObject>& lights);
+		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
-		~Scene();
 
 		std::vector<Node>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
-		
-		
-		bool HasProcedurals() const { return static_cast<bool>(proceduralBuffer_); }
 
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
-		const Vulkan::Buffer& AabbBuffer() const { return *aabbBuffer_; }
-		const Vulkan::Buffer& ProceduralBuffer() const { return *proceduralBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
-
-		const std::vector<uint32_t>& ModelInstanceCount() const { return model_instance_count_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
@@ -78,13 +75,16 @@ namespace Assets
 		const Material* GetMaterial(uint32_t id) const;
 
 		void MarkDirty() {sceneDirty_ = true;}
+
+		std::vector<NodeSimpleProxy>& GetNodeSimpleProxys() { return nodeSimpleProxys; }
+		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 		
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
 		std::vector<Node> nodes_;
+		std::vector<LightObject> lights_;
 		std::vector<glm::uvec2> offsets_;
-		std::vector<uint32_t> model_instance_count_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
@@ -97,12 +97,6 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> aabbBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> aabbBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> proceduralBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> proceduralBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> lightBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
@@ -124,6 +118,10 @@ namespace Assets
 		mutable uint32_t selectedId_ = -1;
 
 		bool sceneDirty_ = true;
+		
+		std::vector<NodeSimpleProxy> nodeSimpleProxys;
+		std::vector<NodeProxy> nodeProxys;
+		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
 	};
 
 }

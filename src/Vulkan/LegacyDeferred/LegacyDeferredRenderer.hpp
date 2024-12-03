@@ -23,13 +23,13 @@ namespace Assets
 
 namespace Vulkan::LegacyDeferred
 {
-	class LegacyDeferredRenderer final : public Vulkan::RayTracing::LogicRendererBase
+	class LegacyDeferredRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
 
 		VULKAN_NON_COPIABLE(LegacyDeferredRenderer)
 		
-		LegacyDeferredRenderer(RayTracing::RayTraceBaseRenderer& baseRender);
+		LegacyDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		~LegacyDeferredRenderer();
 
 		void CreateSwapChain() override;

@@ -37,30 +37,30 @@ void BottomLevelGeometry::AddGeometryTriangles(
 	buildOffsetInfo_.emplace_back(buildOffsetInfo);
 }
 
-void BottomLevelGeometry::AddGeometryAabb(
-	const Assets::Scene& scene,
-	const uint32_t aabbOffset,
-	const uint32_t aabbCount,
-	const bool isOpaque)
-{
-	VkAccelerationStructureGeometryKHR geometry = {};
-	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-	geometry.pNext = nullptr;
-	geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
-	geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-	geometry.geometry.aabbs.pNext = nullptr;
-	geometry.geometry.aabbs.data.deviceAddress = scene.AabbBuffer().GetDeviceAddress();
-	geometry.geometry.aabbs.stride = sizeof(VkAabbPositionsKHR);
-	geometry.flags = isOpaque ? VK_GEOMETRY_OPAQUE_BIT_KHR : 0;
-
-	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
-	buildOffsetInfo.firstVertex = 0;
-	buildOffsetInfo.primitiveOffset = aabbOffset;
-	buildOffsetInfo.primitiveCount = aabbCount;
-	buildOffsetInfo.transformOffset = 0;
-
-	geometry_.emplace_back(geometry);
-	buildOffsetInfo_.emplace_back(buildOffsetInfo);
-}
+// void BottomLevelGeometry::AddGeometryAabb(
+// 	const Assets::Scene& scene,
+// 	const uint32_t aabbOffset,
+// 	const uint32_t aabbCount,
+// 	const bool isOpaque)
+// {
+// 	VkAccelerationStructureGeometryKHR geometry = {};
+// 	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+// 	geometry.pNext = nullptr;
+// 	geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+// 	geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+// 	geometry.geometry.aabbs.pNext = nullptr;
+// 	geometry.geometry.aabbs.data.deviceAddress = scene.AabbBuffer().GetDeviceAddress();
+// 	geometry.geometry.aabbs.stride = sizeof(VkAabbPositionsKHR);
+// 	geometry.flags = isOpaque ? VK_GEOMETRY_OPAQUE_BIT_KHR : 0;
+//
+// 	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
+// 	buildOffsetInfo.firstVertex = 0;
+// 	buildOffsetInfo.primitiveOffset = aabbOffset;
+// 	buildOffsetInfo.primitiveCount = aabbCount;
+// 	buildOffsetInfo.transformOffset = 0;
+//
+// 	geometry_.emplace_back(geometry);
+// 	buildOffsetInfo_.emplace_back(buildOffsetInfo);
+// }
 
 }

@@ -20,7 +20,7 @@
 
 namespace Vulkan::RayTracing
 {
-    RayQueryRenderer::RayQueryRenderer(RayTracing::RayTraceBaseRenderer& baseRender) : LogicRendererBase(baseRender)
+    RayQueryRenderer::RayQueryRenderer(Vulkan::VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender)
     {
     }
 
@@ -71,7 +71,7 @@ namespace Vulkan::RayTracing
     void RayQueryRenderer::CreateSwapChain()
     {
         CreateOutputImage();
-        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), TLAS()[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
+        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
                                                          rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));

@@ -29,11 +29,11 @@ namespace Vulkan::RayTracing
 			uint32_t indexCount,
 			bool isOpaque);
 
-		void AddGeometryAabb(
-			const Assets::Scene& scene,
-			uint32_t aabbOffset,
-			uint32_t aabbCount,
-			bool isOpaque);
+		// void AddGeometryAabb(
+		// 	const Assets::Scene& scene,
+		// 	uint32_t aabbOffset,
+		// 	uint32_t aabbCount,
+		// 	bool isOpaque);
 
 	private:
 

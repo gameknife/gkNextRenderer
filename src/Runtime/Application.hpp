@@ -139,6 +139,9 @@ public:
 
 	// capture
 	void RequestScreenShot(std::string filename);
+
+	// scene loading
+	void RequestLoadScene(std::string sceneFileName);
 	
 #if !WITH_EDITOR
 	class UserInterface* GetUserInterface() {return userInterface_.get();};
@@ -165,7 +168,7 @@ protected:
 	
 private:
 
-	void LoadScene(uint32_t sceneIndex);
+	void LoadScene(std::string sceneFileName);
 	void TickBenchMarker();
 
 	std::unique_ptr<Vulkan::Window> window_;
@@ -173,7 +176,6 @@ private:
 	std::unique_ptr<BenchMarker> benchMarker_;
 
 	int rendererType = 0;
-	uint32_t sceneIndex_{((uint32_t)~((uint32_t)0))};
 	mutable UserSettings userSettings_{};
 	UserSettings previousSettings_{};
 	Assets::CameraInitialSate cameraInitialSate_{};

@@ -197,6 +197,8 @@ protected:
 
     void CleanDynamicBlocks();
 
+    void CPURaycast();
+
 private:
     ELegoMode currentMode_{};
     ECamMode currentCamMode_{};
@@ -259,4 +261,5 @@ private:
     // cpu hit
     mutable glm::vec3 cachedCameraPos_;
     glm::vec3 cpuHit;
+    uint32_t basementInstanceId_ = 0;
 };
