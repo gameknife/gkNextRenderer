@@ -693,16 +693,9 @@ void NextRendererApplication::OnRendererDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr", Vulkan::SamplerConfig());
 
     if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
+        
+    scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
     
-    std::vector<Assets::Model> models;
-    std::vector<Assets::Node> nodes;
-    std::vector<Assets::Material> materials;
-    std::vector<Assets::LightObject> lights;
-    Assets::CameraInitialSate cameraState;
-    
-    scene_.reset(new Assets::Scene(renderer_->CommandPool(), nodes, models,
-                                  materials, lights, renderer_->supportRayTracing_));
-
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
 
@@ -984,9 +977,10 @@ void NextRendererApplication::LoadScene(const uint32_t sceneIndex)
         renderer_->Device().WaitIdle();
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
-
-        scene_.reset(new Assets::Scene(renderer_->CommandPool(), *nodes, *models,
-                                *materials, *lights, renderer_->supportRayTracing_));
+        
+        scene_->Reload(*nodes, *models, *materials, *lights);
+        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+        
         renderer_->SetScene(scene_);
         
         sceneIndex_ = sceneIndex;

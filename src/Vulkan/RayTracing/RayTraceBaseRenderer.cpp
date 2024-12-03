@@ -317,11 +317,7 @@ namespace Vulkan::RayTracing
             const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
             const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
             BottomLevelGeometry geometries;
-
-            model.Procedural()
-                ? geometries.AddGeometryAabb(scene, aabbOffset, 1, true)
-                : geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
-
+            geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
             vertexOffset += vertexCount * sizeof(Assets::Vertex);

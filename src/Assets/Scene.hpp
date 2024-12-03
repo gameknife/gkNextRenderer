@@ -34,28 +34,25 @@ namespace Assets
 		Scene& operator = (const Scene&) = delete;
 		Scene& operator = (Scene&&) = delete;
 
-		Scene(Vulkan::CommandPool& commandPool,
-			std::vector<Node>& nodes,
+		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
+		~Scene();
+
+		void Reload(std::vector<Node>& nodes,
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
-			std::vector<LightObject>& lights,
+			std::vector<LightObject>& lights);
+		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
-		~Scene();
 
 		std::vector<Node>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
-		
-		
-		bool HasProcedurals() const { return static_cast<bool>(proceduralBuffer_); }
 
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
-		const Vulkan::Buffer& AabbBuffer() const { return *aabbBuffer_; }
-		const Vulkan::Buffer& ProceduralBuffer() const { return *proceduralBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
@@ -86,6 +83,7 @@ namespace Assets
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
 		std::vector<Node> nodes_;
+		std::vector<LightObject> lights_;
 		std::vector<glm::uvec2> offsets_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
@@ -99,12 +97,6 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> aabbBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> aabbBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> proceduralBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> proceduralBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> lightBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;

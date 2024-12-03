@@ -457,8 +457,10 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
+	if (UNIX)
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
+	endif()
 	if (MSVC)
 	add_custom_command(
 			TARGET ${target} POST_BUILD
