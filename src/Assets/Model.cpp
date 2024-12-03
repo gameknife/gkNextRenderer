@@ -552,7 +552,7 @@ namespace Assets
 
                     for (size_t i = 0; i < inputAccessor.count; ++i)
                     {
-                        float time;
+                        float time = 0.f;
                         glm::vec3 translation;
                         if ( inputAccessor.type == TINYGLTF_TYPE_SCALAR )
                         {
