@@ -442,9 +442,7 @@ foreach(target IN LISTS AllTargets)
 	else()
 	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 	
-	if (APPLE)
-	#target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
-	else()
+	if (UNIX AND NOT APPLE AND NOT ANDROID)
 	target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
 	endif()
 	
