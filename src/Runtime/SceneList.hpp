@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Utilities/Glm.hpp"
 #include <functional>
 #include <string>
 #include <vector>
@@ -42,6 +41,9 @@ class SceneList final
 public:
     static void ScanScenes();
     static int32_t AddExternalScene(std::string absPath);
-    
-    static std::vector<scenes_pair> AllScenes;
+    static std::vector<std::string> AllScenes;
+
+	static bool LoadScene(std::string filename, Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models,
+                     std::vector<Assets::Material>& materials,
+                     std::vector<Assets::LightObject>& lights);
 };

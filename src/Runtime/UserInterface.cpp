@@ -11,6 +11,7 @@
 #include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
+#include "Application.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>
@@ -27,6 +28,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
+#include "Application.hpp"
 #include "Options.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -41,11 +43,13 @@ extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 
 UserInterface::UserInterface(
+	NextRendererApplication* engine,
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
 	UserSettings& userSettings, std::function<void()> func) :
-	userSettings_(userSettings)
+	userSettings_(userSettings),
+	engine_(engine)
 {
 	const auto& device = swapChain.Device();
 	const auto& window = device.Surface().Instance().Window();
@@ -393,12 +397,19 @@ void UserInterface::DrawSettings()
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			std::vector<const char*> scenes;
+			std::vector<std::string> sceneNames;
 			for (const auto& scene : SceneList::AllScenes)
 			{
-				scenes.push_back(scene.first.c_str());
+				std::filesystem::path path(scene);
+				sceneNames.push_back(path.filename().string());
 			}
 
+			std::vector<const char*> scenes;
+			for (const auto& scene : sceneNames)
+			{
+				scenes.push_back(scene.c_str());
+			}
+			
 			std::vector<const char*> camerasList;
 			for (const auto& cam : Settings().cameras)
 			{
@@ -408,7 +419,11 @@ void UserInterface::DrawSettings()
 			ImGui::Text("%s", LOCTEXT("Scene"));
 			
 			ImGui::PushItemWidth(-1);
-			ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size()));
+			if (ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size())) )
+			{
+				// Request Scene Load
+				GetEngine().RequestLoadScene(SceneList::AllScenes[Settings().SceneIndex]);
+			}
 			ImGui::PopItemWidth();
 
 			int prevCameraIdx = Settings().CameraIdx;

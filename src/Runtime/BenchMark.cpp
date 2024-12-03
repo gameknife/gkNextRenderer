@@ -94,7 +94,7 @@ void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::stri
     
     double fps = benchmarkTotalFrames_ / totalTime;
     fmt::print("{} totalTime {:%H:%M:%S} fps {:.3f}{}\n", CONSOLE_GOLD_COLOR, std::chrono::seconds(static_cast<long long>(totalTime)), fps, CONSOLE_DEFAULT_COLOR);
-    Report(renderer, static_cast<int>(floor(fps)), SceneName, false, GOption->SaveFile);
+    Report(renderer, static_cast<int>(floor(fps)), std::filesystem::path(SceneName).filename().replace_extension().string(), false, GOption->SaveFile);
 }
 
 void BenchMarker::SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
