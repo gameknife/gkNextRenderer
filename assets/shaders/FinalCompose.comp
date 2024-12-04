@@ -59,14 +59,15 @@ uint FetchVisibility(in ivec2 ipos)
     return visibility[ipos.x][ipos.y];
 }
 
-void JBF(ivec2 coord, ivec2 localCoord, inout vec3 Total, inout float Weight, in float CenterLum, in vec3 CenterNormal, in uint CenterVisibility)
+void JBF(ivec2 coord, ivec2 localCoord, inout vec3 AvgTotal, inout vec3 Total, inout float Weight, in float CenterLum, in vec3 CenterNormal, in uint CenterVisibility)
 {
     const float sigma = Camera.BFSigma; // spatial sigma
     const float sigmaL = Camera.BFSigmaLum * 100.0; // 
     const float sigmaN = Camera.BFSigmaNormal;
     const int N = int(WINDOW_R); // filter size
     
-    const vec3 Ci = FetchColor(coord) / (FetchAlbedo(coord) + vec3(0.001,0.001,0.001));
+    const vec3 FinalCol = FetchColor(coord);
+    const vec3 Ci = FinalCol / (FetchAlbedo(coord) + vec3(0.001,0.001,0.001));
     const vec3 Ni = FetchNormal(coord);
     const uint Pi = FetchVisibility(coord);
     const float lumi = dot((Ci), vec3(0.212671F, 0.715160F, 0.072169F));
@@ -80,6 +81,8 @@ void JBF(ivec2 coord, ivec2 localCoord, inout vec3 Total, inout float Weight, in
     const float Li = exp(-dlum*dlum/(2.* sigmaL*sigmaL));
     const float Oi = float(CenterVisibility == Pi);
 
+    AvgTotal += Ci;
+    
     Total += Ci * Fi * Li * Ai * Oi;
     Weight += Fi * Li * Ai * Oi;
 }
@@ -163,16 +166,27 @@ void main() {
 
         float Weight = 0;
 
+        vec3 AvgColor = vec3(0);
         for (int i = -WINDOW_R; i <= WINDOW_R; i += 2)
         {
             for (int j = -WINDOW_R; j <= WINDOW_R; j += 2)
             {
-                JBF(coord.xy + ivec2(i,j), ivec2(i,j), Total, Weight, CenterLum, Normal, current_primitive_index);
+                JBF(coord.xy + ivec2(i,j), ivec2(i,j), AvgColor, Total, Weight, CenterLum, Normal, current_primitive_index);
             }
         }
 
+        AvgColor /= ((WINDOW_R + 1) * (WINDOW_R + 1));
         Total /= Weight;
+        
+        // if AvgColor is More lighter than AvgColor, mix back
+        if (dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) < CenterLum * 0.33)// || dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) > CenterLum * 100.0)
+        {
+            Total = mix(Total, AvgColor, 0.95);
+        }
+        
         Total = Total * CenterAlbedo;
+        
+
     }
     else
     {
