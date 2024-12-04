@@ -8,7 +8,7 @@
 layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
 layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
 layout(binding = 2, rgba16f) uniform image2D Accumulate1Image;
-layout(binding = 3, rg16f) uniform image2D MotionVectorImage;
+layout(binding = 3, rg32f) uniform image2D MotionVectorImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
@@ -52,9 +52,13 @@ void main() {
 	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1,-1)));
 	// 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
 	// after, motionvector calculate last frame position
-    const bool check = length(motion) > 0.01 ? true : false;
+	// 当前uv直接执行id比对，如果不同，直接check
+	uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
+	uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
+	const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
+    const bool check = (length(motion) > 0.01 || changed) ? true : false;
     // fetch visibility to validate the history
-    uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
+    
 	const bool miss = current_primitive_index0 == 65535 ? true : false;
     if(miss || Camera.TotalFrames == 0 || !inside)
     {
@@ -71,7 +75,6 @@ void main() {
 			
 			uint current_total = current_primitive_index0 + current_primitive_index1 + current_primitive_index2 + current_primitive_index3;
 			
-			uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
 			uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r;
 			uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r;
 			uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r;

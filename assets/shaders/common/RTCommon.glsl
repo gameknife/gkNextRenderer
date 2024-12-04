@@ -154,6 +154,6 @@ void FetchPrimaryRayInfo(in vec2 size, in vec3 origin, in vec3 scatterDir, out v
 	
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
 	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin - Ray.Velocity, 1);
-	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size,0,0);
+	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size, 0, 0);
 	primitiveId = Ray.primitiveId;
 }

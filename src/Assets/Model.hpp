@@ -69,7 +69,7 @@ namespace Assets
         // Node(Node&&) = default;
         // ~Node() = default;
 
-        //void Transform(const glm::mat4& transform) { transform_ = transform; }
+        void SetTransform(const glm::mat4& transform);
         const glm::mat4& WorldTransform() const { return transform_; }
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }
@@ -102,8 +102,13 @@ namespace Assets
     
     struct AnimationTrack
     {
+        void Sample(float time, glm::mat4& transform);
+        
         std::string NodeName_;
         std::vector<AnimationKey> KeyFrames_;
+
+        float Time_;
+        float Duration_;
     };
     
     class Model final

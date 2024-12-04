@@ -26,7 +26,7 @@ layout(binding = 8) readonly buffer NodeSimpleProxyArray { NodeSimpleProxy[] Nod
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
-layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
+layout(binding = 11, rg32f) uniform image2D MotionVectorImage;
 layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 14, rgba16f) uniform image2D OutAlbedoBuffer;
@@ -91,13 +91,13 @@ void main() {
         const vec2 pixel = vec2(iposLocal);
         vec2 uv = (pixel / isize) * 2.0 - 1.0;
         // anti aliasing
-		if( Camera.TAA )
-		{
-            // here should offset a non-random offset and consider in motion vector
-			vec2 uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
-            uv += uvOffset;
-		}
-		
+//        vec2 uvOffset = vec2(0);
+//		if( Camera.TAA )
+//		{
+//            // here should offset a non-random offset and consider in motion vector
+//            uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
+//		}
+//        uv += uvOffset;
 		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
         vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
         vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -113,6 +113,7 @@ void main() {
         if(s == 0)
         {
             FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, albedo, motionvector, primitiveId);
+            motionvector.xy += RandomFloat2(Ray.RandomSeed) * 0.02f; // add a fuzzy short offset
         }
         
         if(!exit)

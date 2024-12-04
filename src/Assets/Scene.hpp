@@ -40,7 +40,8 @@ namespace Assets
 		void Reload(std::vector<Node>& nodes,
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
-			std::vector<LightObject>& lights);
+			std::vector<LightObject>& lights,
+			std::vector<AnimationTrack>& tracks);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
 
@@ -66,6 +67,7 @@ namespace Assets
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
+		void Tick(float DeltaSeconds);
 		void UpdateMaterial();
 		bool UpdateNodes();
 
@@ -84,7 +86,8 @@ namespace Assets
 		std::vector<Model> models_;
 		std::vector<Node> nodes_;
 		std::vector<LightObject> lights_;
-		std::vector<glm::uvec2> offsets_;
+		std::vector<AnimationTrack> tracks_;
+		std::vector<uvec2> offsets_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;

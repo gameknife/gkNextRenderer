@@ -540,7 +540,7 @@ namespace Assets
                     AnimationTrack CreateTrack;
 
                     CreateTrack.NodeName_ = model.nodes[track.target_node].name;
-                    
+                    CreateTrack.Time_ = 0;
                     tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
                     tinygltf::Accessor outputAccessor = model.accessors[animation.samplers[track.sampler].output];
 
@@ -575,6 +575,7 @@ namespace Assets
 
                         AnimationKey key{time, translation, vec3(1), quat(1, 0, 0, 0)};
                         CreateTrack.KeyFrames_.emplace_back(key);
+                        CreateTrack.Duration_ = time;
                     }
 
                     tracks.emplace_back(CreateTrack);
@@ -610,6 +611,27 @@ namespace Assets
             i++;
         }
         //printf("model.cameras: %d\n", i);
+    }
+
+    void AnimationTrack::Sample(float time, glm::mat4& transform)
+    {
+        for ( int i = 0; i < KeyFrames_.size() - 1; i++ )
+        {
+            auto& Key = KeyFrames_[i];
+            auto& KeyNext = KeyFrames_[i + 1];
+            if (time >= Key.Time && time < KeyNext.Time)
+            {
+                float t = (time - Key.Time) / (KeyNext.Time - Key.Time);
+                transform = glm::translate(mat4(1), Key.Translation + (KeyNext.Translation - Key.Translation) * t);
+                return;
+            }
+
+            if ( i == 0 && time < Key.Time )
+            {
+                transform = glm::translate(mat4(1), Key.Translation);
+                return;
+            }
+        }
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
@@ -1124,6 +1146,11 @@ namespace Assets
     Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace)
     {
         return Node(name, transform, id, instanceId, replace);
+    }
+
+    void Node::SetTransform(const glm::mat4& transform)
+    {
+        transform_ = transform;
     }
 
     glm::vec3 Node::TickVelocity()

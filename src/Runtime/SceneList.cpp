@@ -181,13 +181,12 @@ int32_t SceneList::AddExternalScene(std::string absPath)
 }
 
 bool SceneList::LoadScene(std::string filename, Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials,
-                          std::vector<Assets::LightObject>& lights)
+                          std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
 {
     std::filesystem::path filepath = filename;
     std::string ext = filepath.extension().string();
     if (ext == ".glb")
     {
-        std::vector<Assets::AnimationTrack> tracks;
         Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
         return true;
     }

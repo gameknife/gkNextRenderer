@@ -55,7 +55,7 @@ namespace Vulkan::HybridDeferred
                                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 
         rtMotionVector.reset(new RenderImage(Device(), extent,
-                                             VK_FORMAT_R16G16_SFLOAT,
+                                             VK_FORMAT_R32G32_SFLOAT,
                                              VK_IMAGE_TILING_OPTIMAL,
                                              VK_IMAGE_USAGE_STORAGE_BIT));
 

@@ -296,11 +296,11 @@ bool NextRendererApplication::Tick()
     }
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
-    // Handle Scene Switching
-    // if (status_ == NextRenderer::EApplicationStatus::Running && currentSceneName_ != SceneList::AllScenes[userSettings_.SceneIndex])
-    // {
-    //     LoadScene( userSettings_.SceneIndex);
-    // }
+    // Scene Update
+    if(scene_)
+    {
+        scene_->Tick(static_cast<float>(deltaSeconds_));
+    }
 
     // Setting Update
     previousSettings_ = userSettings_;
@@ -940,18 +940,19 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::Node> > nodes = std::make_shared< std::vector<Assets::Node> >();
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
+    std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::CameraInitialSate > cameraState = std::make_shared< Assets::CameraInitialSate >();
     
     cameraInitialSate_.cameras.clear();
     cameraInitialSate_.CameraIdx = -1;
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights);
+        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -959,7 +960,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
+    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
@@ -975,7 +976,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
         
-        scene_->Reload(*nodes, *models, *materials, *lights);
+        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
         
         renderer_->SetScene(scene_);
