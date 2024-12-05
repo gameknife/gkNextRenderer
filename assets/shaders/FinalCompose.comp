@@ -179,7 +179,7 @@ void main() {
         Total /= Weight;
         
         // if AvgColor is More lighter than AvgColor, mix back
-        if (dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) < CenterLum * 0.33)// || dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) > CenterLum * 100.0)
+        if (dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) < CenterLum * 0.33)// || dot(AvgColor, vec3(0.212671F, 0.715160F, 0.072169F)) > CenterLum * 10.0)
         {
             Total = mix(Total, AvgColor, 0.95);
         }

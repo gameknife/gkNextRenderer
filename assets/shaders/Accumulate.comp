@@ -56,7 +56,7 @@ void main() {
 	uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
 	uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
 	const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
-    const bool check = (length(motion) > 0.01 || changed) ? true : false;
+    const bool check = (length(motion) > 0.01) ? true : false;
     // fetch visibility to validate the history
     
 	const bool miss = current_primitive_index0 == 65535 ? true : false;
@@ -67,7 +67,7 @@ void main() {
 
     if( useHistory )
     {
-		if( check )
+		if( !Camera.Benchmark )
 		{
 			uint current_primitive_index1 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(1,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(1,0)).r;
 			uint current_primitive_index2 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0,1)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0,1)).r;
@@ -75,19 +75,29 @@ void main() {
 			
 			uint current_total = current_primitive_index0 + current_primitive_index1 + current_primitive_index2 + current_primitive_index3;
 			
+			// prev frame around
 			uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r;
 			uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r;
 			uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r;
 
+			uint prev_primitive_index4 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,0)).r;
+			uint prev_primitive_index5 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,-1)).r;
+			uint prev_primitive_index6 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,-1)).r;
+
+			uint prev_primitive_index7 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,-1)).r;
+			uint prev_primitive_index8 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,1)).r;
+
 			uint prev_total = prev_primitive_index0 + prev_primitive_index1 + prev_primitive_index2 + prev_primitive_index3;
 			
 			
-			//bool miss = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index, current_primitive_index, current_primitive_index, current_primitive_index) ));
-			bool miss = current_total != prev_total ? true : false;
-			if( miss )
+			bool miss1 = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
+			bool miss2 = all( notEqual( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
+			bool miss3 = prev_primitive_index8 != current_primitive_index0 ? true : false;
+			bool miss = miss1 && miss2 && miss3;
+			bool missMotion = current_total != prev_total ? true : false;
+			if( check ? missMotion : miss )
 			{
 				useHistory = false;
-				//src.w = Camera.TemporalFrames * 0.75;
 			}
 		}
 
@@ -104,54 +114,11 @@ void main() {
 				mix(history2, history3, subpixel.x),
 				subpixel.y
 			);
-
-			// color clamping
-			vec3 minCol = vec3(99999.);
-			vec3 maxCol = vec3(0.);
-			const int kernelSize = 2;
-			for(int x=-kernelSize; x<=kernelSize; x++){
-				for(int y=-kernelSize; y<=kernelSize; y++){
-					vec4 c = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(x,y)) : imageLoad(Accumulate1Image, previpos  + ivec2(x,y));
-					c.rgb = rgb2ycocg(c.rgb);
-					minCol = min(minCol, c.rgb);
-					maxCol = max(maxCol, c.rgb);
-				}
-			}
-			history.rgb = rgb2ycocg(history.rgb);
-			history.rgb = clamp(history.rgb, minCol, maxCol);
-			history.rgb = ycocg2rgb(history.rgb);
-
+			
 			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
 			final = mix(history, src, clamp(currKeep,0.0,1.0));
-			
-			// clip in history
-			
-			
-
-            // 这里我们希望评估的是噪点密集的区域，就是肉眼看上去十分闪烁的区域
-            // 应该类似SVGF一样，评估时间，空间域内的方差
-            // 然后，这个评估，也可以用于降噪，这种区域，应该提升降噪强度。
-            // 最终的结果，类似于，采样数严重不足的区域，自适应的提升采样数，并拉高后续的降噪强度
-            // 而比如光线充足的大平面，采样数足够，后续也可以适当降低降噪强度
-            // 我们先输出一个区域的图给到visualdebug	
-			if(Camera.AdaptiveSample)
-			{
-			    // 之前的算法是不稳定，抖动的。使用 delta ^ 2 = prev - cur ^ 2 来预估
-			
-			    // 将方差直接写入buffer，显示一下，他应该是稳定的
-			
-				// if history variance is too large, we should not use it.
-				const float historyVariance = Camera.AdaptiveVariance;
-
-				float diff = abs(luminance(src.rgb) - luminance(history.rgb));
-				if (diff > historyVariance)
-				{
-					// need sample
-					//imageStore(AdaptiveSampleBuffer, ipos, uvec4(Camera.AdaptiveSteps));
-				}
-			}
 		}
     }
 	

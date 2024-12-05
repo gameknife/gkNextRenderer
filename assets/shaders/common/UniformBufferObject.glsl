@@ -44,6 +44,7 @@ struct UniformBufferObject
 	glbool TAA;
 	uint SelectedId;
 	glbool ShowEdge;
+	glbool Benchmark;
 		
 	float BFSigma;
 	float BFSigmaLum;

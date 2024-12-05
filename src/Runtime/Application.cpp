@@ -126,7 +126,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
-    userSettings.AdaptiveSteps = 8;
+    userSettings.AdaptiveSteps = 4;
     userSettings.TAA = true; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
@@ -646,6 +646,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 
+    ubo.Benchmark = userSettings_.Benchmark;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

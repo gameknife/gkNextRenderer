@@ -448,7 +448,7 @@ void UserInterface::DrawSettings()
 			//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
 			ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
 			ImGui::SliderInt(LOCTEXT("Samples"), &Settings().NumberOfSamples, 1, 16);
-			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
+			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 64);
 			ImGui::NewLine();
 		}
 
