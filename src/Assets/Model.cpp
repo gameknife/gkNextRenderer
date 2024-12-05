@@ -533,20 +533,79 @@ namespace Assets
         // load all animations
         for ( auto& animation : model.animations )
         {
+            std::map<std::string, AnimationTrack> trackMaps;
             for ( auto& track : animation.channels )
             {
-                if (track.target_path == "translation")
+                if (track.target_path == "rotation")
                 {
-                    AnimationTrack CreateTrack;
-
-                    CreateTrack.NodeName_ = model.nodes[track.target_node].name;
-                    CreateTrack.Time_ = 0;
                     tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
                     tinygltf::Accessor outputAccessor = model.accessors[animation.samplers[track.sampler].output];
 
                     tinygltf::BufferView inputView = model.bufferViews[inputAccessor.bufferView];
                     tinygltf::BufferView outputView = model.bufferViews[outputAccessor.bufferView];
-              
+                    
+                    std::string nodeName = model.nodes[track.target_node].name;
+                    AnimationTrack& CreateTrack = trackMaps[nodeName];
+
+                    CreateTrack.NodeName_ = nodeName;
+                    CreateTrack.Time_ = 0;
+
+                    if ( CreateTrack.KeyFrames_.empty() )
+                    {
+                        CreateTrack.KeyFrames_.assign(inputAccessor.count, {0, {}, vec3(1), quat(1,0,0,0)});
+                    }
+
+                    int inputStride = inputAccessor.ByteStride(inputView);
+                    int outputStride = outputAccessor.ByteStride(outputView);
+
+                    for (size_t i = 0; i < inputAccessor.count; ++i)
+                    {
+                        float time = 0.f;
+                        glm::quat rotation;
+                        if ( inputAccessor.type == TINYGLTF_TYPE_SCALAR )
+                        {
+                            
+                            float* position = reinterpret_cast<float*>(&model.buffers[inputView.buffer].data[inputView.byteOffset + inputAccessor.byteOffset + i *
+                                inputStride]);
+                            time = position[0];
+                        }
+
+                        if ( outputAccessor.type == TINYGLTF_TYPE_VEC4 )
+                        {
+                            float* position = reinterpret_cast<float*>(&model.buffers[outputView.buffer].data[outputView.byteOffset + outputAccessor.byteOffset + i *
+                                outputStride]);
+                            rotation = glm::quat(
+                                position[3],
+                                position[0],
+                                position[1],
+                                position[2]
+                            );
+                        }
+                        
+                        CreateTrack.KeyFrames_[i].Time = time;
+                        CreateTrack.KeyFrames_[i].Rotation = rotation;
+                        CreateTrack.Duration_ = time;
+                    }
+                }
+                if (track.target_path == "translation")
+                {
+                    tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
+                    tinygltf::Accessor outputAccessor = model.accessors[animation.samplers[track.sampler].output];
+
+                    tinygltf::BufferView inputView = model.bufferViews[inputAccessor.bufferView];
+                    tinygltf::BufferView outputView = model.bufferViews[outputAccessor.bufferView];
+                    
+                    std::string nodeName = model.nodes[track.target_node].name;
+                    AnimationTrack& CreateTrack = trackMaps[nodeName];
+                    
+                    CreateTrack.NodeName_ = nodeName;
+                    CreateTrack.Time_ = 0;
+
+                    if ( CreateTrack.KeyFrames_.empty() )
+                    {
+                        CreateTrack.KeyFrames_.assign(inputAccessor.count, {0, {}, vec3(1), quat(1,0,0,0)});
+                    }
+
                     int inputStride = inputAccessor.ByteStride(inputView);
                     int outputStride = outputAccessor.ByteStride(outputView);
 
@@ -572,14 +631,17 @@ namespace Assets
                                 position[2]
                             );
                         }
-
-                        AnimationKey key{time, translation, vec3(1), quat(1, 0, 0, 0)};
-                        CreateTrack.KeyFrames_.emplace_back(key);
+                        
+                        CreateTrack.KeyFrames_[i].Time = time;
+                        CreateTrack.KeyFrames_[i].Translation = translation;
                         CreateTrack.Duration_ = time;
                     }
-
-                    tracks.emplace_back(CreateTrack);
                 }
+            }
+
+            for ( auto& track : trackMaps )
+            {
+                tracks.push_back(track.second);
             }
         }
 
@@ -622,13 +684,25 @@ namespace Assets
             if (time >= Key.Time && time < KeyNext.Time)
             {
                 float t = (time - Key.Time) / (KeyNext.Time - Key.Time);
-                transform = glm::translate(mat4(1), Key.Translation + (KeyNext.Translation - Key.Translation) * t);
+
+                glm::vec3 translation = Key.Translation + (KeyNext.Translation - Key.Translation) * t;
+                glm::quat quaternion = glm::slerp(Key.Rotation, KeyNext.Rotation, t);
+                glm::vec3 scaling = Key.Scale + (KeyNext.Scale - Key.Scale) * t;
+                glm::mat4 T = glm::translate(glm::mat4(1), translation);
+                glm::mat4 R = glm::toMat4(quaternion);
+                glm::mat4 S = glm::scale(glm::mat4(1), scaling);
+                
+                transform = (T * R * S);
                 return;
             }
 
             if ( i == 0 && time < Key.Time )
             {
-                transform = glm::translate(mat4(1), Key.Translation);
+                glm::mat4 T = glm::translate(glm::mat4(1), Key.Translation);
+                glm::mat4 R = glm::toMat4(Key.Rotation);
+                glm::mat4 S = glm::scale(glm::mat4(1), Key.Scale);
+                
+                transform = (T * R * S);
                 return;
             }
         }
