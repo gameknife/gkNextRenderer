@@ -92,21 +92,32 @@ namespace Assets
 
     void Scene::Tick(float DeltaSeconds)
     {
+        float DurationMax = 0;
+        for ( auto& track : tracks_ )
+        {
+            DurationMax = glm::max(DurationMax, track.Duration_);
+        }
         for ( auto& track : tracks_ )
         {
             track.Time_ += DeltaSeconds;
-            if (track.Time_ > track.Duration_)
+            if (track.Time_ > DurationMax)
             {
                 track.Time_ = 0;
             }
 
-            glm::mat4 transform = glm::mat4(1);
-            track.Sample(track.Time_, transform);
-
             Node* node = GetNode(track.NodeName_);
             if (node)
             {
-                node->SetTransform(transform);
+                glm::vec3 translation = node->Translation();
+                glm::quat rotation = node->Rotation();
+                glm::vec3 scaling = node->Scale();
+                
+                track.Sample(track.Time_, translation, rotation, scaling);
+                
+                node->SetTranslation(translation);
+                node->SetRotation(rotation);
+                node->SetScale(scaling);
+                
                 MarkDirty();
             }
         }

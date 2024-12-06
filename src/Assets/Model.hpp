@@ -59,7 +59,7 @@ namespace Assets
     class Node final
     {
     public:
-        static Node CreateNode(std::string name, glm::mat4 transform, uint32_t modelId, uint32_t instanceId, bool replace);
+        static Node CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t modelId, uint32_t instanceId, bool replace);
         
         //Node& operator =(const Node&) = delete;
         //Node& operator =(Node&&) = delete;
@@ -69,7 +69,15 @@ namespace Assets
         // Node(Node&&) = default;
         // ~Node() = default;
 
-        void SetTransform(const glm::mat4& transform);
+        void SetTranslation( glm::vec3 translation );
+        void SetRotation( glm::quat rotation );
+        void SetScale( glm::vec3 scale );
+
+        glm::vec3 Translation() const { return translation_; }
+        glm::quat Rotation() const { return rotation_; }
+        glm::vec3 Scale() const { return scaling_; }
+        
+        void RecalcTransform();
         const glm::mat4& WorldTransform() const { return transform_; }
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }
@@ -82,7 +90,7 @@ namespace Assets
         glm::vec3 TickVelocity();
 
     private:
-        Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace);
+        Node(std::string name,  glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace);
 
         std::string name_;
 
@@ -113,7 +121,7 @@ namespace Assets
     
     struct AnimationTrack
     {
-        void Sample(float time, glm::mat4& transform);
+        void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
         
         std::string NodeName_;
         

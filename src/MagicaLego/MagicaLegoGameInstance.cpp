@@ -1,5 +1,7 @@
 #include "MagicaLegoGameInstance.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
@@ -276,7 +278,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
                 NodeName = "SmallBase";
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
-            Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate(glm::mat4(1), location), modelId, basementInstanceId_, false);
+            Assets::Node newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
             GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
@@ -751,7 +753,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 // 所以如果没有modelid的改变的话，采用原位替换
                 glm::mat4 orientation = GetOrientationMatrix(Block.second.orientation);
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)) * orientation, BasicBlock->modelId_,
+                Assets::Node newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 

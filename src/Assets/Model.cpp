@@ -40,6 +40,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
 #include <fmt/format.h>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include "Options.hpp"
 #include "Texture.hpp"
@@ -184,11 +185,19 @@ namespace Assets
             transform =  parentTransform * localTs;   
         }
 
+        // decouple transform
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(transform, scale, rotation, translation, skew, perspective);
+        
         if(node.mesh != -1)
         {
             if( node.extras.Has("arealight") )
             {
-                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, out_nodes.size(), false));
+                out_nodes.push_back(Node::CreateNode(node.name, translation, rotation, scale, node.mesh + modelIdx, out_nodes.size(), false));
 
                 // use the aabb to build a light, using the average normals and area
                 // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
@@ -208,7 +217,7 @@ namespace Assets
             }
             else
             {
-                out_nodes.push_back(Node::CreateNode(node.name, transform, node.mesh + modelIdx, out_nodes.size(), false));
+                out_nodes.push_back(Node::CreateNode(node.name, translation, rotation, scale, node.mesh + modelIdx, out_nodes.size(), false));
             }
         }
         else
@@ -688,6 +697,11 @@ namespace Assets
             {
                 return Key.Value;
             }
+
+            if ( i == Keys.size() - 2)
+            {
+                return KeyNext.Value;
+            }
         }
         return T{};
     }
@@ -710,20 +724,29 @@ namespace Assets
             {
                 return Key.Value;
             }
+
+            if ( i == Keys.size() - 2)
+            {
+                return KeyNext.Value;
+            }
         }
         return {};
     }
     
-    void AnimationTrack::Sample(float time, glm::mat4& transform)
+    void AnimationTrack::Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling)
     {
-        glm::vec3 translation = TranslationChannel.Sample(time);
-        glm::quat quaternion = RotationChannel.Sample(time);
-        glm::vec3 scaling = glm::vec3(1,1,1);// ScaleChannel.Sample(time);
-        glm::mat4 T = glm::translate(glm::mat4(1), translation);
-        glm::mat4 R = glm::toMat4(quaternion);
-        glm::mat4 S = glm::scale(glm::mat4(1), scaling);
-        
-        transform = (T * R * S);
+        if (TranslationChannel.Keys.size() > 0)
+        {
+            translation = TranslationChannel.Sample(time);
+        }
+        if (RotationChannel.Keys.size() > 0)
+        {
+            rotation = RotationChannel.Sample(time);
+        }
+        if (ScaleChannel.Keys.size() > 0)
+        {
+            scaling = ScaleChannel.Sample(time);
+        }
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
@@ -973,7 +996,7 @@ namespace Assets
             models.push_back(Model(std::move(vertices), std::move(indices), std::move(materials)));
             if(autoNode)
             {
-                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), static_cast<int>(models.size()) - 1, nodes.size(), false));
+                nodes.push_back(Node::CreateNode(Utilities::NameHelper::RandomName(6), glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), static_cast<int>(models.size()) - 1, nodes.size(), false));
             }
         }
         
@@ -1235,14 +1258,32 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace)
+    Node Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)
     {
-        return Node(name, transform, id, instanceId, replace);
+        return Node(name, translation, rotation, scale, id, instanceId, replace);
     }
 
-    void Node::SetTransform(const glm::mat4& transform)
+    void Node::SetTranslation(glm::vec3 translation)
     {
-        transform_ = transform;
+        translation_ = translation;
+        RecalcTransform();
+    }
+
+    void Node::SetRotation(glm::quat rotation)
+    {
+        rotation_ = rotation;
+        RecalcTransform();
+    }
+
+    void Node::SetScale(glm::vec3 scale)
+    {
+        scaling_ = scale;
+        RecalcTransform();
+    }
+
+    void Node::RecalcTransform()
+    {
+        transform_ = glm::translate(glm::mat4(1), translation_) * glm::mat4_cast(rotation_) * glm::scale(glm::mat4(1), scaling_);
     }
 
     glm::vec3 Node::TickVelocity()
@@ -1258,9 +1299,12 @@ namespace Assets
         return velocity;
     }
 
-    Node::Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace): name_(name), transform_(transform), modelId_(id), instanceId_(instanceId),
-                                                                                                          visible_(true)
+    Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace):
+    name_(name),
+    translation_(translation), rotation_(rotation), scaling_(scale), 
+    modelId_(id), instanceId_(instanceId), visible_(true)
     {
+        RecalcTransform();
         if(replace)
         {
             prevTransform_ = transform_;

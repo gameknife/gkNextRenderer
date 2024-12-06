@@ -23,6 +23,7 @@ using Assets::Model;
 using Assets::Texture;
 
 // 这里保留procedural的场景代码，后续再添加，先去掉functor的场景创建，换成使用loader
+#if 0
 namespace
 {
     int CreateMaterial(std::vector<Assets::Material>& materials, Material mat)
@@ -148,7 +149,7 @@ void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& no
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), ts0, 1, static_cast<uint32_t>(nodes.size()), false));
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), ts1, 1, static_cast<uint32_t>(nodes.size()), false));
 }
-
+#endif
 // procedural scene without assets
 // std::vector<scenes_pair> SceneList::AllScenes
 //     =
