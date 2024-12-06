@@ -550,11 +550,6 @@ namespace Assets
                     CreateTrack.NodeName_ = nodeName;
                     CreateTrack.Time_ = 0;
 
-                    if ( CreateTrack.KeyFrames_.empty() )
-                    {
-                        CreateTrack.KeyFrames_.assign(inputAccessor.count, {0, {}, vec3(1), quat(1,0,0,0)});
-                    }
-
                     int inputStride = inputAccessor.ByteStride(inputView);
                     int outputStride = outputAccessor.ByteStride(outputView);
 
@@ -581,10 +576,13 @@ namespace Assets
                                 position[2]
                             );
                         }
+
+                        AnimationKey<glm::quat> Key;
+                        Key.Time = time;
+                        Key.Value = rotation;
                         
-                        CreateTrack.KeyFrames_[i].Time = time;
-                        CreateTrack.KeyFrames_[i].Rotation = rotation;
-                        CreateTrack.Duration_ = time;
+                        CreateTrack.RotationChannel.Keys.push_back(Key);
+                        CreateTrack.Duration_ = max(time, CreateTrack.Duration_);
                     }
                 }
                 if (track.target_path == "translation")
@@ -600,11 +598,6 @@ namespace Assets
                     
                     CreateTrack.NodeName_ = nodeName;
                     CreateTrack.Time_ = 0;
-
-                    if ( CreateTrack.KeyFrames_.empty() )
-                    {
-                        CreateTrack.KeyFrames_.assign(inputAccessor.count, {0, {}, vec3(1), quat(1,0,0,0)});
-                    }
 
                     int inputStride = inputAccessor.ByteStride(inputView);
                     int outputStride = outputAccessor.ByteStride(outputView);
@@ -631,10 +624,13 @@ namespace Assets
                                 position[2]
                             );
                         }
-                        
-                        CreateTrack.KeyFrames_[i].Time = time;
-                        CreateTrack.KeyFrames_[i].Translation = translation;
-                        CreateTrack.Duration_ = time;
+
+                        AnimationKey<glm::vec3> Key;
+                        Key.Time = time;
+                        Key.Value = translation;
+
+                        CreateTrack.TranslationChannel.Keys.push_back(Key);
+                        CreateTrack.Duration_ = max(time, CreateTrack.Duration_);
                     }
                 }
             }
@@ -675,37 +671,59 @@ namespace Assets
         //printf("model.cameras: %d\n", i);
     }
 
-    void AnimationTrack::Sample(float time, glm::mat4& transform)
+    template <typename T>
+    T AnimationChannel<T>::Sample(float time)
     {
-        for ( int i = 0; i < KeyFrames_.size() - 1; i++ )
+        for ( int i = 0; i < Keys.size() - 1; i++ )
         {
-            auto& Key = KeyFrames_[i];
-            auto& KeyNext = KeyFrames_[i + 1];
+            auto& Key = Keys[i];
+            auto& KeyNext = Keys[i + 1];
             if (time >= Key.Time && time < KeyNext.Time)
             {
                 float t = (time - Key.Time) / (KeyNext.Time - Key.Time);
-
-                glm::vec3 translation = Key.Translation + (KeyNext.Translation - Key.Translation) * t;
-                glm::quat quaternion = glm::slerp(Key.Rotation, KeyNext.Rotation, t);
-                glm::vec3 scaling = Key.Scale + (KeyNext.Scale - Key.Scale) * t;
-                glm::mat4 T = glm::translate(glm::mat4(1), translation);
-                glm::mat4 R = glm::toMat4(quaternion);
-                glm::mat4 S = glm::scale(glm::mat4(1), scaling);
-                
-                transform = (T * R * S);
-                return;
+                return glm::mix(Key.Value, KeyNext.Value, t);
             }
 
             if ( i == 0 && time < Key.Time )
             {
-                glm::mat4 T = glm::translate(glm::mat4(1), Key.Translation);
-                glm::mat4 R = glm::toMat4(Key.Rotation);
-                glm::mat4 S = glm::scale(glm::mat4(1), Key.Scale);
-                
-                transform = (T * R * S);
-                return;
+                return Key.Value;
             }
         }
+        return T{};
+    }
+
+    // 偏特化T == glm::quat
+    template <>
+    glm::quat AnimationChannel<glm::quat>::Sample(float time)
+    {
+        for ( int i = 0; i < Keys.size() - 1; i++ )
+        {
+            auto& Key = Keys[i];
+            auto& KeyNext = Keys[i + 1];
+            if (time >= Key.Time && time < KeyNext.Time)
+            {
+                float t = (time - Key.Time) / (KeyNext.Time - Key.Time);
+                return glm::slerp(Key.Value, KeyNext.Value, t);
+            }
+
+            if ( i == 0 && time < Key.Time )
+            {
+                return Key.Value;
+            }
+        }
+        return {};
+    }
+    
+    void AnimationTrack::Sample(float time, glm::mat4& transform)
+    {
+        glm::vec3 translation = TranslationChannel.Sample(time);
+        glm::quat quaternion = RotationChannel.Sample(time);
+        glm::vec3 scaling = glm::vec3(1,1,1);// ScaleChannel.Sample(time);
+        glm::mat4 T = glm::translate(glm::mat4(1), translation);
+        glm::mat4 R = glm::toMat4(quaternion);
+        glm::mat4 S = glm::scale(glm::mat4(1), scaling);
+        
+        transform = (T * R * S);
     }
 
     void Model::FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)

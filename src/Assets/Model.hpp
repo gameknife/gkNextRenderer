@@ -85,6 +85,11 @@ namespace Assets
         Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace);
 
         std::string name_;
+
+        glm::vec3 translation_;
+        glm::quat rotation_;
+        glm::vec3 scaling_;
+        
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
         uint32_t modelId_;
@@ -92,12 +97,18 @@ namespace Assets
         bool visible_;
     };
 
+    template <typename T>
     struct AnimationKey
     {
         float Time;
-        glm::vec3 Translation;
-        glm::vec3 Scale;
-        glm::quat Rotation;
+        T Value;
+    };
+
+    template <typename T>
+    struct AnimationChannel
+    {
+        std::vector<AnimationKey<T>> Keys;
+        T Sample(float time);
     };
     
     struct AnimationTrack
@@ -105,8 +116,11 @@ namespace Assets
         void Sample(float time, glm::mat4& transform);
         
         std::string NodeName_;
-        std::vector<AnimationKey> KeyFrames_;
-
+        
+        AnimationChannel<glm::vec3> TranslationChannel;
+        AnimationChannel<glm::quat> RotationChannel;
+        AnimationChannel<glm::vec3> ScaleChannel;
+        
         float Time_;
         float Duration_;
     };
