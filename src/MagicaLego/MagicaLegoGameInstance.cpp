@@ -207,8 +207,11 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // raycast request
     if (GetBuildMode() == ELegoMode::ELM_Place || bMouseLeftDown_)
     {
-        //GetEngine().GetUserSettings().RequestRayCast = true;
+#if WITH_CPURAYCAST
         CPURaycast();
+#else
+        GetEngine().GetUserSettings().RequestRayCast = true;
+#endif
     }
 
     // select edge showing
@@ -306,16 +309,17 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     SwitchBasePlane(EBasePlane::EBP_Small);
 
     //GeneratingThmubnail();
+
+    UserInterface_->OnSceneLoaded();
+
+    CleanUp();
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
 {
     NextGameInstanceBase::OnSceneUnloaded();
-
     BasicNodes.clear();
     CleanUp();
-
-    UserInterface_->OnSceneLoaded();
 }
 
 bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
@@ -773,7 +777,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
 #if WITH_CPURAYCAST
     if (GTriangles.size() > 3)
     {
-        GCpuBvh.BuildAVX( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
+        GCpuBvh.Build( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
         // GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
         // GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
     }
