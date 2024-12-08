@@ -1,5 +1,6 @@
 #include "Scene.hpp"
 #include "Model.hpp"
+#include "Options.hpp"
 #include "Sphere.hpp"
 #include "Vulkan/BufferUtil.hpp"
 
@@ -92,6 +93,11 @@ namespace Assets
 
     void Scene::Tick(float DeltaSeconds)
     {
+        if (GOption->Benchmark)
+        {
+            return;
+        }
+        
         float DurationMax = 0;
         for ( auto& track : tracks_ )
         {

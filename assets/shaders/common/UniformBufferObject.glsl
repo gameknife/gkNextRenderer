@@ -1,10 +1,12 @@
 #ifdef __cplusplus
 #define glbool uint32_t
+#define ALIGN_16 alignas(16)
 #else
 #define glbool bool
+#define ALIGN_16
 #endif
 
-struct UniformBufferObject
+struct ALIGN_16 UniformBufferObject
 {
 	mat4 ModelView;
 	mat4 Projection;

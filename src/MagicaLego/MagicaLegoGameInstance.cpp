@@ -740,8 +740,14 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
     GExtInfos.clear();
     // base
     {
-        glm::vec3 min {-0.8,-0.08,-0.8};
-        glm::vec3 max {0.8,0,0.8};
+        float multiplier = 6;
+        switch (currentBaseSize_)
+        {
+            case EBasePlane::EBP_Big: multiplier = 6 * 20; break;
+            case EBasePlane::EBP_Mid: multiplier = 6 * 7; break;
+        }
+        glm::vec3 min {-0.08 * multiplier,-0.08,-0.08 * multiplier};
+        glm::vec3 max {0.08 * multiplier,0,0.08 * multiplier};
         BuildBox(GTriangles, GExtInfos, min, max, basementInstanceId_);
     }
 #endif
