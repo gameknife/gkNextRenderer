@@ -281,7 +281,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
                 NodeName = "SmallBase";
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
-            Assets::Node newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
+            auto newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
             GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
@@ -454,9 +454,9 @@ void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
     auto& allNodes = GetEngine().GetScene().Nodes();
     for (auto& Node : allNodes)
     {
-        if (Node.GetName().find(typeName, 0) == 0)
+        if (Node->GetName().find(typeName, 0) == 0)
         {
-            AddBasicBlock(Node.GetName(), typeName);
+            AddBasicBlock(Node->GetName(), typeName);
         }
     }
 
@@ -546,9 +546,9 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
     auto& allNodes = GetEngine().GetScene().Nodes();
     for (auto& Node : allNodes)
     {
-        if (Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+        if (Node->GetName() == "BigBase" || Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
         {
-            Node.SetVisible(false);
+            Node->SetVisible(false);
         }
     }
 
@@ -557,27 +557,27 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
     case EBasePlane::EBP_Big:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+            if (Node->GetName() == "BigBase" || Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
     case EBasePlane::EBP_Mid:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+            if (Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
     case EBasePlane::EBP_Small:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "SmallBase")
+            if (Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
@@ -763,7 +763,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 // 所以如果没有modelid的改变的话，采用原位替换
                 glm::mat4 orientation = GetOrientationMatrix(Block.second.orientation);
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
+                std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 

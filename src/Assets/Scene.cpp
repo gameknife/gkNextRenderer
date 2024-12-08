@@ -42,7 +42,7 @@ namespace Assets
         nodeMatrixBufferMemory_.reset();
     }
 
-    void Scene::Reload(std::vector<Node>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
+    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
@@ -123,6 +123,7 @@ namespace Assets
                 node->SetTranslation(translation);
                 node->SetRotation(rotation);
                 node->SetScale(scaling);
+                node->RecalcTransform();
                 
                 MarkDirty();
             }
@@ -147,7 +148,7 @@ namespace Assets
                     nodeSimpleProxys.reserve(nodes_.size());
                     for (auto& node : nodes_)
                     {
-                        if (node.IsVisible())
+                        if (node->IsVisible())
                         {
                         }
                     }
@@ -168,15 +169,15 @@ namespace Assets
                         uint32_t instanceCountOfThisModel = 0;
                         for (auto& node : nodes_)
                         {
-                            if (node.GetModel() == i && node.IsVisible())
+                            if (node->GetModel() == i && node->IsVisible())
                             {
-                                glm::vec3 delta = node.TickVelocity();
+                                glm::vec3 delta = node->TickVelocity();
                                 if (glm::length(delta) > 0.01f)
                                 {
-                                    sceneDirty_ = true;
+                                    MarkDirty();
                                 }
-                                nodeSimpleProxys.push_back({node.GetInstanceId(), node.GetModel(), 0u, 0u, glm::vec4(delta, 0)});
-                                nodeProxys.push_back({node.WorldTransform()});
+                                nodeSimpleProxys.push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, glm::vec4(delta, 0)});
+                                nodeProxys.push_back({node->WorldTransform()});
                                 instanceCountOfThisModel++;
                             }
                         }
@@ -220,9 +221,9 @@ namespace Assets
     {
         for (auto& node : nodes_)
         {
-            if (node.GetName() == name)
+            if (node->GetName() == name)
             {
-                return &node;
+                return node.get();
             }
         }
         return nullptr;
@@ -232,9 +233,9 @@ namespace Assets
     {
         for (auto& node : nodes_)
         {
-            if (node.GetInstanceId() == id)
+            if (node->GetInstanceId() == id)
             {
-                return &node;
+                return node.get();
             }
         }
         return nullptr;

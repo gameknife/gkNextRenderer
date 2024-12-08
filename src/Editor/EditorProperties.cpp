@@ -14,7 +14,7 @@ void Editor::GUI::ShowProperties()
     {
         if (selected_obj_id != -1)
         {
-            const Assets::Node* selected_obj = &(current_scene->Nodes()[selected_obj_id]);
+            std::shared_ptr<Assets::Node> selected_obj = current_scene->Nodes()[selected_obj_id];
             
             ImGui::PushFont(fontIcon_);
             ImGui::TextUnformatted(selected_obj->GetName().c_str());

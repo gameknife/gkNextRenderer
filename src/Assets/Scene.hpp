@@ -37,7 +37,7 @@ namespace Assets
 		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
 		~Scene();
 
-		void Reload(std::vector<Node>& nodes,
+		void Reload(std::vector<std::shared_ptr<Node>>& nodes,
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
 			std::vector<LightObject>& lights,
@@ -45,7 +45,7 @@ namespace Assets
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
 
-		std::vector<Node>& Nodes() { return nodes_; }
+		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
@@ -84,7 +84,7 @@ namespace Assets
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
-		std::vector<Node> nodes_;
+		std::vector<std::shared_ptr<Node>> nodes_;
 		std::vector<LightObject> lights_;
 		std::vector<AnimationTrack> tracks_;
 		std::vector<uvec2> offsets_;
