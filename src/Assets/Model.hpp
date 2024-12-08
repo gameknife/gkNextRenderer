@@ -74,7 +74,7 @@ namespace Assets
         glm::vec3 Scale() const { return scaling_; }
 
         void RecalcLocalTransform();
-        void RecalcTransform();
+        void RecalcTransform(bool full = true);
         const glm::mat4& WorldTransform() const { return transform_; }
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }

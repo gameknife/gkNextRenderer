@@ -123,7 +123,7 @@ namespace Assets
                 node->SetTranslation(translation);
                 node->SetRotation(rotation);
                 node->SetScale(scaling);
-                node->RecalcTransform();
+                node->RecalcTransform(true);
                 
                 MarkDirty();
             }
@@ -145,13 +145,13 @@ namespace Assets
                 {
                     // this is a fast node proxy for ray tracing, plain order as nodes
                     nodeSimpleProxys.clear();
-                    nodeSimpleProxys.reserve(nodes_.size());
-                    for (auto& node : nodes_)
-                    {
-                        if (node->IsVisible())
-                        {
-                        }
-                    }
+                    //nodeSimpleProxys.reserve(nodes_.size());
+                    // for (auto& node : nodes_)
+                    // {
+                    //     if (node->IsVisible())
+                    //     {
+                    //     }
+                    // }
                 }
 
                 {

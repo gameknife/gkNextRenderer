@@ -744,7 +744,8 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.CamPosY = modelViewController_.Position()[1];
     stats.CamPosZ = modelViewController_.Position()[2];
 
-    stats.InstanceCount = static_cast<uint32_t>(scene_->Nodes().size());
+    stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeSimpleProxys().size());
+    stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;

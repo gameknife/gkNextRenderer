@@ -1260,19 +1260,16 @@ namespace Assets
     void Node::SetTranslation(glm::vec3 translation)
     {
         translation_ = translation;
-        RecalcLocalTransform();
     }
 
     void Node::SetRotation(glm::quat rotation)
     {
         rotation_ = rotation;
-        RecalcLocalTransform();
     }
 
     void Node::SetScale(glm::vec3 scale)
     {
         scaling_ = scale;
-        RecalcLocalTransform();
     }
 
     void Node::RecalcLocalTransform()
@@ -1280,8 +1277,9 @@ namespace Assets
         localTransform_ = glm::translate(glm::mat4(1), translation_) * glm::mat4_cast(rotation_) * glm::scale(glm::mat4(1), scaling_);
     }
 
-    void Node::RecalcTransform()
+    void Node::RecalcTransform(bool full)
     {
+        RecalcLocalTransform();
         if(parent_)
         {
             transform_ = parent_->transform_ * localTransform_;
@@ -1292,9 +1290,12 @@ namespace Assets
         }
 
         // update children
-        for(auto& child : children_)
+        if (full)
         {
-            child->RecalcTransform();
+            for(auto& child : children_)
+            {
+                child->RecalcTransform(full);
+            }
         }
     }
 
