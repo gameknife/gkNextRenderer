@@ -765,6 +765,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
                 std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
+                newNode->SetVisible(true);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 
 #if WITH_CPURAYCAST

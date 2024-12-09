@@ -272,6 +272,8 @@ void NextRendererApplication::Start()
 
 bool NextRendererApplication::Tick()
 {
+    PERFORMANCEAPI_INSTRUMENT_FUNCTION();
+    
     // make sure the output is flushed
     std::cout << std::flush;
     
@@ -299,6 +301,7 @@ bool NextRendererApplication::Tick()
     // Scene Update
     if(scene_)
     {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
 
@@ -308,6 +311,7 @@ bool NextRendererApplication::Tick()
     // Benchmark Update
     if(status_ == NextRenderer::EApplicationStatus::Running)
     {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickBenchmark", "");
         TickBenchMarker();
     }
 
@@ -320,20 +324,28 @@ bool NextRendererApplication::Tick()
     glfwPollEvents();
 
     // tick
-    gameInstance_->OnTick(deltaSeconds_);
-
-    // iterate the tickedTasks_, if return true, remove it
-    for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
     {
-        if( (*it)(deltaSeconds_) )
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
+        gameInstance_->OnTick(deltaSeconds_);
+    }
+
+    {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickTasks", "");
+
+        // iterate the tickedTasks_, if return true, remove it
+        for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
         {
-            it = tickedTasks_.erase(it);
-        }
-        else
-        {
-            ++it;
+            if( (*it)(deltaSeconds_) )
+            {
+                it = tickedTasks_.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
         }
     }
+   
 
     // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
     for( auto it = delayedTasks_.begin(); it != delayedTasks_.end(); )
@@ -358,8 +370,12 @@ bool NextRendererApplication::Tick()
             ++it;
         }
     }
+
+    {
+        PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+        renderer_->DrawFrame();
+    }
     
-    renderer_->DrawFrame();
     window_->attemptDragWindow();
     totalFrames_ += 1;
     return glfwWindowShouldClose( window_->Handle() ) != 0;

@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
 #include <string>

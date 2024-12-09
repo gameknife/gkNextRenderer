@@ -143,20 +143,35 @@ namespace Assets
             {
                 sceneDirty_ = false;
                 {
-                    // this is a fast node proxy for ray tracing, plain order as nodes
+                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
                     nodeSimpleProxys.clear();
-                    //nodeSimpleProxys.reserve(nodes_.size());
+                    nodeProxys.clear();
+                    indirectDrawBufferInstanced.clear();
+
                     // for (auto& node : nodes_)
                     // {
                     //     if (node->IsVisible())
                     //     {
+                    //         glm::vec3 delta = node->TickVelocity();
+                    //         if (glm::length(delta) > 0.01f)
+                    //         {
+                    //             MarkDirty();
+                    //         }
+                    //         nodeSimpleProxys.push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, glm::vec4(delta, 0)});
+                    //         nodeProxys.push_back({node->WorldTransform()});
                     //     }
                     // }
-                }
-
-                {
-                    nodeProxys.clear();
-                    indirectDrawBufferInstanced.clear();
+                    //
+                    // NodeSimpleProxy* simpleProxy = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
+                    // std::memcpy(simpleProxy, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
+                    // nodeSimpleMatrixBufferMemory_->Unmap();
+                    //
+                    // NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+                    // std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+                    // nodeMatrixBufferMemory_->Unmap();
+                    //
+                    // return true;
+                    
                     uint32_t indexOffset = 0;
                     uint32_t vertexOffset = 0;
                     uint32_t nodeOffsetBatched = 0;
@@ -199,16 +214,16 @@ namespace Assets
                     NodeSimpleProxy* simpleProxy = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
                     std::memcpy(simpleProxy, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
                     nodeSimpleMatrixBufferMemory_->Unmap();
-
+                    
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     nodeMatrixBufferMemory_->Unmap();
-
+                    
                     VkDrawIndexedIndirectCommand* diic = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectDrawBufferMemory_->Map(
                         0, sizeof(VkDrawIndexedIndirectCommand) * indirectDrawBufferInstanced.size()));
                     std::memcpy(diic, indirectDrawBufferInstanced.data(), indirectDrawBufferInstanced.size() * sizeof(VkDrawIndexedIndirectCommand));
                     indirectDrawBufferMemory_->Unmap();
-
+                    
                     indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
                 }
                 return true;

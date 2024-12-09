@@ -206,11 +206,7 @@ namespace Vulkan::RayTracing
             instancesBufferMemory_->Unmap();
         }
 
-        // request tlas update
-        SingleTimeCommands::Submit(CommandPool(), [this, instanceCount](VkCommandBuffer commandBuffer)
-        {
-            topAs_[0].Update(commandBuffer, instanceCount);
-        });
+        tlasUpdateRequest_ = instanceCount;
     }
 
 
@@ -251,6 +247,13 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         VulkanBaseRenderer::Render(commandBuffer, imageIndex);
+
+        if (tlasUpdateRequest_ > 0)
+        {
+            topAs_[0].Update(commandBuffer, tlasUpdateRequest_);
+            tlasUpdateRequest_ = 0;
+        }
+        //return;
         
         {
             VkMemoryBarrier memoryBarrier{};
