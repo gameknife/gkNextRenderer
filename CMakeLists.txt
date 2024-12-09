@@ -72,6 +72,12 @@ if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
 endif()
 
+if( WITH_SUPERLUMINAL )
+set(SuperluminalAPI_USE_STATIC_RUNTIME 1)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "C:/Program Files/Superluminal/Performance/API")
+find_package(SuperluminalAPI REQUIRED)
+endif()
+
 find_package(draco CONFIG REQUIRED)
 
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
