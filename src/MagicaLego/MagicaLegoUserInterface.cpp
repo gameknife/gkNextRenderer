@@ -608,11 +608,9 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 
     static int count = 0;
     count = 0;
-    GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 4;
-    GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 32;
     GetGameInstance()->GetEngine().AddTickedTask([this, MaxStep, localTempPath, filename, autoRotate](double DeltaSeconds)-> bool
     {
-        int FramePerStep = 16;
+        int FramePerStep = 4;
         count++;
 
         if (count > MaxStep * FramePerStep)
@@ -621,8 +619,6 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
             capture_ = false;
             waiting_ = false;
             PopLayout();
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
-            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 8;
             // sleep os for a while
             NextRenderer::OSProcess(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
             // delete all *.jpg using std::filesystem

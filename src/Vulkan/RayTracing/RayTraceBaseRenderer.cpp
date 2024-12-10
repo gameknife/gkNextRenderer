@@ -188,13 +188,11 @@ namespace Vulkan::RayTracing
         // rebuild all instance
         std::vector<VkAccelerationStructureInstanceKHR> instances;
         auto& nodeTrans = scene.GetNodeProxys();
-        auto& nodeProxys = scene.GetNodeSimpleProxys();
         for ( size_t i = 0; i < nodeTrans.size(); i++)
         {
-            auto& transform = nodeTrans[i];
-            auto& nodeProxy = nodeProxys[i];
+            auto& Node = nodeTrans[i];
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[nodeProxy.modelId], glm::transpose(transform.transform), nodeProxy.instanceId, true));
+                bottomAs_[Node.modelId], glm::transpose(Node.worldTS), Node.instanceId, true));
         }
 
         // upload to gpu
@@ -206,11 +204,7 @@ namespace Vulkan::RayTracing
             instancesBufferMemory_->Unmap();
         }
 
-        // request tlas update
-        SingleTimeCommands::Submit(CommandPool(), [this, instanceCount](VkCommandBuffer commandBuffer)
-        {
-            topAs_[0].Update(commandBuffer, instanceCount);
-        });
+        tlasUpdateRequest_ = instanceCount;
     }
 
 
@@ -251,6 +245,13 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         VulkanBaseRenderer::Render(commandBuffer, imageIndex);
+
+        if (tlasUpdateRequest_ > 0)
+        {
+            topAs_[0].Update(commandBuffer, tlasUpdateRequest_);
+            tlasUpdateRequest_ = 0;
+        }
+        //return;
         
         {
             VkMemoryBarrier memoryBarrier{};

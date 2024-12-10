@@ -17,3 +17,26 @@
 #define DISABLE_OPTIMIZATION
 #define ENABLE_OPTIMIZATION
 #endif
+
+#if WITH_SUPERLUMINAL
+#include "Superluminal/PerformanceAPI.h"
+#else
+#define PERFORMANCEAPI_INSTRUMENT(InstrumentationID)
+#define PERFORMANCEAPI_INSTRUMENT_DATA(InstrumentationID, InstrumentationData)
+#define PERFORMANCEAPI_INSTRUMENT_COLOR(InstrumentationID, InstrumentationColor)
+#define PERFORMANCEAPI_INSTRUMENT_DATA_COLOR(InstrumentationID, InstrumentationData, InstrumentationColor)
+
+#define PERFORMANCEAPI_INSTRUMENT_FUNCTION()
+#define PERFORMANCEAPI_INSTRUMENT_FUNCTION_DATA(InstrumentationData)
+#define PERFORMANCEAPI_INSTRUMENT_FUNCTION_COLOR(InstrumentationColor)
+#define PERFORMANCEAPI_INSTRUMENT_FUNCTION_DATA_COLOR(InstrumentationData, InstrumentationColor)
+
+inline void SetCurrentThreadName(const char* inThreadName) {}
+inline void BeginEvent(const char* inID) {}
+inline void BeginEvent(const char* inID, const char* inData) {}
+inline void BeginEvent(const char* inID, const char* inData, uint32_t inColor) {}
+inline void BeginEvent(const wchar_t* inID) {}
+inline void BeginEvent(const wchar_t* inID, const wchar_t* inData) {}
+inline void BeginEvent(const wchar_t* inID, const wchar_t* inData, uint32_t inColor) {}
+inline void EndEvent() {}
+#endif

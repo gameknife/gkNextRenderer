@@ -7,6 +7,7 @@
 #include "UniformBuffer.hpp"
 
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 #include <glm/detail/type_quat.hpp>
@@ -42,34 +43,24 @@ namespace Assets
         std::vector<Camera> cameras;
     };
 
-    struct alignas(16) NodeProxy final
-	{
-        glm::mat4 transform;
-    };
-    
-    struct alignas(16) NodeSimpleProxy final
-    {
-        uint32_t instanceId;
-        uint32_t modelId;
-        uint32_t matId;
-        uint32_t reserved2;
-        glm::vec4 velocityWS;
-    };
-
-    class Node final
+    // node tree to represent the scene
+    // but in rendering, it will flatten to renderproxys
+    class Node : public std::enable_shared_from_this<Node>
     {
     public:
-        static Node CreateNode(std::string name, glm::mat4 transform, uint32_t modelId, uint32_t instanceId, bool replace);
+        static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t modelId, uint32_t instanceId, bool replace);
+        Node(std::string name,  glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace);
         
-        //Node& operator =(const Node&) = delete;
-        //Node& operator =(Node&&) = delete;
+        void SetTranslation( glm::vec3 translation );
+        void SetRotation( glm::quat rotation );
+        void SetScale( glm::vec3 scale );
 
-        // Node() = default;
-        // Node(const Node&) = default;
-        // Node(Node&&) = default;
-        // ~Node() = default;
+        glm::vec3 Translation() const { return translation_; }
+        glm::quat Rotation() const { return rotation_; }
+        glm::vec3 Scale() const { return scaling_; }
 
-        //void Transform(const glm::mat4& transform) { transform_ = transform; }
+        void RecalcLocalTransform();
+        void RecalcTransform(bool full = true);
         const glm::mat4& WorldTransform() const { return transform_; }
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }
@@ -78,32 +69,58 @@ namespace Assets
         bool IsVisible() const { return visible_; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
+        bool TickVelocity(glm::mat4& combinedTS);
 
-        glm::vec3 TickVelocity();
+        void SetParent(std::shared_ptr<Node> parent);
+        Node* GetParent() { return parent_.get(); }
 
+        void AddChild(std::shared_ptr<Node> child);
+        void RemoveChild(std::shared_ptr<Node> child);
+        
     private:
-        Node(std::string name, glm::mat4 transform, uint32_t id, uint32_t instanceId, bool replace);
-
         std::string name_;
+
+        glm::vec3 translation_;
+        glm::quat rotation_;
+        glm::vec3 scaling_;
+
+        glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
         uint32_t modelId_;
         uint32_t instanceId_;
         bool visible_;
+
+        std::shared_ptr<Node> parent_;
+        std::set< std::shared_ptr<Node> > children_;
     };
 
+    template <typename T>
     struct AnimationKey
     {
         float Time;
-        glm::vec3 Translation;
-        glm::vec3 Scale;
-        glm::quat Rotation;
+        T Value;
+    };
+
+    template <typename T>
+    struct AnimationChannel
+    {
+        std::vector<AnimationKey<T>> Keys;
+        T Sample(float time);
     };
     
     struct AnimationTrack
     {
+        void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
+        
         std::string NodeName_;
-        std::vector<AnimationKey> KeyFrames_;
+        
+        AnimationChannel<glm::vec3> TranslationChannel;
+        AnimationChannel<glm::quat> RotationChannel;
+        AnimationChannel<glm::vec3> ScaleChannel;
+        
+        float Time_;
+        float Duration_;
     };
     
     class Model final
@@ -113,7 +130,7 @@ namespace Assets
 
         static void AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models);
 
-        static int LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+        static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights, bool autoNode = true);
 
@@ -126,7 +143,7 @@ namespace Assets
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<class Node>& nodes,
+        static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                                   std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry

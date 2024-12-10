@@ -448,7 +448,7 @@ void UserInterface::DrawSettings()
 			//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
 			ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
 			ImGui::SliderInt(LOCTEXT("Samples"), &Settings().NumberOfSamples, 1, 16);
-			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 16);
+			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 64);
 			ImGui::NewLine();
 		}
 
@@ -552,6 +552,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 		
 		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
+		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
+		
 		ImGui::Text("Texture: %d", statistics.TextureCount);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);

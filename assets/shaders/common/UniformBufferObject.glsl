@@ -1,10 +1,12 @@
 #ifdef __cplusplus
 #define glbool uint32_t
+#define ALIGN_16 alignas(16)
 #else
 #define glbool bool
+#define ALIGN_16
 #endif
 
-struct UniformBufferObject
+struct ALIGN_16 UniformBufferObject
 {
 	mat4 ModelView;
 	mat4 Projection;
@@ -44,9 +46,20 @@ struct UniformBufferObject
 	glbool TAA;
 	uint SelectedId;
 	glbool ShowEdge;
+	glbool Benchmark;
 		
 	float BFSigma;
 	float BFSigmaLum;
 	float BFSigmaNormal;
 	uint BFSize;
+};
+
+struct ALIGN_16 NodeProxy
+{
+uint instanceId;
+uint modelId;
+uint matId;
+uint reserved2;
+mat4 worldTS;
+mat4 combinedPrevTS;
 };

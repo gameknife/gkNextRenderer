@@ -19,7 +19,7 @@ vec3 mikkTSpace(vec3 vNt, vec3 normal, vec4 tangent)
 void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float RayDist, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const vec3 HitPos, const int PrimitiveIndex, const int InstanceID)
 {
     // Get the material.
-    const NodeSimpleProxy node = NodeProxies[InstanceID];
+    const NodeProxy node = NodeProxies[InstanceID];
 	const uvec2 offsets = Offsets[node.modelId];
 	const uint indexOffset = offsets.x + PrimitiveIndex * 3;
 	const uint vertexOffset = offsets.y;
@@ -53,7 +53,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
     Ray.primitiveId = node.instanceId;
 	Ray.BounceCount++;
 	Ray.Exit = false;
-    Ray.Velocity = node.velocityWS.xyz;
+    Ray.prevTrans = node.combinedPrevTS;
 	Scatter(Ray, material, Lights[lightIdx], RayDirection, normal, texCoord, RayDist, v0.MaterialIndex);
 }
 
@@ -65,7 +65,7 @@ void ProcessMiss(const vec3 RayDirection)
 	Ray.Exit = true;
 	Ray.Distance = 1000.0;
 	Ray.pdf = 1.0;
-    Ray.Velocity = vec3(0,0,0);
+    Ray.prevTrans = mat4(1);
 	if (Camera.HasSky)
 	{
 		// Sky color
@@ -153,7 +153,7 @@ void FetchPrimaryRayInfo(in vec2 size, in vec3 origin, in vec3 scatterDir, out v
 	albedo = vec4(Ray.Albedo.rgb, Ray.GBuffer.w);
 	
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(origin, 1);
-	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(origin - Ray.Velocity, 1);
-	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size,0,0);
+	vec4 prevFrameHPos = Camera.PrevViewProjection * Ray.prevTrans * vec4(origin, 1);
+	motionVector = Ray.Distance < -5 ? vec4(0) : vec4((prevFrameHPos.xy / prevFrameHPos.w - currFrameHPos.xy / currFrameHPos.w) * 0.5 * size, 0, 0);
 	primitiveId = Ray.primitiveId;
 }

@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
 #include <memory>
 #include <string>
@@ -37,25 +37,25 @@ namespace Assets
 		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
 		~Scene();
 
-		void Reload(std::vector<Node>& nodes,
+		void Reload(std::vector<std::shared_ptr<Node>>& nodes,
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
-			std::vector<LightObject>& lights);
+			std::vector<LightObject>& lights,
+			std::vector<AnimationTrack>& tracks);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
 
-		std::vector<Node>& Nodes() { return nodes_; }
+		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
-
+		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
-		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
@@ -66,6 +66,7 @@ namespace Assets
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
 
+		void Tick(float DeltaSeconds);
 		void UpdateMaterial();
 		bool UpdateNodes();
 
@@ -75,16 +76,16 @@ namespace Assets
 		const Material* GetMaterial(uint32_t id) const;
 
 		void MarkDirty() {sceneDirty_ = true;}
-
-		std::vector<NodeSimpleProxy>& GetNodeSimpleProxys() { return nodeSimpleProxys; }
+		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 		
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
-		std::vector<Node> nodes_;
+		std::vector<std::shared_ptr<Node>> nodes_;
 		std::vector<LightObject> lights_;
-		std::vector<glm::uvec2> offsets_;
+		std::vector<AnimationTrack> tracks_;
+		std::vector<uvec2> offsets_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
@@ -103,9 +104,6 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> nodeSimpleMatrixBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> nodeSimpleMatrixBufferMemory_;
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
@@ -119,7 +117,6 @@ namespace Assets
 
 		bool sceneDirty_ = true;
 		
-		std::vector<NodeSimpleProxy> nodeSimpleProxys;
 		std::vector<NodeProxy> nodeProxys;
 		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
 	};

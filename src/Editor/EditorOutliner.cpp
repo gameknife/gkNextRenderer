@@ -29,10 +29,10 @@ void Editor::GUI::ShowSidebar(Assets::Scene* scene)
         uint32_t limit = 1000;
         for( auto& node : allnodes )
         {
-            const Assets::Node* selected_obj = nullptr;
+            std::shared_ptr<Assets::Node> selected_obj = nullptr;
             if(selected_obj_id >= 0 && selected_obj_id < allnodes.size())
             {
-                selected_obj = &allnodes[selected_obj_id];
+                selected_obj = allnodes[selected_obj_id];
             }
             // draw stripe background
             ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
@@ -46,12 +46,12 @@ void Editor::GUI::ShowSidebar(Assets::Scene* scene)
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 
-            if(selected_obj == &node)
+            if(selected_obj == node)
             {
                 ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),IM_COL32(70, 120, 255, 255), 0);
             }
             
-            if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node.GetName()).c_str(), flag))
+            if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node->GetName()).c_str(), flag))
             {
                 if (ImGui::IsItemClicked())
                 {
@@ -67,7 +67,7 @@ void Editor::GUI::ShowSidebar(Assets::Scene* scene)
                 }
                 ImGui::TreePop();
             }
-            if(selected_obj == &node)
+            if(selected_obj == node)
             {
                 ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
             }

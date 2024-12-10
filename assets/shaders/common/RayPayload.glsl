@@ -20,7 +20,7 @@ struct RayPayload
 	uint MaterialIndex;
 	vec3 HitPos;
 	uint AdaptiveSample;
-	vec3 Velocity;
+	mat4 prevTrans;
 };
 
 #endif

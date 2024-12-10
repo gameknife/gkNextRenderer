@@ -370,7 +370,7 @@ namespace Vulkan::PipelineCommon
 
         // Nodes buffer
         VkDescriptorBufferInfo nodesBufferInfo = {};
-        nodesBufferInfo.buffer = scene.NodeSimpleMatrixBuffer().Handle();
+        nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
         nodesBufferInfo.range = VK_WHOLE_SIZE;
         
         std::vector<VkWriteDescriptorSet> descriptorWrites =

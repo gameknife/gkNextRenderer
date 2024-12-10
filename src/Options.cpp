@@ -19,10 +19,10 @@ Options::Options(const int argc, const char* argv[])
 	options_description renderer("Renderer options", lineLength);
 	renderer.add_options()
 		("renderer", value<uint32_t>(&RendererType)->default_value(0), "Renderer Type (0 = RayQuery, 1 = HybridDeferred， 2 = ModernDeferred, 3 = LegacyDeferred, 4 = VulkanBase).")
-		("samples", value<uint32_t>(&Samples)->default_value(2), "The number of ray samples per pixel.")
+		("samples", value<uint32_t>(&Samples)->default_value(8), "The number of ray samples per pixel.")
 		("bounces", value<uint32_t>(&Bounces)->default_value(4), "The general limit number of bounces per ray.")
 		("max-bounces", value<uint32_t>(&MaxBounces)->default_value(10), "The maximum bounces per ray.")
-		("temporal", value<uint32_t>(&Temporal)->default_value(32), "The number of temporal frames.")
+		("temporal", value<uint32_t>(&Temporal)->default_value(8), "The number of temporal frames.")
 		("nodenoiser", bool_switch(&NoDenoiser)->default_value(false), "Not Use Denoiser.")
 		("adaptivesample", bool_switch(&AdaptiveSample)->default_value(false), "use adaptive sample to improve render quality.")
 	

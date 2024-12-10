@@ -21,12 +21,12 @@ layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
-layout(binding = 8) readonly buffer NodeSimpleProxyArray { NodeSimpleProxy[] NodeProxies; };
+layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
-layout(binding = 11, rg16f) uniform image2D MotionVectorImage;
+layout(binding = 11, rg32f) uniform image2D MotionVectorImage;
 layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;
 layout(binding = 14, rgba16f) uniform image2D OutAlbedoBuffer;
@@ -46,6 +46,8 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 #else
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
+
+#define MAX_SAMPLE 32
 
 void main() {
 
@@ -79,7 +81,7 @@ void main() {
 	bool multisample = multisamplecount > 1;
 	if(multisample)
 	{
-		sampleTimes = min(16, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps));
+		sampleTimes = min(MAX_SAMPLE * Camera.NumberOfSamples, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps));
 	}
 
     #if MOBILE
@@ -91,13 +93,13 @@ void main() {
         const vec2 pixel = vec2(iposLocal);
         vec2 uv = (pixel / isize) * 2.0 - 1.0;
         // anti aliasing
+        vec2 uvOffset = vec2(0);
 		if( Camera.TAA )
 		{
             // here should offset a non-random offset and consider in motion vector
-			vec2 uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
-            uv += uvOffset;
+            uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
 		}
-		
+        uv += uvOffset;
 		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
         vec4 origin = Camera.ModelViewInverse * vec4(offset, 0, 1);
         vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
@@ -113,6 +115,7 @@ void main() {
         if(s == 0)
         {
             FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, albedo, motionvector, primitiveId);
+            //motionvector.xy += RandomFloat2(Ray.RandomSeed) * 0.02f; // add a fuzzy short offset
         }
         
         if(!exit)
@@ -136,12 +139,12 @@ void main() {
             ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );            
         
             // after, motionvector calculate last frame position
-            if( length(motionvector.xy) > 0.01 )
+            if( !Camera.Benchmark )
             {
                 uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
                 if (prev_primitive_index0 != primitiveId)
                 {
-                    sampleTimes = max(min(16, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps)), sampleTimes);
+                    sampleTimes = max(min(MAX_SAMPLE * Camera.NumberOfSamples, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps)), sampleTimes);
                     multisamplecount = Camera.AdaptiveSteps;
                 }
             }

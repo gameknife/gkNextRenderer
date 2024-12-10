@@ -126,7 +126,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
-    userSettings.AdaptiveSteps = 8;
+    userSettings.AdaptiveSteps = 4;
     userSettings.TAA = true; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
@@ -272,6 +272,8 @@ void NextRendererApplication::Start()
 
 bool NextRendererApplication::Tick()
 {
+    PERFORMANCEAPI_INSTRUMENT_FUNCTION();
+    
     // make sure the output is flushed
     std::cout << std::flush;
     
@@ -296,11 +298,12 @@ bool NextRendererApplication::Tick()
     }
     modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
 
-    // Handle Scene Switching
-    // if (status_ == NextRenderer::EApplicationStatus::Running && currentSceneName_ != SceneList::AllScenes[userSettings_.SceneIndex])
-    // {
-    //     LoadScene( userSettings_.SceneIndex);
-    // }
+    // Scene Update
+    if(scene_)
+    {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
+        scene_->Tick(static_cast<float>(deltaSeconds_));
+    }
 
     // Setting Update
     previousSettings_ = userSettings_;
@@ -308,6 +311,7 @@ bool NextRendererApplication::Tick()
     // Benchmark Update
     if(status_ == NextRenderer::EApplicationStatus::Running)
     {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickBenchmark", "");
         TickBenchMarker();
     }
 
@@ -320,20 +324,28 @@ bool NextRendererApplication::Tick()
     glfwPollEvents();
 
     // tick
-    gameInstance_->OnTick(deltaSeconds_);
-
-    // iterate the tickedTasks_, if return true, remove it
-    for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
     {
-        if( (*it)(deltaSeconds_) )
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
+        gameInstance_->OnTick(deltaSeconds_);
+    }
+
+    {
+        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickTasks", "");
+
+        // iterate the tickedTasks_, if return true, remove it
+        for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
         {
-            it = tickedTasks_.erase(it);
-        }
-        else
-        {
-            ++it;
+            if( (*it)(deltaSeconds_) )
+            {
+                it = tickedTasks_.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
         }
     }
+   
 
     // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
     for( auto it = delayedTasks_.begin(); it != delayedTasks_.end(); )
@@ -358,8 +370,12 @@ bool NextRendererApplication::Tick()
             ++it;
         }
     }
+
+    {
+        PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+        renderer_->DrawFrame();
+    }
     
-    renderer_->DrawFrame();
     window_->attemptDragWindow();
     totalFrames_ += 1;
     return glfwWindowShouldClose( window_->Handle() ) != 0;
@@ -646,6 +662,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 
+    ubo.Benchmark = userSettings_.Benchmark;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -743,7 +760,8 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.CamPosY = modelViewController_.Position()[1];
     stats.CamPosZ = modelViewController_.Position()[2];
 
-    stats.InstanceCount = static_cast<uint32_t>(scene_->Nodes().size());
+    stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
+    stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
@@ -937,21 +955,22 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
     status_ = NextRenderer::EApplicationStatus::Loading;
     
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
-    std::shared_ptr< std::vector<Assets::Node> > nodes = std::make_shared< std::vector<Assets::Node> >();
+    std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
+    std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::CameraInitialSate > cameraState = std::make_shared< Assets::CameraInitialSate >();
     
     cameraInitialSate_.cameras.clear();
     cameraInitialSate_.CameraIdx = -1;
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights);
+        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -959,7 +978,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights](ResTask& task)
+    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
@@ -975,7 +994,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
         
-        scene_->Reload(*nodes, *models, *materials, *lights);
+        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
         
         renderer_->SetScene(scene_);

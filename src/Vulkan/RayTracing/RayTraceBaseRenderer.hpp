@@ -87,5 +87,7 @@ namespace Vulkan::RayTracing
 		mutable Assets::RayCastContext cameraCenterCastContext_;
 		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
+
+		int tlasUpdateRequest_ {};
 	};
 }

@@ -20,7 +20,7 @@ out gl_PerVertex
 void main() 
 {
 	NodeProxy proxy = NodeProxies[gl_InstanceIndex];
-    gl_Position = Camera.Projection * Camera.ModelView * proxy.World * vec4(InPosition, 1.0);
+    gl_Position = Camera.Projection * Camera.ModelView * proxy.worldTS * vec4(InPosition, 1.0);
 	g_out_primitive_index = (gl_VertexIndex / 3);
 	g_out_instance_index = gl_InstanceIndex;
 }

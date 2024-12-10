@@ -46,8 +46,8 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 	case GLFW_KEY_W: cameraMovingForward_ = action != GLFW_RELEASE; return true;
 	case GLFW_KEY_A: cameraMovingLeft_ = action != GLFW_RELEASE; return true;
 	case GLFW_KEY_D: cameraMovingRight_ = action != GLFW_RELEASE; return true;
-	case GLFW_KEY_LEFT_CONTROL: cameraMovingDown_ = action != GLFW_RELEASE; return true;
-	case GLFW_KEY_LEFT_SHIFT: cameraMovingUp_ = action != GLFW_RELEASE; return true;
+	// case GLFW_KEY_LEFT_CONTROL: cameraMovingDown_ = action != GLFW_RELEASE; return true;
+	// case GLFW_KEY_LEFT_SHIFT: cameraMovingUp_ = action != GLFW_RELEASE; return true;
 	default: return false;
 	}
 #else

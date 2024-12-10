@@ -1,5 +1,7 @@
 #include "MagicaLegoGameInstance.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+
 #include "Assets/Scene.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
@@ -205,8 +207,11 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // raycast request
     if (GetBuildMode() == ELegoMode::ELM_Place || bMouseLeftDown_)
     {
-        //GetEngine().GetUserSettings().RequestRayCast = true;
+#if WITH_CPURAYCAST
         CPURaycast();
+#else
+        GetEngine().GetUserSettings().RequestRayCast = true;
+#endif
     }
 
     // select edge showing
@@ -276,7 +281,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
                 NodeName = "SmallBase";
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
-            Assets::Node newNode = Assets::Node::CreateNode(NodeName, glm::translate(glm::mat4(1), location), modelId, basementInstanceId_, false);
+            auto newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
             GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
@@ -304,16 +309,17 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     SwitchBasePlane(EBasePlane::EBP_Small);
 
     //GeneratingThmubnail();
+
+    UserInterface_->OnSceneLoaded();
+
+    CleanUp();
 }
 
 void MagicaLegoGameInstance::OnSceneUnloaded()
 {
     NextGameInstanceBase::OnSceneUnloaded();
-
     BasicNodes.clear();
     CleanUp();
-
-    UserInterface_->OnSceneLoaded();
 }
 
 bool MagicaLegoGameInstance::OnKey(int key, int scancode, int action, int mods)
@@ -448,9 +454,9 @@ void MagicaLegoGameInstance::AddBlockGroup(std::string typeName)
     auto& allNodes = GetEngine().GetScene().Nodes();
     for (auto& Node : allNodes)
     {
-        if (Node.GetName().find(typeName, 0) == 0)
+        if (Node->GetName().find(typeName, 0) == 0)
         {
-            AddBasicBlock(Node.GetName(), typeName);
+            AddBasicBlock(Node->GetName(), typeName);
         }
     }
 
@@ -540,9 +546,9 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
     auto& allNodes = GetEngine().GetScene().Nodes();
     for (auto& Node : allNodes)
     {
-        if (Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+        if (Node->GetName() == "BigBase" || Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
         {
-            Node.SetVisible(false);
+            Node->SetVisible(false);
         }
     }
 
@@ -551,27 +557,27 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane Type)
     case EBasePlane::EBP_Big:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "BigBase" || Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+            if (Node->GetName() == "BigBase" || Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
     case EBasePlane::EBP_Mid:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "MidBase" || Node.GetName() == "SmallBase")
+            if (Node->GetName() == "MidBase" || Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
     case EBasePlane::EBP_Small:
         for (auto& Node : allNodes)
         {
-            if (Node.GetName() == "SmallBase")
+            if (Node->GetName() == "SmallBase")
             {
-                Node.SetVisible(true);
+                Node->SetVisible(true);
             }
         }
         break;
@@ -734,8 +740,16 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
     GExtInfos.clear();
     // base
     {
-        glm::vec3 min {-0.8,-0.08,-0.8};
-        glm::vec3 max {0.8,0,0.8};
+        float multiplier = 6;
+        switch (currentBaseSize_)
+        {
+            case EBasePlane::EBP_Big: multiplier = 6 * 20; break;
+            case EBasePlane::EBP_Mid: multiplier = 6 * 7; break;
+            case EBasePlane::EBP_Small: multiplier = 6; break;
+            default: break;
+        }
+        glm::vec3 min {-0.08 * multiplier,-0.08,-0.08 * multiplier};
+        glm::vec3 max {0.08 * multiplier,0,0.08 * multiplier};
         BuildBox(GTriangles, GExtInfos, min, max, basementInstanceId_);
     }
 #endif
@@ -751,8 +765,9 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 // 所以如果没有modelid的改变的话，采用原位替换
                 glm::mat4 orientation = GetOrientationMatrix(Block.second.orientation);
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
-                Assets::Node newNode = Assets::Node::CreateNode("blockInst", glm::translate(glm::mat4(1.0f), GetRenderLocationFromBlockLocation(Block.second.location)) * orientation, BasicBlock->modelId_,
+                std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
+                newNode->SetVisible(true);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 
 #if WITH_CPURAYCAST
@@ -771,7 +786,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
 #if WITH_CPURAYCAST
     if (GTriangles.size() > 3)
     {
-        GCpuBvh.BuildAVX( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
+        GCpuBvh.Build( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
         // GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
         // GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
     }

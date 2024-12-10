@@ -567,15 +567,18 @@ void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint
 void VulkanBaseRenderer::DrawFrame()
 {
 	{
+		PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::DrawFrame", PERFORMANCEAPI_MAKE_COLOR(200, 255, 200));
 		SCOPED_CPU_TIMER("draw-frame");
 		const auto noTimeout = std::numeric_limits<uint64_t>::max();
 		
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Prepare", PERFORMANCEAPI_MAKE_COLOR(255, 255, 200));
 			SCOPED_CPU_TIMER("cpu-prepare");
 			BeforeNextFrame();
 		}
 
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::QueryWait", PERFORMANCEAPI_MAKE_COLOR(255, 255, 200));
 			SCOPED_CPU_TIMER("query-wait");
 			gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
 		}
@@ -601,6 +604,7 @@ void VulkanBaseRenderer::DrawFrame()
 		gpuTimer_->Reset(commandBuffer);
 
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Render", PERFORMANCEAPI_MAKE_COLOR(200, 200, 255));
 			SCOPED_CPU_TIMER("render");
 			SCOPED_GPU_TIMER("gpu time");
 	
@@ -616,9 +620,11 @@ void VulkanBaseRenderer::DrawFrame()
 		
 
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::UpdateNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
 			SCOPED_CPU_TIMER("cpugpu-io");
 			if( GetScene().UpdateNodes() )
 			{
+				// here will trigger a wait, the tlas may start later
 				AfterUpdateScene();
 			}
 			UpdateUniformBuffer(currentImageIndex_);
@@ -627,6 +633,7 @@ void VulkanBaseRenderer::DrawFrame()
 		// wait the last frame command buffer to complete
 		if(fence)
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Fence", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
 			SCOPED_CPU_TIMER("sync-wait");
 			fence->Wait(noTimeout);
 		}
@@ -658,6 +665,7 @@ void VulkanBaseRenderer::DrawFrame()
 		}
 		
 		{
+			PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Present", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
 			SCOPED_CPU_TIMER("present");
 			VkSwapchainKHR swapChains[] = { swapChain_->Handle() };
 			VkPresentInfoKHR presentInfo = {};
