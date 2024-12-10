@@ -49,7 +49,7 @@ namespace Assets
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<Material>& Materials() { return materials_; }
 		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
-
+		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }

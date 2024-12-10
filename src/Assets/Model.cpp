@@ -175,24 +175,6 @@ namespace Assets
         if(node.mesh != -1)
         {
             meshId = node.mesh + modelIdx;
-            if( node.extras.Has("arealight") )
-            {
-                // use the aabb to build a light, using the average normals and area
-                // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
-                glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
-                glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
-                glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
-                
-                // LightObject light;
-                // light.p0 = transform * local_p0;
-                // light.p1 = transform * local_p1;
-                // light.p3 = transform * local_p3;
-                // vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
-                // light.normal_area = glm::vec4(glm::normalize(dir),0);
-                // light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
-                //
-                // out_lights.push_back(light);
-            }
         }
         else
         {
@@ -221,6 +203,27 @@ namespace Assets
         out_nodes.push_back(sceneNode);
 
         nodeMap[node_idx] = sceneNode;
+
+        if( node.extras.Has("arealight") )
+        {
+            // use the aabb to build a light, using the average normals and area
+            // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
+            glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
+            glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
+            glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
+
+            auto transform = sceneNode->WorldTransform();
+                
+            LightObject light;
+            light.p0 = transform * local_p0;
+            light.p1 = transform * local_p1;
+            light.p3 = transform * local_p3;
+            vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
+            light.normal_area = glm::vec4(glm::normalize(dir),0);
+            light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+            
+            out_lights.push_back(light);
+        }
         
         // for each child node
         for (int child : node.children)
