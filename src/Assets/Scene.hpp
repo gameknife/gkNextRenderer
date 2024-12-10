@@ -56,7 +56,6 @@ namespace Assets
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
-		const Vulkan::Buffer& NodeSimpleMatrixBuffer() const { return *nodeSimpleMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
@@ -77,8 +76,7 @@ namespace Assets
 		const Material* GetMaterial(uint32_t id) const;
 
 		void MarkDirty() {sceneDirty_ = true;}
-
-		std::vector<NodeSimpleProxy>& GetNodeSimpleProxys() { return nodeSimpleProxys; }
+		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 		
 	private:
@@ -106,9 +104,6 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
-
-		std::unique_ptr<Vulkan::Buffer> nodeSimpleMatrixBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> nodeSimpleMatrixBufferMemory_;
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
@@ -122,7 +117,6 @@ namespace Assets
 
 		bool sceneDirty_ = true;
 		
-		std::vector<NodeSimpleProxy> nodeSimpleProxys;
 		std::vector<NodeProxy> nodeProxys;
 		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
 	};

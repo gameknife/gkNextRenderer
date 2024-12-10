@@ -18,6 +18,7 @@ namespace Assets
 
 	#include "../assets/shaders/common/UniformBufferObject.glsl"
 	// struct UniformBufferObject
+	// struct NodeProxy
 		
 	struct alignas(16) LightObject final
 	{

@@ -16,7 +16,6 @@ namespace Assets
 
         // 动态更新的场景结构，每帧更新
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "SimpleNodes", flags, sizeof(NodeSimpleProxy) * 65535, nodeSimpleMatrixBuffer_, nodeSimpleMatrixBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                                       indirectDrawBufferMemory_); // support 65535 nodes
     }
@@ -36,8 +35,6 @@ namespace Assets
 
         indirectDrawBuffer_.reset();
         indirectDrawBufferMemory_.reset();
-        nodeSimpleMatrixBuffer_.reset();
-        nodeSimpleMatrixBufferMemory_.reset();
         nodeMatrixBuffer_.reset();
         nodeMatrixBufferMemory_.reset();
     }
@@ -137,6 +134,7 @@ namespace Assets
 
     bool Scene::UpdateNodes()
     {
+        // this can move to thread task
         if (nodes_.size() > 0)
         {
             if (sceneDirty_)
@@ -144,77 +142,59 @@ namespace Assets
                 sceneDirty_ = false;
                 {
                     PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
-                    nodeSimpleProxys.clear();
                     nodeProxys.clear();
                     indirectDrawBufferInstanced.clear();
-
-                    // for (auto& node : nodes_)
-                    // {
-                    //     if (node->IsVisible())
-                    //     {
-                    //         glm::vec3 delta = node->TickVelocity();
-                    //         if (glm::length(delta) > 0.01f)
-                    //         {
-                    //             MarkDirty();
-                    //         }
-                    //         nodeSimpleProxys.push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, glm::vec4(delta, 0)});
-                    //         nodeProxys.push_back({node->WorldTransform()});
-                    //     }
-                    // }
-                    //
-                    // NodeSimpleProxy* simpleProxy = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
-                    // std::memcpy(simpleProxy, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
-                    // nodeSimpleMatrixBufferMemory_->Unmap();
-                    //
-                    // NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
-                    // std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
-                    // nodeMatrixBufferMemory_->Unmap();
-                    //
-                    // return true;
                     
                     uint32_t indexOffset = 0;
                     uint32_t vertexOffset = 0;
                     uint32_t nodeOffsetBatched = 0;
 
-                    // 这里相当于是对nodes的一个排序，用这个顺序来喂给ray tracing感觉会更稳定
+                    static std::unordered_map<uint32_t, std::vector<NodeProxy> > nodeProxysMapByModel;
+                    for ( auto& [key, value] : nodeProxysMapByModel )
+                    {
+                        value.clear();
+                    }
+
+                    for (auto& node : nodes_)
+                    {
+                        if (node->IsVisible())
+                        {
+                            auto modelId = node->GetModel();
+                            glm::mat4 combined;
+                            if ( node->TickVelocity(combined) )
+                            {
+                                MarkDirty();
+                            }
+                            nodeProxysMapByModel[modelId].push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, node->WorldTransform(), combined});
+                        }
+                    }
+                    
                     int modelCount = static_cast<int>(models_.size());
                     for (int i = 0; i < modelCount; i++)
                     {
-                        // sort by model, one model one idc
-                        uint32_t instanceCountOfThisModel = 0;
-                        for (auto& node : nodes_)
+                        if (nodeProxysMapByModel.find(i) != nodeProxysMapByModel.end())
                         {
-                            if (node->GetModel() == i && node->IsVisible())
-                            {
-                                glm::vec3 delta = node->TickVelocity();
-                                if (glm::length(delta) > 0.01f)
-                                {
-                                    MarkDirty();
-                                }
-                                nodeSimpleProxys.push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, glm::vec4(delta, 0)});
-                                nodeProxys.push_back({node->WorldTransform()});
-                                instanceCountOfThisModel++;
-                            }
-                        }
-                        // draw indirect buffer, instanced
-                        VkDrawIndexedIndirectCommand cmd{};
-                        cmd.firstIndex = indexOffset;
-                        cmd.indexCount = static_cast<uint32_t>(models_[i].Indices().size());
-                        cmd.vertexOffset = static_cast<int32_t>(vertexOffset);
-                        cmd.firstInstance = nodeOffsetBatched;
-                        cmd.instanceCount = instanceCountOfThisModel;
+                            auto& nodesOfThisModel = nodeProxysMapByModel[i];
+                        
+                            // draw indirect buffer, instanced, this could be generate in gpu
+                            VkDrawIndexedIndirectCommand cmd{};
+                            cmd.firstIndex = indexOffset;
+                            cmd.indexCount = static_cast<uint32_t>(models_[i].Indices().size());
+                            cmd.vertexOffset = static_cast<int32_t>(vertexOffset);
+                            cmd.firstInstance = nodeOffsetBatched;
+                            cmd.instanceCount = static_cast<uint32_t>(nodesOfThisModel.size());
 
-                        indirectDrawBufferInstanced.push_back(cmd);
+                            indirectDrawBufferInstanced.push_back(cmd);
+                            nodeOffsetBatched += static_cast<uint32_t>(nodesOfThisModel.size());
+
+                            // fill the nodeProxy
+                            nodeProxys.insert(nodeProxys.end(), nodesOfThisModel.begin(), nodesOfThisModel.end());
+                        }
 
                         indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
                         vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
-                        nodeOffsetBatched += instanceCountOfThisModel;
                     }
-
-                    NodeSimpleProxy* simpleProxy = reinterpret_cast<NodeSimpleProxy*>(nodeSimpleMatrixBufferMemory_->Map(0, sizeof(NodeSimpleProxy) * nodeSimpleProxys.size()));
-                    std::memcpy(simpleProxy, nodeSimpleProxys.data(), nodeSimpleProxys.size() * sizeof(NodeSimpleProxy));
-                    nodeSimpleMatrixBufferMemory_->Unmap();
-                    
+                                        
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     nodeMatrixBufferMemory_->Unmap();

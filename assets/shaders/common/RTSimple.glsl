@@ -3,7 +3,7 @@
 void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 TwoBaryCoords, const int PrimitiveIndex, const int InstanceID, out vec3 HitNormal, out vec2 HitTexcoord, out uint MaterialId, out uint OutInstanceId  )
 {
     // Get the material.
-    const NodeSimpleProxy node = NodeProxies[InstanceID];
+    const NodeProxy node = NodeProxies[InstanceID];
     const uvec2 offsets = Offsets[node.modelId];
     const uint indexOffset = offsets.x + PrimitiveIndex * 3;
     const uint vertexOffset = offsets.y;

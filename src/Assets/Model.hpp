@@ -43,20 +43,6 @@ namespace Assets
         std::vector<Camera> cameras;
     };
 
-    struct alignas(16) NodeProxy final
-	{
-        glm::mat4 transform;
-    };
-    
-    struct alignas(16) NodeSimpleProxy final
-    {
-        uint32_t instanceId;
-        uint32_t modelId;
-        uint32_t matId;
-        uint32_t reserved2;
-        glm::vec4 velocityWS;
-    };
-
     // node tree to represent the scene
     // but in rendering, it will flatten to renderproxys
     class Node : public std::enable_shared_from_this<Node>
@@ -83,7 +69,7 @@ namespace Assets
         bool IsVisible() const { return visible_; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
-        glm::vec3 TickVelocity();
+        bool TickVelocity(glm::mat4& combinedTS);
 
         void SetParent(std::shared_ptr<Node> parent);
         Node* GetParent() { return parent_.get(); }

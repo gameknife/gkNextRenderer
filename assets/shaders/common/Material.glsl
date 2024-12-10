@@ -31,20 +31,6 @@ struct LightObject
 	vec4 normal_area;
 };
 
-struct NodeProxy
-{
-	mat4 World;
-};
-
-struct NodeSimpleProxy
-{
-	uint instanceId;
-	uint modelId;
-	uint materialId;
-	uint reserved2;
-	vec4 velocityWS;
-};
-
 struct RayCastContext
 {
 	// in

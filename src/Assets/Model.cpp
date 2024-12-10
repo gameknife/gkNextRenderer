@@ -1302,17 +1302,13 @@ namespace Assets
         }
     }
 
-    glm::vec3 Node::TickVelocity()
+    bool Node::TickVelocity(glm::mat4& combinedTS)
     {
-        // calculate velocity
-        glm::vec3 velocity = glm::vec3(0);
-        glm::vec3 prevPos = glm::vec3(prevTransform_[3]);
-        glm::vec3 currentPos = glm::vec3(transform_[3]);
-        velocity = currentPos - prevPos;
-
+        combinedTS = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 
-        return velocity;
+        glm::vec3 newPos = combinedTS * glm::vec4(0,0,0,1);
+        return length2(newPos) > 0.1;
     }
 
     void Node::SetParent(std::shared_ptr<Node> parent)
