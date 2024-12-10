@@ -46,6 +46,7 @@ struct Statistics final
 	float CamPosZ;
 	uint32_t TriCount;
 	uint32_t InstanceCount;
+	uint32_t NodeCount;
 	uint32_t TextureCount;
 	uint32_t ComputePassCount;
 	bool LoadingStatus;

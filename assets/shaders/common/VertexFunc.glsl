@@ -11,8 +11,8 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin, vec3 ray_d
 
     for (int i = 0; i != 3; ++i) {
     	const Vertex v = UnpackVertex(vertex_index);
-    	positions[i] = (proxy.World * vec4(v.Position, 1)).xyz;
-    	normals[i] = (proxy.World * vec4(v.Normal, 0)).xyz;
+    	positions[i] = (proxy.worldTS * vec4(v.Position, 1)).xyz;
+    	normals[i] = (proxy.worldTS * vec4(v.Normal, 0)).xyz;
     	tex_coords[i] = v.TexCoord;
     	if(i == 0) matid = v.MaterialIndex;
     	vertex_index++;

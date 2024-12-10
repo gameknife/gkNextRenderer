@@ -153,77 +153,39 @@ namespace Assets
         genTangSpaceDefault(&mikktspace_context);
     }
     
-    void ParseGltfNode(std::vector<Assets::Node>& out_nodes, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
-        glm::mat4 parentTransform, tinygltf::Model& model, int node_idx, int modelIdx)
+    void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
+        tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
-
-        glm::mat4 transform = glm::mat4(1);
-        if( node.matrix.empty() )
-        {
-            glm::vec3 translation = node.translation.empty()
-                               ? glm::vec3(0)
-                               : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-            glm::vec3 scaling = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-            glm::quat quaternion = node.rotation.empty()
-                                       ? glm::quat(1, 0, 0, 0)
-                                       : glm::quat(
-                                           static_cast<float>(node.rotation[3]),
-                                           static_cast<float>(node.rotation[0]),
-                                           static_cast<float>(node.rotation[1]),
-                                           static_cast<float>(node.rotation[2]));
-            quaternion = glm::normalize(quaternion);
-            glm::mat4 t = glm::translate(glm::mat4(1), translation);
-            glm::mat4 r = glm::toMat4(quaternion);
-            glm::mat4 s = glm::scale(glm::mat4(1), scaling);
         
-            transform =  parentTransform * (t * r * s);   
-        }
-        else
-        {
-            glm::mat4 localTs = glm::make_mat4(node.matrix.data());
-            transform =  parentTransform * localTs;   
-        }
+        glm::vec3 translation = node.translation.empty()
+                           ? glm::vec3(0)
+                           : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+        glm::vec3 scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+        glm::quat rotation = node.rotation.empty()
+                                   ? glm::quat(1, 0, 0, 0)
+                                   : glm::quat(
+                                       static_cast<float>(node.rotation[3]),
+                                       static_cast<float>(node.rotation[0]),
+                                       static_cast<float>(node.rotation[1]),
+                                       static_cast<float>(node.rotation[2]));
+        rotation = glm::normalize(rotation);
 
-        // decouple transform
-        glm::vec3 scale;
-        glm::quat rotation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(transform, scale, rotation, translation, skew, perspective);
-        
+        uint32_t meshId = -1;
         if(node.mesh != -1)
         {
-            if( node.extras.Has("arealight") )
-            {
-                out_nodes.push_back(Node::CreateNode(node.name, translation, rotation, scale, node.mesh + modelIdx, out_nodes.size(), false));
-
-                // use the aabb to build a light, using the average normals and area
-                // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
-                glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
-                glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
-                glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
-                
-                LightObject light;
-                light.p0 = transform * local_p0;
-                light.p1 = transform * local_p1;
-                light.p3 = transform * local_p3;
-                vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
-                light.normal_area = glm::vec4(glm::normalize(dir),0);
-                light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
-                
-                out_lights.push_back(light);
-            }
-            else
-            {
-                out_nodes.push_back(Node::CreateNode(node.name, translation, rotation, scale, node.mesh + modelIdx, out_nodes.size(), false));
-            }
+            meshId = node.mesh + modelIdx;
         }
         else
         {
             if(node.camera >= 0)
             {
+                glm::mat4 t = glm::translate(glm::mat4(1), translation);
+                glm::mat4 r = glm::toMat4(rotation);
+                glm::mat4 s = glm::scale(glm::mat4(1), scale);
+                
+                glm::mat4 transform =  (t * r * s);
+                
                 vec4 camEye = transform * glm::vec4(0,0,0,1);
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 glm::mat4 ModelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
@@ -232,14 +194,46 @@ namespace Assets
                 if(node.camera == 0) out_camera.ModelView = ModelView;
             }
         }
-
-        for ( int child : node.children )
+        
+        std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, meshId, out_nodes.size(), false);
+        if (meshId != -1)
         {
-            ParseGltfNode(out_nodes, out_camera, out_lights, transform, model, child, modelIdx);
+            sceneNode->SetVisible(true);
+        }
+        out_nodes.push_back(sceneNode);
+
+        nodeMap[node_idx] = sceneNode;
+
+        if( node.extras.Has("arealight") )
+        {
+            // use the aabb to build a light, using the average normals and area
+            // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
+            glm::vec4 local_p0 = glm::vec4(-1,0,-1, 1);
+            glm::vec4 local_p1 = glm::vec4(-1,0,1, 1);
+            glm::vec4 local_p3 = glm::vec4(1,0,-1, 1);
+
+            auto transform = sceneNode->WorldTransform();
+                
+            LightObject light;
+            light.p0 = transform * local_p0;
+            light.p1 = transform * local_p1;
+            light.p3 = transform * local_p3;
+            vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
+            light.normal_area = glm::vec4(glm::normalize(dir),0);
+            light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+            
+            out_lights.push_back(light);
+        }
+        
+        // for each child node
+        for (int child : node.children)
+        {
+            ParseGltfNode(out_nodes, nodeMap, out_camera, out_lights, model, child, modelIdx);
+            nodeMap[child]->SetParent(sceneNode);
         }
     }
     
-    void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector<Assets::Node>& nodes,
+    void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
@@ -534,9 +528,12 @@ namespace Assets
         {
             cameraInit.HasSky = false;
         }
+
+        // gltf scenes contain the rootnodes
+        std::map<int, std::shared_ptr<Node> > nodeMap;
         for (int nodeIdx : model.scenes[0].nodes)
         {
-            ParseGltfNode(nodes, cameraInit, lights, glm::mat4(1), model, nodeIdx, modelIdx);
+            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
         }
 
         // load all animations
@@ -797,7 +794,7 @@ namespace Assets
         cameraInit.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
     }
 
-    int Model::LoadObjModel(const std::string& filename, std::vector<Node>& nodes, std::vector<Model>& models,
+    int Model::LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
                             std::vector<Material>& materials,
                             std::vector<LightObject>& lights, bool autoNode)
     {
@@ -1258,52 +1255,91 @@ namespace Assets
         }
     }
 
-    Node Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)
+    std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)
     {
-        return Node(name, translation, rotation, scale, id, instanceId, replace);
+        return std::make_shared<Node>(name, translation, rotation, scale, id, instanceId, replace);
     }
 
     void Node::SetTranslation(glm::vec3 translation)
     {
         translation_ = translation;
-        RecalcTransform();
     }
 
     void Node::SetRotation(glm::quat rotation)
     {
         rotation_ = rotation;
-        RecalcTransform();
     }
 
     void Node::SetScale(glm::vec3 scale)
     {
         scaling_ = scale;
+    }
+
+    void Node::RecalcLocalTransform()
+    {
+        localTransform_ = glm::translate(glm::mat4(1), translation_) * glm::mat4_cast(rotation_) * glm::scale(glm::mat4(1), scaling_);
+    }
+
+    void Node::RecalcTransform(bool full)
+    {
+        RecalcLocalTransform();
+        if(parent_)
+        {
+            transform_ = parent_->transform_ * localTransform_;
+        }
+        else
+        {
+            transform_ = localTransform_;
+        }
+
+        // update children
+        if (full)
+        {
+            for(auto& child : children_)
+            {
+                child->RecalcTransform(full);
+            }
+        }
+    }
+
+    bool Node::TickVelocity(glm::mat4& combinedTS)
+    {
+        combinedTS = prevTransform_ * glm::inverse(transform_);
+        prevTransform_ = transform_;
+
+        glm::vec3 newPos = combinedTS * glm::vec4(0,0,0,1);
+        return length2(newPos) > 0.1;
+    }
+
+    void Node::SetParent(std::shared_ptr<Node> parent)
+    {
+        // remove form previous parent
+        if(parent_)
+        {
+            parent_->RemoveChild( shared_from_this() );
+        }
+        parent_ = parent;
+        parent_->AddChild( shared_from_this() );
+
         RecalcTransform();
     }
 
-    void Node::RecalcTransform()
+    void Node::AddChild(std::shared_ptr<Node> child)
     {
-        transform_ = glm::translate(glm::mat4(1), translation_) * glm::mat4_cast(rotation_) * glm::scale(glm::mat4(1), scaling_);
+        children_.insert(child);
     }
 
-    glm::vec3 Node::TickVelocity()
+    void Node::RemoveChild(std::shared_ptr<Node> child)
     {
-        // calculate velocity
-        glm::vec3 velocity = glm::vec3(0);
-        glm::vec3 prevPos = glm::vec3(prevTransform_[3]);
-        glm::vec3 currentPos = glm::vec3(transform_[3]);
-        velocity = currentPos - prevPos;
-
-        prevTransform_ = transform_;
-
-        return velocity;
+        children_.erase(child);
     }
 
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace):
     name_(name),
     translation_(translation), rotation_(rotation), scaling_(scale), 
-    modelId_(id), instanceId_(instanceId), visible_(true)
+    modelId_(id), instanceId_(instanceId), visible_(false)
     {
+        RecalcLocalTransform();
         RecalcTransform();
         if(replace)
         {

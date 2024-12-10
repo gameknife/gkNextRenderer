@@ -414,6 +414,12 @@ foreach(target IN LISTS AllTargets)
 	target_link_libraries(${target} PRIVATE avif)
 	endif()
 
+	if( WITH_SUPERLUMINAL )
+	target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
+	target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
+	target_link_libraries(${target} PRIVATE SuperluminalAPI)
+	endif()
+
 	if ( WITH_OIDN )
 	target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
 	target_include_directories(${target} PRIVATE ../src/ThirdParty/oidn/include/)

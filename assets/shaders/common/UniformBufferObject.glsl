@@ -53,3 +53,13 @@ struct ALIGN_16 UniformBufferObject
 	float BFSigmaNormal;
 	uint BFSize;
 };
+
+struct ALIGN_16 NodeProxy
+{
+uint instanceId;
+uint modelId;
+uint matId;
+uint reserved2;
+mat4 worldTS;
+mat4 combinedPrevTS;
+};

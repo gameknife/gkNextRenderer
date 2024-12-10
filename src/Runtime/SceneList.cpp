@@ -181,7 +181,7 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     return static_cast<int32_t>(AllScenes.size() - 1);
 }
 
-bool SceneList::LoadScene(std::string filename, Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials,
+bool SceneList::LoadScene(std::string filename, Assets::CameraInitialSate& camera, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials,
                           std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
 {
     std::filesystem::path filepath = filename;
