@@ -745,6 +745,8 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
         {
             case EBasePlane::EBP_Big: multiplier = 6 * 20; break;
             case EBasePlane::EBP_Mid: multiplier = 6 * 7; break;
+            case EBasePlane::EBP_Small: multiplier = 6; break;
+            default: break;
         }
         glm::vec3 min {-0.08 * multiplier,-0.08,-0.08 * multiplier};
         glm::vec3 max {0.08 * multiplier,0,0.08 * multiplier};
