@@ -506,7 +506,7 @@ void UserInterface::DrawSettings()
 
 			ImGui::Text("%s", LOCTEXT("Performance"));
 			ImGui::Separator();
-			uint32_t min = 0, max = 256;
+			uint32_t min = 8, max = 32;
 			ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
 		}
 	}

@@ -127,7 +127,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
-    userSettings.TAA = false; // makes reproject failed
+    userSettings.TAA = true; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -149,7 +149,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 20.0f;
+    userSettings.DenoiseSigmaLum = 25.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
@@ -541,6 +541,62 @@ void NextRendererApplication::RequestScreenShot(std::string filename)
     SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
 }
 
+// 生成一个随机抖动偏移
+glm::vec2 GenerateJitter(float screenWidth, float screenHeight) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(-0.5f, 0.5f);
+
+    float jitterX = static_cast<float>(dis(gen)) / screenWidth;
+    float jitterY = static_cast<float>(dis(gen)) / screenHeight;
+
+    return glm::vec2(jitterX, jitterY);
+}
+
+// 创建抖动矩阵
+glm::mat4 CreateJitterMatrix(float jitterX, float jitterY) {
+    glm::mat4 jitterMatrix = glm::mat4(1.0f);
+    jitterMatrix[3][0] = jitterX;
+    jitterMatrix[3][1] = jitterY;
+    return jitterMatrix;
+}
+
+// 调制投影矩阵
+glm::mat4 RandomJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+    glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
+    glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
+    return jitterMatrix * projectionMatrix;
+}
+
+// 生成Halton序列的单一维度
+float HaltonSequence(int index, int base) {
+    float f = 1.0f;
+    float result = 0.0f;
+    while (index > 0) {
+        f = f / base;
+        result = result + f * (index % base);
+        index = index / base;
+    }
+    return result;
+}
+
+// 生成2D Halton序列
+std::vector<glm::vec2> GenerateHaltonSequence(int count) {
+    std::vector<glm::vec2> sequence;
+    for (int i = 0; i < count; ++i) {
+        float x = HaltonSequence(i + 1, 2);  // 基数2
+        float y = HaltonSequence(i + 1, 3);  // 基数3
+        sequence.push_back(glm::vec2(x, y));
+    }
+    return sequence;
+}
+
+glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+    glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
+    glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
+    return jitterMatrix * projectionMatrix;
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
@@ -557,8 +613,20 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
-    ubo.Projection[1][1] *= -1;
+    
+    if (userSettings_.TAA)
+    {
+        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
+        //ubo.Projection = jitterMatrix * ubo.Projection;
 
+        ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+    }
+    
+    ubo.Projection[1][1] *= -1;
+    
     // handle android vulkan pre rotation
 #if ANDROID
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);

@@ -104,22 +104,54 @@ void main() {
 
 		if(useHistory)
 		{
-			vec4 history0 = isEvenFrame ? imageLoad(AccumulateImage, previpos) : imageLoad(Accumulate1Image, previpos);
-			vec4 history1 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,0)) : imageLoad(Accumulate1Image, previpos + ivec2(1,0));
-			vec4 history2 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)) : imageLoad(Accumulate1Image, previpos + ivec2(0,1));
-			vec4 history3 = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)) : imageLoad(Accumulate1Image, previpos + ivec2(1,1));
+			vec3 historyColor[4];
+			historyColor[0] = isEvenFrame ? imageLoad(AccumulateImage, previpos).rgb : imageLoad(Accumulate1Image, previpos).rgb;
+			historyColor[1] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,0)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,0)).rgb;
+			historyColor[2] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0,1)).rgb;
+			historyColor[3] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,1)).rgb;
+
+			vec3 currentColor[9];
+
+			currentColor[0] = src.rgb;
+			currentColor[1] = imageLoad(NewSourceImage, ipos + ivec2(1,0)).rgb;
+			currentColor[2] = imageLoad(NewSourceImage, ipos + ivec2(0,1)).rgb;
+			currentColor[3] = imageLoad(NewSourceImage, ipos + ivec2(1,1)).rgb;
+			currentColor[4] = imageLoad(NewSourceImage, ipos + ivec2(-1,-1)).rgb;
+			currentColor[5] = imageLoad(NewSourceImage, ipos + ivec2(-1,1)).rgb;
+			currentColor[6] = imageLoad(NewSourceImage, ipos + ivec2(1,-1)).rgb;
+			currentColor[7] = imageLoad(NewSourceImage, ipos + ivec2(0,-1)).rgb;
+			currentColor[8] = imageLoad(NewSourceImage, ipos + ivec2(-1,0)).rgb;
 
 			vec2 subpixel = fract(vec2(ipos) + motion);
-			vec4 history = mix(
-				mix(history0, history1, subpixel.x),
-				mix(history2, history3, subpixel.x),
+			vec3 history = mix(
+				mix(historyColor[0], historyColor[1], subpixel.x),
+				mix(historyColor[2], historyColor[3], subpixel.x),
 				subpixel.y
 			);
+
+			if( !Camera.Benchmark )
+			{
+				vec3 AABBMin, AABBMax;
+				AABBMax = rgb2ycocg(src.rgb);
+				AABBMin = AABBMax;
+				// 取得YCoCg色彩空间下，Clip的范围
+				for(int k = 0; k < 9; k++)
+				{
+					AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
+					AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
+				}
+				// 需要 Clip处理的历史数据
+				vec3 HistoryYCoCg = rgb2ycocg(history);
+
+				// 简单地进行Clmap
+				vec3 ResultYCoCg =  clamp(HistoryYCoCg, AABBMin, AABBMax);
+				//还原到RGB色彩空间，得到最终结果
+				history = ycocg2rgb(ResultYCoCg);
+			}
 			
-			history = max(vec4(0.0), history);
 			// judge current gbuffer / object id with prev frame, to deghosting
 			float currKeep = src.w / max(1, Camera.TemporalFrames);
-			final = mix(history, src, clamp(currKeep,0.0,1.0));
+			final.rgb = mix(history, src.rgb, clamp(currKeep,0.0,1.0));
 		}
     }
 	
