@@ -127,7 +127,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
-    userSettings.TAA = true; // makes reproject failed
+    userSettings.TAA = false; // makes reproject failed
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -149,7 +149,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 50.0f;
+    userSettings.DenoiseSigmaLum = 20.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 

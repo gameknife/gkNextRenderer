@@ -88,14 +88,15 @@ void main() {
 			uint prev_primitive_index8 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,1)).r;
 
 			uint prev_total = prev_primitive_index0 + prev_primitive_index1 + prev_primitive_index2 + prev_primitive_index3;
+
+
+			ivec4 miss1 = ivec4(equal( uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
+			ivec4 miss2 = ivec4(equal( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
+			int miss3 = prev_primitive_index0 == current_primitive_index0 ? 1 : 0;
 			
-			
-			bool miss1 = all( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
-			bool miss2 = all( notEqual( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
-			bool miss3 = prev_primitive_index8 != current_primitive_index0 ? true : false;
-			bool miss = miss1 && miss2 && miss3;
+			bool miss = (miss1.x + miss1.y + miss1.z + miss1.w + miss2.x + miss2.y + miss2.z + miss2.w + miss3) < 5 ? true : false;
 			bool missMotion = current_total != prev_total ? true : false;
-			if( check ? missMotion : miss )
+			if( miss )
 			{
 				useHistory = false;
 			}
