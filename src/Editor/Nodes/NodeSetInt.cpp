@@ -67,7 +67,7 @@ namespace Nodes
         //ImGui::SetNextItemWidth(100.f);
         if(textureId != -1 && GUserInterface)
         {
-            ImGui::Image( GUserInterface->RequestImTextureId(textureId), ImVec2(128, 128));
+            //ImGui::Image( GUserInterface->RequestImTextureId(textureId), ImVec2(128, 128));
         }
     }
 }

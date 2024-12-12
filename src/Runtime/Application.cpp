@@ -27,11 +27,6 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
 
-#if WITH_EDITOR
-#include "Editor/EditorCommand.hpp"
-#include "Editor/EditorInterface.hpp"
-#endif
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -39,13 +34,6 @@
 #include "build.version"
 
 ENGINE_API Options* GOption = nullptr;
-
-#if !WITH_GAME
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
-{
-    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
-}
-#endif
 
 namespace NextRenderer
 {
@@ -217,32 +205,6 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
 
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-
-    // EditorCommand, need Refactoring
-#if WITH_EDITOR    
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
-        GetWindow().Close();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
-        GetWindow().Maximum();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
-        GetWindow().Minimize();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
-        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
-        RequestLoadScene(args);
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
-        Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
-        userSettings_.SkyIdx = 0;
-        return true;
-    });
-#endif
 }
 
 NextRendererApplication::~NextRendererApplication()
@@ -780,7 +742,11 @@ void NextRendererApplication::OnRendererCreateSwapChain()
         userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
 #else
         userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_, [this]()->void{
+                                   userSettings_, [this]()->void
+                                   {
+                                       gameInstance_->OnPreConfigUI();
+                                   },
+                                   [this]()->void{
             gameInstance_->OnInitUI();
         }));
 #endif

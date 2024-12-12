@@ -47,7 +47,7 @@ UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings, std::function<void()> func) :
+	UserSettings& userSettings, std::function<void()> funcPreConfig, std::function<void()> funcInit) :
 	userSettings_(userSettings),
 	engine_(engine)
 {
@@ -70,6 +70,8 @@ UserInterface::UserInterface(
 	// No ini file.
 	io.IniFilename = "imgui.ini";
 
+	funcPreConfig();
+	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
 	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
@@ -152,9 +154,9 @@ UserInterface::UserInterface(
 	}
 #endif
 
-	if(func != nullptr)
+	if(funcInit != nullptr)
 	{
-		func();
+		funcInit();
 	}
 
 	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
@@ -335,6 +337,13 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	vkCmdEndRenderPass(commandBuffer);
+
+	auto& io = ImGui::GetIO();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const

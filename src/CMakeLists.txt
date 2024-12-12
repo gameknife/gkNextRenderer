@@ -33,9 +33,9 @@ file(GLOB_RECURSE src_files_engine
 	"Options.cpp"
 	"Options.hpp"
 )
-file(GLOB_RECURSE src_files_editor "Editor/*.cpp" "Editor/*.hpp")
+file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
-
+file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 # libray and app
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
@@ -51,6 +51,7 @@ add_library(gkNextEngine
 	${src_files_thirdparty}
 )
 add_executable(gkNextRenderer
+	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor
@@ -58,6 +59,7 @@ add_executable(gkNextEditor
 	DesktopMain.cpp
 )
 add_executable(MagicaLego
+	${src_files_magicalego}
 	DesktopMain.cpp
 )
 add_executable(Packager
@@ -166,12 +168,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if ( ${target} STREQUAL gkNextRenderer )
-		target_compile_definitions(gkNextRenderer PUBLIC WITH_EDITOR=0)
-	endif()
-
 	if ( ${target} STREQUAL MagicaLego )
-		target_compile_definitions(MagicaLego PUBLIC WITH_EDITOR=0 WITH_GAME=1)
 	if (UNIX)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
@@ -187,9 +184,7 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL gkNextEditor )
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
-	target_compile_definitions(gkNextEditor PUBLIC WITH_EDITOR=1)
 	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
-
 	# third-party warning fix
 	if (MSVC)
 

@@ -1,12 +1,41 @@
 #pragma once
 
 #include "EditorGUI.h"
+#include "Runtime/Application.hpp"
 
-struct Statistics;
+class EditorInterface;
 
 namespace Assets
 {
     class Scene;    
 }
 
-void MainWindowGUI(Editor::GUI & gui, Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun);
+void MainWindowGUI(Editor::GUI & gui, Assets::Scene& scene, ImGuiID id, bool firstRun);
+
+class EditorGameInstance : public NextGameInstanceBase
+{
+public:
+    EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
+    ~EditorGameInstance() override = default;
+
+    // overrides
+    void OnInit() override;
+    void OnTick(double deltaSeconds) override;
+    void OnDestroy() override {};
+
+    void OnPreConfigUI() override;
+    bool OnRenderUI() override;
+    void OnInitUI() override;
+
+    bool OnKey(int key, int scancode, int action, int mods) override;
+    bool OnCursorPosition(double xpos, double ypos) override;
+    bool OnMouseButton(int button, int action, int mods) override;
+    
+    // quick access engine
+    NextRendererApplication& GetEngine() { return *engine_; }
+
+private:
+    NextRendererApplication* engine_;
+
+    std::unique_ptr<EditorInterface> editorUserInterface_;
+};

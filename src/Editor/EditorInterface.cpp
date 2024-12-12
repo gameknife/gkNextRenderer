@@ -58,90 +58,42 @@ namespace
 	}
 }
 
-EditorInterface::EditorInterface(
-	Vulkan::CommandPool& commandPool, 
-	const Vulkan::SwapChain& swapChain, 
-	const Vulkan::DepthBuffer& depthBuffer)
+EditorInterface::EditorInterface(class EditorGameInstance* editor)
+	: editor_(editor)
 {
-	editorGUI_.reset(new Editor::GUI());
 	
-	const auto& device = swapChain.Device();
-	const auto& window = device.Surface().Instance().Window();
+}
 
-	// Initialise descriptor pool and render pass for ImGui.
-	const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
-	{
-		{0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
-	};
-	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
-	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
-	
-	// Initialise ImGui
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	
+EditorInterface::~EditorInterface()
+{
+	editorGUI_.reset();
+}
+
+void EditorInterface::Config()
+{
 	auto& io = ImGui::GetIO();
-	// No ini file.
-	io.IniFilename = "imgui.ini";
 
+	io.IniFilename = "editor.ini";
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+}
 
-
-	// Initialise ImGui GLFW adapter
-	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
-	{
-		Throw(std::runtime_error("failed to initialise ImGui GLFW adapter"));
-	}
-	
-	// Initialise ImGui Vulkan adapter
-	ImGui_ImplVulkan_InitInfo vulkanInit = {};
-	vulkanInit.Instance = device.Surface().Instance().Handle();
-	vulkanInit.PhysicalDevice = device.PhysicalDevice();
-	vulkanInit.Device = device.Handle();
-	vulkanInit.QueueFamily = device.GraphicsFamilyIndex();
-	vulkanInit.Queue = device.GraphicsQueue();
-	vulkanInit.PipelineCache = nullptr;
-	vulkanInit.DescriptorPool = descriptorPool_->Handle();
-	vulkanInit.MinImageCount = swapChain.MinImageCount();
-	vulkanInit.ImageCount = static_cast<uint32_t>(swapChain.Images().size());
-	vulkanInit.Allocator = nullptr;
-	vulkanInit.CheckVkResultFn = CheckVulkanResultCallback;
-	vulkanInit.RenderPass = renderPass_->Handle();
-
-	if (!ImGui_ImplVulkan_Init(&vulkanInit))
-	{
-		Throw(std::runtime_error("failed to initialise ImGui vulkan adapter"));
-	}
-	
+void EditorInterface::Init()
+{
+	editorGUI_.reset(new Editor::GUI());
+	auto& io = ImGui::GetIO();
+		
 	// Window scaling and style.
-#if __APPLE__
 	const auto scaleFactor = 1.0;
-#else
-    const auto scaleFactor = window.ContentScale();
-#endif
-
+	
 	UserInterface::SetStyle();
 	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
-
-
-	// Upload ImGui fonts (use ImGuiFreeType for better font rendering, see https://github.com/ocornut/imgui/tree/master/misc/freetype).
+	
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), 14 * scaleFactor, nullptr, glyphRange ))
-	{
-		Throw(std::runtime_error("failed to load basic ImGui Text font"));
-	}
-	
-	ImFontConfig configLocale;
-	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), 14 * scaleFactor, &configLocale, glyphRange ))
-	{
-		Throw(std::runtime_error("failed to load locale ImGui Text font"));
-	}
 	
 	const ImWchar* iconRange = GetGlyphRangesFontAwesome();
 	ImFontConfig config;
@@ -161,28 +113,10 @@ EditorInterface::EditorInterface(
 
 	fontBigIcon_ = io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr, iconRange );
 	
-	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
-	{
-		if (!ImGui_ImplVulkan_CreateFontsTexture())
-		{
-			Throw(std::runtime_error("failed to create ImGui font textures"));
-		}
-	});
-	
 	firstRun = true;
 
 	editorGUI_->fontIcon_ = fontIcon_;
 	editorGUI_->bigIcon_ = fontBigIcon_;
-}
-
-EditorInterface::~EditorInterface()
-{
-	uiFrameBuffers_.clear();
-	editorGUI_.reset();
-	
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
 }
 
 const float toolbarSize = 50;
@@ -191,41 +125,6 @@ const float toolbarIconHeight = 32;
 const float titleBarHeight = 55;
 const float footBarHeight = 40;
 float menuBarHeight = 0;
-
-
-VkDescriptorSet EditorInterface::RequestImTextureId(uint32_t globalTextureId)
-{
-	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
-	{
-		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
-		if(texture)
-		{
-			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			return imTextureIdMap_[globalTextureId];
-		}
-	}
-	else
-	{
-		return imTextureIdMap_[globalTextureId];
-	}
-	return VK_NULL_HANDLE;
-}
-
-void EditorInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
-{
-	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
-	
-	for (const auto& imageView : swapChain.ImageViews())
-	{
-		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
-	}
-}
-
-void EditorInterface::OnDestroySurface()
-{
-	renderPass_.reset();
-	uiFrameBuffers_.clear();
-}
 
 ImGuiID EditorInterface::DockSpaceUI()
 {
@@ -316,77 +215,23 @@ void EditorInterface::ToolbarUI()
 	ImGui::End();
 }
 
-void EditorInterface::PreRender()
-{
-}
-
-void EditorInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+void EditorInterface::Render()
 {
 	GUserInterface = this;
-	
-	uint32_t count = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
-	for ( uint32_t i = 0; i < count; ++i )
-	{
-		RequestImTextureId(i);
-	}
-	
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-	
-	editorGUI_->selected_obj_id = scene->GetSelectedId();
+		
+	editorGUI_->selected_obj_id = editor_->GetEngine().GetScene().GetSelectedId();
 	
 	ImGuiID id = DockSpaceUI();
 	ToolbarUI();
 	
-	MainWindowGUI(*editorGUI_, scene, statistics, id, firstRun);
+	MainWindowGUI(*editorGUI_, editor_->GetEngine().GetScene(), id, firstRun);
 	
-	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
-}
-
-void EditorInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
-{
-	ImGuiID id = DockSpaceUI();
 	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	swapChain.UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
-	
-	auto& io = ImGui::GetIO();
-	
-	ImGui::Render();
-
-	VkRenderPassBeginInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = renderPass_->Handle();
-	renderPassInfo.framebuffer = uiFrameBuffers_[imageIdx].Handle();
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = renderPass_->SwapChain().Extent();
-	renderPassInfo.clearValueCount = 0;
-	renderPassInfo.pClearValues = nullptr;
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-	vkCmdEndRenderPass(commandBuffer);
-
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-	}
+	editor_->GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 
 	firstRun = false;
-
 	GUserInterface = nullptr;
-}
-
-bool EditorInterface::WantsToCaptureKeyboard() const
-{
-	return ImGui::GetIO().WantCaptureKeyboard;
-}
-
-bool EditorInterface::WantsToCaptureMouse() const
-{
-	return ImGui::GetIO().WantCaptureMouse;
 }
 
 void EditorInterface::DrawIndicator(uint32_t frameCount)

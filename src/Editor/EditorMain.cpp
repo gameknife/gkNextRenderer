@@ -1,12 +1,24 @@
 #include "EditorMain.h"
 #include <imgui_internal.h>
+#include <Runtime/Platform/PlatformWindows.h>
 
-void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& statistics, ImGuiID id, bool firstRun)
+#include "EditorInterface.hpp"
+#include "Runtime/Application.hpp"
+
+#include "Editor/EditorCommand.hpp"
+#include "Editor/EditorInterface.hpp"
+
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+{
+    return std::make_unique<EditorGameInstance>(config, options, engine);
+}
+
+void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene& scene, ImGuiID id, bool firstRun)
 {
     //////////////////////////////////
     Editor::GUI &gui = gui_r;
 
-    gui.current_scene = scene;
+    gui.current_scene = &scene;
     
     // Only run DockBuilder functions on the first frame of the app:
     if (firstRun) {
@@ -25,7 +37,7 @@ void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& 
         gui.ShowMenubar();
 
         // create-sidebar
-        if (gui.sidebar) gui.ShowSidebar(scene);
+        if (gui.sidebar) gui.ShowSidebar(&scene);
 
         // create-properties
         if (gui.properties) gui.ShowProperties();
@@ -34,7 +46,7 @@ void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& 
         if (gui.contentBrowser) gui.ShowContentBrowser();
 
         // create-viewport
-        if (gui.viewport) gui.ShowViewport(id, statistics);
+        if (gui.viewport) gui.ShowViewport(id);
     }
 
     { // create-children
@@ -52,4 +64,81 @@ void MainWindowGUI(Editor::GUI & gui_r, Assets::Scene* scene, const Statistics& 
         if(gui.ed_material) gui.ShowMaterialEditor();
     }
 
+}
+
+EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+{
+    editorUserInterface_ = std::make_unique<EditorInterface>(this);
+
+    NextRenderer::HideConsole();
+
+    // windows config
+    config.Title = "NextEditor";
+    config.Height = 1080;
+    config.Width = 1920;
+    config.ForceSDR = true;
+    config.HideTitleBar = true;
+}
+
+void EditorGameInstance::OnInit()
+{
+    // EditorCommand, need Refactoring
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
+        GetEngine().GetWindow().Close();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
+        GetEngine().GetWindow().Maximum();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
+        GetEngine().GetWindow().Minimize();
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
+        //RequestLoadScene(args);
+        return true;
+    });
+    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
+        //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
+        //userSettings_.SkyIdx = 0;
+        return true;
+    });
+}
+
+void EditorGameInstance::OnTick(double deltaSeconds)
+{
+    
+}
+
+void EditorGameInstance::OnPreConfigUI()
+{
+    editorUserInterface_->Config();
+}
+
+bool EditorGameInstance::OnRenderUI()
+{
+    editorUserInterface_->Render();
+    return true;
+}
+
+void EditorGameInstance::OnInitUI()
+{
+    editorUserInterface_->Init();
+}
+
+bool EditorGameInstance::OnKey(int key, int scancode, int action, int mods)
+{
+    return false;
+}
+
+bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
+{
+    return false;
+}
+
+bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
+{
+    return false;
 }
