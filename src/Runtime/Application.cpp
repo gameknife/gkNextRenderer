@@ -38,6 +38,8 @@
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
+ENGINE_API Options* GOption = nullptr;
+
 #if !WITH_GAME
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
 {

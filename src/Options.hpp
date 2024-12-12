@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -57,4 +58,4 @@ public:
 	bool Fullscreen{};
 };
 
-extern Options* GOption;
+extern ENGINE_API Options* GOption;
