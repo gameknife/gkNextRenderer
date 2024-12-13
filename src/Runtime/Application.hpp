@@ -147,6 +147,9 @@ public:
 	Vulkan::Window& GetWindow() {return *window_;}
 	
 	class UserInterface* GetUserInterface() {return userInterface_.get();}
+
+	// monitor info
+	glm::ivec2 GetMonitorSize(int monitorIndex = 0) const;
 	
 protected:
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);

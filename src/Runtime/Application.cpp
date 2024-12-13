@@ -162,6 +162,8 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+
+    Vulkan::Window::InitGLFW();
     // Create Window
     Vulkan::WindowConfig windowConfig
     {
@@ -215,6 +217,8 @@ NextRendererApplication::~NextRendererApplication()
     renderer_.reset();
     window_.reset();
     benchMarker_.reset();
+
+    Vulkan::Window::TerminateGLFW();
 }
 
 void NextRendererApplication::Start()
@@ -559,6 +563,16 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
     glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
     glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
     return jitterMatrix * projectionMatrix;
+}
+
+glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
+{
+    glm::ivec2 pos{0,0};
+    glm::ivec2 size{1920,1080};
+#if !ANDROID
+    glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &pos.x, &pos.y, &size.x, &size.y);
+#endif
+    return size;
 }
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)

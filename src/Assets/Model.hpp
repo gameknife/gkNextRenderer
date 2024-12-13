@@ -76,6 +76,8 @@ namespace Assets
 
         void AddChild(std::shared_ptr<Node> child);
         void RemoveChild(std::shared_ptr<Node> child);
+
+        const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
         
     private:
         std::string name_;

@@ -65,7 +65,7 @@ void Editor::GUI::ShowProperties()
             ImGui::Text( ICON_FA_CIRCLE_HALF_STROKE " Material");
             ImGui::Separator();
             
-            if(current_scene != nullptr)
+            if(current_scene != nullptr && modelId != -1)
             {
                 auto& model = current_scene->Models()[modelId];
                 auto& mats = model.Materials();

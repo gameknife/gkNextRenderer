@@ -72,10 +72,12 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
 
     NextRenderer::HideConsole();
 
+    glm::ivec2 MonitorSize = GetEngine().GetMonitorSize();
+
     // windows config
     config.Title = "NextEditor";
-    config.Height = 1080;
-    config.Width = 1920;
+    config.Width = static_cast<uint32_t>(MonitorSize.x * 0.75f);
+    config.Height = static_cast<uint32_t>(MonitorSize.y * 0.75f);
     config.ForceSDR = true;
     config.HideTitleBar = true;
 }
@@ -96,15 +98,16 @@ void EditorGameInstance::OnInit()
         return true;
     });
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
-        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
-        //RequestLoadScene(args);
+        GetEngine().RequestLoadScene(args);
         return true;
     });
     EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
         //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
-        //userSettings_.SkyIdx = 0;
+        //GetEngine().GetUserSettings().SkyIdx = 0;
         return true;
     });
+
+    GetEngine().GetUserSettings().ShowEdge = true;
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)

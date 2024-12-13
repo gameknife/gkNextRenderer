@@ -87,9 +87,7 @@ void EditorInterface::Init()
 		
 	// Window scaling and style.
 	const auto scaleFactor = 1.0;
-	
-	UserInterface::SetStyle();
-	ImGui::GetStyle().ScaleAllSizes(scaleFactor);
+	//ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 	
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
