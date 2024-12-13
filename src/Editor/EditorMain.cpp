@@ -80,6 +80,9 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     config.Height = static_cast<uint32_t>(MonitorSize.y * 0.75f);
     config.ForceSDR = true;
     config.HideTitleBar = true;
+
+    options.Samples = 4;
+    options.ForceSDR = true;
 }
 
 void EditorGameInstance::OnInit()

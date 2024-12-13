@@ -44,7 +44,7 @@ namespace Editor
 
         bool                    viewport                   = true;                 // Viewport State
         uint32_t                selected_obj_id               = -1;              // Viewport Selected
-        Assets::Scene*    current_scene              = nullptr;
+        Assets::Scene*          current_scene              = nullptr;
         void                    ShowViewport               (ImGuiID id);
 
         bool                    contentBrowser             = true;                // Workspace "Output"
