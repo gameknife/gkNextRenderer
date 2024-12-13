@@ -272,6 +272,7 @@ namespace Vulkan::RayTracing
                 nullptr); 
         }
 
+#if !ANDROID
         if(supportRayCast_)
         {
             SCOPED_GPU_TIMER("raycast");
@@ -294,6 +295,7 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
+#endif
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

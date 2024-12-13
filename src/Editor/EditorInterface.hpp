@@ -49,10 +49,10 @@ public:
 	void Render();
 
 private:
-
 	ImGuiID DockSpaceUI();
 	void ToolbarUI();
-	
+	void MainWindowGUI(Editor::GUI & gui, Assets::Scene& scene, ImGuiID id, bool firstRun);
+
 	void DrawIndicator(uint32_t frameCount);
 
 	EditorGameInstance* editor_;
@@ -60,8 +60,7 @@ private:
 
 	ImFont* fontBigIcon_;
 	ImFont* fontIcon_;
-
 	bool firstRun;
 };
 
-inline EditorInterface* GUserInterface = nullptr;
+inline UserInterface* GUserInterface = nullptr;

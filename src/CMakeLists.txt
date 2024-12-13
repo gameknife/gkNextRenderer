@@ -38,7 +38,15 @@ file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 # libray and app
 if ( ANDROID )
+add_library(gkNextEngine
+	${src_files_assets} 
+	${src_files_utilities} 
+	${src_files_engine}
+	${src_files_vulkan} 
+	${src_files_thirdparty}
+)
 add_library(gkNextRenderer SHARED
+	${src_files_gkrenderer}
 	AndroidMain.cpp
 	GameActivitySources.cpp
 )
@@ -80,6 +88,7 @@ add_subdirectory(ThirdParty/ImNodeFlow)
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets 
+gkNextEngine
 gkNextRenderer
 )
 else()

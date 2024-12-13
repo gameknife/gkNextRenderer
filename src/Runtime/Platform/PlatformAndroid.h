@@ -89,4 +89,49 @@ private:
 
     char buffer[bufsize];
 };
+
+#include <android/log.h>
+#include <cstdio>
+#include <unistd.h>
+#include <fcntl.h>
+
+class AndroidLogOutputStream {
+public:
+    AndroidLogOutputStream() {
+        backup_fd = dup(fileno(stdout));
+        pipe(pipe_fd);
+        dup2(pipe_fd[1], fileno(stdout));
+        close(pipe_fd[1]);
+
+        // 创建新线程来读取管道的内容并将其写入 Android 日志
+        pthread_create(&thread, nullptr, &AndroidLogOutputStream::logThreadFunction, this);
+    }
+
+    ~AndroidLogOutputStream() {
+        dup2(backup_fd, fileno(stdout));
+        close(backup_fd);
+    }
+
+private:
+    static void* logThreadFunction(void* arg) {
+        auto* instance = static_cast<AndroidLogOutputStream*>(arg);
+        char buffer[512];
+
+        while (true) {
+            ssize_t count = read(instance->pipe_fd[0], buffer, sizeof(buffer) - 1);
+            if (count <= 0) {
+                break;
+            }
+            buffer[count] = '\0';
+            __android_log_print(ANDROID_LOG_INFO, "gknext", "%s", buffer);
+        }
+
+        return nullptr;
+    }
+
+    int backup_fd;
+    int pipe_fd[2];
+    pthread_t thread;
+};
+
 #endif

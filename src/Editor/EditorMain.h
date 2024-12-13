@@ -10,8 +10,6 @@ namespace Assets
     class Scene;    
 }
 
-void MainWindowGUI(Editor::GUI & gui, Assets::Scene& scene, ImGuiID id, bool firstRun);
-
 class EditorGameInstance : public NextGameInstanceBase
 {
 public:

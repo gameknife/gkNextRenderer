@@ -55,7 +55,9 @@ namespace NextRenderer
                     if(!ptr->supportRayTracing_) {
                         break;
                     }
+#if !ANDROID
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
+#endif
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
@@ -235,6 +237,7 @@ void NextRendererApplication::Start()
 
     gameInstance_->OnInit();
 
+    fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
@@ -284,13 +287,9 @@ bool NextRendererApplication::Tick()
     }
 
     // Renderer Tick
-#if ANDROID
-    renderer_->DrawFrame();
-    totalFrames_ += 1;
-    return false;
-#else
+#if !ANDROID
     glfwPollEvents();
-
+#endif
     // tick
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
@@ -343,9 +342,11 @@ bool NextRendererApplication::Tick()
         PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
         renderer_->DrawFrame();
     }
-    
-    window_->attemptDragWindow();
     totalFrames_ += 1;
+#if ANDROID
+    return false;
+#else
+    window_->attemptDragWindow();
     return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
 }

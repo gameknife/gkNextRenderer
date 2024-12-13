@@ -15,7 +15,7 @@ struct UserSettings final
 	uint32_t BenchmarkMaxFrame{};
 	
 	// Scene
-	int SceneIndex;
+	int SceneIndex {};
 
 	// Renderer
 	bool AccumulateRays;

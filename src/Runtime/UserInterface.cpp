@@ -306,6 +306,14 @@ void UserInterface::PreRender()
 	ImGui_ImplAndroid_NewFrame();
 #endif
 	ImGui::NewFrame();
+
+
+	// update texture to ui
+	uint32_t maxId = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+	for ( uint32_t idx = 0; idx < maxId; ++idx)
+	{
+		RequestImTextureId(idx);
+	}
 }
 
 void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
