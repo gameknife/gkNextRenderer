@@ -1,6 +1,6 @@
 #include "EditorMain.h"
 #include <imgui_internal.h>
-#include <Runtime/Platform/PlatformWindows.h>
+#include <Runtime/Platform/PlatformCommon.h>
 
 #include "EditorInterface.hpp"
 #include "Runtime/Application.hpp"
