@@ -18,6 +18,29 @@
 #define ENABLE_OPTIMIZATION
 #endif
 
+#ifdef ENGINE_API_SHARED
+
+#if defined(_WIN32) || defined(_WIN64)
+
+  #ifdef ENGINE_EXPORTS
+    #define ENGINE_API __declspec(dllexport)
+  #else
+    #define ENGINE_API __declspec(dllimport)
+  #endif
+#else
+  #ifdef ENGINE_EXPORTS
+    #define ENGINE_API __attribute__((visibility("default")))
+  #else
+    #define ENGINE_API
+  #endif
+#endif
+
+#else
+
+  #define ENGINE_API
+
+#endif
+
 #if WITH_SUPERLUMINAL
 #include "Superluminal/PerformanceAPI.h"
 #else

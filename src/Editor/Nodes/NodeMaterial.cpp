@@ -18,6 +18,9 @@ namespace Nodes
         addIN<float>("Emissive", 0.0f, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
 
         addIN<int>("AlbedoTexture", 0, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
+        addIN<int>("NormalTexture", 0, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
+        addIN<int>("MRATexture", 0, ImFlow::ConnectionFilter::SameType(), ImFlow::PinStyle::white());
+        
     }
 
     void NodeMaterial::draw()

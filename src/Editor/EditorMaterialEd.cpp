@@ -19,7 +19,7 @@ void Editor::GUI::OpenMaterialEditor()
     {
         float baseY = 20.0f;
         float seprateY = 100.0f;
-        float seprateX = 400.0f;
+        float seprateX = 600.0f;
         // from material to node
         auto nodeIOR = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30,baseY), "IOR", selected_material->RefractionIndex);
         auto nodeShadingMode = myNode->placeNodeAt<Nodes::NodeSetInt>(ImVec2(30,baseY += seprateY), "ShadingMode", (int)selected_material->MaterialModel);
@@ -40,10 +40,23 @@ void Editor::GUI::OpenMaterialEditor()
         nodeRoughness->outPin("Out")->createLink(nodeMat->inPin("Roughness"));
         nodeMetalness->outPin("Out")->createLink(nodeMat->inPin("Metalness"));
 
+        seprateY = 200.0f;
         if(selected_material->DiffuseTextureId != -1)
         {
-            auto nodeAlbedoTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->DiffuseTextureId);
-            nodeAlbedoTexture->outPin("Out")->createLink(nodeMat->inPin("AlbedoTexture"));
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->DiffuseTextureId);
+            nodeTexture->outPin("Out")->createLink(nodeMat->inPin("AlbedoTexture"));
+        }
+
+        if(selected_material->NormalTextureId != -1)
+        {
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "NormalTexture", selected_material->NormalTextureId);
+            nodeTexture->outPin("Out")->createLink(nodeMat->inPin("NormalTexture"));
+        }
+
+        if(selected_material->MRATextureId != -1)
+        {
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "MRATexture", selected_material->MRATextureId);
+            nodeTexture->outPin("Out")->createLink(nodeMat->inPin("MRATexture"));
         }
     }
 }

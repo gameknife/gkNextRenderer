@@ -27,23 +27,13 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
 
-#if WITH_EDITOR
-#include "Editor/EditorCommand.hpp"
-#include "Editor/EditorInterface.hpp"
-#endif
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
-#if !WITH_GAME
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
-{
-    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
-}
-#endif
+ENGINE_API Options* GOption = nullptr;
 
 namespace NextRenderer
 {
@@ -65,7 +55,9 @@ namespace NextRenderer
                     if(!ptr->supportRayTracing_) {
                         break;
                     }
+#if !ANDROID
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
+#endif
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
@@ -172,6 +164,8 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+
+    Vulkan::Window::InitGLFW();
     // Create Window
     Vulkan::WindowConfig windowConfig
     {
@@ -215,32 +209,6 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
 
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-
-    // EditorCommand, need Refactoring
-#if WITH_EDITOR    
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
-        GetWindow().Close();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
-        GetWindow().Maximum();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
-        GetWindow().Minimize();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
-        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
-        RequestLoadScene(args);
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
-        Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
-        userSettings_.SkyIdx = 0;
-        return true;
-    });
-#endif
 }
 
 NextRendererApplication::~NextRendererApplication()
@@ -251,6 +219,8 @@ NextRendererApplication::~NextRendererApplication()
     renderer_.reset();
     window_.reset();
     benchMarker_.reset();
+
+    Vulkan::Window::TerminateGLFW();
 }
 
 void NextRendererApplication::Start()
@@ -267,6 +237,7 @@ void NextRendererApplication::Start()
 
     gameInstance_->OnInit();
 
+    fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
@@ -316,13 +287,9 @@ bool NextRendererApplication::Tick()
     }
 
     // Renderer Tick
-#if ANDROID
-    renderer_->DrawFrame();
-    totalFrames_ += 1;
-    return false;
-#else
+#if !ANDROID
     glfwPollEvents();
-
+#endif
     // tick
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
@@ -375,9 +342,11 @@ bool NextRendererApplication::Tick()
         PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
         renderer_->DrawFrame();
     }
-    
-    window_->attemptDragWindow();
     totalFrames_ += 1;
+#if ANDROID
+    return false;
+#else
+    window_->attemptDragWindow();
     return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
 }
@@ -597,6 +566,16 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
     return jitterMatrix * projectionMatrix;
 }
 
+glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
+{
+    glm::ivec2 pos{0,0};
+    glm::ivec2 size{1920,1080};
+#if !ANDROID
+    glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &pos.x, &pos.y, &size.x, &size.y);
+#endif
+    return size;
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
@@ -778,7 +757,11 @@ void NextRendererApplication::OnRendererCreateSwapChain()
         userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
 #else
         userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_, [this]()->void{
+                                   userSettings_, [this]()->void
+                                   {
+                                       gameInstance_->OnPreConfigUI();
+                                   },
+                                   [this]()->void{
             gameInstance_->OnInitUI();
         }));
 #endif

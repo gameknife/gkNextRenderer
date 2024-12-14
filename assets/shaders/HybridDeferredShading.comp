@@ -65,7 +65,7 @@ struct RayPayload
 bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, INF);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, 10.0f);
 	rayQueryProceedEXT(rayQuery);
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
 		RayPayload PayloadData;
@@ -137,39 +137,30 @@ void main() {
 
     // checker box
 	bool isEvenFrame = Camera.TotalFrames % 2 == 0;
-    //int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
-    
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
 	
-//    if(Camera.UseCheckerBoard)
-//    {
-//        ipos = ipos * ivec2(2,1);
-//        if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
-//            ipos.x += 1;
-//        }
-//    }
-	
 	ivec2 size = imageSize(MiniGBuffer0);
-    uvec2 vBuffer = isEvenFrame ? imageLoad(MiniGBuffer0, ipos).gr : imageLoad(MiniGBuffer1, ipos).gr;
+    uvec2 vBuffer = isEvenFrame ? imageLoad(MiniGBuffer0, ipos).rg : imageLoad(MiniGBuffer1, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
     vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
 	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
 	vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
 	vec3 ray_dir = normalize(dir.xyz);
-	uvec4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 	
 	// x == y == 0, hit the sky, quick go
 	if(vBuffer.x == 0)
 	{
-		const vec3 blurRay = AlignWithNormal( RandomInCone(RandomSeed, cos(0.2 / 180.f * M_PI)), ray_dir );
-		vec3 iblColor = Camera.HasSky ? equirectangularSample(blurRay, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? equirectangularSample(ray_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(InOutDirectLight1, ipos, vec4(0));
 		imageStore(OutAlbedoBuffer, ipos, vec4(iblColor,1.0));
 		return;
 	}
+
+	uvec4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
     
+	// visibility fetch hit point, if primary ray, start from here
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     
     Material mat = Materials[v.MaterialIndex];
@@ -222,7 +213,7 @@ void main() {
 		
 		const vec3 trace_dir = chanceReflect ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
 		(RandomFloat(RandomSeed) < metalProb ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
-		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere(RandomSeed), outwardNormal ) : ray_dir
+		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere1(RandomSeed), outwardNormal ) : ray_dir
 		);
 
 		// if miss, sample the sky
@@ -236,7 +227,7 @@ void main() {
 		
 		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		vec3 illumColor = vec3(0.0);
-		bool hit = TraceRay(ipos, v.Position - ray_dir * EPS2, trace_dir, iblColor, bounceSingle, illumColor);
+		bool hit = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;
@@ -248,27 +239,27 @@ void main() {
 		
 		bounceColor += albedoSingle.rgb * bounceSingle;
 
-		if(s == 0)
-		{
-			// after the first spp, we could judge if reproject miss with previous primitive buffer
-			vec2 prevfpos = vec2(ipos) + motion.rg;
-			ivec2 previpos = ivec2( floor(ipos + motion.rg) );
-
-			if( length(motion.xy) > 0.01 )
-			{
-				uint prev_primitive_index0 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 0)).r;
-				uint prev_primitive_index1 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 1)).r;
-				uint prev_primitive_index2 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 0)).r;
-				uint prev_primitive_index3 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 1)).r;
-
-				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(vBuffer.r)));
-
-				if (miss)
-				{
-					sampleTimes = max(min(32, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
-				}
-			}
-		}
+//		if(s == 0)
+//		{
+//			// after the first spp, we could judge if reproject miss with previous primitive buffer
+//			vec2 prevfpos = vec2(ipos) + motion.rg;
+//			ivec2 previpos = ivec2( floor(ipos + motion.rg) );
+//
+//			if( length(motion.xy) > 0.01 )
+//			{
+//				uint prev_primitive_index0 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 0)).r;
+//				uint prev_primitive_index1 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 1)).r;
+//				uint prev_primitive_index2 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 0)).r;
+//				uint prev_primitive_index3 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 1)).r;
+//
+//				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(vBuffer.r)));
+//
+//				if (miss)
+//				{
+//					sampleTimes = max(min(32, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
+//				}
+//			}
+//		}
 	}
 	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;

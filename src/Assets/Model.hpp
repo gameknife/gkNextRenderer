@@ -55,9 +55,9 @@ namespace Assets
         void SetRotation( glm::quat rotation );
         void SetScale( glm::vec3 scale );
 
-        glm::vec3 Translation() const { return translation_; }
-        glm::quat Rotation() const { return rotation_; }
-        glm::vec3 Scale() const { return scaling_; }
+        glm::vec3& Translation() const { return translation_; }
+        glm::quat& Rotation() const { return rotation_; }
+        glm::vec3& Scale() const { return scaling_; }
 
         void RecalcLocalTransform();
         void RecalcTransform(bool full = true);
@@ -76,13 +76,15 @@ namespace Assets
 
         void AddChild(std::shared_ptr<Node> child);
         void RemoveChild(std::shared_ptr<Node> child);
+
+        const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
         
     private:
         std::string name_;
 
-        glm::vec3 translation_;
-        glm::quat rotation_;
-        glm::vec3 scaling_;
+        mutable glm::vec3 translation_;
+        mutable glm::quat rotation_;
+        mutable glm::vec3 scaling_;
 
         glm::mat4 localTransform_;
         glm::mat4 transform_;

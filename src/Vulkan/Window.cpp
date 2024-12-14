@@ -86,18 +86,6 @@ Window::Window(const WindowConfig& config) :
 	config_(config)
 {
 #if !ANDROID
-	glfwSetErrorCallback(GlfwErrorCallback);
-
-	if (!glfwInit())
-	{
-		Throw(std::runtime_error("glfwInit() failed"));
-	}
-
-	if (!glfwVulkanSupported())
-	{
-		Throw(std::runtime_error("glfwVulkanSupported() failed"));
-	}
-
 	// hide title bar, handle in ImGUI Later
 
 	if (config.HideTitleBar)
@@ -118,7 +106,7 @@ Window::Window(const WindowConfig& config) :
 		Throw(std::runtime_error("failed to create window"));
 	}
 
-#if WIN32
+#if !ANDROID
 	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 	if (mode) {
 		int windowPosX = (mode->width - config.Width) / 2;
@@ -164,9 +152,6 @@ Window::~Window()
 		glfwDestroyWindow(window_);
 		window_ = nullptr;
 	}
-
-	glfwTerminate();
-	glfwSetErrorCallback(nullptr);
 #endif
 }
 
@@ -317,6 +302,30 @@ void Window::attemptDragWindow() {
 	if (glfwGetMouseButton(window_, 0) == GLFW_RELEASE && dragState == 1) {
 		dragState = 0;
 	}
+#endif
+}
+
+void Window::InitGLFW()
+{
+#if !ANDROID
+	glfwSetErrorCallback(GlfwErrorCallback);
+	if (!glfwInit())
+	{
+		Throw(std::runtime_error("glfwInit() failed"));
+	}
+
+	if (!glfwVulkanSupported())
+	{
+		Throw(std::runtime_error("glfwVulkanSupported() failed"));
+	}
+#endif
+}
+
+void Window::TerminateGLFW()
+{
+#if !ANDROID
+	glfwTerminate();
+	glfwSetErrorCallback(nullptr);
 #endif
 }
 }

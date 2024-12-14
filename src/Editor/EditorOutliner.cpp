@@ -3,89 +3,87 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 
+
+void DrawNode(Assets::Scene* scene, Assets::Node* node)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+
+    ImGuiTreeNodeFlags flag = 0 |
+        (scene->GetSelectedId() == node->GetInstanceId() ? ImGuiTreeNodeFlags_Selected : 0) |
+        (node->Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
+
+     
+
+    if (ImGui::TreeNodeEx(((node->GetModel() == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node->GetName()).c_str(), flag))
+    {
+        if (ImGui::IsItemClicked())
+        {
+            scene->SetSelectedId(node->GetInstanceId());
+        }
+        auto& childrenNodes = node->Children();
+        for (auto& child : childrenNodes)
+        {
+            DrawNode(scene, child.get());
+        }
+        ImGui::TreePop();
+    }
+}
+
+
 void Editor::GUI::ShowSidebar(Assets::Scene* scene)
 {
-    //ImGui::SetNextWindowPos(sb_P);
-    //ImGui::SetNextWindowSizeConstraints(ImVec2(0, -1), ImVec2(FLT_MAX, -1));
-    //ImGui::SetNextWindowSize(sb_S);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.00f, 5.00f));
     ImGui::Begin("Outliner", NULL);
 
-    /// content-sidebar
     {
-
         ImGui::TextDisabled("NOTE");
-        ImGui::SameLine(); utils::HelpMarker
+        ImGui::SameLine();
+        utils::HelpMarker
         ("ALL SCENE NODES\n"
-        "limited to 1000 nodes\n"
-        "select and view node properties\n");
+            "limited to 1000 nodes\n"
+            "select and view node properties\n");
         ImGui::Separator();
-        
+
         //ANCHOR SIDEBAR.DATAINPUTS
         ImGui::Text("Nodes");
         ImGui::Separator();
-        
-        auto& allnodes = scene->Nodes();
-        uint32_t limit = 1000;
-        for( auto& node : allnodes )
+
+        ImGui::BeginChild("ListBox", ImVec2(0, -50));
+
+        if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
         {
-            std::shared_ptr<Assets::Node> selected_obj = nullptr;
-            if(selected_obj_id >= 0 && selected_obj_id < allnodes.size())
+            ImGui::TableSetupColumn("NodeName");
+            auto& allnodes = scene->Nodes();
+            uint32_t limit = 1000;
+            for (auto& node : allnodes)
             {
-                selected_obj = allnodes[selected_obj_id];
-            }
-            // draw stripe background
-            ImVec2 WindowPadding = ImGui::GetStyle().WindowPadding;
-            ImVec2 CursorPos = ImGui::GetCursorScreenPos() - ImVec2(WindowPadding.x,2);
-            float singleHeight = ImGui::GetTextLineHeight() + 4;
-            ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),limit % 2 == 0 ? IM_COL32(0, 0, 0, 50) : IM_COL32(0, 0, 0, 0), 0);
-
-            ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_Leaf;
-            
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive , ImVec4(0.3f, 0.3f, 0.9f, 1.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-
-            if(selected_obj == node)
-            {
-                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x - WindowPadding.x * 2, singleHeight),IM_COL32(70, 120, 255, 255), 0);
-            }
-            
-            if (ImGui::TreeNodeEx((ICON_FA_CUBE " " + node->GetName()).c_str(), flag))
-            {
-                if (ImGui::IsItemClicked())
+                if (node->GetParent() != nullptr)
                 {
-                    for (uint32_t i = 0; i < allnodes.size(); i++)
-                    {
-                        if (&allnodes[i] == &node)
-                        {
-                            selected_obj_id = i;
-                            break;
-                        }
-                    }
-                    scene->SetSelectedId(selected_obj_id);
+                    continue;
                 }
-                ImGui::TreePop();
+
+                DrawNode(scene, node.get());
+              
+                if (limit-- <= 0)
+                {
+                    break;
+                }
             }
-            if(selected_obj == node)
-            {
-                ImGui::ScrollToItem(ImGuiScrollFlags_KeepVisibleCenterY);
-            }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor();
-            if( limit-- <= 0 )
-            {
-                break;
-            }
+            ImGui::EndTable();
         }
 
+        ImGui::EndChild();
+
+        ImGui::Spacing();
+
+        ImGui::Text("%d Nodes", scene->Nodes().size());
+
+        ImGui::Spacing();
+        
         if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_F4))))
         {
             state = false;
         }
     }
-
     ImGui::End();
-    ImGui::PopStyleVar(1);
 }

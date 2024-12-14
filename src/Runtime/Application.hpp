@@ -25,8 +25,9 @@ public:
 	virtual void OnTick(double deltaSeconds) =0;
 	virtual void OnDestroy() =0;
 	virtual bool OnRenderUI() =0;
+	virtual void OnPreConfigUI() {}
 	virtual void OnInitUI() {}
-	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) {};
 
 	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
 
@@ -142,12 +143,15 @@ public:
 
 	// scene loading
 	void RequestLoadScene(std::string sceneFileName);
+
+	Vulkan::Window& GetWindow() {return *window_;}
 	
-#if !WITH_EDITOR
-	class UserInterface* GetUserInterface() {return userInterface_.get();};
-#endif
+	class UserInterface* GetUserInterface() {return userInterface_.get();}
+
+	// monitor info
+	glm::ivec2 GetMonitorSize(int monitorIndex = 0) const;
+	
 protected:
-	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
 	void OnRendererDeviceSet();
 	void OnRendererCreateSwapChain();
@@ -162,9 +166,6 @@ protected:
 	void OnMouseButton(int button, int action, int mods);
 	void OnScroll(double xoffset, double yoffset);
 	void OnDropFile(int path_count, const char* paths[]);
-	
-	Vulkan::Window& GetWindow() {return *window_;}
-
 	
 private:
 

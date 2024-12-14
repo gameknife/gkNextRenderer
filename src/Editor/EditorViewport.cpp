@@ -3,7 +3,7 @@
 #include "Assets/Model.hpp"
 #include "Utilities/Math.hpp"
 
-void Editor::GUI::ShowViewport(ImGuiID id, const Statistics& statistics)
+void Editor::GUI::ShowViewport(ImGuiID id)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
@@ -26,12 +26,12 @@ void Editor::GUI::ShowViewport(ImGuiID id, const Statistics& statistics)
     ImGui::Begin("ViewportStat", nullptr, window_flags);
 
     ImGui::Text("Reatime Statstics: ");
-    ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
-    ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
-
-    ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
-    ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
-    ImGui::Text("Texture: %d", statistics.TextureCount);
+    // ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
+    // ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
+    //
+    // ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
+    // ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
+    // ImGui::Text("Texture: %d", statistics.TextureCount);
 
     ImGui::End();
 }

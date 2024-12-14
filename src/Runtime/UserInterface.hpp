@@ -65,7 +65,9 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings, std::function<void()> func);
+		UserSettings& userSettings,
+		std::function<void()> funcPreConfig,
+		std::function<void()> funcInit);
 	~UserInterface();
 
 	void PreRender();

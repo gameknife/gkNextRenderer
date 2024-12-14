@@ -51,6 +51,10 @@ namespace Vulkan
 		void Restore();
 
 		void attemptDragWindow();
+
+		// Static methods
+		static void InitGLFW();
+		static void TerminateGLFW();
 	private:
 
 		const WindowConfig config_;
