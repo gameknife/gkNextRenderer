@@ -124,7 +124,9 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngine)
+		if ( NOT (${target} STREQUAL Packager) )
+			target_link_libraries(${target} PRIVATE gkNextEngine)
+		endif()
 	endif()
 
 	# platform & target specific
