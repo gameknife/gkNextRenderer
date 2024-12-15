@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <fmt/format.h>
 #include <filesystem>
+#include <iostream>
 
 #include "Runtime/Platform/PlatformCommon.h"
 
@@ -16,7 +17,7 @@
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 
 std::unique_ptr<NextRendererApplication> GApplication = nullptr;
-Options* GOption = nullptr;
+
 
 void handle_cmd(android_app* app, int32_t cmd) {
     switch (cmd) {
@@ -101,10 +102,10 @@ static int32_t engine_handle_input(struct android_app* app) {
 return 0;
 }
 
+AndroidLogOutputStream logOutputStream;
+
 void android_main(struct android_app* app)
 {
-    //std::cout.rdbuf(new androidbuf);
-    
     app->onAppCmd = handle_cmd;
 
     // Used to poll the events in the main loop
@@ -125,6 +126,4 @@ void android_main(struct android_app* app)
             GApplication->Tick();
         }
     } while (app->destroyRequested == 0);
-
-    //delete std::cout.rdbuf(0);
 }

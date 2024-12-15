@@ -9,8 +9,6 @@
 
 #include "Runtime/Platform/PlatformCommon.h"
 
-Options* GOption = nullptr;
-
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine
