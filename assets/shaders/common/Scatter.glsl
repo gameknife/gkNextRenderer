@@ -34,7 +34,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	ray.EmitColor = vec4(0);
 
 	// Global Sun Check
-	if(Camera.HasSun)
+	if(Camera.HasSun && ray.BounceCount <= 2)
 	{
 		const vec3 hitpos = ray.HitPos;
 		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos_0_5degree), Camera.SunDirection.xyz);
