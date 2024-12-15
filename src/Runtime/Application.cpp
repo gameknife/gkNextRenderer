@@ -119,7 +119,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
-    userSettings.TAA = false; // makes reproject failed
+    userSettings.TAA = true;
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -595,13 +595,13 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     
     if (userSettings_.TAA)
     {
-        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
-        glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
-        //ubo.Projection = jitterMatrix * ubo.Projection;
-
-        ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
-        ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+        // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        // glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        // glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
+        // //ubo.Projection = jitterMatrix * ubo.Projection;
+        //
+        // ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        // ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
     }
     
     ubo.Projection[1][1] *= -1;

@@ -19,7 +19,6 @@ struct RayPayload
 	bool Exit;
 	uint MaterialIndex;
 	vec3 HitPos;
-	uint AdaptiveSample;
 	mat4 prevTrans;
 };
 
