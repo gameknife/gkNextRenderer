@@ -244,33 +244,12 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        VulkanBaseRenderer::Render(commandBuffer, imageIndex);
-
         if (tlasUpdateRequest_ > 0)
         {
             topAs_[0].Update(commandBuffer, tlasUpdateRequest_);
             tlasUpdateRequest_ = 0;
         }
-        //return;
-        
-        {
-            VkMemoryBarrier memoryBarrier{};
-            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-            memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT; // 从主机写入
-            memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // 渲染所需的读取
-        
-            vkCmdPipelineBarrier(
-                commandBuffer,
-                VK_PIPELINE_STAGE_HOST_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0,
-                sizeof(memoryBarrier) / sizeof(VkMemoryBarrier),
-                &memoryBarrier, 
-                0, 
-                nullptr, 
-                0,
-                nullptr); 
-        }
+        VulkanBaseRenderer::Render(commandBuffer, imageIndex);
 
 #if !ANDROID
         if(supportRayCast_)

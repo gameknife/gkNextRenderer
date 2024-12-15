@@ -24,6 +24,7 @@ layout(binding = 11, rgba16f) uniform image2D InOutDirectLight0;
 layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
 layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
+layout(binding = 15, rgba16f) uniform image2D PrevNormalBuffer;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -65,7 +66,7 @@ struct RayPayload
 bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, 10.0f);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, INF);
 	rayQueryProceedEXT(rayQuery);
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
 		RayPayload PayloadData;
@@ -111,19 +112,29 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
 		const vec4 lightColor = material.MaterialModel == MaterialDiffuseLight ? material.Diffuse : vec4(0);
 		
-		// may get from previous frame, if not, use the albedo and force lose a magic energy
-		bounceColor = texColor.rgb * texColor.rgb * material.Diffuse.rgb * iblColor * 0.5;
+		// 这其实是一个缺省的bounceColor，如果没有取到合适的cache样本，这个bounce的颜色直接乘以穿透的iblcolor不太能是一个好的值
+		bounceColor = texColor.rgb * texColor.rgb * material.Diffuse.rgb * iblColor * 0.9;  
+		//bounceColor *= vec3(50,0,0);
 		illumColor = lightColor.rgb;
 		
 		vec3 hitPos = origin + direction * PayloadData.HitDist;
-		vec4 hpos =  Camera.PrevViewProjection * vec4(hitPos, 1);
+		vec4 hpos =  Camera.PrevViewProjection * node.combinedPrevTS * vec4(hitPos, 1);
 		ivec2 size = imageSize(MiniGBuffer0);
 		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
 		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
 		{
 			return true;
 		}
-		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;// * 0.5;
+
+		vec3 PrevNormal = imageLoad(PrevNormalBuffer, ipos_new).rgb;
+		// compare prevnormal and normal
+		if(dot(PrevNormal, normal) < 0.5)
+		{
+			return true;
+		}
+		
+		// 这里从屏幕空间取出DirectLight的信息，IBL和SunLight，但这个hpos不一定是有效的
+		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;
 		
 		return true;
 	}
@@ -155,6 +166,7 @@ void main() {
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(InOutDirectLight1, ipos, vec4(0));
 		imageStore(OutAlbedoBuffer, ipos, vec4(iblColor,1.0));
+		imageStore(OutNormalBuffer, ipos, vec4(0,1,0,1));
 		return;
 	}
 
@@ -162,7 +174,7 @@ void main() {
     
 	// visibility fetch hit point, if primary ray, start from here
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
-    
+	NodeProxy node = NodeProxies[vBuffer.x - 1];
     Material mat = Materials[v.MaterialIndex];
     vec4 albedo = mat.Diffuse;
     if (mat.DiffuseTextureId >= 0)
@@ -198,10 +210,10 @@ void main() {
 
 	// calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
-	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
 
-	vec4 prevFrameHPos = Camera.PrevViewProjection * vec4(v.Position, 1);
-	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5 + 0.5) * vec2(size));
+	vec4 prevFrameHPos = Camera.PrevViewProjection * node.combinedPrevTS * vec4(v.Position, 1);
+	vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5) * vec2(size));
 	vec2 motion = prevfpos - currfpos;
 	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 	
@@ -215,6 +227,13 @@ void main() {
 		(RandomFloat(RandomSeed) < metalProb ? ggxSampling(RandomSeed, mat.Fuzziness, reflected) : 
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere1(RandomSeed), outwardNormal ) : ray_dir
 		);
+		
+		vec3 posOffset = vec3(0);
+		if(mat.MaterialModel == MaterialDielectric)
+		{
+			albedo = vec4(1,1,1,1);
+			posOffset = ray_dir * 0.1;
+		}
 
 		// if miss, sample the sky
 		vec3 bounceSingle = vec3(0);
@@ -225,9 +244,9 @@ void main() {
 			albedoSingle = vec4(1);
 		}
 		
-		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir , Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
 		vec3 illumColor = vec3(0.0);
-		bool hit = TraceRay(ipos, v.Position, trace_dir, iblColor, bounceSingle, illumColor);
+		bool hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;
@@ -236,30 +255,7 @@ void main() {
 		{
 			irradianceColor += albedoSingle.rgb * illumColor;
 		}
-		
 		bounceColor += albedoSingle.rgb * bounceSingle;
-
-//		if(s == 0)
-//		{
-//			// after the first spp, we could judge if reproject miss with previous primitive buffer
-//			vec2 prevfpos = vec2(ipos) + motion.rg;
-//			ivec2 previpos = ivec2( floor(ipos + motion.rg) );
-//
-//			if( length(motion.xy) > 0.01 )
-//			{
-//				uint prev_primitive_index0 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 0)).r;
-//				uint prev_primitive_index1 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(0, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(0, 1)).r;
-//				uint prev_primitive_index2 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 0)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 0)).r;
-//				uint prev_primitive_index3 = isEvenFrame ? imageLoad(MiniGBuffer1, previpos + ivec2(1, 1)).r : imageLoad(MiniGBuffer0, previpos + ivec2(1, 1)).r;
-//
-//				bool miss = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(vBuffer.r)));
-//
-//				if (miss)
-//				{
-//					sampleTimes = max(min(32, Camera.NumberOfSamples * Camera.TemporalFrames / Camera.AdaptiveSteps), sampleTimes);
-//				}
-//			}
-//		}
 	}
 	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;
