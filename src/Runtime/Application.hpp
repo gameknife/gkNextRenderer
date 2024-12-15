@@ -13,7 +13,6 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
-class BenchMarker;
 class NextRendererApplication;
 
 class NextGameInstanceBase
@@ -67,12 +66,9 @@ namespace NextRenderer
 		Loading,
 		AsyncPreparing,
 	};
-
 	std::string GetBuildVersion();
-
 	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 }
-
 
 typedef std::function<bool (double DeltaSeconds)> TickedTask;
 typedef std::function<bool ()> DelayedTask;
@@ -168,13 +164,10 @@ protected:
 	void OnDropFile(int path_count, const char* paths[]);
 	
 private:
-
 	void LoadScene(std::string sceneFileName);
-	void TickBenchMarker();
 
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
-	std::unique_ptr<BenchMarker> benchMarker_;
 
 	int rendererType = 0;
 	mutable UserSettings userSettings_{};
@@ -186,11 +179,7 @@ private:
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::shared_ptr<Assets::Scene> scene_;
-#if WITH_EDITOR
-	std::unique_ptr<class EditorInterface> userInterface_;
-#else
 	std::unique_ptr<class UserInterface> userInterface_;
-#endif
 
 	NextRenderer::EApplicationStatus status_{};
 

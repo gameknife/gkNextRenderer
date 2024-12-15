@@ -11,7 +11,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
-#include "BenchMark.hpp"
+#include "ScreenShot.hpp"
 
 #include <iostream>
 #include <fmt/format.h>
@@ -146,11 +146,6 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
-
-#if WITH_EDITOR
-    userSettings.ShowEdge = true;
-#endif
-
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -182,13 +177,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
-
-    // Initialize BenchMarker
-    if(options.Benchmark)
-    {
-        benchMarker_ = std::make_unique<BenchMarker>();
-    }
-    
+        
     // Initialize Renderer
     renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
     rendererType = options.RendererType;
@@ -218,7 +207,6 @@ NextRendererApplication::~NextRendererApplication()
     scene_.reset();
     renderer_.reset();
     window_.reset();
-    benchMarker_.reset();
 
     Vulkan::Window::TerminateGLFW();
 }
@@ -278,19 +266,13 @@ bool NextRendererApplication::Tick()
 
     // Setting Update
     previousSettings_ = userSettings_;
-
-    // Benchmark Update
-    if(status_ == NextRenderer::EApplicationStatus::Running)
-    {
-        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickBenchmark", "");
-        TickBenchMarker();
-    }
-
+    
     // Renderer Tick
 #if !ANDROID
     glfwPollEvents();
 #endif
     // tick
+    if (status_ == NextRenderer::EApplicationStatus::Running)
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
         gameInstance_->OnTick(deltaSeconds_);
@@ -406,7 +388,7 @@ bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
 
 void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
-    BenchMarker::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
+    ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
 glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
@@ -753,9 +735,6 @@ void NextRendererApplication::OnRendererCreateSwapChain()
 {
     if(userInterface_.get() == nullptr)
     {
-#if WITH_EDITOR
-        userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
-#else
         userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
                                    userSettings_, [this]()->void
                                    {
@@ -764,7 +743,6 @@ void NextRendererApplication::OnRendererCreateSwapChain()
                                    [this]()->void{
             gameInstance_->OnInitUI();
         }));
-#endif
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
@@ -1074,12 +1052,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
 
         
         totalFrames_ = 0;
-
-        if(benchMarker_)
-        {
-            benchMarker_->OnSceneStart(GetWindow().GetTime());
-        }
-
+        
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
 
@@ -1092,22 +1065,4 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
-}
-
-void NextRendererApplication::TickBenchMarker()
-{
-    if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
-    {
-        // Benchmark is done, report the results.
-        benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex]);
-        
-        if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
-            SceneList::AllScenes.size() - 1)
-        {
-            GetWindow().Close();
-        }
-        
-        userSettings_.SceneIndex += 1;
-        RequestLoadScene(SceneList::AllScenes[userSettings_.SceneIndex]);
-    }
 }
