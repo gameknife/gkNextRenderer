@@ -517,6 +517,7 @@ void UserInterface::DrawSettings()
 		{
 			ImGui::Text("%s", LOCTEXT("Profiler"));
 			ImGui::Separator();
+			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &Settings().ShowVisualDebug);
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 			ImGui::NewLine();

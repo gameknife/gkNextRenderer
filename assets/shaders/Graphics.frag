@@ -40,5 +40,6 @@ void main()
 	OutColor = vec4(1);
 	OutColor.rgb = LinearToST2084UE(c.rgb * Camera.PaperWhiteNit / 230.0);
 
-	
+	OutColor.rgb = vec3(0);
+	OutColor.a = 0.25;
 }
