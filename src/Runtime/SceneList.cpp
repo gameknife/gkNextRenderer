@@ -163,6 +163,7 @@ std::vector<std::string> SceneList::AllScenes;
 void SceneList::ScanScenes()
 {
     std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/models/");
+    fmt::print("Scaning dir: {}\n", path);
     for (const auto& entry : std::filesystem::directory_iterator(path))
     {
         std::filesystem::path filename = entry.path().filename();
@@ -170,6 +171,7 @@ void SceneList::ScanScenes()
         if (ext != ".glb" && ext != ".obj") continue;
         AllScenes.push_back(absolute(path / filename).string());
     }
+    fmt::print("Scene found: {}\n", AllScenes.size());
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)

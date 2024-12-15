@@ -47,7 +47,7 @@ UserInterface::UserInterface(
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
-	UserSettings& userSettings, std::function<void()> func) :
+	UserSettings& userSettings, std::function<void()> funcPreConfig, std::function<void()> funcInit) :
 	userSettings_(userSettings),
 	engine_(engine)
 {
@@ -70,6 +70,8 @@ UserInterface::UserInterface(
 	// No ini file.
 	io.IniFilename = "imgui.ini";
 
+	funcPreConfig();
+	
 	// Initialise ImGui GLFW adapter
 #if !ANDROID
 	if (!ImGui_ImplGlfw_InitForVulkan(window.Handle(), true))
@@ -152,9 +154,9 @@ UserInterface::UserInterface(
 	}
 #endif
 
-	if(func != nullptr)
+	if(funcInit != nullptr)
 	{
-		func();
+		funcInit();
 	}
 
 	Vulkan::SingleTimeCommands::Submit(commandPool, [] (VkCommandBuffer commandBuffer)
@@ -304,6 +306,14 @@ void UserInterface::PreRender()
 	ImGui_ImplAndroid_NewFrame();
 #endif
 	ImGui::NewFrame();
+
+
+	// update texture to ui
+	uint32_t maxId = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
+	for ( uint32_t idx = 0; idx < maxId; ++idx)
+	{
+		RequestImTextureId(idx);
+	}
 }
 
 void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
@@ -335,6 +345,13 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	vkCmdEndRenderPass(commandBuffer);
+
+	auto& io = ImGui::GetIO();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const
@@ -458,10 +475,10 @@ void UserInterface::DrawSettings()
 			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
 #else
 			ImGui::Checkbox(LOCTEXT("Use JBF"), &Settings().Denoiser);
-			// ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 1.0f, "%.2f");
-			// ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
-			// ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
-			// ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 2.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
+			ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
 #endif
 			ImGui::NewLine();
 		}
@@ -500,13 +517,14 @@ void UserInterface::DrawSettings()
 		{
 			ImGui::Text("%s", LOCTEXT("Profiler"));
 			ImGui::Separator();
+			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &Settings().ShowVisualDebug);
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 			ImGui::NewLine();
 
 			ImGui::Text("%s", LOCTEXT("Performance"));
 			ImGui::Separator();
-			uint32_t min = 0, max = 256;
+			uint32_t min = 8, max = 32;
 			ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
 		}
 	}

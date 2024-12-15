@@ -34,7 +34,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	ray.EmitColor = vec4(0);
 
 	// Global Sun Check
-	if(Camera.HasSun)
+	if(Camera.HasSun && ray.BounceCount <= 2)
 	{
 		const vec3 hitpos = ray.HitPos;
 		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos_0_5degree), Camera.SunDirection.xyz);
@@ -82,7 +82,6 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
-	ray.AdaptiveSample = max(4, ray.AdaptiveSample);
 }
 
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
@@ -91,7 +90,6 @@ void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject l
 	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
-	ray.AdaptiveSample = max(4, ray.AdaptiveSample);
 }
 
 void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
@@ -125,7 +123,6 @@ void ScatterDieletric(inout RayPayload ray, const Material m, const LightObject 
 	
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
-	ray.AdaptiveSample = max(Camera.TemporalFrames / 8, ray.AdaptiveSample);
 }
 
 // Mixture

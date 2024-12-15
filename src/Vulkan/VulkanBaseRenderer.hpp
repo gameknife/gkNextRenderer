@@ -312,20 +312,16 @@ namespace Vulkan
 		std::function<void()> DelegateBeforeNextTick;
 		std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> DelegateGetUniformBufferObject;
 		std::function<void(VkCommandBuffer, uint32_t)> DelegatePostRender;
-		
-		// std::function<void()> OnScroll;
-		// std::function<void()> OnDropFile;
-		// std::function<void()> OnFocus;
 
 		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
 	
 		std::weak_ptr<Assets::Scene> scene_;
 		
-		bool isWireFrame_{};
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
 		bool supportDenoiser_ {};
 		bool supportRayCast_ {};
+		bool showWireframe_ {};
 		int frameCount_{};
 		bool forceSDR_{};
 		bool visualDebug_{};

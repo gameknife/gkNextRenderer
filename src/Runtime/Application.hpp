@@ -13,7 +13,6 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
-class BenchMarker;
 class NextRendererApplication;
 
 class NextGameInstanceBase
@@ -25,8 +24,9 @@ public:
 	virtual void OnTick(double deltaSeconds) =0;
 	virtual void OnDestroy() =0;
 	virtual bool OnRenderUI() =0;
+	virtual void OnPreConfigUI() {}
 	virtual void OnInitUI() {}
-	virtual void OnRayHitResponse(Assets::RayCastResult& result) =0;
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) {};
 
 	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
 
@@ -66,12 +66,9 @@ namespace NextRenderer
 		Loading,
 		AsyncPreparing,
 	};
-
 	std::string GetBuildVersion();
-
 	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 }
-
 
 typedef std::function<bool (double DeltaSeconds)> TickedTask;
 typedef std::function<bool ()> DelayedTask;
@@ -142,12 +139,15 @@ public:
 
 	// scene loading
 	void RequestLoadScene(std::string sceneFileName);
+
+	Vulkan::Window& GetWindow() {return *window_;}
 	
-#if !WITH_EDITOR
-	class UserInterface* GetUserInterface() {return userInterface_.get();};
-#endif
+	class UserInterface* GetUserInterface() {return userInterface_.get();}
+
+	// monitor info
+	glm::ivec2 GetMonitorSize(int monitorIndex = 0) const;
+	
 protected:
-	
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
 	void OnRendererDeviceSet();
 	void OnRendererCreateSwapChain();
@@ -163,17 +163,11 @@ protected:
 	void OnScroll(double xoffset, double yoffset);
 	void OnDropFile(int path_count, const char* paths[]);
 	
-	Vulkan::Window& GetWindow() {return *window_;}
-
-	
 private:
-
 	void LoadScene(std::string sceneFileName);
-	void TickBenchMarker();
 
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
-	std::unique_ptr<BenchMarker> benchMarker_;
 
 	int rendererType = 0;
 	mutable UserSettings userSettings_{};
@@ -185,11 +179,7 @@ private:
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::shared_ptr<Assets::Scene> scene_;
-#if WITH_EDITOR
-	std::unique_ptr<class EditorInterface> userInterface_;
-#else
 	std::unique_ptr<class UserInterface> userInterface_;
-#endif
 
 	NextRenderer::EApplicationStatus status_{};
 

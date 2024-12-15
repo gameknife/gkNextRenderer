@@ -11,7 +11,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
-#include "BenchMark.hpp"
+#include "ScreenShot.hpp"
 
 #include <iostream>
 #include <fmt/format.h>
@@ -27,23 +27,13 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
 
-#if WITH_EDITOR
-#include "Editor/EditorCommand.hpp"
-#include "Editor/EditorInterface.hpp"
-#endif
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 
-#if !WITH_GAME
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
-{
-    return std::make_unique<NextGameInstanceVoid>(config,options,engine);
-}
-#endif
+ENGINE_API Options* GOption = nullptr;
 
 namespace NextRenderer
 {
@@ -65,7 +55,9 @@ namespace NextRenderer
                     if(!ptr->supportRayTracing_) {
                         break;
                     }
+#if !ANDROID
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
+#endif
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
@@ -127,7 +119,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
-    userSettings.TAA = true; // makes reproject failed
+    userSettings.TAA = true;
 
     userSettings.ShowSettings = !options.Benchmark;
     userSettings.ShowOverlay = true;
@@ -149,16 +141,11 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.RequestRayCast = false;
 
     userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 50.0f;
+    userSettings.DenoiseSigmaLum = 25.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
-
-#if WITH_EDITOR
-    userSettings.ShowEdge = true;
-#endif
-
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -172,6 +159,8 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+
+    Vulkan::Window::InitGLFW();
     // Create Window
     Vulkan::WindowConfig windowConfig
     {
@@ -188,13 +177,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
-
-    // Initialize BenchMarker
-    if(options.Benchmark)
-    {
-        benchMarker_ = std::make_unique<BenchMarker>();
-    }
-    
+        
     // Initialize Renderer
     renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
     rendererType = options.RendererType;
@@ -215,32 +198,6 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
 
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-
-    // EditorCommand, need Refactoring
-#if WITH_EDITOR    
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
-        GetWindow().Close();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
-        GetWindow().Maximum();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
-        GetWindow().Minimize();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
-        //userSettings_.SceneIndex = SceneList::AddExternalScene(args);
-        RequestLoadScene(args);
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
-        Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
-        userSettings_.SkyIdx = 0;
-        return true;
-    });
-#endif
 }
 
 NextRendererApplication::~NextRendererApplication()
@@ -250,7 +207,8 @@ NextRendererApplication::~NextRendererApplication()
     scene_.reset();
     renderer_.reset();
     window_.reset();
-    benchMarker_.reset();
+
+    Vulkan::Window::TerminateGLFW();
 }
 
 void NextRendererApplication::Start()
@@ -267,6 +225,7 @@ void NextRendererApplication::Start()
 
     gameInstance_->OnInit();
 
+    fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
@@ -307,23 +266,13 @@ bool NextRendererApplication::Tick()
 
     // Setting Update
     previousSettings_ = userSettings_;
-
-    // Benchmark Update
-    if(status_ == NextRenderer::EApplicationStatus::Running)
-    {
-        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickBenchmark", "");
-        TickBenchMarker();
-    }
-
+    
     // Renderer Tick
-#if ANDROID
-    renderer_->DrawFrame();
-    totalFrames_ += 1;
-    return false;
-#else
+#if !ANDROID
     glfwPollEvents();
-
+#endif
     // tick
+    if (status_ == NextRenderer::EApplicationStatus::Running)
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
         gameInstance_->OnTick(deltaSeconds_);
@@ -375,9 +324,11 @@ bool NextRendererApplication::Tick()
         PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
         renderer_->DrawFrame();
     }
-    
-    window_->attemptDragWindow();
     totalFrames_ += 1;
+#if ANDROID
+    return false;
+#else
+    window_->attemptDragWindow();
     return glfwWindowShouldClose( window_->Handle() ) != 0;
 #endif
 }
@@ -437,7 +388,7 @@ bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
 
 void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
-    BenchMarker::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
+    ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
 glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
@@ -541,6 +492,72 @@ void NextRendererApplication::RequestScreenShot(std::string filename)
     SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
 }
 
+// 生成一个随机抖动偏移
+glm::vec2 GenerateJitter(float screenWidth, float screenHeight) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(-0.5f, 0.5f);
+
+    float jitterX = static_cast<float>(dis(gen)) / screenWidth;
+    float jitterY = static_cast<float>(dis(gen)) / screenHeight;
+
+    return glm::vec2(jitterX, jitterY);
+}
+
+// 创建抖动矩阵
+glm::mat4 CreateJitterMatrix(float jitterX, float jitterY) {
+    glm::mat4 jitterMatrix = glm::mat4(1.0f);
+    jitterMatrix[3][0] = jitterX;
+    jitterMatrix[3][1] = jitterY;
+    return jitterMatrix;
+}
+
+// 调制投影矩阵
+glm::mat4 RandomJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+    glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
+    glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
+    return jitterMatrix * projectionMatrix;
+}
+
+// 生成Halton序列的单一维度
+float HaltonSequence(int index, int base) {
+    float f = 1.0f;
+    float result = 0.0f;
+    while (index > 0) {
+        f = f / base;
+        result = result + f * (index % base);
+        index = index / base;
+    }
+    return result;
+}
+
+// 生成2D Halton序列
+std::vector<glm::vec2> GenerateHaltonSequence(int count) {
+    std::vector<glm::vec2> sequence;
+    for (int i = 0; i < count; ++i) {
+        float x = HaltonSequence(i + 1, 2);  // 基数2
+        float y = HaltonSequence(i + 1, 3);  // 基数3
+        sequence.push_back(glm::vec2(x, y));
+    }
+    return sequence;
+}
+
+glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+    glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
+    glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
+    return jitterMatrix * projectionMatrix;
+}
+
+glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
+{
+    glm::ivec2 pos{0,0};
+    glm::ivec2 size{1920,1080};
+#if !ANDROID
+    glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &pos.x, &pos.y, &size.x, &size.y);
+#endif
+    return size;
+}
+
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
@@ -557,8 +574,20 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
+    
+    if (userSettings_.TAA)
+    {
+        // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        // glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        // glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
+        // //ubo.Projection = jitterMatrix * ubo.Projection;
+        //
+        // ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        // ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+    }
+    
     ubo.Projection[1][1] *= -1;
-
+    
     // handle android vulkan pre rotation
 #if ANDROID
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
@@ -706,14 +735,14 @@ void NextRendererApplication::OnRendererCreateSwapChain()
 {
     if(userInterface_.get() == nullptr)
     {
-#if WITH_EDITOR
-        userInterface_.reset(new EditorInterface(renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer()));
-#else
         userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_, [this]()->void{
+                                   userSettings_, [this]()->void
+                                   {
+                                       gameInstance_->OnPreConfigUI();
+                                   },
+                                   [this]()->void{
             gameInstance_->OnInitUI();
         }));
-#endif
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
@@ -1023,12 +1052,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
 
         
         totalFrames_ = 0;
-
-        if(benchMarker_)
-        {
-            benchMarker_->OnSceneStart(GetWindow().GetTime());
-        }
-
+        
         renderer_->OnPostLoadScene();
         renderer_->CreateSwapChain();
 
@@ -1041,22 +1065,4 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
-}
-
-void NextRendererApplication::TickBenchMarker()
-{
-    if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
-    {
-        // Benchmark is done, report the results.
-        benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex]);
-        
-        if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
-            SceneList::AllScenes.size() - 1)
-        {
-            GetWindow().Close();
-        }
-        
-        userSettings_.SceneIndex += 1;
-        RequestLoadScene(SceneList::AllScenes[userSettings_.SceneIndex]);
-    }
 }

@@ -49,6 +49,17 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 #define MAX_SAMPLE 32
 
+const vec2 haltonSeq[8] = vec2[](
+vec2(0.5, 0.3333),
+vec2(0.25, 0.6667),
+vec2(0.75, 0.1111),
+vec2(0.125, 0.4444),
+vec2(0.625, 0.7778),
+vec2(0.375, 0.2222),
+vec2(0.875, 0.5556),
+vec2(0.0625, 0.8889)
+);
+
 void main() {
 
     const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
@@ -83,10 +94,6 @@ void main() {
 	{
 		sampleTimes = min(MAX_SAMPLE * Camera.NumberOfSamples, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps));
 	}
-
-    #if MOBILE
-        sampleTimes = 1;
-    #endif
     
     for (uint s = 0; s < sampleTimes; ++s)
 	{
@@ -97,7 +104,7 @@ void main() {
 		if( Camera.TAA )
 		{
             // here should offset a non-random offset and consider in motion vector
-            uvOffset = (RandomFloat2(Ray.RandomSeed) - vec2(0.5,0.5)) / isize;
+            uvOffset = (haltonSeq[Camera.TotalFrames % 8] - vec2(0.5,0.5)) / isize;
 		}
         uv += uvOffset;
 		vec2 offset = Camera.Aperture/2 * RandomInUnitDisk(Ray.RandomSeed);
@@ -106,21 +113,17 @@ void main() {
         vec4 direction = Camera.ModelViewInverse * vec4(normalize(target.xyz * Camera.FocusDistance - vec3(offset, 0)), 0);
 
         // Path Tracing
-		
         vec3 rayColor = vec3(1);
-
 	    Ray.BounceCount = 0;
-        Ray.AdaptiveSample = 1;
         bool exit = GetRayColor(origin.xyz, direction.xyz, rayColor);
         if(s == 0)
         {
             FetchPrimaryRayInfo(isize, origin.xyz, direction.xyz, gbuffer, albedo, motionvector, primitiveId);
-            //motionvector.xy += RandomFloat2(Ray.RandomSeed) * 0.02f; // add a fuzzy short offset
         }
         
         if(!exit)
         {
-            for(uint b = 0; b < Camera.MaxNumberOfBounces; ++b)
+            for(uint b = 0; b < Camera.MaxNumberOfBounces - 1; ++b)
             {	
                 if( GetRayColor(origin.xyz, direction.xyz, rayColor) )
                 {
@@ -130,8 +133,7 @@ void main() {
         }
         
         pixelColor += rayColor;
-
-        #if !MOBILE
+        
         if(s == 0)
         {
             // after the first spp, we could judge if reproject miss with previous primitive buffer
@@ -149,7 +151,6 @@ void main() {
                 }
             }
         }
-        #endif
     }
     
     //imageStore(GBufferImage, ipos, gbuffer);
