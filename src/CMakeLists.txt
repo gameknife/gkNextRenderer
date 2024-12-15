@@ -36,6 +36,11 @@ file(GLOB_RECURSE src_files_engine
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
+file(GLOB_RECURSE src_files_gkbenchmark "Application/gkNextBenchmark/*")
+
+
+
+
 # libray and app
 if ( ANDROID )
 add_library(gkNextEngine
@@ -60,6 +65,10 @@ add_library(gkNextEngine
 )
 add_executable(gkNextRenderer
 	${src_files_gkrenderer}
+	DesktopMain.cpp
+)
+add_executable(gkNextBenchmark
+	${src_files_gkbenchmark}
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor
@@ -95,6 +104,7 @@ else()
 set(AllTargets 
 gkNextEngine
 gkNextRenderer
+gkNextBenchmark
 gkNextEditor
 Packager
 MagicaLego 
