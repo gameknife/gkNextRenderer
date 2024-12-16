@@ -324,7 +324,7 @@ bool NextRendererApplication::Tick()
         PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
         renderer_->DrawFrame();
     }
-    totalFrames_ += 1;
+    totalFrames_ = renderer_->FrameCount();
 #if ANDROID
     return false;
 #else
