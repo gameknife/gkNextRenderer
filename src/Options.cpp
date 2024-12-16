@@ -13,7 +13,6 @@ Options::Options(const int argc, const char* argv[])
 	benchmark.add_options()
 		("next-scenes", bool_switch(&BenchmarkNextScenes)->default_value(false), "Load the next scene once the sample or time limit is reached.")
 		("max-time", value<uint32_t>(&BenchmarkMaxTime)->default_value(10), "The benchmark time limit per scene (in seconds).")
-		("max-frame", value<uint32_t>(&BenchmarkMaxFrame)->default_value(0), "The benchmark frame limit per scene.")
 		;
 
 	options_description renderer("Renderer options", lineLength);

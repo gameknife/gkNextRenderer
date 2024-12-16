@@ -102,7 +102,6 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.Benchmark = options.Benchmark;
     userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
     userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-    userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
     userSettings.SceneIndex = options.SceneIndex;
 
     if(options.SceneName != "")

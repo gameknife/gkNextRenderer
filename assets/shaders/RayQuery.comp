@@ -47,7 +47,7 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
-#define MAX_SAMPLE 32
+#define MAX_SAMPLE 4
 
 const vec2 haltonSeq[8] = vec2[](
 vec2(0.5, 0.3333),
