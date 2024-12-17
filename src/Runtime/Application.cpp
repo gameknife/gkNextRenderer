@@ -570,7 +570,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 
     ubo.ModelView = modelViewController_.ModelView();
     gameInstance_->OverrideModelView(ubo.ModelView);
-    
+    scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     

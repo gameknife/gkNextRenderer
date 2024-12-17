@@ -78,7 +78,8 @@ namespace Assets
 		void MarkDirty() {sceneDirty_ = true;}
 		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
-		
+
+		void OverrideModelView(glm::mat4& OutMatrix) const;
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
@@ -119,6 +120,9 @@ namespace Assets
 		
 		std::vector<NodeProxy> nodeProxys;
 		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
+
+		glm::mat4 overrideModelView;
+		bool requestOverrideModelView = false;
 	};
 
 }
