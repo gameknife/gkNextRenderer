@@ -40,13 +40,14 @@ namespace Assets
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
-                       std::vector<AnimationTrack>& tracks)
+                       std::vector<AnimationTrack>& tracks, std::vector<Assets::Camera>& cameras)
     {
         nodes_ = std::move(nodes);
         models_ = std::move(models);
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
+        cameras_ = std::move(cameras);
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)

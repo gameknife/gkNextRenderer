@@ -41,7 +41,8 @@ namespace Assets
 			std::vector<Model>& models,
 			std::vector<Material>& materials,
 			std::vector<LightObject>& lights,
-			std::vector<AnimationTrack>& tracks);
+			std::vector<AnimationTrack>& tracks,
+			std::vector<Assets::Camera>& cameras);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
 
@@ -80,6 +81,10 @@ namespace Assets
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 
 		void OverrideModelView(glm::mat4& OutMatrix) const;
+
+		const std::vector<Assets::Camera>& GetCameras() const { return cameras_; }
+		const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
+		
 	private:
 		std::vector<Material> materials_;
 		std::vector<Model> models_;
@@ -123,6 +128,9 @@ namespace Assets
 
 		glm::mat4 overrideModelView;
 		bool requestOverrideModelView = false;
+
+		std::vector<Assets::Camera> cameras_;
+		Assets::EnvironmentSetting envSettings_;
 	};
 
 }

@@ -153,7 +153,7 @@ namespace Assets
         genTangSpaceDefault(&mikktspace_context);
     }
     
-    void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
+    void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& out_camera, std::vector<Assets::LightObject>& out_lights,
         tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
@@ -233,7 +233,7 @@ namespace Assets
         }
     }
     
-    void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+    void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
@@ -769,7 +769,7 @@ namespace Assets
         }
     }
 
-    void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)
+    void Model::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
         glm::vec3 boundsMin, boundsMax;

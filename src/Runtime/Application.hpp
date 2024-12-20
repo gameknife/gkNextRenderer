@@ -172,7 +172,6 @@ private:
 	int rendererType = 0;
 	mutable UserSettings userSettings_{};
 	UserSettings previousSettings_{};
-	Assets::CameraInitialSate cameraInitialSate_{};
 
 	mutable ModelViewController modelViewController_{};
 
@@ -198,4 +197,6 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
 	
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
+
+	Assets::EnvironmentSetting envSettings_;
 };

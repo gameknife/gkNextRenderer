@@ -428,7 +428,7 @@ void UserInterface::DrawSettings()
 			}
 			
 			std::vector<const char*> camerasList;
-			for (const auto& cam : Settings().cameras)
+			for (const auto& cam : GetEngine().GetScene().GetCameras())
 			{
 				camerasList.emplace_back(cam.name.c_str());
 			}
@@ -450,7 +450,7 @@ void UserInterface::DrawSettings()
 			ImGui::PopItemWidth();
 			if(prevCameraIdx != Settings().CameraIdx)
 			{
-				auto &cam = Settings().cameras[Settings().CameraIdx];
+				auto &cam = GetEngine().GetScene().GetCameras()[Settings().CameraIdx];
 				Settings().RawFieldOfView = cam.FieldOfView;
 				Settings().Aperture = cam.Aperture;
 				Settings().FocusDistance = cam.FocalDistance;

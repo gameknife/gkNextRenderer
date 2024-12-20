@@ -254,7 +254,7 @@ bool NextRendererApplication::Tick()
     {
         userSettings_.FieldOfView = userSettings_.RawFieldOfView;
     }
-    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
+    modelViewController_.UpdateCamera(envSettings_.ControlSpeed, deltaSeconds_);
 
     // Scene Update
     if(scene_)
@@ -561,10 +561,8 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 {
     if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
     {
-		modelViewController_.Reset((userSettings_.cameras[userSettings_.CameraIdx]).ModelView);
+		modelViewController_.Reset((GetScene().GetCameras()[userSettings_.CameraIdx]).ModelView);
     }
-
-    const auto& init = cameraInitialSate_;
 
     Assets::UniformBufferObject ubo = {};
 
@@ -987,11 +985,8 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
-    std::shared_ptr< Assets::CameraInitialSate > cameraState = std::make_shared< Assets::CameraInitialSate >();
+    std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
     
-    cameraInitialSate_.cameras.clear();
-    cameraInitialSate_.CameraIdx = -1;
-
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
@@ -1014,7 +1009,7 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        cameraInitialSate_ = *cameraState;
+        envSettings_ = *cameraState;
 
         gameInstance_->OnSceneUnloaded();
         
@@ -1022,32 +1017,33 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
         
-        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
+        scene_->Reload(*nodes, *models, *materials, *lights, *tracks, envSettings_.cameras);
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
         
         renderer_->SetScene(scene_);
 
-        userSettings_.RawFieldOfView = cameraInitialSate_.FieldOfView;
-        userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
-        userSettings_.Aperture = cameraInitialSate_.Aperture;
-        userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-        userSettings_.HasSky = cameraInitialSate_.HasSky;
-        if(cameraInitialSate_.HasSky)
+        userSettings_.RawFieldOfView = envSettings_.FieldOfView;
+        userSettings_.FieldOfView = envSettings_.FieldOfView;
+        userSettings_.Aperture = envSettings_.Aperture;
+        userSettings_.FocusDistance = envSettings_.FocusDistance;
+        userSettings_.HasSky = envSettings_.HasSky;
+        if(envSettings_.HasSky)
         {
-            userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
-            userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
-            userSettings_.SkyRotation = cameraInitialSate_.SkyRotation;
+            userSettings_.SkyIdx = envSettings_.SkyIdx;
+            userSettings_.SkyIntensity = envSettings_.SkyIntensity;
+            userSettings_.SkyRotation = envSettings_.SkyRotation;
         }
-        userSettings_.HasSun = cameraInitialSate_.HasSun;
-        if(cameraInitialSate_.HasSun)
+        userSettings_.HasSun = envSettings_.HasSun;
+        if(envSettings_.HasSun)
         {
-            userSettings_.SunRotation = cameraInitialSate_.SunRotation;
-            userSettings_.SunLuminance = cameraInitialSate_.SunIntensity;
+            userSettings_.SunRotation = envSettings_.SunRotation;
+            userSettings_.SunLuminance = envSettings_.SunIntensity;
         }
-        userSettings_.cameras = cameraInitialSate_.cameras;
-        userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
+        userSettings_.CameraIdx = 0;
 
-        modelViewController_.Reset(cameraInitialSate_.ModelView);
+        modelViewController_.Reset(envSettings_.ModelView);
+
+        
 
         
         totalFrames_ = 0;

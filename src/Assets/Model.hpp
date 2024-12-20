@@ -23,7 +23,7 @@ namespace Assets
         float FocalDistance;
     };
 
-    struct CameraInitialSate
+    struct EnvironmentSetting
     {
         glm::mat4 ModelView;
         float FieldOfView;
@@ -130,7 +130,7 @@ namespace Assets
     public:
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 
-        static void AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models);
+        static void AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
 
         static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
                                      std::vector<Material>& materials,
@@ -145,7 +145,7 @@ namespace Assets
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+        static void LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                                   std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry
