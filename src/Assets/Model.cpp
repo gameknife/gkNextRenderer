@@ -482,14 +482,6 @@ namespace Assets
 
         // default auto camera
         Model::AutoFocusCamera(cameraInit, models);
-        cameraInit.FieldOfView = 20;
-        cameraInit.Aperture = 0.0f;
-        cameraInit.FocusDistance = 1000.0f;
-        cameraInit.ControlSpeed = 5.0f;
-        cameraInit.GammaCorrection = true;
-        cameraInit.HasSky = true;
-        cameraInit.HasSun = false;
-        cameraInit.SkyIdx = 0;
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))

@@ -27,19 +27,8 @@ struct UserSettings final
 	bool TAA;
 
 	// Camera
-	float FieldOfView;
-	float RawFieldOfView;
-	float Aperture;
-	float FocusDistance;
 	bool RequestRayCast;
-
-	bool HasSky;
-	float SkyRotation;
-	bool HasSun;
-	float SunRotation;
-	float SunLuminance;
-	float SkyIntensity;
-	int SkyIdx, CameraIdx;
+	int CameraIdx;
 
 	// Profiler
 	bool ShowVisualDebug;

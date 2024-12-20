@@ -132,10 +132,6 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.Denoiser = options.Benchmark ? false : !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
-
-    userSettings.SunRotation = 0.5f;
-    userSettings.SunLuminance = 500.f;
-    userSettings.SkyIntensity = 100.f;
     
     userSettings.RequestRayCast = false;
 
@@ -249,12 +245,7 @@ bool NextRendererApplication::Tick()
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
 
     // Camera Update
-    userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
-    if ( glm::abs(userSettings_.RawFieldOfView - userSettings_.FieldOfView) < 0.05f)
-    {
-        userSettings_.FieldOfView = userSettings_.RawFieldOfView;
-    }
-    modelViewController_.UpdateCamera(envSettings_.ControlSpeed, deltaSeconds_);
+    modelViewController_.UpdateCamera(scene_->GetEnvSettings().ControlSpeed, deltaSeconds_);
 
     // Scene Update
     if(scene_)
@@ -569,7 +560,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.ModelView = modelViewController_.ModelView();
     gameInstance_->OverrideModelView(ubo.ModelView);
     scene_->OverrideModelView(ubo.ModelView);
-    ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
+    ubo.Projection = glm::perspective(glm::radians(scene_->GetEnvSettings().FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     
     if (userSettings_.TAA)
@@ -624,7 +615,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
         {
             if(rayResult.Hitted )
             {
-                userSettings_.FocusDistance = rayResult.T;
+                scene_->GetEnvSettings().FocusDistance = rayResult.T;
                 scene_->SetSelectedId(rayResult.InstanceId);
 
                 AddTickedTask([this, rayResult](double DeltaTimes)->bool
@@ -651,11 +642,11 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.SelectedId = scene_->GetSelectedId();
 
     // Camera Stuff
-    ubo.Aperture = userSettings_.Aperture;
-    ubo.FocusDistance = userSettings_.FocusDistance;
+    ubo.Aperture = scene_->GetEnvSettings().Aperture;
+    ubo.FocusDistance = scene_->GetEnvSettings().FocusDistance;
 
     // SceneStuff
-    ubo.SkyRotation = userSettings_.SkyRotation;
+    ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
     ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = userSettings_.NumberOfSamples;
@@ -665,13 +656,13 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
-    ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
-    ubo.SkyIntensity = userSettings_.SkyIntensity;
-    ubo.SkyIdx = userSettings_.SkyIdx;
-    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
-    ubo.HasSky = userSettings_.HasSky;
-    ubo.HasSun =userSettings_.HasSun && userSettings_.SunLuminance > 0;
+    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( scene_->GetEnvSettings().SunRotation * M_PI )), 0.75f, cosf(float( scene_->GetEnvSettings().SunRotation * M_PI )) )), 0.0f );
+    ubo.SunColor = glm::vec4(1,1,1, 0) * scene_->GetEnvSettings().SunIntensity;
+    ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
+    ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
+    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
+    ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.HasSun =scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -721,7 +712,6 @@ void NextRendererApplication::OnRendererDeviceSet()
     if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
         
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
-    
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
 
@@ -918,8 +908,8 @@ void NextRendererApplication::OnScroll(const double xoffset, const double yoffse
     {
         return;
     }
-    const auto prevFov = userSettings_.RawFieldOfView;
-    userSettings_.RawFieldOfView = std::clamp(
+    const auto prevFov = scene_->GetEnvSettings().FieldOfView;
+    scene_->GetEnvSettings().FieldOfView = std::clamp(
         static_cast<float>(prevFov - yoffset),
         UserSettings::FieldOfViewMinValue,
         UserSettings::FieldOfViewMaxValue);
@@ -936,13 +926,13 @@ void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
 
         if (ext == "glb")
         {
-            userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+            //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         }
 
         if( ext == "hdr")
         {
-            Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-            userSettings_.SkyIdx = 0;
+            //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+            //userSettings_.SkyIdx = 0;
         }
     }
 }
@@ -1008,8 +998,9 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
         
         const auto timer = std::chrono::high_resolution_clock::now();
-        
-        envSettings_ = *cameraState;
+
+        scene_->GetEnvSettings().Reset();
+        scene_->SetEnvSettings(*cameraState);
 
         gameInstance_->OnSceneUnloaded();
         
@@ -1017,35 +1008,14 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         renderer_->DeleteSwapChain();
         renderer_->OnPreLoadScene();
         
-        scene_->Reload(*nodes, *models, *materials, *lights, *tracks, envSettings_.cameras);
+        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
         
         renderer_->SetScene(scene_);
-
-        userSettings_.RawFieldOfView = envSettings_.FieldOfView;
-        userSettings_.FieldOfView = envSettings_.FieldOfView;
-        userSettings_.Aperture = envSettings_.Aperture;
-        userSettings_.FocusDistance = envSettings_.FocusDistance;
-        userSettings_.HasSky = envSettings_.HasSky;
-        if(envSettings_.HasSky)
-        {
-            userSettings_.SkyIdx = envSettings_.SkyIdx;
-            userSettings_.SkyIntensity = envSettings_.SkyIntensity;
-            userSettings_.SkyRotation = envSettings_.SkyRotation;
-        }
-        userSettings_.HasSun = envSettings_.HasSun;
-        if(envSettings_.HasSun)
-        {
-            userSettings_.SunRotation = envSettings_.SunRotation;
-            userSettings_.SunLuminance = envSettings_.SunIntensity;
-        }
+        
         userSettings_.CameraIdx = 0;
+        modelViewController_.Reset(scene_->GetEnvSettings().ModelView);
 
-        modelViewController_.Reset(envSettings_.ModelView);
-
-        
-
-        
         totalFrames_ = 0;
         
         renderer_->OnPostLoadScene();

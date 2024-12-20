@@ -25,6 +25,26 @@ namespace Assets
 
     struct EnvironmentSetting
     {
+        EnvironmentSetting()
+        {
+            Reset();
+        }
+        
+        void Reset()
+        {
+            FieldOfView = 50;
+            Aperture = 0.0f;
+            FocusDistance = 1000.0f;
+            ControlSpeed = 5.0f;
+            GammaCorrection = true;
+            HasSky = true;
+            HasSun = false;
+            SkyIdx = 0;
+            SunIntensity = 500.f;
+            SkyIntensity = 100.0f;
+            SunRotation = 0.5f;   
+        }
+        
         glm::mat4 ModelView;
         float FieldOfView;
         float Aperture;
@@ -33,7 +53,7 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
-        uint32_t SkyIdx, CameraIdx;
+        int32_t SkyIdx, CameraIdx;
         float SunRotation;
         float SkyRotation;
         

@@ -197,6 +197,4 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
 	
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
-
-	Assets::EnvironmentSetting envSettings_;
 };

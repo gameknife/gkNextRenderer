@@ -40,14 +40,13 @@ namespace Assets
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
-                       std::vector<AnimationTrack>& tracks, std::vector<Assets::Camera>& cameras)
+                       std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
         models_ = std::move(models);
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
-        cameras_ = std::move(cameras);
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
@@ -262,10 +261,11 @@ namespace Assets
         return nullptr;
     }
 
-    void Scene::OverrideModelView(glm::mat4& OutMatrix) const
+    void Scene::OverrideModelView(glm::mat4& OutMatrix)
     {
         if (requestOverrideModelView)
         {
+            requestOverrideModelView = false;
             OutMatrix = overrideModelView;
         }
     }

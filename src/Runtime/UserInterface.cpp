@@ -450,10 +450,10 @@ void UserInterface::DrawSettings()
 			ImGui::PopItemWidth();
 			if(prevCameraIdx != Settings().CameraIdx)
 			{
-				auto &cam = GetEngine().GetScene().GetCameras()[Settings().CameraIdx];
-				Settings().RawFieldOfView = cam.FieldOfView;
-				Settings().Aperture = cam.Aperture;
-				Settings().FocusDistance = cam.FocalDistance;
+				//auto &cam = GetEngine().GetScene().GetCameras()[Settings().CameraIdx];
+				//Settings().RawFieldOfView = cam.FieldOfView;
+				//Settings().Aperture = cam.Aperture;
+				//Settings().FocusDistance = cam.FocalDistance;
 			}
 			ImGui::NewLine();
 		}
@@ -485,28 +485,28 @@ void UserInterface::DrawSettings()
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Camera"), ImGuiTreeNodeFlags_None) )
 		{
-			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
-			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
+			ImGui::SliderFloat(LOCTEXT("FoV"), &GetEngine().GetScene().GetEnvSettings().FieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
+			ImGui::SliderFloat(LOCTEXT("Aperture"), &GetEngine().GetScene().GetEnvSettings().Aperture, 0.0f, 1.0f, "%.2f");
+			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &GetEngine().GetScene().GetEnvSettings().FocusDistance, 0.001f, 1000.0f, "%.3f");
 			ImGui::NewLine();
 		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
 		{
 			
-			ImGui::Checkbox(LOCTEXT("HasSky"), &userSettings_.HasSky);
-			if(userSettings_.HasSky)
+			ImGui::Checkbox(LOCTEXT("HasSky"), &GetEngine().GetScene().GetEnvSettings().HasSky);
+			if(GetEngine().GetScene().GetEnvSettings().HasSky)
 			{
-				ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
-				ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-				ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+				ImGui::SliderInt(LOCTEXT("SkyIdx"), &GetEngine().GetScene().GetEnvSettings().SkyIdx, 0, 10);
+				ImGui::SliderFloat(LOCTEXT("SkyRotation"), &GetEngine().GetScene().GetEnvSettings().SkyRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SkyLum"), &GetEngine().GetScene().GetEnvSettings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
 			}
 			
-			ImGui::Checkbox(LOCTEXT("HasSun"), &userSettings_.HasSun);
-			if(userSettings_.HasSun)
+			ImGui::Checkbox(LOCTEXT("HasSun"), &GetEngine().GetScene().GetEnvSettings().HasSun);
+			if(GetEngine().GetScene().GetEnvSettings().HasSun)
 			{
-				ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-				ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
+				ImGui::SliderFloat(LOCTEXT("SunRotation"), &GetEngine().GetScene().GetEnvSettings().SunRotation, 0.0f, 2.0f, "%.2f");
+				ImGui::SliderFloat(LOCTEXT("SunLum"), &GetEngine().GetScene().GetEnvSettings().SunIntensity, 0.0f, 2000.0f, "%.0f");
 			}
 
 			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
