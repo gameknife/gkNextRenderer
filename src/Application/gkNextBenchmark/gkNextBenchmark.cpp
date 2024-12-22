@@ -1,16 +1,15 @@
 #include "gkNextBenchmark.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
 
-BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
+BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     config.Title = "gkNextBenchmark";
     options.Benchmark = true;
-    options.BenchmarkNextScenes = true;
     options.Width = 1280;
     options.Height = 720;
 }
@@ -33,9 +32,11 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
          {
              GetEngine().RequestClose();
          }
-         
-         GetEngine().GetUserSettings().SceneIndex += 1;
-         GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         else
+         {
+             GetEngine().GetUserSettings().SceneIndex += 1;
+             GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         }
      }
 }
 

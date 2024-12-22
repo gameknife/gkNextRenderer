@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <glm/vec4.hpp>
 
-class NextRendererApplication;
+class NextEngine;
 
 namespace Assets
 {
@@ -41,9 +41,6 @@ struct Statistics final
 	uint32_t TotalSamples;
 	uint32_t TotalFrames;
 	double RenderTime;
-	float CamPosX;
-	float CamPosY;
-	float CamPosZ;
 	uint32_t TriCount;
 	uint32_t InstanceCount;
 	uint32_t NodeCount;
@@ -61,7 +58,7 @@ public:
 	VULKAN_NON_COPIABLE(UserInterface)
 
 	UserInterface(
-		NextRendererApplication* engine,
+		NextEngine* engine,
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
@@ -92,9 +89,8 @@ public:
 	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
 
 private:
-	NextRendererApplication& GetEngine() {return *engine_;}
+	NextEngine& GetEngine() {return *engine_;}
 	
-	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
@@ -105,5 +101,5 @@ private:
 	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
 	std::vector< std::function<void ()> > auxDrawRequest_;
 
-	NextRendererApplication* engine_;
+	NextEngine* engine_;
 };

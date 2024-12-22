@@ -28,11 +28,6 @@ public:
 	bool NoDenoiser{};
 	bool ForceSDR{};
 	std::string locale{};
-	
-	// Benchmark options.
-	bool BenchmarkNextScenes{};
-	uint32_t BenchmarkMaxTime{};
-	uint32_t BenchmarkMaxFrame{};
 
 	// Renderer options.
 	uint32_t Samples{};

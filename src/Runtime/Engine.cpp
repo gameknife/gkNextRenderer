@@ -1,4 +1,4 @@
-#include "Application.hpp"
+#include "Engine.hpp"
 #include "UserInterface.hpp"
 #include "UserSettings.hpp"
 #include "Assets/Model.hpp"
@@ -100,17 +100,12 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.RendererType = options.RendererType;
     userSettings.Benchmark = options.Benchmark;
-    userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
-    userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
-    userSettings.BenchmarkMaxFrame = options.BenchmarkMaxFrame;
     userSettings.SceneIndex = options.SceneIndex;
 
     if(options.SceneName != "")
     {
         userSettings.SceneIndex = SceneList::AddExternalScene(Utilities::FileHelper::GetPlatformFilePath(("assets/models/" + options.SceneName).c_str()));
     }
-
-    userSettings.AccumulateRays = false;
     
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
@@ -133,10 +128,6 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.Denoiser = options.Benchmark ? false : !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
-
-    userSettings.SunRotation = 0.5f;
-    userSettings.SunLuminance = 500.f;
-    userSettings.SkyIntensity = 100.f;
     
     userSettings.RequestRayCast = false;
 
@@ -154,7 +145,7 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(Options& options, void* userdata)
+NextEngine::NextEngine(Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -200,7 +191,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 }
 
-NextRendererApplication::~NextRendererApplication()
+NextEngine::~NextEngine()
 {
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
@@ -211,7 +202,7 @@ NextRendererApplication::~NextRendererApplication()
     Vulkan::Window::TerminateGLFW();
 }
 
-void NextRendererApplication::Start()
+void NextEngine::Start()
 {
     renderer_->Start();
 
@@ -229,7 +220,7 @@ void NextRendererApplication::Start()
     RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
-bool NextRendererApplication::Tick()
+bool NextEngine::Tick()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
     
@@ -248,24 +239,13 @@ bool NextRendererApplication::Tick()
     deltaSeconds_ = time_ - prevTime;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
-
-    // Camera Update
-    userSettings_.FieldOfView = glm::mix( userSettings_.FieldOfView, userSettings_.RawFieldOfView, 0.1);
-    if ( glm::abs(userSettings_.RawFieldOfView - userSettings_.FieldOfView) < 0.05f)
-    {
-        userSettings_.FieldOfView = userSettings_.RawFieldOfView;
-    }
-    modelViewController_.UpdateCamera(cameraInitialSate_.ControlSpeed, deltaSeconds_);
-
+    
     // Scene Update
     if(scene_)
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
-
-    // Setting Update
-    previousSettings_ = userSettings_;
     
     // Renderer Tick
 #if !ANDROID
@@ -324,7 +304,7 @@ bool NextRendererApplication::Tick()
         PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
         renderer_->DrawFrame();
     }
-    totalFrames_ += 1;
+    totalFrames_ = renderer_->FrameCount();
 #if ANDROID
     return false;
 #else
@@ -333,7 +313,7 @@ bool NextRendererApplication::Tick()
 #endif
 }
 
-void NextRendererApplication::End()
+void NextEngine::End()
 {
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
@@ -341,12 +321,12 @@ void NextRendererApplication::End()
     userInterface_.reset();
 }
 
-void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
+void NextEngine::AddTimerTask(double delay, DelayedTask task)
 {
     delayedTasks_.push_back( { time_ + delay, delay, task} );
 }
 
-void NextRendererApplication::PlaySound(const std::string& soundName, bool loop, float volume)
+void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -365,7 +345,7 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
-void NextRendererApplication::PauseSound(const std::string& soundName, bool pause)
+void NextEngine::PauseSound(const std::string& soundName, bool pause)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -376,7 +356,7 @@ void NextRendererApplication::PauseSound(const std::string& soundName, bool paus
     pause ? ma_sound_stop(sound) : ma_sound_start(sound);
 }
 
-bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
+bool NextEngine::IsSoundPlaying(const std::string& soundName)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -386,12 +366,12 @@ bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
     return ma_sound_is_playing(sound);
 }
 
-void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
+void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
     ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
-glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
+glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 {
     glm::vec2 offset = glm::vec2(0.0, 0.0);
     glm::vec2 extent = glm::vec2(GetWindow().FramebufferSize().width, GetWindow().FramebufferSize().height);
@@ -405,7 +385,7 @@ glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
     return raydir;
 }
 
-glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
+glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
@@ -418,7 +398,7 @@ glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
     return transformed;
 }
 
-void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
+void NextEngine::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
 {
     auto transformedFrom = ProjectWorldToScreen(from);
     auto transformedTo = ProjectWorldToScreen(to);
@@ -430,7 +410,7 @@ void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec
     }
 }
 
-void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
+void NextEngine::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
 {
     // Draw the box with 12 lines
     DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
@@ -449,7 +429,7 @@ void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4
     DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
 }
 
-void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
+void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
 {
     auto transformed = ProjectWorldToScreen(location);
     // center as 0,0
@@ -459,22 +439,22 @@ void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, 
     }
 }
 
-void NextRendererApplication::RequestClose()
+void NextEngine::RequestClose()
 {
     window_->Close();
 }
 
-void NextRendererApplication::RequestMinimize()
+void NextEngine::RequestMinimize()
 {
     window_->Minimize();
 }
 
-bool NextRendererApplication::IsMaximumed()
+bool NextEngine::IsMaximumed()
 {
     return window_->IsMaximumed();
 }
 
-void NextRendererApplication::ToggleMaximize()
+void NextEngine::ToggleMaximize()
 {
     if (window_->IsMaximumed())
     {
@@ -486,7 +466,7 @@ void NextRendererApplication::ToggleMaximize()
     }
 }
 
-void NextRendererApplication::RequestScreenShot(std::string filename)
+void NextEngine::RequestScreenShot(std::string filename)
 {
     std::string screenshot_filename = filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr))) : filename;
     SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
@@ -548,7 +528,7 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
     return jitterMatrix * projectionMatrix;
 }
 
-glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
+glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
 {
     glm::ivec2 pos{0,0};
     glm::ivec2 size{1920,1080};
@@ -558,21 +538,17 @@ glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
     return size;
 }
 
-Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
+Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
-    if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
-    {
-		modelViewController_.Reset((userSettings_.cameras[userSettings_.CameraIdx]).ModelView);
-    }
-
-    const auto& init = cameraInitialSate_;
-
     Assets::UniformBufferObject ubo = {};
 
-    ubo.ModelView = modelViewController_.ModelView();
-    gameInstance_->OverrideModelView(ubo.ModelView);
+    // a copy, simple struct
+    Assets::Camera renderCam = scene_->GetRenderCamera();
+    gameInstance_->OverrideRenderCamera(renderCam);
+    ubo.ModelView = renderCam.ModelView;
     
-    ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
+    scene_->OverrideModelView(ubo.ModelView);
+    ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     
     if (userSettings_.TAA)
@@ -594,7 +570,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
     pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
     
-    ubo.Projection = glm::perspective(glm::radians(userSettings_.FieldOfView),
+    ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
     ubo.Projection = pre_rotate_mat * ubo.Projection;
@@ -611,54 +587,54 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 
     // Raycasting
     {
-        glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
-        glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-        glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-        glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-        glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-        glm::vec3 rayorg = glm::vec3(origin);
-
-        // Send new
-        renderer_->SetRaycastRay(rayorg, raydir);
-        Assets::RayCastResult rayResult {};
-        renderer_->GetLastRaycastResult(rayResult);
-    
-        if( userSettings_.RequestRayCast )
-        {
-            if(rayResult.Hitted )
-            {
-                userSettings_.FocusDistance = rayResult.T;
-                scene_->SetSelectedId(rayResult.InstanceId);
-
-                AddTickedTask([this, rayResult](double DeltaTimes)->bool
-                {
-                    Assets::RayCastResult ray = rayResult;
-                    gameInstance_->OnRayHitResponse(ray);
-                    return true;
-                });
-                
-            }
-            else
-            {
-                scene_->SetSelectedId(-1);
-            }
-
-            // only active one frame
-            userSettings_.RequestRayCast = false;
-        }
-
-        userSettings_.HitResult = rayResult;
+        // glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
+        // glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+        // glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+        // glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+        // glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+        // glm::vec3 rayorg = glm::vec3(origin);
+        //
+        // // Send new
+        // renderer_->SetRaycastRay(rayorg, raydir);
+        // Assets::RayCastResult rayResult {};
+        // renderer_->GetLastRaycastResult(rayResult);
+        //
+        // if( userSettings_.RequestRayCast )
+        // {
+        //     if(rayResult.Hitted )
+        //     {
+        //         scene_->GetEnvSettings().FocusDistance = rayResult.T;
+        //         scene_->SetSelectedId(rayResult.InstanceId);
+        //
+        //         AddTickedTask([this, rayResult](double DeltaTimes)->bool
+        //         {
+        //             Assets::RayCastResult ray = rayResult;
+        //             gameInstance_->OnRayHitResponse(ray);
+        //             return true;
+        //         });
+        //         
+        //     }
+        //     else
+        //     {
+        //         scene_->SetSelectedId(-1);
+        //     }
+        //
+        //     // only active one frame
+        //     userSettings_.RequestRayCast = false;
+        // }
+        //
+        // userSettings_.HitResult = rayResult;
     }
 
 
     ubo.SelectedId = scene_->GetSelectedId();
 
     // Camera Stuff
-    ubo.Aperture = userSettings_.Aperture;
-    ubo.FocusDistance = userSettings_.FocusDistance;
+    ubo.Aperture = renderCam.Aperture;
+    ubo.FocusDistance = renderCam.FocalDistance;
 
     // SceneStuff
-    ubo.SkyRotation = userSettings_.SkyRotation;
+    ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
     ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
     ubo.TotalFrames = totalFrames_;
     ubo.NumberOfSamples = userSettings_.NumberOfSamples;
@@ -668,13 +644,13 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( userSettings_.SunRotation * M_PI )), 0.75f, cosf(float( userSettings_.SunRotation * M_PI )) )), 0.0f );
-    ubo.SunColor = glm::vec4(1,1,1, 0) * userSettings_.SunLuminance;
-    ubo.SkyIntensity = userSettings_.SkyIntensity;
-    ubo.SkyIdx = userSettings_.SkyIdx;
-    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * userSettings_.SkyIntensity;
-    ubo.HasSky = userSettings_.HasSky;
-    ubo.HasSun =userSettings_.HasSun && userSettings_.SunLuminance > 0;
+    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( scene_->GetEnvSettings().SunRotation * M_PI )), 0.75f, cosf(float( scene_->GetEnvSettings().SunRotation * M_PI )) )), 0.0f );
+    ubo.SunColor = glm::vec4(1,1,1, 0) * scene_->GetEnvSettings().SunIntensity;
+    ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
+    ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
+    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
+    ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.HasSun =scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -703,7 +679,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     return ubo;
 }
 
-void NextRendererApplication::OnRendererDeviceSet()
+void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
@@ -724,14 +700,13 @@ void NextRendererApplication::OnRendererDeviceSet()
     if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
         
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
-    
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
 
     status_ = NextRenderer::EApplicationStatus::Running;
 }
 
-void NextRendererApplication::OnRendererCreateSwapChain()
+void NextEngine::OnRendererCreateSwapChain()
 {
     if(userInterface_.get() == nullptr)
     {
@@ -747,7 +722,7 @@ void NextRendererApplication::OnRendererCreateSwapChain()
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
 
-void NextRendererApplication::OnRendererDeleteSwapChain()
+void NextEngine::OnRendererDeleteSwapChain()
 {
     if(userInterface_.get() != nullptr)
     {
@@ -755,7 +730,7 @@ void NextRendererApplication::OnRendererDeleteSwapChain()
     }
 }
 
-void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     static float frameRate = 0.0;
     static double lastTime = 0.0;
@@ -781,14 +756,7 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.FrameRate = frameRate;
     
-
     stats.TotalFrames = totalFrames_;
-    //stats.RenderTime = time_ - sceneInitialTime_;
-
-    stats.CamPosX = modelViewController_.Position()[0];
-    stats.CamPosY = modelViewController_.Position()[1];
-    stats.CamPosZ = modelViewController_.Position()[2];
-
     stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
     stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
@@ -805,7 +773,7 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
 }
 
-void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
+void NextEngine::OnKey(int key, int scancode, int action, int mods)
 {
     if (userInterface_->WantsToCaptureKeyboard())
     {
@@ -822,7 +790,7 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
     {
         switch (key)
         {
-        case GLFW_KEY_ESCAPE: scene_->SetSelectedId(-1);;
+        case GLFW_KEY_ESCAPE: scene_->SetSelectedId(-1);
             break;
         default: break;
         }
@@ -840,26 +808,10 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
             }
         }
     }
-    else if(action == GLFW_RELEASE)
-    {
-        if (!userSettings_.Benchmark)
-        {
-            // switch (key)
-            // {
-            //     default: break;
-            // }
-        }
-    }
 #endif
-
-    // Camera motions
-    if (!userSettings_.Benchmark)
-    {
-        modelViewController_.OnKey(key, scancode, action, mods);
-    }
 }
 
-void NextRendererApplication::OnCursorPosition(const double xpos, const double ypos)
+void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -869,19 +821,14 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
     {
         return;
     }
-
-    mousePos_ = glm::vec2(xpos, ypos);
     
     if(gameInstance_->OnCursorPosition(xpos, ypos))
     {
         return;
     }
-
-    // Camera motions
-    modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
-void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)
+void NextEngine::OnMouseButton(const int button, const int action, const int mods)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -894,26 +841,9 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     {
         return;
     }
-
-    // Camera motions
-    modelViewController_.OnMouseButton(button, action, mods);
-#if !ANDROID
-    static glm::vec2 pressMousePos_ {};
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-    {
-       pressMousePos_ = mousePos_;
-    }
-    else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
-    {
-        if( glm::distance(pressMousePos_, mousePos_) < 2.0f )
-        {
-            userSettings_.RequestRayCast = true;
-        }
-    }
-#endif
 }
 
-void NextRendererApplication::OnScroll(const double xoffset, const double yoffset)
+void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -921,14 +851,11 @@ void NextRendererApplication::OnScroll(const double xoffset, const double yoffse
     {
         return;
     }
-    const auto prevFov = userSettings_.RawFieldOfView;
-    userSettings_.RawFieldOfView = std::clamp(
-        static_cast<float>(prevFov - yoffset),
-        UserSettings::FieldOfViewMinValue,
-        UserSettings::FieldOfViewMaxValue);
+
+    gameInstance_->OnScroll(xoffset, yoffset);
 }
 
-void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
+void NextEngine::OnDropFile(int path_count, const char* paths[])
 {
     // add glb to the last, and loaded
     if (path_count > 0)
@@ -939,33 +866,33 @@ void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
 
         if (ext == "glb")
         {
-            userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+            //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         }
 
         if( ext == "hdr")
         {
-            Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-            userSettings_.SkyIdx = 0;
+            //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+            //userSettings_.SkyIdx = 0;
         }
     }
 }
 
-void NextRendererApplication::OnRendererBeforeNextFrame()
+void NextEngine::OnRendererBeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
 }
 
-void NextRendererApplication::OnTouch(bool down, double xpos, double ypos)
+void NextEngine::OnTouch(bool down, double xpos, double ypos)
 {
-    modelViewController_.OnTouch(down, xpos, ypos);
+
 }
 
-void NextRendererApplication::OnTouchMove(double xpos, double ypos)
+void NextEngine::OnTouchMove(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition(xpos, ypos);
+
 }
 
-void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
+void NextEngine::RequestLoadScene(std::string sceneFileName)
 {
     AddTickedTask([this, sceneFileName](double DeltaSeconds)->bool
     {
@@ -979,7 +906,7 @@ void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
     });
 }
 
-void NextRendererApplication::LoadScene(std::string sceneFileName)
+void NextEngine::LoadScene(std::string sceneFileName)
 {
     status_ = NextRenderer::EApplicationStatus::Loading;
     
@@ -988,11 +915,8 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
-    std::shared_ptr< Assets::CameraInitialSate > cameraState = std::make_shared< Assets::CameraInitialSate >();
+    std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
     
-    cameraInitialSate_.cameras.clear();
-    cameraInitialSate_.CameraIdx = -1;
-
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
@@ -1014,8 +938,9 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
         
         const auto timer = std::chrono::high_resolution_clock::now();
-        
-        cameraInitialSate_ = *cameraState;
+
+        scene_->GetEnvSettings().Reset();
+        scene_->SetEnvSettings(*cameraState);
 
         gameInstance_->OnSceneUnloaded();
         
@@ -1027,30 +952,11 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
         
         renderer_->SetScene(scene_);
-
-        userSettings_.RawFieldOfView = cameraInitialSate_.FieldOfView;
-        userSettings_.FieldOfView = cameraInitialSate_.FieldOfView;
-        userSettings_.Aperture = cameraInitialSate_.Aperture;
-        userSettings_.FocusDistance = cameraInitialSate_.FocusDistance;
-        userSettings_.HasSky = cameraInitialSate_.HasSky;
-        if(cameraInitialSate_.HasSky)
-        {
-            userSettings_.SkyIdx = cameraInitialSate_.SkyIdx;
-            userSettings_.SkyIntensity = cameraInitialSate_.SkyIntensity;
-            userSettings_.SkyRotation = cameraInitialSate_.SkyRotation;
-        }
-        userSettings_.HasSun = cameraInitialSate_.HasSun;
-        if(cameraInitialSate_.HasSun)
-        {
-            userSettings_.SunRotation = cameraInitialSate_.SunRotation;
-            userSettings_.SunLuminance = cameraInitialSate_.SunIntensity;
-        }
-        userSettings_.cameras = cameraInitialSate_.cameras;
-        userSettings_.CameraIdx = cameraInitialSate_.CameraIdx;
-
-        modelViewController_.Reset(cameraInitialSate_.ModelView);
-
         
+        userSettings_.CameraIdx = 0;
+        assert(!scene_->GetEnvSettings().cameras.empty());
+        scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+
         totalFrames_ = 0;
         
         renderer_->OnPostLoadScene();

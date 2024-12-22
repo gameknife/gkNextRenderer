@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-#include "ModelViewController.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
 #include "Assets/UniformBuffer.hpp"
@@ -13,12 +12,12 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
-class NextRendererApplication;
+class NextEngine;
 
 class NextGameInstanceBase
 {
 public:
-	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine){}
+	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextEngine* engine){}
 	virtual ~NextGameInstanceBase() {}
 	virtual void OnInit() =0;
 	virtual void OnTick(double deltaSeconds) =0;
@@ -26,22 +25,26 @@ public:
 	virtual bool OnRenderUI() =0;
 	virtual void OnPreConfigUI() {}
 	virtual void OnInitUI() {}
-	virtual void OnRayHitResponse(Assets::RayCastResult& result) {};
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
 
-	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
+	// camera
+	virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const {return false;}
 
+	// scene
 	virtual void OnSceneLoaded() {}
 	virtual void OnSceneUnloaded() {}
 
+	// input
 	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
 	virtual bool OnCursorPosition(double xpos, double ypos) =0;
 	virtual bool OnMouseButton(int button, int action, int mods) =0;
+	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase
 {
 public:
-	NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config,options,engine){}
+	NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config,options,engine){}
 	~NextGameInstanceVoid() override = default;
 	
 	void OnInit() override {}
@@ -55,7 +58,7 @@ public:
 	bool OnMouseButton(int button, int action, int mods) override {return false;}
 };
 
-extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
 
 namespace NextRenderer
 {
@@ -80,14 +83,14 @@ struct FDelayTaskContext
 	DelayedTask task;
 };
 
-class NextRendererApplication final
+class NextEngine final
 {
 public:
 
-	VULKAN_NON_COPIABLE(NextRendererApplication)
+	VULKAN_NON_COPIABLE(NextEngine)
 
-	NextRendererApplication(Options& options, void* userdata = nullptr);
-	~NextRendererApplication();
+	NextEngine(Options& options, void* userdata = nullptr);
+	~NextEngine();
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
 
@@ -166,36 +169,40 @@ protected:
 private:
 	void LoadScene(std::string sceneFileName);
 
+	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
 	int rendererType = 0;
 	mutable UserSettings userSettings_{};
-	UserSettings previousSettings_{};
-	Assets::CameraInitialSate cameraInitialSate_{};
-
-	mutable ModelViewController modelViewController_{};
-
+	
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::shared_ptr<Assets::Scene> scene_;
+
+	// integrate interface, may add from application later?
 	std::unique_ptr<class UserInterface> userInterface_;
 
-	NextRenderer::EApplicationStatus status_{};
-
+	// timing
 	uint32_t totalFrames_{};
 	double time_{};
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
-	glm::vec2 mousePos_ {};
 
+	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
 
+	// tasks
 	std::vector<TickedTask> tickedTasks_;
 	std::vector<FDelayTaskContext> delayedTasks_;
 
+	// audio
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
-	
+
+	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
+
+	// engine status
+	NextRenderer::EApplicationStatus status_{};
 };

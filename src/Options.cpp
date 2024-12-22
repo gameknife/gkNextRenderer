@@ -8,13 +8,6 @@ using namespace boost::program_options;
 Options::Options(const int argc, const char* argv[])
 {
 	const int lineLength = 120;
-	
-	options_description benchmark("Benchmark options", lineLength);
-	benchmark.add_options()
-		("next-scenes", bool_switch(&BenchmarkNextScenes)->default_value(false), "Load the next scene once the sample or time limit is reached.")
-		("max-time", value<uint32_t>(&BenchmarkMaxTime)->default_value(10), "The benchmark time limit per scene (in seconds).")
-		("max-frame", value<uint32_t>(&BenchmarkMaxFrame)->default_value(0), "The benchmark frame limit per scene.")
-		;
 
 	options_description renderer("Renderer options", lineLength);
 	renderer.add_options()
@@ -57,8 +50,7 @@ Options::Options(const int argc, const char* argv[])
 		("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")
 		("locale", value<std::string>(&locale)->default_value("en"), "Locale: en, zhCN, RU.")
 		;
-
-	desc.add(benchmark);
+	
 	desc.add(renderer);
 	desc.add(scene);
 	desc.add(vulkan);

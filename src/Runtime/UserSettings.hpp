@@ -8,17 +8,11 @@ struct UserSettings final
 	int RendererType;
 	// Application
 	bool Benchmark;
-
-	// Benchmark
-	bool BenchmarkNextScenes{};
-	uint32_t BenchmarkMaxTime{};
-	uint32_t BenchmarkMaxFrame{};
 	
 	// Scene
 	int SceneIndex {};
 
 	// Renderer
-	bool AccumulateRays;
 	int32_t NumberOfSamples;
 	int32_t NumberOfBounces;
 	int32_t MaxNumberOfBounces;
@@ -28,19 +22,8 @@ struct UserSettings final
 	bool TAA;
 
 	// Camera
-	float FieldOfView;
-	float RawFieldOfView;
-	float Aperture;
-	float FocusDistance;
 	bool RequestRayCast;
-
-	bool HasSky;
-	float SkyRotation;
-	bool HasSun;
-	float SunRotation;
-	float SunLuminance;
-	float SkyIntensity;
-	int SkyIdx, CameraIdx;
+	int CameraIdx;
 
 	// Profiler
 	bool ShowVisualDebug;
@@ -64,11 +47,7 @@ struct UserSettings final
 	float PaperWhiteNit;
 
 	bool ShowEdge;
-	
-	inline const static float FieldOfViewMinValue = 5.0f;
-	inline const static float FieldOfViewMaxValue = 90.0f;
-	
-	std::vector<Assets::Camera> cameras;
+
 	// HitResult
 	Assets::RayCastResult HitResult;
 };

@@ -78,6 +78,17 @@ namespace Assets
 		void MarkDirty() {sceneDirty_ = true;}
 		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
+
+		void OverrideModelView(glm::mat4& OutMatrix);
+
+		const std::vector<Assets::Camera>& GetCameras() const { return envSettings_.cameras; }
+		const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
+		
+		Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
+		void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
+
+		Camera& GetRenderCamera() { return renderCamera_; }
+		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 		
 	private:
 		std::vector<Material> materials_;
@@ -119,6 +130,12 @@ namespace Assets
 		
 		std::vector<NodeProxy> nodeProxys;
 		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
+
+		glm::mat4 overrideModelView;
+		bool requestOverrideModelView = false;
+		
+		Assets::EnvironmentSetting envSettings_;
+		Camera renderCamera_;
 	};
 
 }

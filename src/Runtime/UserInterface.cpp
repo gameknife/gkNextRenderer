@@ -11,7 +11,7 @@
 #include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
-#include "Application.hpp"
+#include "Engine.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>
@@ -28,7 +28,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
-#include "Application.hpp"
+#include "Engine.hpp"
 #include "Options.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -43,7 +43,7 @@ extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 
 UserInterface::UserInterface(
-	NextRendererApplication* engine,
+	NextEngine* engine,
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,
@@ -318,7 +318,6 @@ void UserInterface::PreRender()
 
 void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
-	DrawSettings();
 	DrawOverlay(statistics, gpuTimer);
 	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 }
@@ -362,173 +361,6 @@ bool UserInterface::WantsToCaptureKeyboard() const
 bool UserInterface::WantsToCaptureMouse() const
 {
 	return ImGui::GetIO().WantCaptureMouse;
-}
-
-void UserInterface::DrawSettings()
-{
-	if (!Settings().ShowSettings)
-	{
-		return;
-	}
-
-	const float distance = 10.0f;
-	const ImVec2 pos = ImVec2(distance, distance);
-	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
-	ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-#if ANDROID
-	ImGui::SetNextWindowSize(ImVec2(300,-1));
-#else
-	ImGui::SetNextWindowSize(ImVec2(400,-1));
-#endif
-	ImGui::SetNextWindowBgAlpha(0.9f);
-	
-	const auto flags =
-		ImGuiWindowFlags_AlwaysAutoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoSavedSettings;
-
-	if (ImGui::Begin("Settings", &Settings().ShowSettings, flags))
-	{
-		if( ImGui::CollapsingHeader(LOCTEXT("Help"), ImGuiTreeNodeFlags_None) )
-		{
-			ImGui::Separator();
-			ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
-			ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
-			ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
-			ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
-			ImGui::NewLine();
-		}
-
-		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
-		{
-			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred"};
-			
-			ImGui::Text("%s", LOCTEXT("Renderer"));
-			
-			ImGui::PushItemWidth(-1);
-			ImGui::Combo("##RendererList", &Settings().RendererType, renderers.data(), static_cast<int>(renderers.size()));
-			ImGui::PopItemWidth();
-			ImGui::NewLine();
-		}
-		
-		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
-		{
-			std::vector<std::string> sceneNames;
-			for (const auto& scene : SceneList::AllScenes)
-			{
-				std::filesystem::path path(scene);
-				sceneNames.push_back(path.filename().string());
-			}
-
-			std::vector<const char*> scenes;
-			for (const auto& scene : sceneNames)
-			{
-				scenes.push_back(scene.c_str());
-			}
-			
-			std::vector<const char*> camerasList;
-			for (const auto& cam : Settings().cameras)
-			{
-				camerasList.emplace_back(cam.name.c_str());
-			}
-			
-			ImGui::Text("%s", LOCTEXT("Scene"));
-			
-			ImGui::PushItemWidth(-1);
-			if (ImGui::Combo("##SceneList", &Settings().SceneIndex, scenes.data(), static_cast<int>(scenes.size())) )
-			{
-				// Request Scene Load
-				GetEngine().RequestLoadScene(SceneList::AllScenes[Settings().SceneIndex]);
-			}
-			ImGui::PopItemWidth();
-
-			int prevCameraIdx = Settings().CameraIdx;
-			ImGui::Text("%s", LOCTEXT("Camera"));
-			ImGui::PushItemWidth(-1);
-			ImGui::Combo("##CameraList", &Settings().CameraIdx, camerasList.data(), static_cast<int>(camerasList.size()));
-			ImGui::PopItemWidth();
-			if(prevCameraIdx != Settings().CameraIdx)
-			{
-				auto &cam = Settings().cameras[Settings().CameraIdx];
-				Settings().RawFieldOfView = cam.FieldOfView;
-				Settings().Aperture = cam.Aperture;
-				Settings().FocusDistance = cam.FocalDistance;
-			}
-			ImGui::NewLine();
-		}
-
-		if( ImGui::CollapsingHeader(LOCTEXT("Ray Tracing"), ImGuiTreeNodeFlags_DefaultOpen) )
-		{
-			uint32_t min = 0, max = 7; //max bounce + 1 will off roulette. max bounce now is 6
-			//ImGui::SliderScalar(LOCTEXT("RR Start"), ImGuiDataType_U32, &Settings().RR_MIN_DEPTH, &min, &max);
-			//ImGui::Checkbox(LOCTEXT("AdaptiveSample"), &Settings().AdaptiveSample);
-			ImGui::Checkbox(LOCTEXT("AntiAlias"), &Settings().TAA);
-			ImGui::SliderInt(LOCTEXT("Samples"), &Settings().NumberOfSamples, 1, 16);
-			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &Settings().AdaptiveSteps, 2, 64);
-			ImGui::NewLine();
-		}
-
-		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
-		{
-#if WITH_OIDN
-			ImGui::Checkbox("Use OIDN", &Settings().Denoiser);
-#else
-			ImGui::Checkbox(LOCTEXT("Use JBF"), &Settings().Denoiser);
-			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &Settings().DenoiseSigma, 0.01f, 2.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &Settings().DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &Settings().DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
-			ImGui::SliderInt(LOCTEXT("DenoiseSize"), &Settings().DenoiseSize, 1, 10);
-#endif
-			ImGui::NewLine();
-		}
-		
-		if( ImGui::CollapsingHeader(LOCTEXT("Camera"), ImGuiTreeNodeFlags_None) )
-		{
-			ImGui::SliderFloat(LOCTEXT("FoV"), &Settings().RawFieldOfView, UserSettings::FieldOfViewMinValue, UserSettings::FieldOfViewMaxValue, "%.0f");
-			ImGui::SliderFloat(LOCTEXT("Aperture"), &Settings().Aperture, 0.0f, 1.0f, "%.2f");
-			ImGui::SliderFloat(LOCTEXT("Focus(cm)"), &Settings().FocusDistance, 0.001f, 1000.0f, "%.3f");
-			ImGui::NewLine();
-		}
-		
-		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
-		{
-			
-			ImGui::Checkbox(LOCTEXT("HasSky"), &userSettings_.HasSky);
-			if(userSettings_.HasSky)
-			{
-				ImGui::SliderInt(LOCTEXT("SkyIdx"), &Settings().SkyIdx, 0, 10);
-				ImGui::SliderFloat(LOCTEXT("SkyRotation"), &Settings().SkyRotation, 0.0f, 2.0f, "%.2f");
-				ImGui::SliderFloat(LOCTEXT("SkyLum"), &Settings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-			}
-			
-			ImGui::Checkbox(LOCTEXT("HasSun"), &userSettings_.HasSun);
-			if(userSettings_.HasSun)
-			{
-				ImGui::SliderFloat(LOCTEXT("SunRotation"), &Settings().SunRotation, 0.0f, 2.0f, "%.2f");
-				ImGui::SliderFloat(LOCTEXT("SunLum"), &Settings().SunLuminance, 0.0f, 2000.0f, "%.0f");
-			}
-
-			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &Settings().PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
-			ImGui::NewLine();
-		}
-
-		if( ImGui::CollapsingHeader(LOCTEXT("Misc"), ImGuiTreeNodeFlags_None) )
-		{
-			ImGui::Text("%s", LOCTEXT("Profiler"));
-			ImGui::Separator();
-			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
-			ImGui::Checkbox(LOCTEXT("DebugDraw"), &Settings().ShowVisualDebug);
-			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &Settings().HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
-			ImGui::NewLine();
-
-			ImGui::Text("%s", LOCTEXT("Performance"));
-			ImGui::Separator();
-			uint32_t min = 8, max = 32;
-			ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &Settings().TemporalFrames, &min, &max);		
-		}
-	}
-	ImGui::End();
 }
 
 void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)

@@ -1,7 +1,7 @@
 #pragma once
 // ReSharper disable once CppUnusedIncludeDirective
 #include "Common/CoreMinimal.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
 
 #define MAGICALEGO_SAVE_VERSION 1
@@ -106,7 +106,7 @@ struct FMagicaLegoSave
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:
-    MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
+    MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
     ~MagicaLegoGameInstance() override = default;
 
     // overrides
@@ -120,15 +120,16 @@ public:
     bool OnRenderUI() override;
     void OnInitUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
-    bool OverrideModelView(glm::mat4& OutMatrix) const override;
+    bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     void OnSceneLoaded() override;
     void OnSceneUnloaded() override;
     bool OnKey(int key, int scancode, int action, int mods) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(int button, int action, int mods) override;
+    bool OnScroll(double xoffset, double yoffset) override;
 
     // quick access engine
-    NextRendererApplication& GetEngine() { return *engine_; }
+    NextEngine& GetEngine() { return *engine_; }
 
     // save and load
     void CleanUp();
@@ -222,7 +223,7 @@ private:
     FPlacedBlockDatabase BlocksDynamics;
     FPlacedRecords BlockRecords;
 
-    NextRendererApplication* engine_;
+    NextEngine* engine_;
 
     bool resetMouse_{};
 
@@ -236,6 +237,7 @@ private:
     float cameraRotY_{};
     float cameraArm_{};
     float cameraMultiplier_{};
+    float cameraFOV_{};
 
     bool bMouseLeftDown_{};
     int lastDownFrameNum_{};

@@ -153,7 +153,7 @@ namespace Assets
         genTangSpaceDefault(&mikktspace_context);
     }
     
-    void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::CameraInitialSate& out_camera, std::vector<Assets::LightObject>& out_lights,
+    void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& out_camera, std::vector<Assets::LightObject>& out_lights,
         tinygltf::Model& model, int node_idx, int modelIdx)
     {
         tinygltf::Node& node = model.nodes[node_idx];
@@ -190,8 +190,6 @@ namespace Assets
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 glm::mat4 ModelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
                 out_camera.cameras.push_back({ std::to_string(node.camera) + " " + node.name, ModelView, 40});
-
-                if(node.camera == 0) out_camera.ModelView = ModelView;
             }
         }
         
@@ -233,7 +231,7 @@ namespace Assets
         }
     }
     
-    void Model::LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+    void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
@@ -481,15 +479,7 @@ namespace Assets
         }
 
         // default auto camera
-        Model::AutoFocusCamera(cameraInit, models);
-        cameraInit.FieldOfView = 20;
-        cameraInit.Aperture = 0.0f;
-        cameraInit.FocusDistance = 1000.0f;
-        cameraInit.ControlSpeed = 5.0f;
-        cameraInit.GammaCorrection = true;
-        cameraInit.HasSky = true;
-        cameraInit.HasSun = false;
-        cameraInit.SkyIdx = 0;
+        Camera defaultCam = Model::AutoFocusCamera(cameraInit, models);
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
@@ -534,6 +524,12 @@ namespace Assets
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
+        }
+
+        // if no camera, add default
+        if (cameraInit.cameras.empty() )
+        {
+            cameraInit.cameras.push_back(defaultCam);
         }
 
         // load all animations
@@ -663,15 +659,6 @@ namespace Assets
             {
                 cameraInit.cameras[i].FocalDistance = cam.extras.Get("FocalDistance").GetNumberAsDouble();
             }
-            
-            if (i == 0) //use 1st camera params
-            {
-                cameraInit.FieldOfView = cameraInit.cameras[i].FieldOfView;
-                cameraInit.Aperture = cameraInit.cameras[i].Aperture;
-                cameraInit.FocusDistance = cameraInit.cameras[i].FocalDistance;
-                cameraInit.CameraIdx = 0;
-
-            }
             i++;
         }
         //printf("model.cameras: %d\n", i);
@@ -769,7 +756,7 @@ namespace Assets
         }
     }
 
-    void Model::AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models)
+    Camera Model::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
         glm::vec3 boundsMin, boundsMax;
@@ -791,7 +778,13 @@ namespace Assets
         }
 
         glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
-        cameraInit.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+
+        Camera newCamera;
+        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+        newCamera.FieldOfView = 40;
+        newCamera.Aperture = 0.0f;
+
+        return newCamera;
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,

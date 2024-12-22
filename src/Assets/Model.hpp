@@ -23,17 +23,31 @@ namespace Assets
         float FocalDistance;
     };
 
-    struct CameraInitialSate
+    struct EnvironmentSetting
     {
-        glm::mat4 ModelView;
-        float FieldOfView;
-        float Aperture;
-        float FocusDistance;
+        EnvironmentSetting()
+        {
+            Reset();
+        }
+        
+        void Reset()
+        {
+            ControlSpeed = 5.0f;
+            GammaCorrection = true;
+            HasSky = true;
+            HasSun = false;
+            SkyIdx = 0;
+            SunIntensity = 500.f;
+            SkyIntensity = 100.0f;
+            SkyRotation = 0;
+            SunRotation = 0.5f;   
+        }
+        
         float ControlSpeed;
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
-        uint32_t SkyIdx, CameraIdx;
+        int32_t SkyIdx;
         float SunRotation;
         float SkyRotation;
         
@@ -130,7 +144,7 @@ namespace Assets
     public:
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 
-        static void AutoFocusCamera(Assets::CameraInitialSate& cameraInit, std::vector<Model>& models);
+        static Camera AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
 
         static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
                                      std::vector<Material>& materials,
@@ -145,7 +159,7 @@ namespace Assets
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static void LoadGLTFScene(const std::string& filename, Assets::CameraInitialSate& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+        static void LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                                   std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry

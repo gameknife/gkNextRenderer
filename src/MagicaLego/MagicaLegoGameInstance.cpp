@@ -31,7 +31,7 @@ static std::vector<VertExtInfo> GExtInfos;
 
 const glm::i16vec3 INVALID_POS(0, -10, 0);
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config, options, engine);
 }
@@ -67,7 +67,7 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation)
     return hash;
 }
 
-MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     NextRenderer::HideConsole();
 
@@ -95,6 +95,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     cameraRotX_ = 45;
     cameraRotY_ = 30;
     cameraArm_ = 5.0;
+    cameraFOV_ = 12.f;
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
@@ -167,7 +168,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
 }
 
-bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
+bool MagicaLegoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
 {
     float xRotation = cameraRotX_; // 例如绕X轴旋转45度
     float yRotation = cameraRotY_; // 例如上下偏转30度
@@ -188,8 +189,8 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
     panForward_ = glm::normalize(forward);
     panLeft_ = glm::normalize(left);
 
-    OutMatrix = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
-    
+    OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
+    OutRenderCamera.FieldOfView = cameraFOV_;
     
     
     return true;
@@ -408,6 +409,13 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         cameraMultiplier_ = 0.0f;
     }
+    return true;
+}
+
+bool MagicaLegoGameInstance::OnScroll(double xoffset, double yoffset)
+{
+    cameraFOV_ -= static_cast<float>(yoffset);
+    cameraFOV_ = std::clamp(cameraFOV_, 1.0f, 30.0f);
     return true;
 }
 

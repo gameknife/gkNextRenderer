@@ -786,13 +786,13 @@ void MagicaLegoUserInterface::DrawLeftBar()
         ImGui::Dummy(ImVec2(0, 20));
         ImGui::SeparatorText(LOCTEXT("Light"));
 
-        ImGui::Checkbox(LOCTEXT("Sun"), &GetGameInstance()->GetEngine().GetUserSettings().HasSun);
-        if (GetGameInstance()->GetEngine().GetUserSettings().HasSun)
+        ImGui::Checkbox(LOCTEXT("Sun"), &GetGameInstance()->GetEngine().GetScene().GetEnvSettings().HasSun);
+        if (GetGameInstance()->GetEngine().GetScene().GetEnvSettings().HasSun)
         {
-            ImGui::SliderFloat(LOCTEXT("Dir"), &GetGameInstance()->GetEngine().GetUserSettings().SunRotation, 0, 2);
+            ImGui::SliderFloat(LOCTEXT("Dir"), &GetGameInstance()->GetEngine().GetScene().GetEnvSettings().SunRotation, 0, 2);
         }
-        ImGui::SliderInt(LOCTEXT("Sky"), &GetGameInstance()->GetEngine().GetUserSettings().SkyIdx, 0, 10);
-        ImGui::SliderFloat(LOCTEXT("Lum"), &GetGameInstance()->GetEngine().GetUserSettings().SkyIntensity, 0, 100);
+        ImGui::SliderInt(LOCTEXT("Sky"), &GetGameInstance()->GetEngine().GetScene().GetEnvSettings().SkyIdx, 0, 10);
+        ImGui::SliderFloat(LOCTEXT("Lum"), &GetGameInstance()->GetEngine().GetScene().GetEnvSettings().SkyIntensity, 0, 100);
 
         ImGui::Dummy(ImVec2(0, 20));
 

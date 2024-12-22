@@ -123,6 +123,13 @@ namespace Assets
                 node->RecalcTransform(true);
                 
                 MarkDirty();
+
+                // temporal if camera node, request override
+                if (node->GetName() == "Shot.BlueCar")
+                {
+                    requestOverrideModelView = true;
+                    overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0,0,-1), glm::vec3(0.0f, 1.0f, 0.0f));
+                }
             }
         }
     }
@@ -252,5 +259,14 @@ namespace Assets
             return &materials_[id];
         }
         return nullptr;
+    }
+
+    void Scene::OverrideModelView(glm::mat4& OutMatrix)
+    {
+        if (requestOverrideModelView)
+        {
+            requestOverrideModelView = false;
+            OutMatrix = overrideModelView;
+        }
     }
 }
