@@ -166,35 +166,40 @@ protected:
 private:
 	void LoadScene(std::string sceneFileName);
 
+	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
 	int rendererType = 0;
 	mutable UserSettings userSettings_{};
-	UserSettings previousSettings_{};
-
-	mutable ModelViewController modelViewController_{};
-
+	
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	std::shared_ptr<Assets::Scene> scene_;
+
+	// integrate interface, may add from application later?
 	std::unique_ptr<class UserInterface> userInterface_;
 
-	NextRenderer::EApplicationStatus status_{};
-
+	// timing
 	uint32_t totalFrames_{};
 	double time_{};
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
-	glm::vec2 mousePos_ {};
 
+	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
 
+	// tasks
 	std::vector<TickedTask> tickedTasks_;
 	std::vector<FDelayTaskContext> delayedTasks_;
 
+	// audio
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
-	
+
+	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
+
+	// engine status
+	NextRenderer::EApplicationStatus status_{};
 };

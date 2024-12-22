@@ -450,6 +450,7 @@ void UserInterface::DrawSettings()
 			ImGui::PopItemWidth();
 			if(prevCameraIdx != Settings().CameraIdx)
 			{
+				GetEngine().GetScene().SetRenderCamera( GetEngine().GetScene().GetCameras()[Settings().CameraIdx] );
 				//auto &cam = GetEngine().GetScene().GetCameras()[Settings().CameraIdx];
 				//Settings().RawFieldOfView = cam.FieldOfView;
 				//Settings().Aperture = cam.Aperture;

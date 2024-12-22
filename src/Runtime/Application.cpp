@@ -243,19 +243,13 @@ bool NextRendererApplication::Tick()
     deltaSeconds_ = time_ - prevTime;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
-
-    // Camera Update
-    modelViewController_.UpdateCamera(scene_->GetEnvSettings().ControlSpeed, deltaSeconds_);
-
+    
     // Scene Update
     if(scene_)
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
-
-    // Setting Update
-    previousSettings_ = userSettings_;
     
     // Renderer Tick
 #if !ANDROID
@@ -550,17 +544,13 @@ glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
 
 Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
-    if(userSettings_.CameraIdx >= 0 && previousSettings_.CameraIdx != userSettings_.CameraIdx)
-    {
-		modelViewController_.Reset((GetScene().GetCameras()[userSettings_.CameraIdx]).ModelView);
-    }
-
     Assets::UniformBufferObject ubo = {};
 
-    ubo.ModelView = modelViewController_.ModelView();
+    const Assets::Camera& renderCam = scene_->GetRenderCamera();
+    ubo.ModelView = renderCam.ModelView;
     gameInstance_->OverrideModelView(ubo.ModelView);
     scene_->OverrideModelView(ubo.ModelView);
-    ubo.Projection = glm::perspective(glm::radians(scene_->GetEnvSettings().FieldOfView),
+    ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
     
     if (userSettings_.TAA)
@@ -599,51 +589,51 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
 
     // Raycasting
     {
-        glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
-        glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-        glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-        glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-        glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-        glm::vec3 rayorg = glm::vec3(origin);
-
-        // Send new
-        renderer_->SetRaycastRay(rayorg, raydir);
-        Assets::RayCastResult rayResult {};
-        renderer_->GetLastRaycastResult(rayResult);
-    
-        if( userSettings_.RequestRayCast )
-        {
-            if(rayResult.Hitted )
-            {
-                scene_->GetEnvSettings().FocusDistance = rayResult.T;
-                scene_->SetSelectedId(rayResult.InstanceId);
-
-                AddTickedTask([this, rayResult](double DeltaTimes)->bool
-                {
-                    Assets::RayCastResult ray = rayResult;
-                    gameInstance_->OnRayHitResponse(ray);
-                    return true;
-                });
-                
-            }
-            else
-            {
-                scene_->SetSelectedId(-1);
-            }
-
-            // only active one frame
-            userSettings_.RequestRayCast = false;
-        }
-
-        userSettings_.HitResult = rayResult;
+        // glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
+        // glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
+        // glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
+        // glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
+        // glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
+        // glm::vec3 rayorg = glm::vec3(origin);
+        //
+        // // Send new
+        // renderer_->SetRaycastRay(rayorg, raydir);
+        // Assets::RayCastResult rayResult {};
+        // renderer_->GetLastRaycastResult(rayResult);
+        //
+        // if( userSettings_.RequestRayCast )
+        // {
+        //     if(rayResult.Hitted )
+        //     {
+        //         scene_->GetEnvSettings().FocusDistance = rayResult.T;
+        //         scene_->SetSelectedId(rayResult.InstanceId);
+        //
+        //         AddTickedTask([this, rayResult](double DeltaTimes)->bool
+        //         {
+        //             Assets::RayCastResult ray = rayResult;
+        //             gameInstance_->OnRayHitResponse(ray);
+        //             return true;
+        //         });
+        //         
+        //     }
+        //     else
+        //     {
+        //         scene_->SetSelectedId(-1);
+        //     }
+        //
+        //     // only active one frame
+        //     userSettings_.RequestRayCast = false;
+        // }
+        //
+        // userSettings_.HitResult = rayResult;
     }
 
 
     ubo.SelectedId = scene_->GetSelectedId();
 
     // Camera Stuff
-    ubo.Aperture = scene_->GetEnvSettings().Aperture;
-    ubo.FocusDistance = scene_->GetEnvSettings().FocusDistance;
+    ubo.Aperture = renderCam.Aperture;
+    ubo.FocusDistance = renderCam.FocalDistance;
 
     // SceneStuff
     ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
@@ -768,14 +758,7 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.FrameRate = frameRate;
     
-
     stats.TotalFrames = totalFrames_;
-    //stats.RenderTime = time_ - sceneInitialTime_;
-
-    stats.CamPosX = modelViewController_.Position()[0];
-    stats.CamPosY = modelViewController_.Position()[1];
-    stats.CamPosZ = modelViewController_.Position()[2];
-
     stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
     stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
@@ -838,12 +821,6 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
         }
     }
 #endif
-
-    // Camera motions
-    if (!userSettings_.Benchmark)
-    {
-        modelViewController_.OnKey(key, scancode, action, mods);
-    }
 }
 
 void NextRendererApplication::OnCursorPosition(const double xpos, const double ypos)
@@ -856,16 +833,11 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
     {
         return;
     }
-
-    mousePos_ = glm::vec2(xpos, ypos);
     
     if(gameInstance_->OnCursorPosition(xpos, ypos))
     {
         return;
     }
-
-    // Camera motions
-    modelViewController_.OnCursorPosition(xpos, ypos);
 }
 
 void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)
@@ -881,23 +853,6 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     {
         return;
     }
-
-    // Camera motions
-    modelViewController_.OnMouseButton(button, action, mods);
-#if !ANDROID
-    static glm::vec2 pressMousePos_ {};
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-    {
-       pressMousePos_ = mousePos_;
-    }
-    else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
-    {
-        if( glm::distance(pressMousePos_, mousePos_) < 2.0f )
-        {
-            userSettings_.RequestRayCast = true;
-        }
-    }
-#endif
 }
 
 void NextRendererApplication::OnScroll(const double xoffset, const double yoffset)
@@ -944,12 +899,12 @@ void NextRendererApplication::OnRendererBeforeNextFrame()
 
 void NextRendererApplication::OnTouch(bool down, double xpos, double ypos)
 {
-    modelViewController_.OnTouch(down, xpos, ypos);
+
 }
 
 void NextRendererApplication::OnTouchMove(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition(xpos, ypos);
+
 }
 
 void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
@@ -1014,7 +969,8 @@ void NextRendererApplication::LoadScene(std::string sceneFileName)
         renderer_->SetScene(scene_);
         
         userSettings_.CameraIdx = 0;
-        modelViewController_.Reset(scene_->GetEnvSettings().ModelView);
+        assert(!scene_->GetEnvSettings().cameras.empty());
+        scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
 
         totalFrames_ = 0;
         

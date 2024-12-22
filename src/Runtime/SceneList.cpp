@@ -202,7 +202,8 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
         camera.ControlSpeed = 1.0f;
         camera.GammaCorrection = true;
         camera.HasSky = true;
-        Model::AutoFocusCamera(camera, models);
+        Assets::Camera defaultCam = Model::AutoFocusCamera(camera, models);
+        camera.cameras.push_back(defaultCam);
         return true;
     }
 

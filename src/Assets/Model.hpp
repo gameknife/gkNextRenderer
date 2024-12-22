@@ -42,10 +42,10 @@ namespace Assets
             SkyIdx = 0;
             SunIntensity = 500.f;
             SkyIntensity = 100.0f;
+            SkyRotation = 0;
             SunRotation = 0.5f;   
         }
         
-        glm::mat4 ModelView;
         float FieldOfView;
         float Aperture;
         float FocusDistance;
@@ -150,7 +150,7 @@ namespace Assets
     public:
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 
-        static void AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
+        static Camera AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
 
         static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
                                      std::vector<Material>& materials,

@@ -86,6 +86,9 @@ namespace Assets
 		
 		Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
 		void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
+
+		const Camera& GetRenderCamera() const { return renderCamera_; }
+		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 		
 	private:
 		std::vector<Material> materials_;
@@ -132,6 +135,7 @@ namespace Assets
 		bool requestOverrideModelView = false;
 		
 		Assets::EnvironmentSetting envSettings_;
+		Camera renderCamera_;
 	};
 
 }

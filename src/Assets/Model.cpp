@@ -190,8 +190,6 @@ namespace Assets
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 glm::mat4 ModelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
                 out_camera.cameras.push_back({ std::to_string(node.camera) + " " + node.name, ModelView, 40});
-
-                if(node.camera == 0) out_camera.ModelView = ModelView;
             }
         }
         
@@ -481,7 +479,7 @@ namespace Assets
         }
 
         // default auto camera
-        Model::AutoFocusCamera(cameraInit, models);
+        Camera defaultCam = Model::AutoFocusCamera(cameraInit, models);
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
@@ -526,6 +524,12 @@ namespace Assets
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
+        }
+
+        // if no camera, add default
+        if (cameraInit.cameras.empty() )
+        {
+            cameraInit.cameras.push_back(defaultCam);
         }
 
         // load all animations
@@ -761,7 +765,7 @@ namespace Assets
         }
     }
 
-    void Model::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
+    Camera Model::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
         glm::vec3 boundsMin, boundsMax;
@@ -783,7 +787,13 @@ namespace Assets
         }
 
         glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
-        cameraInit.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+
+        Camera newCamera;
+        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+        newCamera.FieldOfView = 40;
+        newCamera.Aperture = 0.0f;
+
+        return newCamera;
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,

@@ -41,9 +41,6 @@ struct Statistics final
 	uint32_t TotalSamples;
 	uint32_t TotalFrames;
 	double RenderTime;
-	float CamPosX;
-	float CamPosY;
-	float CamPosZ;
 	uint32_t TriCount;
 	uint32_t InstanceCount;
 	uint32_t NodeCount;
