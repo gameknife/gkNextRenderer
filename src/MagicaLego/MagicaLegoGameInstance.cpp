@@ -95,6 +95,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     cameraRotX_ = 45;
     cameraRotY_ = 30;
     cameraArm_ = 5.0;
+    cameraFOV_ = 12.f;
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
@@ -189,7 +190,7 @@ bool MagicaLegoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamer
     panLeft_ = glm::normalize(left);
 
     OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
-    
+    OutRenderCamera.FieldOfView = cameraFOV_;
     
     
     return true;
@@ -408,6 +409,13 @@ bool MagicaLegoGameInstance::OnMouseButton(int button, int action, int mods)
     {
         cameraMultiplier_ = 0.0f;
     }
+    return true;
+}
+
+bool MagicaLegoGameInstance::OnScroll(double xoffset, double yoffset)
+{
+    cameraFOV_ -= static_cast<float>(yoffset);
+    cameraFOV_ = std::clamp(cameraFOV_, 1.0f, 30.0f);
     return true;
 }
 

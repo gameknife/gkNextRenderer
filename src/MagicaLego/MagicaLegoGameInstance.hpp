@@ -126,6 +126,7 @@ public:
     bool OnKey(int key, int scancode, int action, int mods) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(int button, int action, int mods) override;
+    bool OnScroll(double xoffset, double yoffset) override;
 
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }
@@ -236,6 +237,7 @@ private:
     float cameraRotY_{};
     float cameraArm_{};
     float cameraMultiplier_{};
+    float cameraFOV_{};
 
     bool bMouseLeftDown_{};
     int lastDownFrameNum_{};
