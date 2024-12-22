@@ -1,7 +1,7 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
 #include <fmt/format.h>
 #include <iostream>
@@ -41,8 +41,8 @@ int main(int argc, const char* argv[]) noexcept
         NextRenderer::PlatformInit();
         
         // Start the application.
-        std::unique_ptr<NextRendererApplication> GApplication;
-        GApplication.reset( new NextRendererApplication(options) );
+        std::unique_ptr<NextEngine> GApplication;
+        GApplication.reset( new NextEngine(options) );
 
         // Application Main Loop
         GApplication->Start();
