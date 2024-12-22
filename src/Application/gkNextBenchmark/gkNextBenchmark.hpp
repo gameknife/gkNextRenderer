@@ -2,7 +2,7 @@
 // ReSharper disable once CppUnusedIncludeDirective
 #include "BenchMark.hpp"
 #include "Common/CoreMinimal.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
 
 class BenchmarkGameInstance : public NextGameInstanceBase

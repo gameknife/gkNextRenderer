@@ -11,7 +11,7 @@
 #include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
-#include "Application.hpp"
+#include "Engine.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>
@@ -28,7 +28,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
-#include "Application.hpp"
+#include "Engine.hpp"
 #include "Options.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"

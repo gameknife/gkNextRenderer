@@ -1,5 +1,5 @@
 #include "gkNextRenderer.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {

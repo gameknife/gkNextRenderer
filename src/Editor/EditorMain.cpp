@@ -3,7 +3,7 @@
 #include <Runtime/Platform/PlatformCommon.h>
 
 #include "EditorInterface.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
 #include "Editor/EditorCommand.hpp"
 #include "Editor/EditorInterface.hpp"

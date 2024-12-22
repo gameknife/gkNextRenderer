@@ -1,7 +1,7 @@
 #pragma once
 
 #include "EditorGUI.h"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 
 class EditorInterface;
 
