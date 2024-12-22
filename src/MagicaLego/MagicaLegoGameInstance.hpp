@@ -120,7 +120,7 @@ public:
     bool OnRenderUI() override;
     void OnInitUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
-    bool OverrideModelView(glm::mat4& OutMatrix) const override;
+    bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     void OnSceneLoaded() override;
     void OnSceneUnloaded() override;
     bool OnKey(int key, int scancode, int action, int mods) override;

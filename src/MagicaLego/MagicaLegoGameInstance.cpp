@@ -167,7 +167,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     }
 }
 
-bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
+bool MagicaLegoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
 {
     float xRotation = cameraRotX_; // 例如绕X轴旋转45度
     float yRotation = cameraRotY_; // 例如上下偏转30度
@@ -188,7 +188,7 @@ bool MagicaLegoGameInstance::OverrideModelView(glm::mat4& OutMatrix) const
     panForward_ = glm::normalize(forward);
     panLeft_ = glm::normalize(left);
 
-    OutMatrix = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
+    OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     
     
     

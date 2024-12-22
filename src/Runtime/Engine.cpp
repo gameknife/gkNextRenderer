@@ -100,16 +100,12 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.RendererType = options.RendererType;
     userSettings.Benchmark = options.Benchmark;
-    userSettings.BenchmarkNextScenes = options.BenchmarkNextScenes;
-    userSettings.BenchmarkMaxTime = options.BenchmarkMaxTime;
     userSettings.SceneIndex = options.SceneIndex;
 
     if(options.SceneName != "")
     {
         userSettings.SceneIndex = SceneList::AddExternalScene(Utilities::FileHelper::GetPlatformFilePath(("assets/models/" + options.SceneName).c_str()));
     }
-
-    userSettings.AccumulateRays = false;
     
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
@@ -546,9 +542,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 {
     Assets::UniformBufferObject ubo = {};
 
-    const Assets::Camera& renderCam = scene_->GetRenderCamera();
+    // a copy, simple struct
+    Assets::Camera renderCam = scene_->GetRenderCamera();
+    gameInstance_->OverrideRenderCamera(renderCam);
     ubo.ModelView = renderCam.ModelView;
-    gameInstance_->OverrideModelView(ubo.ModelView);
+    
     scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
@@ -792,7 +790,7 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
     {
         switch (key)
         {
-        case GLFW_KEY_ESCAPE: scene_->SetSelectedId(-1);;
+        case GLFW_KEY_ESCAPE: scene_->SetSelectedId(-1);
             break;
         default: break;
         }
@@ -808,16 +806,6 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
                 break;
             default: break;
             }
-        }
-    }
-    else if(action == GLFW_RELEASE)
-    {
-        if (!userSettings_.Benchmark)
-        {
-            // switch (key)
-            // {
-            //     default: break;
-            // }
         }
     }
 #endif
@@ -863,11 +851,8 @@ void NextEngine::OnScroll(const double xoffset, const double yoffset)
     {
         return;
     }
-    const auto prevFov = scene_->GetEnvSettings().FieldOfView;
-    scene_->GetEnvSettings().FieldOfView = std::clamp(
-        static_cast<float>(prevFov - yoffset),
-        UserSettings::FieldOfViewMinValue,
-        UserSettings::FieldOfViewMaxValue);
+
+    gameInstance_->OnScroll(xoffset, yoffset);
 }
 
 void NextEngine::OnDropFile(int path_count, const char* paths[])

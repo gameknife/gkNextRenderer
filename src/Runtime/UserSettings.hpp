@@ -8,16 +8,11 @@ struct UserSettings final
 	int RendererType;
 	// Application
 	bool Benchmark;
-
-	// Benchmark
-	bool BenchmarkNextScenes{};
-	uint32_t BenchmarkMaxTime{};
 	
 	// Scene
 	int SceneIndex {};
 
 	// Renderer
-	bool AccumulateRays;
 	int32_t NumberOfSamples;
 	int32_t NumberOfBounces;
 	int32_t MaxNumberOfBounces;
@@ -52,10 +47,7 @@ struct UserSettings final
 	float PaperWhiteNit;
 
 	bool ShowEdge;
-	
-	inline const static float FieldOfViewMinValue = 5.0f;
-	inline const static float FieldOfViewMaxValue = 90.0f;
-	
+
 	// HitResult
 	Assets::RayCastResult HitResult;
 };

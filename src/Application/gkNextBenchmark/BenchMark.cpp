@@ -74,7 +74,7 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
 
     // If in benchmark mode, bail out from the scene if we've reached the time or sample limit.
     {
-        const bool timeLimitReached = periodTotalFrames_ != 0 && time_ - sceneInitialTime_ > GOption->BenchmarkMaxTime;
+        const bool timeLimitReached = periodTotalFrames_ != 0 && time_ - sceneInitialTime_ > 10.0;
         if (timeLimitReached)
         {
             return true;

@@ -1,12 +1,14 @@
 #include "ModelViewController.hpp"
+
+#include "Assets/Model.hpp"
 #include "Vulkan/Vulkan.hpp"
 
-void ModelViewController::Reset(const glm::mat4& modelView)
+void ModelViewController::Reset(const Assets::Camera& RenderCamera)
 {
-	const auto inverse = glm::inverse(modelView);
+	const auto inverse = glm::inverse(RenderCamera.ModelView);
 
 	position_ = inverse * glm::vec4(0, 0, 0, 1);
-	orientation_ = glm::mat4(glm::mat3(modelView));
+	orientation_ = glm::mat4(glm::mat3(RenderCamera.ModelView));
 	
 	cameraRotX_ = 0;
 	cameraRotY_ = 0;
@@ -21,6 +23,8 @@ void ModelViewController::Reset(const glm::mat4& modelView)
 	mouseRightPressed_ = false;
 
 	mouseSensitive_ = 0.5;
+
+	fieldOfView_ = RenderCamera.FieldOfView;
 
 	UpdateVectors();
 }
@@ -46,8 +50,8 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
 	case GLFW_KEY_W: cameraMovingForward_ = action != GLFW_RELEASE; return true;
 	case GLFW_KEY_A: cameraMovingLeft_ = action != GLFW_RELEASE; return true;
 	case GLFW_KEY_D: cameraMovingRight_ = action != GLFW_RELEASE; return true;
-	// case GLFW_KEY_LEFT_CONTROL: cameraMovingDown_ = action != GLFW_RELEASE; return true;
-	// case GLFW_KEY_LEFT_SHIFT: cameraMovingUp_ = action != GLFW_RELEASE; return true;
+	case GLFW_KEY_Q: cameraMovingDown_ = action != GLFW_RELEASE; return true;
+	case GLFW_KEY_E: cameraMovingUp_ = action != GLFW_RELEASE; return true;
 	default: return false;
 	}
 #else
@@ -117,6 +121,12 @@ bool ModelViewController::OnTouch(bool down, double xpos, double ypos)
 	mousePosY_ = ypos;
 
 	return true;
+}
+
+void ModelViewController::OnScroll(double xoffset, double yoffset)
+{
+	fieldOfView_ -= static_cast<float>(yoffset);
+	fieldOfView_ = glm::clamp(fieldOfView_, 1.0f, 90.0f);
 }
 
 bool ModelViewController::UpdateCamera(const double speed, const double timeDelta)

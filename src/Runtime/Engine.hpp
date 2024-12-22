@@ -25,16 +25,20 @@ public:
 	virtual bool OnRenderUI() =0;
 	virtual void OnPreConfigUI() {}
 	virtual void OnInitUI() {}
-	virtual void OnRayHitResponse(Assets::RayCastResult& result) {};
+	virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
 
-	virtual bool OverrideModelView(glm::mat4& OutMatrix) const {return false;}
+	// camera
+	virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const {return false;}
 
+	// scene
 	virtual void OnSceneLoaded() {}
 	virtual void OnSceneUnloaded() {}
 
+	// input
 	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
 	virtual bool OnCursorPosition(double xpos, double ypos) =0;
 	virtual bool OnMouseButton(int button, int action, int mods) =0;
+	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase

@@ -87,7 +87,7 @@ namespace Assets
 		Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
 		void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
 
-		const Camera& GetRenderCamera() const { return renderCamera_; }
+		Camera& GetRenderCamera() { return renderCamera_; }
 		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 		
 	private:

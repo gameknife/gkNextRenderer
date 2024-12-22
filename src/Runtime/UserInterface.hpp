@@ -91,7 +91,6 @@ public:
 private:
 	NextEngine& GetEngine() {return *engine_;}
 	
-	void DrawSettings();
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;

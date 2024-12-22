@@ -10,7 +10,6 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Optio
 {
     config.Title = "gkNextBenchmark";
     options.Benchmark = true;
-    options.BenchmarkNextScenes = true;
     options.Width = 1280;
     options.Height = 720;
 }
@@ -33,9 +32,11 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
          {
              GetEngine().RequestClose();
          }
-         
-         GetEngine().GetUserSettings().SceneIndex += 1;
-         GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         else
+         {
+             GetEngine().GetUserSettings().SceneIndex += 1;
+             GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         }
      }
 }
 

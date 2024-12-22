@@ -659,15 +659,6 @@ namespace Assets
             {
                 cameraInit.cameras[i].FocalDistance = cam.extras.Get("FocalDistance").GetNumberAsDouble();
             }
-            
-            if (i == 0) //use 1st camera params
-            {
-                cameraInit.FieldOfView = cameraInit.cameras[i].FieldOfView;
-                cameraInit.Aperture = cameraInit.cameras[i].Aperture;
-                cameraInit.FocusDistance = cameraInit.cameras[i].FocalDistance;
-                cameraInit.CameraIdx = 0;
-
-            }
             i++;
         }
         //printf("model.cameras: %d\n", i);

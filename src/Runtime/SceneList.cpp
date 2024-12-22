@@ -196,9 +196,6 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     else if (ext == ".obj")
     {
         Model::LoadObjModel(filename, nodes, models, materials, lights);
-        camera.FieldOfView = 38;
-        camera.Aperture = 0.0f;
-        camera.FocusDistance = 100.0f;
         camera.ControlSpeed = 1.0f;
         camera.GammaCorrection = true;
         camera.HasSky = true;

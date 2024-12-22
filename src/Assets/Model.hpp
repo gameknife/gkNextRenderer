@@ -32,9 +32,6 @@ namespace Assets
         
         void Reset()
         {
-            FieldOfView = 50;
-            Aperture = 0.0f;
-            FocusDistance = 1000.0f;
             ControlSpeed = 5.0f;
             GammaCorrection = true;
             HasSky = true;
@@ -46,14 +43,11 @@ namespace Assets
             SunRotation = 0.5f;   
         }
         
-        float FieldOfView;
-        float Aperture;
-        float FocusDistance;
         float ControlSpeed;
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
-        int32_t SkyIdx, CameraIdx;
+        int32_t SkyIdx;
         float SunRotation;
         float SkyRotation;
         
