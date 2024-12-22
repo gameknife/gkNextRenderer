@@ -3,7 +3,7 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
-#include "Runtime/Application.hpp"
+#include "Runtime/Engine.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <fmt/format.h>
@@ -16,7 +16,7 @@
 #include <android/log.h>
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 
-std::unique_ptr<NextRendererApplication> GApplication = nullptr;
+std::unique_ptr<NextEngine> GApplication = nullptr;
 
 
 void handle_cmd(android_app* app, int32_t cmd) {
@@ -32,7 +32,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
             
             const char* argv[] = { "gkNextRenderer", "--renderer=1" };
             GOption = new Options(2, argv);
-            GApplication.reset(new NextRendererApplication(*GOption, app->window));
+            GApplication.reset(new NextEngine(*GOption, app->window));
             GApplication->Start();
         }
         break;
