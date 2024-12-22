@@ -31,7 +31,7 @@ static std::vector<VertExtInfo> GExtInfos;
 
 const glm::i16vec3 INVALID_POS(0, -10, 0);
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<MagicaLegoGameInstance>(config, options, engine);
 }
@@ -67,7 +67,7 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& BlockLocation)
     return hash;
 }
 
-MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     NextRenderer::HideConsole();
 

@@ -43,7 +43,7 @@ extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 
 UserInterface::UserInterface(
-	NextRendererApplication* engine,
+	NextEngine* engine,
 	Vulkan::CommandPool& commandPool, 
 	const Vulkan::SwapChain& swapChain, 
 	const Vulkan::DepthBuffer& depthBuffer,

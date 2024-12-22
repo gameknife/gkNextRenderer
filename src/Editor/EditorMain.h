@@ -13,7 +13,7 @@ namespace Assets
 class EditorGameInstance : public NextGameInstanceBase
 {
 public:
-    EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
+    EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
     ~EditorGameInstance() override = default;
 
     // overrides
@@ -30,10 +30,10 @@ public:
     bool OnMouseButton(int button, int action, int mods) override;
     
     // quick access engine
-    NextRendererApplication& GetEngine() { return *engine_; }
+    NextEngine& GetEngine() { return *engine_; }
 
 private:
-    NextRendererApplication* engine_;
+    NextEngine* engine_;
 
     std::unique_ptr<EditorInterface> editorUserInterface_;
 };

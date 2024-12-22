@@ -1,12 +1,12 @@
 #include "gkNextBenchmark.hpp"
 #include "Runtime/Application.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
 
-BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
+BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     config.Title = "gkNextBenchmark";
     options.Benchmark = true;

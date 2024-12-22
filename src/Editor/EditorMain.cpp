@@ -8,12 +8,12 @@
 #include "Editor/EditorCommand.hpp"
 #include "Editor/EditorInterface.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
 
-EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
 

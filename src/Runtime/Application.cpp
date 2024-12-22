@@ -149,7 +149,7 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
-NextRendererApplication::NextRendererApplication(Options& options, void* userdata)
+NextEngine::NextEngine(Options& options, void* userdata)
 {
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -195,7 +195,7 @@ NextRendererApplication::NextRendererApplication(Options& options, void* userdat
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 }
 
-NextRendererApplication::~NextRendererApplication()
+NextEngine::~NextEngine()
 {
     Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
@@ -206,7 +206,7 @@ NextRendererApplication::~NextRendererApplication()
     Vulkan::Window::TerminateGLFW();
 }
 
-void NextRendererApplication::Start()
+void NextEngine::Start()
 {
     renderer_->Start();
 
@@ -224,7 +224,7 @@ void NextRendererApplication::Start()
     RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 }
 
-bool NextRendererApplication::Tick()
+bool NextEngine::Tick()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
     
@@ -317,7 +317,7 @@ bool NextRendererApplication::Tick()
 #endif
 }
 
-void NextRendererApplication::End()
+void NextEngine::End()
 {
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
@@ -325,12 +325,12 @@ void NextRendererApplication::End()
     userInterface_.reset();
 }
 
-void NextRendererApplication::AddTimerTask(double delay, DelayedTask task)
+void NextEngine::AddTimerTask(double delay, DelayedTask task)
 {
     delayedTasks_.push_back( { time_ + delay, delay, task} );
 }
 
-void NextRendererApplication::PlaySound(const std::string& soundName, bool loop, float volume)
+void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -349,7 +349,7 @@ void NextRendererApplication::PlaySound(const std::string& soundName, bool loop,
     ma_sound_start(sound);
 }
 
-void NextRendererApplication::PauseSound(const std::string& soundName, bool pause)
+void NextEngine::PauseSound(const std::string& soundName, bool pause)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -360,7 +360,7 @@ void NextRendererApplication::PauseSound(const std::string& soundName, bool paus
     pause ? ma_sound_stop(sound) : ma_sound_start(sound);
 }
 
-bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
+bool NextEngine::IsSoundPlaying(const std::string& soundName)
 {
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
@@ -370,12 +370,12 @@ bool NextRendererApplication::IsSoundPlaying(const std::string& soundName)
     return ma_sound_is_playing(sound);
 }
 
-void NextRendererApplication::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
+void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
     ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
 }
 
-glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
+glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 {
     glm::vec2 offset = glm::vec2(0.0, 0.0);
     glm::vec2 extent = glm::vec2(GetWindow().FramebufferSize().width, GetWindow().FramebufferSize().height);
@@ -389,7 +389,7 @@ glm::vec3 NextRendererApplication::ProjectScreenToWorld(glm::vec2 locationSS)
     return raydir;
 }
 
-glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
+glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
@@ -402,7 +402,7 @@ glm::vec3 NextRendererApplication::ProjectWorldToScreen(glm::vec3 locationWS)
     return transformed;
 }
 
-void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
+void NextEngine::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
 {
     auto transformedFrom = ProjectWorldToScreen(from);
     auto transformedTo = ProjectWorldToScreen(to);
@@ -414,7 +414,7 @@ void NextRendererApplication::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec
     }
 }
 
-void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
+void NextEngine::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
 {
     // Draw the box with 12 lines
     DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
@@ -433,7 +433,7 @@ void NextRendererApplication::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4
     DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
 }
 
-void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
+void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
 {
     auto transformed = ProjectWorldToScreen(location);
     // center as 0,0
@@ -443,22 +443,22 @@ void NextRendererApplication::DrawAuxPoint(glm::vec3 location, glm::vec4 color, 
     }
 }
 
-void NextRendererApplication::RequestClose()
+void NextEngine::RequestClose()
 {
     window_->Close();
 }
 
-void NextRendererApplication::RequestMinimize()
+void NextEngine::RequestMinimize()
 {
     window_->Minimize();
 }
 
-bool NextRendererApplication::IsMaximumed()
+bool NextEngine::IsMaximumed()
 {
     return window_->IsMaximumed();
 }
 
-void NextRendererApplication::ToggleMaximize()
+void NextEngine::ToggleMaximize()
 {
     if (window_->IsMaximumed())
     {
@@ -470,7 +470,7 @@ void NextRendererApplication::ToggleMaximize()
     }
 }
 
-void NextRendererApplication::RequestScreenShot(std::string filename)
+void NextEngine::RequestScreenShot(std::string filename)
 {
     std::string screenshot_filename = filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", fmt::localtime(std::time(nullptr))) : filename;
     SaveScreenShot(screenshot_filename, 0, 0, 0, 0);
@@ -532,7 +532,7 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
     return jitterMatrix * projectionMatrix;
 }
 
-glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
+glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
 {
     glm::ivec2 pos{0,0};
     glm::ivec2 size{1920,1080};
@@ -542,7 +542,7 @@ glm::ivec2 NextRendererApplication::GetMonitorSize(int monitorIndex) const
     return size;
 }
 
-Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
+Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     Assets::UniformBufferObject ubo = {};
 
@@ -681,7 +681,7 @@ Assets::UniformBufferObject NextRendererApplication::GetUniformBufferObject(cons
     return ubo;
 }
 
-void NextRendererApplication::OnRendererDeviceSet()
+void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
@@ -708,7 +708,7 @@ void NextRendererApplication::OnRendererDeviceSet()
     status_ = NextRenderer::EApplicationStatus::Running;
 }
 
-void NextRendererApplication::OnRendererCreateSwapChain()
+void NextEngine::OnRendererCreateSwapChain()
 {
     if(userInterface_.get() == nullptr)
     {
@@ -724,7 +724,7 @@ void NextRendererApplication::OnRendererCreateSwapChain()
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
 
-void NextRendererApplication::OnRendererDeleteSwapChain()
+void NextEngine::OnRendererDeleteSwapChain()
 {
     if(userInterface_.get() != nullptr)
     {
@@ -732,7 +732,7 @@ void NextRendererApplication::OnRendererDeleteSwapChain()
     }
 }
 
-void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     static float frameRate = 0.0;
     static double lastTime = 0.0;
@@ -775,7 +775,7 @@ void NextRendererApplication::OnRendererPostRender(VkCommandBuffer commandBuffer
     userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
 }
 
-void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
+void NextEngine::OnKey(int key, int scancode, int action, int mods)
 {
     if (userInterface_->WantsToCaptureKeyboard())
     {
@@ -823,7 +823,7 @@ void NextRendererApplication::OnKey(int key, int scancode, int action, int mods)
 #endif
 }
 
-void NextRendererApplication::OnCursorPosition(const double xpos, const double ypos)
+void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -840,7 +840,7 @@ void NextRendererApplication::OnCursorPosition(const double xpos, const double y
     }
 }
 
-void NextRendererApplication::OnMouseButton(const int button, const int action, const int mods)
+void NextEngine::OnMouseButton(const int button, const int action, const int mods)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -855,7 +855,7 @@ void NextRendererApplication::OnMouseButton(const int button, const int action, 
     }
 }
 
-void NextRendererApplication::OnScroll(const double xoffset, const double yoffset)
+void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
     if (!renderer_->HasSwapChain() ||
         userSettings_.Benchmark ||
@@ -870,7 +870,7 @@ void NextRendererApplication::OnScroll(const double xoffset, const double yoffse
         UserSettings::FieldOfViewMaxValue);
 }
 
-void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
+void NextEngine::OnDropFile(int path_count, const char* paths[])
 {
     // add glb to the last, and loaded
     if (path_count > 0)
@@ -892,22 +892,22 @@ void NextRendererApplication::OnDropFile(int path_count, const char* paths[])
     }
 }
 
-void NextRendererApplication::OnRendererBeforeNextFrame()
+void NextEngine::OnRendererBeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
 }
 
-void NextRendererApplication::OnTouch(bool down, double xpos, double ypos)
+void NextEngine::OnTouch(bool down, double xpos, double ypos)
 {
 
 }
 
-void NextRendererApplication::OnTouchMove(double xpos, double ypos)
+void NextEngine::OnTouchMove(double xpos, double ypos)
 {
 
 }
 
-void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
+void NextEngine::RequestLoadScene(std::string sceneFileName)
 {
     AddTickedTask([this, sceneFileName](double DeltaSeconds)->bool
     {
@@ -921,7 +921,7 @@ void NextRendererApplication::RequestLoadScene(std::string sceneFileName)
     });
 }
 
-void NextRendererApplication::LoadScene(std::string sceneFileName)
+void NextEngine::LoadScene(std::string sceneFileName)
 {
     status_ = NextRenderer::EApplicationStatus::Loading;
     

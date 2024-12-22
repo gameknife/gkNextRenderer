@@ -8,7 +8,7 @@
 class BenchmarkGameInstance : public NextGameInstanceBase
 {
 public:
-    BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextRendererApplication* engine);
+    BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
     ~BenchmarkGameInstance() override = default;
 
     // overrides
@@ -24,9 +24,9 @@ public:
     bool OnMouseButton(int button, int action, int mods) override;
     
     // quick access engine
-    NextRendererApplication& GetEngine() { return *engine_; }
+    NextEngine& GetEngine() { return *engine_; }
 private:
-    NextRendererApplication* engine_;
+    NextEngine* engine_;
 
     std::unique_ptr<BenchMarker> benchMarker_;
 };
