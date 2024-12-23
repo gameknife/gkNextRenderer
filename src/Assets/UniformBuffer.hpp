@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Common/CoreMinimal.hpp"
 #include "Utilities/Glm.hpp"
 #include <memory>
 
@@ -8,6 +8,7 @@ namespace Vulkan
 	class Buffer;
 	class Device;
 	class DeviceMemory;
+	class CommandPool;
 }
 
 
@@ -52,8 +53,8 @@ namespace Assets
 
 	struct RayCastContext
 	{
-		glm::vec4 Origin;
-		glm::vec4 Direction;
+		vec4 Origin;
+		vec4 Direction;
 		float TMin;
 		float TMax;
 		float Reversed0;
@@ -62,8 +63,8 @@ namespace Assets
 
 	struct RayCastResult
 	{
-		glm::vec4 HitPoint;
-		glm::vec4 Normal;
+		vec4 HitPoint;
+		vec4 Normal;
 		float T;
 		uint32_t InstanceId;
 		uint32_t MaterialId;
@@ -76,6 +77,12 @@ namespace Assets
 		RayCastResult Result;
 	};
 
+	struct RayCastRequest
+	{
+		RayCastContext context;
+		std::function<bool(RayCastResult)> callback;
+	};
+
 	class RayCastBuffer
 	{
 	public:
@@ -84,19 +91,17 @@ namespace Assets
 		RayCastBuffer& operator = (const RayCastBuffer&) = delete;
 		RayCastBuffer& operator = (RayCastBuffer&&) = delete;
 
-		explicit RayCastBuffer(const Vulkan::Device& device);
-		RayCastBuffer(RayCastBuffer&& other) noexcept;
+		explicit RayCastBuffer(Vulkan::CommandPool& commandPool);
 		~RayCastBuffer();
 
 		const Vulkan::Buffer& Buffer() const { return *buffer_; }
-
-		RayCastResult GetResult() {return  rayCastIO.Result;}
-		void SetContext(RayCastContext& context) {rayCastIO.Context = context;}
-
+		
 		void SyncWithGPU();
 
+		std::vector<RayCastIO> rayCastIO;
+		std::vector<RayCastIO> rayCastIOTemp;
 	private:
-		RayCastIO rayCastIO;
+		
 		std::unique_ptr<Vulkan::Buffer> buffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> memory_;
 	};

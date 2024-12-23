@@ -144,7 +144,7 @@ namespace Vulkan::RayTracing
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
         
-        rayCastBuffer_.reset(new Assets::RayCastBuffer(Device()));
+        rayCastBuffer_.reset(new Assets::RayCastBuffer(CommandPool()));
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
@@ -164,21 +164,28 @@ namespace Vulkan::RayTracing
 
         if(supportRayCast_)
         {
-            rayCastBuffer_->SetContext(cameraCenterCastContext_);
-            rayCastBuffer_->SyncWithGPU();
-            cameraCenterCastResult_ = rayCastBuffer_->GetResult();
-            if (cameraCenterCastResult_.Hitted )
+            if (rayRequested_.size() > 0)
             {
-                if ( rayCastCallback_ )
+                for ( int i = 0; i < rayRequested_.size(); i++)
                 {
-                    rayCastCallback_(cameraCenterCastResult_);
-                    rayCastCallback_ = nullptr;
+                    rayCastBuffer_->rayCastIO[i].Context = rayRequested_[i].context;
                 }
             }
-        }
-        else
-        {
-            cameraCenterCastResult_ = Assets::RayCastResult();
+            
+            rayCastBuffer_->SyncWithGPU(); // readback last frame, request this frame
+
+            for ( int i = 0; i < rayFetched_.size(); i++)
+            {
+                if (rayCastBuffer_->rayCastIO[i].Result.Hitted)
+                {
+                    if (rayFetched_[i].callback)
+                    {
+                        rayFetched_[i].callback(rayCastBuffer_->rayCastIO[i].Result);
+                    }
+                }
+            }
+            rayFetched_ = rayRequested_;
+            rayRequested_.clear();
         }
     }
 
@@ -215,28 +222,12 @@ namespace Vulkan::RayTracing
         tlasUpdateRequest_ = instanceCount;
     }
 
-
-    bool RayTraceBaseRenderer::GetFocusDistance(float& distance) const
+    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback)
     {
-        if(cameraCenterCastResult_.Hitted)
-        {
-            distance = cameraCenterCastResult_.T;
-        }
-
-        return cameraCenterCastResult_.Hitted;
-    }
-
-    bool RayTraceBaseRenderer::GetLastRaycastResult(Assets::RayCastResult& result) const
-    {
-        result = cameraCenterCastResult_;
-        return cameraCenterCastResult_.Hitted;
-    }
-
-    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback) const
-    {
-        rayCastCallback_ = callback;
-        cameraCenterCastContext_.Origin = glm::vec4(org, 1);
-        cameraCenterCastContext_.Direction = glm::vec4(dir, 0);
+        Assets::RayCastContext context;
+        context.Origin = glm::vec4(org, 1);
+        context.Direction = glm::vec4(dir, 0);
+        rayRequested_.push_back({context, callback});
     }
 
     void RayTraceBaseRenderer::OnPreLoadScene()

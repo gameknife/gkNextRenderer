@@ -436,13 +436,30 @@ void NextEngine::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float
     DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
 }
 
-void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
+static std::vector<int32_t> auxCounter;
+void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick)
 {
-    auto transformed = ProjectWorldToScreen(location);
-    // center as 0,0
-    if(transformed.z < 1)
+    if (durationInTick > 0)
     {
-        userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+        auxCounter.push_back(durationInTick);
+        int32_t id = static_cast<int32_t>(auxCounter.size()) - 1;
+        AddTickedTask( [this, location, color, size, id](double deltaSeconds)->bool
+        {
+            auto transformed = ProjectWorldToScreen(location);
+            if(transformed.z < 1)
+            {
+                userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+            }
+            return (auxCounter[id] -= 1) <= 0;
+        });
+    }
+    else
+    {
+        auto transformed = ProjectWorldToScreen(location);
+        if(transformed.z < 1)
+        {
+            userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+        }
     }
 }
 

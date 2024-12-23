@@ -74,14 +74,21 @@ bool NextRendererGameInstance::OnMouseButton(int button, int action, int mods)
 	{
 		auto mousePos = GetEngine().GetMousePos();
 
-		glm::vec3 org;
-		glm::vec3 dir;
-		GetEngine().GetScreenToWorldRay(mousePos, org, dir);
-		GetEngine().RayCastGPU( org, dir, [](Assets::RayCastResult result)
+		for ( int x = -4; x < 4; ++x)
 		{
-			fmt::print("{}: {} -> {}\n", result.Hitted, result.InstanceId, result.MaterialId);
-			return true;
-		});
+			for ( int y = -4; y < 4; ++y)
+			{
+				glm::vec3 org;
+				glm::vec3 dir;
+				GetEngine().GetScreenToWorldRay(mousePos + glm::dvec2(x * 1, y * 1), org, dir);
+				GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
+				{
+					GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+					//GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(1, 0, 0, 1), 2, 1000 );
+					return true;
+				});
+			}
+		}
 		return true;
 	}
     return true;

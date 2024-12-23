@@ -1,6 +1,9 @@
 #include "UniformBuffer.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/CommandPool.hpp"
 #include <cstring>
+
+#include "Vulkan/BufferUtil.hpp"
 
 namespace Assets {
 
@@ -30,21 +33,17 @@ void UniformBuffer::SetValue(const UniformBufferObject& ubo)
 	std::memcpy(data, &ubo, sizeof(ubo));
 	memory_->Unmap();
 }
-
-RayCastBuffer::RayCastBuffer(const Vulkan::Device& device)
+constexpr int32_t raycastMax = 1000;
+RayCastBuffer::RayCastBuffer(Vulkan::CommandPool& commandPool)
 {
-	const auto bufferSize = sizeof(RayCastIO);
+	const auto bufferSize = sizeof(RayCastIO) * raycastMax;
 
-	buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-	memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+	Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "RayCastIO", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, bufferSize, buffer_, memory_);
+
+	rayCastIO.resize(raycastMax);
+	rayCastIOTemp.resize(raycastMax);
 }
-
-	RayCastBuffer::RayCastBuffer(RayCastBuffer&& other) noexcept :
-		buffer_(other.buffer_.release()),
-		memory_(other.memory_.release())
-{
-}
-
+	
 RayCastBuffer::~RayCastBuffer()
 {
 	buffer_.reset();
@@ -53,12 +52,13 @@ RayCastBuffer::~RayCastBuffer()
 
 void RayCastBuffer::SyncWithGPU()
 {
-	const auto data = memory_->Map(0, sizeof(RayCastIO));
+	const auto data = memory_->Map(0, sizeof(RayCastIO) * raycastMax);
 	// download
 	RayCastIO* gpuData = static_cast<RayCastIO*>(data);
-	rayCastIO.Result = gpuData->Result;
+	std::memcpy(rayCastIOTemp.data(), rayCastIO.data(), sizeof(RayCastIO) * raycastMax);
+	std::memcpy(rayCastIO.data(), gpuData, sizeof(RayCastIO) * raycastMax);
 	// upload
-	std::memcpy(data, &rayCastIO, sizeof(rayCastIO));
+	std::memcpy(data, rayCastIOTemp.data(), sizeof(RayCastIO) * raycastMax);
 	memory_->Unmap();
 }
 }
