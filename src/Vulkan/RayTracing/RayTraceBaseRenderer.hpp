@@ -61,7 +61,7 @@ namespace Vulkan::RayTracing
 
 		virtual bool GetFocusDistance(float& distance) const override;
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const override;
-		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const override;
+		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback) const override;
 
 
 	protected:
@@ -84,6 +84,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<DeviceMemory> instancesBufferMemory_;
 		
 		Assets::RayCastResult cameraCenterCastResult_;
+		mutable std::function<bool(Assets::RayCastResult)> rayCastCallback_;
 		mutable Assets::RayCastContext cameraCenterCastContext_;
 		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;

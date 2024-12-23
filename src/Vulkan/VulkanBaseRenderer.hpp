@@ -252,7 +252,7 @@ namespace Vulkan
 		
 		virtual bool GetFocusDistance(float& distance) const {return false;}
 		virtual bool GetLastRaycastResult(Assets::RayCastResult& result) const {return false;}
-		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir) const {};
+		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback) const {};
 		
 		void CaptureScreenShot();
 		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);

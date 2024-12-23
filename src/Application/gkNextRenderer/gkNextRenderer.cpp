@@ -69,6 +69,21 @@ bool NextRendererGameInstance::OnCursorPosition(double xpos, double ypos)
 bool NextRendererGameInstance::OnMouseButton(int button, int action, int mods)
 {
     modelViewController_.OnMouseButton( button,  action,  mods);
+	
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		auto mousePos = GetEngine().GetMousePos();
+
+		glm::vec3 org;
+		glm::vec3 dir;
+		GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+		GetEngine().RayCastGPU( org, dir, [](Assets::RayCastResult result)
+		{
+			fmt::print("{}: {} -> {}\n", result.Hitted, result.InstanceId, result.MaterialId);
+			return true;
+		});
+		return true;
+	}
     return true;
 }
 

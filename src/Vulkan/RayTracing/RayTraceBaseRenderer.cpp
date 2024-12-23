@@ -167,6 +167,14 @@ namespace Vulkan::RayTracing
             rayCastBuffer_->SetContext(cameraCenterCastContext_);
             rayCastBuffer_->SyncWithGPU();
             cameraCenterCastResult_ = rayCastBuffer_->GetResult();
+            if (cameraCenterCastResult_.Hitted )
+            {
+                if ( rayCastCallback_ )
+                {
+                    rayCastCallback_(cameraCenterCastResult_);
+                    rayCastCallback_ = nullptr;
+                }
+            }
         }
         else
         {
@@ -224,8 +232,9 @@ namespace Vulkan::RayTracing
         return cameraCenterCastResult_.Hitted;
     }
 
-    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir) const
+    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback) const
     {
+        rayCastCallback_ = callback;
         cameraCenterCastContext_.Origin = glm::vec4(org, 1);
         cameraCenterCastContext_.Direction = glm::vec4(dir, 0);
     }
