@@ -94,6 +94,7 @@ namespace Assets
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         void SetMaterial(const std::vector<uint32_t>& materials);
+        const std::vector<uint32_t>& Materials() const { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
         
     private:

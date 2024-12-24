@@ -62,5 +62,5 @@ uint reserved1;
 uint reserved2;
 mat4 worldTS;
 mat4 combinedPrevTS;
-uint matId[4];
+uint matId[16];
 };

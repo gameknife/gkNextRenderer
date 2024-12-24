@@ -15,6 +15,11 @@ void Editor::GUI::ShowProperties()
         if (selected_obj_id != -1)
         {
             Assets::Node* selected_obj = current_scene->GetNodeByInstanceId(selected_obj_id);
+            if (selected_obj == nullptr)
+            {
+                ImGui::End();
+                return;
+            }
             
             ImGui::PushFont(fontIcon_);
             ImGui::TextUnformatted(selected_obj->GetName().c_str());
@@ -74,7 +79,7 @@ void Editor::GUI::ShowProperties()
             if(current_scene != nullptr && modelId != -1)
             {
                 auto& model = current_scene->Models()[modelId];
-                auto& mats = model.Materials();
+                auto& mats = selected_obj->Materials();
                 for ( auto& mat : mats)
                 {
                     int matIdx = mat;

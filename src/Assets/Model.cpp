@@ -1248,7 +1248,7 @@ namespace Assets
             GenerateMikkTSpace(this);
         }
 
-        if (materialIdx_.size() > 4)
+        if (materialIdx_.size() >= 16)
         {
             fmt::print("model material size: {}\n", materialIdx_.size());
         }
@@ -1346,7 +1346,7 @@ namespace Assets
         proxy.worldTS = WorldTransform();
         for ( int i = 0; i < materialIdx_.size(); i++ )
         {
-            if (i < 4)
+            if (i < 16)
             {
                 proxy.matId[i] = materialIdx_[i];
             }
