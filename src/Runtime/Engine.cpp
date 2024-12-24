@@ -381,21 +381,30 @@ glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 
 glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
+    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
+    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
     // from ndc to screenspace
     transformed.x += 1.0f;
-    transformed.x *= GetWindow().FramebufferSize().width / 2;
+    transformed.x *= vkextent.width / 2;
     transformed.y += 1.0f;
-    transformed.y *= GetWindow().FramebufferSize().height / 2;
-
+    transformed.y *= vkextent.height / 2;
+    
+    transformed.x += vkoffset.x;
+    transformed.y += vkoffset.y;
+    
     return transformed;
 }
 
 void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
 {
-    glm::vec2 offset = glm::vec2(0.0, 0.0);
-    glm::vec2 extent = glm::vec2(GetWindow().FramebufferSize().width, GetWindow().FramebufferSize().height);
+    // should consider rt offset
+    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
+    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    glm::vec2 offset = {vkoffset.x, vkoffset.y};
+    glm::vec2 extent = {vkextent.width, vkextent.height};
     glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
     glm::vec2 uv = pixel / extent * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
     glm::vec4 origin = prevUBO_.ModelViewInverse * glm::vec4(0, 0, 0, 1);

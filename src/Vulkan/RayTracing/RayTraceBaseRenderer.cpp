@@ -164,12 +164,9 @@ namespace Vulkan::RayTracing
 
         if(supportRayCast_)
         {
-            if (rayRequested_.size() > 0)
+            for ( int i = 0; i < rayRequested_.size(); i++)
             {
-                for ( int i = 0; i < rayRequested_.size(); i++)
-                {
-                    rayCastBuffer_->rayCastIO[i].Context = rayRequested_[i].context;
-                }
+                rayCastBuffer_->rayCastIO[i].Context = rayRequested_[i].context;
             }
             
             rayCastBuffer_->SyncWithGPU(); // readback last frame, request this frame

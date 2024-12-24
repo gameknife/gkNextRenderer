@@ -285,15 +285,18 @@ void UserInterface::SetStyle()
 
 void UserInterface::DrawPoint(float x, float y, float size, glm::vec4 color)
 {
+	// in viewport mode, the start from the display
 	auxDrawRequest_.push_back( [=]() {
-		ImGui::GetForegroundDrawList()->AddRectFilled({x - size, y - size}, {x + size, y + size}, Utilities::UI::Vec4ToImU32(color));
+		ImVec2 StartPos = ImGui::GetMainViewport()->Pos;
+		ImGui::GetForegroundDrawList()->AddRectFilled(StartPos + ImVec2{x - size, y - size}, StartPos + ImVec2{x + size, y + size}, Utilities::UI::Vec4ToImU32(color));
 	});
 }
 
 void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, float size, glm::vec4 color)
 {
 	auxDrawRequest_.push_back( [=]() {
-		ImGui::GetForegroundDrawList()->AddLine( ImVec2(fromx, fromy), ImVec2(tox, toy), Utilities::UI::Vec4ToImU32(color), size);
+		ImVec2 StartPos = ImGui::GetMainViewport()->Pos;
+		ImGui::GetForegroundDrawList()->AddLine( StartPos + ImVec2(fromx, fromy), StartPos + ImVec2(tox, toy), Utilities::UI::Vec4ToImU32(color), size);
 	});
 }
 

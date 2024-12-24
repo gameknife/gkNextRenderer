@@ -62,7 +62,12 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    
+    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+}
+
+void EditorGameInstance::OnSceneLoaded()
+{
+    modelViewController_.Reset( GetEngine().GetScene().GetRenderCamera() );
 }
 
 void EditorGameInstance::OnPreConfigUI()
@@ -83,15 +88,38 @@ void EditorGameInstance::OnInitUI()
 
 bool EditorGameInstance::OnKey(int key, int scancode, int action, int mods)
 {
-    return false;
+    modelViewController_.OnKey(key, scancode, action, mods);
+    return true;
 }
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    return false;
+    modelViewController_.OnCursorPosition( xpos,  ypos);
+    return true;
 }
 
 bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
 {
-    return false;
+    modelViewController_.OnMouseButton( button,  action,  mods);
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        auto mousePos = GetEngine().GetMousePos();
+        glm::vec3 org;
+        glm::vec3 dir;
+        GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+        GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
+        {
+            GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+            GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30 );
+            return true;
+        });
+        return true;
+    }
+    return true;
+}
+
+bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
+{
+    modelViewController_.OnScroll( xoffset,  yoffset);
+    return true;
 }
