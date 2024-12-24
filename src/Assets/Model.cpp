@@ -363,6 +363,7 @@ namespace Assets
             std::vector<uint32_t> materials;
 
             uint32_t vertext_offset = 0;
+            uint32_t sectionIdx = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
@@ -395,7 +396,7 @@ namespace Assets
                 int positionStride = positionAccessor.ByteStride(positionView);
                 int normalStride = normalAccessor.ByteStride(normalView);
                 int texcoordStride = texcoordAccessor.ByteStride(texcoordView);
-
+                
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
@@ -436,13 +437,13 @@ namespace Assets
                             texcoord[1]
                         );              
                     }
-
-
-                    vertex.MaterialIndex = max(0, primtive.material) + matieralIdx;
+                    
+                    vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
                 }
 
                 materials.push_back(max(0, primtive.material) + matieralIdx);
+                sectionIdx++;
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
@@ -1246,6 +1247,11 @@ namespace Assets
         {
             GenerateMikkTSpace(this);
         }
+
+        if (materialIdx_.size() > 4)
+        {
+            fmt::print("model material size: {}\n", materialIdx_.size());
+        }
     }
 
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)
@@ -1325,6 +1331,28 @@ namespace Assets
     void Node::RemoveChild(std::shared_ptr<Node> child)
     {
         children_.erase(child);
+    }
+
+    void Node::SetMaterial(const std::vector<uint32_t>& materials)
+    {
+        materialIdx_ = materials;
+    }
+
+    NodeProxy Node::GetNodeProxy() const
+    {
+        NodeProxy proxy;
+        proxy.instanceId = instanceId_;
+        proxy.modelId = modelId_;
+        proxy.worldTS = WorldTransform();
+        for ( int i = 0; i < materialIdx_.size(); i++ )
+        {
+            if (i < 4)
+            {
+                proxy.matId[i] = materialIdx_[i];
+            }
+        }
+
+        return proxy;
     }
 
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace):

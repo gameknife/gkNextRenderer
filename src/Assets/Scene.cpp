@@ -47,6 +47,17 @@ namespace Assets
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
+
+        // build nodes materials with models
+        for (auto& node : nodes_)
+        {
+            auto modelId = node->GetModel();
+            if (modelId >= 0 && modelId < models_.size())
+            {
+                auto& model = models_[modelId];
+                node->SetMaterial(model.Materials());
+            }
+        }
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
@@ -172,7 +183,10 @@ namespace Assets
                             {
                                 MarkDirty();
                             }
-                            nodeProxysMapByModel[modelId].push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, node->WorldTransform(), combined});
+
+                            NodeProxy proxy = node->GetNodeProxy();
+                            proxy.combinedPrevTS = combined;
+                            nodeProxysMapByModel[modelId].push_back(proxy);
                         }
                     }
                     

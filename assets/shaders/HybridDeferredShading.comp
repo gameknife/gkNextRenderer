@@ -104,7 +104,7 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
 		const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
 		const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
-		const Material material = Materials[v0.MaterialIndex];
+		const Material material = Materials[node.matId[v0.MaterialIndex]];
 
 		const vec3 normal = normalize((to_world(PayloadData.BaryCoords, v0.Normal, v1.Normal, v2.Normal) * worldtoobject).xyz);
 		const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
@@ -175,7 +175,7 @@ void main() {
 	// visibility fetch hit point, if primary ray, start from here
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
 	NodeProxy node = NodeProxies[vBuffer.x - 1];
-    Material mat = Materials[v.MaterialIndex];
+    Material mat = Materials[node.matId[v.MaterialIndex]];
     vec4 albedo = mat.Diffuse;
     if (mat.DiffuseTextureId >= 0)
     {

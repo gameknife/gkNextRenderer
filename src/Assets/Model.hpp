@@ -92,6 +92,9 @@ namespace Assets
         void RemoveChild(std::shared_ptr<Node> child);
 
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
+
+        void SetMaterial(const std::vector<uint32_t>& materials);
+        NodeProxy GetNodeProxy() const;
         
     private:
         std::string name_;
@@ -109,6 +112,7 @@ namespace Assets
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
+        std::vector<uint32_t> materialIdx_;
     };
 
     template <typename T>

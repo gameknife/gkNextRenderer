@@ -26,7 +26,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 	const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset]);
 	const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
 	const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
-	const Material material = Materials[v0.MaterialIndex];
+	const Material material = Materials[node.matId[v0.MaterialIndex]]; // read real materialIdx from node, vertex store the index
 
 	// Compute the ray hit point properties.
 	const vec3 barycentrics = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
