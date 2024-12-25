@@ -66,7 +66,12 @@ void Editor::GUI::ApplyMaterial()
     if(std::shared_ptr<Nodes::NodeMaterial> mat = matNode.lock())
     {
         const glm::vec3& color = mat->getInVal<glm::vec3>("Albedo");
+        
         selected_material->Diffuse = glm::vec4(color,1.0);
+        selected_material->Fuzziness = mat->getInVal<float>("Roughness");
+        selected_material->Metalness = mat->getInVal<float>("Metalness");
+        selected_material->RefractionIndex = mat->getInVal<float>("IOR");
+        
         current_scene->UpdateMaterial();
     }
 }
@@ -116,6 +121,11 @@ void Editor::GUI::ShowMaterialEditor()
     ImGui::Text("Links: %lu", myLinks.size());
     ImGui::SameLine();
     ImGui::Text("Nodes: %u", myNode->getNodesCount());
+    ImGui::SameLine();
+    if ( ImGui::Button("Apply Material") )
+    {
+        ApplyMaterial();
+    }
 
     for (auto wp : myLinks)
     {

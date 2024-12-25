@@ -18,14 +18,16 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                                       indirectDrawBufferMemory_); // support 65535 nodes
+
+
+        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
     }
 
     Scene::~Scene()
     {
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
-        materialBuffer_.reset();
-        materialBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+
         indexBuffer_.reset();
         indexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         vertexBuffer_.reset();
@@ -37,6 +39,8 @@ namespace Assets
         indirectDrawBufferMemory_.reset();
         nodeMatrixBuffer_.reset();
         nodeMatrixBufferMemory_.reset();
+        materialBuffer_.reset();
+        materialBufferMemory_.reset();
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
@@ -88,7 +92,6 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
 
         // 材质和灯光也应考虑更新
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Materials", flags, materials_, materialBuffer_, materialBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
 
         // 一些数据
@@ -96,6 +99,7 @@ namespace Assets
         indicesCount_ = static_cast<uint32_t>(indices.size());
         verticeCount_ = static_cast<uint32_t>(vertices.size());
 
+        UpdateMaterial();
         MarkDirty();
     }
 
@@ -147,7 +151,11 @@ namespace Assets
 
     void Scene::UpdateMaterial()
     {
-        // update value after binding, like the bindless textures, try
+        if (materials_.empty()) return;
+        
+        Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * materials_.size()));
+        std::memcpy(data, materials_.data(), materials_.size() * sizeof(Material));
+        materialBufferMemory_->Unmap();
     }
 
     bool Scene::UpdateNodes()

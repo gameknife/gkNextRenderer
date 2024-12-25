@@ -91,6 +91,10 @@ void EditorGameInstance::OnInitUI()
 bool EditorGameInstance::OnKey(int key, int scancode, int action, int mods)
 {
     modelViewController_.OnKey(key, scancode, action, mods);
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    {
+        GetEngine().GetScene().SetSelectedId(-1);
+    }
     return true;
 }
 
@@ -113,6 +117,9 @@ bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
         {
             GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
             GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30 );
+
+            // selection
+            GetEngine().GetScene().SetSelectedId(result.InstanceId);
             return true;
         });
         return true;
