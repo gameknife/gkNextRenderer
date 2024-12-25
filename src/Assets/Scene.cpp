@@ -43,7 +43,7 @@ namespace Assets
         materialBufferMemory_.reset();
     }
 
-    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
+    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
@@ -152,9 +152,15 @@ namespace Assets
     void Scene::UpdateMaterial()
     {
         if (materials_.empty()) return;
+
+        gpuMaterials_.clear();
+        for ( auto& material : materials_ )
+        {
+            gpuMaterials_.push_back(material.gpuMaterial_);
+        }
         
-        Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * materials_.size()));
-        std::memcpy(data, materials_.data(), materials_.size() * sizeof(Material));
+        Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
+        std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
     }
 
@@ -274,7 +280,7 @@ namespace Assets
         return nullptr;
     }
 
-    const Material* Scene::GetMaterial(uint32_t id) const
+    const FMaterial* Scene::GetMaterial(uint32_t id) const
     {
         if (id < materials_.size())
         {

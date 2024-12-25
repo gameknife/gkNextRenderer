@@ -83,14 +83,25 @@ void Editor::GUI::ShowProperties()
                 for ( auto& mat : mats)
                 {
                     int matIdx = mat;
-                    ImGui::InputInt("##MaterialId", &matIdx, 1, 1, ImGuiInputTextFlags_ReadOnly);
+                    auto& refMat = current_scene->Materials()[matIdx];
+                    
+                    ImGui::InputText("##MatName", &refMat.name_, ImGuiInputTextFlags_ReadOnly);
                     ImGui::SameLine();
-                    if( ImGui::Button(ICON_FA_LINK) )
+                    if( ImGui::Button(ICON_FA_CIRCLE_LEFT) )
+                    {
+                        if (selectedMaterialId != -1)
+                        {
+                            mat = selectedMaterialId;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if( ImGui::Button(ICON_FA_PEN_TO_SQUARE) )
                     {
                         selected_material = &(current_scene->Materials()[matIdx]);
                         ed_material = true;
                         OpenMaterialEditor();
                     }
+                    
                 }
             }
         }

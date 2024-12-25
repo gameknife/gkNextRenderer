@@ -7,11 +7,13 @@
 #include <string>
 #include <cstdint>
 #include "imgui.h"
+#include "imgui_stdlib.h"
 #include "EditorUtils.h"
 
 namespace Assets
 {
     struct Material;
+    struct FMaterial;
 }
 
 struct Statistics;
@@ -50,8 +52,14 @@ namespace Editor
         bool                    contentBrowser             = true;                // Workspace "Output"
         void                    ShowContentBrowser();
 
+        bool                    materialBrowser            = true;                // Workspace "Output"
+        void                    ShowMaterialBrowser();
+
+        bool                    textureBrowser             = false;                // Workspace "Output"
+        void                    ShowTextureBrowser();
+
         bool                    ed_material                = false;                // Material Editor
-        Assets::Material*       selected_material          = nullptr;              // Material Selected
+        Assets::FMaterial*       selected_material          = nullptr;              // Material Selected
         void                    ShowMaterialEditor();
         void                    OpenMaterialEditor();
         void                    ApplyMaterial();
@@ -67,6 +75,8 @@ namespace Editor
         
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;
+
+        uint32_t                selectedMaterialId         = -1;      
     };
 
 }

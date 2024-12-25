@@ -264,6 +264,7 @@ void EditorInterface::MainWindowGUI(Editor::GUI & gui_r, Assets::Scene& scene, I
 		ImGui::DockBuilderDockWindow("Outliner", dock1);
 		ImGui::DockBuilderDockWindow("Properties", dock2);
 		ImGui::DockBuilderDockWindow("Content Browser", dock3);
+		ImGui::DockBuilderDockWindow("Material Browser", dock3);
 
 		ImGui::DockBuilderFinish(id);
 	}
@@ -277,8 +278,11 @@ void EditorInterface::MainWindowGUI(Editor::GUI & gui_r, Assets::Scene& scene, I
 		// create-properties
 		if (gui.properties) gui.ShowProperties();
 
-		// workspace-output
+		// content browser
 		if (gui.contentBrowser) gui.ShowContentBrowser();
+
+		// material browser
+		if (gui.materialBrowser) gui.ShowMaterialBrowser();
 
 		// create-viewport
 		if (gui.viewport) gui.ShowViewport(id);

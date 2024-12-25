@@ -964,7 +964,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
     
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
     std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
-    std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
+    std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();

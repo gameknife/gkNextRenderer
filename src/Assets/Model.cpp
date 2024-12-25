@@ -233,7 +233,7 @@ namespace Assets
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
-                              std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+                              std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
@@ -351,7 +351,7 @@ namespace Assets
                 m = Material::DiffuseLight(emissiveColor * power * 100.0f);
             }
 
-            materials.push_back(m);
+            materials.push_back( { mat.name, static_cast<uint32_t>(materials.size()), m } );
         }
 
         // export whole scene into a big buffer, with vertice indices materials
@@ -789,7 +789,7 @@ namespace Assets
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
-                            std::vector<Material>& materials,
+                            std::vector<FMaterial>& materials,
                             std::vector<LightObject>& lights, bool autoNode)
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
@@ -874,7 +874,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Metallic;
             }
 
-            materials.emplace_back(m);
+            materials.push_back({material.name, static_cast<uint32_t>(materials.size()), m});
         }
 
         if (materialIdxOffset == static_cast<int32_t>(materials.size()))
@@ -884,7 +884,7 @@ namespace Assets
             m.Diffuse = vec4(0.7f, 0.7f, 0.7f, 1.0);
             m.DiffuseTextureId = -1;
 
-            materials.emplace_back(m);
+            materials.push_back({"default", static_cast<uint32_t>(materials.size()),m});
 
             materialIdxOffset = static_cast<int32_t>(materials.size());
         }

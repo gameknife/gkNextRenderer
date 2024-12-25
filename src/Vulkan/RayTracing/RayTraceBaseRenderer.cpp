@@ -173,12 +173,9 @@ namespace Vulkan::RayTracing
 
             for ( int i = 0; i < rayFetched_.size(); i++)
             {
-                if (rayCastBuffer_->rayCastIO[i].Result.Hitted)
+                if (rayFetched_[i].callback)
                 {
-                    if (rayFetched_[i].callback)
-                    {
-                        rayFetched_[i].callback(rayCastBuffer_->rayCastIO[i].Result);
-                    }
+                    rayFetched_[i].callback(rayCastBuffer_->rayCastIO[i].Result);
                 }
             }
             rayFetched_ = rayRequested_;

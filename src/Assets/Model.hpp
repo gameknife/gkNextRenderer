@@ -94,7 +94,7 @@ namespace Assets
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         void SetMaterial(const std::vector<uint32_t>& materials);
-        const std::vector<uint32_t>& Materials() const { return materialIdx_; }
+        std::vector<uint32_t>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
         
     private:
@@ -152,7 +152,7 @@ namespace Assets
         static Camera AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
 
         static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
-                                     std::vector<Material>& materials,
+                                     std::vector<FMaterial>& materials,
                                      std::vector<LightObject>& lights, bool autoNode = true);
 
         static uint32_t CreateCornellBox(const float scale,
@@ -165,7 +165,7 @@ namespace Assets
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
         static void LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
-                                  std::vector<Assets::Model>& models, std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
+                                  std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, uint32_t materialIdx);

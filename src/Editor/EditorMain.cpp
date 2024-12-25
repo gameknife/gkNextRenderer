@@ -37,23 +37,28 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
 void EditorGameInstance::OnInit()
 {
     // EditorCommand, need Refactoring
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Close();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Maximum();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Minimize();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)-> bool
+    {
         GetEngine().RequestLoadScene(args);
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)-> bool
+    {
         //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
         //GetEngine().GetUserSettings().SkyIdx = 0;
         return true;
@@ -69,7 +74,7 @@ void EditorGameInstance::OnTick(double deltaSeconds)
 
 void EditorGameInstance::OnSceneLoaded()
 {
-    modelViewController_.Reset( GetEngine().GetScene().GetRenderCamera() );
+    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
 }
 
 void EditorGameInstance::OnPreConfigUI()
@@ -100,26 +105,33 @@ bool EditorGameInstance::OnKey(int key, int scancode, int action, int mods)
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition( xpos,  ypos);
+    modelViewController_.OnCursorPosition(xpos, ypos);
     return true;
 }
 
 bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
 {
-    modelViewController_.OnMouseButton( button,  action,  mods);
+    modelViewController_.OnMouseButton(button, action, mods);
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
         GetEngine().GetScreenToWorldRay(mousePos, org, dir);
-        GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
+        GetEngine().RayCastGPU(org, dir, [this](Assets::RayCastResult result)
         {
-            GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-            GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30 );
+            if (result.Hitted)
+            {
+                GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+                GetEngine().DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30);
+                // selection
+                GetEngine().GetScene().SetSelectedId(result.InstanceId);
+            }
+            else
+            {
+                GetEngine().GetScene().SetSelectedId(-1);
+            }
 
-            // selection
-            GetEngine().GetScene().SetSelectedId(result.InstanceId);
             return true;
         });
         return true;
@@ -129,6 +141,6 @@ bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
 
 bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 {
-    modelViewController_.OnScroll( xoffset,  yoffset);
+    modelViewController_.OnScroll(xoffset, yoffset);
     return true;
 }
