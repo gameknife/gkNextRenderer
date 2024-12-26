@@ -71,3 +71,63 @@ void Editor::GUI::ShowMaterialBrowser()
     }
     ImGui::End();
 }
+
+
+void Editor::GUI::ShowTextureBrowser()
+{
+    ImGui::Begin("Texture Browser", NULL, ImGuiWindowFlags_NoScrollbar);
+    {
+        if (current_scene)
+        {
+            auto& totalTextureMap = Assets::GlobalTexturePool::GetInstance()->TotalTextureMap();
+            ImGui::Text("All Textures %d", totalTextureMap.size());
+
+            
+            auto elementLambda = [this](uint32_t texId, const std::string& texName, Assets::TextureImage* texture, const char* icon, ImU32 color, std::function<void ()> doubleclick_action)
+            {
+                ImGui::BeginGroup();
+                ImGui::PushFont(bigIcon_); // use the font awesome font
+                ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(32, 32, 32, 255));
+                ImGui::Button(icon, ImVec2(ICON_SIZE, ICON_SIZE));
+                ImGui::PopStyleColor();
+                ImGui::PopFont();
+                
+                if( ImGui::IsItemHovered(ImGuiHoveredFlags_None) )
+                {
+                    if( ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        doubleclick_action();
+                    }
+                    if( ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                    {
+                        selectedTextureId = texId;
+                    }
+                }
+
+                auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4);
+                bool selected = selectedTextureId == texId;
+                ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? IM_COL32(64, 128, 255, 255) : IM_COL32(64, 64, 64, 255), 4);
+                ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ICON_SIZE, 0), color, 2);
+
+                ImGui::PushItemWidth(ICON_SIZE);
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ICON_SIZE);
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
+                ImGui::Text("%s", texName.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::PopItemWidth();
+                ImGui::EndGroup();
+                ImGui::SameLine();
+            };
+
+            for ( auto& textureGroup : totalTextureMap )
+            {
+                Assets::TextureImage* texture = Assets::GlobalTexturePool::GetTextureImage(textureGroup.second);
+                elementLambda(textureGroup.second, textureGroup.first, texture, ICON_FA_BOWLING_BALL, IM_COL32(0, 172, 255, 255), [this]()
+                {
+                    
+                });
+            }
+        }
+    }
+    ImGui::End();
+}

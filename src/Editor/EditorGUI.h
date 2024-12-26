@@ -55,7 +55,7 @@ namespace Editor
         bool                    materialBrowser            = true;                // Workspace "Output"
         void                    ShowMaterialBrowser();
 
-        bool                    textureBrowser             = false;                // Workspace "Output"
+        bool                    textureBrowser             = true;                // Workspace "Output"
         void                    ShowTextureBrowser();
 
         bool                    ed_material                = false;                // Material Editor
@@ -76,7 +76,8 @@ namespace Editor
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;
 
-        uint32_t                selectedMaterialId         = -1;      
+        uint32_t                selectedMaterialId          = -1;
+        uint32_t                selectedTextureId           = -1;   
     };
 
 }

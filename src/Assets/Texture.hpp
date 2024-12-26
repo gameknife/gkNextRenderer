@@ -31,6 +31,7 @@ namespace Assets
 		uint32_t RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength);
 
 		uint32_t TotalTextures() const {return static_cast<uint32_t>(textureImages_.size());}
+		const std::unordered_map<std::string, uint32_t>& TotalTextureMap() {return textureNameMap_;}
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 		static uint32_t LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig);
