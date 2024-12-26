@@ -3,6 +3,7 @@
 #include "EditorCommand.hpp"
 #include "IconsFontAwesome6.h"
 #include "EditorGUI.h"
+#include "EditorInterface.hpp"
 #include "Assets/Scene.hpp"
 #include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -58,7 +59,7 @@ void Editor::GUI::ShowMaterialBrowser()
             for ( uint32_t i = 0; i < AllMaterials.size(); ++i)
             {
                 auto& mat = AllMaterials[i];
-                elementLambda(mat.globalId_, mat.name_, ICON_FA_BOWLING_BALL, IM_COL32(0, 172, 255, 255), [this, i]()
+                elementLambda(mat.globalId_, mat.name_, ICON_FA_BOWLING_BALL, IM_COL32(132, 255, 132, 255), [this, i]()
                 {
                     selected_material = &(current_scene->Materials()[i]);
                     ed_material = true;
@@ -75,7 +76,7 @@ void Editor::GUI::ShowMaterialBrowser()
 
 void Editor::GUI::ShowTextureBrowser()
 {
-    ImGui::Begin("Texture Browser", NULL, ImGuiWindowFlags_NoScrollbar);
+    ImGui::Begin("Texture Browser", NULL, ImGuiWindowFlags_NoScrollbar );
     {
         if (current_scene)
         {
@@ -88,7 +89,9 @@ void Editor::GUI::ShowTextureBrowser()
                 ImGui::BeginGroup();
                 ImGui::PushFont(bigIcon_); // use the font awesome font
                 ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(32, 32, 32, 255));
-                ImGui::Button(icon, ImVec2(ICON_SIZE, ICON_SIZE));
+                //ImGui::Button(icon, ImVec2(ICON_SIZE, ICON_SIZE));
+                //ImGui::GetWindowDrawList()->AddImage(GUserInterface->RequestImTextureId(texId), CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3));
+                ImGui::Image(GUserInterface->RequestImTextureId(texId), ImVec2(ICON_SIZE, ICON_SIZE) );
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
                 
@@ -106,6 +109,7 @@ void Editor::GUI::ShowTextureBrowser()
 
                 auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4);
                 bool selected = selectedTextureId == texId;
+                
                 ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? IM_COL32(64, 128, 255, 255) : IM_COL32(64, 64, 64, 255), 4);
                 ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ICON_SIZE, 0), color, 2);
 
@@ -122,7 +126,7 @@ void Editor::GUI::ShowTextureBrowser()
             for ( auto& textureGroup : totalTextureMap )
             {
                 Assets::TextureImage* texture = Assets::GlobalTexturePool::GetTextureImage(textureGroup.second);
-                elementLambda(textureGroup.second, textureGroup.first, texture, ICON_FA_BOWLING_BALL, IM_COL32(0, 172, 255, 255), [this]()
+                elementLambda(textureGroup.second, textureGroup.first, texture, ICON_FA_BOWLING_BALL, IM_COL32(255, 72, 72, 255), [this]()
                 {
                     
                 });

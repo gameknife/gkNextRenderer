@@ -69,6 +69,8 @@ UserInterface::UserInterface(
 	auto& io = ImGui::GetIO();
 	// No ini file.
 	io.IniFilename = "imgui.ini";
+	io.WantCaptureMouse = false;
+	io.WantCaptureKeyboard = false;
 
 	funcPreConfig();
 	

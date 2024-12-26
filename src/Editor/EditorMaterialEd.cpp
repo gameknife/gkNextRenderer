@@ -82,10 +82,16 @@ void Editor::GUI::ShowMaterialEditor()
     {
         ImGui::SetNextWindowSize(ImVec2(1280,800));
         ImGui::SetWindowFocus("Material Editor");
+        
+        ImGuiWindowClass window_class1;
+        window_class1.ClassId = ImGui::GetID("Material Editor");
+        window_class1.ViewportFlagsOverrideSet = ImGuiViewportFlags_TopMost | ImGuiViewportFlags_NoAutoMerge;
+        
+        ImGui::SetNextWindowClass(&window_class1);
         init_nodes = false;
     }
     
-    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking);
+    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse);
     
     myNode->rightClickPopUpContent([](ImFlow::BaseNode *node)
                                       {
