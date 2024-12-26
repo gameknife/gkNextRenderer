@@ -67,7 +67,7 @@ namespace Assets
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         // 重建universe mesh buffer, 这个可以比较静态
-        std::vector<Vertex> vertices;
+        std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
 
         offsets_.clear();
@@ -80,7 +80,13 @@ namespace Assets
             offsets_.emplace_back(indexOffset, vertexOffset);
 
             // Copy model data one after the other.
-            vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
+
+            // cpu vertex to gpu vertex
+            for (auto& vertex : model.Vertices())
+            {
+                vertices.push_back(MakeVertex(vertex));
+            }
+            //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
             indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
         }
 
