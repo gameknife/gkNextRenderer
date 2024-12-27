@@ -45,7 +45,7 @@
 #include "Options.hpp"
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
 
 using namespace glm;
 
@@ -92,41 +92,41 @@ namespace Assets
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-	    auto v1 = m->Indices()[iFace * 3 + iVert];
+	    auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvPosOut[0] = m->Vertices()[v1].Position.x;
-	    fvPosOut[1] = m->Vertices()[v1].Position.y;
-	    fvPosOut[2] = m->Vertices()[v1].Position.z;
+	    fvPosOut[0] = m->CPUVertices()[v1].Position.x;
+	    fvPosOut[1] = m->CPUVertices()[v1].Position.y;
+	    fvPosOut[2] = m->CPUVertices()[v1].Position.z;
     }
 
     static void mikktspace_get_normal(const SMikkTSpaceContext *pContext, float fvNormOut[],
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvNormOut[0] = m->Vertices()[v1].Normal.x;
-	    fvNormOut[1] = m->Vertices()[v1].Normal.y;
-	    fvNormOut[2] = m->Vertices()[v1].Normal.z;
+	    fvNormOut[0] = m->CPUVertices()[v1].Normal.x;
+	    fvNormOut[1] = m->CPUVertices()[v1].Normal.y;
+	    fvNormOut[2] = m->CPUVertices()[v1].Normal.z;
     }
 
     static void mikktspace_get_tex_coord(const SMikkTSpaceContext *pContext, float fvTexcOut[],
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvTexcOut[0] = m->Vertices()[v1].TexCoord.x;
-	    fvTexcOut[1] = m->Vertices()[v1].TexCoord.y;
+	    fvTexcOut[0] = m->CPUVertices()[v1].TexCoord.x;
+	    fvTexcOut[1] = m->CPUVertices()[v1].TexCoord.y;
     }
 
     static void mikktspace_set_t_space_basic(const SMikkTSpaceContext *pContext, const float fvTangent[],
 				    const float fSign, const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
         
-        m->Vertices()[v1].Tangent = glm::vec4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
+        m->CPUVertices()[v1].Tangent = glm::vec4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
     }
 
     static SMikkTSpaceInterface mikktspace_interface = {
@@ -475,6 +475,7 @@ namespace Assets
             #if FLATTEN_VERTICE
                 FlattenVertices(vertices, indices);
             #endif
+
             
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), !hasTangent));
         }
@@ -1226,13 +1227,21 @@ namespace Assets
         return static_cast<int32_t>(models.size()) - 1;
     }
 
+    void Model::FreeMemory()
+    {
+        vertices_ = std::vector<Vertex>();
+        indices_ = std::vector<uint32_t>();
+    }
+
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
                  bool needGenTSpace) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
-        materialIdx_(std::move(materials)),
-        procedural_(nullptr)
+        materialIdx_(std::move(materials))
     {
+        verticeCount = vertices_.size();
+        indiceCount = indices_.size();
+        
         // calculate local aabb
         local_aabb_min = glm::vec3(999999, 999999, 999999);
         local_aabb_max = glm::vec3(-999999, -999999, -999999);
