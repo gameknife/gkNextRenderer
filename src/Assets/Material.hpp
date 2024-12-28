@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
 #include "Utilities/Glm.hpp"
 
 namespace Assets
@@ -65,5 +66,12 @@ namespace Assets
         float RefractionIndex2;
         float NormalTextureScale;
         float Reserverd2;
+    };
+
+    struct FMaterial final
+    {
+        std::string name_;
+        uint32_t globalId_;
+        Material gpuMaterial_;
     };
 }

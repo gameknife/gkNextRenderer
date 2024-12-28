@@ -92,41 +92,41 @@ namespace Assets
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-	    auto v1 = m->Indices()[iFace * 3 + iVert];
+	    auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvPosOut[0] = m->Vertices()[v1].Position.x;
-	    fvPosOut[1] = m->Vertices()[v1].Position.y;
-	    fvPosOut[2] = m->Vertices()[v1].Position.z;
+	    fvPosOut[0] = m->CPUVertices()[v1].Position.x;
+	    fvPosOut[1] = m->CPUVertices()[v1].Position.y;
+	    fvPosOut[2] = m->CPUVertices()[v1].Position.z;
     }
 
     static void mikktspace_get_normal(const SMikkTSpaceContext *pContext, float fvNormOut[],
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvNormOut[0] = m->Vertices()[v1].Normal.x;
-	    fvNormOut[1] = m->Vertices()[v1].Normal.y;
-	    fvNormOut[2] = m->Vertices()[v1].Normal.z;
+	    fvNormOut[0] = m->CPUVertices()[v1].Normal.x;
+	    fvNormOut[1] = m->CPUVertices()[v1].Normal.y;
+	    fvNormOut[2] = m->CPUVertices()[v1].Normal.z;
     }
 
     static void mikktspace_get_tex_coord(const SMikkTSpaceContext *pContext, float fvTexcOut[],
 					    const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
 
-	    fvTexcOut[0] = m->Vertices()[v1].TexCoord.x;
-	    fvTexcOut[1] = m->Vertices()[v1].TexCoord.y;
+	    fvTexcOut[0] = m->CPUVertices()[v1].TexCoord.x;
+	    fvTexcOut[1] = m->CPUVertices()[v1].TexCoord.y;
     }
 
     static void mikktspace_set_t_space_basic(const SMikkTSpaceContext *pContext, const float fvTangent[],
 				    const float fSign, const int iFace, const int iVert)
     {
         Assets::Model *m = reinterpret_cast<Assets::Model*>(pContext->m_pUserData);
-        auto v1 = m->Indices()[iFace * 3 + iVert];
+        auto v1 = m->CPUIndices()[iFace * 3 + iVert];
         
-        m->Vertices()[v1].Tangent = glm::vec4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
+        m->CPUVertices()[v1].Tangent = glm::vec4(fvTangent[0], fvTangent[1], fvTangent[2], fSign);
     }
 
     static SMikkTSpaceInterface mikktspace_interface = {
@@ -230,10 +230,17 @@ namespace Assets
             nodeMap[child]->SetParent(sceneNode);
         }
     }
+
+    bool LoadImageData(tinygltf::Image * image, const int image_idx, std::string * err,
+                   std::string * warn, int req_width, int req_height,
+                   const unsigned char * bytes, int size, void * user_data )
+    {
+        return true;
+    }
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
-                              std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+                              std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
         int32_t matieralIdx = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
@@ -243,6 +250,7 @@ namespace Assets
         std::string err;
         std::string warn;
 
+        gltfLoader.SetImageLoader(LoadImageData, nullptr);
         if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
         {
             return;
@@ -351,7 +359,7 @@ namespace Assets
                 m = Material::DiffuseLight(emissiveColor * power * 100.0f);
             }
 
-            materials.push_back(m);
+            materials.push_back( { mat.name, static_cast<uint32_t>(materials.size()), m } );
         }
 
         // export whole scene into a big buffer, with vertice indices materials
@@ -363,6 +371,7 @@ namespace Assets
             std::vector<uint32_t> materials;
 
             uint32_t vertext_offset = 0;
+            uint32_t sectionIdx = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
                 tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
@@ -395,7 +404,7 @@ namespace Assets
                 int positionStride = positionAccessor.ByteStride(positionView);
                 int normalStride = normalAccessor.ByteStride(normalView);
                 int texcoordStride = texcoordAccessor.ByteStride(texcoordView);
-
+                
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
@@ -436,13 +445,13 @@ namespace Assets
                             texcoord[1]
                         );              
                     }
-
-
-                    vertex.MaterialIndex = max(0, primtive.material) + matieralIdx;
+                    
+                    vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
                 }
 
                 materials.push_back(max(0, primtive.material) + matieralIdx);
+                sectionIdx++;
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
                 for (size_t i = 0; i < indexAccessor.count; ++i)
@@ -474,6 +483,7 @@ namespace Assets
             #if FLATTEN_VERTICE
                 FlattenVertices(vertices, indices);
             #endif
+
             
             models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), !hasTangent));
         }
@@ -788,7 +798,7 @@ namespace Assets
     }
 
     int Model::LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
-                            std::vector<Material>& materials,
+                            std::vector<FMaterial>& materials,
                             std::vector<LightObject>& lights, bool autoNode)
     {
         int32_t materialIdxOffset = static_cast<int32_t>(materials.size());
@@ -873,7 +883,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Metallic;
             }
 
-            materials.emplace_back(m);
+            materials.push_back({material.name, static_cast<uint32_t>(materials.size()), m});
         }
 
         if (materialIdxOffset == static_cast<int32_t>(materials.size()))
@@ -883,7 +893,7 @@ namespace Assets
             m.Diffuse = vec4(0.7f, 0.7f, 0.7f, 1.0);
             m.DiffuseTextureId = -1;
 
-            materials.emplace_back(m);
+            materials.push_back({"default", static_cast<uint32_t>(materials.size()),m});
 
             materialIdxOffset = static_cast<int32_t>(materials.size());
         }
@@ -1225,13 +1235,21 @@ namespace Assets
         return static_cast<int32_t>(models.size()) - 1;
     }
 
+    void Model::FreeMemory()
+    {
+        vertices_ = std::vector<Vertex>();
+        indices_ = std::vector<uint32_t>();
+    }
+
     Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
                  bool needGenTSpace) :
         vertices_(std::move(vertices)),
         indices_(std::move(indices)),
-        materialIdx_(std::move(materials)),
-        procedural_(nullptr)
+        materialIdx_(std::move(materials))
     {
+        verticeCount = vertices_.size();
+        indiceCount = indices_.size();
+        
         // calculate local aabb
         local_aabb_min = glm::vec3(999999, 999999, 999999);
         local_aabb_max = glm::vec3(-999999, -999999, -999999);
@@ -1245,6 +1263,11 @@ namespace Assets
         if(needGenTSpace)
         {
             GenerateMikkTSpace(this);
+        }
+
+        if (materialIdx_.size() >= 16)
+        {
+            fmt::print("model material size: {}\n", materialIdx_.size());
         }
     }
 
@@ -1325,6 +1348,28 @@ namespace Assets
     void Node::RemoveChild(std::shared_ptr<Node> child)
     {
         children_.erase(child);
+    }
+
+    void Node::SetMaterial(const std::vector<uint32_t>& materials)
+    {
+        materialIdx_ = materials;
+    }
+
+    NodeProxy Node::GetNodeProxy() const
+    {
+        NodeProxy proxy;
+        proxy.instanceId = instanceId_;
+        proxy.modelId = modelId_;
+        proxy.worldTS = WorldTransform();
+        for ( int i = 0; i < materialIdx_.size(); i++ )
+        {
+            if (i < 16)
+            {
+                proxy.matId[i] = materialIdx_[i];
+            }
+        }
+
+        return proxy;
     }
 
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace):

@@ -18,14 +18,16 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                                       indirectDrawBufferMemory_); // support 65535 nodes
+
+
+        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
     }
 
     Scene::~Scene()
     {
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
-        materialBuffer_.reset();
-        materialBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+
         indexBuffer_.reset();
         indexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         vertexBuffer_.reset();
@@ -37,9 +39,11 @@ namespace Assets
         indirectDrawBufferMemory_.reset();
         nodeMatrixBuffer_.reset();
         nodeMatrixBufferMemory_.reset();
+        materialBuffer_.reset();
+        materialBufferMemory_.reset();
     }
 
-    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<Material>& materials, std::vector<LightObject>& lights,
+    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
@@ -47,12 +51,23 @@ namespace Assets
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
+
+        // build nodes materials with models
+        for (auto& node : nodes_)
+        {
+            auto modelId = node->GetModel();
+            if (modelId >= 0 && modelId < models_.size())
+            {
+                auto& model = models_[modelId];
+                node->SetMaterial(model.Materials());
+            }
+        }
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         // 重建universe mesh buffer, 这个可以比较静态
-        std::vector<Vertex> vertices;
+        std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
 
         offsets_.clear();
@@ -65,8 +80,16 @@ namespace Assets
             offsets_.emplace_back(indexOffset, vertexOffset);
 
             // Copy model data one after the other.
-            vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
-            indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
+
+            // cpu vertex to gpu vertex
+            for (auto& vertex : model.CPUVertices())
+            {
+                vertices.push_back(MakeVertex(vertex));
+            }
+            //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
+            indices.insert(indices.end(), model.CPUIndices().begin(), model.CPUIndices().end());
+
+            model.FreeMemory();
         }
 
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -77,7 +100,6 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
 
         // 材质和灯光也应考虑更新
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Materials", flags, materials_, materialBuffer_, materialBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
 
         // 一些数据
@@ -85,6 +107,7 @@ namespace Assets
         indicesCount_ = static_cast<uint32_t>(indices.size());
         verticeCount_ = static_cast<uint32_t>(vertices.size());
 
+        UpdateMaterial();
         MarkDirty();
     }
 
@@ -136,7 +159,17 @@ namespace Assets
 
     void Scene::UpdateMaterial()
     {
-        // update value after binding, like the bindless textures, try
+        if (materials_.empty()) return;
+
+        gpuMaterials_.clear();
+        for ( auto& material : materials_ )
+        {
+            gpuMaterials_.push_back(material.gpuMaterial_);
+        }
+        
+        Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
+        std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
+        materialBufferMemory_->Unmap();
     }
 
     bool Scene::UpdateNodes()
@@ -172,7 +205,10 @@ namespace Assets
                             {
                                 MarkDirty();
                             }
-                            nodeProxysMapByModel[modelId].push_back({node->GetInstanceId(), node->GetModel(), 0u, 0u, node->WorldTransform(), combined});
+
+                            NodeProxy proxy = node->GetNodeProxy();
+                            proxy.combinedPrevTS = combined;
+                            nodeProxysMapByModel[modelId].push_back(proxy);
                         }
                     }
                     
@@ -186,7 +222,7 @@ namespace Assets
                             // draw indirect buffer, instanced, this could be generate in gpu
                             VkDrawIndexedIndirectCommand cmd{};
                             cmd.firstIndex = indexOffset;
-                            cmd.indexCount = static_cast<uint32_t>(models_[i].Indices().size());
+                            cmd.indexCount = models_[i].NumberOfIndices();
                             cmd.vertexOffset = static_cast<int32_t>(vertexOffset);
                             cmd.firstInstance = nodeOffsetBatched;
                             cmd.instanceCount = static_cast<uint32_t>(nodesOfThisModel.size());
@@ -198,8 +234,8 @@ namespace Assets
                             nodeProxys.insert(nodeProxys.end(), nodesOfThisModel.begin(), nodesOfThisModel.end());
                         }
 
-                        indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
-                        vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
+                        indexOffset += models_[i].NumberOfIndices();
+                        vertexOffset += models_[i].NumberOfVertices();
                     }
                                         
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
@@ -252,7 +288,7 @@ namespace Assets
         return nullptr;
     }
 
-    const Material* Scene::GetMaterial(uint32_t id) const
+    const FMaterial* Scene::GetMaterial(uint32_t id) const
     {
         if (id < materials_.size())
         {

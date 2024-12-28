@@ -28,30 +28,37 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     config.ForceSDR = true;
     config.HideTitleBar = true;
 
-    options.Samples = 4;
+    options.Samples = 8;
+    options.Temporal = 32;
     options.ForceSDR = true;
+    options.NoDenoiser = true;
 }
 
 void EditorGameInstance::OnInit()
 {
     // EditorCommand, need Refactoring
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Close();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Maximum();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)-> bool
+    {
         GetEngine().GetWindow().Minimize();
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)-> bool
+    {
         GetEngine().RequestLoadScene(args);
         return true;
     });
-    EditorCommand::RegisterEdtiorCommand( EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)->bool {
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)-> bool
+    {
         //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
         //GetEngine().GetUserSettings().SkyIdx = 0;
         return true;
@@ -62,7 +69,12 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    
+    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+}
+
+void EditorGameInstance::OnSceneLoaded()
+{
+    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
 }
 
 void EditorGameInstance::OnPreConfigUI()
@@ -83,15 +95,52 @@ void EditorGameInstance::OnInitUI()
 
 bool EditorGameInstance::OnKey(int key, int scancode, int action, int mods)
 {
-    return false;
+    modelViewController_.OnKey(key, scancode, action, mods);
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    {
+        GetEngine().GetScene().SetSelectedId(-1);
+    }
+    return true;
 }
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    return false;
+    modelViewController_.OnCursorPosition(xpos, ypos);
+    return true;
 }
 
 bool EditorGameInstance::OnMouseButton(int button, int action, int mods)
 {
-    return false;
+    modelViewController_.OnMouseButton(button, action, mods);
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        auto mousePos = GetEngine().GetMousePos();
+        glm::vec3 org;
+        glm::vec3 dir;
+        GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+        GetEngine().RayCastGPU(org, dir, [this](Assets::RayCastResult result)
+        {
+            if (result.Hitted)
+            {
+                GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+                GetEngine().DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30);
+                // selection
+                GetEngine().GetScene().SetSelectedId(result.InstanceId);
+            }
+            else
+            {
+                GetEngine().GetScene().SetSelectedId(-1);
+            }
+
+            return true;
+        });
+        return true;
+    }
+    return true;
+}
+
+bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
+{
+    modelViewController_.OnScroll(xoffset, yoffset);
+    return true;
 }

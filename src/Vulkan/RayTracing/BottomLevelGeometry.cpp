@@ -19,7 +19,7 @@ void BottomLevelGeometry::AddGeometryTriangles(
 	geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
 	geometry.geometry.triangles.pNext = nullptr;
 	geometry.geometry.triangles.vertexData.deviceAddress = scene.VertexBuffer().GetDeviceAddress();
-	geometry.geometry.triangles.vertexStride = sizeof(Assets::Vertex);
+	geometry.geometry.triangles.vertexStride = sizeof(Assets::GPUVertex);
 	geometry.geometry.triangles.maxVertex = vertexCount;
 	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
 	geometry.geometry.triangles.indexData.deviceAddress = scene.IndexBuffer().GetDeviceAddress();
@@ -28,7 +28,7 @@ void BottomLevelGeometry::AddGeometryTriangles(
 	geometry.flags = isOpaque ? VK_GEOMETRY_OPAQUE_BIT_KHR : 0;
 
 	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
-	buildOffsetInfo.firstVertex = vertexOffset / sizeof(Assets::Vertex);
+	buildOffsetInfo.firstVertex = vertexOffset / sizeof(Assets::GPUVertex);
 	buildOffsetInfo.primitiveOffset = indexOffset;
 	buildOffsetInfo.primitiveCount = indexCount / 3;
 	buildOffsetInfo.transformOffset = 0;

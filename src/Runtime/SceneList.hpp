@@ -10,6 +10,7 @@ namespace Assets
     class Model;
     class Texture;
     struct Material;
+    struct FMaterial;
     struct LightObject;
 	struct AnimationTrack;
     struct EnvironmentSetting;
@@ -23,7 +24,7 @@ public:
     static std::vector<std::string> AllScenes;
 
 	static bool LoadScene(std::string filename, Assets::EnvironmentSetting& camera, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Assets::Model>& models,
-                     std::vector<Assets::Material>& materials,
+                     std::vector<Assets::FMaterial>& materials,
                      std::vector<Assets::LightObject>& lights,
                      std::vector<Assets::AnimationTrack>& tracks);
 };

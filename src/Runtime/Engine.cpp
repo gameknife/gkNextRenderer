@@ -373,29 +373,45 @@ void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int w
 
 glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 {
-    glm::vec2 offset = glm::vec2(0.0, 0.0);
-    glm::vec2 extent = glm::vec2(GetWindow().FramebufferSize().width, GetWindow().FramebufferSize().height);
+    glm::vec3 org;
+    glm::vec3 dir;
+    GetScreenToWorldRay(locationSS, org, dir );
+    return dir;
+}
+
+glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
+{
+    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
+    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    
+    glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
+    transformed = transformed / transformed.w;
+    // from ndc to screenspace
+    transformed.x += 1.0f;
+    transformed.x *= vkextent.width / 2;
+    transformed.y += 1.0f;
+    transformed.y *= vkextent.height / 2;
+    
+    transformed.x += vkoffset.x;
+    transformed.y += vkoffset.y;
+    
+    return transformed;
+}
+
+void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
+{
+    // should consider rt offset
+    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
+    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    glm::vec2 offset = {vkoffset.x, vkoffset.y};
+    glm::vec2 extent = {vkextent.width, vkextent.height};
     glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
     glm::vec2 uv = pixel / extent * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
     glm::vec4 origin = prevUBO_.ModelViewInverse * glm::vec4(0, 0, 0, 1);
     glm::vec4 target = prevUBO_.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
     glm::vec3 raydir = prevUBO_.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-    glm::vec3 rayorg = glm::vec3(origin);
-
-    return raydir;
-}
-
-glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
-{
-    glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
-    transformed = transformed / transformed.w;
-    // from ndc to screenspace
-    transformed.x += 1.0f;
-    transformed.x *= GetWindow().FramebufferSize().width / 2;
-    transformed.y += 1.0f;
-    transformed.y *= GetWindow().FramebufferSize().height / 2;
-
-    return transformed;
+    org = glm::vec3(origin);
+    dir = raydir;
 }
 
 void NextEngine::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
@@ -429,14 +445,40 @@ void NextEngine::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float
     DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
 }
 
-void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size)
+static std::vector<int32_t> auxCounter;
+void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick)
 {
-    auto transformed = ProjectWorldToScreen(location);
-    // center as 0,0
-    if(transformed.z < 1)
+    if (durationInTick > 0)
     {
-        userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+        auxCounter.push_back(durationInTick);
+        int32_t id = static_cast<int32_t>(auxCounter.size()) - 1;
+        AddTickedTask( [this, location, color, size, id](double deltaSeconds)->bool
+        {
+            auto transformed = ProjectWorldToScreen(location);
+            if(transformed.z < 1)
+            {
+                userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+            }
+            return (auxCounter[id] -= 1) <= 0;
+        });
     }
+    else
+    {
+        auto transformed = ProjectWorldToScreen(location);
+        if(transformed.z < 1)
+        {
+            userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
+        }
+    }
+}
+
+glm::dvec2 NextEngine::GetMousePos()
+{
+    double x{},y{};
+#if !ANDROID
+    glfwGetCursorPos( window_->Handle(), &x, &y );
+#endif
+    return glm::dvec2(x,y);
 }
 
 void NextEngine::RequestClose()
@@ -536,6 +578,18 @@ glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
     glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &pos.x, &pos.y, &size.x, &size.y);
 #endif
     return size;
+}
+
+void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
+    std::function<bool(Assets::RayCastResult rayResult)> callback)
+{
+    // set in gpu directly
+    renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
+
+    // it will batch together in next frame, then callback one by one
+
+
+    // TODO: currently the context only avaliable for single ray, support multiple later
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -912,7 +966,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
     
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
     std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
-    std::shared_ptr< std::vector<Assets::Material> > materials = std::make_shared< std::vector<Assets::Material> >();
+    std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();

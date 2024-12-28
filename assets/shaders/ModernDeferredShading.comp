@@ -56,7 +56,9 @@ void main() {
     
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     
-    Material mat = Materials[v.MaterialIndex];
+    NodeProxy node = NodeProxies[vBuffer.x - 1];
+    Material mat = Materials[node.matId[v.MaterialIndex]];
+    
     vec4 albedo = mat.Diffuse;
     if (mat.DiffuseTextureId >= 0)
     {

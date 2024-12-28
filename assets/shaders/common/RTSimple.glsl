@@ -11,7 +11,7 @@ void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 T
     const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
     const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
     
-    MaterialId = v0.MaterialIndex;
+    MaterialId = node.matId[v0.MaterialIndex];
 
     // Compute the ray hit point properties.
     const vec3 barycentrics = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);

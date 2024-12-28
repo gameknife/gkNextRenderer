@@ -490,8 +490,8 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         auto mat = Scene.GetMaterial(mat_id);
         if (mat)
         {
-            newBlock.matType = static_cast<int>(mat->MaterialModel);
-            newBlock.color = mat->Diffuse;
+            newBlock.matType = static_cast<int>(mat->gpuMaterial_.MaterialModel);
+            newBlock.color = mat->gpuMaterial_.Diffuse;
         }
         BasicNodes.push_back(newBlock);
         BasicBlockTypeMap[typeName].push_back(newBlock);

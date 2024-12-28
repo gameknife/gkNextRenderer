@@ -21,12 +21,12 @@ void Editor::GUI::OpenMaterialEditor()
         float seprateY = 100.0f;
         float seprateX = 600.0f;
         // from material to node
-        auto nodeIOR = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30,baseY), "IOR", selected_material->RefractionIndex);
-        auto nodeShadingMode = myNode->placeNodeAt<Nodes::NodeSetInt>(ImVec2(30,baseY += seprateY), "ShadingMode", (int)selected_material->MaterialModel);
+        auto nodeIOR = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30,baseY), "IOR", selected_material->gpuMaterial_.RefractionIndex);
+        auto nodeShadingMode = myNode->placeNodeAt<Nodes::NodeSetInt>(ImVec2(30,baseY += seprateY), "ShadingMode", (int)selected_material->gpuMaterial_.MaterialModel);
         
-        auto nodeAlbedo = myNode->placeNodeAt<Nodes::NodeSetColor>(ImVec2(30, baseY += seprateY), "Albedo", glm::vec3(selected_material->Diffuse));
-        auto nodeRoughness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Roughness", selected_material->Fuzziness);
-        auto nodeMetalness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Metalness", selected_material->Metalness);
+        auto nodeAlbedo = myNode->placeNodeAt<Nodes::NodeSetColor>(ImVec2(30, baseY += seprateY), "Albedo", glm::vec3(selected_material->gpuMaterial_.Diffuse));
+        auto nodeRoughness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Roughness", selected_material->gpuMaterial_.Fuzziness);
+        auto nodeMetalness  = myNode->placeNodeAt<Nodes::NodeSetFloat>(ImVec2(30, baseY += seprateY), "Metalness", selected_material->gpuMaterial_.Metalness);
 
 
         
@@ -41,21 +41,21 @@ void Editor::GUI::OpenMaterialEditor()
         nodeMetalness->outPin("Out")->createLink(nodeMat->inPin("Metalness"));
 
         seprateY = 200.0f;
-        if(selected_material->DiffuseTextureId != -1)
+        if(selected_material->gpuMaterial_.DiffuseTextureId != -1)
         {
-            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->DiffuseTextureId);
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "AlbedoTexture", selected_material->gpuMaterial_.DiffuseTextureId);
             nodeTexture->outPin("Out")->createLink(nodeMat->inPin("AlbedoTexture"));
         }
 
-        if(selected_material->NormalTextureId != -1)
+        if(selected_material->gpuMaterial_.NormalTextureId != -1)
         {
-            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "NormalTexture", selected_material->NormalTextureId);
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "NormalTexture", selected_material->gpuMaterial_.NormalTextureId);
             nodeTexture->outPin("Out")->createLink(nodeMat->inPin("NormalTexture"));
         }
 
-        if(selected_material->MRATextureId != -1)
+        if(selected_material->gpuMaterial_.MRATextureId != -1)
         {
-            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "MRATexture", selected_material->MRATextureId);
+            auto nodeTexture = myNode->placeNodeAt<Nodes::NodeSetTexture>(ImVec2(30,baseY += seprateY), "MRATexture", selected_material->gpuMaterial_.MRATextureId);
             nodeTexture->outPin("Out")->createLink(nodeMat->inPin("MRATexture"));
         }
     }
@@ -66,7 +66,12 @@ void Editor::GUI::ApplyMaterial()
     if(std::shared_ptr<Nodes::NodeMaterial> mat = matNode.lock())
     {
         const glm::vec3& color = mat->getInVal<glm::vec3>("Albedo");
-        selected_material->Diffuse = glm::vec4(color,1.0);
+        
+        selected_material->gpuMaterial_.Diffuse = glm::vec4(color,1.0);
+        selected_material->gpuMaterial_.Fuzziness = mat->getInVal<float>("Roughness");
+        selected_material->gpuMaterial_.Metalness = mat->getInVal<float>("Metalness");
+        selected_material->gpuMaterial_.RefractionIndex = mat->getInVal<float>("IOR");
+        
         current_scene->UpdateMaterial();
     }
 }
@@ -77,10 +82,16 @@ void Editor::GUI::ShowMaterialEditor()
     {
         ImGui::SetNextWindowSize(ImVec2(1280,800));
         ImGui::SetWindowFocus("Material Editor");
+        
+        ImGuiWindowClass window_class1;
+        window_class1.ClassId = ImGui::GetID("Material Editor");
+        window_class1.ViewportFlagsOverrideSet = ImGuiViewportFlags_TopMost | ImGuiViewportFlags_NoAutoMerge;
+        
+        ImGui::SetNextWindowClass(&window_class1);
         init_nodes = false;
     }
     
-    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking);
+    ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse);
     
     myNode->rightClickPopUpContent([](ImFlow::BaseNode *node)
                                       {
@@ -116,6 +127,11 @@ void Editor::GUI::ShowMaterialEditor()
     ImGui::Text("Links: %lu", myLinks.size());
     ImGui::SameLine();
     ImGui::Text("Nodes: %u", myNode->getNodesCount());
+    ImGui::SameLine();
+    if ( ImGui::Button("Apply Material") )
+    {
+        ApplyMaterial();
+    }
 
     for (auto wp : myLinks)
     {

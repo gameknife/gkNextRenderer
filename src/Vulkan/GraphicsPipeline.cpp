@@ -25,8 +25,8 @@ GraphicsPipeline::GraphicsPipeline(
 	isWireFrame_(isWireFrame)
 {
 	const auto& device = swapChain.Device();
-	const auto bindingDescription = Assets::Vertex::GetBindingDescription();
-	const auto attributeDescriptions = Assets::Vertex::GetAttributeDescriptions();
+	const auto bindingDescription = Assets::GPUVertex::GetBindingDescription();
+	const auto attributeDescriptions = Assets::GPUVertex::GetFastAttributeDescriptions();
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

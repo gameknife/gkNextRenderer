@@ -58,8 +58,9 @@ struct ALIGN_16 NodeProxy
 {
 uint instanceId;
 uint modelId;
-uint matId;
+uint reserved1;
 uint reserved2;
 mat4 worldTS;
 mat4 combinedPrevTS;
+uint matId[16];
 };
