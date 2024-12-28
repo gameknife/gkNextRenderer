@@ -12,7 +12,7 @@
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine
-    try
+    //try
     {
         // Handle command line options.
         Options options(argc, argv);
@@ -61,7 +61,7 @@ int main(int argc, const char* argv[]) noexcept
         return EXIT_SUCCESS;
     }
     // Exception Handle
-    catch (const Options::Help&)
+    /*catch (const Options::Help&)
     {
         return EXIT_SUCCESS;
     }
@@ -85,6 +85,6 @@ int main(int argc, const char* argv[]) noexcept
         {
             fmt::print(stderr, "FATAL: caught unhandled exception\n");
         });
-    }
+    }*/
     return EXIT_FAILURE;
 }
