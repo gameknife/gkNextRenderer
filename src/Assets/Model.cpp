@@ -45,7 +45,7 @@
 #include "Options.hpp"
 #include "Texture.hpp"
 
-#define FLATTEN_VERTICE 0
+#define FLATTEN_VERTICE 1
 
 using namespace glm;
 
@@ -230,6 +230,13 @@ namespace Assets
             nodeMap[child]->SetParent(sceneNode);
         }
     }
+
+    bool LoadImageData(tinygltf::Image * image, const int image_idx, std::string * err,
+                   std::string * warn, int req_width, int req_height,
+                   const unsigned char * bytes, int size, void * user_data )
+    {
+        return true;
+    }
     
     void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
@@ -243,6 +250,7 @@ namespace Assets
         std::string err;
         std::string warn;
 
+        gltfLoader.SetImageLoader(LoadImageData, nullptr);
         if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
         {
             return;
