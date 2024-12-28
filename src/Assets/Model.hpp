@@ -179,17 +179,17 @@ namespace Assets
         Model(Model&&) = default;
         ~Model() = default;
 
-        std::vector<Vertex>& Vertices() { return vertices_; }
-        const std::vector<uint32_t>& Indices() const { return indices_; }
+        std::vector<Vertex>& CPUVertices() { return vertices_; }
+        const std::vector<uint32_t>& CPUIndices() const { return indices_; }
         const std::vector<uint32_t>& Materials() const { return materialIdx_; }
-
-        const class Procedural* Procedural() const { return procedural_.get(); }
-
-        uint32_t NumberOfVertices() const { return static_cast<uint32_t>(vertices_.size()); }
-        uint32_t NumberOfIndices() const { return static_cast<uint32_t>(indices_.size()); }
-
+        
         glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
+
+        uint32_t NumberOfVertices() const { return verticeCount; }
+        uint32_t NumberOfIndices() const { return indiceCount; }
+
+        void FreeMemory();
 
     private:
         Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, bool needGenTSpace = true);
@@ -197,11 +197,13 @@ namespace Assets
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
         std::vector<uint32_t> materialIdx_;
-        std::shared_ptr<const class Procedural> procedural_;
-
+        
         std::vector<AnimationTrack> AnimationTracks_;
         
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
+
+        uint32_t verticeCount;
+        uint32_t indiceCount;
     };
 }

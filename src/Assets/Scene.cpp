@@ -67,7 +67,7 @@ namespace Assets
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         // 重建universe mesh buffer, 这个可以比较静态
-        std::vector<Vertex> vertices;
+        std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
 
         offsets_.clear();
@@ -80,8 +80,16 @@ namespace Assets
             offsets_.emplace_back(indexOffset, vertexOffset);
 
             // Copy model data one after the other.
-            vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
-            indices.insert(indices.end(), model.Indices().begin(), model.Indices().end());
+
+            // cpu vertex to gpu vertex
+            for (auto& vertex : model.CPUVertices())
+            {
+                vertices.push_back(MakeVertex(vertex));
+            }
+            //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
+            indices.insert(indices.end(), model.CPUIndices().begin(), model.CPUIndices().end());
+
+            model.FreeMemory();
         }
 
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -214,7 +222,7 @@ namespace Assets
                             // draw indirect buffer, instanced, this could be generate in gpu
                             VkDrawIndexedIndirectCommand cmd{};
                             cmd.firstIndex = indexOffset;
-                            cmd.indexCount = static_cast<uint32_t>(models_[i].Indices().size());
+                            cmd.indexCount = models_[i].NumberOfIndices();
                             cmd.vertexOffset = static_cast<int32_t>(vertexOffset);
                             cmd.firstInstance = nodeOffsetBatched;
                             cmd.instanceCount = static_cast<uint32_t>(nodesOfThisModel.size());
@@ -226,8 +234,8 @@ namespace Assets
                             nodeProxys.insert(nodeProxys.end(), nodesOfThisModel.begin(), nodesOfThisModel.end());
                         }
 
-                        indexOffset += static_cast<uint32_t>(models_[i].Indices().size());
-                        vertexOffset += static_cast<uint32_t>(models_[i].Vertices().size());
+                        indexOffset += models_[i].NumberOfIndices();
+                        vertexOffset += models_[i].NumberOfVertices();
                     }
                                         
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));

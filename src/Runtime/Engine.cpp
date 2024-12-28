@@ -474,8 +474,10 @@ void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, i
 
 glm::dvec2 NextEngine::GetMousePos()
 {
-    double x,y;
+    double x{},y{};
+#if !ANDROID
     glfwGetCursorPos( window_->Handle(), &x, &y );
+#endif
     return glm::dvec2(x,y);
 }
 
