@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Vulkan/Image.hpp"
 #include <memory>
 
 namespace Vulkan
@@ -24,7 +25,7 @@ namespace Assets
 		TextureImage& operator = (const TextureImage&) = delete;
 		TextureImage& operator = (TextureImage&&) = delete;
 
-		TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, bool hdr, const unsigned char* data);
+		TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, uint32_t miplevel, VkFormat format, const unsigned char* data, uint32_t size);
 		~TextureImage();
 
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }

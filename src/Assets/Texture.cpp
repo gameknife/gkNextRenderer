@@ -4,6 +4,7 @@
 #include <chrono>
 #include <imgui_impl_vulkan.h>
 #include <fmt/format.h>
+#include <ktx.h>
 
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
@@ -27,19 +28,19 @@ namespace Assets
     {
         std::vector<uint8_t> data;
         Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
-        return GetInstance()->RequestNewTextureMemAsync(filename, false, data.data(), data.size());
+        return GetInstance()->RequestNewTextureMemAsync(filename, "texture/default", false, data.data(), data.size(), false);
     }
 
-    uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const unsigned char* data, size_t bytelength, const Vulkan::SamplerConfig& samplerConfig)
+    uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data, size_t bytelength, bool srgb)
     {
-        return GetInstance()->RequestNewTextureMemAsync(texname, false, data, bytelength);
+        return GetInstance()->RequestNewTextureMemAsync(texname, mime, false, data, bytelength, srgb);
     }
 
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
     {
         std::vector<uint8_t> data;
         Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
-        return GetInstance()->RequestNewTextureMemAsync(filename, true, data.data(), data.size());
+        return GetInstance()->RequestNewTextureMemAsync(filename, "texture/default", true, data.data(), data.size(), false);
     }
 
     void GlobalTexturePool::UpdateHDRTexture(uint32_t idx, const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
@@ -203,13 +204,20 @@ namespace Assets
             // Load the texture in normal host memory.
             int width, height, channels;
             void* pixels = nullptr;
+            uint32_t size = 0;
+            VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+            
             if(hdr)
             {
                 pixels = stbi_loadf(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+                format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                size = width * height * 4 * sizeof(float);
             }
             else
             {
                 pixels = stbi_load(filename.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+                format = VK_FORMAT_R8G8B8A8_UNORM;
+                size = width * height * 4 * sizeof(uint8_t);
             }
 
             if (!pixels)
@@ -218,7 +226,7 @@ namespace Assets
             }
 
             // thread reset may cause crash, created the new texture here, but reset in later main thread phase
-            taskContext.transferPtr = new TextureImage(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
+            taskContext.transferPtr = new TextureImage(commandPool_, width, height, 1, format, static_cast<unsigned char*>((void*)pixels), size);
             stbi_image_free(pixels);
             taskContext.textureId = textureIdx;
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
@@ -237,7 +245,7 @@ namespace Assets
         }, 0);
     }
 
-    uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, bool hdr, const unsigned char* data, size_t bytelength)
+    uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr, const unsigned char* data, size_t bytelength, bool srgb)
     {
         if (textureNameMap_.find(texname) != textureNameMap_.end())
         {
@@ -249,22 +257,57 @@ namespace Assets
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);
-        TaskCoordinator::GetInstance()->AddTask([this, hdr, texname, copyedData, bytelength, newTextureIdx](ResTask& task)
+        TaskCoordinator::GetInstance()->AddTask([this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](ResTask& task)
         {
             TextureTaskContext taskContext {};
             const auto timer = std::chrono::high_resolution_clock::now();
             
             // Load the texture in normal host memory.
             int width, height, channels;
-            void* pixels = nullptr;
+            uint8_t* pixels = nullptr;
+            uint32_t size = 0;
+            uint32_t miplevel = 1;
+            VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
-            if(hdr)
+            ktxTexture2* kTexture;
+            if ( mime.find("ktx") != std::string::npos )
             {
-                pixels = stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+                ktx_error_code_e result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
+                if (KTX_SUCCESS != result) {
+                 Throw(std::runtime_error("failed to load ktx2 texture image "));
+                }
+                result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
+                if (KTX_SUCCESS != result) {
+                 Throw(std::runtime_error("failed to load ktx2 texture image "));
+                }
+                // ready to create compressed BC7?
+                pixels = ktxTexture_GetData(ktxTexture(kTexture));
+                //size = static_cast<uint32_t>( ktxTexture_GetDataSize(ktxTexture(kTexture)) );
+
+                ktx_size_t offset;
+                ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
+                pixels += offset;
+                size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
+
+                format = static_cast<VkFormat>(kTexture->vkFormat);
+                width = kTexture->baseWidth;
+                height = kTexture->baseHeight;
+                miplevel = 1;
             }
             else
             {
-                pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+                if(hdr)
+                {
+                    pixels = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
+                    format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                    size = width * height * 4 * sizeof(float);
+                }
+                else
+                {
+                    pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+                    format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+                    size = width * height * 4 * sizeof(uint8_t);
+                }
             }
             
             if (!pixels)
@@ -273,13 +316,21 @@ namespace Assets
             }
 
             // create texture image
-            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, hdr, static_cast<unsigned char*>((void*)pixels));
+            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
             BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
-            stbi_image_free(pixels);
+
+            if ( mime.find("ktx") == std::string::npos )
+            {
+                stbi_image_free(pixels);
+            }
+            else
+            {
+                ktxTexture_Destroy(ktxTexture(kTexture));
+            }
 
             taskContext.textureId = newTextureIdx;
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, channels, taskContext.elapsed * 1000.f);
+            std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, miplevel, taskContext.elapsed * 1000.f);
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext( taskContext );
         }, [this, copyedData](ResTask& task)

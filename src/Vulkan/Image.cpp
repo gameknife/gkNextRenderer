@@ -7,14 +7,15 @@
 
 namespace Vulkan {
 
-Image::Image(const class Device& device, const VkExtent2D extent, const VkFormat format) :
-	Image(device, extent, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false)
+Image::Image(const class Device& device, const VkExtent2D extent, uint32_t miplevel, const VkFormat format) :
+	Image(device, extent, miplevel, format,  VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false)
 {
 }
 
 Image::Image(
 	const class Device& device, 
 	const VkExtent2D extent,
+	const uint32_t miplevel,
 	const VkFormat format,
 	const VkImageTiling tiling,
 	const VkImageUsageFlags usage,
@@ -31,7 +32,7 @@ Image::Image(
 	imageInfo.extent.width = extent.width;
 	imageInfo.extent.height = extent.height;
 	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = 1;
+	imageInfo.mipLevels = miplevel;
 	imageInfo.arrayLayers = 1;
 	imageInfo.format = format;
 	imageInfo.tiling = tiling;
