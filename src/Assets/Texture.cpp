@@ -290,28 +290,21 @@ namespace Assets
 
                 // Load the texture in normal host memory.
                 int width, height, channels;
+                uint8_t* stbdata = nullptr;
                 uint8_t* pixels = nullptr;
                 uint32_t size = 0;
                 uint32_t miplevel = 1;
                 VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
-                ktxTexture2* kTexture;
+                ktxTexture2* kTexture = nullptr;
+                ktx_error_code_e result;
                 if (mime.find("ktx") != std::string::npos)
                 {
-                    ktx_error_code_e result = ktxTexture2_CreateFromMemory(
-                        copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
-                    if (KTX_SUCCESS != result)
-                    {
-                        Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    }
+                    result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
+                    if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
                     result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
-                    if (KTX_SUCCESS != result)
-                    {
-                        Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    }
-                    // ready to create compressed BC7?
+                    if (KTX_SUCCESS != result)  Throw(std::runtime_error("failed to load ktx2 texture image "));
                     pixels = ktxTexture_GetData(ktxTexture(kTexture));
-                    //size = static_cast<uint32_t>( ktxTexture_GetDataSize(ktxTexture(kTexture)) );
 
                     ktx_size_t offset;
                     ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
@@ -327,81 +320,89 @@ namespace Assets
                 {
                     if (hdr)
                     {
-                        pixels = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(
+                        // ktx now don't support hdr, use stbi import
+                        stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(
                             copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
+                        pixels = stbdata;
                         format = VK_FORMAT_R32G32B32A32_SFLOAT;
                         size = width * height * 4 * sizeof(float);
                     }
                     else
                     {
-                        pixels = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height,
-                                                       &channels, STBI_rgb_alpha);
-                        format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-                        size = width * height * 4 * sizeof(uint8_t);
-
-                        ktxTexture2* texture;
-                        ktxTextureCreateInfo createInfo = {
-                            0, // 内部格式
-                            VK_FORMAT_R8G8B8A8_UNORM,
-                            0,
-                            static_cast<uint32_t>(width),
-                            static_cast<uint32_t>(height),
-                            1,
-                            2,
-                            1,
-                            1,
-                            1,
-                            KTX_FALSE,
-                            KTX_FALSE
-                        };
-
-                        KTX_error_code result = ktxTexture2_Create(&createInfo, KTX_TEXTURE_CREATE_ALLOC_STORAGE,
-                                                                   &texture);
-                        if (result != KTX_SUCCESS)
+                        // ldr texture, try cache fist
+                        std::filesystem::path cachePath = Utilities::FileHelper::GetPlatformFilePath("cache");
+                        std::filesystem::create_directories(cachePath);
+                        
+                        // hash the texname
+                        std::hash<std::string> hasher;
+                        std::string hashname = fmt::format("{:x}", hasher(texname));
+                        std::string cacheFileName = (cachePath / fmt::format("{}.ktx", hashname)).string();
+                        if (!std::filesystem::exists(cacheFileName))
                         {
-                            Throw(std::runtime_error("failed to load texture image "));
+                            // load from stbi and compress to ktx and cache
+                            stbdata = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height,
+                                                           &channels, STBI_rgb_alpha);
+                            format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+                            size = width * height * 4 * sizeof(uint8_t);
+
+                            ktxTextureCreateInfo createInfo = {
+                                0,
+                                static_cast<uint32_t>(format),
+                                0,
+                                static_cast<uint32_t>(width),
+                                static_cast<uint32_t>(height),
+                                1,2,1,1,1,KTX_FALSE,KTX_FALSE
+                            };
+
+                            result = ktxTexture2_Create(&createInfo, KTX_TEXTURE_CREATE_ALLOC_STORAGE,
+                                                                       &kTexture);
+                            if (result != KTX_SUCCESS)
+                            {
+                                Throw(std::runtime_error("failed to load texture image "));
+                            }
+
+                            // 复制图像数据到KTX纹理
+                            std::memcpy(ktxTexture_GetData(ktxTexture(kTexture)), stbdata, size);
+
+                            ktxBasisParams params = {};
+                            params.structSize = sizeof(params);
+                            params.uastc = KTX_TRUE;
+                            params.compressionLevel = 2;
+                            params.qualityLevel = 128;
+                            params.threadCount = 12;
+                            result = ktxTexture2_CompressBasisEx(kTexture, &params);
+                            if (KTX_SUCCESS != result)
+                            {
+                                Throw(std::runtime_error("failed to load ktx2 texture image "));
+                            }
+
+                            // save to cache
+                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), (cachePath / fmt::format("{}.ktx", hashname)).string().c_str());
                         }
-
-                        // 复制图像数据到KTX纹理
-                        std::memcpy(ktxTexture_GetData(ktxTexture(texture)), pixels, size);
-
-                        ktxBasisParams params = { 0 };
-                        params.structSize = sizeof(params);
-                        params.uastc = KTX_TRUE;
-                        params.compressionLevel = 128;
-                        params.qualityLevel = 1;
-                        params.threadCount = 24;  
-                        result = ktxTexture2_CompressBasisEx(texture, &params);
+                        else
+                        {
+                            result = ktxTexture2_CreateFromNamedFile(cacheFileName.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &kTexture);
+                        }
+                        
+                        // next
+                        result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
                         if (KTX_SUCCESS != result)
                         {
                             Throw(std::runtime_error("failed to load ktx2 texture image "));
                         }
-                        result = ktxTexture2_TranscodeBasis(texture, KTX_TTF_BC7_RGBA, 0);
-                        if (KTX_SUCCESS != result)
-                        {
-                            Throw(std::runtime_error("failed to load ktx2 texture image "));
-                        }
 
-                        pixels = ktxTexture_GetData(ktxTexture(texture));
-                        //size = static_cast<uint32_t>( ktxTexture_GetDataSize(ktxTexture(kTexture)) );
+                        pixels = ktxTexture_GetData(ktxTexture(kTexture));
 
                         ktx_size_t offset;
-                        ktxTexture_GetImageOffset(ktxTexture(texture), 0, 0, 0, &offset);
+                        ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
                         pixels += offset;
-                        size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(texture), 0));
+                        size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
 
                         format = srgb ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
-                        width = texture->baseWidth;
-                        height = texture->baseHeight;
+                        width = kTexture->baseWidth;
+                        height = kTexture->baseHeight;
                         miplevel = 1;
                     }
-                }
-
-
-
-
-                {
-                    Throw(std::runtime_error("failed to load texture image "));
                 }
 
                 // create texture image
@@ -409,13 +410,14 @@ namespace Assets
                     commandPool_, width, height, miplevel, format, pixels, size);
                 BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
-                if (mime.find("ktx") == std::string::npos)
+                if (stbdata)
                 {
-                    stbi_image_free(pixels);
+                    stbi_image_free(stbdata);
                 }
-                else
+
+                if (kTexture)
                 {
-                    ktxTexture_Destroy(ktxTexture(kTexture));
+                    ktxTexture_Destroy( ktxTexture(kTexture) );
                 }
 
                 taskContext.textureId = newTextureIdx;
