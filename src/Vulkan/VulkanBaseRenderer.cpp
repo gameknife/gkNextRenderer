@@ -411,7 +411,7 @@ namespace Vulkan
 
         fence = nullptr;
 
-        screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+        screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), 1, swapChain_->Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         screenShotImageMemory_.reset(new DeviceMemory(screenShotImage_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
 
         rtEditorViewport_.reset(new RenderImage(*device_, {1280, 720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));

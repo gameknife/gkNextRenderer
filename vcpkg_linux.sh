@@ -29,4 +29,6 @@ git checkout 2024.08.23
 	draco:x64-linux \
 	rapidjson:x64-linux \
 	fmt:x64-linux \
+	meshoptimizer:x64-linux \
+	ktx:x64-linux \
 	cpp-base64:x64-linux

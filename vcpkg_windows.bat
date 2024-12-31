@@ -34,6 +34,8 @@ vcpkg.exe install --recurse ^
 	draco:x64-windows-static ^
 	rapidjson:x64-windows-static ^
 	fmt:x64-windows-static ^
+	meshoptimizer:x64-windows-static ^
+	ktx:x64-windows-static ^
 	cpp-base64:x64-windows-static || goto :error
 
 IF "%1" == "avif" (

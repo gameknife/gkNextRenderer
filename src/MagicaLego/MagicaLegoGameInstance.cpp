@@ -283,6 +283,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
             auto newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
+            newNode->SetMaterial( GetEngine().GetScene().GetModel(modelId)->Materials() );
             GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
@@ -503,7 +504,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
         std::vector<uint8_t> outData;
         GetEngine().GetPakSystem().LoadFile(fileName, outData);
-        Assets::GlobalTexturePool::LoadTexture(fileName, outData.data(), outData.size(), Vulkan::SamplerConfig());
+        Assets::GlobalTexturePool::LoadTexture(fileName, "jpg", outData.data(), outData.size(), false );
 #endif
     }
 }
@@ -775,6 +776,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
                 std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
+                newNode->SetMaterial( GetEngine().GetScene().GetModel(BasicBlock->modelId_)->Materials() );
                 newNode->SetVisible(true);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 

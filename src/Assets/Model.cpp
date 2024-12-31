@@ -37,6 +37,8 @@
 #define TINYGLTF_NO_INCLUDE_RAPIDJSON
 #endif
 
+#define TINYGLTF_NO_STB_IMAGE
+//#define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
 #include <fmt/format.h>
@@ -231,10 +233,13 @@ namespace Assets
         }
     }
 
+    static std::string currSceneName = "default";
+    
     bool LoadImageData(tinygltf::Image * image, const int image_idx, std::string * err,
                    std::string * warn, int req_width, int req_height,
                    const unsigned char * bytes, int size, void * user_data )
     {
+        image->as_is = true;
         return true;
     }
     
@@ -249,31 +254,65 @@ namespace Assets
         tinygltf::TinyGLTF gltfLoader;
         std::string err;
         std::string warn;
+        std::filesystem::path filepath = filename;
+        
+        
+        // load all textures
+        std::vector<int32_t> textureIdMap;
+        currSceneName = filepath.filename().string();
 
+        gltfLoader.SetImagesAsIs(true);
         gltfLoader.SetImageLoader(LoadImageData, nullptr);
         if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
         {
             return;
         }
-        
-        // load all textures
-        std::vector<uint32_t> textureIdMap;
 
-        std::filesystem::path filepath = filename;
-        
-        for ( uint32_t i = 0; i < model.images.size(); ++i )
+        // delayed texture creation
+        textureIdMap.resize(model.images.size(), -1);
+        auto lambdaLoadTexture = [&textureIdMap, &model](int texture, bool srgb)
         {
-            tinygltf::Image& image = model.images[i];
-            
-            std::string texname = image.name.empty() ? fmt::format("tex_{}", i):  image.name;
-            // 假设，这里的image id和外面的textures id是一样的
-            uint32_t texIdx = GlobalTexturePool::LoadTexture(
-                filepath.filename().string() + "_" + texname, model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
-                model.bufferViews[image.bufferView].byteLength, Vulkan::SamplerConfig());
+            if (texture != -1)
+            {
+                int imageIdx = model.textures[texture].source;
+                if (imageIdx == -1) imageIdx = texture;
 
-            textureIdMap.push_back(texIdx);
+                if (textureIdMap[imageIdx] != -1)
+                {
+                    return;
+                }
+                
+                // create texture
+                auto& image = model.images[imageIdx];
+                std::string texname = image.name.empty() ? fmt::format("tex_{}", imageIdx) : image.name;
+                
+                uint32_t texIdx = GlobalTexturePool::LoadTexture(
+                    currSceneName + texname, model.images[imageIdx].mimeType,
+                    model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
+                    model.bufferViews[image.bufferView].byteLength, srgb);
+
+                textureIdMap[imageIdx] = texIdx;
+            }
+        };
+
+        auto lambdaGetTexture = [&textureIdMap, &model](int texture)
+        {
+            if (texture != -1)
+            {
+                int imageIdx = model.textures[texture].source;
+                if (imageIdx == -1) imageIdx = texture;
+                return textureIdMap[imageIdx];
+            }
+            return -1;
+        };
+        
+        for (tinygltf::Material& mat : model.materials)
+        {
+            lambdaLoadTexture(mat.pbrMetallicRoughness.baseColorTexture.index, true);
+            lambdaLoadTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
+            lambdaLoadTexture(mat.normalTexture.index, false);
         }
-
+        
         // load all materials
         for (tinygltf::Material& mat : model.materials)
         {
@@ -290,23 +329,11 @@ namespace Assets
             m.RefractionIndex = 1.46f;
             m.RefractionIndex2 = 1.46f;
             
-            int texture = mat.pbrMetallicRoughness.baseColorTexture.index;
-            if(texture != -1)
-            {
-                m.DiffuseTextureId = textureIdMap[ model.textures[texture].source ];
-            }
-            int mraTexture = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
-            if(mraTexture != -1)
-            {
-                m.MRATextureId = textureIdMap[ model.textures[mraTexture].source ];
-                m.Fuzziness = 1.0;
-            }
-            int normalTexture = mat.normalTexture.index;
-            if(normalTexture != -1)
-            {
-                m.NormalTextureId = textureIdMap[ model.textures[normalTexture].source ];
-                m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
-            }
+            m.DiffuseTextureId = lambdaGetTexture( mat.pbrMetallicRoughness.baseColorTexture.index );
+            m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+           
+            m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
+            m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
             
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()
                                           ? glm::vec3(0)

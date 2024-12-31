@@ -30,4 +30,6 @@ cp -f ../../android/custom-triplets/arm64-android.cmake ./triplets/arm64-android
 	tinygltf:arm64-android \
 	draco:arm64-android \
 	fmt:arm64-android \
+	meshoptimizer:arm64-android \
+	ktx:arm64-android \
 	cpp-base64:arm64-android

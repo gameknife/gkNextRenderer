@@ -18,7 +18,7 @@ namespace Vulkan {
         bool external,
         const char* debugName)
     {
-        image_.reset(new Image(device, extent, format, tiling, usage, external));
+        image_.reset(new Image(device, extent, 1, format, tiling, usage, external));
         imageMemory_.reset(
             new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, external)));
         imageView_.reset(new ImageView(device, image_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
