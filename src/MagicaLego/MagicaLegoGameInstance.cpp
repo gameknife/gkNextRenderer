@@ -504,7 +504,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         std::string fileName = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", type, name);
         std::vector<uint8_t> outData;
         GetEngine().GetPakSystem().LoadFile(fileName, outData);
-        Assets::GlobalTexturePool::LoadTexture(fileName, "jpg", outData.data(), outData.size(), false );
+        Assets::GlobalTexturePool::LoadTexture(fileName, "image/jpg", outData.data(), outData.size(), false );
 #endif
     }
 }

@@ -168,7 +168,7 @@ void SceneList::ScanScenes()
     {
         std::filesystem::path filename = entry.path().filename();
         std::string ext = entry.path().extension().string();
-        if (ext != ".glb" && ext != ".obj") continue;
+        if (ext != ".glb" && ext != ".gltf") continue;
         AllScenes.push_back(absolute(path / filename).string());
     }
     fmt::print("Scene found: {}\n", AllScenes.size());
@@ -188,21 +188,11 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
 {
     std::filesystem::path filepath = filename;
     std::string ext = filepath.extension().string();
-    if (ext == ".glb")
+    if (ext == ".glb" || ext == ".gltf")
     {
         Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
         return true;
     }
-    else if (ext == ".obj")
-    {
-        Model::LoadObjModel(filename, nodes, models, materials, lights);
-        camera.ControlSpeed = 1.0f;
-        camera.GammaCorrection = true;
-        camera.HasSky = true;
-        Assets::Camera defaultCam = Model::AutoFocusCamera(camera, models);
-        camera.cameras.push_back(defaultCam);
-        return true;
-    }
-
+    
     return false;
 }

@@ -150,11 +150,7 @@ namespace Assets
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 
         static Camera AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
-
-        static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
-                                     std::vector<FMaterial>& materials,
-                                     std::vector<LightObject>& lights, bool autoNode = true);
-
+        
         static uint32_t CreateCornellBox(const float scale,
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,

@@ -16,8 +16,13 @@ namespace Utilities
             // pak mounted, read through offset and size
             if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
             {
+                std::filesystem::path path(entry);
+                std::string absEntry = entry;
+                if (!path.is_absolute())
+                {
+                    absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
+                }
                 // read from os file
-                std::string absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
                 std::ifstream reader(absEntry, std::ios::binary);
                 if (!reader.is_open()) {
                     fmt::print("LoadFile: Failed to open file: {}\n", entry);

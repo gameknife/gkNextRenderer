@@ -737,19 +737,19 @@ void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
     
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
 
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
 
     //if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
         
