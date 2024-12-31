@@ -46,12 +46,6 @@ namespace Assets
                                                         false);
     }
 
-    void GlobalTexturePool::UpdateHDRTexture(uint32_t idx, const std::string& filename,
-                                             const Vulkan::SamplerConfig& samplerConfig)
-    {
-        GetInstance()->RequestUpdateTextureFileAsync(idx, filename, true);
-    }
-
     TextureImage* GlobalTexturePool::GetTextureImage(uint32_t idx)
     {
         if (GetInstance()->textureImages_.size() > idx)
@@ -203,70 +197,6 @@ namespace Assets
             return textureNameMap_.at(textureName);
         }
         return -1;
-    }
-
-    void GlobalTexturePool::RequestUpdateTextureFileAsync(uint32_t textureIdx, const std::string& filename, bool hdr)
-    {
-        TaskCoordinator::GetInstance()->AddTask([this, filename, hdr, textureIdx](ResTask& task)
-        {
-            TextureTaskContext taskContext{};
-            const auto timer = std::chrono::high_resolution_clock::now();
-
-            // Load the texture in normal host memory.
-            int width, height, channels;
-            void* pixels = nullptr;
-            uint32_t size = 0;
-            VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-
-            if (hdr)
-            {
-                pixels = stbi_loadf(
-                    filename.c_str(), &width, &height, &channels,
-                    STBI_rgb_alpha);
-                format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                size = width * height * 4 * sizeof(float);
-            }
-            else
-            {
-                pixels = stbi_load(
-                    filename.c_str(), &width, &height, &channels,
-                    STBI_rgb_alpha);
-                format = VK_FORMAT_R8G8B8A8_UNORM;
-                size = width * height * 4 * sizeof(uint8_t);
-            }
-
-            if (!pixels)
-            {
-                Throw(std::runtime_error(
-                    "failed to load texture image '" + filename + "'"));
-            }
-
-            // thread reset may cause crash, created the new texture here, but reset in later main thread phase
-            taskContext.transferPtr = new TextureImage(
-                commandPool_, width, height, 1, format,
-                static_cast<unsigned char*>((void*)pixels), size);
-            stbi_image_free(pixels);
-            taskContext.textureId = textureIdx;
-            taskContext.elapsed = std::chrono::duration<
-                float, std::chrono::seconds::period>(
-                std::chrono::high_resolution_clock::now() - timer).count();
-            std::string info = fmt::format(
-                "reloaded {} ({} x {} x {}) in {:.2f}ms", filename, width,
-                height, channels, taskContext.elapsed * 1000.f);
-            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
-            task.SetContext(taskContext);
-        }, [this](ResTask& task)
-        {
-            TextureTaskContext taskContext{};
-            task.GetContext(taskContext);
-
-            textureImages_[taskContext.textureId].
-                reset(taskContext.transferPtr);
-            BindTexture(taskContext.textureId,
-                        *(textureImages_[taskContext.textureId]));
-
-            fmt::print("{}\n", taskContext.outputInfo.data());
-        }, 0);
     }
 
     uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr,
