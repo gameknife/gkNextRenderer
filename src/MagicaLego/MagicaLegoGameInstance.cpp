@@ -79,7 +79,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     config.HideTitleBar = true;
 
     // options
-    options.SceneName = "legobricks.glb";
+    // options.SceneName = "legobricks.glb";
     options.Samples = 8;
     options.Temporal = 16;
     options.ForceSDR = true;
@@ -201,6 +201,8 @@ void MagicaLegoGameInstance::OnInit()
     bgmArray_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
     bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
     PlayNextBGM();
+
+    GetEngine().RequestLoadScene("assets/models/legobricks.glb");
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)

@@ -162,20 +162,25 @@ std::vector<std::string> SceneList::AllScenes;
 
 void SceneList::ScanScenes()
 {
-    std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/models/");
+    // add relative path
+    std::string modelPath = "assets/models/";
+    std::string path = Utilities::FileHelper::GetPlatformFilePath(modelPath.c_str());
     fmt::print("Scaning dir: {}\n", path);
     for (const auto& entry : std::filesystem::directory_iterator(path))
     {
         std::filesystem::path filename = entry.path().filename();
         std::string ext = entry.path().extension().string();
         if (ext != ".glb" && ext != ".gltf") continue;
-        AllScenes.push_back(absolute(path / filename).string());
+        AllScenes.push_back((modelPath / filename).string());
     }
+    // sort the scene
+    std::sort(AllScenes.begin(), AllScenes.end());
     fmt::print("Scene found: {}\n", AllScenes.size());
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)
 {
+    // add absolute path
     if ( std::filesystem::exists(absPath) )
     {
         AllScenes.push_back(absPath);

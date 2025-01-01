@@ -265,14 +265,17 @@ namespace Assets
         gltfLoader.SetImageLoader(LoadImageData, nullptr);
         if (filepath.extension() == ".glb")
         {
-            if(!gltfLoader.LoadBinaryFromFile(&model, &err, &warn, filename) )
+            // try fetch from pakcagesystem
+            std::vector<uint8_t> data;
+            Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+            if(!gltfLoader.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size()) )
             {
                 return;
             }
         }
         else
         {
-            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, filename) )
+            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, "../" + filename) )
             {
                 return;
             }
@@ -593,6 +596,54 @@ namespace Assets
             std::map<std::string, AnimationTrack> trackMaps;
             for ( auto& track : animation.channels )
             {
+                if (track.target_path == "scale")
+                {
+                    tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
+                    tinygltf::Accessor outputAccessor = model.accessors[animation.samplers[track.sampler].output];
+
+                    tinygltf::BufferView inputView = model.bufferViews[inputAccessor.bufferView];
+                    tinygltf::BufferView outputView = model.bufferViews[outputAccessor.bufferView];
+
+                    std::string nodeName = model.nodes[track.target_node].name;
+                    AnimationTrack& CreateTrack = trackMaps[nodeName];
+
+                    CreateTrack.NodeName_ = nodeName;
+                    CreateTrack.Time_ = 0;
+
+                    int inputStride = inputAccessor.ByteStride(inputView);
+                    int outputStride = outputAccessor.ByteStride(outputView);
+
+                    for (size_t i = 0; i < inputAccessor.count; ++i)
+                    {
+                        float time = 0.f;
+                        glm::vec3 translation;
+                        if ( inputAccessor.type == TINYGLTF_TYPE_SCALAR )
+                        {
+
+                            float* position = reinterpret_cast<float*>(&model.buffers[inputView.buffer].data[inputView.byteOffset + inputAccessor.byteOffset + i *
+                                inputStride]);
+                            time = position[0];
+                        }
+
+                        if ( outputAccessor.type == TINYGLTF_TYPE_VEC3 )
+                        {
+                            float* position = reinterpret_cast<float*>(&model.buffers[outputView.buffer].data[outputView.byteOffset + outputAccessor.byteOffset + i *
+                                outputStride]);
+                            translation = vec3(
+                                position[0],
+                                position[1],
+                                position[2]
+                            );
+                        }
+
+                        AnimationKey<glm::vec3> Key;
+                        Key.Time = time;
+                        Key.Value = translation;
+
+                        CreateTrack.ScaleChannel.Keys.push_back(Key);
+                        CreateTrack.Duration_ = max(time, CreateTrack.Duration_);
+                    }
+                }
                 if (track.target_path == "rotation")
                 {
                     tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];

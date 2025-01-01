@@ -17,7 +17,7 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
-    
+	GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)

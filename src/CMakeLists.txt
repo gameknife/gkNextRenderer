@@ -189,7 +189,7 @@ foreach(target IN LISTS AllTargets)
 
 	# specific for targets
 	if ( ${target} STREQUAL MagicaLego )
-	if (UNIX)
+	if (UNIX AND NOT APPLE)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()

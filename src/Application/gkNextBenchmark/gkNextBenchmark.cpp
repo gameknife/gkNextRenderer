@@ -17,7 +17,7 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Optio
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
-    
+    GetEngine().RequestLoadScene(SceneList::AllScenes[0]);
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)

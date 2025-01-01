@@ -89,7 +89,7 @@ THE SOFTWARE.
 #define C_TRAV	0.01f
 
 // include fast AVX BVH builder
-#if defined(__x86_64__) || defined(_M_X64) || defined(__wasm_simd128__) || defined(__wasm_relaxed_simd__)
+#if !defined(__APPLE__) && (defined(__x86_64__) || defined(_M_X64) || defined(__wasm_simd128__) || defined(__wasm_relaxed_simd__))
 #define BVH_USEAVX
 #include "immintrin.h" // for __m128 and __m256
 #elif defined(__aarch64__) || defined(_M_ARM64)
