@@ -243,7 +243,7 @@ namespace Assets
         return true;
     }
     
-    void Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+    bool Model::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
@@ -267,17 +267,28 @@ namespace Assets
         {
             // try fetch from pakcagesystem
             std::vector<uint8_t> data;
-            Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+            if ( !Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data) )
+            {
+                fmt::print("failed to load file: {}\n", filename);
+                return false;
+            }
             if(!gltfLoader.LoadBinaryFromMemory(&model, &err, &warn, data.data(), data.size()) )
             {
-                return;
+                fmt::print("failed to parse glb file: {}\n", filename);
+                return false;
             }
         }
         else
         {
-            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, "../" + filename) )
+            std::filesystem::path gltfFile(filename);
+            if (gltfFile.is_relative())
             {
-                return;
+                gltfFile = ".." / gltfFile;
+            }
+            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, gltfFile.string()) )
+            {
+                fmt::print("failed to parse glb file: {}\n", filename);
+                return false;
             }
         }
 
@@ -768,6 +779,7 @@ namespace Assets
             i++;
         }
         //printf("model.cameras: %d\n", i);
+        return true;
     }
 
     template <typename T>

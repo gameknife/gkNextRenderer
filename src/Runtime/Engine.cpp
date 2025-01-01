@@ -87,6 +87,7 @@ namespace
 
     struct SceneTaskContext
     {
+        bool success;
         float elapsed;
         std::array<char, 256> outputInfo;
     };
@@ -100,13 +101,8 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.RendererType = options.RendererType;
     userSettings.Benchmark = options.Benchmark;
-    userSettings.SceneIndex = options.SceneIndex;
-
-    if(options.SceneName != "")
-    {
-        userSettings.SceneIndex = SceneList::AddExternalScene(Utilities::FileHelper::GetPlatformFilePath(("assets/models/" + options.SceneName).c_str()));
-    }
-    
+    userSettings.SceneIndex = 0;
+        
     userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
     userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
@@ -137,6 +133,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
+    
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -918,9 +915,10 @@ void NextEngine::OnDropFile(int path_count, const char* paths[])
         std::string ext = path.substr(path.find_last_of(".") + 1);
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-        if (ext == "glb")
+        if (ext == "glb" || ext == "gltf")
         {
             //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+            RequestLoadScene(path);
         }
 
         if( ext == "hdr")
@@ -977,7 +975,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
+        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -989,39 +987,43 @@ void NextEngine::LoadScene(std::string sceneFileName)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
-        fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
-        
-        const auto timer = std::chrono::high_resolution_clock::now();
+        if (taskContext.success )
+        {
+            fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
+            const auto timer = std::chrono::high_resolution_clock::now();
+            scene_->GetEnvSettings().Reset();
+            scene_->SetEnvSettings(*cameraState);
 
-        scene_->GetEnvSettings().Reset();
-        scene_->SetEnvSettings(*cameraState);
+            gameInstance_->OnSceneUnloaded();
+                    
+            renderer_->Device().WaitIdle();
+            renderer_->DeleteSwapChain();
+            renderer_->OnPreLoadScene();
+                    
+            scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
+            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                    
+            renderer_->SetScene(scene_);
+                    
+            userSettings_.CameraIdx = 0;
+            assert(!scene_->GetEnvSettings().cameras.empty());
+            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
 
-        gameInstance_->OnSceneUnloaded();
-        
-        renderer_->Device().WaitIdle();
-        renderer_->DeleteSwapChain();
-        renderer_->OnPreLoadScene();
-        
-        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
-        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-        
-        renderer_->SetScene(scene_);
-        
-        userSettings_.CameraIdx = 0;
-        assert(!scene_->GetEnvSettings().cameras.empty());
-        scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+            totalFrames_ = 0;
+                    
+            renderer_->OnPostLoadScene();
+            renderer_->CreateSwapChain();
 
-        totalFrames_ = 0;
-        
-        renderer_->OnPostLoadScene();
-        renderer_->CreateSwapChain();
+            gameInstance_->OnSceneLoaded();
 
-        gameInstance_->OnSceneLoaded();
+            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            fmt::print("{} uploaded scene [{}] to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
+        }
+        else
+        {
+            fmt::print("{} failed to load scene [{}]{}\n", CONSOLE_RED_COLOR, std::filesystem::path(sceneFileName).filename().string(), CONSOLE_DEFAULT_COLOR);
+        }
 
-        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-
-        fmt::print("{} uploaded scene [{}] to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
-        
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);

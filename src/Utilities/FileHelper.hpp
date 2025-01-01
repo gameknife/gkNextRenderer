@@ -103,7 +103,7 @@ namespace Utilities
             // Loading
             void Reset();
             void MountPak(const std::string& pakFile);
-            void LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
+            bool LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
             
             // Recording
             //void RecordUsage(const std::string& entry);

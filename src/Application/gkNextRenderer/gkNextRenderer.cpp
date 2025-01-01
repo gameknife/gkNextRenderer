@@ -17,7 +17,12 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
-	GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+	std::string initializedScene = SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
+	if (!GOption->SceneName.empty())
+	{
+		initializedScene = GOption->SceneName;
+	}
+	GetEngine().RequestLoadScene(initializedScene);
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)

@@ -39,7 +39,6 @@ public:
 	bool AdaptiveSample{};
 	
 	// Scene options.
-	uint32_t SceneIndex{};
 	std::string SceneName{};
 	std::string HDRIfile{};
 

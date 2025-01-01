@@ -11,7 +11,7 @@ namespace Utilities
             instance_ = this;
         }
 
-        void FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
+        bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
             // pak mounted, read through offset and size
             if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
@@ -26,12 +26,12 @@ namespace Utilities
                 std::ifstream reader(absEntry, std::ios::binary);
                 if (!reader.is_open()) {
                     fmt::print("LoadFile: Failed to open file: {}\n", entry);
-                    return;
+                    return false;
                 }
 
                 outData = std::vector<uint8_t>(std::istreambuf_iterator<char>(reader), {});
                 reader.close();
-                return;
+                return true;
             }
 
             // from pak
@@ -41,7 +41,7 @@ namespace Utilities
             std::ifstream reader(pakFile, std::ios::binary);
             if (!reader.is_open()) {
                 fmt::print("LoadFile: Failed to open pak file: {}\n", "pakfile");
-                return;
+                return false;
             }
 
             void* comp_buf = malloc( pakEntry.size );
@@ -53,6 +53,7 @@ namespace Utilities
             int l = lzav_decompress( comp_buf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
             free(comp_buf);
 
+            return true;
         }
 
         void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex )

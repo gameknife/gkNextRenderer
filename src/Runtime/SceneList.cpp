@@ -195,8 +195,7 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     std::string ext = filepath.extension().string();
     if (ext == ".glb" || ext == ".gltf")
     {
-        Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
-        return true;
+        return Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
     }
     
     return false;
