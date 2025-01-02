@@ -1035,7 +1035,7 @@ namespace Assets
                     static_cast<float>(i) / slices,
                     static_cast<float>(j) / stacks);
 
-                vertices.push_back(Vertex{position, normal, vec4(1,0,0,0), texCoord, materialIdx});
+                vertices.push_back(Vertex{position, normal, vec4(1,0,0,0), texCoord, 0});
 
                 i0 += i0_delta;
             }
