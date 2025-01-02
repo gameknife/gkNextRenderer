@@ -119,44 +119,46 @@ void RayTracingInOneWeekend(Assets::CameraInitialSate& camera, std::vector<Asset
                                          isProc));
     nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), glm::mat4(1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
 }
+#endif
 
-void CornellBox(Assets::CameraInitialSate& camera, std::vector<Assets::Node>& nodes,
-                std::vector<Assets::Model>& models,
-                std::vector<Assets::Material>& materials, std::vector<Assets::LightObject>& lights)
+void CornellBox(Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+                              std::vector<Assets::Model>& models,
+                              std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
 {
-    camera.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
-    camera.FieldOfView = 40;
-    camera.Aperture = 0.0f;
-    camera.FocusDistance = 778.0f;
-    camera.ControlSpeed = 200.0f;
-    camera.GammaCorrection = true;
-    camera.HasSky = false;
-    camera.HasSun = false;
+    //cameraInit.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
+    //camera.FieldOfView = 40;
+    //camera.Aperture = 0.0f;
+    //camera.FocusDistance = 778.0f;
+    
+    cameraInit.ControlSpeed = 200.0f;
+    cameraInit.GammaCorrection = true;
+    cameraInit.HasSky = false;
+    cameraInit.HasSun = false;
 
 
     int cbox_model = Model::CreateCornellBox(555, models, materials, lights);
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), mat4(1), cbox_model, static_cast<uint32_t>(nodes.size()), false));
-
-
-    materials.push_back(Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)));
-    auto box0 = Model::CreateBox(vec3(0, 0, -165), vec3(165, 165, 0), static_cast<int>(materials.size() - 1));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0,0,0), quat(1,0,0,0), vec3(1,1,1), cbox_model, static_cast<uint32_t>(nodes.size()), false));
+    nodes.back()->SetVisible(true);
+    
+    materials.push_back({ "cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
+    auto box0 = Model::CreateBox(vec3(-80, 0, -80), vec3(80, 160, 80), static_cast<uint32_t>(materials.size() - 1));
     models.push_back(box0);
 
-    glm::mat4 ts0 = (rotate(translate(mat4(1), vec3(278 - 130 - 165, 0, 213)), radians(-18.0f), vec3(0, 1, 0)));
-    glm::mat4 ts1 = (rotate(scale(translate(mat4(1), vec3(278 - 265 - 165, 0, 17)), vec3(1, 2, 1)),
-                            radians(15.0f), vec3(0, 1, 0)));
-
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), ts0, 1, static_cast<uint32_t>(nodes.size()), false));
-    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), ts1, 1, static_cast<uint32_t>(nodes.size()), false));
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0 + 130 - 0, 0, 80), quat(vec3(0,0.5f,0)), vec3(1,1,1), cbox_model + 1, static_cast<uint32_t>(nodes.size()), false));
+    nodes.back()->SetVisible(true);
+    nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0 - 130 - 0, 0, -80), quat(vec3(0,0.25f,0)), vec3(1,2,1), cbox_model + 1, static_cast<uint32_t>(nodes.size()), false));
+    nodes.back()->SetVisible(true);
+    
+    Assets::Camera defaultCam;
+    defaultCam.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
+    defaultCam.FieldOfView = 40;
+    
+    // if no camera, add default
+    if (cameraInit.cameras.empty() )
+    {
+        cameraInit.cameras.push_back(defaultCam);
+    }
 }
-#endif
-// procedural scene without assets
-// std::vector<scenes_pair> SceneList::AllScenes
-//     =
-//     {
-//     {"Ray Tracing In One Weekend", RayTracingInOneWeekend},
-//     {"Cornell Box", CornellBox},
-//     };
 
 std::vector<std::string> SceneList::AllScenes;
 
@@ -173,8 +175,12 @@ void SceneList::ScanScenes()
         if (ext != ".glb" && ext != ".gltf") continue;
         AllScenes.push_back((modelPath / filename).string());
     }
+
+    AllScenes.push_back("0cornellbox.proc");
+    
     // sort the scene
     std::sort(AllScenes.begin(), AllScenes.end());
+    
     fmt::print("Scene found: {}\n", AllScenes.size());
 }
 
@@ -196,6 +202,11 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     if (ext == ".glb" || ext == ".gltf")
     {
         return Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
+    }
+    if (ext == ".proc")
+    {
+        CornellBox(camera, nodes, models, materials, lights, tracks);
+        return true;
     }
     
     return false;

@@ -907,7 +907,7 @@ namespace Assets
 
     uint32_t Model::CreateCornellBox(const float scale,
                                  std::vector<Model>& models,
-                                 std::vector<Material>& materials,
+                                 std::vector<FMaterial>& materials,
                                  std::vector<LightObject>& lights)
     {
         std::vector<Vertex> vertices;
@@ -930,7 +930,7 @@ namespace Assets
         models.push_back(Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIds)
+            std::move(materialIds),true
         ));
 
         return models.size() - 1;
@@ -940,35 +940,35 @@ namespace Assets
     {
         std::vector<Vertex> vertices =
         {
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(-1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
 
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(1, 0, 0), vec4(1,0,0,0), vec2(0), 0},
 
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 0, -1), vec4(1,0,0,0), vec2(0), 0},
 
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 0, 1), vec4(1,0,0,0), vec2(0), 0},
 
-            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p0.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p0.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p0.y, p1.z), vec3(0, -1, 0), vec4(1,0,0,0), vec2(0), 0},
 
-            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
-            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), materialIdx},
+            Vertex{vec3(p1.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p0.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p0.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), 0},
+            Vertex{vec3(p1.x, p1.y, p1.z), vec3(0, 1, 0), vec4(1,0,0,0), vec2(0), 0},
         };
 
         std::vector<uint32_t> indices =
@@ -990,7 +990,7 @@ namespace Assets
         return Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialids));
+            std::move(materialids), true);
     }
 
     Model Model::CreateSphere(const vec3& center, float radius, uint32_t materialIdx, const bool isProcedural)

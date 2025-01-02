@@ -153,7 +153,7 @@ namespace Assets
         
         static uint32_t CreateCornellBox(const float scale,
                                      std::vector<Model>& models,
-                                     std::vector<Material>& materials,
+                                     std::vector<FMaterial>& materials,
                                      std::vector<LightObject>& lights);
         static uint32_t CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
                                      const glm::vec3& dir, const glm::vec3& lightColor,
