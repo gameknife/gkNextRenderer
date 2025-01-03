@@ -37,6 +37,24 @@ bool EdgeDetect(in uint current_primitive_index, in bool isEvenFrame, in ivec2 i
 	return edge0 && edge1;
 }
 
+// 
+const vec2 offsets5x5[25] = vec2[25](
+vec2(-2.0, -2.0), vec2(-1.0, -2.0), vec2(0.0, -2.0), vec2(1.0, -2.0), vec2(2.0, -2.0),
+vec2(-2.0, -1.0), vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0), vec2(2.0, -1.0),
+vec2(-2.0,  0.0), vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0), vec2(2.0,  0.0),
+vec2(-2.0,  1.0), vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0), vec2(2.0,  1.0),
+vec2(-2.0,  2.0), vec2(-1.0,  2.0), vec2(0.0,  2.0), vec2(1.0,  2.0), vec2(2.0,  2.0)
+);
+//const vec2 offsets7x7[49] = vec2[49](
+//vec2(-3.0, -3.0), vec2(-2.0, -3.0), vec2(-1.0, -3.0), vec2(0.0, -3.0), vec2(1.0, -3.0), vec2(2.0, -3.0), vec2(3.0, -3.0),
+//vec2(-3.0, -2.0), vec2(-2.0, -2.0), vec2(-1.0, -2.0), vec2(0.0, -2.0), vec2(1.0, -2.0), vec2(2.0, -2.0), vec2(3.0, -2.0),
+//vec2(-3.0, -1.0), vec2(-2.0, -1.0), vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0), vec2(2.0, -1.0), vec2(3.0, -1.0),
+//vec2(-3.0,  0.0), vec2(-2.0,  0.0), vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0), vec2(2.0,  0.0), vec2(3.0,  0.0),
+//vec2(-3.0,  1.0), vec2(-2.0,  1.0), vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0), vec2(2.0,  1.0), vec2(3.0,  1.0),
+//vec2(-3.0,  2.0), vec2(-2.0,  2.0), vec2(-1.0,  2.0), vec2(0.0,  2.0), vec2(1.0,  2.0), vec2(2.0,  2.0), vec2(3.0,  2.0),
+//vec2(-3.0,  3.0), vec2(-2.0,  3.0), vec2(-1.0,  3.0), vec2(0.0,  3.0), vec2(1.0,  3.0), vec2(2.0,  3.0), vec2(3.0,  3.0)
+//);
+
 // a simple accumulation shader, reproject can impl here later.
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
@@ -110,24 +128,15 @@ void main() {
 			historyColor[2] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0,1)).rgb;
 			historyColor[3] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,1)).rgb;
 
-			vec3 currentColor[9];
+			vec3 currentColor[25];
 
-			currentColor[0] = src.rgb;
-			currentColor[1] = imageLoad(NewSourceImage, ipos + ivec2(1,0)).rgb;
-			currentColor[2] = imageLoad(NewSourceImage, ipos + ivec2(0,1)).rgb;
-			currentColor[3] = imageLoad(NewSourceImage, ipos + ivec2(1,1)).rgb;
-			currentColor[4] = imageLoad(NewSourceImage, ipos + ivec2(-1,-1)).rgb;
-			currentColor[5] = imageLoad(NewSourceImage, ipos + ivec2(-1,1)).rgb;
-			currentColor[6] = imageLoad(NewSourceImage, ipos + ivec2(1,-1)).rgb;
-			currentColor[7] = imageLoad(NewSourceImage, ipos + ivec2(0,-1)).rgb;
-			currentColor[8] = imageLoad(NewSourceImage, ipos + ivec2(-1,0)).rgb;
-
+			for(int i = 0; i < 25; i++)
+			{
+				currentColor[i] = imageLoad(NewSourceImage, ipos + ivec2(offsets5x5[i])).rgb;
+			}
+			
 			vec2 subpixel = fract(vec2(ipos) + motion);
-			vec3 history = mix(
-				mix(historyColor[0], historyColor[1], subpixel.x),
-				mix(historyColor[2], historyColor[3], subpixel.x),
-				subpixel.y
-			);
+			vec3 history = mix(mix(historyColor[0], historyColor[1], subpixel.x),mix(historyColor[2], historyColor[3], subpixel.x),subpixel.y);
 
 			if( !Camera.Benchmark )
 			{
@@ -135,7 +144,7 @@ void main() {
 				AABBMax = rgb2ycocg(src.rgb);
 				AABBMin = AABBMax;
 				// 取得YCoCg色彩空间下，Clip的范围
-				for(int k = 0; k < 9; k++)
+				for(int k = 0; k < 25; k++)
 				{
 					AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
 					AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
