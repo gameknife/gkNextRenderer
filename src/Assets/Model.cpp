@@ -930,7 +930,7 @@ namespace Assets
         return models.size() - 1;
     }
 
-    Model Model::CreateBox(const vec3& p0, const vec3& p1, uint32_t materialIdx)
+    Model Model::CreateBox(const vec3& p0, const vec3& p1)
     {
         std::vector<Vertex> vertices =
         {
@@ -975,8 +975,6 @@ namespace Assets
             20, 21, 22, 20, 22, 23
         };
 
-        std::vector<uint32_t> materialids = {(uint32_t)materialIdx};
-
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
@@ -984,7 +982,7 @@ namespace Assets
         return Model( std::move(vertices),std::move(indices), true);
     }
 
-    Model Model::CreateSphere(const vec3& center, float radius, uint32_t materialIdx, const bool isProcedural)
+    Model Model::CreateSphere(const vec3& center, float radius)
     {
         const int slices = 32;
         const int stacks = 16;
@@ -1058,16 +1056,13 @@ namespace Assets
                 j1 += slices1;
             }
         }
-
-        std::vector<uint32_t> materialIdxs = {(uint32_t)materialIdx};
-
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
 
         return Model(std::move(vertices), std::move(indices));
     }
-
+    
     uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
                                 const glm::vec3& dir, const glm::vec3& lightColor,
                                 std::vector<Model>& models,

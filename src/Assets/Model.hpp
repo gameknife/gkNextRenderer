@@ -164,8 +164,8 @@ namespace Assets
                                   std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry
-        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, uint32_t materialIdx);
-        static Model CreateSphere(const glm::vec3& center, float radius, uint32_t materialIdx, bool isProcedural);
+        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1);
+        static Model CreateSphere(const glm::vec3& center, float radius);
 
         Model& operator =(const Model&) = delete;
         Model& operator =(Model&&) = delete;
