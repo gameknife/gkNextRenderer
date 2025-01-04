@@ -199,6 +199,13 @@ namespace Assets
         if (meshId != -1)
         {
             sceneNode->SetVisible(true);
+            std::vector<uint32_t> materialIdx;
+            for (int i = 0; i < model.meshes[node.mesh].primitives.size(); i++)
+            {
+                auto& primitive = model.meshes[node.mesh].primitives[i];
+                materialIdx.push_back(max(0, primitive.material));
+            }
+            sceneNode->SetMaterial(materialIdx);
         }
         out_nodes.push_back(sceneNode);
 
@@ -427,7 +434,6 @@ namespace Assets
             bool hasTangent = false;
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
-            std::vector<uint32_t> materials;
 
             uint32_t vertext_offset = 0;
             uint32_t sectionIdx = 0;
@@ -508,8 +514,7 @@ namespace Assets
                     vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
                 }
-
-                materials.push_back(max(0, primtive.material) + matieralIdx);
+                
                 sectionIdx++;
                 tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
                 int strideIndex = indexAccessor.ByteStride(indexView);
@@ -544,7 +549,7 @@ namespace Assets
             #endif
 
             
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), std::move(materials), !hasTangent));
+            models.push_back(Assets::Model(std::move(vertices), std::move(indices), !hasTangent));
         }
 
         // default auto camera
@@ -912,25 +917,14 @@ namespace Assets
     {
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        std::vector<uint32_t> materialIds;
-
-        uint32_t prev_mat_id = materials.size();
-
-        materialIds.push_back(prev_mat_id + 0);
-        materialIds.push_back(prev_mat_id + 1);
-        materialIds.push_back(prev_mat_id + 2);
-        materialIds.push_back(prev_mat_id + 3);
-
         CornellBox::Create(scale, vertices, indices, materials, lights);
-
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-
         models.push_back(Model(
             std::move(vertices),
             std::move(indices),
-            std::move(materialIds),true
+            true
         ));
 
         return models.size() - 1;
@@ -987,10 +981,7 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(
-            std::move(vertices),
-            std::move(indices),
-            std::move(materialids), true);
+        return Model( std::move(vertices),std::move(indices), true);
     }
 
     Model Model::CreateSphere(const vec3& center, float radius, uint32_t materialIdx, const bool isProcedural)
@@ -1074,10 +1065,7 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(
-            std::move(vertices),
-            std::move(indices),
-            std::move(materialIdxs));
+        return Model(std::move(vertices), std::move(indices));
     }
 
     uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
@@ -1117,13 +1105,10 @@ namespace Assets
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-
-        std::vector<uint32_t> materialIds = {(uint32_t)materialIdx};
         
         models.push_back( Model(
             std::move(vertices),
-            std::move(indices),
-            std::move(materialIds)));
+            std::move(indices)));
 
         return static_cast<int32_t>(models.size()) - 1;
     }
@@ -1134,11 +1119,9 @@ namespace Assets
         indices_ = std::vector<uint32_t>();
     }
 
-    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials,
-                 bool needGenTSpace) :
+    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace) :
         vertices_(std::move(vertices)),
-        indices_(std::move(indices)),
-        materialIdx_(std::move(materials))
+        indices_(std::move(indices))
     {
         verticeCount = vertices_.size();
         indiceCount = indices_.size();
@@ -1156,11 +1139,6 @@ namespace Assets
         if(needGenTSpace)
         {
             GenerateMikkTSpace(this);
-        }
-
-        if (materialIdx_.size() >= 16)
-        {
-            fmt::print("model material size: {}\n", materialIdx_.size());
         }
     }
 

@@ -267,6 +267,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     Assets::Node* Base = GetEngine().GetScene().GetNode("BasePlane12x12");
     Base->SetVisible(false);
     uint32_t modelId = Base->GetModel();
+    auto& matId = Base->Materials();
     basementInstanceId_ = Base->GetInstanceId();
 
     // one is 12 x 12, we support 252 x 252 (21 x 21), so duplicate and create
@@ -285,7 +286,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
             auto newNode = Assets::Node::CreateNode(NodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
-            newNode->SetMaterial( GetEngine().GetScene().GetModel(modelId)->Materials() );
+            newNode->SetMaterial( matId );
             GetEngine().GetScene().Nodes().push_back(newNode);
         }
     }
@@ -489,11 +490,11 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         newBlock.type[127] = 0;
         newBlock.modelId_ = Node->GetModel();
         newBlock.brushId_ = static_cast<int16_t>(BasicNodes.size());
-        uint32_t mat_id = Scene.GetModel(newBlock.modelId_)->Materials()[0];
+        uint32_t mat_id = Node->Materials()[0];
         auto mat = Scene.GetMaterial(mat_id);
         if (mat)
         {
-            newBlock.matType = static_cast<int>(mat->gpuMaterial_.MaterialModel);
+            newBlock.matType = mat_id;
             newBlock.color = mat->gpuMaterial_.Diffuse;
         }
         BasicNodes.push_back(newBlock);
@@ -778,7 +779,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(Block.second.location);
                 std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(Block.second.location), glm::quat(orientation), glm::vec3(1), BasicBlock->modelId_,
                                                                 instanceId, newhash != Block.first);
-                newNode->SetMaterial( GetEngine().GetScene().GetModel(BasicBlock->modelId_)->Materials() );
+                newNode->SetMaterial( {BasicBlock->matType} );
                 newNode->SetVisible(true);
                 GetEngine().GetScene().Nodes().push_back(newNode);
 

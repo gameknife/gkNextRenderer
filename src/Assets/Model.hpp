@@ -177,7 +177,6 @@ namespace Assets
 
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
-        const std::vector<uint32_t>& Materials() const { return materialIdx_; }
         
         glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
@@ -188,11 +187,10 @@ namespace Assets
         void FreeMemory();
 
     private:
-        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, bool needGenTSpace = true);
+        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
-        std::vector<uint32_t> materialIdx_;
         
         std::vector<AnimationTrack> AnimationTracks_;
         

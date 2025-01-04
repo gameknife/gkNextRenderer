@@ -34,6 +34,8 @@ namespace
     void AddRayTracingInOneWeekendCommonScene(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
                                               const bool& isProc, std::function<float ()>& random)
     {
+        models.push_back(Model::CreateSphere(vec3(0,0,0), 0.2f, 0, isProc));
+        uint32_t meshIdx = static_cast<uint32_t>(models.size() - 1);
         for (int i = -11; i < 11; ++i)
         {
             for (int j = -11; j < 11; ++j)
@@ -50,17 +52,16 @@ namespace
                         const float b = random() * random();
                         const float g = random() * random();
                         const float r = random() * random();
-
-                        models.push_back(
-                            Model::CreateSphere(center, 0.2f, CreateMaterial(materials, Material::Lambertian(vec3(r, g, b))), isProc));
+                        uint32_t matId = CreateMaterial(materials, Material::Lambertian(vec3(r,g,b)));
                         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),
-                                                                 vec3(0, 0, 0),
+                                                                 center,
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(models.size() - 1),
+                                                                 meshIdx,
                                                                  static_cast<uint32_t>(nodes.size()),
                                                                  false));
                         nodes.back()->SetVisible(true);
+                        nodes.back()->SetMaterial({matId});
                     }
                     else if (chooseMat < 0.9f) // Metal
                     {
@@ -68,31 +69,30 @@ namespace
                         const float b = 0.5f * (1 + random());
                         const float g = 0.5f * (1 + random());
                         const float r = 0.5f * (1 + random());
-
-                        models.push_back(Model::CreateSphere(center, 0.2f, CreateMaterial(materials, Material::Metallic(vec3(r, g, b), fuzziness)),
-                                                             isProc));
+                        uint32_t matId = CreateMaterial(materials, Material::Metallic(vec3(r,g,b), fuzziness));
                         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),
-                                                                 vec3(0, 0, 0),
+                                                                 center,
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(models.size() - 1),
+                                                                 meshIdx,
                                                                  static_cast<uint32_t>(nodes.size()),
                                                                  false));
                         nodes.back()->SetVisible(true);
+                        nodes.back()->SetMaterial({matId});
                     }
                     else // Glass
                     {
                         const float fuzziness = 0.5f * random();
-                        models.push_back(
-                            Model::CreateSphere(center, 0.2f, CreateMaterial(materials, Material::Dielectric(1.45f, fuzziness)), isProc));
+                        uint32_t matId = CreateMaterial(materials, Material::Dielectric(1.5f, fuzziness));
                         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6),
-                                                                 vec3(0, 0, 0),
+                                                                 center,
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(models.size() - 1),
+                                                                 meshIdx,
                                                                  static_cast<uint32_t>(nodes.size()),
                                                                  false));
                         nodes.back()->SetVisible(true);
+                        nodes.back()->SetMaterial({matId});
                     }
                 }
             }
@@ -128,19 +128,25 @@ namespace
                                           static_cast<int>(materials.size() - 1)));
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), 0, static_cast<uint32_t>(nodes.size()), false));
         nodes.back()->SetVisible(true);
-
+        nodes.back()->SetMaterial({0});
+        
         AddRayTracingInOneWeekendCommonScene(nodes, models, materials, isProc, random);
 
-        models.push_back(Model::CreateSphere(vec3(0, 1, 0), 1.0f, CreateMaterial(materials, Material::Dielectric(1.5f, 0.0f)), isProc));
-        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
+        uint32_t matIdx0 = CreateMaterial(materials, Material::Dielectric(1.5f, 0.0f));
+        uint32_t matIdx1 = CreateMaterial(materials, Material::Lambertian(vec3(0.4f, 0.2f, 0.1f)));
+        uint32_t matIdx2 = CreateMaterial(materials, Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.5f));
+        models.push_back(Model::CreateSphere(vec3(0, 0, 0), 1.0f, 0, isProc ));
+        uint32_t modelIdx = static_cast<uint32_t>(models.size() - 1);
+        
+        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
-        models.push_back(Model::CreateSphere(vec3(-4, 1, 0), 1.0f, CreateMaterial(materials, Material::Lambertian(vec3(0.4f, 0.2f, 0.1f))), isProc));
-        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
+        nodes.back()->SetMaterial({matIdx0});
+        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
-        models.push_back(Model::CreateSphere(vec3(4, 1, 0), 1.0f, CreateMaterial(materials, Material::Metallic(vec3(0.7f, 0.6f, 0.5f), 0.5f)),
-                                             isProc));
-        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<int>(models.size() - 1), static_cast<uint32_t>(nodes.size()), isProc));
+        nodes.back()->SetMaterial({matIdx1});
+        nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
+        nodes.back()->SetMaterial({matIdx2});
     }
 
     void CornellBox(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -164,6 +170,7 @@ namespace
         int cbox_model = Model::CreateCornellBox(555, models, materials, lights);
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), cbox_model, static_cast<uint32_t>(nodes.size()), false));
         nodes.back()->SetVisible(true);
+        nodes.back()->SetMaterial({0,1,2,3});
 
         materials.push_back({"cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
         auto box0 = Model::CreateBox(vec3(-80, 0, -80), vec3(80, 160, 80), static_cast<uint32_t>(materials.size() - 1));
@@ -172,8 +179,10 @@ namespace
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0 + 130 - 0, 0, 80), quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 1, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetVisible(true);
+        nodes.back()->SetMaterial({4});
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0 - 130 - 0, 0, -80), quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), cbox_model + 1, static_cast<uint32_t>(nodes.size()),
                                                  false));
+        nodes.back()->SetMaterial({4});
         nodes.back()->SetVisible(true);
     }
 }
