@@ -388,7 +388,7 @@ namespace Assets
 
             if (m.MRATextureId != -1)
             {
-                m.Metalness = 0.0f;
+                m.Metalness = 1.0f;
                 m.Fuzziness = 1.0f;
             }
 
@@ -397,7 +397,7 @@ namespace Assets
                 m.MaterialModel = Material::Enum::Metallic;
             }
 
-            if (m.Fuzziness > .95 && m.MRATextureId == -1)
+            if (m.Fuzziness > .95 && m.MRATextureId == -1 && m.Metalness < 0.01)
             {
                 m.MaterialModel = Material::Enum::Lambertian;
             }

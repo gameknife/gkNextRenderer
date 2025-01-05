@@ -87,7 +87,7 @@ void ScatterDieletricOpaque(inout RayPayload ray, const Material m, const LightO
 void ScatterMetallic(inout RayPayload ray, const Material m, const LightObject light, const vec3 direction, const vec3 normal, const vec2 texCoord)
 {
 	ray.Attenuation = ray.Albedo.rgb;
-	ray.ScatterDirection = ray.GBuffer.w > NEARzero ? ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)) : reflect(direction, normal);
+	ray.ScatterDirection = ray.GBuffer.w < NEARzero ? reflect(direction, normal) : ( ray.GBuffer.w > 0.95 ? AlignWithNormal( RandomInHemiSphere1(ray.RandomSeed), reflect(direction, normal)) : ggxSampling(ray.RandomSeed, ray.GBuffer.w, reflect(direction, normal)));
 	ray.pdf = 1.0;
 	ray.EmitColor = vec4(0);
 }
@@ -130,13 +130,13 @@ void ScatterMixture(inout RayPayload ray, const Material m, const LightObject li
 {
 	const float reflectProb = Schlick(ray.FrontFace ? -dot(direction, normal) : m.RefractionIndex * dot(direction, normal), m.RefractionIndex);
 	
-    if( RandomFloat(ray.RandomSeed) < reflectProb )
-	{
-		ScatterDieletricOpaque(ray,m,light,direction,normal,texCoord);
-	}
-	else if( RandomFloat(ray.RandomSeed) < m.Metalness)
+	if( RandomFloat(ray.RandomSeed) < ray.Metalness)
 	{
 		ScatterMetallic(ray,m,light,direction,normal,texCoord);
+	}
+	else if( RandomFloat(ray.RandomSeed) < reflectProb )
+	{
+		ScatterDieletricOpaque(ray,m,light,direction,normal,texCoord);
 	}
 	else
 	{
@@ -151,6 +151,8 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 	
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
+	ray.GBuffer.w = sqrt(ray.GBuffer.w);
+	ray.Metalness = m.Metalness * mra.b;
 	ray.Albedo = texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;

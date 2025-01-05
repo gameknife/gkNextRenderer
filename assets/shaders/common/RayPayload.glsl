@@ -9,6 +9,7 @@ struct RayPayload
 	vec3 ScatterDirection;
 	bool FrontFace;
 	vec4 GBuffer; // normal + roughness
+	float Metalness;
 	vec4 Albedo;
 	uvec4 RandomSeed;
 	uint AdaptiveRay;
