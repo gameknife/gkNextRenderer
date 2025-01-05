@@ -369,7 +369,7 @@ namespace Assets
             m.RefractionIndex2 = 1.46f;
             
             m.DiffuseTextureId = lambdaGetTexture( mat.pbrMetallicRoughness.baseColorTexture.index );
-            m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index);
+            m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index); // metallic in B, roughness in G
            
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
@@ -386,7 +386,13 @@ namespace Assets
 
             m.Diffuse = glm::vec4(sqrt(diffuseColor), 1.0);
 
-            if (m.Metalness > .95)
+            if (m.MRATextureId != -1)
+            {
+                m.Metalness = 0.0f;
+                m.Fuzziness = 1.0f;
+            }
+
+            if (m.Metalness > .95 && m.MRATextureId == -1)
             {
                 m.MaterialModel = Material::Enum::Metallic;
             }
