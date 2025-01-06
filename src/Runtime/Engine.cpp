@@ -705,7 +705,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
-    ubo.TemporalFrames = userSettings_.TemporalFrames;
+    ubo.TemporalFrames = progressiveRendering_ ? (1024 / userSettings_.TemporalFrames) : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
@@ -718,7 +718,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 
-    ubo.Benchmark = userSettings_.Benchmark;
+    ubo.ProgressiveRender = userSettings_.Benchmark || progressiveRendering_;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

@@ -85,7 +85,7 @@ void main() {
 
     if( useHistory )
     {
-		if( !Camera.Benchmark )
+		if( !Camera.ProgressiveRender )
 		{
 			// current 4
 			uint current_primitive_index1 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(1,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(1,0)).r;
@@ -148,7 +148,7 @@ void main() {
 			vec2 subpixel = fract(vec2(ipos) + motion);
 			vec3 history = mix(mix(historyColor[0], historyColor[1], subpixel.x),mix(historyColor[2], historyColor[3], subpixel.x),subpixel.y);
 
-			if( !Camera.Benchmark )
+			if( !Camera.ProgressiveRender )
 			{
 				vec3 AABBMin, AABBMax;
 				AABBMax = rgb2ycocg(src.rgb);

@@ -254,6 +254,7 @@ void EditorInterface::MainWindowGUI(Editor::GUI & gui_r, Assets::Scene& scene, I
 	Editor::GUI &gui = gui_r;
 
 	gui.current_scene = &scene;
+	gui.engine = &(editor_->GetEngine());
     
 	// Only run DockBuilder functions on the first frame of the app:
 	if (firstRun) {

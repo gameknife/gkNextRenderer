@@ -29,7 +29,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     config.HideTitleBar = true;
 
     options.Samples = 8;
-    options.Temporal = 32;
+    options.Temporal = 8;
     options.ForceSDR = true;
     options.NoDenoiser = true;
 }
@@ -69,7 +69,8 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    GetEngine().SetProgressiveRendering(!moving);
 }
 
 void EditorGameInstance::OnSceneLoaded()

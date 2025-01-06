@@ -156,6 +156,11 @@ public:
 
 	// gpu raycast
 	void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir, std::function<bool (Assets::RayCastResult rayResult)> callback );
+
+	void SetProgressiveRendering(bool enable) { progressiveRendering_ = enable; }
+	bool IsProgressiveRendering() const { return progressiveRendering_; }
+
+	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
 	
 protected:
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
@@ -195,6 +200,7 @@ private:
 	double time_{};
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
+	bool progressiveRendering_{};
 
 	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
