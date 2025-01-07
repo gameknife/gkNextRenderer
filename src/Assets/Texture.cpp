@@ -344,7 +344,7 @@ namespace Assets
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
-                if (!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
+                fmt::print("{}\n", taskContext.outputInfo.data());
                 delete[] copyedData;
             }, 0);
 

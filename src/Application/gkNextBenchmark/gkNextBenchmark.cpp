@@ -9,15 +9,21 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     config.Title = "gkNextBenchmark";
-    options.Benchmark = true;
+    options.Samples = 1;
+    options.Temporal = 2;
+    options.Bounces = 4;
+    options.PresentMode = 0;
+    options.NoDenoiser = true;
     options.Width = 1280;
     options.Height = 720;
+    
 }
 
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
     GetEngine().RequestLoadScene(SceneList::AllScenes[0]);
+    GetEngine().SetProgressiveRendering(true);
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)

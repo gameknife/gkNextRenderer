@@ -100,11 +100,10 @@ UserSettings CreateUserSettings(const Options& options)
     UserSettings userSettings{};
 
     userSettings.RendererType = options.RendererType;
-    userSettings.Benchmark = options.Benchmark;
     userSettings.SceneIndex = 0;
         
-    userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
-    userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
+    userSettings.NumberOfSamples = options.Samples;
+    userSettings.NumberOfBounces = options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
 
     userSettings.AdaptiveSample = options.AdaptiveSample;
@@ -112,16 +111,16 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSteps = 4;
     userSettings.TAA = true;
 
-    userSettings.ShowSettings = !options.Benchmark;
+    userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
     userSettings.HeatmapScale = 0.5f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
+    userSettings.TemporalFrames = options.Temporal;
 
-    userSettings.Denoiser = options.Benchmark ? false : !options.NoDenoiser;
+    userSettings.Denoiser = !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
     
@@ -155,7 +154,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
         options.Width,
         options.Height,
-        options.Benchmark && options.Fullscreen,
+        options.Fullscreen,
         options.Fullscreen,
         !options.Fullscreen,
         options.SaveFile,
@@ -167,7 +166,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
     window_.reset( new Vulkan::Window(windowConfig));
         
     // Initialize Renderer
-    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
+    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.PresentMode), EnableValidationLayers) );
     rendererType = options.RendererType;
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
@@ -718,7 +717,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 
-    ubo.ProgressiveRender = userSettings_.Benchmark || progressiveRendering_;
+    ubo.ProgressiveRender = progressiveRendering_;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -847,16 +846,13 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
         }
 
         // Settings (toggle switches)
-        if (!userSettings_.Benchmark)
+        switch (key)
         {
-            switch (key)
-            {
-            case GLFW_KEY_F1: userSettings_.ShowSettings = !userSettings_.ShowSettings;
-                break;
-            case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
-                break;
-            default: break;
-            }
+        case GLFW_KEY_F1: userSettings_.ShowSettings = !userSettings_.ShowSettings;
+            break;
+        case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
+            break;
+        default: break;
         }
     }
 #endif
@@ -865,7 +861,6 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureKeyboard() ||
         userInterface_->WantsToCaptureMouse()
         )
@@ -882,7 +877,6 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 void NextEngine::OnMouseButton(const int button, const int action, const int mods)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
         return;
@@ -897,7 +891,6 @@ void NextEngine::OnMouseButton(const int button, const int action, const int mod
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
         return;

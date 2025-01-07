@@ -22,7 +22,6 @@ public:
 	~Options() = default;
 
 	// Application options.
-	bool Benchmark{};
 	bool SaveFile{};
 	bool RenderDoc{};
 	bool NoDenoiser{};

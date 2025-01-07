@@ -104,11 +104,6 @@ namespace Assets
 
     void Scene::Tick(float DeltaSeconds)
     {
-        if (GOption->Benchmark)
-        {
-            return;
-        }
-        
         float DurationMax = 0;
         for ( auto& track : tracks_ )
         {
