@@ -102,21 +102,32 @@ namespace Assets
         MarkDirty();
     }
 
+    void Scene::PlayAllTracks()
+    {
+		for (auto& track : tracks_)
+		{
+		    track.Play();
+		}
+    }
+
     void Scene::Tick(float DeltaSeconds)
     {
         float DurationMax = 0;
+        
         for ( auto& track : tracks_ )
         {
+            if ( !track.Playing() ) continue;
             DurationMax = glm::max(DurationMax, track.Duration_);
         }
+        
         for ( auto& track : tracks_ )
         {
+            if ( !track.Playing() ) continue;
             track.Time_ += DeltaSeconds;
             if (track.Time_ > DurationMax)
             {
                 track.Time_ = 0;
             }
-
             Node* node = GetNode(track.NodeName_);
             if (node)
             {

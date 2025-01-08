@@ -132,6 +132,10 @@ namespace Assets
     
     struct AnimationTrack
     {
+        bool Playing() const { return Playing_; }
+        void Play() { Playing_ = true; }
+        void Stop() { Playing_ = false; }
+        
         void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
         
         std::string NodeName_;
@@ -142,6 +146,8 @@ namespace Assets
         
         float Time_;
         float Duration_;
+
+        bool Playing_{};
     };
     
     class Model final

@@ -34,6 +34,8 @@ void NextRendererGameInstance::OnSceneLoaded()
 {
     NextGameInstanceBase::OnSceneLoaded();
     modelViewController_.Reset( GetEngine().GetScene().GetRenderCamera() );
+
+	GetEngine().GetScene().PlayAllTracks();
 }
 
 void NextRendererGameInstance::OnPreConfigUI()

@@ -70,21 +70,3 @@ bool BenchmarkGameInstance::OnMouseButton(int button, int action, int mods)
 {
     return true;
 }
-//
-// void NextRendererApplication::TickBenchMarker()
-// {
-//     if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
-//     {
-//         // Benchmark is done, report the results.
-//         benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex]);
-//         
-//         if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
-//             SceneList::AllScenes.size() - 1)
-//         {
-//             GetWindow().Close();
-//         }
-//         
-//         userSettings_.SceneIndex += 1;
-//         RequestLoadScene(SceneList::AllScenes[userSettings_.SceneIndex]);
-//     }
-// }
