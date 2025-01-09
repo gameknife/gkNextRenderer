@@ -12,6 +12,12 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
+namespace qjs
+{
+	class Context;
+	class Runtime;
+}
+
 class NextEngine;
 
 class NextGameInstanceBase
@@ -181,6 +187,8 @@ protected:
 private:
 	void LoadScene(std::string sceneFileName);
 
+	void TestJSEngine();
+
 	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
@@ -218,4 +226,7 @@ private:
 
 	// engine status
 	NextRenderer::EApplicationStatus status_{};
+
+	std::unique_ptr<qjs::Runtime> JSRuntime_;
+	std::unique_ptr<qjs::Context> JSContext_;
 };

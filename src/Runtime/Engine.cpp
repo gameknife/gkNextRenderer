@@ -24,6 +24,8 @@
 #include "Utilities/Localization.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 
+#include <ThirdParty/quickjs-ng/quickjspp.hpp>
+
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
 
@@ -185,6 +187,10 @@ NextEngine::NextEngine(Options& options, void* userdata)
 
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+
+    // Initialize JS Engine
+    JSRuntime_.reset(new qjs::Runtime());
+    JSContext_.reset(new qjs::Context(*JSRuntime_));
 }
 
 NextEngine::~NextEngine()
@@ -214,6 +220,8 @@ void NextEngine::Start()
 
     //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
+
+    TestJSEngine();
 }
 
 bool NextEngine::Tick()
@@ -1020,4 +1028,64 @@ void NextEngine::LoadScene(std::string sceneFileName)
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
+}
+
+
+class MyClass
+{
+public:
+    MyClass() {}
+    MyClass(std::vector<int>) {}
+
+    double member_variable = 5.5;
+    std::string member_function(const std::string& s) { return "Hello, " + s; }
+};
+
+void println(qjs::rest<std::string> args) {
+    for (auto const & arg : args) { fmt::printf(arg); fmt::printf("\n"); }
+}
+
+void NextEngine::TestJSEngine()
+{
+    try
+    {
+        // export classes as a module
+        auto& module = JSContext_->addModule("MyModule");
+        module.function<&println>("println");
+        module.class_<MyClass>("MyClass")
+                .constructor<>()
+                .constructor<std::vector<int>>("MyClassA")
+                .fun<&MyClass::member_variable>("member_variable")
+                .fun<&MyClass::member_function>("member_function");
+        // import module
+        JSContext_->eval(R"xxx(
+            import * as my from 'MyModule';
+            globalThis.my = my;
+        )xxx", "<import>", JS_EVAL_TYPE_MODULE);
+        // evaluate js code
+        JSContext_->eval(R"xxx(
+            let v1 = new my.MyClass();
+            v1.member_variable = 1;
+            let v2 = new my.MyClassA([1,2,3]);
+            function my_callback(str) {
+              my.println("Call callback from javascript:", v2.member_function(str));
+            }
+        )xxx");
+
+        // callback
+        auto cb = (std::function<void(const std::string&)>) JSContext_->eval("my_callback");
+        cb("World from cpp");
+
+        // passing c++ objects to JS
+        auto lambda = JSContext_->eval("x=>my.println(x.member_function('Lambda from javascript'))").as<std::function<void(qjs::shared_ptr<MyClass>)>>();
+        auto v3 = qjs::make_shared<MyClass>(JSContext_->ctx, std::vector{1,2,3});
+        lambda(v3);
+    }
+    catch(qjs::exception)
+    {
+        auto exc = JSContext_->getException();
+        std::cerr << (std::string) exc << std::endl;
+        if((bool) exc["stack"])
+            std::cerr << (std::string) exc["stack"] << std::endl;
+    }
 }
