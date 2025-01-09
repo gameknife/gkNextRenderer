@@ -221,7 +221,7 @@ void NextEngine::Start()
     //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 
-    TestJSEngine();
+    InitJSEngine();
 }
 
 bool NextEngine::Tick()
@@ -249,6 +249,11 @@ bool NextEngine::Tick()
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
+    }
+
+    if (JSTickCallback_)
+    {
+        JSTickCallback_(deltaSeconds_);
     }
     
     // Renderer Tick
@@ -323,6 +328,11 @@ void NextEngine::End()
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
+}
+
+void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
+{
+    JSTickCallback_ = callback;
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -1045,6 +1055,48 @@ void println(qjs::rest<std::string> args) {
     for (auto const & arg : args) { fmt::printf(arg); fmt::printf("\n"); }
 }
 
+void NextEngine::InitJSEngine()
+{
+    try
+    {
+        // export classes as a module
+        auto& module = JSContext_->addModule("Engine");
+        module.function<&println>("println");
+        module.class_<NextEngine>("NextEngine")
+                .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
+                .fun<&NextEngine::GetTestNumber>("GetTestNumber")
+                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
+                .fun<&NextEngine::GetScenePtr>("GetScenePtr")
+                ;
+        module.class_<Assets::Scene>("Scene")
+                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
+                ;
+        
+        JSContext_->global()["GEngine"] = this;
+        // import module
+        JSContext_->eval(R"xxx(
+            import * as NE from 'Engine';
+            globalThis.NE = NE;
+        )xxx", "<import>", JS_EVAL_TYPE_MODULE);
+        // evaluate js code
+        JSContext_->eval(R"xxx(
+            let frame = GEngine.GetTestNumber();
+            NE.println("Frame: ", frame);
+            GEngine.RegisterJSCallback(
+                (delta)=>{
+                    let indiceCount = GEngine.GetScenePtr().GetIndicesCount();
+                    //NE.println("Count: ", indiceCount);
+                });
+        )xxx");
+    }
+    catch(qjs::exception)
+    {
+        auto exc = JSContext_->getException();
+        std::cerr << (std::string) exc << std::endl;
+        if((bool) exc["stack"])
+            std::cerr << (std::string) exc["stack"] << std::endl;
+    }
+}
 void NextEngine::TestJSEngine()
 {
     try

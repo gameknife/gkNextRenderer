@@ -108,12 +108,16 @@ public:
 	void OnTouchMove(double xpos, double ypos);
 
 	Assets::Scene& GetScene() { return *scene_; }
+	Assets::Scene* GetScenePtr() { return scene_.get(); }
 	UserSettings& GetUserSettings() { return userSettings_; }
 
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
 	float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
 	uint32_t GetTotalFrames() const { return totalFrames_; }
+	uint32_t GetTestNumber() const { return 20; }
+
+	void RegisterJSCallback(std::function<void(double)> callback);
 
 	// remove till return true
 	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
@@ -187,6 +191,7 @@ protected:
 private:
 	void LoadScene(std::string sceneFileName);
 
+	void InitJSEngine();
 	void TestJSEngine();
 
 	// engine stuff
@@ -229,4 +234,6 @@ private:
 
 	std::unique_ptr<qjs::Runtime> JSRuntime_;
 	std::unique_ptr<qjs::Context> JSContext_;
+
+	std::function<void(double)> JSTickCallback_;
 };
