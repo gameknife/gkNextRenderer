@@ -11,12 +11,13 @@
 
 ### 一句话简介
 
-一个基于Vulkan的实时路径跟踪渲染器，目标是实现 **"质量"** 和 **"效率"** 能用于 **"实时"** 的路径跟踪渲染。
+一个基于Vulkan的实时路径跟踪渲染器，目标是实现"**质量**"和"**效率**"能用于"**实时游戏**"的路径跟踪渲染。
 
 ### 技术特点
 
 不同于目前游戏中实装的各种光追辅助技术，本项目的目标是最接近GroundTruth的路径跟踪，
-并提供最接近游戏的运行时环境，验证实时光追的可行性，并实验最新的GPU特性，为下一代渲染架构作准备。
+不同于其他GPU PathTracer的实现，本项目的目标是实时，Benchmark使用全动态场景，
+并提供最接近游戏的运行时环境（轻量级游戏引擎），验证实时光追的可行性，并实验最新的GPU特性，为下一代渲染架构作准备。
 
 ### 开发前提
 
@@ -24,9 +25,12 @@
 
 ### 子项目
 
-- **渲染器**: 主项目，路径追踪，benchmark
-- **编辑器**: 基于imgui的编辑器框架，用于编辑场景，完全依赖glb的读写
+- **gkNextRenderer**: 主项目，路径追踪渲染器
+- **gkNextEditor**: 基于imgui的编辑器框架，用于编辑场景，完全依赖glb的读写
 - **MagicaLego**: 类似MagicaVoxel的乐高搭建游戏，全实时路径追踪渲染，用以验证目标
+- **gkNextBenchmark**: 专用的Benchmark程序，用于静态和实时场景的Benchmark
+- **Packager**: 将资产打包成pkg文件，用于快速部署
+- **Portal**: 子项目组合调用程序，提供可视化的各种部署，调试工具（计划中）
 
 ## 图库 (TrueHDR)
 
@@ -68,34 +72,35 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ## 技术特性
 
 * Rendering
-    * Importance Sampling
+    * Importance Sampling (BRDF / Light)
     * VNDF Sampling for GGX, by [tigrazone](https://github.com/tigrazone)
-    * Adaptive Sampling, thanks [tigrazone](https://github.com/tigrazone)
     * Ground Truth Path Tracing
-    * Phsyical Light Unit
-    * Temporal Reproject
+    * Temporal Reproject with MultiSample catchup
     * High Performance Bilateral Filter Denoiser
     * OpenImageDenoise Denoiser* (need sdk)
-    * RayQuery on Android
     * Visibiliy Buffer Rendering
-    * Legacy Rendering
+    * Reference Legacy Deferred Rendering
     * RayTraced Hybrid Rendering
     * Realtime Renderer Switch
     * GPU Draw
     * GPU Raycast
-    
-* Scene Management
-    * Wavefront OBJ File PBR Scene Support
-    * Full GLTF Scene File Support
 
-* System
-    * CrossPlatform support for Windows/Linux/MacOS/Android
-    * EditorApp including node based MaterialEditor
+* Engine
+    * Multi-Platform support ( Windows / Linux / Mac / Android )
     * Global Bindless TexturePool
-    * MultiThread Resource Loading
+    * MultiThread Task Dispatcher ( Async Resource Loading and etc )
+    * Full-Scope File Package System
+    * Gpu scene updating
+    * Aux Rendering
     * HDR Display Support
-    * Benchmark System
     * Screenshot HDR and encode to avif / jpg
+
+* Scene Management
+    * Full GLTF Scene File Support ( Mesh / Texture / Material / Animation)
+
+* Editor
+    * Full Imgui Pipeline
+    * Node-based Material Editor
 
 ## 运行
 
@@ -172,14 +177,8 @@ brew install ninja
 ```
 
 ## Next Todolist
-
-- [ ] Pure GPU AuxRenderer, display gpu helpers
-- [ ] WireFrame Rendering
-- [ ] Realtime Renderer Switch
 - [ ] GPU Frustum / Occulusion Culling
 - [ ] GPU Lod Swtiching
-- [ ] Dynamic Scene Management
-- [ ] Multi Material Execution
 - [ ] Huge Landscape
 
 ## 参考项目
