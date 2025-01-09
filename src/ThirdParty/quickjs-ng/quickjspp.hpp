@@ -766,7 +766,7 @@ struct js_traits<ctor_wrapper<T, Args...>>
 
             try
             {
-                std::shared_ptr<T> ptr = std::apply(std::make_shared<T, Args...>, detail::unwrap_args<Args...>(ctx, argc, argv));
+                std::shared_ptr<T> ptr = std::apply([](Args... args) { return std::make_shared<T>(args...); }, detail::unwrap_args<Args...>(ctx, argc, argv));
                 JS_SetOpaque(jsobj, new std::shared_ptr<T>(std::move(ptr)));
                 return jsobj;
             }
