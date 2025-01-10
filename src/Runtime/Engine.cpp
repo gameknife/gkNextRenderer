@@ -1071,6 +1071,11 @@ void NextEngine::InitJSEngine()
         module.class_<Assets::Scene>("Scene")
                 .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
                 ;
+        module.class_<NextComponent>("NextComponent")
+                .constructor<>()
+                .fun<&NextComponent::name_> ("name_")
+                .fun<&NextComponent::id_> ("id_")
+        ;
         
         JSContext_->global()["GEngine"] = this;
         // import module
@@ -1080,14 +1085,43 @@ void NextEngine::InitJSEngine()
         )xxx", "<import>", JS_EVAL_TYPE_MODULE);
         // evaluate js code
         JSContext_->eval(R"xxx(
+            
+            class ScriptComponent extends NE.NextComponent {
+                constructor() {
+                    super();
+                    this.name_ = "ScriptComponent";
+                    this.id_ = 1;
+                }
+                get_info() {
+                    return this.name_ + " " + this.id_;
+                }
+            }
+
             let frame = GEngine.GetTestNumber();
             NE.println("Frame: ", frame);
+            
+            globalThis.components = [];
+
+            let comp = new ScriptComponent();
+            NE.println("Component: ", comp.get_info());
+
             GEngine.RegisterJSCallback(
                 (delta)=>{
                     let indiceCount = GEngine.GetScenePtr().GetIndicesCount();
                     //NE.println("Count: ", indiceCount);
                 });
+
+            function CreateScriptComponent() {
+                globalThis.components.push(new ScriptComponent());
+                return globalThis.components[globalThis.components.length - 1];
+            }
         )xxx");
+
+        NextComponent* IsObj = (NextComponent*)JSContext_->eval("CreateScriptComponent()");
+        //auto IsObj2 = std::make_shared<NextComponent>(IsObj);
+        //println( {IsObj.get()->name_ } );
+        //JSContext_->eval("globalThis.components = [];");
+        //println( {IsObj->name_ } );
     }
     catch(qjs::exception)
     {

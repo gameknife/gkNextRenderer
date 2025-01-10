@@ -89,6 +89,22 @@ struct FDelayTaskContext
 	DelayedTask task;
 };
 
+class NextComponent;
+
+class NextActor
+{
+public:
+	std::vector<NextComponent*> components;
+};
+
+class NextComponent : std::enable_shared_from_this<NextComponent>
+{
+public:
+	NextComponent() = default;
+	std::string name_;
+	int id_;
+};
+
 class NextEngine final
 {
 public:
