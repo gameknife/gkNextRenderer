@@ -143,8 +143,12 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
+NextEngine* NextEngine::instance_ = nullptr;
+
 NextEngine::NextEngine(Options& options, void* userdata)
 {
+    instance_ = this;
+
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
@@ -221,7 +225,8 @@ void NextEngine::Start()
     //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
     //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 
-    InitJSEngine();
+    // init js engine
+    //InitJSEngine();
 }
 
 bool NextEngine::Tick()
@@ -1055,13 +1060,18 @@ void println(qjs::rest<std::string> args) {
     for (auto const & arg : args) { fmt::printf(arg); fmt::printf("\n"); }
 }
 
-void NextEngine::InitJSEngine()
-{
+NextEngine* GetEngine() {
+    return NextEngine::GetInstance();
+}
+
+void NextEngine::InitJSEngine() {
     try
     {
         // export classes as a module
         auto& module = JSContext_->addModule("Engine");
         module.function<&println>("println");
+        module.function<&GetEngine>("GetEngine");
+
         module.class_<NextEngine>("NextEngine")
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
                 .fun<&NextEngine::GetTestNumber>("GetTestNumber")
@@ -1076,52 +1086,10 @@ void NextEngine::InitJSEngine()
                 .fun<&NextComponent::name_> ("name_")
                 .fun<&NextComponent::id_> ("id_")
         ;
-        
-        JSContext_->global()["GEngine"] = this;
-        // import module
-        JSContext_->eval(R"xxx(
-            import * as NE from 'Engine';
-            globalThis.NE = NE;
-        )xxx", "<import>", JS_EVAL_TYPE_MODULE);
-        // evaluate js code
-        JSContext_->eval(R"xxx(
-            
-            class ScriptComponent extends NE.NextComponent {
-                constructor() {
-                    super();
-                    this.name_ = "ScriptComponent";
-                    this.id_ = 1;
-                }
-                get_info() {
-                    return this.name_ + " " + this.id_;
-                }
-            }
 
-            let frame = GEngine.GetTestNumber();
-            NE.println("Frame: ", frame);
-            
-            globalThis.components = [];
-
-            let comp = new ScriptComponent();
-            NE.println("Component: ", comp.get_info());
-
-            GEngine.RegisterJSCallback(
-                (delta)=>{
-                    let indiceCount = GEngine.GetScenePtr().GetIndicesCount();
-                    //NE.println("Count: ", indiceCount);
-                });
-
-            function CreateScriptComponent() {
-                globalThis.components.push(new ScriptComponent());
-                return globalThis.components[globalThis.components.length - 1];
-            }
-        )xxx");
-
-        NextComponent* IsObj = (NextComponent*)JSContext_->eval("CreateScriptComponent()");
-        //auto IsObj2 = std::make_shared<NextComponent>(IsObj);
-        //println( {IsObj.get()->name_ } );
-        //JSContext_->eval("globalThis.components = [];");
-        //println( {IsObj->name_ } );
+        std::vector<uint8_t> scriptBuffer;
+        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer);
+        JSContext_->eval( std::string_view( (char*)scriptBuffer.data()), "<import>", JS_EVAL_TYPE_MODULE);
     }
     catch(qjs::exception)
     {
@@ -1131,6 +1099,7 @@ void NextEngine::InitJSEngine()
             std::cerr << (std::string) exc["stack"] << std::endl;
     }
 }
+
 void NextEngine::TestJSEngine()
 {
     try

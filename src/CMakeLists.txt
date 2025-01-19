@@ -38,9 +38,6 @@ file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 file(GLOB_RECURSE src_files_gkbenchmark "Application/gkNextBenchmark/*")
 
-
-
-
 # libray and app
 if ( ANDROID )
 add_library(gkNextEngine
@@ -85,7 +82,6 @@ add_executable(Packager
 )
 endif()
 
-
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
 	# This is not needed with GCC9 or higher.
@@ -128,15 +124,16 @@ foreach(target IN LISTS AllTargets)
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
-	target_link_libraries(${target} PRIVATE quickjs KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
+		target_link_libraries(${target} PRIVATE quickjs KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		if ( NOT ANDROID)
+			target_link_libraries(${target} PRIVATE glfw)
+		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		if ( NOT (${target} STREQUAL Packager) )
-			target_link_libraries(${target} PRIVATE gkNextEngine)
-		endif()
+		target_link_libraries(${target} PRIVATE gkNextEngine)
 	endif()
 
 	# platform & target specific
@@ -147,8 +144,6 @@ foreach(target IN LISTS AllTargets)
 	if ( ANDROID)
 		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
 		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
-	else()
-		target_link_libraries(${target} PRIVATE glfw)
 	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")

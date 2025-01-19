@@ -114,6 +114,9 @@ public:
 	NextEngine(Options& options, void* userdata = nullptr);
 	~NextEngine();
 
+	static NextEngine* instance_;
+	static NextEngine* GetInstance() { return instance_; }
+
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
 
 	void Start();
