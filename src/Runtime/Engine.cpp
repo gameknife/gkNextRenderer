@@ -23,6 +23,7 @@
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Platform/PlatformCommon.h"
 
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 
@@ -226,7 +227,7 @@ void NextEngine::Start()
     //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
 
     // init js engine
-    //InitJSEngine();
+    InitJSEngine();
 }
 
 bool NextEngine::Tick()
@@ -1076,20 +1077,27 @@ void NextEngine::InitJSEngine() {
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
                 .fun<&NextEngine::GetTestNumber>("GetTestNumber")
                 .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
-                .fun<&NextEngine::GetScenePtr>("GetScenePtr")
-                ;
+                .fun<&NextEngine::GetScenePtr>("GetScenePtr");
         module.class_<Assets::Scene>("Scene")
-                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
-                ;
+                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount");
         module.class_<NextComponent>("NextComponent")
                 .constructor<>()
                 .fun<&NextComponent::name_> ("name_")
-                .fun<&NextComponent::id_> ("id_")
-        ;
+                .fun<&NextComponent::id_> ("id_");
 
+        // TODO use node.exe + tsc to compile the typescript to js realtime
+        // NextRenderer::OSProcess(fmt::format("").c_str());    
+
+        // Current load the script from file
         std::vector<uint8_t> scriptBuffer;
-        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer);
-        JSContext_->eval( std::string_view( (char*)scriptBuffer.data()), "<import>", JS_EVAL_TYPE_MODULE);
+        if ( Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer) )
+        {
+            JSContext_->eval( std::string_view( (char*)scriptBuffer.data()), "<import>", JS_EVAL_TYPE_MODULE);
+        }
+        else
+        {
+            fmt::print("Failed to load script\n");
+        }
     }
     catch(qjs::exception)
     {
