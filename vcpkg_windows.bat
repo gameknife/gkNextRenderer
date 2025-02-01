@@ -36,7 +36,6 @@ vcpkg.exe install --recurse ^
 	fmt:x64-windows-static ^
 	meshoptimizer:x64-windows-static ^
 	ktx:x64-windows-static ^
-	vcpkg-tool-nodejs ^
 	cpp-base64:x64-windows-static || goto :error
 
 IF "%1" == "avif" (
