@@ -32,4 +32,5 @@ git checkout 2024.08.23
 	fmt:x64-mingw-static \
 	meshoptimizer:x64-mingw-static \
 	ktx:x64-mingw-static \
+	joltphysics:x64-mingw-static \
 	cpp-base64:x64-mingw-static

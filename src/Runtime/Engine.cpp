@@ -35,6 +35,7 @@
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
+#include "NextPhysics.h"
 
 ENGINE_API Options* GOption = nullptr;
 
@@ -221,6 +222,9 @@ void NextEngine::Start()
         return;
     }
 
+    physicsEngine_.reset(new NextPhysics());
+    physicsEngine_->Start();
+    
     gameInstance_->OnInit();
 
     //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
@@ -256,6 +260,8 @@ bool NextEngine::Tick()
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
+
+    physicsEngine_->Tick();
 
     if (JSTickCallback_)
     {
@@ -330,6 +336,7 @@ bool NextEngine::Tick()
 
 void NextEngine::End()
 {
+    physicsEngine_->Stop();
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
@@ -1151,4 +1158,9 @@ void NextEngine::TestJSEngine()
         if((bool) exc["stack"])
             std::cerr << (std::string) exc["stack"] << std::endl;
     }
+}
+
+void NextEngine::InitPhysics()
+{
+    
 }

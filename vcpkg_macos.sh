@@ -30,4 +30,5 @@ fi
 	fmt:x64-osx \
 	meshoptimizer:x64-osx \
 	ktx:x64-osx \
+	joltphysics:x64-osx \
 	cpp-base64:x64-osx

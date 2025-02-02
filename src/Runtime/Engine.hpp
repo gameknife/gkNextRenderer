@@ -12,6 +12,8 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
+class NextPhysics;
+
 namespace qjs
 {
 	class Context;
@@ -213,6 +215,8 @@ private:
 	void InitJSEngine();
 	void TestJSEngine();
 
+	void InitPhysics();
+
 	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
@@ -244,6 +248,9 @@ private:
 	// audio
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
+
+	// physics
+	std::unique_ptr<NextPhysics> physicsEngine_;
 
 	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
