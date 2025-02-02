@@ -63,6 +63,7 @@ find_package(Stb REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
+find_package(Jolt CONFIG REQUIRED)
 
 if (!ANDROID)
 find_package(RapidJSON CONFIG REQUIRED)
