@@ -178,7 +178,7 @@ public:
 
 	virtual void			OnContactAdded(const Body &inBody1, const Body &inBody2, const ContactManifold &inManifold, ContactSettings &ioSettings) override
 	{
-		cout << "A contact was added" << endl;
+		//cout << "A contact was added" << endl;
 	}
 
 	virtual void			OnContactPersisted(const Body &inBody1, const Body &inBody2, const ContactManifold &inManifold, ContactSettings &ioSettings) override
@@ -188,7 +188,7 @@ public:
 
 	virtual void			OnContactRemoved(const SubShapeIDPair &inSubShapePair) override
 	{
-		cout << "A contact was removed" << endl;
+		//cout << "A contact was removed" << endl;
 	}
 };
 
@@ -215,7 +215,7 @@ struct FNextPhysicsContext
 	{
 		// This is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 		// Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
-		const uint cMaxBodies = 1024;
+		const uint cMaxBodies = 65535;//1024;
 
 		// This determines how many mutexes to allocate to protect rigid bodies from concurrent access. Set it to 0 for the default settings.
 		const uint cNumBodyMutexes = 0;
@@ -224,12 +224,12 @@ struct FNextPhysicsContext
 		// body pairs based on their bounding boxes and will insert them into a queue for the narrowphase). If you make this buffer
 		// too small the queue will fill up and the broad phase jobs will start to do narrow phase work. This is slightly less efficient.
 		// Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
-		const uint cMaxBodyPairs = 1024;
+		const uint cMaxBodyPairs = 65535;//1024;
 
 		// This is the maximum size of the contact constraint buffer. If more contacts (collisions between bodies) are detected than this
 		// number then these contacts will be ignored and bodies will start interpenetrating / fall through the world.
 		// Note: This value is low because this is a simple test. For a real project use something in the order of 10240.
-		const uint cMaxContactConstraints = 1024;
+		const uint cMaxContactConstraints = 10240;//1024;
 		
 		physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broad_phase_layer_interface, object_vs_broadphase_layer_filter, object_vs_object_layer_filter);
 
@@ -312,6 +312,8 @@ void NextPhysics::Start()
 	RegisterTypes();
 
 	context_.reset(new FNextPhysicsContext());
+
+	//context_->physics_system.SetGravity(Vec3(0,-9.8f,0));
 	// The main way to interact with the bodies in the physics system is through the body interface. There is a locking and a non-locking
 	// variant of this. We're going to use the locking version (even though we're not planning to access bodies from multiple threads)
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
@@ -329,12 +331,23 @@ void NextPhysics::Start()
 	
 }
 
-void NextPhysics::Tick()
+void NextPhysics::Tick(double DeltaSeconds)
 {
+	TimeElapsed += DeltaSeconds;
+	const float TimeOffset = static_cast<float>( TimeElapsed - TimeSimulated );
 	const float cDeltaTime = 1.0f / 60.0f;
+
+	float shouldTick = TimeOffset / cDeltaTime;
+
+	if (shouldTick < 1.0f)
+	{
+		return;
+	}
 	
 	// If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
-	const int cCollisionSteps = 1;
+	const int cCollisionSteps = glm::min(4, glm::max(1, static_cast<int>(glm::floor(TimeOffset / cDeltaTime))));
+
+	TimeSimulated += cDeltaTime * cCollisionSteps;
 
 	// Update bodies
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
@@ -355,13 +368,7 @@ void NextPhysics::Tick()
 
 void NextPhysics::Stop()
 {
-	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
-	
-	for (auto& body : bodies_)
-	{
-		body_interface.RemoveBody(body.first);
-		body_interface.DestroyBody(body.first);
-	}
+	// OnSceneDestroyed();
 	
 	// Unregisters all types with the factory and cleans up the default material
 	UnregisterTypes();
@@ -371,49 +378,6 @@ void NextPhysics::Stop()
 	Factory::sInstance = nullptr;
 
 	context_.reset();
-}
-
-JPH::BodyID NextPhysics::CreateBody(ENextBodyShape shape, glm::vec3 position)
-{
-	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
-
-	BodyID body_id(-1);
-	if (shape == ENextBodyShape::Box)
-	{
-		// Next we can create a rigid body to serve as the floor, we make a large box
-		// Create the settings for the collision volume (the shape).
-		// Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
-		BoxShapeSettings floor_shape_settings(Vec3(100.0f, 1.0f, 100.0f));
-		floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
-
-		// Create the shape
-		ShapeSettings::ShapeResult floor_shape_result = floor_shape_settings.Create();
-		ShapeRefC floor_shape = floor_shape_result.Get(); // We don't expect an error here, but you can check floor_shape_result for HasError() / GetError()
-
-		// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
-		BodyCreationSettings floor_settings(floor_shape, RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
-
-		// Create the actual rigid body
-		Body *floor = body_interface.CreateBody(floor_settings); // Note that if we run out of bodies this can return nullptr
-
-		body_id = floor->GetID();
-		// Add it to the world
-		body_interface.AddBody(floor->GetID(), EActivation::DontActivate);
-	}
-
-	if (shape == ENextBodyShape::Sphere)
-	{
-		// Now create a dynamic body to bounce on the floor
-		// Note that this uses the shorthand version of creating and adding a body to the world
-		BodyCreationSettings sphere_settings(new SphereShape(0.5f), RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
-		body_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
-
-		// Now you can interact with the dynamic body, in this case we're going to give it a velocity.
-		// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
-		body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
-	}
-	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), shape, body_id };
-	return AddBodyInternal(body);
 }
 
 JPH::BodyID NextPhysics::AddBodyInternal(FNextPhysicsBody& body)
@@ -431,12 +395,12 @@ JPH::BodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, JPH:
 	// Now create a dynamic body to bounce on the floor
 	// Note that this uses the shorthand version of creating and adding a body to the world
 	BodyCreationSettings sphere_settings(new SphereShape(radius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
+	sphere_settings.mFriction = 0.25f;
 	body_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
 
 	// Now you can interact with the dynamic body, in this case we're going to give it a velocity.
 	// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
-	body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
-
+	//body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
 	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Sphere, body_id };
 	return AddBodyInternal(body);
 }
@@ -458,10 +422,40 @@ JPH::BodyID NextPhysics::CreatePlaneBody(glm::vec3 position, glm::vec3 extent, J
 
 	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
 	BodyCreationSettings floor_settings(floor_shape, RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
-	floor_settings.mRestitution = 0.5f;
+	floor_settings.mRestitution = 0.25f;
+	floor_settings.mFriction = 0.25f;
 	// Create the actual rigid body
 	body_id = body_interface.CreateAndAddBody(floor_settings, EActivation::DontActivate);
 
 	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, body_id };
 	return AddBodyInternal(body);
+}
+
+FNextPhysicsBody* NextPhysics::GetBody(JPH::BodyID bodyID)
+{
+	if ( bodies_.contains(bodyID) )
+	{
+		return &(bodies_[bodyID]);
+	}
+	return nullptr;
+}
+
+void NextPhysics::OnSceneStarted()
+{
+	TimeElapsed = 0;
+	TimeSimulated = 0;
+}
+
+void NextPhysics::OnSceneDestroyed()
+{
+	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
+	
+	for (auto& body : bodies_)
+	{
+		if (body.first.IsInvalid()) continue;
+		body_interface.RemoveBody(body.first);
+		body_interface.DestroyBody(body.first);
+	}
+	
+	bodies_.clear();
 }

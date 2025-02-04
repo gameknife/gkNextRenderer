@@ -261,7 +261,7 @@ bool NextEngine::Tick()
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
 
-    physicsEngine_->Tick();
+    physicsEngine_->Tick(deltaSeconds_);
 
     if (JSTickCallback_)
     {
@@ -992,9 +992,11 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
+
+    physicsEngine_->OnSceneDestroyed();
     
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
@@ -1019,7 +1021,8 @@ void NextEngine::LoadScene(std::string sceneFileName)
             scene_->SetEnvSettings(*cameraState);
 
             gameInstance_->OnSceneUnloaded();
-                    
+            physicsEngine_->OnSceneStarted();
+
             renderer_->Device().WaitIdle();
             renderer_->DeleteSwapChain();
             renderer_->OnPreLoadScene();

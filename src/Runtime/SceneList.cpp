@@ -44,26 +44,29 @@ namespace
                 const float chooseMat = random();
                 const float center_y = static_cast<float>(j) + 0.9f * random();
                 const float center_x = static_cast<float>(i) + 0.9f * random();
-                const vec3 center(center_x, 0.2f, center_y);
+                const vec3 center(center_x, 0.2f + 2.0f * chooseMat, center_y);
 
                 const std::string Name = Utilities::NameHelper::RandomName(6);
 
-                const float Duration = 0.3f;
-                Assets::AnimationTrack track{};
-                track.Duration_ = Duration;
-                track.NodeName_ = Name;
-                int offset = static_cast<int>(random() * 9.0f);
-                for ( int i = 0; i < 11; ++i )
-                {
-                    float time = i / 10.0f;
-                    float shifttime = ((i + offset) % 10) / 10.0f;
-                    float mixer = glm::abs(shifttime - 0.5f) / 0.5f;
-                    track.TranslationChannel.Keys.push_back( {time * Duration, center + vec3(0,glm::sqrt(mixer) * 0.15f,0)} );
-                }
-                tracks.push_back(track);
+                // Animation Sequence
+                // const float Duration = 0.3f;
+                // Assets::AnimationTrack track{};
+                // track.Duration_ = Duration;
+                // track.NodeName_ = Name;
+                // int offset = static_cast<int>(random() * 9.0f);
+                // for ( int i = 0; i < 11; ++i )
+                // {
+                //     float time = i / 10.0f;
+                //     float shifttime = ((i + offset) % 10) / 10.0f;
+                //     float mixer = glm::abs(shifttime - 0.5f) / 0.5f;
+                //     track.TranslationChannel.Keys.push_back( {time * Duration, center + vec3(0,glm::sqrt(mixer) * 0.15f,0)} );
+                // }
+                // tracks.push_back(track);
                 
                 if (length(center - vec3(4, 0.2f, 0)) > 0.9f)
                 {
+                    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, JPH::EMotionType::Dynamic);
+                    
                     if (chooseMat < 0.7f) // Diffuse
                     {
                         const float b = random() * random();
@@ -111,6 +114,7 @@ namespace
                         nodes.back()->SetVisible(true);
                         nodes.back()->SetMaterial({matId});
                     }
+                    nodes.back()->BindPhysicsBody(id);
                 }
             }
         }
@@ -145,6 +149,8 @@ namespace
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), 0, static_cast<uint32_t>(nodes.size()), false));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({0});
+
+        NextEngine::GetInstance()->GetPhysicsEngine()->CreatePlaneBody(vec3(0,-0.5,0), vec3(2000, 0.5, 2000), JPH::EMotionType::Static);
         
         AddRayTracingInOneWeekendCommonScene(nodes, models, materials, tracks, random);
 
@@ -157,12 +163,21 @@ namespace
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx0});
+        auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        nodes.back()->BindPhysicsBody(body1);
+        
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx1});
+        auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        nodes.back()->BindPhysicsBody(body2);
+        
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx2});
+        auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        nodes.back()->BindPhysicsBody(body3);
+        
     }
 
     void CornellBox(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -171,7 +186,7 @@ namespace
     {
         Assets::Camera defaultCam;
         defaultCam.name = "Cam";
-        defaultCam.ModelView = lookAt(vec3(0, 278, 1078), vec3(0, 278, 0), vec3(0, 1, 0));
+        defaultCam.ModelView = lookAt(vec3(0, 2.78, 10.78), vec3(0, 2.78, 0), vec3(0, 1, 0));
         defaultCam.FieldOfView = 40;
         defaultCam.Aperture = 0;
         defaultCam.FocalDistance = 10;
@@ -182,26 +197,26 @@ namespace
         cameraInit.HasSky = false;
         cameraInit.HasSun = false;
 
-        int cbox_model = Model::CreateCornellBox(555, models, materials, lights);
+        int cbox_model = Model::CreateCornellBox(5.55f, models, materials, lights);
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), cbox_model, static_cast<uint32_t>(nodes.size()), false));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({0,1,2,3});
 
-        auto spherePos = vec3(130, 101 + 200, 80);
-        auto boxPos = vec3(-130, 0, -80);
+        auto spherePos = vec3(1.30, 1.01 + 2.00, 0.80);
+        auto boxPos = vec3(-1.30, 0, -0.80);
         
         materials.push_back({"cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
         materials.push_back({"cball_white", 5, Material::Dielectric(1.85f, 0.0f)});
-        auto box0 = Model::CreateBox(vec3(-80, 0, -80), vec3(80, 160, 80));
+        auto box0 = Model::CreateBox(vec3(-0.80, 0, -0.80), vec3(0.80, 1.60, 0.80));
         models.push_back(box0);
-        auto ball0 = Model::CreateSphere(vec3(0, 0, 0), 100.0f);
+        auto ball0 = Model::CreateSphere(vec3(0, 0, 0), 1.0f);
         models.push_back(ball0);
         nodes.push_back(Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 2, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({5});
 
-        auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 100.0f, JPH::EMotionType::Dynamic);
+        auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, JPH::EMotionType::Dynamic);
         nodes.back()->BindPhysicsBody(id);
         
         nodes.push_back(Assets::Node::CreateNode("Box", boxPos, quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), cbox_model + 1, static_cast<uint32_t>(nodes.size()),
@@ -210,7 +225,7 @@ namespace
         nodes.back()->SetVisible(true);
 
         // create physical scene, later it will change to node components later
-        NextEngine::GetInstance()->GetPhysicsEngine()->CreatePlaneBody(boxPos, vec3(800, 1, 800), JPH::EMotionType::Static);
+        NextEngine::GetInstance()->GetPhysicsEngine()->CreatePlaneBody(vec3(0, -1, 0), vec3(8, 1, 8), JPH::EMotionType::Static);
         
         // procedural animation
         // Assets::AnimationTrack track{};

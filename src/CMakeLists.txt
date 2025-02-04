@@ -28,6 +28,7 @@ set_source_files_properties(
 endif()
 file(GLOB_RECURSE src_files_engine
 	"Common/*.hpp" 
+	"Runtime/*.h"
 	"Runtime/*.hpp"
 	"Runtime/*.cpp"
 	"Options.cpp"
@@ -124,6 +125,10 @@ foreach(target IN LISTS AllTargets)
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
+	# if debug
+	# 假设你的目标名称是 MyTarget
+	target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED>)
+	
 	target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )

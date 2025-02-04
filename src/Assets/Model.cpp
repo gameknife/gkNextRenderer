@@ -1196,9 +1196,12 @@ namespace Assets
     {
         if (!physicsBodyTemp_.IsInvalid())
         {
-            auto& body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
-            SetTranslation(body.position);
-            RecalcTransform(true);
+            auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
+            if (body != nullptr)
+            {
+                SetTranslation(body->position);
+                RecalcTransform(true);
+            }
         }
         
         combinedTS = prevTransform_ * glm::inverse(transform_);

@@ -42,19 +42,24 @@ public:
     ~NextPhysics();
 
     void Start();
-    void Tick();
+    void Tick(double DeltaSeconds);
     void Stop();
-
-    JPH::BodyID CreateBody(ENextBodyShape shape, glm::vec3 position);
-
+    
     JPH::BodyID CreateSphereBody(glm::vec3 position, float radius, JPH::EMotionType motionType);
     JPH::BodyID CreatePlaneBody(glm::vec3 position, glm::vec3 extent, JPH::EMotionType motionType);
 
-    FNextPhysicsBody& GetBody(JPH::BodyID bodyID) { return bodies_[bodyID]; }
+    FNextPhysicsBody* GetBody(JPH::BodyID bodyID);
+
+    void OnSceneStarted();
+    void OnSceneDestroyed();
 private:
 
     JPH::BodyID AddBodyInternal(FNextPhysicsBody& body);
     
     std::unique_ptr<FNextPhysicsContext> context_;
     std::unordered_map<JPH::BodyID, FNextPhysicsBody> bodies_;
+
+    double TimeElapsed {};
+    double TimeSimulated {};
 };
+
