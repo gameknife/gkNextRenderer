@@ -5,6 +5,7 @@
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyID.h>
+#include <Jolt/Physics/Body/MotionType.h>
 
 #include "Vulkan/Vulkan.hpp"
 
@@ -44,11 +45,16 @@ public:
     void Tick();
     void Stop();
 
-    FNextPhysicsBody& CreateBody(ENextBodyShape shape, glm::vec3 position);
+    JPH::BodyID CreateBody(ENextBodyShape shape, glm::vec3 position);
 
+    JPH::BodyID CreateSphereBody(glm::vec3 position, float radius, JPH::EMotionType motionType);
+    JPH::BodyID CreatePlaneBody(glm::vec3 position, glm::vec3 extent, JPH::EMotionType motionType);
+
+    FNextPhysicsBody& GetBody(JPH::BodyID bodyID) { return bodies_[bodyID]; }
 private:
+
+    JPH::BodyID AddBodyInternal(FNextPhysicsBody& body);
+    
     std::unique_ptr<FNextPhysicsContext> context_;
-    std::vector<FNextPhysicsBody> bodies_;
+    std::unordered_map<JPH::BodyID, FNextPhysicsBody> bodies_;
 };
-
-

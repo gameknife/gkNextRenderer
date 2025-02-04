@@ -21,6 +21,8 @@
 #include <cstdarg>
 #include <thread>
 
+#include "Engine.hpp"
+
 // Disable common warnings triggered by Jolt, you can use JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the warning state
 JPH_SUPPRESS_WARNINGS
 
@@ -314,8 +316,8 @@ void NextPhysics::Start()
 	// variant of this. We're going to use the locking version (even though we're not planning to access bodies from multiple threads)
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
 
-	CreateBody(ENextBodyShape::Box, glm::vec3(0.0f, -1.0f, 0.0f));
-	CreateBody(ENextBodyShape::Sphere, glm::vec3(0.0f, 5.0f, 0.0f));
+	//CreateBody(ENextBodyShape::Box, glm::vec3(0.0f, -1.0f, 0.0f));
+	//CreateBody(ENextBodyShape::Sphere, glm::vec3(0.0f, 5.0f, 0.0f));
 
 	
 	// We simulate the physics world in discrete time steps. 60 Hz is a good rate to update the physics system.
@@ -337,10 +339,14 @@ void NextPhysics::Tick()
 	// Update bodies
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
 	
-	for (FNextPhysicsBody &body : bodies_)
+	for (auto& body : bodies_)
 	{
-		RVec3 pos = body_interface.GetPosition(body.bodyID);
-		body.position = glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
+		RVec3 pos = body_interface.GetPosition(body.first);
+		RVec3 vel = body_interface.GetLinearVelocity(body.first);
+		body.second.position = glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
+		body.second.velocity = glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
+
+		NextEngine::GetInstance()->GetScene().MarkDirty();
 	}
 
 	// Step the world
@@ -351,10 +357,10 @@ void NextPhysics::Stop()
 {
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
 	
-	for (FNextPhysicsBody &body : bodies_)
+	for (auto& body : bodies_)
 	{
-		body_interface.RemoveBody(body.bodyID);
-		body_interface.DestroyBody(body.bodyID);
+		body_interface.RemoveBody(body.first);
+		body_interface.DestroyBody(body.first);
 	}
 	
 	// Unregisters all types with the factory and cleans up the default material
@@ -367,7 +373,7 @@ void NextPhysics::Stop()
 	context_.reset();
 }
 
-FNextPhysicsBody& NextPhysics::CreateBody(ENextBodyShape shape, glm::vec3 position)
+JPH::BodyID NextPhysics::CreateBody(ENextBodyShape shape, glm::vec3 position)
 {
 	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
 
@@ -406,10 +412,56 @@ FNextPhysicsBody& NextPhysics::CreateBody(ENextBodyShape shape, glm::vec3 positi
 		// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
 		body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
 	}
-
 	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), shape, body_id };
-	bodies_.push_back(body);
-	context_->physics_system.OptimizeBroadPhase();
+	return AddBodyInternal(body);
+}
 
-	return bodies_.back();
+JPH::BodyID NextPhysics::AddBodyInternal(FNextPhysicsBody& body)
+{
+	bodies_[body.bodyID] = body;
+	context_->physics_system.OptimizeBroadPhase();
+	return body.bodyID;
+}
+
+JPH::BodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, JPH::EMotionType motionType)
+{
+	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
+	BodyID body_id(-1);
+
+	// Now create a dynamic body to bounce on the floor
+	// Note that this uses the shorthand version of creating and adding a body to the world
+	BodyCreationSettings sphere_settings(new SphereShape(radius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Dynamic, Layers::MOVING);
+	body_id = body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
+
+	// Now you can interact with the dynamic body, in this case we're going to give it a velocity.
+	// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
+	body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
+
+	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Sphere, body_id };
+	return AddBodyInternal(body);
+}
+
+JPH::BodyID NextPhysics::CreatePlaneBody(glm::vec3 position, glm::vec3 extent, JPH::EMotionType motionType)
+{
+	BodyInterface &body_interface = context_->physics_system.GetBodyInterface();
+	BodyID body_id(-1);
+	
+	// Next we can create a rigid body to serve as the floor, we make a large box
+	// Create the settings for the collision volume (the shape).
+	// Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
+	BoxShapeSettings floor_shape_settings(Vec3(extent.x, extent.y, extent.z));
+	floor_shape_settings.SetEmbedded(); // A ref counted object on the stack (base class RefTarget) should be marked as such to prevent it from being freed when its reference count goes to 0.
+
+	// Create the shape
+	ShapeSettings::ShapeResult floor_shape_result = floor_shape_settings.Create();
+	ShapeRefC floor_shape = floor_shape_result.Get(); // We don't expect an error here, but you can check floor_shape_result for HasError() / GetError()
+
+	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
+	BodyCreationSettings floor_settings(floor_shape, RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
+	floor_settings.mRestitution = 0.5f;
+	// Create the actual rigid body
+	body_id = body_interface.CreateAndAddBody(floor_settings, EActivation::DontActivate);
+
+	FNextPhysicsBody body { position, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, body_id };
+	return AddBodyInternal(body);
 }

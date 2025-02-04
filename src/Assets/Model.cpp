@@ -46,6 +46,8 @@
 
 #include "Options.hpp"
 #include "Texture.hpp"
+#include "Runtime/Engine.hpp"
+#include "Runtime/NextPhysics.h"
 
 #define FLATTEN_VERTICE 1
 
@@ -1192,6 +1194,13 @@ namespace Assets
 
     bool Node::TickVelocity(glm::mat4& combinedTS)
     {
+        if (!physicsBodyTemp_.IsInvalid())
+        {
+            auto& body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
+            SetTranslation(body.position);
+            RecalcTransform(true);
+        }
+        
         combinedTS = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 

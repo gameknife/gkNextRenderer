@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "Engine.hpp"
+#include "NextPhysics.h"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 
@@ -186,32 +187,43 @@ namespace
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({0,1,2,3});
 
+        auto spherePos = vec3(130, 101 + 200, 80);
+        auto boxPos = vec3(-130, 0, -80);
+        
         materials.push_back({"cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
         materials.push_back({"cball_white", 5, Material::Dielectric(1.85f, 0.0f)});
         auto box0 = Model::CreateBox(vec3(-80, 0, -80), vec3(80, 160, 80));
         models.push_back(box0);
         auto ball0 = Model::CreateSphere(vec3(0, 0, 0), 100.0f);
         models.push_back(ball0);
-        nodes.push_back(Assets::Node::CreateNode("Sphere1", vec3(130, 101, 80), quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 2, static_cast<uint32_t>(nodes.size()),
+        nodes.push_back(Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 2, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({5});
-        nodes.push_back(Assets::Node::CreateNode("Box", vec3(-130, 0, -80), quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), cbox_model + 1, static_cast<uint32_t>(nodes.size()),
+
+        auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 100.0f, JPH::EMotionType::Dynamic);
+        nodes.back()->BindPhysicsBody(id);
+        
+        nodes.push_back(Assets::Node::CreateNode("Box", boxPos, quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), cbox_model + 1, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetMaterial({4});
         nodes.back()->SetVisible(true);
 
-        Assets::AnimationTrack track{};
-        track.Duration_ = 1.0f;
-        track.NodeName_ = "Sphere1";
-        for ( int i = 0; i < 11; ++i )
-        {
-            float time = i / 10.0f;
-            float mixer = glm::abs(time - 0.5f) / 0.5f;
-            track.TranslationChannel.Keys.push_back( {time, vec3(130, glm::mix(360, 101, mixer * mixer), 80)} );
-        }
+        // create physical scene, later it will change to node components later
+        NextEngine::GetInstance()->GetPhysicsEngine()->CreatePlaneBody(boxPos, vec3(800, 1, 800), JPH::EMotionType::Static);
         
-        tracks.push_back(track);
+        // procedural animation
+        // Assets::AnimationTrack track{};
+        // track.Duration_ = 1.0f;
+        // track.NodeName_ = "Sphere1";
+        // for ( int i = 0; i < 11; ++i )
+        // {
+        //     float time = i / 10.0f;
+        //     float mixer = glm::abs(time - 0.5f) / 0.5f;
+        //     track.TranslationChannel.Keys.push_back( {time, vec3(130, glm::mix(360, 101, mixer * mixer), 80)} );
+        // }
+        //
+        // tracks.push_back(track);
     }
 }
 

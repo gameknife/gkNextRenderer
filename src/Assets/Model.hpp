@@ -5,12 +5,15 @@
 #include "Vertex.hpp"
 #include "Texture.hpp"
 #include "UniformBuffer.hpp"
+#include "Runtime/NextPhysics.h"
 
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 #include <glm/detail/type_quat.hpp>
+
+struct FNextPhysicsBody;
 
 namespace Assets
 {
@@ -96,6 +99,8 @@ namespace Assets
         void SetMaterial(const std::vector<uint32_t>& materials);
         std::vector<uint32_t>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
+
+        void BindPhysicsBody(JPH::BodyID bodyId) { physicsBodyTemp_ = bodyId; }
         
     private:
         std::string name_;
@@ -114,6 +119,7 @@ namespace Assets
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
         std::vector<uint32_t> materialIdx_;
+        JPH::BodyID physicsBodyTemp_;
     };
 
     template <typename T>
