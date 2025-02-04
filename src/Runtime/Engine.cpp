@@ -996,7 +996,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
     physicsEngine_->OnSceneDestroyed();
     
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
