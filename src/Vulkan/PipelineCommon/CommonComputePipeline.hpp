@@ -148,4 +148,27 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
+
+	class AmbientGenPipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(AmbientGenPipeline)
+	
+		AmbientGenPipeline(
+			const DeviceProcedures& deviceProcedures,
+			const Buffer& ioBuffer,
+			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const Assets::Scene& scene);
+		~AmbientGenPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const DeviceProcedures& deviceProcedures_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
 }
