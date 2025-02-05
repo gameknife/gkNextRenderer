@@ -19,7 +19,7 @@ on:
 jobs:
   build:
 
-    runs-on: macos-13
+    runs-on: macos-latest
     env: 
       SDK_VERSION: 1.3.280
     steps:
