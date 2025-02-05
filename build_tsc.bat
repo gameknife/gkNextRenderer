@@ -9,5 +9,12 @@ IF NOT EXIST "tools\node\node.exe" (
   del "tools\node.zip"
 )
 
+IF NOT EXIST "tools\typescript\bin\tsc" (
+  SET TSC_URL=https://registry.npmjs.org/typescript/-/typescript-4.5.4.tgz
+  powershell -Command "Invoke-WebRequest -Uri $env:TSC_URL -OutFile 'tools\\typescript.tgz'"
+  tar -xzf tools\typescript.tgz -C tools\typescript --strip-components=1
+  del "tools\\typescript.tgz"
+)
+
 tools\node\node.exe tools\typescript\bin\tsc -p src\Typescript\
 xcopy /s /y assets\scripts\ build\windows\assets\scripts\
