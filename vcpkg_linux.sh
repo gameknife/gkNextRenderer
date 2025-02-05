@@ -31,4 +31,6 @@ git checkout 2024.08.23
 	fmt:x64-linux \
 	meshoptimizer:x64-linux \
 	ktx:x64-linux \
+	joltphysics:x64-linux \
 	cpp-base64:x64-linux
+

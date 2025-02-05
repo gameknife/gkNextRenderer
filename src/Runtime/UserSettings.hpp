@@ -6,8 +6,6 @@
 struct UserSettings final
 {
 	int RendererType;
-	// Application
-	bool Benchmark;
 	
 	// Scene
 	int SceneIndex {};

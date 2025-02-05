@@ -22,7 +22,6 @@ public:
 	~Options() = default;
 
 	// Application options.
-	bool Benchmark{};
 	bool SaveFile{};
 	bool RenderDoc{};
 	bool NoDenoiser{};
@@ -39,7 +38,6 @@ public:
 	bool AdaptiveSample{};
 	
 	// Scene options.
-	uint32_t SceneIndex{};
 	std::string SceneName{};
 	std::string HDRIfile{};
 

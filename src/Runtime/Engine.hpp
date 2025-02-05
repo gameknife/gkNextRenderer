@@ -12,6 +12,14 @@
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
+class NextPhysics;
+
+namespace qjs
+{
+	class Context;
+	class Runtime;
+}
+
 class NextEngine;
 
 class NextGameInstanceBase
@@ -83,6 +91,22 @@ struct FDelayTaskContext
 	DelayedTask task;
 };
 
+class NextComponent;
+
+class NextActor
+{
+public:
+	std::vector<NextComponent*> components;
+};
+
+class NextComponent : std::enable_shared_from_this<NextComponent>
+{
+public:
+	NextComponent() = default;
+	std::string name_;
+	int id_;
+};
+
 class NextEngine final
 {
 public:
@@ -91,6 +115,9 @@ public:
 
 	NextEngine(Options& options, void* userdata = nullptr);
 	~NextEngine();
+
+	static NextEngine* instance_;
+	static NextEngine* GetInstance() { return instance_; }
 
 	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
 
@@ -102,12 +129,16 @@ public:
 	void OnTouchMove(double xpos, double ypos);
 
 	Assets::Scene& GetScene() { return *scene_; }
+	Assets::Scene* GetScenePtr() { return scene_.get(); }
 	UserSettings& GetUserSettings() { return userSettings_; }
 
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
 	float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
 	uint32_t GetTotalFrames() const { return totalFrames_; }
+	uint32_t GetTestNumber() const { return 20; }
+
+	void RegisterJSCallback(std::function<void(double)> callback);
 
 	// remove till return true
 	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
@@ -156,6 +187,13 @@ public:
 
 	// gpu raycast
 	void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir, std::function<bool (Assets::RayCastResult rayResult)> callback );
+
+	void SetProgressiveRendering(bool enable) { progressiveRendering_ = enable; }
+	bool IsProgressiveRendering() const { return progressiveRendering_; }
+
+	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
+
+	NextPhysics* GetPhysicsEngine() { return physicsEngine_.get(); }
 	
 protected:
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
@@ -176,6 +214,11 @@ protected:
 private:
 	void LoadScene(std::string sceneFileName);
 
+	void InitJSEngine();
+	void TestJSEngine();
+
+	void InitPhysics();
+
 	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
@@ -195,6 +238,7 @@ private:
 	double time_{};
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
+	bool progressiveRendering_{};
 
 	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
@@ -207,9 +251,17 @@ private:
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
 
+	// physics
+	std::unique_ptr<NextPhysics> physicsEngine_;
+
 	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
 	// engine status
 	NextRenderer::EApplicationStatus status_{};
+
+	std::unique_ptr<qjs::Runtime> JSRuntime_;
+	std::unique_ptr<qjs::Context> JSContext_;
+
+	std::function<void(double)> JSTickCallback_;
 };

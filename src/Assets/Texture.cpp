@@ -24,12 +24,13 @@ namespace Assets
         std::array<char, 256> outputInfo;
     };
 
-    uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
+    uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb)
     {
         std::vector<uint8_t> data;
         Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
-        return GetInstance()->RequestNewTextureMemAsync(filename, "texture/default", false, data.data(), data.size(),
-                                                        false);
+        std::filesystem::path path(filename);
+        std::string mime = std::string("image/") + path.extension().string().substr(1);
+        return GetInstance()->RequestNewTextureMemAsync(filename, mime, false, data.data(), data.size(),srgb);
     }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const std::string& mime,
@@ -38,12 +39,11 @@ namespace Assets
         return GetInstance()->RequestNewTextureMemAsync(texname, mime, false, data, bytelength, srgb);
     }
 
-    uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename, const Vulkan::SamplerConfig& samplerConfig)
+    uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename)
     {
         std::vector<uint8_t> data;
         Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
-        return GetInstance()->RequestNewTextureMemAsync(filename, "texture/default", true, data.data(), data.size(),
-                                                        false);
+        return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, data.data(), data.size(),false);
     }
 
     TextureImage* GlobalTexturePool::GetTextureImage(uint32_t idx)
@@ -228,7 +228,7 @@ namespace Assets
 
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
-                if (mime.find("ktx") != std::string::npos)
+                if (mime.find("image/ktx") != std::string::npos)
                 {
                     result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
                     if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
@@ -344,7 +344,7 @@ namespace Assets
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
-                if (!GOption->Benchmark) fmt::print("{}\n", taskContext.outputInfo.data());
+                fmt::print("{}\n", taskContext.outputInfo.data());
                 delete[] copyedData;
             }, 0);
 

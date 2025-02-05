@@ -9,15 +9,21 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     config.Title = "gkNextBenchmark";
-    options.Benchmark = true;
+    options.Samples = 1;
+    options.Temporal = 2;
+    options.Bounces = 4;
+    options.PresentMode = 0;
+    options.NoDenoiser = true;
     options.Width = 1280;
     options.Height = 720;
+    
 }
 
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
-    
+    GetEngine().RequestLoadScene(SceneList::AllScenes[0]);
+    GetEngine().SetProgressiveRendering(true);
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
@@ -64,21 +70,3 @@ bool BenchmarkGameInstance::OnMouseButton(int button, int action, int mods)
 {
     return true;
 }
-//
-// void NextRendererApplication::TickBenchMarker()
-// {
-//     if( benchMarker_ && benchMarker_->OnTick( GetWindow().GetTime(), renderer_.get() ))
-//     {
-//         // Benchmark is done, report the results.
-//         benchMarker_->OnReport(renderer_.get(), SceneList::AllScenes[userSettings_.SceneIndex]);
-//         
-//         if (!userSettings_.BenchmarkNextScenes || static_cast<size_t>(userSettings_.SceneIndex) ==
-//             SceneList::AllScenes.size() - 1)
-//         {
-//             GetWindow().Close();
-//         }
-//         
-//         userSettings_.SceneIndex += 1;
-//         RequestLoadScene(SceneList::AllScenes[userSettings_.SceneIndex]);
-//     }
-// }

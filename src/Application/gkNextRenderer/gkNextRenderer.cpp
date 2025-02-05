@@ -17,7 +17,12 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
-    
+	std::string initializedScene = SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
+	if (!GOption->SceneName.empty())
+	{
+		initializedScene = GOption->SceneName;
+	}
+	GetEngine().RequestLoadScene(initializedScene);
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
@@ -29,6 +34,8 @@ void NextRendererGameInstance::OnSceneLoaded()
 {
     NextGameInstanceBase::OnSceneLoaded();
     modelViewController_.Reset( GetEngine().GetScene().GetRenderCamera() );
+
+	GetEngine().GetScene().PlayAllTracks();
 }
 
 void NextRendererGameInstance::OnPreConfigUI()

@@ -275,6 +275,8 @@ void UserInterface::SetStyle()
     colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
     colors[ImGuiCol_TextSelectedBg]         = ActiveColor;
     colors[ImGuiCol_NavHighlight]           = ActiveColor;
+	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
+	
     style->WindowPadding                    = ImVec2(12.00f, 8.00f);
     style->ItemSpacing                      = ImVec2(6.00f, 6.00f);
     style->GrabMinSize                      = 20.00f;
@@ -324,11 +326,12 @@ void UserInterface::PreRender()
 void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
 	DrawOverlay(statistics, gpuTimer);
-	if( statistics.LoadingStatus ) DrawIndicator(static_cast<uint32_t>(std::floor(statistics.RenderTime * 2)));
 }
 
 void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
 {
+	if( GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading ) DrawIndicator(GetEngine().GetTotalFrames());
+	
 	// aux
 	for( auto& req : auxDrawRequest_) {
 		req();
@@ -469,15 +472,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 void UserInterface::DrawIndicator(uint32_t frameCount)
 {
+	frameCount /= 60;
 	ImGui::OpenPopup("Loading");
 	// Always center this window when appearing
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowSize(ImVec2(100,40));
+	ImGui::SetNextWindowSize(ImVec2(200,40));
 
-	if (ImGui::BeginPopupModal("Loading", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	if (ImGui::BeginPopupModal("Loading", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
 	{
-		ImGui::Text("Loading%s   ", frameCount % 4 == 0 ? "" : frameCount % 4 == 1 ? "." : frameCount % 4 == 2 ? ".." : "...");
+		ImGui::Text("Loading%s", frameCount % 4 == 0 ? "" : frameCount % 4 == 1 ? "." : frameCount % 4 == 2 ? ".." : "...");
 		ImGui::EndPopup();
 	}
 }

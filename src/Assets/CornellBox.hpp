@@ -16,7 +16,7 @@ namespace Assets
 			float scale,
 			std::vector<Vertex>& vertices,
 			std::vector<uint32_t>& indices,
-			std::vector<Material>& materials,
+			std::vector<FMaterial>& materials,
 			std::vector<LightObject>& lights);
 	};
 

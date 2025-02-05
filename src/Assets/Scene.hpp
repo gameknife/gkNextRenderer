@@ -89,6 +89,8 @@ namespace Assets
 
 		Camera& GetRenderCamera() { return renderCamera_; }
 		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
+
+		void PlayAllTracks();
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -138,5 +140,4 @@ namespace Assets
 		Assets::EnvironmentSetting envSettings_;
 		Camera renderCamera_;
 	};
-
 }

@@ -5,12 +5,15 @@
 #include "Vertex.hpp"
 #include "Texture.hpp"
 #include "UniformBuffer.hpp"
+#include "Runtime/NextPhysics.h"
 
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 #include <glm/detail/type_quat.hpp>
+
+struct FNextPhysicsBody;
 
 namespace Assets
 {
@@ -96,6 +99,8 @@ namespace Assets
         void SetMaterial(const std::vector<uint32_t>& materials);
         std::vector<uint32_t>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
+
+        void BindPhysicsBody(JPH::BodyID bodyId) { physicsBodyTemp_ = bodyId; }
         
     private:
         std::string name_;
@@ -114,6 +119,7 @@ namespace Assets
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
         std::vector<uint32_t> materialIdx_;
+        JPH::BodyID physicsBodyTemp_;
     };
 
     template <typename T>
@@ -132,6 +138,10 @@ namespace Assets
     
     struct AnimationTrack
     {
+        bool Playing() const { return Playing_; }
+        void Play() { Playing_ = true; }
+        void Stop() { Playing_ = false; }
+        
         void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
         
         std::string NodeName_;
@@ -142,6 +152,8 @@ namespace Assets
         
         float Time_;
         float Duration_;
+
+        bool Playing_{};
     };
     
     class Model final
@@ -150,26 +162,22 @@ namespace Assets
         static void FlattenVertices(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
 
         static Camera AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models);
-
-        static int LoadObjModel(const std::string& filename, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Model>& models,
-                                     std::vector<FMaterial>& materials,
-                                     std::vector<LightObject>& lights, bool autoNode = true);
-
+        
         static uint32_t CreateCornellBox(const float scale,
                                      std::vector<Model>& models,
-                                     std::vector<Material>& materials,
+                                     std::vector<FMaterial>& materials,
                                      std::vector<LightObject>& lights);
         static uint32_t CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
                                      const glm::vec3& dir, const glm::vec3& lightColor,
                                      std::vector<Model>& models,
                                      std::vector<Material>& materials,
                                      std::vector<LightObject>& lights);
-        static void LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
+        static bool LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                                   std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks);
 
         // basic geometry
-        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1, uint32_t materialIdx);
-        static Model CreateSphere(const glm::vec3& center, float radius, uint32_t materialIdx, bool isProcedural);
+        static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1);
+        static Model CreateSphere(const glm::vec3& center, float radius);
 
         Model& operator =(const Model&) = delete;
         Model& operator =(Model&&) = delete;
@@ -181,7 +189,6 @@ namespace Assets
 
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
-        const std::vector<uint32_t>& Materials() const { return materialIdx_; }
         
         glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
@@ -192,11 +199,10 @@ namespace Assets
         void FreeMemory();
 
     private:
-        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<uint32_t>&& materials, bool needGenTSpace = true);
+        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
-        std::vector<uint32_t> materialIdx_;
         
         std::vector<AnimationTrack> AnimationTracks_;
         

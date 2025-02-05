@@ -23,8 +23,7 @@ Options::Options(const int argc, const char* argv[])
 
 	options_description scene("Scene options", lineLength);
 	scene.add_options()
-		("scene", value<uint32_t>(&SceneIndex)->default_value(0), "The scene to start with.")
-		("load-scene", value<std::string>(&SceneName)->default_value(""), "The scene to load.")
+		("load-scene", value<std::string>(&SceneName)->default_value(""), "The scene to load. absolute path or relative path to project root.")
 		("hdri", value<std::string>(&HDRIfile)->default_value(""), "The HDRI file to load.")
 		;
 
@@ -44,7 +43,6 @@ Options::Options(const int argc, const char* argv[])
 	options_description desc("Application options", lineLength);
 	desc.add_options()
 		("help", "Display help message.")
-		("benchmark", bool_switch(&Benchmark)->default_value(false), "Run the application in benchmark mode.")
 		("savefile", bool_switch(&SaveFile)->default_value(false), "Save screenshot every benchmark finish.")
 		("renderdoc", bool_switch(&RenderDoc)->default_value(false), "Attach renderdoc if avaliable.")
 		("forcesdr", bool_switch(&ForceSDR)->default_value(false), "Force use SDR Display even supported.")

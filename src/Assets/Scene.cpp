@@ -52,16 +52,7 @@ namespace Assets
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
 
-        // build nodes materials with models
-        for (auto& node : nodes_)
-        {
-            auto modelId = node->GetModel();
-            if (modelId >= 0 && modelId < models_.size())
-            {
-                auto& model = models_[modelId];
-                node->SetMaterial(model.Materials());
-            }
-        }
+      
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
@@ -111,26 +102,32 @@ namespace Assets
         MarkDirty();
     }
 
+    void Scene::PlayAllTracks()
+    {
+		for (auto& track : tracks_)
+		{
+		    track.Play();
+		}
+    }
+
     void Scene::Tick(float DeltaSeconds)
     {
-        if (GOption->Benchmark)
-        {
-            return;
-        }
-        
         float DurationMax = 0;
+        
         for ( auto& track : tracks_ )
         {
+            if ( !track.Playing() ) continue;
             DurationMax = glm::max(DurationMax, track.Duration_);
         }
+        
         for ( auto& track : tracks_ )
         {
+            if ( !track.Playing() ) continue;
             track.Time_ += DeltaSeconds;
             if (track.Time_ > DurationMax)
             {
                 track.Time_ = 0;
             }
-
             Node* node = GetNode(track.NodeName_);
             if (node)
             {

@@ -23,6 +23,9 @@
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Platform/PlatformCommon.h"
+
+#include <ThirdParty/quickjs-ng/quickjspp.hpp>
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
@@ -32,6 +35,7 @@
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
+#include "NextPhysics.h"
 
 ENGINE_API Options* GOption = nullptr;
 
@@ -87,6 +91,7 @@ namespace
 
     struct SceneTaskContext
     {
+        bool success;
         float elapsed;
         std::array<char, 256> outputInfo;
     };
@@ -99,16 +104,10 @@ UserSettings CreateUserSettings(const Options& options)
     UserSettings userSettings{};
 
     userSettings.RendererType = options.RendererType;
-    userSettings.Benchmark = options.Benchmark;
-    userSettings.SceneIndex = options.SceneIndex;
-
-    if(options.SceneName != "")
-    {
-        userSettings.SceneIndex = SceneList::AddExternalScene(Utilities::FileHelper::GetPlatformFilePath(("assets/models/" + options.SceneName).c_str()));
-    }
-    
-    userSettings.NumberOfSamples = options.Benchmark ? 1 : options.Samples;
-    userSettings.NumberOfBounces = options.Benchmark ? 4 : options.Bounces;
+    userSettings.SceneIndex = 0;
+        
+    userSettings.NumberOfSamples = options.Samples;
+    userSettings.NumberOfBounces = options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
 
     userSettings.AdaptiveSample = options.AdaptiveSample;
@@ -116,16 +115,16 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSteps = 4;
     userSettings.TAA = true;
 
-    userSettings.ShowSettings = !options.Benchmark;
+    userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
     userSettings.HeatmapScale = 0.5f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Benchmark ? 256 : options.Temporal;
+    userSettings.TemporalFrames = options.Temporal;
 
-    userSettings.Denoiser = options.Benchmark ? false : !options.NoDenoiser;
+    userSettings.Denoiser = !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
     
@@ -137,6 +136,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
+    
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
@@ -145,8 +145,12 @@ UserSettings CreateUserSettings(const Options& options)
     return userSettings;
 }
 
+NextEngine* NextEngine::instance_ = nullptr;
+
 NextEngine::NextEngine(Options& options, void* userdata)
 {
+    instance_ = this;
+
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
@@ -158,7 +162,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
         "gkNextRenderer " + NextRenderer::GetBuildVersion(),
         options.Width,
         options.Height,
-        options.Benchmark && options.Fullscreen,
+        options.Fullscreen,
         options.Fullscreen,
         !options.Fullscreen,
         options.SaveFile,
@@ -170,7 +174,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
     window_.reset( new Vulkan::Window(windowConfig));
         
     // Initialize Renderer
-    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.Benchmark ? 0 : options.PresentMode), EnableValidationLayers) );
+    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.PresentMode), EnableValidationLayers) );
     rendererType = options.RendererType;
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
@@ -189,6 +193,10 @@ NextEngine::NextEngine(Options& options, void* userdata)
 
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+
+    // Initialize JS Engine
+    JSRuntime_.reset(new qjs::Runtime());
+    JSContext_.reset(new qjs::Context(*JSRuntime_));
 }
 
 NextEngine::~NextEngine()
@@ -214,10 +222,16 @@ void NextEngine::Start()
         return;
     }
 
+    physicsEngine_.reset(new NextPhysics());
+    physicsEngine_->Start();
+    
     gameInstance_->OnInit();
 
-    fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
-    RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
+    //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
+    //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
+
+    // init js engine
+    InitJSEngine();
 }
 
 bool NextEngine::Tick()
@@ -245,6 +259,13 @@ bool NextEngine::Tick()
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
+    }
+
+    physicsEngine_->Tick(deltaSeconds_);
+
+    if (JSTickCallback_)
+    {
+        JSTickCallback_(deltaSeconds_);
     }
     
     // Renderer Tick
@@ -315,10 +336,16 @@ bool NextEngine::Tick()
 
 void NextEngine::End()
 {
+    physicsEngine_->Stop();
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
+}
+
+void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
+{
+    JSTickCallback_ = callback;
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -708,7 +735,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
-    ubo.TemporalFrames = userSettings_.TemporalFrames;
+    ubo.TemporalFrames = progressiveRendering_ ? (1024 / userSettings_.TemporalFrames) : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
@@ -721,7 +748,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 
-    ubo.Benchmark = userSettings_.Benchmark;
+    ubo.ProgressiveRender = progressiveRendering_;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
@@ -737,19 +764,19 @@ void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
     
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
 
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr", Vulkan::SamplerConfig());
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr", Vulkan::SamplerConfig());
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
 
     //if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
         
@@ -850,16 +877,13 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
         }
 
         // Settings (toggle switches)
-        if (!userSettings_.Benchmark)
+        switch (key)
         {
-            switch (key)
-            {
-            case GLFW_KEY_F1: userSettings_.ShowSettings = !userSettings_.ShowSettings;
-                break;
-            case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
-                break;
-            default: break;
-            }
+        case GLFW_KEY_F1: userSettings_.ShowSettings = !userSettings_.ShowSettings;
+            break;
+        case GLFW_KEY_F2: userSettings_.ShowOverlay = !userSettings_.ShowOverlay;
+            break;
+        default: break;
         }
     }
 #endif
@@ -868,7 +892,6 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureKeyboard() ||
         userInterface_->WantsToCaptureMouse()
         )
@@ -885,7 +908,6 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 void NextEngine::OnMouseButton(const int button, const int action, const int mods)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
         return;
@@ -900,7 +922,6 @@ void NextEngine::OnMouseButton(const int button, const int action, const int mod
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
     if (!renderer_->HasSwapChain() ||
-        userSettings_.Benchmark ||
         userInterface_->WantsToCaptureMouse())
     {
         return;
@@ -918,9 +939,10 @@ void NextEngine::OnDropFile(int path_count, const char* paths[])
         std::string ext = path.substr(path.find_last_of(".") + 1);
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-        if (ext == "glb")
+        if (ext == "glb" || ext == "gltf")
         {
             //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+            RequestLoadScene(path);
         }
 
         if( ext == "hdr")
@@ -970,6 +992,8 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
+
+    physicsEngine_->OnSceneDestroyed();
     
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
@@ -977,7 +1001,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
+        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
         
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -989,40 +1013,157 @@ void NextEngine::LoadScene(std::string sceneFileName)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
-        fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
-        
-        const auto timer = std::chrono::high_resolution_clock::now();
+        if (taskContext.success )
+        {
+            fmt::print("{} {}{}\n", CONSOLE_GREEN_COLOR, taskContext.outputInfo.data(), CONSOLE_DEFAULT_COLOR);
+            const auto timer = std::chrono::high_resolution_clock::now();
+            scene_->GetEnvSettings().Reset();
+            scene_->SetEnvSettings(*cameraState);
 
-        scene_->GetEnvSettings().Reset();
-        scene_->SetEnvSettings(*cameraState);
+            gameInstance_->OnSceneUnloaded();
+            physicsEngine_->OnSceneStarted();
 
-        gameInstance_->OnSceneUnloaded();
-        
-        renderer_->Device().WaitIdle();
-        renderer_->DeleteSwapChain();
-        renderer_->OnPreLoadScene();
-        
-        scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
-        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-        
-        renderer_->SetScene(scene_);
-        
-        userSettings_.CameraIdx = 0;
-        assert(!scene_->GetEnvSettings().cameras.empty());
-        scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+            renderer_->Device().WaitIdle();
+            renderer_->DeleteSwapChain();
+            renderer_->OnPreLoadScene();
+                    
+            scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
+            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                    
+            renderer_->SetScene(scene_);
+                    
+            userSettings_.CameraIdx = 0;
+            assert(!scene_->GetEnvSettings().cameras.empty());
+            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
 
-        totalFrames_ = 0;
-        
-        renderer_->OnPostLoadScene();
-        renderer_->CreateSwapChain();
+            totalFrames_ = 0;
+                    
+            renderer_->OnPostLoadScene();
+            renderer_->CreateSwapChain();
 
-        gameInstance_->OnSceneLoaded();
+            gameInstance_->OnSceneLoaded();
 
-        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+            fmt::print("{} uploaded scene [{}] to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
+        }
+        else
+        {
+            fmt::print("{} failed to load scene [{}]{}\n", CONSOLE_RED_COLOR, std::filesystem::path(sceneFileName).filename().string(), CONSOLE_DEFAULT_COLOR);
+        }
 
-        fmt::print("{} uploaded scene [{}] to gpu in {:.2f}ms{}\n", CONSOLE_GREEN_COLOR, std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f, CONSOLE_DEFAULT_COLOR);
-        
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
+}
+
+
+class MyClass
+{
+public:
+    MyClass() {}
+    MyClass(std::vector<int>) {}
+
+    double member_variable = 5.5;
+    std::string member_function(const std::string& s) { return "Hello, " + s; }
+};
+
+void println(qjs::rest<std::string> args) {
+    for (auto const & arg : args) { fmt::printf(arg); fmt::printf("\n"); }
+}
+
+NextEngine* GetEngine() {
+    return NextEngine::GetInstance();
+}
+
+void NextEngine::InitJSEngine() {
+    try
+    {
+        // export classes as a module
+        auto& module = JSContext_->addModule("Engine");
+        module.function<&println>("println");
+        module.function<&GetEngine>("GetEngine");
+
+        module.class_<NextEngine>("NextEngine")
+                .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
+                .fun<&NextEngine::GetTestNumber>("GetTestNumber")
+                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
+                .fun<&NextEngine::GetScenePtr>("GetScenePtr");
+        module.class_<Assets::Scene>("Scene")
+                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount");
+        module.class_<NextComponent>("NextComponent")
+                .constructor<>()
+                .fun<&NextComponent::name_> ("name_")
+                .fun<&NextComponent::id_> ("id_");
+
+        // TODO use node.exe + tsc to compile the typescript to js realtime
+        // NextRenderer::OSProcess(fmt::format("").c_str());    
+
+        // Current load the script from file
+        std::vector<uint8_t> scriptBuffer;
+        if ( Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer) )
+        {
+            JSContext_->eval( std::string_view( (char*)scriptBuffer.data()), "<import>", JS_EVAL_TYPE_MODULE);
+        }
+        else
+        {
+            fmt::print("Failed to load script\n");
+        }
+    }
+    catch(qjs::exception)
+    {
+        auto exc = JSContext_->getException();
+        std::cerr << (std::string) exc << std::endl;
+        if((bool) exc["stack"])
+            std::cerr << (std::string) exc["stack"] << std::endl;
+    }
+}
+
+void NextEngine::TestJSEngine()
+{
+    try
+    {
+        // export classes as a module
+        auto& module = JSContext_->addModule("MyModule");
+        module.function<&println>("println");
+        module.class_<MyClass>("MyClass")
+                .constructor<>()
+                .constructor<std::vector<int>>("MyClassA")
+                .fun<&MyClass::member_variable>("member_variable")
+                .fun<&MyClass::member_function>("member_function");
+        // import module
+        JSContext_->eval(R"xxx(
+            import * as my from 'MyModule';
+            globalThis.my = my;
+        )xxx", "<import>", JS_EVAL_TYPE_MODULE);
+        // evaluate js code
+        JSContext_->eval(R"xxx(
+            let v1 = new my.MyClass();
+            v1.member_variable = 1;
+            let v2 = new my.MyClassA([1,2,3]);
+            function my_callback(str) {
+              my.println("Call callback from javascript:", v2.member_function(str));
+            }
+        )xxx");
+
+        // callback
+        auto cb = (std::function<void(const std::string&)>) JSContext_->eval("my_callback");
+        cb("World from cpp");
+
+        // passing c++ objects to JS
+        auto lambda = JSContext_->eval("x=>my.println(x.member_function('Lambda from javascript'))").as<std::function<void(qjs::shared_ptr<MyClass>)>>();
+        auto v3 = qjs::make_shared<MyClass>(JSContext_->ctx, std::vector{1,2,3});
+        lambda(v3);
+    }
+    catch(qjs::exception)
+    {
+        auto exc = JSContext_->getException();
+        std::cerr << (std::string) exc << std::endl;
+        if((bool) exc["stack"])
+            std::cerr << (std::string) exc["stack"] << std::endl;
+    }
+}
+
+void NextEngine::InitPhysics()
+{
+    
 }

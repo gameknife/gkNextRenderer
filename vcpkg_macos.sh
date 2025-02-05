@@ -15,19 +15,20 @@ else
 fi
 
 ./vcpkg --recurse install \
-	boost-exception:x64-osx \
-	boost-program-options:x64-osx \
-	boost-stacktrace:x64-osx \
-	glfw3:x64-osx \
-	glm:x64-osx \
-	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:x64-osx \
-	stb:x64-osx \
-	tinyobjloader:x64-osx \
-	curl:x64-osx \
-	tinygltf:x64-osx \
-	draco:x64-osx \
-	rapidjson:x64-osx \
-	fmt:x64-osx \
-	meshoptimizer:x64-osx \
-	ktx:x64-osx \
-	cpp-base64:x64-osx
+	boost-exception:arm64-osx \
+	boost-program-options:arm64-osx \
+	boost-stacktrace:arm64-osx \
+	glfw3:arm64-osx \
+	glm:arm64-osx \
+	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:arm64-osx \
+	stb:arm64-osx \
+	tinyobjloader:arm64-osx \
+	curl:arm64-osx \
+	tinygltf:arm64-osx \
+	draco:arm64-osx \
+	rapidjson:arm64-osx \
+	fmt:arm64-osx \
+	meshoptimizer:arm64-osx \
+	ktx:arm64-osx \
+	joltphysics:arm64-osx \
+	cpp-base64:arm64-osx

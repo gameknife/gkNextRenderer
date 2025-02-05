@@ -129,7 +129,7 @@ namespace
         return SupportRayQuery;
     }
 
-    void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application, const bool benchmark)
+    void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application)
     {
         const auto& swapChain = application.SwapChain();
 
@@ -174,11 +174,6 @@ namespace Vulkan
 
     VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
     {
-        if (GOption->Benchmark)
-        {
-            return;
-        }
-
         device_ = device;
         time_stamps.resize(totalCount);
         timeStampPeriod_ = prop.limits.timestampPeriod;
@@ -194,11 +189,6 @@ namespace Vulkan
 
     VulkanGpuTimer::~VulkanGpuTimer()
     {
-        if (GOption->Benchmark)
-        {
-            return;
-        }
-
         vkDestroyQueryPool(device_, query_pool_timestamps, nullptr);
     }
 
@@ -280,7 +270,7 @@ namespace Vulkan
         //PrintVulkanLayersInformation(*GApplication, options.Benchmark);
         PrintVulkanDevices(*this);
         SetVulkanDevice(*this, GOption->GpuIdx);
-        PrintVulkanSwapChainInformation(*this, GOption->Benchmark);
+        PrintVulkanSwapChainInformation(*this);
 
         currentFrame_ = 0;
     }

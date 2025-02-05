@@ -8,22 +8,26 @@
 
 ### One sentence introduction
 
-A real-time path tracing renderer based on Vulkan that aims to achieve**"quality"**and**"efficiency"**can be used for**"real time"**Path tracing rendering.
+A real-time path tracing renderer based on Vulkan with the goal of "**quality**"and"**efficiency**"Can be used for"**real time gaming**"Path tracing rendering.
 
 ### Technical features
 
 Different from various ray tracing auxiliary technologies currently implemented in games, the goal of this project is the path tracking closest to GroundTruth.
-It also provides a runtime environment closest to the game, verifies the feasibility of real-time ray tracing, and experiments with the latest GPU features to prepare for the next generation of rendering architecture.
+Different from other GPU PathTracer implementations, the goal of this project is real-time, Benchmark uses full dynamic scenes,
+It also provides a runtime environment (lightweight game engine) closest to the game, verifies the feasibility of real-time ray tracing, and experiments with the latest GPU features to prepare for the next generation of rendering architecture.
 
 ### Development premise
 
-The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technology, intentionally avoid obsolete technologies, use new C++ specifications and standard libraries, and develop cross-platform full-time.
+The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technology, intentionally avoid old technologies, use new C++ specifications and standard libraries, and develop cross-platform full-time.
 
 ### Subproject
 
--   **Renderer**: Main project, path tracing, benchmark
--   **Editor**: Editor framework based on imgui, used for editing scenarios, completely dependent on glb reading and writing
+-   **gkNextRenders**: Main project, path tracing renderer
+-   **gkNextEditor**: Editor framework based on imgui, used for editing scenarios, completely dependent on glb reading and writing
 -   **MagicaLego**: A Lego building game similar to MagicaVoxel, with full real-time path tracing rendering to verify goals
+-   **gkNextBenchmark**: Dedicated Benchmark program for benchmarking static and real-time scenes
+-   **Packager**: Package assets into pkg files for rapid deployment
+-   **Portal**: Sub-project combination caller, providing various visual deployment and debugging tools (planned)
 
 ## Gallery (TrueHDR)
 
@@ -74,34 +78,35 @@ The original intention of this project is: learning, verification, and progress.
 ## Technical characteristics
 
 -   Rendering
-    -   Importance Sampling
+    -   Importance Sampling (BRDF / Light)
     -   VNDF Sampling for GGX, by[tigrazone](https://github.com/tigrazone)
-    -   Adaptive Sampling, thanks[tigrazone](https://github.com/tigrazone)
     -   Ground Truth Path Tracing
-    -   Phsyical Light Unit
-    -   Temporal Reproject
+    -   Temporal Reproject with MultiSample catchup
     -   High Performance Bilateral Filter Denoiser
     -   OpenImageDenoise Denoiser\* (need sdk)
-    -   RayQuery on Android
     -   Visibiliy Buffer Rendering
-    -   Legacy Rendering
+    -   Reference Legacy Deferred Rendering
     -   RayTraced Hybrid Rendering
     -   Realtime Renderer Switch
     -   GPU Draw
     -   GPU Raycast
 
--   Scene Management
-    -   Wavefront OBJ File PBR Scene Support
-    -   Full GLTF Scene File Support
-
--   System
-    -   CrossPlatform support for Windows/Linux/MacOS/Android
-    -   EditorApp including node based MaterialEditor
+-   Engine
+    -   Multi-Platform support ( Windows / Linux / Mac / Android )
     -   Global Bindless TexturePool
-    -   MultiThread Resource Loading
+    -   MultiThread Task Dispatcher ( Async Resource Loading and etc )
+    -   Full-Scope File Package System
+    -   Gpu scene updating
+    -   Aux Rendering
     -   HDR Display Support
-    -   Benchmark System
     -   Screenshot HDR and encode to avif / jpg
+
+-   Scene Management
+    -   Full GLTF Scene File Support ( Mesh / Texture / Material / Animation)
+
+-   Editor
+    -   Full Imgui Pipeline
+    -   Node-based Material Editor
 
 ## run
 
@@ -113,7 +118,7 @@ The original intention of this project is: learning, verification, and progress.
 
 First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
 
-project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
+project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
 
 After the local development environment is deployed, each platform can click the script to build
 
@@ -173,13 +178,8 @@ SteamDeck Archlinux
 
 ## Next Todolist
 
--   [ ] Pure GPU AuxRenderer, display gpu helpers
--   [ ] WireFrame Rendering
--   [ ] Realtime Renderer Switch
 -   [ ] GPU Frustum / Occlusion Culling
 -   [ ] GPU Lod Swtiching
--   [ ] Dynamic Scene Management
--   [ ] Multi Material Execution
 -   [ ] Huge Landscape
 
 ## Reference project

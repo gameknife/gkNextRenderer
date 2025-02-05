@@ -46,7 +46,7 @@ struct ALIGN_16 UniformBufferObject
 	glbool TAA;
 	uint SelectedId;
 	glbool ShowEdge;
-	glbool Benchmark;
+	glbool ProgressiveRender;
 		
 	float BFSigma;
 	float BFSigmaLum;

@@ -28,6 +28,7 @@ set_source_files_properties(
 endif()
 file(GLOB_RECURSE src_files_engine
 	"Common/*.hpp" 
+	"Runtime/*.h"
 	"Runtime/*.hpp"
 	"Runtime/*.cpp"
 	"Options.cpp"
@@ -37,9 +38,6 @@ file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 file(GLOB_RECURSE src_files_gkbenchmark "Application/gkNextBenchmark/*")
-
-
-
 
 # libray and app
 if ( ANDROID )
@@ -85,7 +83,6 @@ add_executable(Packager
 )
 endif()
 
-
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	# GCC8 needs an extra lib for <filesystem>.
 	# This is not needed with GCC9 or higher.
@@ -94,6 +91,7 @@ endif()
 
 # editor stuff
 add_subdirectory(ThirdParty/ImNodeFlow)
+add_subdirectory(ThirdParty/quickjs-ng)
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets 
@@ -127,7 +125,11 @@ foreach(target IN LISTS AllTargets)
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
-	target_link_libraries(${target} PRIVATE KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+	# if debug
+	# 假设你的目标名称是 MyTarget
+	target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED>)
+	
+	target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
@@ -180,6 +182,7 @@ foreach(target IN LISTS AllTargets)
 	# warning as error
 	if (MSVC)
 		target_compile_options(${target} PRIVATE /WX)
+		target_compile_options(${target} PRIVATE /wd4200)
 	else()
 	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 		if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -189,7 +192,7 @@ foreach(target IN LISTS AllTargets)
 
 	# specific for targets
 	if ( ${target} STREQUAL MagicaLego )
-	if (UNIX)
+	if (UNIX AND NOT APPLE)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
@@ -215,5 +218,6 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")

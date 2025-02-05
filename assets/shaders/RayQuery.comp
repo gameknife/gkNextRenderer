@@ -141,7 +141,7 @@ void main() {
             ivec2 previpos = ivec2( floor(ipos + motionvector.rg) );            
         
             // after, motionvector calculate last frame position
-            if( !Camera.Benchmark )
+            if( !Camera.ProgressiveRender )
             {
                 uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
                 if (prev_primitive_index0 != primitiveId)

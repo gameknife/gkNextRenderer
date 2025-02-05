@@ -19,15 +19,15 @@ void CornellBox::Create(
 	const float scale,
 	std::vector<Vertex>& vertices,
 	std::vector<uint32_t>& indices,
-	std::vector<Material>& materials,
+	std::vector<FMaterial>& materials,
 	std::vector<LightObject>& lights)
 {
 	uint32_t prev_mat_id = static_cast<uint32_t>(materials.size());
 	
-	materials.push_back(Material::Lambertian(vec3(0.65f, 0.05f, 0.05f))); // red
-	materials.push_back(Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))); // green
-	materials.push_back(Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))); // white
-	materials.push_back(Material::DiffuseLight(vec3(2000.0f))); // light
+	materials.push_back({"", 0,Material::Lambertian(vec3(0.65f, 0.05f, 0.05f))}); // red
+	materials.push_back({"", 1,Material::Lambertian(vec3(0.12f, 0.45f, 0.15f))}); // green
+	materials.push_back({"", 2,Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))}); // white
+	materials.push_back({"", 3,Material::DiffuseLight(vec3(2000.0f))}); // light
 
 	const float s = scale;
 
@@ -96,10 +96,10 @@ void CornellBox::Create(
 	// Light
 	i = static_cast<uint32_t>(vertices.size());
 	{
-		const float x0 = s * (213.0f / 555.0f);
-		const float x1 = s * (343.0f / 555.0f);
-		const float z0 = s * (-555.0f + 382.0f) / 555.0f;
-		const float z1 = s * (-555.0f + 252.0f) / 555.0f;
+		const float x0 = s * (163.0f / 555.0f);
+		const float x1 = s * (393.0f / 555.0f);
+		const float z0 = s * (-555.0f + 432.0f) / 555.0f;
+		const float z1 = s * (-555.0f + 202.0f) / 555.0f;
 		const float y1 = s * 0.999f;
 	
 		vertices.push_back(Vertex{ vec3(x0, y1, z1) - offset, vec3(0, -1, 0), vec4(1,0,0,0), vec2(0, 1), prev_mat_id + 3 });
