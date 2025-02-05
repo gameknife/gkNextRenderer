@@ -27,6 +27,15 @@ if [ ! -d "tools/node" ]; then
   cd ../..
 fi
 
+# Check if tools/typescript/bin/tsc exists
+if [ ! -f "tools/typescript/bin/tsc" ]; then
+  TSC_URL="https://registry.npmjs.org/typescript/-/typescript-4.5.4.tgz"
+  mkdir -p tools/typescript
+  curl -o tools/typescript.tgz $TSC_URL
+  tar -xzf tools/typescript.tgz -C tools/typescript --strip-components=1
+  rm tools/typescript.tgz
+fi
+
 tools/node/bin/node tools/typescript/bin/tsc -p src/Typescript/
-# copy the output from assets\scripts\ to build\linux\assets\scripts\, make sure the directory exists
+# copy the output from assets/scripts to build/$BUILD_NAME/assets/scripts, make sure the directory exists
 cp -r assets/scripts build/$BUILD_NAME/assets/
