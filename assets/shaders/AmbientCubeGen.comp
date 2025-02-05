@@ -1,0 +1,34 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "common/Material.glsl"
+
+// placed me in a 200 x 200 x 100 grid, total 4,000,000 cubes, total size 4,000,000 * 6 * 4 * 4 = 384 MB
+// it the gap is 10 cm, it will cover 20 x 20 x 10 meters area
+
+// for basic testing demo, we use 50 x 50 x 50 to represent 5 x 5 x 5 meters area, the default cornell box is 5 x 5 x 5 meters
+// it may simple gen every frame
+
+// we use 128 ray per cube, it can accumulate with last 16 frames
+
+// every cube face, tracing a hemisphere uniformly
+
+layout(binding = 0) buffer AmbientCubeArray { AmbientCube[] Cubes; };
+
+layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+// the basic algorithm
+// 1. get the area center
+// 2. get the tracing origin
+// 3. tracing the ray, only get the visibiliy for the first iteration
+// 4. record to storage buffer
+
+// when shading
+// 1. sample the ambient cube with world pos, lerp in 3d, get the color as indirect light
+// 2. tracing direct reflection
+
+// when area center moving
+// 1. move still in bound cubes, then update new cubes
+
+void main() {
+    ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(OutImage, ipos, vec4( 0, 0, 0, 0));
+}

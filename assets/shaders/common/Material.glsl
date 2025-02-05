@@ -48,3 +48,13 @@ struct RayCastContext
 	uint MaterialId;
 	uint Hitted;
 };
+
+struct AmbientCube
+{
+	vec4 PosZ;
+	vec4 NegZ;
+	vec4 PosY;
+	vec4 NegY;
+	vec4 PosX;
+	vec4 NegX;
+};
