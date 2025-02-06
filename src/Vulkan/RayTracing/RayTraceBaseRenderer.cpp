@@ -147,6 +147,7 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset(new Assets::RayCastBuffer(CommandPool()));
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
+        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(Device().GetDeviceProcedures(), *ambientCubeBuffer_, topAs_[0], GetScene()));
 #endif
     }
 
@@ -156,6 +157,7 @@ namespace Vulkan::RayTracing
 
         rayCastBuffer_.reset();
         raycastPipeline_.reset();
+        ambientGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
@@ -268,6 +270,19 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
+
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("ambient gen");
+
+            int count = 50 * 50 * 50;
+            int group = count / 50;
+            VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, group, 1, 1);
+        }
 #endif
     }
 
@@ -379,6 +394,9 @@ namespace Vulkan::RayTracing
         topScratchBufferMemory_.reset(new DeviceMemory(
             topScratchBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+
+        ambientCubeBuffer_.reset( new Buffer(Device(), 50 * 50 * 50 * sizeof(Assets::AmbientCube), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        ambientCubeBufferMemory_.reset(new DeviceMemory(ambientCubeBuffer_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 
 
         debugUtils.SetObjectName(topBuffer_->Handle(), "TLAS Buffer");

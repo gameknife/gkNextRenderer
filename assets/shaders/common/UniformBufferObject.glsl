@@ -64,3 +64,13 @@ mat4 worldTS;
 mat4 combinedPrevTS;
 uint matId[16];
 };
+
+struct ALIGN_16 AmbientCube
+{
+	vec4 PosZ;
+	vec4 NegZ;
+	vec4 PosY;
+	vec4 NegY;
+	vec4 PosX;
+	vec4 NegX;
+};

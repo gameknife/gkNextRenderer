@@ -37,6 +37,7 @@ namespace Vulkan::RayTracing
 				
 		std::vector<TopLevelAccelerationStructure>& TLAS() { return topAs_; }
 		std::vector<BottomLevelAccelerationStructure>& BLAS() { return bottomAs_; }
+		Buffer& AmbientCubeBuffer() { return *ambientCubeBuffer_; }
 
 	protected:
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
@@ -83,6 +84,9 @@ namespace Vulkan::RayTracing
 		
 		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
+		std::unique_ptr<Buffer> ambientCubeBuffer_;
+		std::unique_ptr<DeviceMemory> ambientCubeBufferMemory_;
+		std::unique_ptr<PipelineCommon::AmbientGenPipeline> ambientGenPipeline_;
 
 		std::vector<Assets::RayCastRequest> rayRequested_;
 		std::vector<Assets::RayCastRequest> rayFetched_;

@@ -25,6 +25,7 @@ layout(binding = 12, rgba16f) uniform image2D InOutDirectLight1;
 layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
 layout(binding = 15, rgba16f) uniform image2D PrevNormalBuffer;
+layout(binding = 16) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -296,6 +297,13 @@ void main() {
 		outColor.rgb *= 1000.0F / lum;
 	}
 	//#endif
+
+	// 根据世界坐标，计算出从CUBE采样的idx
+	vec3 cubePos = v.Position.xyz;
+	ivec3 cubeIdx = ivec3(cubePos * 10);
+	int idx = cubeIdx.z * 50 * 50 + cubeIdx.y * 50 + cubeIdx.x;
+	vec4 ambientColor = Cubes[idx].PosY;
+	//outColor.rgb = ambientColor.aaa;
 	
     imageStore(OutImage, ipos, outColor);
 }
