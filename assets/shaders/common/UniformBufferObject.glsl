@@ -6,6 +6,9 @@
 #define ALIGN_16
 #endif
 
+const int CUBE_SIZE = 100;
+const vec3 CUBE_OFFSET = vec3(-5.0, -4.9, -5.0);
+
 struct ALIGN_16 UniformBufferObject
 {
 	mat4 ModelView;

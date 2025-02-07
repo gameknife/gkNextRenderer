@@ -417,8 +417,10 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    AmbientGenPipeline::AmbientGenPipeline(const DeviceProcedures& deviceProcedures,
-        const Buffer& ioBuffer, const RayTracing::TopLevelAccelerationStructure& accelerationStructure, const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
+    AmbientGenPipeline::AmbientGenPipeline(const SwapChain& swapChain, const DeviceProcedures& deviceProcedures,
+        const Buffer& ioBuffer, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+        const std::vector<Assets::UniformBuffer>& uniformBuffers,
+        const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
     {
         // Create descriptor pool/sets.
         const auto& device = deviceProcedures_.Device();
@@ -426,7 +428,7 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            //{3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             // Vertex buffer, Index buffer, Material buffer, Offset buffer
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -440,60 +442,64 @@ namespace Vulkan::PipelineCommon
 
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
 
-        // Top level acceleration structure.
-        const auto accelerationStructureHandle = accelerationStructure.Handle();
-        VkWriteDescriptorSetAccelerationStructureKHR structureInfo = {};
-        structureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-        structureInfo.pNext = nullptr;
-        structureInfo.accelerationStructureCount = 1;
-        structureInfo.pAccelerationStructures = &accelerationStructureHandle;
-        
-        VkDescriptorBufferInfo ioBufferInfo = {};
-        ioBufferInfo.buffer = ioBuffer.Handle();
-        ioBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Uniform buffer
-        // VkDescriptorBufferInfo uniformBufferInfo = {};
-        // uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
-        // uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Vertex buffer
-        VkDescriptorBufferInfo vertexBufferInfo = {};
-        vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
-        vertexBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Index buffer
-        VkDescriptorBufferInfo indexBufferInfo = {};
-        indexBufferInfo.buffer = scene.IndexBuffer().Handle();
-        indexBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Material buffer
-        VkDescriptorBufferInfo materialBufferInfo = {};
-        materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
-        materialBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Offsets buffer
-        VkDescriptorBufferInfo offsetsBufferInfo = {};
-        offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
-        offsetsBufferInfo.range = VK_WHOLE_SIZE;
-
-        // Nodes buffer
-        VkDescriptorBufferInfo nodesBufferInfo = {};
-        nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
-        nodesBufferInfo.range = VK_WHOLE_SIZE;
-        
-        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            descriptorSets.Bind(0, 0, structureInfo),
-            descriptorSets.Bind(0, 1, ioBufferInfo),
-            descriptorSets.Bind(0, 4, vertexBufferInfo),
-            descriptorSets.Bind(0, 5, indexBufferInfo),
-            descriptorSets.Bind(0, 6, materialBufferInfo),
-            descriptorSets.Bind(0, 7, offsetsBufferInfo),
-            descriptorSets.Bind(0, 8, nodesBufferInfo),
-        };
+            // Top level acceleration structure.
+            const auto accelerationStructureHandle = accelerationStructure.Handle();
+            VkWriteDescriptorSetAccelerationStructureKHR structureInfo = {};
+            structureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+            structureInfo.pNext = nullptr;
+            structureInfo.accelerationStructureCount = 1;
+            structureInfo.pAccelerationStructures = &accelerationStructureHandle;
+        
+            VkDescriptorBufferInfo ioBufferInfo = {};
+            ioBufferInfo.buffer = ioBuffer.Handle();
+            ioBufferInfo.range = VK_WHOLE_SIZE;
 
-        descriptorSets.UpdateDescriptors(0, descriptorWrites);
+            // Uniform buffer
+            VkDescriptorBufferInfo uniformBufferInfo = {};
+            uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
+            uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Vertex buffer
+            VkDescriptorBufferInfo vertexBufferInfo = {};
+            vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+            vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Index buffer
+            VkDescriptorBufferInfo indexBufferInfo = {};
+            indexBufferInfo.buffer = scene.IndexBuffer().Handle();
+            indexBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Material buffer
+            VkDescriptorBufferInfo materialBufferInfo = {};
+            materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+            materialBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Offsets buffer
+            VkDescriptorBufferInfo offsetsBufferInfo = {};
+            offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
+            offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Nodes buffer
+            VkDescriptorBufferInfo nodesBufferInfo = {};
+            nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
+            nodesBufferInfo.range = VK_WHOLE_SIZE;
+        
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(0, 0, structureInfo),
+                descriptorSets.Bind(0, 1, ioBufferInfo),
+                descriptorSets.Bind(0, 3, uniformBufferInfo),
+                descriptorSets.Bind(0, 4, vertexBufferInfo),
+                descriptorSets.Bind(0, 5, indexBufferInfo),
+                descriptorSets.Bind(0, 6, materialBufferInfo),
+                descriptorSets.Bind(0, 7, offsetsBufferInfo),
+                descriptorSets.Bind(0, 8, nodesBufferInfo),
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
         const ShaderModule denoiseShader(device, "assets/shaders/AmbientCubeGen.comp.spv");

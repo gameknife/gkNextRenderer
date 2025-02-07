@@ -155,9 +155,11 @@ namespace Vulkan::PipelineCommon
 		VULKAN_NON_COPIABLE(AmbientGenPipeline)
 	
 		AmbientGenPipeline(
+			const SwapChain& swapChain,
 			const DeviceProcedures& deviceProcedures,
 			const Buffer& ioBuffer,
 			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~AmbientGenPipeline();
 

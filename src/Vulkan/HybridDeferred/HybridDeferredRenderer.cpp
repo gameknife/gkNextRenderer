@@ -124,6 +124,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtOutput->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
+        
         accumulateForLightPipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                          rtDirectLightSource->GetImageView(),
                                                                          rtDirectLight0->GetImageView(),

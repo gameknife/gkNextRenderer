@@ -5,6 +5,7 @@
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
 #include "common/UniformBufferObject.glsl"
+#include "common/Random.glsl"
 
 // placed me in a 200 x 200 x 100 grid, total 4,000,000 cubes, total size 4,000,000 * 6 * 4 * 4 = 384 MB
 // it the gap is 10 cm, it will cover 20 x 20 x 10 meters area
@@ -31,7 +32,7 @@
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) buffer AmbientCubeArray { AmbientCube[] Cubes; };
-//layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
 layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
@@ -42,58 +43,78 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/RTSimple.glsl"
 
-layout(local_size_x = 50, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = CUBE_SIZE, local_size_y = 1, local_size_z = 1) in;
 
-const uint CUBE_SIZE = 50;
+const uint FACE_TRACING = 8;
+
+float TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
+{
+    float occlusion = 0.0;
+    for( uint i = 0; i < FACE_TRACING; i++ )
+    {
+        vec3 dir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), basis );
+        vec3 rayDir = normalize(dir);
+
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
+        
+        while( rayQueryProceedEXT(rayQuery) )
+        {
+
+        }
+
+        if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
+            const bool IsCommitted = true;
+            const int InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
+            const float RayDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
+            const mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
+            const vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
+            const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
+            const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
+
+            vec3 OutNormal;
+            vec2 OutTexcoord;
+            uint OutMaterialId;
+            uint OutInstanceId;
+            SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
+
+            // if hit backface
+            if( dot(OutNormal, rayDir) < 0.0 )
+            {
+                occlusion += 1.0;
+            }
+            else
+            {
+                occlusion = 0;
+                break;
+            }
+        }
+        else
+        {
+            occlusion += 0.0;
+        }
+    }
+    return 1.0f - occlusion / FACE_TRACING;
+}
 
 void main() {
-    
     uint gIdx = gl_GlobalInvocationID.x;
     
     // convert to local position
     uint z = gIdx / (CUBE_SIZE * CUBE_SIZE);
     uint y = (gIdx - z * CUBE_SIZE * CUBE_SIZE) / CUBE_SIZE;
     uint x = gIdx - z * CUBE_SIZE * CUBE_SIZE - y * CUBE_SIZE;
+
+    uvec4 RandomSeed = InitRandomSeed(x, z, Camera.TotalFrames);
     
-    vec3 origin = vec3(x, y, z) * 0.1 + vec3(0.0, 5.0, 0.0);
-
-    rayQueryEXT rayQuery;
-    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, vec3(0,1,0), INF);
-
-    while( rayQueryProceedEXT(rayQuery) )
-    {
-
-    }
-
-    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
-//        const bool IsCommitted = true;
-//        const int InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
-//        const vec3 RayOrigin = context.Origin.xyz;
-//        const vec3 RayDirection = context.Direction.xyz;
-//        const float RayDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
-//        const mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
-//        const vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
-//        const vec3 HitPos = RayOrigin + RayDirection * RayDist;
-//        const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
-//        const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
-//
-//        vec3 OutNormal;
-//        vec2 OutTexcoord;
-//        uint OutMaterialId;
-//        uint OutInstanceId;
-//        SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
-//
-//        context.HitPoint = vec4(HitPos, 1.0);
-//        context.Normal = vec4(OutNormal, 0.0);
-//        context.Hitted = 1;
-//        context.T = RayDist;
-//        context.InstanceId = OutInstanceId;
-//        context.MaterialId = OutMaterialId;
-        Cubes[gl_GlobalInvocationID.x].PosY = vec4(0,0,0,0);
-    }
-    else
-    {
-        //context.Hitted = 0;
-        Cubes[gl_GlobalInvocationID.x].PosY = vec4(0,0,0,1);
-    }
+    vec3 origin = vec3(x, y, z) * 0.1 + vec3(0.0, 0.01, 0.0) + CUBE_OFFSET;
+    uint evenFrame = Camera.TotalFrames % 2;
+    uint prevFrame = (Camera.TotalFrames - 1) % 2;
+    
+    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,1,0))    * 0.05);
+    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0))   * 0.05);
+    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(1,0,0))    * 0.05);
+    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0))   * 0.05);
+    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,0,1))    * 0.05);
+    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1))   * 0.05);
 }
