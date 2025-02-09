@@ -39,17 +39,16 @@ if (UNIX AND !ANDROID)
 	add_compile_options("-Wall")
 	add_compile_options("-fvisibility=hidden")
 	
-	find_package(Backtrace REQUIRED)
+	#find_package(Backtrace REQUIRED)
 
-	string(COMPARE EQUAL ${Backtrace_HEADER} "backtrace.h" BacktraceRequired)
+	#string(COMPARE EQUAL ${Backtrace_HEADER} "backtrace.h" BacktraceRequired)
 
-	if (BacktraceRequired)
-		add_compile_definitions(BOOST_STACKTRACE_USE_BACKTRACE)
-	endif (BacktraceRequired)
-
+	#if (BacktraceRequired)
+	#	add_compile_definitions(BOOST_STACKTRACE_USE_BACKTRACE)
+	#endif (BacktraceRequired)
 endif ()
 
-find_package(Boost REQUIRED COMPONENTS exception program_options) 
+#find_package(Boost REQUIRED COMPONENTS exception program_options)
 
 if (ANDROID)
 find_package(game-activity REQUIRED CONFIG)
@@ -57,6 +56,7 @@ else()
 find_package(glfw3 REQUIRED)
 endif()
 
+find_package(cxxopts CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)

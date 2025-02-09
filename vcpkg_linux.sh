@@ -16,9 +16,7 @@ git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
-	boost-exception:x64-linux \
-	boost-program-options:x64-linux \
-	boost-stacktrace:x64-linux \
+	cxxopts:x64-linux \
 	glfw3:x64-linux \
 	glm:x64-linux \
 	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:x64-linux \
