@@ -146,10 +146,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt )
 	endif()
 
-	# platform & target specific
-	if ( APPLE )
-		#target_compile_definitions(${target} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
-	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
 		target_link_libraries(${target} PRIVATE gdi32)
