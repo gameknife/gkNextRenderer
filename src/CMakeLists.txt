@@ -133,19 +133,19 @@ foreach(target IN LISTS AllTargets)
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
 		target_link_libraries(${target} PRIVATE cxxopts::cxxopts Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
-	# Boost::program_options
-	if ( ANDROID)
-		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
-		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
-	else()
+		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw)
-	endif()
-
+		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt )
 	endif()
 
+	# for android
+	if ( ANDROID)
+		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
+		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
+	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
 		target_link_libraries(${target} PRIVATE gdi32)
