@@ -5,6 +5,7 @@
 #include <imgui_impl_vulkan.h>
 #include <fmt/format.h>
 #include <ktx.h>
+#include <array>
 
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
