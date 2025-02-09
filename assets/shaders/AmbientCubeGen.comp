@@ -47,16 +47,18 @@ layout(local_size_x = CUBE_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 const uint FACE_TRACING = 8;
 
-float TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
+vec4 TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
 {
     float occlusion = 0.0;
+    float hitDist = 0.0;
+    float hitCount = 0.000001;
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
         vec3 dir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), basis );
         vec3 rayDir = normalize(dir);
 
         rayQueryEXT rayQuery;
-        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
+        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 100.0f);
         
         while( rayQueryProceedEXT(rayQuery) )
         {
@@ -82,10 +84,13 @@ float TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
             if( dot(OutNormal, rayDir) < 0.0 )
             {
                 occlusion += 1.0;
+                hitDist += RayDist;
+                hitCount += 1;
             }
             else
             {
-                occlusion = 0;
+                hitDist = 0.0;
+                hitCount = 1;
                 break;
             }
         }
@@ -94,7 +99,9 @@ float TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
             occlusion += 0.0;
         }
     }
-    return 1.0f - occlusion / FACE_TRACING;
+    float result = 1.0 - occlusion / float(FACE_TRACING);
+    float avgDist = hitDist / hitCount;
+    return vec4(result, result, result, avgDist);
 }
 
 void main() {
@@ -107,14 +114,12 @@ void main() {
 
     uvec4 RandomSeed = InitRandomSeed(x, z, Camera.TotalFrames);
     
-    vec3 origin = vec3(x, y, z) * 0.1 + vec3(0.0, 0.01, 0.0) + CUBE_OFFSET;
-    uint evenFrame = Camera.TotalFrames % 2;
-    uint prevFrame = (Camera.TotalFrames - 1) % 2;
+    vec3 origin = vec3(x, y, z) * 0.1 + CUBE_OFFSET;
     
-    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,1,0))    * 0.05);
-    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0))   * 0.05);
-    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(1,0,0))    * 0.05);
-    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0))   * 0.05);
-    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,0,1))    * 0.05);
-    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.95 + vec4(0,0,0, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1))   * 0.05);
+    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,1,0)    * 0.05);
+    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,-1,0)   * 0.05);
+    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(1,0,0)    * 0.05);
+    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(-1,0,0)   * 0.05);
+    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,1)    * 0.05);
+    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,-1)   * 0.05);
 }

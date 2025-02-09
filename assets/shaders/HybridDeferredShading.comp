@@ -40,9 +40,8 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
 // Sample the ambient cube using the Half-Life 2 algorithm
-vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal) {
+vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     vec4 color = vec4(0.0);
-	uint evenFrame = (Camera.TotalFrames - 1) % 2;//Camera.TotalFrames % 2;
     color += max(normal.x, 0.0) 	* cube.PosX;
     color += max(-normal.x, 0.0) 	* cube.NegX;
     color += max(normal.y, 0.0) 	* cube.PosY;
@@ -71,10 +70,12 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
                 ivec3 offset = ivec3(x, y, z);
                 int idx = (baseIdx + offset).z * CUBE_SIZE * CUBE_SIZE + (baseIdx + offset).y * CUBE_SIZE + (baseIdx + offset).x;
                 AmbientCube cube = Cubes[idx];
-                vec4 sampleColor = sampleAmbientCubeHL2(cube, normal);
+				float occlusion = 0.0f;
+                vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
                 float weight = (x == 0 ? 1.0 - frac.x : frac.x) *
                                (y == 0 ? 1.0 - frac.y : frac.y) *
                                (z == 0 ? 1.0 - frac.z : frac.z);
+				
                 result += sampleColor * weight;
             }
         }
@@ -343,7 +344,7 @@ void main() {
 
 	// Sample the ambient cube using the normal
 	vec4 indirectColor = interpolateProbes(v.Position - CUBE_OFFSET, normal);
-	outColor.rgb = indirectColor.aaa;
+	outColor.rgb = indirectColor.rgb;
 	
     imageStore(OutImage, ipos, outColor);
 }
