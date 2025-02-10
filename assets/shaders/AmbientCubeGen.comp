@@ -1,0 +1,125 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_ray_query : require
+#include "Platform.glsl"
+#include "common/Const_Func.glsl"
+#include "common/Material.glsl"
+#include "common/UniformBufferObject.glsl"
+#include "common/Random.glsl"
+
+// placed me in a 200 x 200 x 100 grid, total 4,000,000 cubes, total size 4,000,000 * 6 * 4 * 4 = 384 MB
+// it the gap is 10 cm, it will cover 20 x 20 x 10 meters area
+
+// for basic testing demo, we use 50 x 50 x 50 to represent 5 x 5 x 5 meters area, the default cornell box is 5 x 5 x 5 meters
+// it may simple gen every frame
+
+// we use 128 ray per cube, it can accumulate with last 16 frames
+
+// every cube face, tracing a hemisphere uniformly
+
+// the basic algorithm
+// 1. get the area center
+// 2. get the tracing origin
+// 3. tracing the ray, only get the visibiliy for the first iteration
+// 4. record to storage buffer
+
+// when shading
+// 1. sample the ambient cube with world pos, lerp in 3d, get the color as indirect light
+// 2. tracing direct reflection
+
+// when area center moving
+// 1. move still in bound cubes, then update new cubes
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
+layout(binding = 1) buffer AmbientCubeArray { AmbientCube[] Cubes; };
+layout(binding = 3) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
+layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
+layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
+layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
+layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
+
+layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
+
+#include "common/RTSimple.glsl"
+
+layout(local_size_x = CUBE_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+const uint FACE_TRACING = 8;
+
+vec4 TraceOcclusion(uvec4 RandomSeed, vec3 origin, vec3 basis)
+{
+    float occlusion = 0.0;
+    float hitDist = 0.0;
+    float hitCount = 0.000001;
+    for( uint i = 0; i < FACE_TRACING; i++ )
+    {
+        vec3 dir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), basis );
+        vec3 rayDir = normalize(dir);
+
+        rayQueryEXT rayQuery;
+        rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 100.0f);
+        
+        while( rayQueryProceedEXT(rayQuery) )
+        {
+
+        }
+
+        if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
+            const bool IsCommitted = true;
+            const int InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
+            const float RayDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
+            const mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
+            const vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
+            const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
+            const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
+
+            vec3 OutNormal;
+            vec2 OutTexcoord;
+            uint OutMaterialId;
+            uint OutInstanceId;
+            SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
+
+            // if hit backface
+            if( dot(OutNormal, rayDir) < 0.0 )
+            {
+                occlusion += 1.0;
+                hitDist += RayDist;
+                hitCount += 1;
+            }
+            else
+            {
+                hitDist = 0.0;
+                hitCount = 1;
+                break;
+            }
+        }
+        else
+        {
+            occlusion += 0.0;
+        }
+    }
+    float result = 1.0 - occlusion / float(FACE_TRACING);
+    float avgDist = hitDist / hitCount;
+    return vec4(result, result, result, avgDist);
+}
+
+void main() {
+    uint gIdx = gl_GlobalInvocationID.x;
+    
+    // convert to local position
+    uint z = gIdx / (CUBE_SIZE * CUBE_SIZE);
+    uint y = (gIdx - z * CUBE_SIZE * CUBE_SIZE) / CUBE_SIZE;
+    uint x = gIdx - z * CUBE_SIZE * CUBE_SIZE - y * CUBE_SIZE;
+
+    uvec4 RandomSeed = InitRandomSeed(x, z, Camera.TotalFrames);
+    
+    vec3 origin = vec3(x, y, z) * 0.1 + CUBE_OFFSET;
+    
+    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,1,0)    * 0.05);
+    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,-1,0)   * 0.05);
+    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(1,0,0)    * 0.05);
+    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(-1,0,0)   * 0.05);
+    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,1)    * 0.05);
+    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,-1)   * 0.05);
+}

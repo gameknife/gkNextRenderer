@@ -198,12 +198,12 @@ class MyBodyActivationListener : public BodyActivationListener
 public:
 	virtual void		OnBodyActivated(const BodyID &inBodyID, uint64 inBodyUserData) override
 	{
-		cout << "A body got activated" << endl;
+		//cout << "A body got activated" << endl;
 	}
 
 	virtual void		OnBodyDeactivated(const BodyID &inBodyID, uint64 inBodyUserData) override
 	{
-		cout << "A body went to sleep" << endl;
+		//cout << "A body went to sleep" << endl;
 	}
 };
 

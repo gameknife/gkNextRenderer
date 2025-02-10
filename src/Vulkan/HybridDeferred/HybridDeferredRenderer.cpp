@@ -102,6 +102,7 @@ namespace Vulkan::HybridDeferred
         //baseRender_
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
+        GetBaseRender<RayTracing::RayTraceBaseRenderer>().AmbientCubeBuffer(),
                                                          rtVisibility0->GetImageView(),
                                                          rtVisibility1->GetImageView(),
                                                          rtAccumlation->GetImageView(),
@@ -123,6 +124,7 @@ namespace Vulkan::HybridDeferred
                                                                          rtOutput->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
+        
         accumulateForLightPipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                          rtDirectLightSource->GetImageView(),
                                                                          rtDirectLight0->GetImageView(),

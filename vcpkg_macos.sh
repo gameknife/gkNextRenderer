@@ -15,9 +15,7 @@ else
 fi
 
 ./vcpkg --recurse install \
-	boost-exception:arm64-osx \
-	boost-program-options:arm64-osx \
-	boost-stacktrace:arm64-osx \
+	cxxopts:arm64-osx \
 	glfw3:arm64-osx \
 	glm:arm64-osx \
 	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:arm64-osx \

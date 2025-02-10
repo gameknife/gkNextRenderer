@@ -129,27 +129,22 @@ foreach(target IN LISTS AllTargets)
 	# 假设你的目标名称是 MyTarget
 	target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED>)
 	
-	target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl Boost::boost Boost::exception Boost::program_options glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
+		target_link_libraries(${target} PRIVATE cxxopts::cxxopts Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		if ( NOT ANDROID ) 
+		target_link_libraries(${target} PRIVATE glfw)
+		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		if ( NOT (${target} STREQUAL Packager) )
-			target_link_libraries(${target} PRIVATE gkNextEngine)
-		endif()
+		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt )
 	endif()
 
-	# platform & target specific
-	if ( APPLE )
-		target_compile_definitions(${target} PUBLIC BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
-	endif()
-
+	# for android
 	if ( ANDROID)
 		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
 		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
-	else()
-		target_link_libraries(${target} PRIVATE glfw)
 	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
@@ -185,7 +180,7 @@ foreach(target IN LISTS AllTargets)
 		target_compile_options(${target} PRIVATE /wd4200)
 	else()
 	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
-		if (UNIX AND NOT APPLE AND NOT ANDROID)
+		if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 			target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
 		endif()
 	endif()

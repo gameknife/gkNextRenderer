@@ -20,9 +20,7 @@ rem replace the triplets/arm64-android.cmake file with ours
 copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm64-android.cmake
 
 .\vcpkg.exe --recurse install ^
-	boost-exception:arm64-android ^
-	boost-program-options:arm64-android ^
-	boost-stacktrace:arm64-android ^
+	cxxopts:arm64-android ^
 	glm:arm64-android ^
 	imgui[core,freetype,android-binding,vulkan-binding,docking-experimental]:arm64-android ^
 	stb:arm64-android ^

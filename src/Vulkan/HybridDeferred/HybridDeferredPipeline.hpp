@@ -19,6 +19,7 @@ namespace Vulkan
 	class PipelineLayout;
 	class RenderPass;
 	class SwapChain;
+	class Buffer;
 	class DescriptorSetManager;
 
 	namespace RayTracing
@@ -38,6 +39,7 @@ namespace Vulkan::HybridDeferred
 	
 		HybridShadingPipeline(
 			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const Buffer& ambientCubeBuffer,
 			const ImageView& miniGBuffer0ImageView,
 			const ImageView& miniGBuffer1ImageView,
 			const ImageView& finalImageView, const ImageView& motionVectorImageView,

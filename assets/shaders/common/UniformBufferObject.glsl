@@ -6,6 +6,9 @@
 #define ALIGN_16
 #endif
 
+const int CUBE_SIZE = 100;
+const vec3 CUBE_OFFSET = vec3(-5.0, -4.99, -5.0);
+
 struct ALIGN_16 UniformBufferObject
 {
 	mat4 ModelView;
@@ -63,4 +66,14 @@ uint reserved2;
 mat4 worldTS;
 mat4 combinedPrevTS;
 uint matId[16];
+};
+
+struct ALIGN_16 AmbientCube
+{
+	vec4 PosZ;
+	vec4 NegZ;
+	vec4 PosY;
+	vec4 NegY;
+	vec4 PosX;
+	vec4 NegX;
 };

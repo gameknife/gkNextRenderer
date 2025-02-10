@@ -1,10 +1,10 @@
 #include <iostream>
-#include <boost/program_options.hpp>
-
+//#include <boost/program_options.hpp>
+#include <cxxopts.hpp>
 #include "../Utilities/FileHelper.hpp"
 #include "../Utilities/Console.hpp"
 
-using namespace boost::program_options;
+//using namespace boost::program_options;
 
 int main(int argc, const char* argv[]) noexcept
 {
@@ -17,24 +17,21 @@ int main(int argc, const char* argv[]) noexcept
         std::string Regex;
                 
         const int lineLength = 120;
-        options_description desc("Application options", lineLength);
-        desc.add_options()
-            ("help", "Display help message.")
-            ("out", value<std::string>(&PakPath)->default_value("out.pak"), "abs path")
-            ("src", value<std::string>(&SrcPath)->default_value("assets"), "based project root path, like assets/textures")
-            ("regex", value<std::string>(&Regex)->default_value(""), "if not empty, only pak files match the regex will be packed.")
-            ;
-        
-        const positional_options_description positional;
-        variables_map vm;
-        store(command_line_parser(argc, argv).options(desc).positional(positional).run(), vm);
-        notify(vm);
+        cxxopts::Options options("options", "");
+        options.add_options()
+            ("out", "abs path", cxxopts::value<std::string>(PakPath)->default_value("out.pak"))
+            ("src", "based project root path, like assets/textures", cxxopts::value<std::string>(SrcPath)->default_value("assets"))
+            ("regex", "if not empty, only pak files match the regex will be packed.", cxxopts::value<std::string>(Regex)->default_value(""))
+            
+            ("h,help", "Print usage");
 
-        if (vm.count("help"))
+        auto result = options.parse(argc, argv);
+        if (result.count("help"))
         {
-            std::cout << desc << std::endl;
-            return EXIT_SUCCESS;
+            std::cout << options.help() << std::endl;
+            exit(0);
         }
+
         Utilities::Package::FPackageFileSystem PackageSystem(Utilities::Package::EPM_OsFile);
         PackageSystem.PakAll(PakPath, SrcPath, "", Regex);
 

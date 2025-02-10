@@ -18,6 +18,7 @@
 namespace Vulkan::HybridDeferred
 {
     HybridShadingPipeline::HybridShadingPipeline(const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+                                                const Buffer& ambientCubeBuffer,
                                                 const ImageView& miniGBuffer0ImageView,
                                                 const ImageView& miniGBuffer1ImageView,
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
@@ -54,6 +55,8 @@ namespace Vulkan::HybridDeferred
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -110,6 +113,10 @@ namespace Vulkan::HybridDeferred
             nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
             nodesBufferInfo.range = VK_WHOLE_SIZE;
             
+            VkDescriptorBufferInfo ambientCubeBufferInfo = {};
+            ambientCubeBufferInfo.buffer = ambientCubeBuffer.Handle();
+            ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -127,7 +134,8 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 12, Info12),
                 descriptorSets.Bind(i, 13, Info13),
                 descriptorSets.Bind(i, 14, Info14),
-                descriptorSets.Bind(i, 15, Info15)
+                descriptorSets.Bind(i, 15, Info15),
+                descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

@@ -340,3 +340,6 @@ android/app/src/main/assets/
 android/local.properties
 
 tools/node/
+tools/typescript/
+cmake-build-debug/
+.DS_Store
