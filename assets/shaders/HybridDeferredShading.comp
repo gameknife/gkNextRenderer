@@ -55,15 +55,16 @@ vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
 vec4 interpolateProbes(vec3 pos, vec3 normal) {
 	
 	// if pos not inside the cube, return black
-	if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x > CUBE_SIZE * 0.1 || pos.y > CUBE_SIZE * 0.1 || pos.z > CUBE_SIZE * 0.1) {
+	if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x > CUBE_SIZE || pos.y > CUBE_SIZE || pos.z > CUBE_SIZE) {
 		return vec4(1.0);
 	}
 	
     vec3 cubePos = pos;
-    ivec3 baseIdx = ivec3(floor(cubePos * 10));
-    vec3 frac = fract(cubePos * 10);
+    ivec3 baseIdx = ivec3(floor(cubePos));
+    vec3 frac = fract(cubePos);
 
     vec4 result = vec4(0.0);
+	float weightSum = 0.0;
     for (int x = 0; x <= 1; ++x) {
         for (int y = 0; y <= 1; ++y) {
             for (int z = 0; z <= 1; ++z) {
@@ -71,15 +72,23 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
                 int idx = (baseIdx + offset).z * CUBE_SIZE * CUBE_SIZE + (baseIdx + offset).y * CUBE_SIZE + (baseIdx + offset).x;
                 AmbientCube cube = Cubes[idx];
 				float occlusion = 0.0f;
-                vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
-                float weight = (x == 0 ? 1.0 - frac.x : frac.x) *
-                               (y == 0 ? 1.0 - frac.y : frac.y) *
-                               (z == 0 ? 1.0 - frac.z : frac.z);
 				
-                result += sampleColor * weight;
+				// normal from point to corner
+                vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
+//                float weight = (x == 0 ? 1.0 - frac.x : frac.x) *
+//                               (y == 0 ? 1.0 - frac.y : frac.y) *
+//                               (z == 0 ? 1.0 - frac.z : frac.z);
+				
+				// use the distance to the corner point
+				float weight = length(vec3(x, y, z) - frac);
+				weight = clamp(2.0 - weight, 0.0, 1.0);
+				float weightStuck = sampleColor.w < 0.1f ? 0.0f : 1.0f;
+				weightSum += weightStuck;
+                result += sampleColor * weight * weightStuck;
             }
         }
     }
+	result *= clamp( 8 / weightSum, 0.0, 1.0 );
     return result;
 }
 
@@ -343,7 +352,7 @@ void main() {
 	//#endif
 
 	// Sample the ambient cube using the normal
-	vec4 indirectColor = interpolateProbes(v.Position - CUBE_OFFSET, normal);
+	vec4 indirectColor = interpolateProbes( (v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
 	outColor.rgb = indirectColor.rgb;
 	
     imageStore(OutImage, ipos, outColor);
