@@ -81,10 +81,10 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 				
 				// use the distance to the corner point
 				float weight = length(vec3(x, y, z) - frac);
-				weight = clamp(2.0 - weight, 0.0, 1.0);
-				float weightStuck = sampleColor.w < 0.1f ? 0.0f : 1.0f;
+				weight = clamp(2.0 - weight, 0.0, 2.0);
+				float weightStuck = sampleColor.w < 0.01f ? 0.0f : 1.0f;
 				weightSum += weightStuck;
-                result += sampleColor * weight * weightStuck;
+                result += sampleColor * weight * 0.5 * weightStuck;
             }
         }
     }
