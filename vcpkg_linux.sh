@@ -16,6 +16,7 @@ git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
+	cpptrace:x64-linux \
 	cxxopts:x64-linux \
 	glfw3:x64-linux \
 	glm:x64-linux \

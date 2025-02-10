@@ -17,6 +17,7 @@ git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \
+	cpptrace:x64-mingw-static \
 	cxxopts:x64-mingw-static \
 	glfw3:x64-mingw-static \
 	glm:x64-mingw-static \

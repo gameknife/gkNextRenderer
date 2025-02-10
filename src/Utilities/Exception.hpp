@@ -1,15 +1,15 @@
 #pragma once
 
-//#include <boost/exception/all.hpp>
-//#include <boost/stacktrace.hpp>
-#include <stdexcept>
+//#include <stdexcept>
+#include <cpptrace/cpptrace.hpp>
+#include <fmt/printf.h>
+#include "Console.hpp"
 #undef APIENTRY
-
-//typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace> traced;
 
 template <class E>
 [[noreturn]] inline void Throw(const E& e) noexcept(false)
 {
-	//throw boost::enable_error_info(e) << traced(boost::stacktrace::stacktrace());
+	fmt::print("\n{}Exception: {}{}\n------------------\n", CONSOLE_RED_COLOR, e.what(), CONSOLE_DEFAULT_COLOR);
+	cpptrace::generate_trace().print();
 	throw e;
 }

@@ -5,12 +5,13 @@
 #include <exception>
 #include <string>
 #include <vector>
+#include <cpptrace/cpptrace.hpp>
 
 class Options final
 {
 public:
 
-	class Help : public std::exception
+	class Help : public cpptrace::exception
 	{
 	public:
 

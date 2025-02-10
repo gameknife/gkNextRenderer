@@ -135,10 +135,11 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE cxxopts::cxxopts Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw)
+		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt )
+		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
 	endif()
 
 	# for android

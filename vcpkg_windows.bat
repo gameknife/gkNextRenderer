@@ -21,6 +21,7 @@ IF "%1" == "forceinstall" (
 
 rem add if want avif libavif[aom]:x64-windows-static ^
 vcpkg.exe install --recurse ^
+	cpptrace:x64-windows-static ^
 	cxxopts:x64-windows-static ^
 	glfw3:x64-windows-static ^
 	glm:x64-windows-static ^

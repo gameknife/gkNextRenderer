@@ -612,11 +612,6 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
 {
     // set in gpu directly
     renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
-
-    // it will batch together in next frame, then callback one by one
-
-
-    // TODO: currently the context only avaliable for single ray, support multiple later
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -665,48 +660,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
-
-    // Raycasting
-    {
-        // glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
-        // glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-        // glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-        // glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-        // glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-        // glm::vec3 rayorg = glm::vec3(origin);
-        //
-        // // Send new
-        // renderer_->SetRaycastRay(rayorg, raydir);
-        // Assets::RayCastResult rayResult {};
-        // renderer_->GetLastRaycastResult(rayResult);
-        //
-        // if( userSettings_.RequestRayCast )
-        // {
-        //     if(rayResult.Hitted )
-        //     {
-        //         scene_->GetEnvSettings().FocusDistance = rayResult.T;
-        //         scene_->SetSelectedId(rayResult.InstanceId);
-        //
-        //         AddTickedTask([this, rayResult](double DeltaTimes)->bool
-        //         {
-        //             Assets::RayCastResult ray = rayResult;
-        //             gameInstance_->OnRayHitResponse(ray);
-        //             return true;
-        //         });
-        //         
-        //     }
-        //     else
-        //     {
-        //         scene_->SetSelectedId(-1);
-        //     }
-        //
-        //     // only active one frame
-        //     userSettings_.RequestRayCast = false;
-        // }
-        //
-        // userSettings_.HitResult = rayResult;
-    }
-
 
     ubo.SelectedId = scene_->GetSelectedId();
 
