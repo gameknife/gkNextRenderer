@@ -41,7 +41,7 @@ Options::Options(const int argc, const char* argv[])
 
 	if (PresentMode > 3)
 	{
-		Throw(std::exception("Invalid present mode."));
+		Throw(std::out_of_range("Invalid present mode."));
 	}
 }
 
