@@ -75,4 +75,5 @@ struct ALIGN_16 AmbientCube
 	vec4 NegY;
 	vec4 PosX;
 	vec4 NegX;
+	ivec4 Info;
 };

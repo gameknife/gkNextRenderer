@@ -187,11 +187,12 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if ( ${target} STREQUAL MagicaLego )
 	if (UNIX AND NOT APPLE)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
+
+	if ( ${target} STREQUAL MagicaLego )
 	if (MSVC)
 	add_custom_command(
 			TARGET ${target} POST_BUILD

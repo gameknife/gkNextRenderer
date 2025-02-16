@@ -53,43 +53,56 @@ vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
 
 // Interpolate between 8 probes
 vec4 interpolateProbes(vec3 pos, vec3 normal) {
-	
-	// if pos not inside the cube, return black
-	if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x > CUBE_SIZE || pos.y > CUBE_SIZE || pos.z > CUBE_SIZE) {
+	// Early out if position is outside the probe grid
+	if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
+	pos.x > CUBE_SIZE || pos.y > CUBE_SIZE || pos.z > CUBE_SIZE) {
 		return vec4(1.0);
 	}
-	
-    vec3 cubePos = pos;
-    ivec3 baseIdx = ivec3(floor(cubePos));
-    vec3 frac = fract(cubePos);
 
-    vec4 result = vec4(0.0);
-	float weightSum = 0.0;
-    for (int x = 0; x <= 1; ++x) {
-        for (int y = 0; y <= 1; ++y) {
-            for (int z = 0; z <= 1; ++z) {
-                ivec3 offset = ivec3(x, y, z);
-                int idx = (baseIdx + offset).z * CUBE_SIZE * CUBE_SIZE + (baseIdx + offset).y * CUBE_SIZE + (baseIdx + offset).x;
-                AmbientCube cube = Cubes[idx];
-				float occlusion = 0.0f;
-				
-				// normal from point to corner
-                vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
-//                float weight = (x == 0 ? 1.0 - frac.x : frac.x) *
-//                               (y == 0 ? 1.0 - frac.y : frac.y) *
-//                               (z == 0 ? 1.0 - frac.z : frac.z);
-				
-				// use the distance to the corner point
-				float weight = length(vec3(x, y, z) - frac);
-				weight = clamp(2.0 - weight, 0.0, 2.0);
-				float weightStuck = sampleColor.w < 0.01f ? 0.0f : 1.0f;
-				weightSum += weightStuck;
-                result += sampleColor * weight * 0.5 * weightStuck;
-            }
-        }
-    }
-	result *= clamp( 8 / weightSum, 0.0, 1.0 );
-    return result;
+	// Get the base indices and fractional positions
+	ivec3 baseIdx = ivec3(floor(pos));
+	vec3 frac = fract(pos);
+
+	// Initialize accumulation variables
+	vec4 result = vec4(0.0);
+	float totalWeight = 0.0;
+
+	// Trilinear interpolation between 8 nearest probes
+	for (int i = 0; i < 8; i++) {
+		// Calculate corner offset (0 or 1 for each axis)
+		ivec3 offset = ivec3(
+		i & 1,
+		(i >> 1) & 1,
+		(i >> 2) & 1
+		);
+
+		// Calculate probe index
+		ivec3 probePos = baseIdx + offset;
+		int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
+		probePos.y * CUBE_SIZE +
+		probePos.x;
+
+		// Get probe data
+		AmbientCube cube = Cubes[idx];
+
+		// Skip inactive probes
+		if (cube.Info.x != 1) continue;
+
+		// Calculate trilinear weights
+		float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+		float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+		float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+		float weight = wx * wy * wz;
+
+		// Sample the cube and accumulate weighted result
+		float occlusion;
+		vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
+		result += sampleColor * weight;
+		totalWeight += weight;
+	}
+
+	// Normalize result by total weight
+	return totalWeight > 0.0 ? result / totalWeight : vec4(1.0);
 }
 
 //-----------------------------------------------------------------------------
