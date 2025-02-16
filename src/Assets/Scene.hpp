@@ -94,6 +94,9 @@ namespace Assets
 		void PlayAllTracks();
 
 		Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
+		void GenerateAmbientCubeCPU();
+
+		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -124,6 +127,9 @@ namespace Assets
 		
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
 
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};

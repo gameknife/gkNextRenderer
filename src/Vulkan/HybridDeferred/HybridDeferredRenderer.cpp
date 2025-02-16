@@ -102,7 +102,7 @@ namespace Vulkan::HybridDeferred
         //baseRender_
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
-        GetBaseRender<RayTracing::RayTraceBaseRenderer>().AmbientCubeBuffer(),
+                                                            GetScene().AmbientCubeBuffer(),
                                                          rtVisibility0->GetImageView(),
                                                          rtVisibility1->GetImageView(),
                                                          rtAccumlation->GetImageView(),

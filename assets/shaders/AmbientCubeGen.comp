@@ -119,12 +119,12 @@ void main() {
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
-    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,1,0)  , activeProbe) * 0.05;
-    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,-1,0) , activeProbe) * 0.05;
-    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(1,0,0)  , activeProbe) * 0.05;
-    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(-1,0,0) , activeProbe) * 0.05;
-    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,1)  , activeProbe) * 0.05;
-    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,0,-1) , activeProbe) * 0.05;
+    Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(0,1,0)  , activeProbe) * 0.025;
+    Cubes[gIdx].NegY = Cubes[gIdx].NegY * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(0,-1,0) , activeProbe) * 0.025;
+    Cubes[gIdx].PosX = Cubes[gIdx].PosX * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(1,0,0)  , activeProbe) * 0.025;
+    Cubes[gIdx].NegX = Cubes[gIdx].NegX * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(-1,0,0) , activeProbe) * 0.025;
+    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(0,0,1)  , activeProbe) * 0.025;
+    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ * 0.975 + TraceOcclusion(RandomSeed, origin, vec3(0,0,-1) , activeProbe) * 0.025;
 
     Cubes[gIdx].Info.x = activeProbe;
 }

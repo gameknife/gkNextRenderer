@@ -27,6 +27,7 @@ namespace Assets
 
 
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE * sizeof(Assets::AmbientCube), ambientCubeBuffer_, ambientCubeBufferMemory_);
     }
 
     Scene::~Scene()
@@ -47,6 +48,9 @@ namespace Assets
         nodeMatrixBufferMemory_.reset();
         materialBuffer_.reset();
         materialBufferMemory_.reset();
+
+        ambientCubeBuffer_.reset();
+        ambientCubeBufferMemory_.reset();
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
@@ -105,7 +109,7 @@ namespace Assets
 
         // 材质和灯光也应考虑更新
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
-
+        
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
@@ -113,6 +117,8 @@ namespace Assets
 
         UpdateMaterial();
         MarkDirty();
+
+        GenerateAmbientCubeCPU();
     }
 
     void Scene::RebuildBVH()
@@ -174,6 +180,99 @@ namespace Assets
         }
 
         return Result;
+    }
+
+    #define CUBE_SIZE 100
+    
+    void Scene::GenerateAmbientCubeCPU()
+    {
+        if (GTriangles.size() < 999999999)
+        {
+            return;
+        }
+        
+        constexpr int cubeSize = CUBE_SIZE;
+        std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
+
+        // Setup ray directions for 6 faces of the cube
+        constexpr int raysPerFace = 1; // 16x16 rays per face
+        const float step = 1.0f / raysPerFace;
+
+        // Directions for cube faces:
+        // PosZ, NegZ, PosY, NegY, PosX, NegX
+        const glm::vec3 directions[6] = {
+            glm::vec3(0,0,1),  // PosZ
+            glm::vec3(0,0,-1), // NegZ
+            glm::vec3(0,1,0),  // PosY
+            glm::vec3(0,-1,0), // NegY
+            glm::vec3(1,0,0),  // PosX
+            glm::vec3(-1,0,0)  // NegX
+        };
+            
+            const float CUBE_UNIT = 0.2f;
+            const glm::vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
+
+        // Process each probe position
+        //#pragma omp parallel for collapse(3)
+        for(int z = 0; z < cubeSize; z++) {
+            for(int y = 0; y < cubeSize; y++) {
+                for(int x = 0; x < cubeSize; x++) {
+                    glm::vec3 probePos = glm::vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
+                    AmbientCube& cube = ambientCubes[z * cubeSize * cubeSize + y * cubeSize + x];
+                    cube.Info = glm::vec4(1, 0, 0, 0); // Mark as active
+
+                    // Cast rays for each face
+                    for(int face = 0; face < 6; face++) {
+                        glm::vec3 baseDir = directions[face];
+                        // glm::vec3 u = glm::normalize(glm::cross(baseDir, glm::vec3(0, 1, 0)));
+                        // glm::vec3 v = glm::normalize(glm::cross(baseDir, u));
+
+                        float occlusion = 0.0f;
+                        for(int i = 0; i < raysPerFace; i++) {
+                            for(int j = 0; j < raysPerFace; j++) {
+                                // Generate ray direction with slight random offset
+                                // glm::vec3 rayDir = glm::normalize(baseDir +
+                                //     (u * ((i + 0.5f) * step - 0.5f)) +
+                                //     (v * ((j + 0.5f) * step - 0.5f)));
+
+                                glm::vec3 rayDir = baseDir;
+
+                                tinybvh::Ray ray(
+                                    tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
+                                    tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z)
+                                );
+
+                                GCpuBvh.Intersect(ray);
+
+                                // Accumulate occlusion
+                                if(ray.hit.t < 100.0f) {
+                                    occlusion += 1.0f;
+                                }
+                            }
+                        }
+
+                        // Store average occlusion for this face
+                        occlusion /= (raysPerFace * raysPerFace);
+                        float visibility = 1.0f - occlusion;
+
+                        // Store in the correct face vector
+                        switch(face) {
+                            case 0: cube.PosZ = glm::vec4(visibility); break;
+                            case 1: cube.NegZ = glm::vec4(visibility); break;
+                            case 2: cube.PosY = glm::vec4(visibility); break;
+                            case 3: cube.NegY = glm::vec4(visibility); break;
+                            case 4: cube.PosX = glm::vec4(visibility); break;
+                            case 5: cube.NegX = glm::vec4(visibility); break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Upload to GPU
+        AmbientCube* data = reinterpret_cast<AmbientCube*>(ambientCubeBufferMemory_->Map(0, sizeof(AmbientCube) * ambientCubes.size()));
+        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
+        ambientCubeBufferMemory_->Unmap();
     }
 
     void Scene::Tick(float DeltaSeconds)
