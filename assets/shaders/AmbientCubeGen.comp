@@ -116,8 +116,7 @@ void main() {
     uint x = gIdx - z * CUBE_SIZE * CUBE_SIZE - y * CUBE_SIZE;
 
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
-    uvec4 RandomSeed2 = InitRandomSeed(Camera.TotalFrames, Camera.TotalFrames, Camera.TotalFrames);
-    vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;// + RandomFloat3(RandomSeed2) * 0.1;
+    vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
     Cubes[gIdx].PosY = Cubes[gIdx].PosY * 0.95 + TraceOcclusion(RandomSeed, origin, vec3(0,1,0)  , activeProbe) * 0.05;
