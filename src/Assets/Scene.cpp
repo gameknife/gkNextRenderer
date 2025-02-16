@@ -4,6 +4,12 @@
 #include "Sphere.hpp"
 #include "Vulkan/BufferUtil.hpp"
 
+#define TINYBVH_IMPLEMENTATION
+#include "ThirdParty/tinybvh/tiny_bvh.h"
+
+static tinybvh::BVH GCpuBvh;
+// represent every triangles verts one by one, triangle count is size / 3
+static std::vector<tinybvh::bvhvec4> GTriangles;
 
 namespace Assets
 {
@@ -57,6 +63,13 @@ namespace Assets
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
+        // Rebuild the cpu bvh
+
+        // tier1: simple flatten whole scene
+        RebuildBVH();
+
+        // tier2: top level, the aabb, bottom level, the triangles in local sapace, with 2 ray relay
+
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
@@ -102,12 +115,65 @@ namespace Assets
         MarkDirty();
     }
 
+    void Scene::RebuildBVH()
+    {
+        GTriangles.clear();
+
+
+
+        for( auto& node : nodes_ )
+        {
+            node->RecalcTransform(true);
+            
+            uint32_t modelId = node->GetModel();
+            if(modelId == -1) continue;
+            Model& model = models_[modelId];
+
+            for( auto& idx : model.CPUIndices())
+            {
+                Vertex& v = model.CPUVertices()[idx];
+                // transform to worldpos
+                glm::vec4 wpos_v = node->WorldTransform() * glm::vec4(v.Position, 1);
+                wpos_v = wpos_v / wpos_v.w;
+                GTriangles.push_back(tinybvh::bvhvec4(wpos_v.x, wpos_v.y, wpos_v.z, 0));
+            }
+        }
+
+        if(GTriangles.size() >= 3)
+        {
+            GCpuBvh.Build( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
+            GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
+            GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
+        }
+
+    }
+
     void Scene::PlayAllTracks()
     {
 		for (auto& track : tracks_)
 		{
 		    track.Play();
 		}
+    }
+
+    Assets::RayCastResult Scene::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)
+    {
+        Assets::RayCastResult Result;
+
+        tinybvh::Ray ray( tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z ));
+        GCpuBvh.Intersect(ray);
+
+        if (ray.hit.t < 100000.f)
+        {
+            glm::vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+
+            Result.HitPoint = glm::vec4(hitPos, 0);
+            //Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
+            Result.Hitted = true;
+            //Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
+        }
+
+        return Result;
     }
 
     void Scene::Tick(float DeltaSeconds)

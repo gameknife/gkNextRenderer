@@ -44,6 +44,7 @@ namespace Assets
 			std::vector<AnimationTrack>& tracks);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
+		void RebuildBVH();
 
 		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
@@ -91,6 +92,8 @@ namespace Assets
 		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 
 		void PlayAllTracks();
+
+		Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 		
 	private:
 		std::vector<FMaterial> materials_;
