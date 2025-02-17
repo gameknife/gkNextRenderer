@@ -27,7 +27,8 @@ namespace Assets
 
 
         Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE * sizeof(Assets::AmbientCube), ambientCubeBuffer_, ambientCubeBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
+                                                    ambientCubeBufferMemory_);
     }
 
     Scene::~Scene()
@@ -61,8 +62,6 @@ namespace Assets
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
-
-      
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
@@ -109,7 +108,7 @@ namespace Assets
 
         // 材质和灯光也应考虑更新
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
-        
+
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
@@ -126,16 +125,15 @@ namespace Assets
         GTriangles.clear();
 
 
-
-        for( auto& node : nodes_ )
+        for (auto& node : nodes_)
         {
             node->RecalcTransform(true);
-            
+
             uint32_t modelId = node->GetModel();
-            if(modelId == -1) continue;
+            if (modelId == -1) continue;
             Model& model = models_[modelId];
 
-            for( auto& idx : model.CPUIndices())
+            for (auto& idx : model.CPUIndices())
             {
                 Vertex& v = model.CPUVertices()[idx];
                 // transform to worldpos
@@ -145,28 +143,27 @@ namespace Assets
             }
         }
 
-        if(GTriangles.size() >= 3)
+        if (GTriangles.size() >= 3)
         {
-            GCpuBvh.Build( GTriangles.data(), static_cast<int>(GTriangles.size()) / 3 );
-            GCpuBvh.Convert( tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE );
-            GCpuBvh.Refit( tinybvh::BVH::VERBOSE );
+            GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
+            GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE);
+            GCpuBvh.Refit(tinybvh::BVH::VERBOSE);
         }
-
     }
 
     void Scene::PlayAllTracks()
     {
-		for (auto& track : tracks_)
-		{
-		    track.Play();
-		}
+        for (auto& track : tracks_)
+        {
+            track.Play();
+        }
     }
 
     Assets::RayCastResult Scene::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)
     {
         Assets::RayCastResult Result;
 
-        tinybvh::Ray ray( tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z ));
+        tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
         GCpuBvh.Intersect(ray);
 
         if (ray.hit.t < 100000.f)
@@ -182,15 +179,15 @@ namespace Assets
         return Result;
     }
 
-    #define CUBE_SIZE 100
-    
+#define CUBE_SIZE 100
+
     void Scene::GenerateAmbientCubeCPU()
     {
-        if (GTriangles.size() < 999999999)
+        if (GTriangles.size() < 999999999993)
         {
             return;
         }
-        
+
         constexpr int cubeSize = CUBE_SIZE;
         std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
 
@@ -201,41 +198,56 @@ namespace Assets
         // Directions for cube faces:
         // PosZ, NegZ, PosY, NegY, PosX, NegX
         const glm::vec3 directions[6] = {
-            glm::vec3(0,0,1),  // PosZ
-            glm::vec3(0,0,-1), // NegZ
-            glm::vec3(0,1,0),  // PosY
-            glm::vec3(0,-1,0), // NegY
-            glm::vec3(1,0,0),  // PosX
-            glm::vec3(-1,0,0)  // NegX
+            glm::vec3(0, 0, 1), // PosZ
+            glm::vec3(0, 0, -1), // NegZ
+            glm::vec3(0, 1, 0), // PosY
+            glm::vec3(0, -1, 0), // NegY
+            glm::vec3(1, 0, 0), // PosX
+            glm::vec3(-1, 0, 0) // NegX
         };
-            
-            const float CUBE_UNIT = 0.2f;
-            const glm::vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
+
+        const float CUBE_UNIT = 0.2f;
+        const glm::vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
 
         // Process each probe position
         //#pragma omp parallel for collapse(3)
-        for(int z = 0; z < cubeSize; z++) {
-            for(int y = 0; y < cubeSize; y++) {
-                for(int x = 0; x < cubeSize; x++) {
+        for (int z = 0; z < cubeSize; z++)
+        {
+            for (int y = 0; y < cubeSize; y++)
+            {
+                for (int x = 0; x < cubeSize; x++)
+                {
                     glm::vec3 probePos = glm::vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
                     AmbientCube& cube = ambientCubes[z * cubeSize * cubeSize + y * cubeSize + x];
                     cube.Info = glm::vec4(1, 0, 0, 0); // Mark as active
 
                     // Cast rays for each face
-                    for(int face = 0; face < 6; face++) {
-                        glm::vec3 baseDir = directions[face];
-                        // glm::vec3 u = glm::normalize(glm::cross(baseDir, glm::vec3(0, 1, 0)));
-                        // glm::vec3 v = glm::normalize(glm::cross(baseDir, u));
+                    for (int face = 0; face < 6; face++)
+                    {
+                         glm::vec3 baseDir = directions[face];
+                        // Create orthonormal basis
+                        glm::vec3 u = glm::normalize(glm::cross(
+                            baseDir, glm::abs(baseDir.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
+                        glm::vec3 v = glm::normalize(glm::cross(baseDir, u));
 
                         float occlusion = 0.0f;
-                        for(int i = 0; i < raysPerFace; i++) {
-                            for(int j = 0; j < raysPerFace; j++) {
-                                // Generate ray direction with slight random offset
-                                // glm::vec3 rayDir = glm::normalize(baseDir +
-                                //     (u * ((i + 0.5f) * step - 0.5f)) +
-                                //     (v * ((j + 0.5f) * step - 0.5f)));
+                        for (int i = 0; i < raysPerFace; i++)
+                        {
+                            for (int j = 0; j < raysPerFace; j++)
+                            {
+                                // Generate random angles within a hemisphere
+                                float phi = (i + 0.5f) * (2.0f * glm::pi<float>() / raysPerFace);
+                                float theta = (j + 0.5f) * (glm::pi<float>() / (2.0f * raysPerFace));
 
-                                glm::vec3 rayDir = baseDir;
+                                // Convert spherical to cartesian coordinates
+                                float x = std::sin(theta) * std::cos(phi);
+                                float y = std::sin(theta) * std::sin(phi);
+                                float z = std::cos(theta);
+
+                                // Transform the ray direction from tangent space to world space
+                                glm::vec3 rayDir = glm::normalize(
+                                    x * u + y * v + z * baseDir
+                                );
 
                                 tinybvh::Ray ray(
                                     tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
@@ -245,7 +257,8 @@ namespace Assets
                                 GCpuBvh.Intersect(ray);
 
                                 // Accumulate occlusion
-                                if(ray.hit.t < 100.0f) {
+                                if (ray.hit.t < 100.0f)
+                                {
                                     occlusion += 1.0f;
                                 }
                             }
@@ -256,13 +269,20 @@ namespace Assets
                         float visibility = 1.0f - occlusion;
 
                         // Store in the correct face vector
-                        switch(face) {
-                            case 0: cube.PosZ = glm::vec4(visibility); break;
-                            case 1: cube.NegZ = glm::vec4(visibility); break;
-                            case 2: cube.PosY = glm::vec4(visibility); break;
-                            case 3: cube.NegY = glm::vec4(visibility); break;
-                            case 4: cube.PosX = glm::vec4(visibility); break;
-                            case 5: cube.NegX = glm::vec4(visibility); break;
+                        switch (face)
+                        {
+                        case 0: cube.PosZ = glm::vec4(visibility);
+                            break;
+                        case 1: cube.NegZ = glm::vec4(visibility);
+                            break;
+                        case 2: cube.PosY = glm::vec4(visibility);
+                            break;
+                        case 3: cube.NegY = glm::vec4(visibility);
+                            break;
+                        case 4: cube.PosX = glm::vec4(visibility);
+                            break;
+                        case 5: cube.NegX = glm::vec4(visibility);
+                            break;
                         }
                     }
                 }
@@ -278,16 +298,16 @@ namespace Assets
     void Scene::Tick(float DeltaSeconds)
     {
         float DurationMax = 0;
-        
-        for ( auto& track : tracks_ )
+
+        for (auto& track : tracks_)
         {
-            if ( !track.Playing() ) continue;
+            if (!track.Playing()) continue;
             DurationMax = glm::max(DurationMax, track.Duration_);
         }
-        
-        for ( auto& track : tracks_ )
+
+        for (auto& track : tracks_)
         {
-            if ( !track.Playing() ) continue;
+            if (!track.Playing()) continue;
             track.Time_ += DeltaSeconds;
             if (track.Time_ > DurationMax)
             {
@@ -299,21 +319,21 @@ namespace Assets
                 glm::vec3 translation = node->Translation();
                 glm::quat rotation = node->Rotation();
                 glm::vec3 scaling = node->Scale();
-                
+
                 track.Sample(track.Time_, translation, rotation, scaling);
-                
+
                 node->SetTranslation(translation);
                 node->SetRotation(rotation);
                 node->SetScale(scaling);
                 node->RecalcTransform(true);
-                
+
                 MarkDirty();
 
                 // temporal if camera node, request override
                 if (node->GetName() == "Shot.BlueCar")
                 {
                     requestOverrideModelView = true;
-                    overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0,0,-1), glm::vec3(0.0f, 1.0f, 0.0f));
+                    overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1), glm::vec3(0.0f, 1.0f, 0.0f));
                 }
             }
         }
@@ -324,11 +344,11 @@ namespace Assets
         if (materials_.empty()) return;
 
         gpuMaterials_.clear();
-        for ( auto& material : materials_ )
+        for (auto& material : materials_)
         {
             gpuMaterials_.push_back(material.gpuMaterial_);
         }
-        
+
         Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
@@ -346,13 +366,13 @@ namespace Assets
                     PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
                     nodeProxys.clear();
                     indirectDrawBufferInstanced.clear();
-                    
+
                     uint32_t indexOffset = 0;
                     uint32_t vertexOffset = 0;
                     uint32_t nodeOffsetBatched = 0;
 
-                    static std::unordered_map<uint32_t, std::vector<NodeProxy> > nodeProxysMapByModel;
-                    for ( auto& [key, value] : nodeProxysMapByModel )
+                    static std::unordered_map<uint32_t, std::vector<NodeProxy>> nodeProxysMapByModel;
+                    for (auto& [key, value] : nodeProxysMapByModel)
                     {
                         value.clear();
                     }
@@ -363,7 +383,7 @@ namespace Assets
                         {
                             auto modelId = node->GetModel();
                             glm::mat4 combined;
-                            if ( node->TickVelocity(combined) )
+                            if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
                             }
@@ -373,14 +393,14 @@ namespace Assets
                             nodeProxysMapByModel[modelId].push_back(proxy);
                         }
                     }
-                    
+
                     int modelCount = static_cast<int>(models_.size());
                     for (int i = 0; i < modelCount; i++)
                     {
                         if (nodeProxysMapByModel.find(i) != nodeProxysMapByModel.end())
                         {
                             auto& nodesOfThisModel = nodeProxysMapByModel[i];
-                        
+
                             // draw indirect buffer, instanced, this could be generate in gpu
                             VkDrawIndexedIndirectCommand cmd{};
                             cmd.firstIndex = indexOffset;
@@ -399,16 +419,16 @@ namespace Assets
                         indexOffset += models_[i].NumberOfIndices();
                         vertexOffset += models_[i].NumberOfVertices();
                     }
-                                        
+
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     nodeMatrixBufferMemory_->Unmap();
-                    
+
                     VkDrawIndexedIndirectCommand* diic = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectDrawBufferMemory_->Map(
                         0, sizeof(VkDrawIndexedIndirectCommand) * indirectDrawBufferInstanced.size()));
                     std::memcpy(diic, indirectDrawBufferInstanced.data(), indirectDrawBufferInstanced.size() * sizeof(VkDrawIndexedIndirectCommand));
                     indirectDrawBufferMemory_->Unmap();
-                    
+
                     indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
                 }
                 return true;
