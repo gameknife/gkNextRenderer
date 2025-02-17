@@ -7,9 +7,16 @@
 #define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
+struct VertInfo
+{
+    glm::vec3 normal;
+    uint32_t instanceId;
+};
+
 static tinybvh::BVH GCpuBvh;
 // represent every triangles verts one by one, triangle count is size / 3
 static std::vector<tinybvh::bvhvec4> GTriangles;
+static std::vector<VertInfo> GExtInfos;
 
 namespace Assets
 {
@@ -123,7 +130,7 @@ namespace Assets
     void Scene::RebuildBVH()
     {
         GTriangles.clear();
-
+        GExtInfos.clear();
 
         for (auto& node : nodes_)
         {
@@ -133,21 +140,41 @@ namespace Assets
             if (modelId == -1) continue;
             Model& model = models_[modelId];
 
-            for (auto& idx : model.CPUIndices())
+            for (size_t i = 0; i < model.CPUIndices().size(); i += 3)
             {
-                Vertex& v = model.CPUVertices()[idx];
-                // transform to worldpos
-                glm::vec4 wpos_v = node->WorldTransform() * glm::vec4(v.Position, 1);
-                wpos_v = wpos_v / wpos_v.w;
-                GTriangles.push_back(tinybvh::bvhvec4(wpos_v.x, wpos_v.y, wpos_v.z, 0));
+                // Get the three vertices of the triangle
+                Vertex& v0 = model.CPUVertices()[model.CPUIndices()[i]];
+                Vertex& v1 = model.CPUVertices()[model.CPUIndices()[i + 1]];
+                Vertex& v2 = model.CPUVertices()[model.CPUIndices()[i + 2]];
+            
+                // Transform vertices to world space
+                glm::vec4 wpos_v0 = node->WorldTransform() * glm::vec4(v0.Position, 1);
+                glm::vec4 wpos_v1 = node->WorldTransform() * glm::vec4(v1.Position, 1);
+                glm::vec4 wpos_v2 = node->WorldTransform() * glm::vec4(v2.Position, 1);
+            
+                // Perspective divide
+                wpos_v0 /= wpos_v0.w;
+                wpos_v1 /= wpos_v1.w;
+                wpos_v2 /= wpos_v2.w;
+            
+                // Calculate face normal
+                glm::vec3 edge1 = glm::vec3(wpos_v1) - glm::vec3(wpos_v0);
+                glm::vec3 edge2 = glm::vec3(wpos_v2) - glm::vec3(wpos_v0);
+                glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
+            
+                // Add triangle vertices to BVH
+                GTriangles.push_back(tinybvh::bvhvec4(wpos_v0.x, wpos_v0.y, wpos_v0.z, 0));
+                GTriangles.push_back(tinybvh::bvhvec4(wpos_v1.x, wpos_v1.y, wpos_v1.z, 0));
+                GTriangles.push_back(tinybvh::bvhvec4(wpos_v2.x, wpos_v2.y, wpos_v2.z, 0));
+            
+                // Store additional triangle information
+                GExtInfos.push_back({normal, node->GetInstanceId()});
             }
         }
 
         if (GTriangles.size() >= 3)
         {
             GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
-            GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::VERBOSE);
-            GCpuBvh.Refit(tinybvh::BVH::VERBOSE);
         }
     }
 
@@ -171,9 +198,9 @@ namespace Assets
             glm::vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
 
             Result.HitPoint = glm::vec4(hitPos, 0);
-            //Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
+            Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
             Result.Hitted = true;
-            //Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
+            Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
         }
 
         return Result;
@@ -183,7 +210,7 @@ namespace Assets
 
     void Scene::GenerateAmbientCubeCPU()
     {
-        if (GTriangles.size() < 999999999993)
+        if (GTriangles.size() < 99999999993)
         {
             return;
         }
@@ -192,7 +219,7 @@ namespace Assets
         std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
 
         // Setup ray directions for 6 faces of the cube
-        constexpr int raysPerFace = 1; // 16x16 rays per face
+        constexpr int raysPerFace = 4; // 16x16 rays per face
         const float step = 1.0f / raysPerFace;
 
         // Directions for cube faces:
@@ -249,6 +276,7 @@ namespace Assets
                                     x * u + y * v + z * baseDir
                                 );
 
+                                // Inside the face ray-casting loop:
                                 tinybvh::Ray ray(
                                     tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
                                     tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z)
@@ -257,9 +285,23 @@ namespace Assets
                                 GCpuBvh.Intersect(ray);
 
                                 // Accumulate occlusion
-                                if (ray.hit.t < 100.0f)
+                                if (ray.hit.t < 10.0f)
                                 {
-                                    occlusion += 1.0f;
+                                    // Get the hit triangle's normal
+                                    const glm::vec3& hitNormal = GExtInfos[ray.hit.prim].normal;
+                                    
+                                    // Check if ray direction and normal are pointing in same direction
+                                    float dotProduct = glm::dot(rayDir, hitNormal);
+                                    
+                                    if (dotProduct < 0.0f)  // Ray and normal are in opposite directions (valid hit)
+                                    {
+                                        occlusion += 1.0f;
+                                    }
+                                    else  // Ray and normal are in same direction (backface hit)
+                                    {
+                                        cube.Info = glm::vec4(0, 0, 0, 0);  // Mark probe as inactive
+                                        break;  // Exit face sampling loop since probe is invalid
+                                    }
                                 }
                             }
                         }
