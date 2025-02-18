@@ -6,7 +6,9 @@
 
 #define TINYBVH_IMPLEMENTATION
 #include <chrono>
+#include <atomic>
 
+#include "Runtime/TaskCoordinator.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
 struct VertInfo
@@ -211,7 +213,8 @@ namespace Assets
     }
 
 #define CUBE_SIZE 100
-
+#define RAY_PERFACE 64
+    
     inline void fastCopyVec3( tinybvh::bvhvec3& target, glm::vec3& source )
     {
         memcpy( &target, &source, sizeof( glm::vec3 ) );
@@ -220,6 +223,95 @@ namespace Assets
     {
         memcpy( &target, &source, sizeof( tinybvh::bvhvec3 ) );
     }
+
+    // Pre-calculated hemisphere samples in the positive Z direction (up)
+ 
+const glm::vec3 hemisphereVectors[64] = {
+    glm::vec3(0.045208304261847965, -0.11627628334926335, 0.9921875),
+    glm::vec3(-0.1930181724004224, 0.09523480832631948, 0.9765625),
+    glm::vec3(0.26573486325149154, 0.07735698770286432, 0.9609375),
+    glm::vec3(-0.16933844306146292, -0.2787629262388916, 0.9453125),
+    glm::vec3(-0.07164105709419565, 0.3613152519368318, 0.9296875),
+    glm::vec3(0.32689361646125864, -0.24006313671746757, 0.9140625),
+    glm::vec3(-0.43653348768112604, -0.04741911773432952, 0.8984375),
+    glm::vec3(0.3100703328917848, 0.3528434192444685, 0.8828125),
+    glm::vec3(0.010289959042319866, -0.49787544284354635, 0.8671875),
+    glm::vec3(-0.3620400469186113, 0.3791679219302705, 0.8515625),
+    glm::vec3(0.5475979471417058, -0.03667402868433644, 0.8359375),
+    glm::vec3(-0.44658537440975626, -0.357279870279656, 0.8203125),
+    glm::vec3(0.09130924535014122, 0.5866350220173848, 0.8046875),
+    glm::vec3(0.3403589991660056, -0.5114060253658194, 0.7890625),
+    glm::vec3(-0.6154098724502003, 0.15187205959154645, 0.7734375),
+    glm::vec3(0.5726979016083169, 0.31262969842479865, 0.7578125),
+    glm::vec3(-0.21684466362347532, -0.634142024078023, 0.7421875),
+    glm::vec3(-0.27523523182276277, 0.6295653268384626, 0.7265625),
+    glm::vec3(0.6429854927306586, -0.2848464976643773, 0.7109375),
+    glm::vec3(-0.681173899031339, -0.22922182841560512, 0.6953125),
+    glm::vec3(0.3545911939487206, 0.6420981136226542, 0.6796875),
+    glm::vec3(0.17559566258035023, -0.7267648583804239, 0.6640625),
+    glm::vec3(-0.6316786718677515, 0.4248657012529294, 0.6484375),
+    glm::vec3(0.7656645419256517, 0.11535228251548411, 0.6328125),
+    glm::vec3(-0.494521160904667, -0.6119872639698072, 0.6171875),
+    glm::vec3(-0.04949099612998147, 0.7972911638139558, 0.6015625),
+    glm::vec3(0.5833561011650366, -0.5624703595099725, 0.5859375),
+    glm::vec3(-0.8211598576906518, 0.02097952480916784, 0.5703125),
+    glm::vec3(0.6276889668978702, 0.5461944142687971, 0.5546875),
+    glm::vec3(-0.095041039683511, -0.8368863852815549, 0.5390625),
+    glm::vec3(-0.5009894513222313, 0.6892189443548397, 0.5234375),
+    glm::vec3(0.8441896860109167, -0.17166898053096186, 0.5078124999999999),
+    glm::vec3(-0.7461731306626566, -0.44830472217102535, 0.4921875),
+    glm::vec3(0.24983794281660274, 0.8428933419614358, 0.4765625000000001),
+    glm::vec3(0.3887762013663958, -0.7977403627401998, 0.4609375000000001),
+    glm::vec3(-0.8329259898180801, 0.32852864841490065, 0.4453125),
+    glm::vec3(0.843190694306946, 0.3231069565607033, 0.42968750000000006),
+    glm::vec3(-0.40673584817665814, -0.8143206959802536, 0.4140624999999999),
+    glm::vec3(-0.2520605302580668, 0.8818804044085411, 0.3984375000000001),
+    glm::vec3(0.7872133087567416, -0.483476779545836, 0.38281250000000006),
+    glm::vec3(-0.913256571451911, -0.17645332114655893, 0.3671875),
+    glm::vec3(0.5577998880146381, 0.7518398057595828, 0.3515625),
+    glm::vec3(0.09714616234904466, -0.9368610458518398, 0.3359375000000001),
+    glm::vec3(-0.7085326619425887, 0.628793582429321, 0.3203124999999999),
+    glm::vec3(0.9523336958114551, 0.01503526407633283, 0.30468750000000006),
+    glm::vec3(-0.6955948361299543, -0.6577162724481522, 0.2890625),
+    glm::vec3(0.06895733046331357, 0.9594148321602723, 0.27343749999999994),
+    glm::vec3(0.5999014736024121, -0.7573974761070995, 0.25781250000000006),
+    glm::vec3(-0.957946743150088, 0.1538936390234811, 0.24218749999999997),
+    glm::vec3(0.8134600252899379, 0.535679214501593, 0.22656250000000006),
+    glm::vec3(-0.2388298553807905, -0.9478742908595742, 0.21093749999999992),
+    glm::vec3(-0.46571344035152984, 0.8631129814918161, 0.19531250000000006),
+    glm::vec3(0.9292445387423254, -0.3228265626637823, 0.17968749999999994),
+    glm::vec3(-0.9057654321487023, -0.3907332568623058, 0.16406249999999994),
+    glm::vec3(0.4049589269614279, 0.9022053957209516, 0.14843749999999992),
+    glm::vec3(0.3115244524221444, -0.9409109178805575, 0.13281249999999994),
+    glm::vec3(-0.8670032766127175, 0.48432675766114935, 0.11718749999999999),
+    glm::vec3(0.9681324707648337, 0.22892046139331595, 0.10156249999999989),
+    glm::vec3(-0.560064325448335, -0.8239797918965318, 0.08593749999999999),
+    glm::vec3(-0.14379285760812155, 0.9871067654740497, 0.07031250000000003),
+    glm::vec3(0.7735674920975367, -0.6313498337005227, 0.05468749999999993),
+    glm::vec3(-0.9976073333593232, -0.05704147194322919, 0.03906249999999996),
+    glm::vec3(0.6974144443248256, 0.7162847034809865, 0.023437499999999938),
+    glm::vec3(-0.03041576832268194, -0.9995068013180756, 0.007812500000000042)
+};
+    // Transform pre-calculated samples to align with given normal
+    void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result )
+    {
+        result.reserve(RAY_PERFACE);
+
+        // Create orthonormal basis
+        glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+        glm::vec3 tangent = glm::normalize(glm::cross(up, normal));
+        glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
+    
+        // Transform matrix from Z-up to normal-up space
+        glm::mat3 transform(tangent, bitangent, normal);
+
+        // Transform each pre-calculated sample
+        for (const auto& sample : hemisphereVectors)
+        {
+            result.push_back(transform * sample);
+        }
+    }
+    
     void Scene::GenerateAmbientCubeCPU()
     {
         if (GTriangles.size() < 3)
@@ -228,34 +320,27 @@ namespace Assets
         }
 
         const auto timer = std::chrono::high_resolution_clock::now();
-        int rayCount = 0;
-        
+        std::atomic<int> rayCount{0};
         constexpr int cubeSize = CUBE_SIZE;
         std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
-
-        // Setup ray directions for 6 faces of the cube
-        constexpr int raysPerFace = 4; // 16x16 rays per face
-        const float step = 1.0f / raysPerFace;
-
-        // Directions for cube faces:
-        // PosZ, NegZ, PosY, NegY, PosX, NegX
-        const glm::vec3 directions[6] = {
-            glm::vec3(0, 0, 1), // PosZ
-            glm::vec3(0, 0, -1), // NegZ
-            glm::vec3(0, 1, 0), // PosY
-            glm::vec3(0, -1, 0), // NegY
-            glm::vec3(1, 0, 0), // PosX
-            glm::vec3(-1, 0, 0) // NegX
-        };
-
-        const float CUBE_UNIT = 0.2f;
-        const glm::vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
         
-
-        // Process each probe position
-        //#pragma omp parallel for collapse(3)
-        for (int z = 0; z < cubeSize; z++)
+        // Create a lambda for processing a single z-slice
+        auto processSlice = [this, &ambientCubes, &rayCount](int z)
         {
+            constexpr int raysPerFace = 4;
+            const glm::vec3 directions[6] = {
+                glm::vec3(0, 0, 1),  // PosZ
+                glm::vec3(0, 0, -1), // NegZ
+                glm::vec3(0, 1, 0),  // PosY
+                glm::vec3(0, -1, 0), // NegY
+                glm::vec3(1, 0, 0),  // PosX
+                glm::vec3(-1, 0, 0)  // NegX
+            };
+        
+            const float CUBE_UNIT = 0.2f;
+            const glm::vec3 CUBE_OFFSET = glm::vec3(-50, -49.9, -50) * CUBE_UNIT;
+        
+            // Process single z-slice
             for (int y = 0; y < cubeSize; y++)
             {
                 for (int x = 0; x < cubeSize; x++)
@@ -265,93 +350,73 @@ namespace Assets
                     fastCopyVec3(ray.O, probePos);
                     
                     AmbientCube& cube = ambientCubes[z * cubeSize * cubeSize + y * cubeSize + x];
-                    cube.Info = glm::vec4(1, 0, 0, 0); // Mark as active
-
-                    // Cast rays for each face
+                    cube.Info = glm::vec4(1, 0, 0, 0);
+        
                     for (int face = 0; face < 6; face++)
                     {
-                         glm::vec3 baseDir = directions[face];
-                        // Create orthonormal basis
+                        glm::vec3 baseDir = directions[face];
                         glm::vec3 u = glm::normalize(glm::cross(
                             baseDir, glm::abs(baseDir.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
                         glm::vec3 v = glm::normalize(glm::cross(baseDir, u));
-
+        
                         float occlusion = 0.0f;
 
-                        bool breakByInactive = false;
-                        for (int i = 0; i < raysPerFace; i++)
+                        std::vector<glm::vec3> hemisphereSamples;
+                        GetHemisphereSamples(baseDir, hemisphereSamples);
+                        
+                        for (int i = 0; i < RAY_PERFACE; i++)
                         {
-                            for (int j = 0; j < raysPerFace; j++)
+                            fastCopyVec3(ray.rD, hemisphereSamples[i]);
+                            fastCopyVec3(ray.D, ray.rD);
+                            ray.hit.t = 15.0f;
+                            
+                            GCpuBvh.Intersect(ray);
+                            rayCount.fetch_add(1, std::memory_order_relaxed);
+    
+                            if (ray.hit.t < 10.0f)
                             {
-                                // Generate random angles within a hemisphere
-                                float phi = (i + 0.5f) * (2.0f * glm::pi<float>() / raysPerFace);
-                                float theta = (j + 0.5f) * (glm::pi<float>() / (2.0f * raysPerFace));
-
-                                // Convert spherical to cartesian coordinates
-                                float x = std::sin(theta) * std::cos(phi);
-                                float y = std::sin(theta) * std::sin(phi);
-                                float z = std::cos(theta);
-
+                                const glm::vec3& hitNormal = GExtInfos[ray.hit.prim].normal;
+                                float dotProduct = glm::dot(hemisphereSamples[i], hitNormal);
                                 
-                                // Transform the ray direction from tangent space to world space
-                                glm::vec3 rayDir = x * u + y * v + z * baseDir;
-
-                                fastCopyVec3(ray.rD, rayDir);
-                                //tinybvh::normalize(ray.rD);
-                                fastCopyVec3(ray.D, ray.rD);
-                                ray.hit.t = 15.0f;
-                                
-                                GCpuBvh.Intersect(ray);
-                                rayCount++;
-
-                                // Accumulate occlusion
-                                if (ray.hit.t < 10.0f)
+                                if (dotProduct < 0.0f)
                                 {
-                                    // Get the hit triangle's normal
-                                    const glm::vec3& hitNormal = GExtInfos[ray.hit.prim].normal;
-                                    
-                                    // Check if ray direction and normal are pointing in same direction
-                                    float dotProduct = glm::dot(rayDir, hitNormal);
-                                    
-                                    if (dotProduct < 0.0f)  // Ray and normal are in opposite directions (valid hit)
-                                    {
-                                        occlusion += 1.0f;
-                                    }
-                                    else  // Ray and normal are in same direction (backface hit)
-                                    {
-                                        cube.Info = glm::vec4(0, 0, 0, 0);  // Mark probe as inactive
-                                        breakByInactive = true;
-                                        break;  // Exit face sampling loop since probe is invalid
-                                    }
+                                    occlusion += 1.0f;
+                                }
+                                else
+                                {
+                                    cube.Info = glm::vec4(0, 0, 0, 0);
+                                    break;
                                 }
                             }
-                            if (breakByInactive) break;
                         }
-
-                        // Store average occlusion for this face
-                        occlusion /= (raysPerFace * raysPerFace);
+        
+                        occlusion /= RAY_PERFACE;
                         float visibility = 1.0f - occlusion;
-
-                        // Store in the correct face vector
+        
                         switch (face)
                         {
-                        case 0: cube.PosZ = glm::vec4(visibility);
-                            break;
-                        case 1: cube.NegZ = glm::vec4(visibility);
-                            break;
-                        case 2: cube.PosY = glm::vec4(visibility);
-                            break;
-                        case 3: cube.NegY = glm::vec4(visibility);
-                            break;
-                        case 4: cube.PosX = glm::vec4(visibility);
-                            break;
-                        case 5: cube.NegX = glm::vec4(visibility);
-                            break;
+                        case 0: cube.PosZ = glm::vec4(visibility); break;
+                        case 1: cube.NegZ = glm::vec4(visibility); break;
+                        case 2: cube.PosY = glm::vec4(visibility); break;
+                        case 3: cube.NegY = glm::vec4(visibility); break;
+                        case 4: cube.PosX = glm::vec4(visibility); break;
+                        case 5: cube.NegX = glm::vec4(visibility); break;
                         }
                     }
                 }
             }
+        };
+        
+        // Distribute tasks for each z-slice
+        for (int z = 0; z < cubeSize; z++)
+        {
+            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
+            {
+                processSlice(z);
+            });
         }
+
+        TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 
         // Upload to GPU
         AmbientCube* data = reinterpret_cast<AmbientCube*>(ambientCubeBufferMemory_->Map(0, sizeof(AmbientCube) * ambientCubes.size()));

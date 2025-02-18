@@ -102,6 +102,12 @@ struct event_signal final
         return m_signaled.load();
     }
 
+    void reset() noexcept
+    {
+        std::lock_guard<std::mutex> mutexGuard{ m_mutex };
+        m_signaled = false;
+    }
+
     void wait() const
     {
         std::unique_lock<std::mutex> mutexLock{ m_mutex };
@@ -159,7 +165,13 @@ public:
         q.push(t);
         c.notify_one();
     }
-
+    
+    size_t size() const
+    {
+        std::lock_guard<std::mutex> lock(m);
+        return q.size();
+    }
+    
     // Get the front element.
     // If the queue is empty, wait till a element is avaiable.
     bool dequeue(T& result, bool wait)
@@ -252,7 +264,7 @@ public:
 
         // Get the number of CPU cores (use half of available cores for low-priority threads)
         unsigned int numCores = std::thread::hardware_concurrency();
-        unsigned int lowThreadCount = std::max(1u, numCores / 2);
+        unsigned int lowThreadCount = std::max(1u, numCores / 1);
 
         // Create low-priority threads based on CPU cores
         for (unsigned int i = 0; i < lowThreadCount; i++)
@@ -285,10 +297,18 @@ public:
         // if task_id not found, it has been down, return immediately.
     }
 
-    void WaitForAllParralledTask()
+    void WaitForAllParralledTask();
+    
+    bool IsAllParralledTaskComplete()
     {
-        // wait for all parralled task to complete
-        
+        for ( auto& thread : lowThreads_ )
+        {
+            if( !thread->IsIdle() )
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     void Tick();

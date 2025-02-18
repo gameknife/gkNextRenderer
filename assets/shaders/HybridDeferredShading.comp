@@ -366,7 +366,7 @@ void main() {
 
 	// Sample the ambient cube using the normal
 	vec4 indirectColor = interpolateProbes( (v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
-	outColor.rgb = indirectColor.rgb;
+	outColor.rgb = indirectColor.rgb * albedo.rgb;
 	
     imageStore(OutImage, ipos, outColor);
 }
