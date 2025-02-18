@@ -229,6 +229,11 @@ public:
         thread_->join();
     }
 
+    bool IsIdle()
+    {
+        return complete_->is_set();
+    }
+
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
@@ -243,6 +248,16 @@ public:
         for (int i = 0; i < 4; i++)
         {
             threads_.push_back(std::make_unique<TaskThread>());
+        }
+
+        // Get the number of CPU cores (use half of available cores for low-priority threads)
+        unsigned int numCores = std::thread::hardware_concurrency();
+        unsigned int lowThreadCount = std::max(1u, numCores / 2);
+
+        // Create low-priority threads based on CPU cores
+        for (unsigned int i = 0; i < lowThreadCount; i++)
+        {
+            lowThreads_.push_back(std::make_unique<TaskThread>());
         }
     }
 
@@ -262,11 +277,18 @@ public:
     }
     
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
+    uint32_t AddParralledTask( ResTask::TaskFunc task_func );
 
     void WaitForTask(uint32_t task_id)
     {
         // wait for specific task to complete, like sync load.
         // if task_id not found, it has been down, return immediately.
+    }
+
+    void WaitForAllParralledTask()
+    {
+        // wait for all parralled task to complete
+        
     }
 
     void Tick();
@@ -282,6 +304,8 @@ public:
 
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
+    // low-level thread, use for parrallel task
+    std::vector< std::unique_ptr<TaskThread> > lowThreads_;
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
 

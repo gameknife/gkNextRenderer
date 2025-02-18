@@ -5,6 +5,8 @@
 #include "Vulkan/BufferUtil.hpp"
 
 #define TINYBVH_IMPLEMENTATION
+#include <chrono>
+
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
 struct VertInfo
@@ -161,7 +163,8 @@ namespace Assets
                 glm::vec3 edge1 = glm::vec3(wpos_v1) - glm::vec3(wpos_v0);
                 glm::vec3 edge2 = glm::vec3(wpos_v2) - glm::vec3(wpos_v0);
                 glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
-            
+
+                
                 // Add triangle vertices to BVH
                 GTriangles.push_back(tinybvh::bvhvec4(wpos_v0.x, wpos_v0.y, wpos_v0.z, 0));
                 GTriangles.push_back(tinybvh::bvhvec4(wpos_v1.x, wpos_v1.y, wpos_v1.z, 0));
@@ -175,6 +178,7 @@ namespace Assets
         if (GTriangles.size() >= 3)
         {
             GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
+            GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::ALT_SOA, true);
         }
     }
 
@@ -208,13 +212,24 @@ namespace Assets
 
 #define CUBE_SIZE 100
 
+    inline void fastCopyVec3( tinybvh::bvhvec3& target, glm::vec3& source )
+    {
+        memcpy( &target, &source, sizeof( glm::vec3 ) );
+    }
+    inline void fastCopyVec3( tinybvh::bvhvec3& target, tinybvh::bvhvec3& source )
+    {
+        memcpy( &target, &source, sizeof( tinybvh::bvhvec3 ) );
+    }
     void Scene::GenerateAmbientCubeCPU()
     {
-        if (GTriangles.size() < 99999999993)
+        if (GTriangles.size() < 3)
         {
             return;
         }
 
+        const auto timer = std::chrono::high_resolution_clock::now();
+        int rayCount = 0;
+        
         constexpr int cubeSize = CUBE_SIZE;
         std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
 
@@ -235,6 +250,7 @@ namespace Assets
 
         const float CUBE_UNIT = 0.2f;
         const glm::vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
+        
 
         // Process each probe position
         //#pragma omp parallel for collapse(3)
@@ -244,7 +260,10 @@ namespace Assets
             {
                 for (int x = 0; x < cubeSize; x++)
                 {
+                    tinybvh::Ray ray;
                     glm::vec3 probePos = glm::vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
+                    fastCopyVec3(ray.O, probePos);
+                    
                     AmbientCube& cube = ambientCubes[z * cubeSize * cubeSize + y * cubeSize + x];
                     cube.Info = glm::vec4(1, 0, 0, 0); // Mark as active
 
@@ -258,6 +277,8 @@ namespace Assets
                         glm::vec3 v = glm::normalize(glm::cross(baseDir, u));
 
                         float occlusion = 0.0f;
+
+                        bool breakByInactive = false;
                         for (int i = 0; i < raysPerFace; i++)
                         {
                             for (int j = 0; j < raysPerFace; j++)
@@ -271,18 +292,17 @@ namespace Assets
                                 float y = std::sin(theta) * std::sin(phi);
                                 float z = std::cos(theta);
 
+                                
                                 // Transform the ray direction from tangent space to world space
-                                glm::vec3 rayDir = glm::normalize(
-                                    x * u + y * v + z * baseDir
-                                );
+                                glm::vec3 rayDir = x * u + y * v + z * baseDir;
 
-                                // Inside the face ray-casting loop:
-                                tinybvh::Ray ray(
-                                    tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                                    tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z)
-                                );
-
+                                fastCopyVec3(ray.rD, rayDir);
+                                //tinybvh::normalize(ray.rD);
+                                fastCopyVec3(ray.D, ray.rD);
+                                ray.hit.t = 15.0f;
+                                
                                 GCpuBvh.Intersect(ray);
+                                rayCount++;
 
                                 // Accumulate occlusion
                                 if (ray.hit.t < 10.0f)
@@ -300,10 +320,12 @@ namespace Assets
                                     else  // Ray and normal are in same direction (backface hit)
                                     {
                                         cube.Info = glm::vec4(0, 0, 0, 0);  // Mark probe as inactive
+                                        breakByInactive = true;
                                         break;  // Exit face sampling loop since probe is invalid
                                     }
                                 }
                             }
+                            if (breakByInactive) break;
                         }
 
                         // Store average occlusion for this face
@@ -335,6 +357,11 @@ namespace Assets
         AmbientCube* data = reinterpret_cast<AmbientCube*>(ambientCubeBufferMemory_->Map(0, sizeof(AmbientCube) * ambientCubes.size()));
         std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
         ambientCubeBufferMemory_->Unmap();
+
+        double elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                    std::chrono::high_resolution_clock::now() - timer).count();
+
+        fmt::print("gen gi data takes: {:.0f}s, {}W rays\n", elapsed, rayCount / 10000);
     }
 
     void Scene::Tick(float DeltaSeconds)
