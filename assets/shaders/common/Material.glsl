@@ -6,8 +6,8 @@ const uint MaterialIsotropic = 3;
 const uint MaterialDiffuseLight = 4;
 const uint MaterialMixture = 5;
 
-const float CUBE_UNIT = 0.2f;
-const vec3 CUBE_OFFSET = vec3(-50, -49.9, -50) * CUBE_UNIT;
+const float CUBE_UNIT = 0.25f;
+const vec3 CUBE_OFFSET = vec3(-50, -49.5, -50) * CUBE_UNIT;
 
 struct Material
 {

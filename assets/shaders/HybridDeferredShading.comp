@@ -63,46 +63,70 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 	ivec3 baseIdx = ivec3(floor(pos));
 	vec3 frac = fract(pos);
 
-	// Initialize accumulation variables
-	vec4 result = vec4(0.0);
-	float totalWeight = 0.0;
-
 	// Trilinear interpolation between 8 nearest probes
+	// Try immediate neighbors first
+	float totalWeight = 0.0;
+	vec4 result = vec4(0.0);
+	
 	for (int i = 0; i < 8; i++) {
-		// Calculate corner offset (0 or 1 for each axis)
-		ivec3 offset = ivec3(
-		i & 1,
-		(i >> 1) & 1,
-		(i >> 2) & 1
-		);
-
-		// Calculate probe index
-		ivec3 probePos = baseIdx + offset;
-		int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
-		probePos.y * CUBE_SIZE +
-		probePos.x;
-
-		// Get probe data
-		AmbientCube cube = Cubes[idx];
-
-		// Skip inactive probes
-		if (cube.Info.x != 1) continue;
-
-		// Calculate trilinear weights
-		float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-		float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-		float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-		float weight = wx * wy * wz;
-
-		// Sample the cube and accumulate weighted result
-		float occlusion;
-		vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
-		result += sampleColor * weight;
-		totalWeight += weight;
+	    ivec3 offset = ivec3(
+	        i & 1,
+	        (i >> 1) & 1,
+	        (i >> 2) & 1
+	    );
+	    
+	    ivec3 probePos = baseIdx + offset;
+	    int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
+	              probePos.y * CUBE_SIZE +
+	              probePos.x;
+	    
+	    AmbientCube cube = Cubes[idx];
+	    if (cube.Info.x != 1) continue;
+	    
+	    float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+	    float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+	    float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+	    float weight = wx * wy * wz;
+	    
+	    float occlusion;
+	    vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
+	    result += sampleColor * weight;
+	    totalWeight += weight;
+	}
+	
+	// If no valid cubes found, try expanded search
+	if (totalWeight <= 0.0) {
+	    for (int i = 0; i < 8; i++) {
+	        ivec3 offset = ivec3(
+	            (i & 1) * 2 - 1,
+	            ((i >> 1) & 1) * 2 - 1,
+	            ((i >> 2) & 1) * 2 - 1
+	        );
+	        
+	        ivec3 probePos = baseIdx + offset;
+	        if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+	            probePos.x >= CUBE_SIZE || probePos.y >= CUBE_SIZE || probePos.z >= CUBE_SIZE) 
+	            continue;
+	            
+	        int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
+	                  probePos.y * CUBE_SIZE +
+	                  probePos.x;
+	        
+	        AmbientCube cube = Cubes[idx];
+	        if (cube.Info.x != 1) continue;
+	        
+	        float dist = length(vec3(offset));
+	        float weight = 1.0 / (dist * dist);
+	        
+	        float occlusion;
+	        vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
+	        result += sampleColor * weight;
+	        totalWeight += weight;
+	    }
 	}
 
 	// Normalize result by total weight
-	return totalWeight > 0.0 ? result / totalWeight : vec4(1.0);
+	return totalWeight > 0.0 ? result / totalWeight : vec4(0.5);
 }
 
 //-----------------------------------------------------------------------------
@@ -275,6 +299,17 @@ void main() {
 		return;
 	}
 
+	// Sample the ambient cube using the normal
+	vec4 indirectColor = interpolateProbes( (v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
+	vec3 fastColor = indirectColor.rgb * 50.0f;
+	//vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
+	imageStore(OutImage, ipos, vec4(fastColor,1));
+	imageStore(OutMotionVector, ipos, vec4(0));
+	imageStore(InOutDirectLight1, ipos, vec4(fastColor,1));
+	imageStore(OutAlbedoBuffer, ipos, vec4(fastColor,1.0));
+	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
+	return;
+
 	// calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
 	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
@@ -363,10 +398,6 @@ void main() {
 		outColor.rgb *= 1000.0F / lum;
 	}
 	//#endif
-
-	// Sample the ambient cube using the normal
-	vec4 indirectColor = interpolateProbes( (v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
-	outColor.rgb = indirectColor.rgb * albedo.rgb;
 	
     imageStore(OutImage, ipos, outColor);
 }

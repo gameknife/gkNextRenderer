@@ -25,6 +25,12 @@ namespace Assets
 	struct Material;
 	struct LightObject;
 
+	struct AmbientCubeProxy
+	{
+		glm::vec3 position;
+		bool isActive;
+	};
+
 	class Scene final
 	{
 	public:
@@ -58,6 +64,7 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+		const std::vector<AmbientCubeProxy>& AmbientCubeProxys() const { return ambientCubeProxys_; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
@@ -106,6 +113,7 @@ namespace Assets
 		std::vector<LightObject> lights_;
 		std::vector<AnimationTrack> tracks_;
 		std::vector<uvec2> offsets_;
+		std::vector<AmbientCubeProxy> ambientCubeProxys_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
