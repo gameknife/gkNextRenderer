@@ -213,7 +213,7 @@ namespace Assets
     }
 
 #define CUBE_SIZE 100
-#define RAY_PERFACE 64
+#define RAY_PERFACE 32
     
     inline void fastCopyVec3( tinybvh::bvhvec3& target, glm::vec3& source )
     {
@@ -494,12 +494,117 @@ const glm::vec3 hemisphereVectors128[128] = {
         glm::mat3 transform(tangent, bitangent, normal);
 
         // Transform each pre-calculated sample
-        for (const auto& sample : hemisphereVectors64)
+        for (const auto& sample : hemisphereVectors32)
         {
             result.push_back(transform * sample);
         }
     }
-    
+
+    void BlurAmbientCubes(std::vector<AmbientCube>& ambientCubes, const std::vector<AmbientCube>& ambientCubesCopy, int cubeSize)
+    {
+        const float centerWeight = 1.0f;
+        const float neighborWeight = 1.0f;
+        const float weightSum = centerWeight + (6.0f * neighborWeight);
+
+        // Create a lambda for processing a single z-slice
+        auto processSlice = [&ambientCubes, &ambientCubesCopy, cubeSize, centerWeight, neighborWeight, weightSum](int z)
+        {
+            // Process only interior cubes (skip border)
+            if (z <= 0 || z >= cubeSize - 1) return;
+
+            for (int y = 1; y < cubeSize - 1; y++)
+            {
+                for (int x = 1; x < cubeSize - 1; x++)
+                {
+                    int idx = z * cubeSize * cubeSize + y * cubeSize + x;
+
+                    // Get indices of 6 neighboring cubes
+                    int idxPosX = z * cubeSize * cubeSize + y * cubeSize + (x + 1);
+                    int idxNegX = z * cubeSize * cubeSize + y * cubeSize + (x - 1);
+                    int idxPosY = z * cubeSize * cubeSize + (y + 1) * cubeSize + x;
+                    int idxNegY = z * cubeSize * cubeSize + (y - 1) * cubeSize + x;
+                    int idxPosZ = (z + 1) * cubeSize * cubeSize + y * cubeSize + x;
+                    int idxNegZ = (z - 1) * cubeSize * cubeSize + y * cubeSize + x;
+
+                    // Skip if center cube is not active
+                    if (ambientCubesCopy[idx].Info.x != 1.0f) continue;
+
+                    // Blur each face
+                    ambientCubes[idx].PosX = (
+                        ambientCubesCopy[idx].PosX * centerWeight +
+                        ambientCubesCopy[idxPosX].PosX * neighborWeight +
+                        ambientCubesCopy[idxNegX].PosX * neighborWeight +
+                        ambientCubesCopy[idxPosY].PosX * neighborWeight +
+                        ambientCubesCopy[idxNegY].PosX * neighborWeight +
+                        ambientCubesCopy[idxPosZ].PosX * neighborWeight +
+                        ambientCubesCopy[idxNegZ].PosX * neighborWeight
+                    ) / weightSum;
+
+                    ambientCubes[idx].NegX = (
+                        ambientCubesCopy[idx].NegX * centerWeight +
+                        ambientCubesCopy[idxPosX].NegX * neighborWeight +
+                        ambientCubesCopy[idxNegX].NegX * neighborWeight +
+                        ambientCubesCopy[idxPosY].NegX * neighborWeight +
+                        ambientCubesCopy[idxNegY].NegX * neighborWeight +
+                        ambientCubesCopy[idxPosZ].NegX * neighborWeight +
+                        ambientCubesCopy[idxNegZ].NegX * neighborWeight
+                    ) / weightSum;
+
+                    ambientCubes[idx].PosY = (
+                        ambientCubesCopy[idx].PosY * centerWeight +
+                        ambientCubesCopy[idxPosX].PosY * neighborWeight +
+                        ambientCubesCopy[idxNegX].PosY * neighborWeight +
+                        ambientCubesCopy[idxPosY].PosY * neighborWeight +
+                        ambientCubesCopy[idxNegY].PosY * neighborWeight +
+                        ambientCubesCopy[idxPosZ].PosY * neighborWeight +
+                        ambientCubesCopy[idxNegZ].PosY * neighborWeight
+                    ) / weightSum;
+
+                    ambientCubes[idx].NegY = (
+                        ambientCubesCopy[idx].NegY * centerWeight +
+                        ambientCubesCopy[idxPosX].NegY * neighborWeight +
+                        ambientCubesCopy[idxNegX].NegY * neighborWeight +
+                        ambientCubesCopy[idxPosY].NegY * neighborWeight +
+                        ambientCubesCopy[idxNegY].NegY * neighborWeight +
+                        ambientCubesCopy[idxPosZ].NegY * neighborWeight +
+                        ambientCubesCopy[idxNegZ].NegY * neighborWeight
+                    ) / weightSum;
+
+                    ambientCubes[idx].PosZ = (
+                        ambientCubesCopy[idx].PosZ * centerWeight +
+                        ambientCubesCopy[idxPosX].PosZ * neighborWeight +
+                        ambientCubesCopy[idxNegX].PosZ * neighborWeight +
+                        ambientCubesCopy[idxPosY].PosZ * neighborWeight +
+                        ambientCubesCopy[idxNegY].PosZ * neighborWeight +
+                        ambientCubesCopy[idxPosZ].PosZ * neighborWeight +
+                        ambientCubesCopy[idxNegZ].PosZ * neighborWeight
+                    ) / weightSum;
+
+                    ambientCubes[idx].NegZ = (
+                        ambientCubesCopy[idx].NegZ * centerWeight +
+                        ambientCubesCopy[idxPosX].NegZ * neighborWeight +
+                        ambientCubesCopy[idxNegX].NegZ * neighborWeight +
+                        ambientCubesCopy[idxPosY].NegZ * neighborWeight +
+                        ambientCubesCopy[idxNegY].NegZ * neighborWeight +
+                        ambientCubesCopy[idxPosZ].NegZ * neighborWeight +
+                        ambientCubesCopy[idxNegZ].NegZ * neighborWeight
+                    ) / weightSum;
+                }
+            }
+        };
+
+        // Distribute tasks for each z-slice
+        for (int z = 0; z < cubeSize; z++)
+        {
+            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
+            {
+                processSlice(z);
+            });
+        }
+
+        TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    }
+        
     void Scene::GenerateAmbientCubeCPU()
     {
         if (GTriangles.size() < 3)
@@ -511,10 +616,11 @@ const glm::vec3 hemisphereVectors128[128] = {
         std::atomic<int> rayCount{0};
         constexpr int cubeSize = CUBE_SIZE;
         std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
+        std::vector<AmbientCube> ambientCubesCopy(cubeSize * cubeSize * cubeSize);
         ambientCubeProxys_.resize(cubeSize * cubeSize * cubeSize);
         
         // Create a lambda for processing a single z-slice
-        auto processSlice = [this, &ambientCubes, &rayCount](int z)
+        auto processSlice = [this, &ambientCubes, &ambientCubesCopy, &rayCount](int z)
         {
             constexpr int raysPerFace = 4;
             const glm::vec3 directions[6] = {
@@ -595,6 +701,7 @@ const glm::vec3 hemisphereVectors128[128] = {
                         }
                     }
                     ambientCubeProxys_[z * cubeSize * cubeSize + y * cubeSize + x] = {probePos, (cube.Info.x == 1)};
+                    ambientCubesCopy[z * cubeSize * cubeSize + y * cubeSize + x] = cube;
                 }
             }
         };
@@ -609,6 +716,8 @@ const glm::vec3 hemisphereVectors128[128] = {
         }
 
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+
+        BlurAmbientCubes(ambientCubes, ambientCubesCopy, cubeSize);
 
         // Upload to GPU
         AmbientCube* data = reinterpret_cast<AmbientCube*>(ambientCubeBufferMemory_->Map(0, sizeof(AmbientCube) * ambientCubes.size()));
