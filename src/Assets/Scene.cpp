@@ -604,7 +604,19 @@ const glm::vec3 hemisphereVectors128[128] = {
 
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     }
-        
+
+    bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
+    {
+        glm::vec3 direction = glm::normalize(lightPos - point);
+        tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z));
+    
+        bvh.Intersect(shadowRay);
+
+        // If the ray hits something before reaching the light, the point is in shadow
+        float distanceToLight = glm::length(lightPos - point);
+        return shadowRay.hit.t < distanceToLight;
+    }
+    
     void Scene::GenerateAmbientCubeCPU()
     {
         if (GTriangles.size() < 3)
@@ -700,6 +712,11 @@ const glm::vec3 hemisphereVectors128[128] = {
                         case 5: cube.NegX = glm::vec4(visibility); break;
                         }
                     }
+
+                    glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
+                    
+                    IsInShadow( probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 1 : cube.Info.y = 0;
+                    
                     ambientCubeProxys_[z * cubeSize * cubeSize + y * cubeSize + x] = {probePos, (cube.Info.x == 1)};
                     ambientCubesCopy[z * cubeSize * cubeSize + y * cubeSize + x] = cube;
                 }
