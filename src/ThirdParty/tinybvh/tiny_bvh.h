@@ -3450,7 +3450,11 @@ void BVH::BuildNEON( const bvhvec4* vertices, const unsigned primCount )
 			unsigned fi = triIdx[node.leftFirst];
 			memset( count, 0, sizeof( count ) );
 			float32x4x2_t r0, r1, r2, f = frag8[fi];
-			int32x4_t bi4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) ) );
+			// not support by android
+			//int32x4_t bi4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) ) );
+			// alternate
+			int32x4_t bi4 = vcvtnq_s32_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) );
+			
 			memcpy( binbox, binboxOrig, sizeof( binbox ) );
 			unsigned i0 = ILANE( bi4, 0 ), i1 = ILANE( bi4, 1 ), i2 = ILANE( bi4, 2 ), * ti = triIdx + node.leftFirst + 1;
 			for (unsigned i = 0; i < node.triCount - 1; i++)
@@ -3463,7 +3467,10 @@ void BVH::BuildNEON( const bvhvec4* vertices, const unsigned primCount )
 				r0 = vmaxq_f32x2( b0, f );
 				r1 = vmaxq_f32x2( b1, f );
 				r2 = vmaxq_f32x2( b2, f );
-				const int32x4_t b4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( fmax, fmin ), nmin4 ), rpd4 ), half4 ) ) );
+				// not support by android
+				// const int32x4_t b4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( fmax, fmin ), nmin4 ), rpd4 ), half4 ) ) );
+				// alternate
+				const int32x4_t b4 = vcvtnq_s32_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( fmax, fmin ), nmin4 ), rpd4 ), half4 ) );
 
 				f = frag8[fid], count[0][i0]++, count[1][i1]++, count[2][i2]++;
 				binbox[i0] = r0, i0 = ILANE( b4, 0 );
