@@ -1,13 +1,25 @@
 
+uint LerpPackedColor(uint c0, uint c1, float t) {
+    // Extract RGBA components (8 bits each)
+    vec4 color0 = unpackUnorm4x8(c0);
+    vec4 color1 = unpackUnorm4x8(c1);
+    // Pack back to uint32
+    return packUnorm4x8(mix(color0, color1, t));
+}
+
+vec4 UnpackColor(uint packed) {
+    return unpackUnorm4x8(packed);
+}
+
 // Sample the ambient cube using the Half-Life 2 algorithm
 vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     vec4 color = vec4(0.0);
-    color += max(normal.x, 0.0) 	* cube.PosX;
-    color += max(-normal.x, 0.0) 	* cube.NegX;
-    color += max(normal.y, 0.0) 	* cube.PosY;
-    color += max(-normal.y, 0.0) 	* cube.NegY;
-    color += max(normal.z, 0.0) 	* cube.PosZ;
-    color += max(-normal.z, 0.0) 	* cube.NegZ;
+    color += max(normal.x, 0.0) 	* UnpackColor(cube.PosX);
+    color += max(-normal.x, 0.0) 	* UnpackColor(cube.NegX);
+    color += max(normal.y, 0.0) 	* UnpackColor(cube.PosY);
+    color += max(-normal.y, 0.0) 	* UnpackColor(cube.NegY);
+    color += max(normal.z, 0.0) 	* UnpackColor(cube.PosZ);
+    color += max(-normal.z, 0.0) 	* UnpackColor(cube.NegZ);
     color.w = cube.Info.y;
     return color;
 }

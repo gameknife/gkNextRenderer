@@ -67,13 +67,14 @@ mat4 combinedPrevTS;
 uint matId[16];
 };
 
+// size = 32 bytes
 struct ALIGN_16 AmbientCube
 {
-	vec4 PosZ;
-	vec4 NegZ;
-	vec4 PosY;
-	vec4 NegY;
-	vec4 PosX;
-	vec4 NegX;
-	ivec4 Info;
+	uint PosZ;
+	uint NegZ;
+	uint PosY;
+	uint NegY;
+	uint PosX;
+	uint NegX;
+	ivec2 Info;
 };

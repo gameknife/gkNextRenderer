@@ -527,68 +527,29 @@ const glm::vec3 hemisphereVectors128[128] = {
                     int idxNegZ = (z - 1) * cubeSize * cubeSize + y * cubeSize + x;
 
                     // Skip if center cube is not active
-                    if (ambientCubesCopy[idx].Info.x != 1.0f) continue;
+                    if (ambientCubesCopy[idx].Info.x != 1) continue;
 
-                    // Blur each face
-                    ambientCubes[idx].PosX = (
-                        ambientCubesCopy[idx].PosX * centerWeight +
-                        ambientCubesCopy[idxPosX].PosX * neighborWeight +
-                        ambientCubesCopy[idxNegX].PosX * neighborWeight +
-                        ambientCubesCopy[idxPosY].PosX * neighborWeight +
-                        ambientCubesCopy[idxNegY].PosX * neighborWeight +
-                        ambientCubesCopy[idxPosZ].PosX * neighborWeight +
-                        ambientCubesCopy[idxNegZ].PosX * neighborWeight
-                    ) / weightSum;
+                    uint32_t* TargetAddress = (uint32_t*)&ambientCubes[idx];
+                    uint32_t* SourceAddressCenter = (uint32_t*)&ambientCubesCopy[idx];
+                    uint32_t* SourceAddressPosX = (uint32_t*)&ambientCubesCopy[idxPosX];
+                    uint32_t* SourceAddressNegX = (uint32_t*)&ambientCubesCopy[idxNegX];
+                    uint32_t* SourceAddressPosY = (uint32_t*)&ambientCubesCopy[idxPosY];
+                    uint32_t* SourceAddressNegY = (uint32_t*)&ambientCubesCopy[idxNegY];
+                    uint32_t* SourceAddressPosZ = (uint32_t*)&ambientCubesCopy[idxPosZ];
+                    uint32_t* SourceAddressNegZ = (uint32_t*)&ambientCubesCopy[idxNegZ];
 
-                    ambientCubes[idx].NegX = (
-                        ambientCubesCopy[idx].NegX * centerWeight +
-                        ambientCubesCopy[idxPosX].NegX * neighborWeight +
-                        ambientCubesCopy[idxNegX].NegX * neighborWeight +
-                        ambientCubesCopy[idxPosY].NegX * neighborWeight +
-                        ambientCubesCopy[idxNegY].NegX * neighborWeight +
-                        ambientCubesCopy[idxPosZ].NegX * neighborWeight +
-                        ambientCubesCopy[idxNegZ].NegX * neighborWeight
-                    ) / weightSum;
-
-                    ambientCubes[idx].PosY = (
-                        ambientCubesCopy[idx].PosY * centerWeight +
-                        ambientCubesCopy[idxPosX].PosY * neighborWeight +
-                        ambientCubesCopy[idxNegX].PosY * neighborWeight +
-                        ambientCubesCopy[idxPosY].PosY * neighborWeight +
-                        ambientCubesCopy[idxNegY].PosY * neighborWeight +
-                        ambientCubesCopy[idxPosZ].PosY * neighborWeight +
-                        ambientCubesCopy[idxNegZ].PosY * neighborWeight
-                    ) / weightSum;
-
-                    ambientCubes[idx].NegY = (
-                        ambientCubesCopy[idx].NegY * centerWeight +
-                        ambientCubesCopy[idxPosX].NegY * neighborWeight +
-                        ambientCubesCopy[idxNegX].NegY * neighborWeight +
-                        ambientCubesCopy[idxPosY].NegY * neighborWeight +
-                        ambientCubesCopy[idxNegY].NegY * neighborWeight +
-                        ambientCubesCopy[idxPosZ].NegY * neighborWeight +
-                        ambientCubesCopy[idxNegZ].NegY * neighborWeight
-                    ) / weightSum;
-
-                    ambientCubes[idx].PosZ = (
-                        ambientCubesCopy[idx].PosZ * centerWeight +
-                        ambientCubesCopy[idxPosX].PosZ * neighborWeight +
-                        ambientCubesCopy[idxNegX].PosZ * neighborWeight +
-                        ambientCubesCopy[idxPosY].PosZ * neighborWeight +
-                        ambientCubesCopy[idxNegY].PosZ * neighborWeight +
-                        ambientCubesCopy[idxPosZ].PosZ * neighborWeight +
-                        ambientCubesCopy[idxNegZ].PosZ * neighborWeight
-                    ) / weightSum;
-
-                    ambientCubes[idx].NegZ = (
-                        ambientCubesCopy[idx].NegZ * centerWeight +
-                        ambientCubesCopy[idxPosX].NegZ * neighborWeight +
-                        ambientCubesCopy[idxNegX].NegZ * neighborWeight +
-                        ambientCubesCopy[idxPosY].NegZ * neighborWeight +
-                        ambientCubesCopy[idxNegY].NegZ * neighborWeight +
-                        ambientCubesCopy[idxPosZ].NegZ * neighborWeight +
-                        ambientCubesCopy[idxNegZ].NegZ * neighborWeight
-                    ) / weightSum;
+                    for (int face = 0; face < 6; face++)
+                    {
+                        TargetAddress[face] = glm::packUnorm4x8((
+                            glm::unpackUnorm4x8(SourceAddressCenter[face]) * centerWeight +
+                            glm::unpackUnorm4x8(SourceAddressPosX[face]) * neighborWeight +
+                            glm::unpackUnorm4x8(SourceAddressNegX[face]) * neighborWeight +
+                            glm::unpackUnorm4x8(SourceAddressPosY[face]) * neighborWeight +
+                            glm::unpackUnorm4x8(SourceAddressNegY[face]) * neighborWeight +
+                            glm::unpackUnorm4x8(SourceAddressPosZ[face]) * neighborWeight +
+                            glm::unpackUnorm4x8(SourceAddressNegZ[face]) * neighborWeight
+                        ) / weightSum);
+                    }
                 }
             }
         };
@@ -701,15 +662,17 @@ const glm::vec3 hemisphereVectors128[128] = {
         
                         occlusion /= RAY_PERFACE;
                         float visibility = 1.0f - occlusion;
+                        vec4 indirectColor = vec4(visibility);
+                        uint packedColor = glm::packUnorm4x8(indirectColor);
         
                         switch (face)
                         {
-                        case 0: cube.PosZ = glm::vec4(visibility); break;
-                        case 1: cube.NegZ = glm::vec4(visibility); break;
-                        case 2: cube.PosY = glm::vec4(visibility); break;
-                        case 3: cube.NegY = glm::vec4(visibility); break;
-                        case 4: cube.PosX = glm::vec4(visibility); break;
-                        case 5: cube.NegX = glm::vec4(visibility); break;
+                        case 0: cube.PosZ = packedColor; break;
+                        case 1: cube.NegZ = packedColor; break;
+                        case 2: cube.PosY = packedColor; break;
+                        case 3: cube.NegY = packedColor; break;
+                        case 4: cube.PosX = packedColor; break;
+                        case 5: cube.NegX = packedColor; break;
                         }
                     }
 

@@ -211,9 +211,14 @@ void main() {
 	}
 
 //	// Sample the ambient cube using the normal
-//	vec4 indirectColor = interpolateProbes( (v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
-//	vec3 fastColor = indirectColor.rgb * 50.0f;
-//	//vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
+//	vec4 indirectColor = vec4(0);
+//	for(int i = 0; i < 4; i++) {
+//		vec3 jit = RandomFloat3(RandomSeed) * 0.25f;
+//		indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
+//	}
+//	indirectColor = indirectColor * 0.25f;
+//	//vec3 fastColor = indirectColor.rgb * 50.0f;
+//	vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
 //	imageStore(OutImage, ipos, vec4(fastColor,1));
 //	imageStore(OutMotionVector, ipos, vec4(0));
 //	imageStore(InOutDirectLight1, ipos, vec4(fastColor,1));
