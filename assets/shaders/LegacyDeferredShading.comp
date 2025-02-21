@@ -6,17 +6,20 @@
 #include "common/Material.glsl"
 #include "common/UniformBufferObject.glsl"
 #include "common/ColorFunc.glsl"
+#include "common/Random.glsl"
 
 layout(binding = 0, rgba8) readonly uniform image2D GBuffer0Image;
 layout(binding = 1, rgba16f) readonly uniform image2D GBuffer1Image;
 layout(binding = 2, rgba8) readonly uniform image2D GBuffer2Image;
 layout(binding = 3, rgba8) writeonly uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-
+layout(binding = 5) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 //layout(push_constant) uniform PushConsts {
 //    uint pingpong;
 //    uint stepsize;
 //} pushConsts;
+
+#include "common/AmbientCube.glsl"
 
 #if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -50,7 +53,7 @@ void main() {
     const vec3 lightVector = Camera.SunDirection.xyz;
     const float d = max(dot(lightVector, normal) * 20.0, 0.5);
 
-    vec4 outColor = albedo * d + (pbr_param.r * 0.000001) + skyColor * albedo;
+    vec4 outColor = albedo * d + skyColor * albedo;
     outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
     
     imageStore(OutImage, ipos, outColor);

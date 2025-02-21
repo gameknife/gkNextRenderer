@@ -147,8 +147,9 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset(new Assets::RayCastBuffer(CommandPool()));
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
-        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
 #endif
+        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
+
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -271,18 +272,18 @@ namespace Vulkan::RayTracing
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
 
-        // if(supportRayCast_)
-        // {
-        //     SCOPED_GPU_TIMER("ambient gen");
-        //
-        //     int count = Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE;
-        //     int group = count / Assets::CUBE_SIZE;
-        //     VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
-        //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
-        //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-        //                             ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-        //     vkCmdDispatch(commandBuffer, group, 1, 1);
-        // }
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("ambient gen");
+        
+            int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            int group = count / 32;
+            VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, group, 1, 1);
+        }
 #endif
     }
 

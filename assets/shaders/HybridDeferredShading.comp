@@ -177,7 +177,59 @@ void main() {
 	// visibility fetch hit point, if primary ray, start from here
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
 	NodeProxy node = NodeProxies[vBuffer.x - 1];
-    Material mat = Materials[node.matId[v.MaterialIndex]];
+	uint materialIndex = 0;
+	// here if direct address with node.matId[v.MaterialIndex] will too slow on android
+	switch (v.MaterialIndex) {
+		case 0:
+			materialIndex = node.matId[0];
+			break;
+		case 1:
+			materialIndex = node.matId[1];
+			break;
+		case 2:
+			materialIndex = node.matId[2];
+			break;
+		case 3:
+			materialIndex = node.matId[3];
+			break;
+		case 4:
+			materialIndex = node.matId[4];
+			break;
+		case 5:
+			materialIndex = node.matId[5];
+			break;
+		case 6:
+			materialIndex = node.matId[6];
+			break;
+		case 7:
+			materialIndex = node.matId[7];
+			break;
+		case 8:
+			materialIndex = node.matId[8];
+			break;
+		case 9:
+			materialIndex = node.matId[9];
+			break;
+		case 10:
+			materialIndex = node.matId[10];
+			break;
+		case 11:
+			materialIndex = node.matId[11];
+			break;
+		case 12:
+			materialIndex = node.matId[12];
+			break;
+		case 13:
+			materialIndex = node.matId[13];
+			break;
+		case 14:
+			materialIndex = node.matId[14];
+			break;
+		case 15:
+			materialIndex = node.matId[15];
+			break;
+	}
+	Material mat = Materials[materialIndex];
     vec4 albedo = mat.Diffuse;
     if (mat.DiffuseTextureId >= 0)
     {
@@ -211,20 +263,20 @@ void main() {
 	}
 
 //	// Sample the ambient cube using the normal
-//	vec4 indirectColor = vec4(0);
-//	for(int i = 0; i < 4; i++) {
-//		vec3 jit = RandomFloat3(RandomSeed) * 0.25f;
-//		indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
-//	}
-//	indirectColor = indirectColor * 0.25f;
-//	//vec3 fastColor = indirectColor.rgb * 50.0f;
-//	vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
-//	imageStore(OutImage, ipos, vec4(fastColor,1));
-//	imageStore(OutMotionVector, ipos, vec4(0));
-//	imageStore(InOutDirectLight1, ipos, vec4(fastColor,1));
-//	imageStore(OutAlbedoBuffer, ipos, vec4(fastColor,1.0));
-//	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
-//	return;
+	vec4 indirectColor = vec4(0);
+	for(int i = 0; i < 4; i++) {
+		vec3 jit = RandomFloat3(RandomSeed) * 0.25f;
+		indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
+	}
+	indirectColor = indirectColor * 0.25f;
+	//vec3 fastColor = indirectColor.rgb * 50.0f;
+	vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
+	imageStore(OutImage, ipos, vec4(fastColor,1));
+	imageStore(OutMotionVector, ipos, vec4(0));
+	imageStore(InOutDirectLight1, ipos, vec4(fastColor,1));
+	imageStore(OutAlbedoBuffer, ipos, vec4(fastColor,1.0));
+	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
+	return;
 
 	// calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);

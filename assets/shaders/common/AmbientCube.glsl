@@ -28,7 +28,7 @@ vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
 vec4 interpolateProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE || pos.y > CUBE_SIZE || pos.z > CUBE_SIZE) {
+    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
         return vec4(1.0);
     }
 
@@ -49,8 +49,8 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
         );
 
         ivec3 probePos = baseIdx + offset;
-        int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
-        probePos.y * CUBE_SIZE +
+        int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+        probePos.z * CUBE_SIZE_XY +
         probePos.x;
 
         AmbientCube cube = Cubes[idx];
@@ -78,11 +78,11 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
             ivec3 probePos = baseIdx + offset;
             if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
-            probePos.x >= CUBE_SIZE || probePos.y >= CUBE_SIZE || probePos.z >= CUBE_SIZE)
+            probePos.x >= CUBE_SIZE_XY || probePos.z >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z)
             continue;
 
-            int idx = probePos.z * CUBE_SIZE * CUBE_SIZE +
-            probePos.y * CUBE_SIZE +
+            int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+            probePos.z * CUBE_SIZE_XY +
             probePos.x;
 
             AmbientCube cube = Cubes[idx];
@@ -99,6 +99,6 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
     }
 
     // Normalize result by total weight
-    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.0);
+    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05);
     return indirectColor;
 }

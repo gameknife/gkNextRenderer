@@ -253,14 +253,7 @@ bool NextEngine::Tick()
     deltaSeconds_ = time_ - prevTime;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
-
-    // Draw Helper
-    // for ( auto& cube : GetScene().AmbientCubeProxys() )
-    // {
-    //     if (!cube.isActive) DrawAuxPoint(cube.position, glm::vec4(0, 1, 0, 1), 1.f);
-    //     //if (!cube.isActive) DrawAuxBox( cube.position - glm::vec3(0.1f), cube.position + glm::vec3(0.1f), glm::vec4(1,0,0,1));
-    // }
-    //
+    
     // Scene Update
     if(scene_)
     {

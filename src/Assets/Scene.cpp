@@ -32,13 +32,13 @@ namespace Assets
         RebuildMeshBuffer(commandPool, supportRayTracing);
 
         // 动态更新的场景结构，每帧更新
-        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                                       indirectDrawBufferMemory_); // support 65535 nodes
 
 
-        Vulkan::BufferUtil::CreateDeviceBufferViolate(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
                                                     ambientCubeBufferMemory_);
     }
 
@@ -212,7 +212,6 @@ namespace Assets
         return Result;
     }
 
-#define CUBE_SIZE 100
 #define RAY_PERFACE 32
     
     inline void fastCopyVec3( tinybvh::bvhvec3& target, glm::vec3& source )
@@ -500,31 +499,31 @@ const glm::vec3 hemisphereVectors128[128] = {
         }
     }
 
-    void BlurAmbientCubes(std::vector<AmbientCube>& ambientCubes, const std::vector<AmbientCube>& ambientCubesCopy, int cubeSize)
+    void BlurAmbientCubes(std::vector<AmbientCube>& ambientCubes, const std::vector<AmbientCube>& ambientCubesCopy)
     {
         const float centerWeight = 1.0f;
         const float neighborWeight = 1.0f;
         const float weightSum = centerWeight + (6.0f * neighborWeight);
 
         // Create a lambda for processing a single z-slice
-        auto processSlice = [&ambientCubes, &ambientCubesCopy, cubeSize, centerWeight, neighborWeight, weightSum](int z)
+        auto processSlice = [&ambientCubes, &ambientCubesCopy, centerWeight, neighborWeight, weightSum](int z)
         {
             // Process only interior cubes (skip border)
-            if (z <= 0 || z >= cubeSize - 1) return;
+            if (z <= 0 || z >= Assets::CUBE_SIZE_Z - 1) return;
 
-            for (int y = 1; y < cubeSize - 1; y++)
+            for (int y = 1; y < Assets::CUBE_SIZE_XY - 1; y++)
             {
-                for (int x = 1; x < cubeSize - 1; x++)
+                for (int x = 1; x < Assets::CUBE_SIZE_XY - 1; x++)
                 {
-                    int idx = z * cubeSize * cubeSize + y * cubeSize + x;
+                    int idx = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
 
                     // Get indices of 6 neighboring cubes
-                    int idxPosX = z * cubeSize * cubeSize + y * cubeSize + (x + 1);
-                    int idxNegX = z * cubeSize * cubeSize + y * cubeSize + (x - 1);
-                    int idxPosY = z * cubeSize * cubeSize + (y + 1) * cubeSize + x;
-                    int idxNegY = z * cubeSize * cubeSize + (y - 1) * cubeSize + x;
-                    int idxPosZ = (z + 1) * cubeSize * cubeSize + y * cubeSize + x;
-                    int idxNegZ = (z - 1) * cubeSize * cubeSize + y * cubeSize + x;
+                    int idxPosX = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + (x + 1);
+                    int idxNegX = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + (x - 1);
+                    int idxPosY = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + (y + 1) * Assets::CUBE_SIZE_XY + x;
+                    int idxNegY = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + (y - 1) * Assets::CUBE_SIZE_XY + x;
+                    int idxPosZ = (z + 1) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
+                    int idxNegZ = (z - 1) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
 
                     // Skip if center cube is not active
                     if (ambientCubesCopy[idx].Info.x != 1) continue;
@@ -555,7 +554,7 @@ const glm::vec3 hemisphereVectors128[128] = {
         };
 
         // Distribute tasks for each z-slice
-        for (int z = 0; z < cubeSize; z++)
+        for (int z = 0; z < Assets::CUBE_SIZE_Z; z++)
         {
             TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
             {
@@ -587,13 +586,13 @@ const glm::vec3 hemisphereVectors128[128] = {
 
         const auto timer = std::chrono::high_resolution_clock::now();
         std::atomic<int> rayCount{0};
-        constexpr int cubeSize = CUBE_SIZE;
-        std::vector<AmbientCube> ambientCubes(cubeSize * cubeSize * cubeSize);
-        std::vector<AmbientCube> ambientCubesCopy(cubeSize * cubeSize * cubeSize);
-        ambientCubeProxys_.resize(cubeSize * cubeSize * cubeSize);
+
+        std::vector<AmbientCube> ambientCubes(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
+        std::vector<AmbientCube> ambientCubesCopy(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
+        ambientCubeProxys_.resize(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
         
         // Create a lambda for processing a single z-slice
-        auto processSlice = [this, &ambientCubes, &ambientCubesCopy, &rayCount](int z)
+        auto processSlice = [this, &ambientCubes, &ambientCubesCopy, &rayCount](int y)
         {
             constexpr int raysPerFace = 4;
             const glm::vec3 directions[6] = {
@@ -605,18 +604,15 @@ const glm::vec3 hemisphereVectors128[128] = {
                 glm::vec3(-1, 0, 0)  // NegX
             };
         
-            const float CUBE_UNIT = 0.25f;
-            const glm::vec3 CUBE_OFFSET = glm::vec3(-50, -49.5, -50) * CUBE_UNIT;
-        
-            // Process single z-slice
-            for (int y = 0; y < cubeSize; y++)
+            // Process single y-slice
+            for (int z = 0; z < Assets::CUBE_SIZE_XY; z++)
             {
-                for (int x = 0; x < cubeSize; x++)
+                for (int x = 0; x < Assets::CUBE_SIZE_XY; x++)
                 {
                     glm::vec3 probePos = glm::vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
                     
-                    AmbientCube& cube = ambientCubes[z * cubeSize * cubeSize + y * cubeSize + x];
-                    cube.Info = glm::vec4(1, 0, 0, 0);
+                    AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
+                    cube.Info = glm::vec4(1, 1, 0, 0);
         
                     for (int face = 0; face < 6; face++)
                     {
@@ -648,6 +644,7 @@ const glm::vec3 hemisphereVectors128[128] = {
                                 else
                                 {
                                     cube.Info.x = 0;
+                                    cube.Info.y = 0;
                                     nextCube = true;
                                     break;
                                 }
@@ -656,7 +653,7 @@ const glm::vec3 hemisphereVectors128[128] = {
 
                         if (nextCube)
                         {
-                            ambientCubeProxys_[z * cubeSize * cubeSize + y * cubeSize + x] = {probePos, (cube.Info.x == 1)};
+                            ambientCubeProxys_[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = {probePos, (cube.Info.x == 1)};
                             continue;
                         }
         
@@ -678,26 +675,26 @@ const glm::vec3 hemisphereVectors128[128] = {
 
                     glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
                     
-                    IsInShadow( probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 1 : cube.Info.y = 0;
+                    IsInShadow( probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
                     
-                    ambientCubeProxys_[z * cubeSize * cubeSize + y * cubeSize + x] = {probePos, (cube.Info.x == 1)};
-                    ambientCubesCopy[z * cubeSize * cubeSize + y * cubeSize + x] = cube;
+                    ambientCubeProxys_[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = {probePos, (cube.Info.x == 1)};
+                    ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
                 }
             }
         };
         
         // Distribute tasks for each z-slice
-        for (int z = 0; z < cubeSize; z++)
+        for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
         {
-            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
+            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, y](ResTask& task)
             {
-                processSlice(z);
+                processSlice(y);
             });
         }
 
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 
-        BlurAmbientCubes(ambientCubes, ambientCubesCopy, cubeSize);
+        BlurAmbientCubes(ambientCubes, ambientCubesCopy);
 
         // Upload to GPU
         AmbientCube* data = reinterpret_cast<AmbientCube*>(ambientCubeBufferMemory_->Map(0, sizeof(AmbientCube) * ambientCubes.size()));
@@ -711,7 +708,7 @@ const glm::vec3 hemisphereVectors128[128] = {
     }
 
     void Scene::Tick(float DeltaSeconds)
-    {
+    {        
         float DurationMax = 0;
 
         for (auto& track : tracks_)

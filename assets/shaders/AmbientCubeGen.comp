@@ -44,9 +44,25 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 #include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
 
-layout(local_size_x = CUBE_SIZE, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 const uint FACE_TRACING = 8;
+
+int TraceShadow(vec3 origin, vec3 lightDir)
+{
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, EPS, -lightDir, 10000.0f);
+
+    rayQueryProceedEXT(rayQuery);
+
+    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
 
 uint TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe)
 {
@@ -114,20 +130,21 @@ void main() {
     uint gIdx = gl_GlobalInvocationID.x;
     
     // convert to local position
-    uint z = gIdx / (CUBE_SIZE * CUBE_SIZE);
-    uint y = (gIdx - z * CUBE_SIZE * CUBE_SIZE) / CUBE_SIZE;
-    uint x = gIdx - z * CUBE_SIZE * CUBE_SIZE - y * CUBE_SIZE;
+    uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
+    uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
+    uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
-    Cubes[gIdx].PosY = LerpPackedColor(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe), 0.02);
-    Cubes[gIdx].NegY = LerpPackedColor(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.02);
-    Cubes[gIdx].PosX = LerpPackedColor(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe), 0.02);
-    Cubes[gIdx].NegX = LerpPackedColor(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.02);
-    Cubes[gIdx].PosZ = LerpPackedColor(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe), 0.02);
-    Cubes[gIdx].NegZ = LerpPackedColor(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.02);
+    Cubes[gIdx].PosY = LerpPackedColor(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe), 0.01);
+    Cubes[gIdx].NegY = LerpPackedColor(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.01);
+    Cubes[gIdx].PosX = LerpPackedColor(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe), 0.01);
+    Cubes[gIdx].NegX = LerpPackedColor(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.01);
+    Cubes[gIdx].PosZ = LerpPackedColor(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe), 0.01);
+    Cubes[gIdx].NegZ = LerpPackedColor(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.01);
 
     Cubes[gIdx].Info.x = activeProbe;
+    Cubes[gIdx].Info.y = TraceShadow(origin, vec3(0.5f, -1.0f, 0.5f));
 }

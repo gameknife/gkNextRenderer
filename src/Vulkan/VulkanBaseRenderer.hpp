@@ -20,7 +20,7 @@
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
 //#define BENCH_MARK_CHECK() if(GOption->Benchmark) return
-#define BENCH_MARK_CHECK() return // disable gpu timer since performance hit
+#define BENCH_MARK_CHECK() // disable gpu timer since performance hit
 namespace Vulkan
 {
 	namespace PipelineCommon
