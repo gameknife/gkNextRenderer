@@ -592,7 +592,7 @@ const glm::vec3 hemisphereVectors128[128] = {
         ambientCubeProxys_.resize(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
         
         // Create a lambda for processing a single z-slice
-        auto processSlice = [this, &ambientCubes, &ambientCubesCopy, &rayCount](int y)
+        auto processSlice = [this, &ambientCubes, &ambientCubesCopy, &rayCount](int x, int y, int z)
         {
             constexpr int raysPerFace = 4;
             const glm::vec3 directions[6] = {
@@ -603,12 +603,7 @@ const glm::vec3 hemisphereVectors128[128] = {
                 glm::vec3(1, 0, 0),  // PosX
                 glm::vec3(-1, 0, 0)  // NegX
             };
-        
-            // Process single y-slice
-            for (int z = 0; z < Assets::CUBE_SIZE_XY; z++)
-            {
-                for (int x = 0; x < Assets::CUBE_SIZE_XY; x++)
-                {
+
                     glm::vec3 probePos = glm::vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
                     
                     AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
@@ -679,18 +674,19 @@ const glm::vec3 hemisphereVectors128[128] = {
                     
                     ambientCubeProxys_[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = {probePos, (cube.Info.x == 1)};
                     ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
-                }
-            }
         };
         
         // Distribute tasks for each z-slice
-        for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
+        for (int x = 0; x < Assets::CUBE_SIZE_XY; x++)
         {
-            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, y](ResTask& task)
+            TaskCoordinator::GetInstance()->AddParralledTask([processSlice, x](ResTask& task)
             {
-                processSlice(y);
+                for (int z = 0; z < Assets::CUBE_SIZE_XY; z++)
+                    for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
+                        processSlice(x, y, z);
             });
         }
+
 
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 

@@ -271,6 +271,8 @@ public:
         {
             lowThreads_.push_back(std::make_unique<TaskThread>());
         }
+
+        fmt::print("low parrallel thread count: {}\n", lowThreadCount);
     }
 
     ~TaskCoordinator()
@@ -328,6 +330,7 @@ private:
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
+    tsqueue<ResTask> parralledTaskQueue_;
 
 
 private:

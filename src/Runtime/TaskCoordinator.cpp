@@ -61,45 +61,23 @@ uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc task_func)
     task.priority = 3;
     task.task_func = std::move(task_func);
 
-    // First try to find an idle thread
-    for (auto& thread : lowThreads_)
-    {
-        if (thread->IsIdle())
-        {
-            thread->complete_->reset();  // Reset complete signal
-            thread->taskQueue_.enqueue(task);
-            return task.task_id;
-        }
-    }
+    parralledTaskQueue_.enqueue(task);
 
-    // If no idle thread found, find thread with least tasks
-    size_t minTasks = SIZE_MAX;
-    TaskThread* selectedThread = nullptr;
-    
-    for (auto& thread : lowThreads_)
-    {
-        size_t queueSize = thread->taskQueue_.size();
-        if (queueSize < minTasks)
-        {
-            minTasks = queueSize;
-            selectedThread = thread.get();
-        }
-    }
-
-    // Assign task to thread with least workload
-    selectedThread->complete_->reset();  // Reset complete signal
-    selectedThread->taskQueue_.enqueue(task);
     return task.task_id;
 }
 
 void TaskCoordinator::WaitForAllParralledTask()
 {
-    // wait 1ms to start last added tasks
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    // wait for all parralled task to complete
-    for ( auto& thread : lowThreads_ )
+    while( parralledTaskQueue_.size() > 0 )
     {
-        thread->complete_->wait();
+        Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+    }
+
+    // wait for all idle
+    while( !IsAllParralledTaskComplete() )
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
     }
 }
 
@@ -118,6 +96,19 @@ void TaskCoordinator::Tick()
     if( completeTaskQueue_.dequeue(task, false) )
     {
         task.complete_func(task);
+    }
+
+    // if low threads has idle one, peak a task from parralled queue
+    for ( auto& thread : lowThreads_ )
+    {
+        if( thread->IsIdle() )
+        {
+            if( parralledTaskQueue_.dequeue(task, false) )
+            {
+                thread->complete_->reset();
+                thread->taskQueue_.enqueue(task);
+            }
+        }
     }
 }
 
