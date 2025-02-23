@@ -11,11 +11,8 @@ static tinybvh::BVH GCpuBvh;
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 {
     const auto timer = std::chrono::high_resolution_clock::now();
-    
-    bvhInstanceList.clear();
+
     bvhBLASList.clear();
-    
-    
     bvhBLASContexts.clear();
     bvhBLASContexts.resize(scene.Models().size());
     for ( size_t m = 0; m < scene.Models().size(); ++m )
@@ -47,7 +44,19 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
         bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
         bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
     }
-    
+
+    double elapsed = std::chrono::duration<float, std::chrono::milliseconds::period>(
+    std::chrono::high_resolution_clock::now() - timer).count();
+
+    fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
+
+    UpdateBVH(scene);
+}
+
+void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
+{
+    bvhInstanceList.clear();
+
     for (auto& node : scene.Nodes())
     {
         node->RecalcTransform(true);
@@ -57,7 +66,7 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 
         glm::mat4 worldTS = node->WorldTransform();
         worldTS = transpose(worldTS);
-        
+
         tinybvh::BLASInstance instance;
         instance.blasIdx = modelId;
         std::memcpy( (float*)instance.transform, &(worldTS[0]), sizeof(float) * 16);
@@ -67,15 +76,8 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 
     if (bvhInstanceList.size() > 0)
     {
-        //GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
         GCpuBvh.Build( bvhInstanceList.data(), static_cast<int>(bvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
-        //GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::ALT_SOA, true);
     }
-
-    double elapsed = std::chrono::duration<float, std::chrono::milliseconds::period>(
-    std::chrono::high_resolution_clock::now() - timer).count();
-
-    fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 }
 
 Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)

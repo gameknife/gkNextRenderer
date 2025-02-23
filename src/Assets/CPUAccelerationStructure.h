@@ -22,7 +22,7 @@ struct FCPUBLASVertInfo
 
 struct FCPUBLASContext
 {
-    tinybvh::BVH4_CPU bvh;
+    tinybvh::BVH bvh;
     std::vector<tinybvh::bvhvec4> triangles;
     std::vector<FCPUBLASVertInfo> extinfos;
 };
@@ -31,6 +31,8 @@ class FCPUAccelerationStructure
 {
 public:
     void InitBVH(Assets::Scene& scene);
+
+    void UpdateBVH(Assets::Scene& scene);
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
     
