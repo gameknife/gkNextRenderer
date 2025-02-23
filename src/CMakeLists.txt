@@ -78,7 +78,6 @@ add_executable(MagicaLego
 	DesktopMain.cpp
 )
 add_executable(Packager
-	${src_files_utilities} 
 	Packager/PackagerMain.cpp
 )
 endif()
