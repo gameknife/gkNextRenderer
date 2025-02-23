@@ -187,6 +187,7 @@ namespace Assets
         Model(Model&&) = default;
         ~Model() = default;
 
+        const std::vector<Vertex>& CPUVertices() const { return vertices_; }
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
         

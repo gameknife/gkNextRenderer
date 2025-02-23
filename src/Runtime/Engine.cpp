@@ -618,8 +618,8 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     else
     {
         // CPU Raycast in scene
-        Assets::RayCastResult result = scene_->RayCastInCPU(rayOrigin, rayDir);
-        callback(result);
+        // Assets::RayCastResult result = scene_->RayCastInCPU(rayOrigin, rayDir);
+        // callback(result);
     }
 }
 
