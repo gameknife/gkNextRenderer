@@ -6,86 +6,94 @@
 #define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
-struct VertInfo
-{
-    glm::vec3 normal;
-    uint32_t instanceId;
-};
-
 static tinybvh::BVH GCpuBvh;
-// represent every triangles verts one by one, triangle count is size / 3
-static std::vector<tinybvh::bvhvec4> GTriangles;
-static std::vector<VertInfo> GExtInfos;
 
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 {
-    GTriangles.clear();
-    GExtInfos.clear();
-
-    for (auto& node : scene.Nodes())
+    const auto timer = std::chrono::high_resolution_clock::now();
+    
+    bvhInstanceList.clear();
+    bvhBLASList.clear();
+    
+    
+    bvhBLASContexts.clear();
+    bvhBLASContexts.resize(scene.Models().size());
+    for ( size_t m = 0; m < scene.Models().size(); ++m )
     {
-        node->RecalcTransform(true);
-
-        uint32_t modelId = node->GetModel();
-        if (modelId == -1) continue;
-        const Assets::Model& model = scene.Models()[modelId];
-
+        const Assets::Model& model = scene.Models()[m];
+        
         for (size_t i = 0; i < model.CPUIndices().size(); i += 3)
         {
             // Get the three vertices of the triangle
             const Assets::Vertex& v0 = model.CPUVertices()[model.CPUIndices()[i]];
             const Assets::Vertex& v1 = model.CPUVertices()[model.CPUIndices()[i + 1]];
             const Assets::Vertex& v2 = model.CPUVertices()[model.CPUIndices()[i + 2]];
-
-            // Transform vertices to world space
-            glm::vec4 wpos_v0 = node->WorldTransform() * glm::vec4(v0.Position, 1);
-            glm::vec4 wpos_v1 = node->WorldTransform() * glm::vec4(v1.Position, 1);
-            glm::vec4 wpos_v2 = node->WorldTransform() * glm::vec4(v2.Position, 1);
-
-            // Perspective divide
-            wpos_v0 /= wpos_v0.w;
-            wpos_v1 /= wpos_v1.w;
-            wpos_v2 /= wpos_v2.w;
-
+            
             // Calculate face normal
-            glm::vec3 edge1 = glm::vec3(wpos_v1) - glm::vec3(wpos_v0);
-            glm::vec3 edge2 = glm::vec3(wpos_v2) - glm::vec3(wpos_v0);
+            glm::vec3 edge1 = glm::vec3(v1.Position) - glm::vec3(v0.Position);
+            glm::vec3 edge2 = glm::vec3(v2.Position) - glm::vec3(v1.Position);
             glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
 
 
             // Add triangle vertices to BVH
-            GTriangles.push_back(tinybvh::bvhvec4(wpos_v0.x, wpos_v0.y, wpos_v0.z, 0));
-            GTriangles.push_back(tinybvh::bvhvec4(wpos_v1.x, wpos_v1.y, wpos_v1.z, 0));
-            GTriangles.push_back(tinybvh::bvhvec4(wpos_v2.x, wpos_v2.y, wpos_v2.z, 0));
+            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v0.Position.x, v0.Position.y, v0.Position.z, 0));
+            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v1.Position.x, v1.Position.y, v1.Position.z, 0));
+            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v2.Position.x, v2.Position.y, v2.Position.z, 0));
 
             // Store additional triangle information
-            GExtInfos.push_back({normal, node->GetInstanceId()});
+            bvhBLASContexts[m].extinfos.push_back({normal, 0});
         }
+
+        bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+        bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
+    }
+    
+    for (auto& node : scene.Nodes())
+    {
+        node->RecalcTransform(true);
+
+        uint32_t modelId = node->GetModel();
+        if (modelId == -1) continue;
+
+        glm::mat4 worldTS = node->WorldTransform();
+        worldTS = transpose(worldTS);
+        
+        tinybvh::BLASInstance instance;
+        instance.blasIdx = modelId;
+        std::memcpy( (float*)instance.transform, &(worldTS[0]), sizeof(float) * 16);
+
+        bvhInstanceList.push_back(instance);
     }
 
-    if (GTriangles.size() >= 3)
+    if (bvhInstanceList.size() > 0)
     {
-        GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
+        //GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
+        GCpuBvh.Build( bvhInstanceList.data(), static_cast<int>(bvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
         //GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::ALT_SOA, true);
     }
+
+    double elapsed = std::chrono::duration<float, std::chrono::milliseconds::period>(
+    std::chrono::high_resolution_clock::now() - timer).count();
+
+    fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 }
 
 Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)
 {
     Assets::RayCastResult Result;
 
-    tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
-    GCpuBvh.Intersect(ray);
-
-    if (ray.hit.t < 100000.f)
-    {
-        glm::vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
-
-        Result.HitPoint = glm::vec4(hitPos, 0);
-        Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
-        Result.Hitted = true;
-        Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
-    }
+    // tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
+    // GCpuBvh.Intersect(ray);
+    //
+    // if (ray.hit.t < 100000.f)
+    // {
+    //     glm::vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+    //
+    //     Result.HitPoint = glm::vec4(hitPos, 0);
+    //     Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
+    //     Result.Hitted = true;
+    //     Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
+    // }
 
     return Result;
 }
@@ -228,17 +236,16 @@ bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh
 
 void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(glm::ivec3 start, glm::ivec3 end, Vulkan::DeviceMemory* GPUMemory)
 {
-    if (GTriangles.size() < 3)
+    if (bvhInstanceList.size() == 0)
     {
         return;
     }
-
+    
     const auto timer = std::chrono::high_resolution_clock::now();
 
     std::vector<Assets::AmbientCube> ambientCubes(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
     std::vector<Assets::AmbientCube> ambientCubesCopy(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
-    //ambientCubeProxys_.resize(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
-
+  
     // Create a lambda for processing a single z-slice
     auto processSlice = [this, &ambientCubes, &ambientCubesCopy](int x, int y, int z)
     {
@@ -269,16 +276,19 @@ void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(glm::ivec3 start, 
             for (int i = 0; i < RAY_PERFACE; i++)
             {
                 tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                                 tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z));
+                                 tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
 
                 GCpuBvh.Intersect(ray);
-                //rayCount.fetch_add(1, std::memory_order_relaxed);
 
                 if (ray.hit.t < 10.0f)
                 {
-                    const glm::vec3& hitNormal = GExtInfos[ray.hit.prim].normal;
-                    float dotProduct = glm::dot(hemisphereSamples[i], hitNormal);
-
+                    uint32_t primIdx = ray.hit.prim;
+                    tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
+                    FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
+                    glm::mat4* worldTS = ( glm::mat4*)instance.transform;
+                    glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+                    float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
+                    
                     if (dotProduct < 0.0f)
                     {
                         occlusion += 1.0f;
@@ -348,7 +358,7 @@ void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(glm::ivec3 start, 
     double elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
         std::chrono::high_resolution_clock::now() - timer).count();
 
-    fmt::print("gen gi data takes: {:.0f}s\n", elapsed);
+    fmt::print("gen gi data takes: {:.1f}s\n", elapsed);
 }
 
 
