@@ -180,7 +180,7 @@ namespace Assets
         if (GTriangles.size() >= 3)
         {
             GCpuBvh.Build(GTriangles.data(), static_cast<int>(GTriangles.size()) / 3);
-            //GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::ALT_SOA, true);
+            GCpuBvh.Convert(tinybvh::BVH::WALD_32BYTE, tinybvh::BVH::ALT_SOA, true);
         }
     }
 
@@ -403,7 +403,7 @@ namespace Assets
                     tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
                                      tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z));
 
-                    GCpuBvh.Intersect(ray);
+                    GCpuBvh.Intersect(ray, tinybvh::BVH::ALT_SOA);
                     //rayCount.fetch_add(1, std::memory_order_relaxed);
 
                     if (ray.hit.t < 10.0f)
