@@ -1189,7 +1189,7 @@ static uint32_t __bfind( uint32_t x ) // https://github.com/mackron/refcode/blob
 #elif defined(__EMSCRIPTEN__)
 	return 31 - __builtin_clz( x );
 #elif defined(__GNUC__) || defined(__clang__)
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(ANDROID)
 	uint32_t r;
 	__asm__ __volatile__( "lzcnt{l %1, %0| %0, %1}" : "=r"(r) : "r"(x) : "cc" );
 	return 31 - r;
@@ -5625,6 +5625,7 @@ void BVH::BuildNEON()
 			BVHNode& node = bvhNode[nodeIdx];
 			float32x4_t* node4 = (float32x4_t*)&bvhNode[nodeIdx];
 			// find optimal object split
+			
 			const float32x4_t d4 = vbslq_f32( vshrq_n_s32( mask3, 31 ), vsubq_f32( node4[1], node4[0] ), min1 );
 			const float32x4_t nmin4 = vmulq_f32( vandq_s32( node4[0], mask3 ), two4 );
 			const float32x4_t rpd4 = vandq_s32( vdivq_f32( binmul3, d4 ), vmvnq_u32( vceqq_f32( d4, vdupq_n_f32( 0 ) ) ) );
@@ -5634,7 +5635,11 @@ void BVH::BuildNEON()
 			memset( count, 0, sizeof( count ) );
 			float32x4x2_t r0, r1, r2, f = _mm256_xor_ps( _mm256_and_ps( frag8[fi], mask6 ), signFlip8 );
 			const float32x4_t fmin = vandq_u32( frag4[fi].bmin4, mask3 ), fmax = vandq_u32( frag4[fi].bmax4, mask3 );
-			const int32x4_t bi4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vaddq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) ) );
+#if !ANDROID
+			int32x4_t bi4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) ) );
+#else
+			int32x4_t bi4 = vcvtnq_s32_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( frag4[fi].bmax4, frag4[fi].bmin4 ), nmin4 ), rpd4 ), half4 ) );
+#endif
 			const int32x4_t b4c = vmaxq_s32( vminq_s32( bi4, maxbin4 ), vdupq_n_s32( 0 ) ); // clamp needed after all
 			memcpy( binbox, binboxOrig, sizeof( binbox ) );
 			uint32_t i0 = ILANE( b4c, 0 ), i1 = ILANE( b4c, 1 ), i2 = ILANE( b4c, 2 ), * ti = primIdx + node.leftFirst + 1;
@@ -5647,7 +5652,11 @@ void BVH::BuildNEON()
 				const float32x4x2_t b0 = binbox[i0], b1 = binbox[AVXBINS + i1], b2 = binbox[2 * AVXBINS + i2];
 				const float32x4_t frmin = vandq_u32( frag4[fid].bmin4, mask3 ), frmax = vandq_u32( frag4[fid].bmax4, mask3 );
 				r0 = _mm256_max_ps( b0, f ), r1 = _mm256_max_ps( b1, f ), r2 = _mm256_max_ps( b2, f );
-				const int32x4_t b4 = vcvtq_s32_f32( vrnd32xq_f32( (vsubq_f32( vmulq_f32( vsubq_f32( vaddq_f32( frmax, frmin ), nmin4 ), rpd4 ), half4 )) ) );
+#if !ANDROID
+				const int32x4_t b4 = vcvtq_s32_f32( vrnd32xq_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( fmax, fmin ), nmin4 ), rpd4 ), half4 ) ) );
+#else
+				const int32x4_t b4 = vcvtnq_s32_f32( vsubq_f32( vmulq_f32( vsubq_f32( vsubq_f32( fmax, fmin ), nmin4 ), rpd4 ), half4 ) );
+#endif
 				const int32x4_t bc4 = vmaxq_s32( vminq_s32( b4, maxbin4 ), vdupq_n_s32( 0 ) ); // clamp needed after all
 				f = _mm256_xor_ps( _mm256_and_ps( frag8[fid], mask6 ), signFlip8 ), count[0][i0]++, count[1][i1]++, count[2][i2]++;
 				binbox[i0] = r0, i0 = ILANE( bc4, 0 );

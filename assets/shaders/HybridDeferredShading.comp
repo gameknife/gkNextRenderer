@@ -262,22 +262,6 @@ void main() {
 		return;
 	}
 
-//	// Sample the ambient cube using the normal
-	vec4 indirectColor = vec4(0);
-	for(int i = 0; i < 4; i++) {
-		vec3 jit = RandomFloat3(RandomSeed) * 0.25f;
-		indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
-	}
-	indirectColor = indirectColor * 0.25f;
-	//vec3 fastColor = indirectColor.rgb * 50.0f;
-	vec3 fastColor = indirectColor.rgb * albedo.rgb * 50.0f;
-	imageStore(OutImage, ipos, vec4(fastColor,1));
-	imageStore(OutMotionVector, ipos, vec4(0));
-	imageStore(InOutDirectLight1, ipos, vec4(fastColor,1));
-	imageStore(OutAlbedoBuffer, ipos, vec4(fastColor,1.0));
-	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
-	return;
-
 	// calculate the motion vector
 	vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
 	vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
