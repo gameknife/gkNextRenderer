@@ -2,8 +2,11 @@
 #include "Runtime/TaskCoordinator.hpp"
 #include "Vulkan/DeviceMemory.hpp"
 #include "Scene.hpp"
+#include <chrono>
 
 #define TINYBVH_IMPLEMENTATION
+#include <dxgi.h>
+
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
 static tinybvh::BVH GCpuBvh;
@@ -51,6 +54,9 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
     fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 
     UpdateBVH(scene);
+
+    ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    ambientCubesCopy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
 }
 
 void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
@@ -138,6 +144,15 @@ const glm::vec3 hemisphereVectors32[32] = {
     glm::vec3(0.9798239737002217, -0.19925069620281746, 0.01562500000000002)
 };
 
+const glm::vec3 directions[6] = {
+    glm::vec3(0, 0, 1), // PosZ
+    glm::vec3(0, 0, -1), // NegZ
+    glm::vec3(0, 1, 0), // PosY
+    glm::vec3(0, -1, 0), // NegY
+    glm::vec3(1, 0, 0), // PosX
+    glm::vec3(-1, 0, 0) // NegX
+};
+
 // Transform pre-calculated samples to align with given normal
 void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result)
 {
@@ -213,15 +228,15 @@ void BlurAmbientCubes(std::vector<Assets::AmbientCube>& ambientCubes, const std:
     };
 
     // Distribute tasks for each z-slice
-    for (int z = 0; z < Assets::CUBE_SIZE_Z; z++)
-    {
-        TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
-        {
-            processSlice(z);
-        });
-    }
-
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    // for (int z = 0; z < Assets::CUBE_SIZE_Z; z++)
+    // {
+    //     TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
+    //     {
+    //         processSlice(z);
+    //     });
+    // }
+    //
+    // TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 }
 
 bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
@@ -236,134 +251,158 @@ bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh
     return shadowRay.hit.t < distanceToLight;
 }
 
-void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(glm::ivec3 start, glm::ivec3 end, Vulkan::DeviceMemory* GPUMemory)
+void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
+{
+    glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
+    Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
+
+    cube.Info = glm::vec4(1, 1, 0, 0);
+
+    for (int face = 0; face < 6; face++)
+    {
+    glm::vec3 baseDir = directions[face];
+
+    float occlusion = 0.0f;
+
+    std::vector<glm::vec3> hemisphereSamples;
+    GetHemisphereSamples(baseDir, hemisphereSamples);
+
+    bool nextCube = false;
+    for (int i = 0; i < RAY_PERFACE; i++)
+    {
+        tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
+                         tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
+
+        GCpuBvh.Intersect(ray);
+
+        if (ray.hit.t < 10.0f)
+        {
+            uint32_t primIdx = ray.hit.prim;
+            tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
+            FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
+            glm::mat4* worldTS = ( glm::mat4*)instance.transform;
+            glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+            float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
+            
+            if (dotProduct < 0.0f)
+            {
+                occlusion += 1.0f;
+            }
+            else
+            {
+                cube.Info.x = 0;
+                cube.Info.y = 0;
+                nextCube = true;
+                break;
+            }
+        }
+    }
+
+    if (nextCube)
+    {
+        continue;
+    }
+
+    occlusion /= RAY_PERFACE;
+    float visibility = 1.0f - occlusion;
+    glm::vec4 indirectColor = glm::vec4(visibility);
+    uint32_t packedColor = glm::packUnorm4x8(indirectColor);
+
+    switch (face)
+    {
+    case 0: cube.PosZ = packedColor;
+        break;
+    case 1: cube.NegZ = packedColor;
+        break;
+    case 2: cube.PosY = packedColor;
+        break;
+    case 3: cube.NegY = packedColor;
+        break;
+    case 4: cube.PosX = packedColor;
+        break;
+    case 5: cube.NegX = packedColor;
+        break;
+    }
+    }
+
+    glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
+    IsInShadow(probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
+    ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
+}
+
+void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
 {
     if (bvhInstanceList.size() == 0)
     {
         return;
     }
     
-    const auto timer = std::chrono::high_resolution_clock::now();
-
-    std::vector<Assets::AmbientCube> ambientCubes(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
-    std::vector<Assets::AmbientCube> ambientCubesCopy(Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z);
-  
-    // Create a lambda for processing a single z-slice
-    auto processSlice = [this, &ambientCubes, &ambientCubesCopy](int x, int y, int z)
-    {
-        const glm::vec3 directions[6] = {
-            glm::vec3(0, 0, 1), // PosZ
-            glm::vec3(0, 0, -1), // NegZ
-            glm::vec3(0, 1, 0), // PosY
-            glm::vec3(0, -1, 0), // NegY
-            glm::vec3(1, 0, 0), // PosX
-            glm::vec3(-1, 0, 0) // NegX
-        };
-
-        glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
-
-        Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
-        cube.Info = glm::vec4(1, 1, 0, 0);
-
-        for (int face = 0; face < 6; face++)
-        {
-            glm::vec3 baseDir = directions[face];
-
-            float occlusion = 0.0f;
-
-            std::vector<glm::vec3> hemisphereSamples;
-            GetHemisphereSamples(baseDir, hemisphereSamples);
-
-            bool nextCube = false;
-            for (int i = 0; i < RAY_PERFACE; i++)
-            {
-                tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                                 tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
-
-                GCpuBvh.Intersect(ray);
-
-                if (ray.hit.t < 10.0f)
-                {
-                    uint32_t primIdx = ray.hit.prim;
-                    tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
-                    FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
-                    glm::mat4* worldTS = ( glm::mat4*)instance.transform;
-                    glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-                    float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
-                    
-                    if (dotProduct < 0.0f)
-                    {
-                        occlusion += 1.0f;
-                    }
-                    else
-                    {
-                        cube.Info.x = 0;
-                        cube.Info.y = 0;
-                        nextCube = true;
-                        break;
-                    }
-                }
-            }
-
-            if (nextCube)
-            {
-                continue;
-            }
-
-            occlusion /= RAY_PERFACE;
-            float visibility = 1.0f - occlusion;
-            glm::vec4 indirectColor = glm::vec4(visibility);
-            uint32_t packedColor = glm::packUnorm4x8(indirectColor);
-
-            switch (face)
-            {
-            case 0: cube.PosZ = packedColor;
-                break;
-            case 1: cube.NegZ = packedColor;
-                break;
-            case 2: cube.PosY = packedColor;
-                break;
-            case 3: cube.NegY = packedColor;
-                break;
-            case 4: cube.PosX = packedColor;
-                break;
-            case 5: cube.NegX = packedColor;
-                break;
-            }
-        }
-
-        glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
-        IsInShadow(probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
-        ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
-    };
-
     // Distribute tasks for each z-slice
-    for (int x = 0; x < Assets::CUBE_SIZE_XY; x++)
+    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int lengthX = Assets::CUBE_SIZE_XY / groupSize;
+    int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
+
+    for (int x = 0; x < lengthX - 1; x++)
     {
-        TaskCoordinator::GetInstance()->AddParralledTask([processSlice, x](ResTask& task)
+        for (int z = 0; z < lengthZ - 1; z++)
+        {   
+            AsyncProcessGroup(x, z);
+        }
+    }
+
+    //TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    //BlurAmbientCubes(ambientCubes, ambientCubesCopy);
+}
+
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
+{
+    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    
+    int actualX = xInMeter * groupSize;
+    int actualZ = zInMeter * groupSize;
+    
+    TaskCoordinator::GetInstance()->AddParralledTask(
+                [this, actualX, actualZ, groupSize](ResTask& task)
+            {
+                for (int z = actualZ; z < actualZ + groupSize; z++)
+                    for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
+                        for (int x = actualX; x < actualX + groupSize; x++)
+                            ProcessCube(x, y, z);
+            },
+            [this](ResTask& task)
+            {
+                needFlush = true;
+            });
+}
+
+void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius)
+{
+    glm::vec3 actrualPos = worldPos - Assets::CUBE_OFFSET;
+    int x = static_cast<int>(actrualPos.x);
+    int y = static_cast<int>(actrualPos.y);
+    int z = static_cast<int>(actrualPos.z);
+    
+    for (int dx = -1; dx <= 1; ++dx)
+    {
+        for (int dz = -1; dz <= 1; ++dz)
         {
-            for (int z = 0; z < Assets::CUBE_SIZE_XY; z++)
-                for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
-                    processSlice(x, y, z);
-        });
+            AsyncProcessGroup(x + dx, z + dz);
+        }
     }
 
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-
-    BlurAmbientCubes(ambientCubes, ambientCubesCopy);
-
-    // Upload to GPU
-    Assets::AmbientCube* data = reinterpret_cast<Assets::AmbientCube*>(GPUMemory->Map(0, sizeof(Assets::AmbientCube) * ambientCubes.size()));
-    std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(Assets::AmbientCube));
-    GPUMemory->Unmap();
-
-    double elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-        std::chrono::high_resolution_clock::now() - timer).count();
-
-    fmt::print("gen gi data takes: {:.1f}s\n", elapsed);
 }
 
 
-void FCPUAccelerationStructure::Tick()
+void FCPUAccelerationStructure::Tick(Vulkan::DeviceMemory* GPUMemory)
 {
+    if (needFlush)
+    {
+        // Upload to GPU, now entire range
+        Assets::AmbientCube* data = reinterpret_cast<Assets::AmbientCube*>(GPUMemory->Map(0, sizeof(Assets::AmbientCube) * ambientCubes.size()));
+        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(Assets::AmbientCube));
+        GPUMemory->Unmap();
+
+        needFlush = false;
+    }
 }

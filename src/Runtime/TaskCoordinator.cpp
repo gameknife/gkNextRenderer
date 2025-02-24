@@ -1,5 +1,7 @@
 #include "TaskCoordinator.hpp"
 
+#include <chrono>
+
 TaskThread::TaskThread(TaskCoordinator* coordinator)
 {
     complete_.reset(new event_signal());
@@ -53,13 +55,14 @@ uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc task_func, ResTask::TaskFun
     return task.task_id;
 }
 
-uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc task_func)
+uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func)
 {
     static uint32_t task_id = 0;
     ResTask task;
     task.task_id = task_id++;
     task.priority = 3;
     task.task_func = std::move(task_func);
+    task.complete_func = std::move(complete_func);
 
     parralledTaskQueue_.enqueue(task);
 
@@ -73,7 +76,7 @@ void TaskCoordinator::WaitForAllParralledTask()
         Tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
     }
-
+    
     // wait for all idle
     while( !IsAllParralledTaskComplete() )
     {
@@ -93,9 +96,22 @@ void TaskCoordinator::Tick()
             MarkTaskComplete(task);
         }
     }
-    if( completeTaskQueue_.dequeue(task, false) )
+    
+    auto startTime = std::chrono::high_resolution_clock::now();
+    while (completeTaskQueue_.size() > 0)
     {
-        task.complete_func(task);
+        // Check if we've exceeded 2ms
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - startTime);
+        if (elapsedTime.count() > 2000) // 2ms = 2000µs
+        {
+            break;
+        }
+
+        if (completeTaskQueue_.dequeue(task, false))
+        {
+            task.complete_func(task);
+        }
     }
 
     // if low threads has idle one, peak a task from parralled queue

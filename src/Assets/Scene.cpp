@@ -4,6 +4,9 @@
 #include "Sphere.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include <chrono>
+#include <unordered_set>
+
+#include "Runtime/Engine.hpp"
 
 namespace Assets
 {
@@ -111,7 +114,7 @@ namespace Assets
         UpdateMaterial();
         MarkDirty();
 
-        cpuAccelerationStructure_.StartAmbientCubeGenerateTasks(vec3(0,0,0), vec3(1,1,1), ambientCubeBufferMemory_.get());
+        cpuAccelerationStructure_.StartAmbientCubeGenerateTasks();
     }
 
     void Scene::PlayAllTracks()
@@ -164,6 +167,11 @@ namespace Assets
                 }
             }
         }
+
+        //if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
+        {
+            cpuAccelerationStructure_.Tick( ambientCubeBufferMemory_.get() );
+        }
     }
 
     void Scene::UpdateMaterial()
@@ -181,6 +189,20 @@ namespace Assets
         materialBufferMemory_->Unmap();
     }
 
+    // Hash function for glm::ivec3
+    struct ivec3_hash {
+        std::size_t operator()(const glm::ivec3& v) const {
+            return std::hash<int>()(v.x) ^ (std::hash<int>()(v.y) << 1) ^ (std::hash<int>()(v.z) << 2);
+        }
+    };
+
+    // Equality comparison function for glm::ivec3
+    struct ivec3_equal {
+        bool operator()(const glm::ivec3& lhs, const glm::ivec3& rhs) const {
+            return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+        }
+    };
+    
     bool Scene::UpdateNodes()
     {
         // this can move to thread task
@@ -188,6 +210,8 @@ namespace Assets
         {
             if (sceneDirty_)
             {
+                std::unordered_set<glm::ivec3, ivec3_hash, ivec3_equal> uniqueCenters;
+                
                 sceneDirty_ = false;
                 {
                     PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
@@ -213,6 +237,8 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
+                                glm::ivec3 center = glm::ivec3(combined[3]);
+                                //uniqueCenters.insert(center);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();
@@ -258,6 +284,14 @@ namespace Assets
 
                     indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
                 }
+
+                //for ( auto& center : uniqueCenters)
+                {
+                    // must redo when previous done
+                    //cpuAccelerationStructure_.UpdateBVH(*this);
+                    //cpuAccelerationStructure_.AsyncProcessGroupInWorld(glm::vec3(-9,0,9), 1.0f);
+                }
+
                 return true;
             }
         }

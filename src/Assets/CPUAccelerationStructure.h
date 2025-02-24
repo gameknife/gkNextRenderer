@@ -1,5 +1,6 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
+#include "Assets/UniformBuffer.hpp"
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
@@ -35,13 +36,22 @@ public:
     void UpdateBVH(Assets::Scene& scene);
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
+
+    void ProcessCube(int x, int y, int z);
+    void StartAmbientCubeGenerateTasks();
+    void AsyncProcessGroup(int xInMeter, int zInMeter);
+    void AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius);
     
-    void StartAmbientCubeGenerateTasks( glm::ivec3 start, glm::ivec3 end, Vulkan::DeviceMemory* GPUMemory );
-    
-    void Tick();
+    void Tick(Vulkan::DeviceMemory* GPUMemory);
 
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
     std::vector<tinybvh::BVHBase*> bvhBLASList;
+
+    
+    std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::AmbientCube> ambientCubesCopy;
+
+    bool needFlush = false;
 };
