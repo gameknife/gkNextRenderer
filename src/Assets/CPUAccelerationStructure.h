@@ -44,6 +44,8 @@ public:
     
     void Tick(Vulkan::DeviceMemory* GPUMemory);
 
+    void RequestUpdate(glm::vec3 worldPos, float radius);
+
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
@@ -52,6 +54,8 @@ private:
     
     std::vector<Assets::AmbientCube> ambientCubes;
     std::vector<Assets::AmbientCube> ambientCubesCopy;
+    
+    std::vector<uint32_t> lastBatchTasks;
 
     bool needFlush = false;
 };

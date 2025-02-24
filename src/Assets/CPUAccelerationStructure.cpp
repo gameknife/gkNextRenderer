@@ -361,7 +361,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
     
-    TaskCoordinator::GetInstance()->AddParralledTask(
+    uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
                 [this, actualX, actualZ, groupSize](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
@@ -373,6 +373,8 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
             {
                 needFlush = true;
             });
+
+    lastBatchTasks.push_back(taskId);
 }
 
 void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius)
@@ -405,4 +407,18 @@ void FCPUAccelerationStructure::Tick(Vulkan::DeviceMemory* GPUMemory)
 
         needFlush = false;
     }
+
+    if (!lastBatchTasks.empty())
+    {
+        if (TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+        {
+            fmt::print("all gi gen tasks done\n");
+            lastBatchTasks.clear();
+        }
+    }
+}
+
+void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
+{
+    
 }

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <fmt/format.h>
 #include <cstring>
+#include <unordered_set>
 
 namespace details
 {
@@ -289,6 +290,11 @@ public:
     {
         completeTaskQueue_.enqueue(task);
     }
+
+    void MarkTaskEnd(const ResTask& task)
+    {
+        completedTaskIds_.insert(task.task_id);
+    }
     
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
     uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
@@ -313,6 +319,8 @@ public:
         return true;
     }
 
+    bool IsAllTaskComplete(std::vector<uint32_t>& tasks);
+
     void Tick();
 
     static TaskCoordinator* GetInstance()
@@ -332,7 +340,7 @@ private:
     tsqueue<ResTask> completeTaskQueue_;
     tsqueue<ResTask> parralledTaskQueue_;
 
-
+    std::unordered_set<uint32_t> completedTaskIds_;
 private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();

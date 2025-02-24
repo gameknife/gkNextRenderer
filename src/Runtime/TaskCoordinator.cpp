@@ -20,10 +20,7 @@ TaskThread::TaskThread(TaskCoordinator* coordinator)
                 task.task_func(task);
 
                 // sync add to mainthread complete queue
-                if(task.complete_func != nullptr)
-                {
-                    TaskCoordinator::GetInstance()->MarkTaskComplete(task);
-                }
+                TaskCoordinator::GetInstance()->MarkTaskComplete(task);
             }
             else
             {
@@ -85,6 +82,18 @@ void TaskCoordinator::WaitForAllParralledTask()
 }
 
 
+bool TaskCoordinator::IsAllTaskComplete(std::vector<uint32_t>& tasks)
+{
+    for (uint32_t task_id : tasks)
+    {
+        if ( !completedTaskIds_.contains(task_id) )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void TaskCoordinator::Tick()
 {
     ResTask task;
@@ -110,7 +119,11 @@ void TaskCoordinator::Tick()
 
         if (completeTaskQueue_.dequeue(task, false))
         {
-            task.complete_func(task);
+            if (task.complete_func != nullptr)
+            {
+                task.complete_func(task);
+            }
+            MarkTaskEnd(task);
         }
     }
 
