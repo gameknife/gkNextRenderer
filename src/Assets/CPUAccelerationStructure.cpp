@@ -3,6 +3,7 @@
 #include "Vulkan/DeviceMemory.hpp"
 #include "Scene.hpp"
 #include <chrono>
+#include <fstream>
 
 #define TINYBVH_IMPLEMENTATION
 #include "Runtime/Engine.hpp"
@@ -40,7 +41,7 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
             bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v2.Position.x, v2.Position.y, v2.Position.z, 0));
 
             // Store additional triangle information
-            bvhBLASContexts[m].extinfos.push_back({normal, 0});
+            bvhBLASContexts[m].extinfos.push_back({normal, v0.MaterialIndex});
         }
 
         bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
@@ -61,6 +62,7 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
 {
     bvhInstanceList.clear();
+    bvhTLASContexts.clear();
 
     for (auto& node : scene.Nodes())
     {
@@ -77,6 +79,14 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
         std::memcpy( (float*)instance.transform, &(worldTS[0]), sizeof(float) * 16);
 
         bvhInstanceList.push_back(instance);
+        FCPUTLASInstanceInfo info;
+        for ( int i = 0; i < node->Materials().size(); ++i )
+        {
+            uint32_t matId = node->Materials()[i];
+            Assets::FMaterial& mat = scene.Materials()[matId];
+            info.mats[i] = glm::packUnorm4x8( mat.gpuMaterial_.Diffuse );
+        }
+        bvhTLASContexts.push_back( info );
     }
 
     if (bvhInstanceList.size() > 0)
@@ -108,6 +118,7 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
 #define RAY_PERFACE 32
 
 // Pre-calculated hemisphere samples in the positive Z direction (up)
+// 这个需要是一个四棱锥范围内的射线，而不能是半球
 const glm::vec3 hemisphereVectors32[32] = {
     glm::vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
     glm::vec3(-0.2713456981395, 0.13388146427413833, 0.953125),
@@ -243,15 +254,16 @@ bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh
     glm::vec3 direction = glm::normalize(lightPos - point);
     tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z));
 
-    bvh.Intersect(shadowRay);
+    return bvh.IsOccluded(shadowRay);
 
     // If the ray hits something before reaching the light, the point is in shadow
-    float distanceToLight = glm::length(lightPos - point);
-    return shadowRay.hit.t < distanceToLight;
+    // float distanceToLight = glm::length(lightPos - point);
+    // return shadowRay.hit.t < distanceToLight;
 }
 
 void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
 {
+    glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
     Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
 
@@ -262,7 +274,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
     glm::vec3 baseDir = directions[face];
 
     float occlusion = 0.0f;
-
+    glm::vec4 rayColor = glm::vec4(0, 0, 0, 0);
     std::vector<glm::vec3> hemisphereSamples;
     GetHemisphereSamples(baseDir, hemisphereSamples);
 
@@ -278,6 +290,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
         {
             uint32_t primIdx = ray.hit.prim;
             tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
+            FCPUTLASInstanceInfo& instContext = bvhTLASContexts[ray.hit.inst];
             FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
             glm::mat4* worldTS = ( glm::mat4*)instance.transform;
             glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
@@ -285,6 +298,15 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
             
             if (dotProduct < 0.0f)
             {
+                // get the hit pos
+                auto hitPos = ray.O + ray.D * ray.hit.t;
+                glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
+                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -10000.0f, GCpuBvh) ? 0.5f: 2.0f;
+                
+                // occlude, bounce color, fade by distance
+                uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
+                
+                rayColor += glm::unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
                 occlusion += 1.0f;
             }
             else
@@ -295,6 +317,13 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
                 break;
             }
         }
+        else
+        {
+            // hit the sky, sky color, with a ibl is better
+            float skyBrightness = hemisphereSamples[i].y > 0.0f ? 2.0f : 0.0f;
+            glm::vec4 skyColor = glm::vec4(0.6, 0.6, 0.8, 1.0f) * skyBrightness;
+            rayColor += skyColor;
+        }
     }
 
     if (nextCube)
@@ -303,8 +332,9 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
     }
 
     occlusion /= RAY_PERFACE;
+    rayColor /= RAY_PERFACE;
     float visibility = 1.0f - occlusion;
-    glm::vec4 indirectColor = glm::vec4(visibility);
+    glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
     uint32_t packedColor = glm::packUnorm4x8(indirectColor);
 
     switch (face)
@@ -324,7 +354,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
     }
     }
 
-    glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
+    
     IsInShadow(probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
     ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
 }
@@ -351,6 +381,8 @@ void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
 
     //TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     //BlurAmbientCubes(ambientCubes, ambientCubesCopy);
+
+    firstUpdate = true;
 }
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
@@ -405,13 +437,23 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
         GPUMemory->Unmap();
 
         needFlush = false;
+
+        if (firstUpdate)
+        {
+            std::ofstream outFile("gi.bin", std::ios::binary);
+            if (outFile.is_open()) {
+                outFile.write(reinterpret_cast<const char*>(ambientCubes.data()), 
+                             ambientCubes.size() * sizeof(Assets::AmbientCube));
+                outFile.close();
+            }
+            firstUpdate = false;
+        }
     }
 
     if (!lastBatchTasks.empty())
     {
         if (TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
         {
-            fmt::print("all gi gen tasks done\n");
             lastBatchTasks.clear();
         }
     }
@@ -424,8 +466,8 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 
             for( auto& group : needUpdateGroups)
             {
-                AsyncProcessGroup(group.x - Assets::CUBE_OFFSET.x, group.z - Assets::CUBE_OFFSET.z);
-                NextEngine::GetInstance()->DrawAuxPoint( group, glm::vec4(1, 0, 0, 1), 2, 30 );
+                AsyncProcessGroup(group.x, group.z);
+                //NextEngine::GetInstance()->DrawAuxPoint( glm::vec3(group) + Assets::CUBE_OFFSET, glm::vec4(1, 0, 0, 1), 2, 30 );
             }
 
             needUpdateGroups.clear();
@@ -435,20 +477,15 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 
 void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
 {
-    glm::ivec3 center = glm::ivec3(worldPos);
-    glm::ivec3 min = center - glm::ivec3(radius);
-    glm::ivec3 max = center + glm::ivec3(radius);
+    glm::ivec3 center = glm::ivec3(worldPos - Assets::CUBE_OFFSET);
+    glm::ivec3 min = center - glm::ivec3(static_cast<int>(radius));
+    glm::ivec3 max = center + glm::ivec3(static_cast<int>(radius));
 
     // Insert all points within the radius (using manhattan distance for simplicity)
-    for (int x = min.x; x <= max.y; ++x) {
-        for (int y = min.y; y <= max.y; ++y) {
-            for (int z = min.z; z <= max.z; ++z) {
-                glm::ivec3 point(x, y, z);
-                // Optional: Check if point is within spherical radius
-                //if (glm::length(glm::vec3(point - center)) <= radius) {
-                    needUpdateGroups.insert(point);
-                //}
-            }
+    for (int x = min.x; x <= max.x; ++x) {
+        for (int z = min.z; z <= max.z; ++z) {
+            glm::ivec3 point(x, 1, z);
+            needUpdateGroups.insert(point);
         }
     }
 }

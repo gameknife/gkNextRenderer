@@ -221,7 +221,7 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
-                                cpuAccelerationStructure_.RequestUpdate(node->Translation(), 1.0f);
+                                //cpuAccelerationStructure_.RequestUpdate(combined * glm::vec4(0,0,0,1), 1.0f);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();
@@ -267,7 +267,9 @@ namespace Assets
 
                     indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
                 }
-                
+                // cpuAccelerationStructure_.RequestUpdate(glm::vec3(10,0,-2), 1.0f);
+                // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,9), 2.0f);
+                // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,5), 2.0f);
                 return true;
             }
         }

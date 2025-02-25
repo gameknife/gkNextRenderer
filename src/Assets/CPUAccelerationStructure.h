@@ -5,6 +5,8 @@
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <functional>
 
+#include "Material.hpp"
+
 namespace std {
     template <>
     struct hash<glm::ivec3> {
@@ -35,7 +37,12 @@ namespace Vulkan
 struct FCPUBLASVertInfo
 {
     glm::vec3 normal;
-    uint32_t instanceId;
+    uint32_t matIdx;
+};
+
+struct FCPUTLASInstanceInfo
+{
+    std::array<uint32_t, 16> mats;
 };
 
 struct FCPUBLASContext
@@ -66,6 +73,7 @@ public:
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
+    std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;
     std::vector<tinybvh::BVHBase*> bvhBLASList;
 
     
@@ -77,4 +85,5 @@ private:
     std::unordered_set<glm::ivec3>  needUpdateGroups;
 
     bool needFlush = false;
+    bool firstUpdate = false;
 };

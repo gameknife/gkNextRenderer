@@ -96,8 +96,8 @@ namespace Assets
 
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
-        void SetMaterial(const std::vector<uint32_t>& materials);
-        std::vector<uint32_t>& Materials() { return materialIdx_; }
+        void SetMaterial(const std::array<uint32_t, 16>& materials);
+        std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
 
         void BindPhysicsBody(JPH::BodyID bodyId) { physicsBodyTemp_ = bodyId; }
@@ -118,7 +118,7 @@ namespace Assets
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
-        std::vector<uint32_t> materialIdx_;
+        std::array<uint32_t, 16> materialIdx_;
         JPH::BodyID physicsBodyTemp_;
     };
 

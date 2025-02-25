@@ -226,10 +226,7 @@ void NextEngine::Start()
     physicsEngine_->Start();
     
     gameInstance_->OnInit();
-
-    //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
-    //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
-
+    
     // init js engine
     InitJSEngine();
 }
