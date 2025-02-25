@@ -170,7 +170,7 @@ namespace Assets
 
         if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
         {
-            cpuAccelerationStructure_.Tick( ambientCubeBufferMemory_.get() );
+            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get() );
         }
     }
 
@@ -221,8 +221,7 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
-                                glm::ivec3 center = glm::ivec3(combined[3]);
-                                cpuAccelerationStructure_.RequestUpdate(center, 1.0f);
+                                cpuAccelerationStructure_.RequestUpdate(node->Translation(), 1.0f);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();

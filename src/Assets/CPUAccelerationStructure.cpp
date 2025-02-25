@@ -5,8 +5,7 @@
 #include <chrono>
 
 #define TINYBVH_IMPLEMENTATION
-#include <dxgi.h>
-
+#include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
 static tinybvh::BVH GCpuBvh;
@@ -396,7 +395,7 @@ void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, flo
 }
 
 
-void FCPUAccelerationStructure::Tick(Vulkan::DeviceMemory* GPUMemory)
+void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory)
 {
     if (needFlush)
     {
@@ -416,9 +415,41 @@ void FCPUAccelerationStructure::Tick(Vulkan::DeviceMemory* GPUMemory)
             lastBatchTasks.clear();
         }
     }
+    else
+    {
+        if(!needUpdateGroups.empty())
+        {
+            // if we got upadte task, rebuild bvh and dispatch
+            UpdateBVH(scene);
+
+            for( auto& group : needUpdateGroups)
+            {
+                AsyncProcessGroup(group.x - Assets::CUBE_OFFSET.x, group.z - Assets::CUBE_OFFSET.z);
+                NextEngine::GetInstance()->DrawAuxPoint( group, glm::vec4(1, 0, 0, 1), 2, 30 );
+            }
+
+            needUpdateGroups.clear();
+        }
+    }
 }
 
 void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
 {
-    
+    glm::ivec3 center = glm::ivec3(worldPos);
+    glm::ivec3 min = center - glm::ivec3(radius);
+    glm::ivec3 max = center + glm::ivec3(radius);
+
+    // Insert all points within the radius (using manhattan distance for simplicity)
+    for (int x = min.x; x <= max.y; ++x) {
+        for (int y = min.y; y <= max.y; ++y) {
+            for (int z = min.z; z <= max.z; ++z) {
+                glm::ivec3 point(x, y, z);
+                // Optional: Check if point is within spherical radius
+                //if (glm::length(glm::vec3(point - center)) <= radius) {
+                    needUpdateGroups.insert(point);
+                //}
+            }
+        }
+    }
 }
+
