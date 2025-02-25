@@ -115,7 +115,7 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-#define RAY_PERFACE 32
+#define RAY_PERFACE 16
 
 // Pre-calculated hemisphere samples in the positive Z direction (up)
 // 这个需要是一个四棱锥范围内的射线，而不能是半球
@@ -153,6 +153,24 @@ const glm::vec3 hemisphereVectors32[32] = {
     glm::vec3(-0.587325250956154, 0.8079924405365998, 0.046875),
     glm::vec3(0.9798239737002217, -0.19925069620281746, 0.01562500000000002)
 };
+const glm::vec3 hemisphereVectors16[16] = {
+    glm::vec3(0.0898831725494359, -0.23118056318048955, 0.96875),
+    glm::vec3(-0.3791079112581037, 0.18705114039085075, 0.90625),
+    glm::vec3(0.5153445316614019, 0.15001983597741456, 0.84375),
+    glm::vec3(-0.3240808043433482, -0.5334979566560387, 0.78125),
+    glm::vec3(-0.1352243320429325, 0.6819918016542008, 0.71875),
+    glm::vec3(0.6081648613009205, -0.4466222553554984, 0.65625),
+    glm::vec3(-0.7999438572571327, -0.08689512492988453, 0.59375),
+    glm::vec3(0.559254806831153, 0.6364019944471022, 0.53125),
+    glm::vec3(0.018252552906059358, -0.8831422772194816, 0.46875000000000006),
+    glm::vec3(-0.6310280835640938, 0.66088160456577, 0.40624999999999994),
+    glm::vec3(0.9369622623684265, -0.06275074818231247, 0.34374999999999994),
+    glm::vec3(-0.7493392047328667, -0.5994907787033216, 0.2812499999999999),
+    glm::vec3(0.1500724796134238, 0.9641715036043528, 0.21875),
+    glm::vec3(0.5472431702110503, -0.8222596002220706, 0.15624999999999997),
+    glm::vec3(-0.9665972247046685, 0.2385387655984508, 0.09375000000000008),
+    glm::vec3(0.8773063928879596, 0.47891223673854594, 0.03125000000000001)
+};
 
 const glm::vec3 directions[6] = {
     glm::vec3(0, 0, 1), // PosZ
@@ -177,7 +195,7 @@ void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& resul
     glm::mat3 transform(tangent, bitangent, normal);
 
     // Transform each pre-calculated sample
-    for (const auto& sample : hemisphereVectors32)
+    for (const auto& sample : hemisphereVectors16)
     {
         result.push_back(transform * sample);
     }
@@ -301,7 +319,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
                 // get the hit pos
                 auto hitPos = ray.O + ray.D * ray.hit.t;
                 glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -10000.0f, GCpuBvh) ? 0.5f: 2.0f;
+                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -10000.0f, GCpuBvh) ? 0.5f: 1.0f;
                 
                 // occlude, bounce color, fade by distance
                 uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
@@ -320,8 +338,8 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
         else
         {
             // hit the sky, sky color, with a ibl is better
-            float skyBrightness = hemisphereSamples[i].y > 0.0f ? 2.0f : 0.0f;
-            glm::vec4 skyColor = glm::vec4(0.6, 0.6, 0.8, 1.0f) * skyBrightness;
+            float skyBrightness = hemisphereSamples[i].y > 0.0f ? 1.0f : 0.0f;
+            glm::vec4 skyColor = glm::vec4(0.6, 0.7, 1.0, 1.0f) * skyBrightness;
             rayColor += skyColor;
         }
     }
@@ -361,6 +379,8 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
 
 void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
 {
+    //return;
+    
     if (bvhInstanceList.size() == 0)
     {
         return;

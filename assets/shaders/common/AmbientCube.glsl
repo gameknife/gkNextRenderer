@@ -11,15 +11,28 @@ vec4 UnpackColor(uint packed) {
     return unpackUnorm4x8(packed);
 }
 
-// Sample the ambient cube using the Half-Life 2 algorithm
 vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     vec4 color = vec4(0.0);
-    color += max(normal.x, 0.0) 	* UnpackColor(cube.PosX);
-    color += max(-normal.x, 0.0) 	* UnpackColor(cube.NegX);
-    color += max(normal.y, 0.0) 	* UnpackColor(cube.PosY);
-    color += max(-normal.y, 0.0) 	* UnpackColor(cube.NegY);
-    color += max(normal.z, 0.0) 	* UnpackColor(cube.PosZ);
-    color += max(-normal.z, 0.0) 	* UnpackColor(cube.NegZ);
+    float sum = 0.0;
+    
+    float wx = max(normal.x, 0.0);
+    float wnx = max(-normal.x, 0.0);
+    float wy = max(normal.y, 0.0);
+    float wny = max(-normal.y, 0.0);
+    float wz = max(normal.z, 0.0);
+    float wnz = max(-normal.z, 0.0);
+    
+    sum = wx + wnx + wy + wny + wz + wnz;
+    
+    color += wx * UnpackColor(cube.PosX);
+    color += wnx * UnpackColor(cube.NegX);
+    color += wy * UnpackColor(cube.PosY);
+    color += wny * UnpackColor(cube.NegY);
+    color += wz * UnpackColor(cube.PosZ);
+    color += wnz * UnpackColor(cube.NegZ);
+    
+    // 归一化处理
+    color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
     color.w = cube.Info.y;
     return color;
 }

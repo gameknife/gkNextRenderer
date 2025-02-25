@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import plotly.graph_objects as go
 
 # 生成半球均匀分布向量
-num_points = 64
+num_points = 16
 indices = np.arange(0, num_points, dtype=float) + 0.5
 
 phi = np.arccos(1 - indices/(1*num_points))  # 极角均匀分布, 限制在90度
