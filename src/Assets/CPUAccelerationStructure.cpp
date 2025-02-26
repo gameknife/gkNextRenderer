@@ -182,7 +182,7 @@ const glm::vec3 directions[6] = {
     glm::vec3(-1, 0, 0) // NegX
 };
 
-#define MAX_ILLUMINANCE 20.f
+#define MAX_ILLUMINANCE 10.f
 
 uint packRGB10A2(vec4 color) {
     vec4 clamped = clamp(color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
@@ -368,6 +368,8 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
+    return;
+    
     if (bvhInstanceList.empty())
     {
         return;

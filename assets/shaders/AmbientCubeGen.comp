@@ -46,8 +46,7 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-const uint FACE_TRACING = 4;
-const vec3 lightDir = vec3(0.5f, -1.0f, 0.5f);
+const uint FACE_TRACING = 6;
 
 int TraceShadow(vec3 origin, vec3 lightDir)
 {
@@ -102,13 +101,13 @@ uint TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             // if hit backface
             if( dot(OutNormal, rayDir) < 0.0 )
             {
-                int shadow = TraceShadow(origin + rayDir * RayDist, lightDir);
+                int shadow = TraceShadow(origin + rayDir * RayDist, -Camera.SunDirection.xyz);
                 //int shadow = 0;
                 const Material material = Materials[OutMaterialId];
                 occlusion += 1.0;
                 hitDist += RayDist;
                 hitCount += 1;
-                rayColor += material.Diffuse.rgb * ( shadow > 0 ? 2.0 : 0.5);// * clamp( 1.0 - RayDist / 10.0, 0.0, 1.0);
+                rayColor += material.Diffuse.rgb * ( shadow > 0 ? 3.0 : 0.5);// * clamp( 1.0 - RayDist / 10.0, 0.0, 1.0);
             }
             else
             {
@@ -152,5 +151,5 @@ void main() {
     Cubes[gIdx].NegZ = LerpPackedColor(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.04);
     
     Cubes[gIdx].Info.x = activeProbe;
-    Cubes[gIdx].Info.y = TraceShadow(origin, lightDir);
+    Cubes[gIdx].Info.y = TraceShadow(origin, -Camera.SunDirection.xyz);
 }

@@ -272,18 +272,18 @@ namespace Vulkan::RayTracing
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
 
-        // if(supportRayCast_)
-        // {
-        //     SCOPED_GPU_TIMER("ambient gen");
-        //
-        //     int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        //     int group = count / 32;
-        //     VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
-        //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
-        //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-        //                             ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-        //     vkCmdDispatch(commandBuffer, group, 1, 1);
-        // }
+        if(supportRayCast_)
+        {
+            SCOPED_GPU_TIMER("ambient gen");
+        
+            int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            int group = count / 32;
+            VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            vkCmdDispatch(commandBuffer, group, 1, 1);
+        }
 #endif
     }
 
