@@ -61,10 +61,9 @@ public:
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-    void ProcessCube(int x, int y, int z, std::vector<glm::vec3> lightPos);
-    void StartAmbientCubeGenerateTasks(Assets::Scene& scene);
+    void ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos);
+    void AsyncProcessFull();
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene);
-    void AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius, Assets::Scene& scene);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
 
@@ -85,5 +84,4 @@ private:
     std::unordered_set<glm::ivec3>  needUpdateGroups;
 
     bool needFlush = false;
-    bool firstUpdate = false;
 };

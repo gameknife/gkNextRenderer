@@ -684,13 +684,19 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( scene_->GetEnvSettings().SunRotation * M_PI )), 0.75f, cosf(float( scene_->GetEnvSettings().SunRotation * M_PI )) )), 0.0f );
+    ubo.SunDirection = glm::vec4( scene_->GetEnvSettings().SunDirection(), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
     ubo.HasSun =scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
+    
+    if (ubo.HasSun != prevUBO_.HasSun || ubo.SunDirection != prevUBO_.SunDirection)
+    {
+        scene_->MarkEnvDirty();
+    }
+
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;

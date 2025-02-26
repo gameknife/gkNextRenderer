@@ -199,7 +199,6 @@ vec4 unpackRGB10A2(uint packed) {
     float r = float((packed) & 0x3FF) / 1023.0f;
     float g = float((packed >> 10) & 0x3FF) / 1023.0f;
     float b = float((packed >> 20) & 0x3FF) / 1023.0f;
-    //float a = packed & 0x3;
     
     return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
 }
@@ -224,72 +223,6 @@ void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& resul
     }
 }
 
-void BlurAmbientCubes(std::vector<Assets::AmbientCube>& ambientCubes, const std::vector<Assets::AmbientCube>& ambientCubesCopy)
-{
-    const float centerWeight = 1.0f;
-    const float neighborWeight = 1.0f;
-    const float weightSum = centerWeight + (6.0f * neighborWeight);
-
-    // Create a lambda for processing a single z-slice
-    auto processSlice = [&ambientCubes, &ambientCubesCopy, centerWeight, neighborWeight, weightSum](int z)
-    {
-        // Process only interior cubes (skip border)
-        if (z <= 0 || z >= Assets::CUBE_SIZE_Z - 1) return;
-
-        for (int y = 1; y < Assets::CUBE_SIZE_XY - 1; y++)
-        {
-            for (int x = 1; x < Assets::CUBE_SIZE_XY - 1; x++)
-            {
-                int idx = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
-
-                // Get indices of 6 neighboring cubes
-                int idxPosX = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + (x + 1);
-                int idxNegX = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + (x - 1);
-                int idxPosY = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + (y + 1) * Assets::CUBE_SIZE_XY + x;
-                int idxNegY = z * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + (y - 1) * Assets::CUBE_SIZE_XY + x;
-                int idxPosZ = (z + 1) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
-                int idxNegZ = (z - 1) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + y * Assets::CUBE_SIZE_XY + x;
-
-                // Skip if center cube is not active
-                if (ambientCubesCopy[idx].Info.x != 1) continue;
-
-                uint32_t* TargetAddress = (uint32_t*)&ambientCubes[idx];
-                uint32_t* SourceAddressCenter = (uint32_t*)&ambientCubesCopy[idx];
-                uint32_t* SourceAddressPosX = (uint32_t*)&ambientCubesCopy[idxPosX];
-                uint32_t* SourceAddressNegX = (uint32_t*)&ambientCubesCopy[idxNegX];
-                uint32_t* SourceAddressPosY = (uint32_t*)&ambientCubesCopy[idxPosY];
-                uint32_t* SourceAddressNegY = (uint32_t*)&ambientCubesCopy[idxNegY];
-                uint32_t* SourceAddressPosZ = (uint32_t*)&ambientCubesCopy[idxPosZ];
-                uint32_t* SourceAddressNegZ = (uint32_t*)&ambientCubesCopy[idxNegZ];
-
-                for (int face = 0; face < 6; face++)
-                {
-                    TargetAddress[face] = glm::packUnorm4x8((
-                        glm::unpackUnorm4x8(SourceAddressCenter[face]) * centerWeight +
-                        glm::unpackUnorm4x8(SourceAddressPosX[face]) * neighborWeight +
-                        glm::unpackUnorm4x8(SourceAddressNegX[face]) * neighborWeight +
-                        glm::unpackUnorm4x8(SourceAddressPosY[face]) * neighborWeight +
-                        glm::unpackUnorm4x8(SourceAddressNegY[face]) * neighborWeight +
-                        glm::unpackUnorm4x8(SourceAddressPosZ[face]) * neighborWeight +
-                        glm::unpackUnorm4x8(SourceAddressNegZ[face]) * neighborWeight
-                    ) / weightSum);
-                }
-            }
-        }
-    };
-
-    // Distribute tasks for each z-slice
-    // for (int z = 0; z < Assets::CUBE_SIZE_Z; z++)
-    // {
-    //     TaskCoordinator::GetInstance()->AddParralledTask([processSlice, z](ResTask& task)
-    //     {
-    //         processSlice(z);
-    //     });
-    // }
-    //
-    // TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-}
-
 bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
 {
     glm::vec3 direction = lightPos - point;
@@ -299,13 +232,12 @@ bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh
     return bvh.IsOccluded(shadowRay);
 }
 
-void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> lightPos)
+void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos)
 {
-    glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
     Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
 
-    cube.Info = glm::vec4(1, 1, 0, 0);
+    cube.Info = glm::vec4(1, 0, 0, 0);
 
     for (int face = 0; face < 6; face++)
     {
@@ -339,8 +271,8 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
                 // get the hit pos
                 auto hitPos = ray.O + ray.D * ray.hit.t;
                 glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
-                
+                //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
+                float power = 0.5f;
                 // occlude, bounce color, fade by distance
                 uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
                 
@@ -407,59 +339,64 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
     }
     }
 
+    if (!sunDir.empty())
+    {
+        IsInShadow(probePos, probePos + sunDir[0] * 1000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
+    }
     
-    IsInShadow(probePos, probePos + lightDir * -1000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
     ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
 }
 
-void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(Assets::Scene& scene)
+void FCPUAccelerationStructure::AsyncProcessFull()
 {
-    //return;
-    
-    if (bvhInstanceList.size() == 0)
-    {
-        return;
-    }
-    
-    // Distribute tasks for each z-slice
+    // add a full update tasks
     int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
-
+    
     for (int x = 0; x < lengthX - 1; x++)
     {
         for (int z = 0; z < lengthZ - 1; z++)
         {   
-            AsyncProcessGroup(x, z, scene);
+            needUpdateGroups.insert(glm::ivec3(x, 0, z));
         }
     }
-
+    
     //TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     //BlurAmbientCubes(ambientCubes, ambientCubesCopy);
-
-    firstUpdate = true;
 }
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
+    if (bvhInstanceList.empty())
+    {
+        return;
+    }
+    
     int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
 
     std::vector<glm::vec3> lightPos;
+    std::vector<glm::vec3> sunDir;
     for( auto& light : scene.Lights() )
     {
         lightPos.push_back(mix(light.p1, light.p3, 0.5f));
     }
 
+    if (scene.HasSun())
+    {
+        sunDir.push_back( scene.GetSunDir() );
+    }
+
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, lightPos](ResTask& task)
+                [this, actualX, actualZ, groupSize, sunDir, lightPos](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z, lightPos);
+                            ProcessCube(x, y, z, sunDir, lightPos);
             },
             [this](ResTask& task)
             {
@@ -468,25 +405,6 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
 
     lastBatchTasks.push_back(taskId);
 }
-
-void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius, Assets::Scene& scene)
-{
-    glm::vec3 actrualPos = worldPos - Assets::CUBE_OFFSET;
-    int x = static_cast<int>(actrualPos.x);
-    int y = static_cast<int>(actrualPos.y);
-    int z = static_cast<int>(actrualPos.z);
-    
-    for (int dx = -1; dx <= 1; ++dx)
-    {
-        for (int dz = -1; dz <= 1; ++dz)
-        {
-            AsyncProcessGroup(x + dx, z + dz, scene);
-        }
-    }
-
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-}
-
 
 void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory)
 {
@@ -498,17 +416,6 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
         GPUMemory->Unmap();
 
         needFlush = false;
-
-        if (firstUpdate)
-        {
-            std::ofstream outFile("gi.bin", std::ios::binary);
-            if (outFile.is_open()) {
-                outFile.write(reinterpret_cast<const char*>(ambientCubes.data()), 
-                             ambientCubes.size() * sizeof(Assets::AmbientCube));
-                outFile.close();
-            }
-            firstUpdate = false;
-        }
     }
 
     if (!lastBatchTasks.empty())

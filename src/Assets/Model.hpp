@@ -45,6 +45,11 @@ namespace Assets
             SkyRotation = 0;
             SunRotation = 0.5f;   
         }
+
+        glm::vec3 SunDirection() const 
+        {
+            return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
+        }
         
         float ControlSpeed;
         bool GammaCorrection;

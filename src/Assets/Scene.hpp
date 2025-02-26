@@ -59,6 +59,8 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+		const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
+		const bool HasSun() const { return envSettings_.HasSun; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
@@ -93,6 +95,8 @@ namespace Assets
 		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 
 		void PlayAllTracks();
+
+		void MarkEnvDirty();
 
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 

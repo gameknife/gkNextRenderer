@@ -114,7 +114,7 @@ namespace Assets
         UpdateMaterial();
         MarkDirty();
 
-        cpuAccelerationStructure_.StartAmbientCubeGenerateTasks(*this);
+        cpuAccelerationStructure_.AsyncProcessFull();
     }
 
     void Scene::PlayAllTracks()
@@ -123,6 +123,11 @@ namespace Assets
         {
             track.Play();
         }
+    }
+
+    void Scene::MarkEnvDirty()
+    {
+        cpuAccelerationStructure_.AsyncProcessFull();
     }
 
     void Scene::Tick(float DeltaSeconds)
@@ -270,7 +275,7 @@ namespace Assets
                 // cpuAccelerationStructure_.RequestUpdate(glm::vec3(10,0,-2), 1.0f);
                 // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,9), 2.0f);
                 // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,5), 2.0f);
-                cpuAccelerationStructure_.RequestUpdate(glm::vec3(1,0,1), 2.0f);
+                //cpuAccelerationStructure_.RequestUpdate(glm::vec3(1,0,1), 2.0f);
                 return true;
             }
         }
