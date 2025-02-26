@@ -269,17 +269,14 @@ void BlurAmbientCubes(std::vector<Assets::AmbientCube>& ambientCubes, const std:
 
 bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
 {
-    glm::vec3 direction = glm::normalize(lightPos - point);
-    tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z));
+    glm::vec3 direction = lightPos - point;
+    float length = glm::length(direction) - 0.02f;
+    tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
 
     return bvh.IsOccluded(shadowRay);
-
-    // If the ray hits something before reaching the light, the point is in shadow
-    // float distanceToLight = glm::length(lightPos - point);
-    // return shadowRay.hit.t < distanceToLight;
 }
 
-void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
+void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> lightPos)
 {
     glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.5f));
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
@@ -319,7 +316,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
                 // get the hit pos
                 auto hitPos = ray.O + ray.D * ray.hit.t;
                 glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -10000.0f, GCpuBvh) ? 0.5f: 1.0f;
+                float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
                 
                 // occlude, bounce color, fade by distance
                 uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
@@ -351,6 +348,21 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
 
     occlusion /= RAY_PERFACE;
     rayColor /= RAY_PERFACE;
+
+    // for each light in the scene, ray hit the center, if not occlude, add rayColor
+    for( auto& light : lightPos )
+    {
+        if( !IsInShadow( probePos, light, GCpuBvh) )
+        {
+            // ndotl + distance attenuation
+            glm::vec3 lightDir = glm::normalize(light - probePos);
+            float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
+            float distance = glm::length(light - probePos);
+            float attenuation = 10.0f / (distance * distance);
+            rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
+        }
+    }
+
     float visibility = 1.0f - occlusion;
     glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
     uint32_t packedColor = glm::packUnorm4x8(indirectColor);
@@ -373,11 +385,11 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z)
     }
 
     
-    IsInShadow(probePos, probePos + lightDir * -10000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
+    IsInShadow(probePos, probePos + lightDir * -1000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
     ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
 }
 
-void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
+void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks(Assets::Scene& scene)
 {
     //return;
     
@@ -395,7 +407,7 @@ void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
     {
         for (int z = 0; z < lengthZ - 1; z++)
         {   
-            AsyncProcessGroup(x, z);
+            AsyncProcessGroup(x, z, scene);
         }
     }
 
@@ -405,20 +417,26 @@ void FCPUAccelerationStructure::StartAmbientCubeGenerateTasks()
     firstUpdate = true;
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
     int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
-    
+
+    std::vector<glm::vec3> lightPos;
+    for( auto& light : scene.Lights() )
+    {
+        lightPos.push_back(mix(light.p1, light.p3, 0.5f));
+    }
+
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize](ResTask& task)
+                [this, actualX, actualZ, groupSize, lightPos](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z);
+                            ProcessCube(x, y, z, lightPos);
             },
             [this](ResTask& task)
             {
@@ -428,7 +446,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter)
     lastBatchTasks.push_back(taskId);
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius)
+void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, float radius, Assets::Scene& scene)
 {
     glm::vec3 actrualPos = worldPos - Assets::CUBE_OFFSET;
     int x = static_cast<int>(actrualPos.x);
@@ -439,7 +457,7 @@ void FCPUAccelerationStructure::AsyncProcessGroupInWorld(glm::vec3 worldPos, flo
     {
         for (int dz = -1; dz <= 1; ++dz)
         {
-            AsyncProcessGroup(x + dx, z + dz);
+            AsyncProcessGroup(x + dx, z + dz, scene);
         }
     }
 
@@ -486,7 +504,7 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 
             for( auto& group : needUpdateGroups)
             {
-                AsyncProcessGroup(group.x, group.z);
+                AsyncProcessGroup(group.x, group.z, scene);
                 //NextEngine::GetInstance()->DrawAuxPoint( glm::vec3(group) + Assets::CUBE_OFFSET, glm::vec4(1, 0, 0, 1), 2, 30 );
             }
 

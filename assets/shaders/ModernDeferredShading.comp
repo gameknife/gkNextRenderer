@@ -148,6 +148,15 @@ void main() {
     //albedo = vec4(1,1,1,1); // for test
     vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1) * 20.0f;
 
-	outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
-    imageStore(OutImage, ipos, outColor);
+	//outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
+    //imageStore(OutImage, ipos, outColor);
+
+    if(Camera.HDR)
+    {
+        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
+    }
+    else
+    {
+        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 10000.0), 1.0));
+    }
 }

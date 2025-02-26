@@ -114,7 +114,7 @@ namespace Assets
         UpdateMaterial();
         MarkDirty();
 
-        cpuAccelerationStructure_.StartAmbientCubeGenerateTasks();
+        cpuAccelerationStructure_.StartAmbientCubeGenerateTasks(*this);
     }
 
     void Scene::PlayAllTracks()
