@@ -1,14 +1,40 @@
 
-uint LerpPackedColor(uint c0, uint c1, float t) {
-    // Extract RGBA components (8 bits each)
-    vec4 color0 = unpackUnorm4x8(c0);
-    vec4 color1 = unpackUnorm4x8(c1);
-    // Pack back to uint32
-    return packUnorm4x8(mix(color0, color1, t));
+#define MAX_ILLUMINANCE 20.f
+
+uint packRGB10A2(vec4 color) {
+    vec4 clamped = clamp( color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
+
+    uint r = uint(clamped.r * 1023.0f);
+    uint g = uint(clamped.g * 1023.0f);
+    uint b = uint(clamped.b * 1023.0f);
+    uint a = uint(clamped.a * 3.0f);
+
+    return r | (g << 10) | (b << 20) | (a << 30);
+}
+
+vec4 unpackRGB10A2(uint packed) {
+    float r = float((packed) & 0x3FF) / 1023.0;
+    float g = float((packed >> 10) & 0x3FF) / 1023.0;
+    float b = float((packed >> 20) & 0x3FF) / 1023.0;
+    //float a = packed & 0x3;
+
+    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
+}
+
+uint PackColor(vec4 source) {
+    return packRGB10A2(source);
 }
 
 vec4 UnpackColor(uint packed) {
-    return unpackUnorm4x8(packed);
+    return unpackRGB10A2(packed);
+}
+
+uint LerpPackedColor(uint c0, uint c1, float t) {
+    // Extract RGBA components (8 bits each)
+    vec4 color0 = UnpackColor(c0);
+    vec4 color1 = UnpackColor(c1);
+    // Pack back to uint32
+    return PackColor(mix(color0, color1, t));
 }
 
 vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {

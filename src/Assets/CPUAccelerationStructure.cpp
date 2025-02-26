@@ -9,6 +9,7 @@
 #include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
+using namespace glm;
 static tinybvh::BVH GCpuBvh;
 
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
@@ -181,6 +182,28 @@ const glm::vec3 directions[6] = {
     glm::vec3(-1, 0, 0) // NegX
 };
 
+#define MAX_ILLUMINANCE 20.f
+
+uint packRGB10A2(vec4 color) {
+    vec4 clamped = clamp(color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
+    
+    uint r = uint(clamped.r * 1023.0f);
+    uint g = uint(clamped.g * 1023.0f);
+    uint b = uint(clamped.b * 1023.0f);
+    uint a = uint(clamped.a * 3.0f);
+    
+    return r | (g << 10) | (b << 20) | (a << 30);
+}
+
+vec4 unpackRGB10A2(uint packed) {
+    float r = float((packed) & 0x3FF) / 1023.0f;
+    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
+    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
+    //float a = packed & 0x3;
+    
+    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
+}
+
 // Transform pre-calculated samples to align with given normal
 void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result)
 {
@@ -321,7 +344,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
                 // occlude, bounce color, fade by distance
                 uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
                 
-                rayColor += glm::unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
+                rayColor += unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
                 occlusion += 1.0f;
             }
             else
@@ -358,14 +381,14 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
             glm::vec3 lightDir = glm::normalize(light - probePos);
             float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
             float distance = glm::length(light - probePos);
-            float attenuation = 10.0f / (distance * distance);
+            float attenuation = 40.0f / (distance * distance);
             rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
         }
     }
 
     float visibility = 1.0f - occlusion;
     glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
-    uint32_t packedColor = glm::packUnorm4x8(indirectColor);
+    uint32_t packedColor = packRGB10A2(indirectColor);
 
     switch (face)
     {

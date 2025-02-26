@@ -129,7 +129,7 @@ uint TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
     rayColor = rayColor / float(FACE_TRACING);
     float avgDist = hitDist / hitCount;
     vec4 indirectColor = vec4(rayColor, avgDist);
-    return packUnorm4x8(indirectColor);
+    return PackColor(indirectColor);
 }
 
 void main() {
