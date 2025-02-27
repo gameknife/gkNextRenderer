@@ -52,7 +52,7 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 		}
 	}
 	
-	if( light.normal_area.w > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
+	if( Camera.LightCount > 0 && light.normal_area.w > 0 && RandomFloat(ray.RandomSeed) < 0.5 )
 	{
 		// scatter to light
 		vec3 lightpos = light.p0.xyz + (light.p1.xyz - light.p0.xyz) * RandomFloat(ray.RandomSeed) + (light.p3.xyz - light.p0.xyz) *  RandomFloat(ray.RandomSeed);

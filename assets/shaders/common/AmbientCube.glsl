@@ -37,6 +37,14 @@ uint LerpPackedColor(uint c0, uint c1, float t) {
     return PackColor(mix(color0, color1, t));
 }
 
+uint LerpPackedColorAlt(uint c0, vec4 c1, float t) {
+    // Extract RGBA components (8 bits each)
+    vec4 color0 = UnpackColor(c0);
+    vec4 color1 = c1;
+    // Pack back to uint32
+    return PackColor(mix(color0, color1, t));
+}
+
 vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     vec4 color = vec4(0.0);
     float sum = 0.0;

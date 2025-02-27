@@ -428,6 +428,7 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
             // Vertex buffer, Index buffer, Material buffer, Offset buffer
@@ -461,6 +462,11 @@ namespace Vulkan::PipelineCommon
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
 
+            // Light buffer
+            VkDescriptorBufferInfo lightBufferInfo = {};
+            lightBufferInfo.buffer = scene.LightBuffer().Handle();
+            lightBufferInfo.range = VK_WHOLE_SIZE;
+
             // Vertex buffer
             VkDescriptorBufferInfo vertexBufferInfo = {};
             vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
@@ -490,6 +496,7 @@ namespace Vulkan::PipelineCommon
             {
                 descriptorSets.Bind(0, 0, structureInfo),
                 descriptorSets.Bind(0, 1, ioBufferInfo),
+                descriptorSets.Bind(0, 2, lightBufferInfo),
                 descriptorSets.Bind(0, 3, uniformBufferInfo),
                 descriptorSets.Bind(0, 4, vertexBufferInfo),
                 descriptorSets.Bind(0, 5, indexBufferInfo),

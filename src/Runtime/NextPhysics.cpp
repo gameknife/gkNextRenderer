@@ -422,7 +422,7 @@ JPH::BodyID NextPhysics::CreatePlaneBody(glm::vec3 position, glm::vec3 extent, J
 
 	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
 	BodyCreationSettings floor_settings(floor_shape, RVec3(position.x, position.y, position.z), Quat::sIdentity(), EMotionType::Static, Layers::NON_MOVING);
-	floor_settings.mRestitution = 0.25f;
+	floor_settings.mRestitution = 0.5f;
 	floor_settings.mFriction = 0.25f;
 	// Create the actual rigid body
 	body_id = body_interface.CreateAndAddBody(floor_settings, EActivation::DontActivate);
