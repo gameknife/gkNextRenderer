@@ -1,7 +1,7 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # directory naming
-file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h")
+file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
 file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
 file(GLOB_RECURSE src_files_vulkan "Vulkan/*.cpp" "Vulkan/*.hpp")
 file(GLOB_RECURSE src_files_thirdparty 

@@ -4,7 +4,7 @@
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/ColorFunc.glsl"
 #include "common/Random.glsl"
 

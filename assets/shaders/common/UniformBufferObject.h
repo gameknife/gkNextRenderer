@@ -19,8 +19,8 @@ struct ALIGN_16 UniformBufferObject
 	mat4 ProjectionInverse;
 	mat4 ViewProjection;
 	mat4 PrevViewProjection;
+	
 	vec4 ViewportRect;
-
 	vec4 SunDirection;
 	vec4 SunColor;
 	vec4 BackGroundColor;	//not used
@@ -29,34 +29,42 @@ struct ALIGN_16 UniformBufferObject
 	float FocusDistance;
 	float SkyRotation;
 	float HeatmapScale;
+	
 	float PaperWhiteNit;
-
 	float SkyIntensity;
 	uint SkyIdx;
 	uint TotalFrames;
+	
 	uint MaxNumberOfBounces;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
 	uint RandomSeed;
+	
 	uint LightCount;
 	glbool HasSky;
 	glbool ShowHeatmap;
 	glbool UseCheckerBoard;	//not used
+	
 	uint TemporalFrames;
 	glbool HasSun;
 	glbool HDR;
 	glbool AdaptiveSample;
+	
 	float AdaptiveVariance;
 	uint AdaptiveSteps;
 	glbool TAA;
 	uint SelectedId;
+	
 	glbool ShowEdge;
 	glbool ProgressiveRender;
-		
 	float BFSigma;
 	float BFSigmaLum;
+	
 	float BFSigmaNormal;
 	uint BFSize;
+
+	glbool BakeWithGPU;
+	glbool Reserve1;
 };
 
 struct ALIGN_16 NodeProxy

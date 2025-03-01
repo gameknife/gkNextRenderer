@@ -271,20 +271,47 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
-
-        if(supportRayCast_)
+#endif
+        
+        if(supportRayCast_ && lastUBO.BakeWithGPU)
         {
             SCOPED_GPU_TIMER("ambient gen");
-        
+#if !ANDROID
+            int cubesPerGroup = 32;
+#else
+            int cubesPerGroup = 1024;
+#endif      
+            
             int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-            int group = count / 32;
+            int group = count / cubesPerGroup;
+
+            // 每32个cube一个group
+
+#if !ANDROID
+            int temporalFrames = 30;
+#else
+            int temporalFrames = 600;
+#endif
+            // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
+            int frame = (int)(frameCount_ % temporalFrames);
+            int groupPerFrame = group / temporalFrames;
+            int offset = frame * groupPerFrame;
+            int offsetInCubes = offset * cubesPerGroup;
+            
             VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, group, 1, 1);
+
+            glm::uvec2 pushConst = { offsetInCubes, 1 };
+
+            vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+            
+            vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
+
+            // 这里可以做一个模糊，或者说降噪，这个对于CPU GEN也可以
         }
-#endif
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

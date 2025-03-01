@@ -1,7 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba16f) uniform image2D InImage;

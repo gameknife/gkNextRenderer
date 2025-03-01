@@ -4,7 +4,7 @@
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/Random.glsl"
 
 // placed me in a 200 x 200 x 100 grid, total 4,000,000 cubes, total size 4,000,000 * 6 * 4 * 4 = 384 MB
@@ -42,12 +42,23 @@ layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
+layout(push_constant) uniform PushConsts {
+    uint globalOffset;
+    uint unitSize;
+} pushConsts;
+
 #include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
 
+#if DESKTOP
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+#else
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+#endif
 
-const uint FACE_TRACING = 6;
+
+
+const uint FACE_TRACING = 8;
 
 int TraceLight(vec3 origin, vec3 lightPos)
 {
@@ -136,7 +147,8 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             hitDist += 1000.0;
             hitCount += 1;
             occlusion += 0.0;
-            rayColor += rayDir.y > 0 ? vec3(0.6, 0.7, 1.0) : vec3(0.0, 0.0, 0.0);
+            // should sample from ibl
+            rayColor += rayDir.y > 0 ? vec3(0.6, 0.6, 0.6) : vec3(0.0, 0.0, 0.0);
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
@@ -159,7 +171,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
 }
 
 void main() {
-    uint gIdx = gl_GlobalInvocationID.x;
+    uint gIdx = gl_GlobalInvocationID.x + pushConsts.globalOffset;
     
     // convert to local position
     uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);

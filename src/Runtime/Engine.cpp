@@ -632,7 +632,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
-    
+
+    ubo.BakeWithGPU = userSettings_.BakeWithGPU;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);

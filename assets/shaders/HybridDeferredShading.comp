@@ -5,7 +5,7 @@
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/Random.glsl"
 #include "common/GGXSample.glsl"
 

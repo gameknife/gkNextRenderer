@@ -1,7 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "Platform.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
 

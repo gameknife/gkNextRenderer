@@ -17,10 +17,8 @@ namespace Assets
 {
 	using namespace glm;
 
-	#include "../assets/shaders/common/UniformBufferObject.glsl"
-	// struct UniformBufferObject
-	// struct NodeProxy
-		
+	#include "../assets/shaders/common/UniformBufferObject.h"
+	
 	struct alignas(16) LightObject final
 	{
 		glm::vec4 p0;
