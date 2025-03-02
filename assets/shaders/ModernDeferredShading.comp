@@ -137,7 +137,7 @@ void main() {
     const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 16;
+    const int jitcount = 2;
     for(int i = 0; i < jitcount; i++) {
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * 2.0f;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
@@ -146,7 +146,7 @@ void main() {
     indirectColor = indirectColor  / float(jitcount);
 
     //albedo = vec4(1,1,1,1); // for test
-    vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1) * Camera.SkyIntensity;
+    vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1) * Camera.SkyIntensity * 0.75f;
     
     if(Camera.HDR)
     {

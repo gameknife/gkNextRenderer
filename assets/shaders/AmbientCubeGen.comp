@@ -1,12 +1,67 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_ray_query : require
+#extension GL_EXT_nonuniform_qualifier : require
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
 #include "common/UniformBufferObject.h"
 #include "common/Random.glsl"
 
+#define HIGH_QUALITY 0
+
+const vec3 hemisphereVectors32[32] = {
+vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
+vec3(-0.2713456981395, 0.13388146427413833, 0.953125),
+vec3(0.3720439325965911, 0.1083041854826636, 0.921875),
+vec3(-0.2360905314110366, -0.38864941831045413, 0.890625),
+vec3(-0.0994527932145428, 0.5015812509422829, 0.859375),
+vec3(0.4518001015172772, -0.3317915801282155, 0.828125),
+vec3(-0.6006110862696151, -0.06524229782152816, 0.796875),
+vec3(0.4246400102205648, 0.4832175711777031, 0.765625),
+vec3(0.014025106917771066, -0.6785990390141627, 0.734375),
+vec3(-0.4910499646725058, 0.5142812135107899, 0.703125),
+vec3(0.7390090634100329, -0.04949331846649647, 0.671875),
+vec3(-0.5995855814426192, -0.47968400004702705, 0.640625),
+vec3(0.12194313936463708, 0.7834487731414841, 0.609375),
+vec3(0.4520746755881747, -0.6792642873483389, 0.578125),
+vec3(-0.8128288753565273, 0.2005915096948101, 0.546875),
+vec3(0.7520560261769773, 0.41053939258723227, 0.515625),
+vec3(-0.28306625928882, -0.8278009134008216, 0.48437499999999994),
+vec3(-0.357091373373129, 0.8168007623879232, 0.4531249999999999),
+vec3(0.8289528112710368, -0.36723115480694823, 0.42187500000000006),
+vec3(-0.8724752793478753, -0.29359665580835004, 0.39062500000000006),
+vec3(0.45112649883473616, 0.8169054360353547, 0.35937499999999994),
+vec3(0.22185204734195418, -0.9182132941017481, 0.328125),
+vec3(-0.792362708282336, 0.5329414347735422, 0.296875),
+vec3(0.9533182286148584, 0.1436235160606669, 0.26562499999999994),
+vec3(-0.6110028678351297, -0.756137457657169, 0.23437499999999994),
+vec3(-0.06066310322190489, 0.9772718261990818, 0.20312499999999992),
+vec3(0.7091634641369421, -0.683773475288631, 0.17187500000000008),
+vec3(-0.9897399665274648, 0.025286518803760413, 0.14062500000000008),
+vec3(0.749854715318357, 0.6524990538612495, 0.1093750000000001),
+vec3(-0.11249484107422018, -0.9905762944401031, 0.0781250000000001),
+vec3(-0.587325250956154, 0.8079924405365998, 0.046875),
+vec3(0.9798239737002217, -0.19925069620281746, 0.01562500000000002)
+};
+const vec3 hemisphereVectors16[16] = {
+vec3(0.0898831725494359, -0.23118056318048955, 0.96875),
+vec3(-0.3791079112581037, 0.18705114039085075, 0.90625),
+vec3(0.5153445316614019, 0.15001983597741456, 0.84375),
+vec3(-0.3240808043433482, -0.5334979566560387, 0.78125),
+vec3(-0.1352243320429325, 0.6819918016542008, 0.71875),
+vec3(0.6081648613009205, -0.4466222553554984, 0.65625),
+vec3(-0.7999438572571327, -0.08689512492988453, 0.59375),
+vec3(0.559254806831153, 0.6364019944471022, 0.53125),
+vec3(0.018252552906059358, -0.8831422772194816, 0.46875000000000006),
+vec3(-0.6310280835640938, 0.66088160456577, 0.40624999999999994),
+vec3(0.9369622623684265, -0.06275074818231247, 0.34374999999999994),
+vec3(-0.7493392047328667, -0.5994907787033216, 0.2812499999999999),
+vec3(0.1500724796134238, 0.9641715036043528, 0.21875),
+vec3(0.5472431702110503, -0.8222596002220706, 0.15624999999999997),
+vec3(-0.9665972247046685, 0.2385387655984508, 0.09375000000000008),
+vec3(0.8773063928879596, 0.47891223673854594, 0.03125000000000001)
+};
 // placed me in a 200 x 200 x 100 grid, total 4,000,000 cubes, total size 4,000,000 * 6 * 4 * 4 = 384 MB
 // it the gap is 10 cm, it will cover 20 x 20 x 10 meters area
 
@@ -49,6 +104,7 @@ layout(push_constant) uniform PushConsts {
 
 #include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
+#include "common/equirectangularSample.glsl"
 
 #if DESKTOP
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
@@ -57,8 +113,40 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
 
+#if HIGH_QUALITY
+const uint FACE_TRACING = 32;
+#else
+const uint FACE_TRACING = 16;
+#endif
 
-const uint FACE_TRACING = 8;
+vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal) {
+    // SH basis function evaluation
+    const float SH_C0 = 0.282095;
+    const float SH_C1 = 0.488603;
+    const float SH_C2 = 1.092548;
+    const float SH_C3 = 0.315392;
+    const float SH_C4 = 0.546274;
+
+    float basis[9];
+    basis[0] = SH_C0;
+    basis[1] = -SH_C1 * normal.y;
+    basis[2] = SH_C1 * normal.z;
+    basis[3] = -SH_C1 * normal.x;
+    basis[4] = SH_C2 * normal.x * normal.y;
+    basis[5] = -SH_C2 * normal.y * normal.z;
+    basis[6] = SH_C3 * (3.0 * normal.y * normal.y - 1.0);
+    basis[7] = -SH_C2 * normal.x * normal.z;
+    basis[8] = SH_C4 * (normal.x * normal.x - normal.z * normal.z);
+
+    vec3 color = vec3(0.0);
+    for (int i = 0; i < 9; ++i) {
+        color.r += SHCoefficients[0][i] * basis[i];
+        color.g += SHCoefficients[1][i] * basis[i];
+        color.b += SHCoefficients[2][i] * basis[i];
+    }
+
+    return color;
+}
 
 int TraceLight(vec3 origin, vec3 lightPos)
 {
@@ -95,11 +183,35 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
     float hitDist = 0.0;
     float hitCount = 0.000001;
     vec3 rayColor = vec3(0.0);
+
+    // Generate a random angle for z-axis rotation
+    float randAngle = RandomFloat(RandomSeed) * M_TWO_PI;
+    float cosTheta = cos(randAngle);
+    float sinTheta = sin(randAngle);
     
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        vec3 rayDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), basis );
+        //vec3 rayDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), basis );
+        
 
+
+        // Get the hemisphere vector and rotate it around z-axis
+        #if HIGH_QUALITY
+        vec3 hemiVec = hemisphereVectors32[i];
+        #else
+        vec3 hemiVec = hemisphereVectors16[i];
+        #endif
+
+        // Apply rotation around z-axis
+        vec3 rotatedVec = vec3(
+        hemiVec.x * cosTheta - hemiVec.y * sinTheta,
+        hemiVec.x * sinTheta + hemiVec.y * cosTheta,
+        hemiVec.z
+        );
+
+        // Align with the surface normal
+        vec3 rayDir = AlignWithNormal(rotatedVec, basis);
+        
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
         
@@ -132,7 +244,10 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
                 occlusion += 1.0;
                 hitDist += RayDist;
                 hitCount += 1;
-                rayColor += clamp(material.Diffuse.rgb, 0, 1) * ( shadow > 0 ? 3.0 : 0.5);// * clamp( 1.0 - RayDist / 10.0, 0.0, 1.0);
+                
+                // 对于sky的反弹，至少可以考虑一个上下半球，如果发现朝下，不贡献天光
+                float skyVisibility = OutNormal.y > -0.1 ? 0.5: 0.0;
+                rayColor += clamp(material.Diffuse.rgb, 0, 1) * ( shadow > 0 ? 3.0 : skyVisibility);// * clamp( 1.0 - RayDist / 10.0, 0.0, 1.0);
             }
             else
             {
@@ -148,7 +263,8 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             hitCount += 1;
             occlusion += 0.0;
             // should sample from ibl
-            rayColor += rayDir.y > 0 ? vec3(0.6, 0.6, 0.6) : vec3(0.0, 0.0, 0.0);
+            //rayColor += rayDir.y > 0 ? vec3(0.6, 0.6, 0.6) : vec3(0.0, 0.0, 0.0);
+            rayColor += equirectangularSample(rayDir, Camera.SkyRotation).rgb;
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
@@ -182,12 +298,19 @@ void main() {
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.08);
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.08);
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.08);
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.08);
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.08);
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.08);
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.125);
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.125);
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.125);
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.125);
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.125);
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.125);
+
+//    Cubes[gIdx].PosY = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe));
+//    Cubes[gIdx].NegY = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe));
+//    Cubes[gIdx].PosX = PackColor(TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe));
+//    Cubes[gIdx].NegX = PackColor(TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe));
+//    Cubes[gIdx].PosZ = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe));
+//    Cubes[gIdx].NegZ = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe));
     
     Cubes[gIdx].Info.x = activeProbe;
     Cubes[gIdx].Info.y = TraceShadow(origin, origin + Camera.SunDirection.xyz * 1000.f);

@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 #include <ktx.h>
 #include <array>
+#include <glm/glm.hpp>
 
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
@@ -14,6 +15,8 @@
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
+
+#define M_PI 3.14159265358979323846f
 
 namespace Assets
 {
@@ -24,6 +27,97 @@ namespace Assets
         float elapsed;
         std::array<char, 256> outputInfo;
     };
+
+    struct SphericalHarmonics
+    {
+        // 3 bands (9 coefficients per color channel)
+        std::array<std::array<float, 9>, 3> coefficients;
+    };
+    
+    SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
+    {
+        SphericalHarmonics result{};
+        
+        // Initialize coefficients to zero
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 9; ++j)
+                result.coefficients[i][j] = 0.0f;
+        
+        // SH basis function evaluation constants
+        constexpr float SH_C0 = 0.282095f; // 1/(2*sqrt(π))
+        constexpr float SH_C1 = 0.488603f; // sqrt(3)/(2*sqrt(π))
+        constexpr float SH_C2 = 1.092548f; // sqrt(15)/(2*sqrt(π))
+        constexpr float SH_C3 = 0.315392f; // sqrt(5)/(4*sqrt(π))
+        constexpr float SH_C4 = 0.546274f; // sqrt(15)/(4*sqrt(π))
+        
+        float weightSum = 0.0f;
+        
+        // For each pixel in the environment map
+        for (int y = 0; y < height; ++y)
+        {
+            // Calculate spherical coordinates
+            float v = (y + 0.5f) / height;
+            float theta = v * M_PI;
+            float sinTheta = std::sin(theta);
+            float cosTheta = std::cos(theta);
+            
+            // Pixel solid angle weight (important for correct integration)
+            float weight = sinTheta * (M_PI / height) * (2.0f * M_PI / width);
+            
+            for (int x = 0; x < width; ++x)
+            {
+                float u = (x + 0.5f) / width;
+                float phi = u * 2.0f * M_PI;
+                float sinPhi = std::sin(phi);
+                float cosPhi = std::cos(phi);
+                
+                // Convert to direction vector
+                float dx = sinTheta * cosPhi;
+                float dy = cosTheta;
+                float dz = sinTheta * sinPhi;
+                
+                // Evaluate SH basis functions
+                float basis[9];
+                // Band 0 (1 coefficient)
+                basis[0] = SH_C0;
+                
+                // Band 1 (3 coefficients)
+                basis[1] = -SH_C1 * dy;
+                basis[2] = SH_C1 * dz;
+                basis[3] = -SH_C1 * dx;
+                
+                // Band 2 (5 coefficients)
+                basis[4] = SH_C2 * dx * dy;
+                basis[5] = -SH_C2 * dy * dz;
+                basis[6] = SH_C3 * (3.0f * dy * dy - 1.0f);
+                basis[7] = -SH_C2 * dx * dz;
+                basis[8] = SH_C4 * (dx * dx - dz * dz);
+                
+                // Get pixel color (RGBA format, we want RGB)
+                int pixelIndex = (y * width + x) * 4;
+                float r = hdrPixels[pixelIndex + 0];
+                float g = hdrPixels[pixelIndex + 1];
+                float b = hdrPixels[pixelIndex + 2];
+                
+                // Project color onto SH basis functions
+                for (int i = 0; i < 9; ++i)
+                {
+                    result.coefficients[0][i] += r * basis[i] * weight;
+                    result.coefficients[1][i] += g * basis[i] * weight;
+                    result.coefficients[2][i] += b * basis[i] * weight;
+                }
+                
+                weightSum += weight;
+            }
+        }
+        
+        // Normalization (optional)
+        // for (int i = 0; i < 3; ++i)
+        //     for (int j = 0; j < 9; ++j)
+        //         result.coefficients[i][j] /= weightSum;
+        
+        return result;
+    }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb)
     {
@@ -255,6 +349,8 @@ namespace Assets
                         pixels = stbdata;
                         format = VK_FORMAT_R32G32B32A32_SFLOAT;
                         size = width * height * 4 * sizeof(float);
+
+                        
                     }
                     else
                     {
