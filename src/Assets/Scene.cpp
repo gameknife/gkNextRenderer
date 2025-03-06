@@ -49,6 +49,9 @@ namespace Assets
 
         ambientCubeBuffer_.reset();
         ambientCubeBufferMemory_.reset();
+
+        hdrSHBuffer_.reset();
+        hdrSHBufferMemory_.reset();
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
@@ -105,6 +108,9 @@ namespace Assets
 
         // 材质和灯光也应考虑更新
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
+
+        auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
+        Vulkan::BufferUtil::CreateDeviceBuffer( commandPool, "HDRSH", flags, SHData, hdrSHBuffer_, hdrSHBufferMemory_ );
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());

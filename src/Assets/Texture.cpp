@@ -5,13 +5,10 @@
 #include <imgui_impl_vulkan.h>
 #include <fmt/format.h>
 #include <ktx.h>
-#include <array>
-#include <glm/glm.hpp>
 
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
-#include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -26,12 +23,6 @@ namespace Assets
         TextureImage* transferPtr;
         float elapsed;
         std::array<char, 256> outputInfo;
-    };
-
-    struct SphericalHarmonics
-    {
-        // 3 bands (9 coefficients per color channel)
-        std::array<std::array<float, 9>, 3> coefficients;
     };
     
     SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
@@ -243,7 +234,12 @@ namespace Assets
         Vulkan::Check(vkAllocateDescriptorSets(device_.Handle(), &alloc_info, descriptorSets_.data()),
                       "alloc global descriptor set");
 
+        // for hdr to bind
+        hdrSphericalHarmonics_.resize(100);
+        
         GlobalTexturePool::instance_ = this;
+
+        
     }
 
     GlobalTexturePool::~GlobalTexturePool()
@@ -350,7 +346,8 @@ namespace Assets
                         format = VK_FORMAT_R32G32B32A32_SFLOAT;
                         size = width * height * 4 * sizeof(float);
 
-                        
+                        SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
+                        hdrSphericalHarmonics_[newTextureIdx] = sh;
                     }
                     else
                     {

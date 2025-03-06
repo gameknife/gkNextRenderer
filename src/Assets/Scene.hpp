@@ -101,6 +101,8 @@ namespace Assets
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
+
+		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -134,6 +136,9 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};

@@ -91,3 +91,10 @@ struct ALIGN_16 AmbientCube
 	uint NegX;
 	ivec2 Info;
 };
+
+struct ALIGN_16 SphericalHarmonics
+{
+	// 3 bands (9 coefficients per color channel)
+	float coefficients[3][9];
+	float padding;
+};

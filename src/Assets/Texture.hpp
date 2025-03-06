@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
 #include "Vulkan/Sampler.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "UniformBuffer.hpp"
 
 namespace Vulkan {
 	class CommandPool;
@@ -40,6 +42,8 @@ namespace Assets
 		static TextureImage* GetTextureImage(uint32_t idx);
 		static TextureImage* GetTextureImageByName(const std::string& name);
 		static uint32_t GetTextureIndexByName(const std::string& name);
+
+		std::vector<SphericalHarmonics>& GetHDRSphericalHarmonics() { return hdrSphericalHarmonics_; }
 	private:
 		static GlobalTexturePool* instance_;
 
@@ -53,6 +57,8 @@ namespace Assets
 
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 		std::unordered_map<std::string, uint32_t> textureNameMap_;
+
+		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
 	};
 
 }
