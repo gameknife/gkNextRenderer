@@ -4,7 +4,7 @@
 #define USE_FIREFLY_FILTER 1
 #include "Vertex.glsl"
 #include "Random.glsl"
-#include "common/equirectangularSample.glsl"
+#include "common/SampleIBL.h"
 #include "Scatter.glsl"
 #include "RTSimple.glsl"
 
@@ -69,7 +69,7 @@ void ProcessMiss(const vec3 RayDirection)
 	if (Camera.HasSky)
 	{
 		// Sky color
-		const vec3 skyColor = equirectangularSample(RayDirection, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+		const vec3 skyColor = SampleIBL(Camera.SkyIdx, RayDirection, Camera.SkyRotation, Ray.GBuffer.w).rgb * Camera.SkyIntensity;
         Ray.Attenuation = vec3(1);
 		Ray.EmitColor = vec4(skyColor, -1);
 	}

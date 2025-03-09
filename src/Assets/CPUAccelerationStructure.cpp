@@ -9,11 +9,17 @@
 #include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
+Assets::SphericalHarmonics HDRSHs[100];
 using namespace glm;
+#include "../assets/shaders/common/SampleIBL.h"
+
 static tinybvh::BVH GCpuBvh;
 
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 {
+    auto& HDR = Assets::GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
+    std::memcpy(HDRSHs, HDR.data(), HDR.size() * sizeof(Assets::SphericalHarmonics));
+    
     const auto timer = std::chrono::high_resolution_clock::now();
 
     bvhBLASList.clear();
@@ -290,8 +296,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
         else
         {
             // hit the sky, sky color, with a ibl is better
-            float skyBrightness = hemisphereSamples[i].y > 0.0f ? 1.0f : 0.0f;
-            glm::vec4 skyColor = glm::vec4(0.6, 0.7, 1.0, 1.0f) * skyBrightness;
+            glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f);
             rayColor += skyColor;
         }
     }
@@ -368,8 +373,6 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
-    return;
-    
     if (bvhInstanceList.empty())
     {
         return;

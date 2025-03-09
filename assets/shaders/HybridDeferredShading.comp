@@ -26,12 +26,13 @@ layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
 layout(binding = 15, rgba16f) uniform image2D PrevNormalBuffer;
 layout(binding = 16) buffer AmbientCubeArray { AmbientCube[] Cubes; };
+layout(binding = 17) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/Const_Func.glsl"
-#include "common/equirectangularSample.glsl"
+#include "common/SampleIBL.h"
 #include "common/AmbientCube.glsl"
 
 #if DESKTOP
@@ -163,7 +164,7 @@ void main() {
 	// x == y == 0, hit the sky, quick go
 	if(vBuffer.x == 0)
 	{
-		vec3 iblColor = Camera.HasSky ? equirectangularSample(ray_dir, Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, ray_dir, Camera.SkyRotation, 1.0f).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(InOutDirectLight1, ipos, vec4(0));
@@ -298,7 +299,7 @@ void main() {
 			albedoSingle = vec4(1);
 		}
 		
-		vec3 iblColor = Camera.HasSky ? equirectangularSample(trace_dir , Camera.SkyRotation).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir , Camera.SkyRotation, 1.0f).rgb * Camera.SkyIntensity : vec3(0.0);
 		vec3 illumColor = vec3(0.0);
 		bool hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)

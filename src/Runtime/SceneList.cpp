@@ -202,7 +202,7 @@ namespace
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({0,1,2,3});
 
-        auto spherePos = vec3(1.30, 1.01 + 2.00, 0.80);
+        auto spherePos = vec3(1.30, 1.01 + 2.00 * 0.0, 0.80);
         auto boxPos = vec3(-1.30, 0, -0.80);
         
         materials.push_back({"cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
