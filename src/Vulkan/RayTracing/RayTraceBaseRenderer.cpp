@@ -149,7 +149,7 @@ namespace Vulkan::RayTracing
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
         ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
-
+        directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -159,6 +159,7 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset();
         raycastPipeline_.reset();
         ambientGenPipeline_.reset();
+        directLightGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
@@ -297,19 +298,34 @@ namespace Vulkan::RayTracing
             int groupPerFrame = group / temporalFrames;
             int offset = frame * groupPerFrame;
             int offsetInCubes = offset * cubesPerGroup;
+
+            {
+                VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        directLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+
+                glm::uvec2 pushConst = { offsetInCubes, 1 };
+
+                vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
             
-            VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-
-            glm::uvec2 pushConst = { offsetInCubes, 1 };
-
-            vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(glm::uvec2), &pushConst);
+                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            }
             
-            vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
+            {
+                VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
 
+                glm::uvec2 pushConst = { offsetInCubes, 1 };
+
+                vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
+            
+                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            }
             // 这里可以做一个模糊，或者说降噪，这个对于CPU GEN也可以
         }
     }

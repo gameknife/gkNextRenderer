@@ -173,4 +173,29 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
+
+	class DirectLightGenPipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(DirectLightGenPipeline)
+	
+		DirectLightGenPipeline(
+			const SwapChain& swapChain,
+			const DeviceProcedures& deviceProcedures,
+			const Buffer& ioBuffer,
+			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
+			const Assets::Scene& scene);
+		~DirectLightGenPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const DeviceProcedures& deviceProcedures_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
 }

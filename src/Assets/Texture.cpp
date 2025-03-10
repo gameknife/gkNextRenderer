@@ -13,7 +13,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
 
-#define M_PI 3.14159265358979323846f
+#define M_NEXT_PI 3.14159265358979323846f
 
 namespace Assets
 {
@@ -48,17 +48,17 @@ namespace Assets
         {
             // Calculate spherical coordinates
             float v = (y + 0.5f) / height;
-            float theta = v * M_PI;
+            float theta = v * M_NEXT_PI;
             float sinTheta = std::sin(theta);
             float cosTheta = std::cos(theta);
             
             // Pixel solid angle weight (important for correct integration)
-            float weight = sinTheta * (M_PI / height) * (2.0f * M_PI / width);
+            float weight = sinTheta * (M_NEXT_PI / height) * (2.0f * M_NEXT_PI / width);
             
             for (int x = 0; x < width; ++x)
             {
                 float u = (x + 0.5f) / width;
-                float phi = u * 2.0f * M_PI;
+                float phi = u * 2.0f * M_NEXT_PI;
                 float sinPhi = std::sin(phi);
                 float cosPhi = std::cos(phi);
                 

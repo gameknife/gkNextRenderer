@@ -1,12 +1,10 @@
-#ifdef __cplusplus
-#define M_PI			3.14159265358979323846f	// pi
-#endif
+#define M_NEXT_PI			3.14159265358979323846f	// pi
 
 #ifndef SampleIBL
 
 vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
     // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
-	float angle = rotate * M_PI;
+	float angle = rotate * M_NEXT_PI;
 	float cosAngle = cos(angle);
 	float sinAngle = sin(angle);
 	

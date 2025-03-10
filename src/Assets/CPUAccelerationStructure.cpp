@@ -373,6 +373,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
+    return;
     if (bvhInstanceList.empty())
     {
         return;

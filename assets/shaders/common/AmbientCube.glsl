@@ -67,7 +67,7 @@ vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = cube.Info.y;
+    color.w = unpackUnorm4x8(cube.Info.y).y;
     return color;
 }
 
