@@ -195,13 +195,18 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             // if hit backface
             if( dot(OutNormal, rayDir) < 0.0 )
             {
-                int shadow = TraceShadow(origin + rayDir * OutRayDist, origin + rayDir * OutRayDist + Camera.SunDirection.xyz * 1000.f);
+                vec3 hitPos = origin + rayDir * OutRayDist;
                 const Material material = Materials[OutMaterialId];
                 occlusion += 1.0;
                 hitDist += OutRayDist;
                 hitCount += 1;
 
-                vec3 lightColor = shadow > 0 ? vec3(3,3,3) : vec3(0.5,0.5,0.5);//EvaluateSH(HDRSHs[Camera.SkyIdx].coefficients, OutNormal, 1.0 - Camera.SkyRotation) * 0.25f;
+                ivec3 cubePos = ivec3(floor(hitPos));
+                AmbientCube cube = FetchCube(cubePos);
+                vec4 indirectLight = unpackUnorm4x8(cube.Info.y);
+
+                // here it works, but the intensity should from the real sky and sun and lights, need improvement
+                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x;
                 rayColor += clamp(material.Diffuse.rgb, 0, 1) * lightColor;
             }
             else

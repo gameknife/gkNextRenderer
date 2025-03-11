@@ -37,7 +37,7 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
 
-#define HIGH_QUALITY 0
+#define HIGH_QUALITY 1
 
 const vec3 hemisphereVectors32[32] = {
 vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
