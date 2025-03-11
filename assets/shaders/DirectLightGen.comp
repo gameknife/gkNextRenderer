@@ -157,8 +157,9 @@ int TraceShadow(vec3 origin, vec3 lightPos)
     return TracingOccludeFunction(origin, lightPos);
 }
 
-float TraceIndirectVisibility(inout uvec4 RandomSeed, vec3 origin)
+float TraceIndirectVisibility(inout uvec4 RandomSeed, vec3 origin, inout uint activeProbe)
 {
+    activeProbe = 1;
     float skyVisibility = 0.0f;
 
     // Generate a random angle for z-axis rotation
@@ -194,6 +195,7 @@ float TraceIndirectVisibility(inout uvec4 RandomSeed, vec3 origin)
             if( dot(OutNormal, rayDir) > 0.0 )
             {
                 skyVisibility = 0;
+                activeProbe = 0;
                 break;
             }
         }
@@ -217,10 +219,21 @@ void main() {
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
-    int activeProbe = 1;
-    float skyVisibility = TraceIndirectVisibility(RandomSeed, origin);
+    // sky visibility
+    uint activeProbe = 1;
+    float skyVisibility = TraceIndirectVisibility(RandomSeed, origin, activeProbe);
+    // sun visibility
     int shadow = TraceShadow(origin, origin + Camera.SunDirection.xyz * 1000.f);
+    // light visibility
+    float lightVisibility = 0.0f;
+    if(Camera.LightCount > 0)
+    {
+        vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
+        float lightAtten = TracingOccludeFunction(origin, lightPos);
+        lightVisibility = 1.0f;
+    }
     
     // Info y, pack skyvisibility and sun visibility
-    Cubes[gIdx].Info.y = packUnorm4x8(vec4(skyVisibility, float(shadow), 0, 0));
+    Cubes[gIdx].Info.x = activeProbe;
+    Cubes[gIdx].Info.y = packUnorm4x8(vec4(skyVisibility, float(shadow), lightVisibility, 0));
 }

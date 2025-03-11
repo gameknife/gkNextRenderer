@@ -206,7 +206,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
                 vec4 indirectLight = unpackUnorm4x8(cube.Info.y);
 
                 // here it works, but the intensity should from the real sky and sun and lights, need improvement
-                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x;
+                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x + vec3(3.0,3.0,3.0) * indirectLight.y + vec3(1.0,1.0,1.0) * indirectLight.z;
                 rayColor += clamp(material.Diffuse.rgb, 0, 1) * lightColor;
             }
             else
@@ -230,6 +230,8 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
     if(Camera.LightCount > 0)
     {
         vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
+
+        //AmbientCube cube = FetchCube(cubePos);
         float lightAtten = TracingOccludeFunction(origin, lightPos);
 
         vec3 lightDir = normalize(lightPos - origin);

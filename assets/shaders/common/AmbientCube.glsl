@@ -78,6 +78,23 @@ AmbientCube FetchCube(ivec3 probePos)
     return Cubes[idx];
 }
 
+AmbientCube FetchValidCube(ivec3 probePos)
+{
+    AmbientCube cube;
+    for (int i = 0; i < 8; i++) {
+        ivec3 offset = ivec3(
+        i & 1,
+        (i >> 1) & 1,
+        (i >> 2) & 1
+        );
+        ivec3 probePos = probePos + offset;
+        cube = FetchCube(probePos);
+        if (cube.Info.x != 1) continue;
+        break;
+    }
+    return cube;
+}
+
 // Interpolate between 8 probes
 vec4 interpolateProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
@@ -116,37 +133,6 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
         result += sampleColor * weight;
         totalWeight += weight;
     }
-
-    // If no valid cubes found, try expanded search
-//    if (totalWeight <= 0.0) {
-//        for (int i = 0; i < 8; i++) {
-//            ivec3 offset = ivec3(
-//            (i & 1) * 2 - 1,
-//            ((i >> 1) & 1) * 2 - 1,
-//            ((i >> 2) & 1) * 2 - 1
-//            );
-//
-//            ivec3 probePos = baseIdx + offset;
-//            if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
-//            probePos.x >= CUBE_SIZE_XY || probePos.z >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z)
-//            continue;
-//
-//            int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
-//            probePos.z * CUBE_SIZE_XY +
-//            probePos.x;
-//
-//            AmbientCube cube = Cubes[idx];
-//            if (cube.Info.x != 1) continue;
-//            
-//            float dist = length(vec3(offset));
-//            float weight = 1.0 / (dist * dist);
-//
-//            float occlusion;
-//            vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
-//            result += sampleColor * weight;
-//            totalWeight += weight;
-//        }
-//    }
 
     // Normalize result by total weight
     vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05);
