@@ -214,7 +214,7 @@ namespace
         nodes.push_back(Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 2, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetVisible(true);
-        nodes.back()->SetMaterial({5});
+        nodes.back()->SetMaterial({4});
 
         auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, JPH::EMotionType::Dynamic);
         nodes.back()->BindPhysicsBody(id);

@@ -168,7 +168,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
     float randAngle = RandomFloat(RandomSeed) * M_TWO_PI;
     float cosTheta = cos(randAngle);
     float sinTheta = sin(randAngle);
-    
+    float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
         #if HIGH_QUALITY
@@ -206,7 +206,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
                 vec4 indirectLight = unpackUnorm4x8(cube.Info.y);
 
                 // here it works, but the intensity should from the real sky and sun and lights, need improvement
-                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x + vec3(3.0,3.0,3.0) * indirectLight.y + vec3(1.0,1.0,1.0) * indirectLight.z;
+                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x * skyMultiplier + vec3(100.0,100.0,100.0) * indirectLight.y + vec3(20.0,20.0,20.0) * indirectLight.z;
                 rayColor += clamp(material.Diffuse.rgb, 0, 1) * lightColor;
             }
             else
@@ -222,7 +222,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             hitDist += 1000.0;
             hitCount += 1;
             occlusion += 0.0;
-            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0).rgb;
+            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0).rgb * skyMultiplier;
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
@@ -238,7 +238,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
         float distance = length(lightPos - origin);
         float attenuation = 40.0f / (distance * distance);
-        rayColor += vec3(0.6f, 0.6f, 0.6f) * ndotl * attenuation * lightAtten;
+        rayColor += vec3(20.0f, 20.0f, 20.0f) * ndotl * attenuation * lightAtten;
     }
     
     float avgDist = hitDist / hitCount;
@@ -258,12 +258,12 @@ void main() {
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.125);
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.125);
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.125);
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.125);
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.125);
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.125);
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.25);
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.25);
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.25);
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.25);
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.25);
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.25);
     
     Cubes[gIdx].Info.x = activeProbe;
 }

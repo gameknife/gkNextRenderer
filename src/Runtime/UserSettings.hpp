@@ -18,7 +18,7 @@ struct UserSettings final
 	float AdaptiveVariance;
 	int AdaptiveSteps;
 	bool TAA {};
-	bool BakeWithGPU {};
+	bool BakeWithGPU = true;
 
 	// Camera
 	bool RequestRayCast;

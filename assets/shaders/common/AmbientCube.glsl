@@ -1,5 +1,5 @@
 
-#define MAX_ILLUMINANCE 10.f
+#define MAX_ILLUMINANCE 1024.f
 
 uint packRGB10A2(vec4 color) {
     vec4 clamped = clamp( color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );

@@ -146,7 +146,7 @@ void main() {
     indirectColor = indirectColor  / float(jitcount);
 
     //albedo = vec4(1,1,1,1); // for test
-    vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1) * Camera.SkyIntensity * 0.75f;
+    vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1);
     
     if(Camera.HDR)
     {
