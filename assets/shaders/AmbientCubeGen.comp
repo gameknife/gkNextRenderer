@@ -37,7 +37,7 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
 
-#define HIGH_QUALITY 0
+#define HIGH_QUALITY 1
 
 const vec3 hemisphereVectors32[32] = {
 vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
@@ -192,25 +192,32 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         float OutRayDist;
         if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist) )
         {
-            // if hit backface
+            
             if( dot(OutNormal, rayDir) < 0.0 )
             {
+                // 这里，就命中了表面，需要反弹。反弹只发生一次
+                // 因此，如果命中的表面，没有直接光照，这里的rayColor会是黑的
+                // 但如果考虑反弹，这里没有直接光照的面，也应该可以贡献光照，可以考虑从以前的buffer里取
                 vec3 hitPos = origin + rayDir * OutRayDist;
                 const Material material = Materials[OutMaterialId];
                 occlusion += 1.0;
                 hitDist += OutRayDist;
                 hitCount += 1;
 
-                ivec3 cubePos = ivec3(floor(hitPos));
-                AmbientCube cube = FetchCube(cubePos);
-                vec4 indirectLight = unpackUnorm4x8(cube.Info.y);
+                // 这里取出直接光照信息，信息是前一个pass生成的，包含最近一个probe的天光遮蔽，方向光，其他光源的亮度归一化信息
+                vec4 indirectLight = interpolateIndirectLights(hitPos);
 
                 // here it works, but the intensity should from the real sky and sun and lights, need improvement
-                vec3 lightColor = vec3(0.5,0.5,0.5) * indirectLight.x * skyMultiplier + vec3(100.0,100.0,100.0) * indirectLight.y + vec3(20.0,20.0,20.0) * indirectLight.z;
-                rayColor += clamp(material.Diffuse.rgb, 0, 1) * lightColor;
+                vec3 skyColor = vec3(0.5,0.5,0.5) * indirectLight.x * skyMultiplier;
+                vec3 sunColor = Camera.SunColor.rgb * indirectLight.y * 2.0;
+                // the light color max is 2000, and indirectlight.z can save the intensity 0 ~ 1
+                // light color currently save to material, for fast access, we shold leave one into lightobject, vec3
+                vec3 lightColor = vec3(40.0,40.0,40.0) * indirectLight.z; 
+                rayColor += clamp(material.Diffuse.rgb, 0, 1) * (skyColor + sunColor + lightColor);
             }
             else
             {
+                // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
                 hitDist = 0.0;
                 hitCount = 1;
                 activeProbe = 0;
@@ -237,8 +244,8 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         vec3 lightDir = normalize(lightPos - origin);
         float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
         float distance = length(lightPos - origin);
-        float attenuation = 40.0f / (distance * distance);
-        rayColor += vec3(20.0f, 20.0f, 20.0f) * ndotl * attenuation * lightAtten;
+        float attenuation = 1.0f / (distance * distance);
+        rayColor += vec3(2000.0f, 2000.0f, 2000.0f) * ndotl * attenuation * lightAtten;
     }
     
     float avgDist = hitDist / hitCount;
@@ -258,12 +265,12 @@ void main() {
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
     
     int activeProbe = 1;
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.25);
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.25);
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.25);
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.25);
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.25);
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.25);
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.125);
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.125);
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.125);
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.125);
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.125);
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.125);
     
     Cubes[gIdx].Info.x = activeProbe;
 }
