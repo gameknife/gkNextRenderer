@@ -209,7 +209,9 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
 
                 // here it works, but the intensity should from the real sky and sun and lights, need improvement
                 vec3 skyColor = vec3(0.5,0.5,0.5) * indirectLight.x * skyMultiplier;
-                vec3 sunColor = Camera.SunColor.rgb * indirectLight.y * 2.0;
+                float lightAtten = TracingOccludeFunction(hitPos, hitPos + Camera.SunDirection.xyz * 1000.0);
+                float ndotl = clamp(dot(OutNormal, Camera.SunDirection.xyz), 0.0f, 1.0f);
+                vec3 sunColor = Camera.SunColor.xyz * lightAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f);
                 // the light color max is 2000, and indirectlight.z can save the intensity 0 ~ 1
                 // light color currently save to material, for fast access, we shold leave one into lightobject, vec3
                 vec3 lightColor = vec3(40.0,40.0,40.0) * indirectLight.z; 

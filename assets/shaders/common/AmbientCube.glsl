@@ -80,46 +80,10 @@ AmbientCube FetchCube(ivec3 probePos)
 
 vec4 interpolateIndirectLights(vec3 pos)
 {
-    // Early out if position is outside the probe grid
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
-        return vec4(0.0);
-    }
-
     // Get the base indices and fractional positions
     ivec3 baseIdx = ivec3(floor(pos));
-    vec3 frac = fract(pos);
-
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
-    float totalWeight = 0.0;
-    vec4 result = vec4(0.0);
-
-    for (int i = 0; i < 8; i++) {
-        ivec3 offset = ivec3(
-        i & 1,
-        (i >> 1) & 1,
-        (i >> 2) & 1
-        );
-
-        ivec3 probePos = baseIdx + offset;
-        AmbientCube cube = FetchCube(probePos);
-        if (cube.Info.x != 1) continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        vec4 sampleColor = unpackUnorm4x8(cube.Info.y);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05);
-    return indirectColor;
+    AmbientCube cube = FetchCube(baseIdx);
+    return unpackUnorm4x8(cube.Info.y);
 }
 
 // Interpolate between 8 probes
@@ -159,6 +123,32 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
         vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
         result += sampleColor * weight;
         totalWeight += weight;
+    }
+    
+    // up cascade
+    if(totalWeight <= 0.0) {
+        baseIdx = baseIdx - ivec3(1,1,1);
+        for (int i = 0; i < 8; i++) {
+            ivec3 offset = ivec3(
+            i & 1,
+            (i >> 1) & 1,
+            (i >> 2) & 1
+            );
+
+            ivec3 probePos = baseIdx + offset * 3;
+            AmbientCube cube = FetchCube(probePos);
+            if (cube.Info.x != 1) continue;
+
+            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+            float weight = wx * wy * wz;
+
+            float occlusion;
+            vec4 sampleColor = sampleAmbientCubeHL2(cube, normal, occlusion);
+            result += sampleColor * weight;
+            totalWeight += weight;
+        }
     }
 
     // Normalize result by total weight
