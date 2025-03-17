@@ -137,17 +137,18 @@ void main() {
     const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 2;
+    const int jitcount = 4;
+    const float range = 2.0f;
     for(int i = 0; i < jitcount; i++) {
-        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * 1.5f;
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * range;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
         indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
     }
     indirectColor = indirectColor  / float(jitcount);
 
     //albedo = vec4(1,1,1,1); // for test
-    vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1);
-    
+    //vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1);
+    vec4 outColor = albedo * vec4(indirectColor.rgb,1);
     if(Camera.HDR)
     {
         imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));

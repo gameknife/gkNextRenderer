@@ -78,7 +78,7 @@ mat4 combinedPrevTS;
 uint matId[16];
 };
 
-// size = 32 bytes, 
+// size = 32 bytes + 32 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
 struct ALIGN_16 AmbientCube
@@ -89,7 +89,15 @@ struct ALIGN_16 AmbientCube
 	uint NegY;
 	uint PosX;
 	uint NegX;
-	uvec2 Info;
+
+	uint PosZ_D;
+	uint NegZ_D;
+	uint PosY_D;
+	uint NegY_D;
+	uint PosX_D;
+	uint NegX_D;
+	
+	uvec4 Info;
 };
 
 struct ALIGN_16 SphericalHarmonics
