@@ -141,7 +141,8 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
 
                 // 这里取出直接光照信息，信息是前一个pass生成的，包含最近一个probe的天光遮蔽，方向光，其他光源的亮度归一化信息
                 vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
-                vec4 indirectLight = material.Diffuse * interpolateDIProbes(localPos, OutNormal);
+                vec3 jit = (RandomFloat3(RandomSeed) - vec3(0.5f)) * CUBE_UNIT;
+                vec4 indirectLight = material.Diffuse * interpolateDIProbes(localPos + jit, OutNormal);
                 rayColor += indirectLight.rgb;
             }
             else

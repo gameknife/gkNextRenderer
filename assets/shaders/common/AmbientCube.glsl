@@ -1,4 +1,4 @@
-#define HIGH_QUALITY 1
+#define HIGH_QUALITY 0
 #define MAX_ILLUMINANCE 1024.f
 
 const vec3 hemisphereVectors32[32] = {
