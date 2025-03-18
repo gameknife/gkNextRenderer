@@ -303,6 +303,11 @@ namespace Vulkan
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
 
+		ERendererType CurrentLogicRendererType() const
+		{
+			return currentLogicRenderer_;
+		}
+		
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;
 		std::function<void()> DelegateCreateSwapChain;

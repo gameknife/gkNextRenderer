@@ -248,7 +248,7 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	uint sampleTimes = Camera.NumberOfSamples;
+	uint sampleTimes = 2;//Camera.NumberOfSamples;
 	
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
@@ -313,7 +313,7 @@ void main() {
 	bounceColor = bounceColor / sampleTimes;
 	
     vec4 outColor = vec4(irradianceColor,1);
-	outColor.a = sampleTimes / Camera.NumberOfSamples;
+	outColor.a = 0.5;//sampleTimes / sampleTimes;
     
     if(Camera.HasSun)
     {
