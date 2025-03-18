@@ -69,8 +69,11 @@ struct RayPayload
 bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS, direction, INF);
-	rayQueryProceedEXT(rayQuery);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS2, direction, 100.f);
+	while( rayQueryProceedEXT(rayQuery) )
+	{
+
+	}
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
 		RayPayload PayloadData;
 
@@ -79,24 +82,17 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		PayloadData.PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
 		PayloadData.InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
 		PayloadData.InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
-		// in     int   gl_GeometryIndexEXT;
 
 		// World space parameters
 		PayloadData.RayOrigin  = rayQueryGetWorldRayOriginEXT(rayQuery);
 		PayloadData.RayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
 
 		// Ray hit info
-		// const uint gl_HitKindFrontFacingTriangleEXT = 0xFEU;
-		// const uint gl_HitKindBackFacingTriangleEXT = 0xFFU;
 		PayloadData.HitDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
 		PayloadData.IsFrontFacing = rayQueryGetIntersectionFrontFaceEXT(rayQuery, IsCommitted);
 
-		mat4x3 worldtoobject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
-
-		// Barycentric Coordinates
-		// Floating point barycentric coordinates of current intersection of ray.
-		// Three Barycentric coordinates are such that their sum is 1.
-		// This gives only two and expects us to calculate the third
+		mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
+		
 		vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
 		PayloadData.BaryCoords = vec3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 
@@ -108,36 +104,39 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1]);
 		const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2]);
 		const Material material = Materials[node.matId[v0.MaterialIndex]];
-
-		const vec3 normal = normalize((to_world(PayloadData.BaryCoords, v0.Normal, v1.Normal, v2.Normal) * worldtoobject).xyz);
+		const vec3 normal = normalize((Mix(v0.Normal, v1.Normal, v2.Normal, PayloadData.BaryCoords) * WorldToObject).xyz);
 		const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
 
 		const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
 		const vec4 lightColor = material.MaterialModel == MaterialDiffuseLight ? material.Diffuse : vec4(0);
-		
-		// 这其实是一个缺省的bounceColor，如果没有取到合适的cache样本，这个bounce的颜色直接乘以穿透的iblcolor不太能是一个好的值
-		bounceColor = texColor.rgb * texColor.rgb * material.Diffuse.rgb * iblColor * 0.9;  
-		//bounceColor *= vec3(50,0,0);
 		illumColor = lightColor.rgb;
+		const vec3 albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : texColor.rgb * texColor.rgb * material.Diffuse.rgb;
 		
 		vec3 hitPos = origin + direction * PayloadData.HitDist;
-		vec4 hpos =  Camera.PrevViewProjection * node.combinedPrevTS * vec4(hitPos, 1);
-		ivec2 size = imageSize(MiniGBuffer0);
-		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
-		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
-		{
-			return true;
-		}
+		vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
+		// 这里都是hit了，那就走间接光照，直接用hitpos和normal，从AmbientCube里取
+		vec4 indirectFromAmbientCube = interpolateProbes(localPos, normal);
+		bounceColor = albedo * indirectFromAmbientCube.rgb;
 
-		vec3 PrevNormal = imageLoad(PrevNormalBuffer, ipos_new).rgb;
-		// compare prevnormal and normal
-		if(dot(PrevNormal, normal) < 0.5)
-		{
-			return true;
-		}
+		// 这里是之前在屏幕空间trace历史DI的代码，没什么必要
 		
-		// 这里从屏幕空间取出DirectLight的信息，IBL和SunLight，但这个hpos不一定是有效的
-		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;
+//		vec4 hpos =  Camera.PrevViewProjection * node.combinedPrevTS * vec4(hitPos, 1);
+//		ivec2 size = imageSize(MiniGBuffer0);
+//		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
+//		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
+//		{
+//			return true;
+//		}
+//
+//		vec3 PrevNormal = imageLoad(PrevNormalBuffer, ipos_new).rgb;
+//		// compare prevnormal and normal
+//		if(dot(PrevNormal, normal) < 0.5)
+//		{
+//			return true;
+//		}
+//		
+//		// 这里从屏幕空间取出DirectLight的信息，IBL和SunLight，但这个hpos不一定是有效的
+//		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;
 		
 		return true;
 	}
@@ -167,7 +166,6 @@ void main() {
 		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, ray_dir, Camera.SkyRotation, 1.0f).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
-		imageStore(InOutDirectLight1, ipos, vec4(0));
 		imageStore(OutAlbedoBuffer, ipos, vec4(iblColor,1.0));
 		imageStore(OutNormalBuffer, ipos, vec4(0,1,0,1));
 		return;
@@ -257,7 +255,6 @@ void main() {
 		vec3 lightColor = albedo.rgb;
 		imageStore(OutImage, ipos, vec4(lightColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
-		imageStore(InOutDirectLight1, ipos, vec4(lightColor,1));
 		imageStore(OutAlbedoBuffer, ipos, vec4(lightColor,1.0));
 		imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
 		return;
@@ -283,23 +280,23 @@ void main() {
 		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere1(RandomSeed), outwardNormal ) : ray_dir
 		);
 		
-		vec3 posOffset = vec3(0);
+		vec3 posOffset = normal * 0.01;
 		if(mat.MaterialModel == MaterialDielectric)
 		{
-			albedo = vec4(1,1,1,1);
-			posOffset = ray_dir * 0.1;
+			//albedo = vec4(1,1,1,1);
+			//posOffset = ray_dir * 0.1;
 		}
 
 		// if miss, sample the sky
 		vec3 bounceSingle = vec3(0);
 		vec4 albedoSingle = albedo;
 		
-		if(chanceReflect)
+		if(chanceReflect && mat.MaterialModel == MaterialMixture)
 		{
 			albedoSingle = vec4(1);
 		}
 		
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir , Camera.SkyRotation, 1.0f).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0.5).rgb * Camera.SkyIntensity : vec3(0.0);
 		vec3 illumColor = vec3(0.0);
 		bool hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)
@@ -309,8 +306,8 @@ void main() {
 		else
 		{
 			irradianceColor += albedoSingle.rgb * illumColor;
+			bounceColor += albedoSingle.rgb * bounceSingle;
 		}
-		bounceColor += albedoSingle.rgb * bounceSingle;
 	}
 	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;
@@ -338,7 +335,6 @@ void main() {
 	
 	vec4 directLight = vec4(outColor.rgb, 1);
 	
-	imageStore(InOutDirectLight1, ipos, directLight);
 	imageStore(OutAlbedoBuffer, ipos, albedo);
 	imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
 	// with multiple bounceColor
