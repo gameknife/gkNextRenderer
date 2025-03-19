@@ -58,6 +58,7 @@ namespace Vulkan::HybridDeferred
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -121,6 +122,11 @@ namespace Vulkan::HybridDeferred
             VkDescriptorBufferInfo hdrshBufferInfo = {};
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
             hdrshBufferInfo.range = VK_WHOLE_SIZE;
+
+            // Light buffer
+            VkDescriptorBufferInfo lightBufferInfo = {};
+            lightBufferInfo.buffer = scene.LightBuffer().Handle();
+            lightBufferInfo.range = VK_WHOLE_SIZE;
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -142,6 +148,7 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 15, Info15),
                 descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
                 descriptorSets.Bind(i, 17, hdrshBufferInfo),
+                descriptorSets.Bind(i, 18, lightBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

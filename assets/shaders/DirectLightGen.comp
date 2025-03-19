@@ -66,25 +66,6 @@ bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uin
     return false;
 }
 
-int TracingOccludeFunction(in vec3 origin, in vec3 lightPos)
-{
-    float dist = length(lightPos - origin);
-    vec3 lightDir = (lightPos - origin) / dist;
-    
-    rayQueryEXT rayQuery;
-    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, EPS, lightDir, dist - EPS2);
-
-    rayQueryProceedEXT(rayQuery);
-
-    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
-        return 0;
-    }
-    else
-    {
-        return 1;
-    }
-}
-
 int TraceShadow(vec3 origin, vec3 lightPos)
 {
     if( !Camera.HasSun )

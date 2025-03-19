@@ -120,22 +120,11 @@ namespace Vulkan::HybridDeferred
                                                                          rtPingPong1->GetImageView(),
                                                                          rtMotionVector->GetImageView(),
                                                                          rtVisibility0->GetImageView(),
-                                                                         rtVisibility0->GetImageView(),
+                                                                         rtVisibility1->GetImageView(),
                                                                          rtOutput->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        
-        accumulateForLightPipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
-                                                                         rtDirectLightSource->GetImageView(),
-                                                                         rtDirectLight0->GetImageView(),
-                                                                         rtDirectLight1->GetImageView(),
-                                                                         rtMotionVector->GetImageView(),
-                                                                         rtVisibility0->GetImageView(),
-                                                                         rtVisibility1->GetImageView(),
-                                                                         rtDirectLightDest->GetImageView(),
-                                                                         UniformBuffers(), GetScene()));
-
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtAlbedo_->GetImageView(),  rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility0->GetImageView(), UniformBuffers()));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput->GetImageView(), rtAlbedo_->GetImageView(),  rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility1->GetImageView(), UniformBuffers()));
 
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                               rtAccumlation->GetImageView(), rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtOutput->GetImageView(),
@@ -284,15 +273,6 @@ namespace Vulkan::HybridDeferred
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 4), 1);
 
             rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        }
-
-        {
-            SCOPED_GPU_TIMER("dlight reproj pass");
-            VkDescriptorSet DescriptorSets[] = {accumulateForLightPipeline_->DescriptorSet(imageIndex)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulateForLightPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    accumulateForLightPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 4), 1);
         }
 
         {

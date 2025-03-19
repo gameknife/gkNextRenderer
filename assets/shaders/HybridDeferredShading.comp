@@ -27,12 +27,14 @@ layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
 layout(binding = 15, rgba16f) uniform image2D PrevNormalBuffer;
 layout(binding = 16) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 layout(binding = 17) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
+layout(binding = 18) readonly buffer LightObjectArray { LightObject[] Lights; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/Const_Func.glsl"
 #include "common/SampleIBL.h"
+#include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
 
 #if DESKTOP
@@ -69,7 +71,7 @@ struct RayPayload
 bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS2, direction, 100.f);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS2, direction, 20.f);
 	while( rayQueryProceedEXT(rayQuery) )
 	{
 
@@ -248,7 +250,7 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	uint sampleTimes = 2;//Camera.NumberOfSamples;
+	uint sampleTimes = Camera.NumberOfSamples;
 	
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
@@ -305,7 +307,8 @@ void main() {
 		}
 		else
 		{
-			irradianceColor += albedoSingle.rgb * illumColor;
+			// hit light directly
+			//irradianceColor += albedoSingle.rgb * illumColor;
 			bounceColor += albedoSingle.rgb * bounceSingle;
 		}
 	}
@@ -313,7 +316,7 @@ void main() {
 	bounceColor = bounceColor / sampleTimes;
 	
     vec4 outColor = vec4(irradianceColor,1);
-	outColor.a = 0.5;//sampleTimes / sampleTimes;
+	outColor.a = 1.0;//sampleTimes / sampleTimes;
     
     if(Camera.HasSun)
     {
@@ -323,7 +326,7 @@ void main() {
         d = mix(d, vec3(0.0), vec3(metalProb));
     
         const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-        
+
         rayQueryEXT rayQuery;
         rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, v.Position.xyz, EPS, lightVectorCone, INF);
         rayQueryProceedEXT(rayQuery);
@@ -332,6 +335,19 @@ void main() {
         }
         outColor.rgb += albedo.rgb * d;
     }
+
+	if(Camera.LightCount > 0)
+	{
+		LightObject light = Lights[0];
+		vec3 lightPos = light.p0.xyz + (light.p1.xyz - light.p0.xyz) * RandomFloat(RandomSeed) + (light.p3.xyz - light.p0.xyz) *  RandomFloat(RandomSeed);
+		float lightAtten = TracingOccludeFunction(v.Position, lightPos);
+
+		vec3 lightDir = normalize(lightPos - v.Position);
+		float ndotl = clamp(dot(normal, lightDir), 0.0f, 1.0f);
+		float distance = length(lightPos - v.Position);
+		float attenuation = 1.0f / (distance * distance);
+		outColor.rgb += albedo.rgb * vec3(2000.0f, 2000.0f, 2000.0f) * ndotl * attenuation * lightAtten;
+	}
 	
 	vec4 directLight = vec4(outColor.rgb, 1);
 	
