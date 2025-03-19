@@ -274,7 +274,7 @@ namespace Vulkan::RayTracing
         }
 #endif
         
-        if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing)
+        if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing && CurrentLogicRendererType() != ERT_LegacyDeferred)
         {
             SCOPED_GPU_TIMER("ambient gen");
 #if !ANDROID
