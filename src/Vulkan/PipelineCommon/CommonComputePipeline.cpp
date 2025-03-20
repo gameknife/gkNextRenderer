@@ -661,7 +661,7 @@ namespace Vulkan::PipelineCommon
         Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,
                                        1, &pipelineCreateInfo,
                                        NULL, &pipeline_),
-              "create ray-cast shading pipeline");
+              "create direct lighting gen shading pipeline");
     }
 
     DirectLightGenPipeline::~DirectLightGenPipeline()

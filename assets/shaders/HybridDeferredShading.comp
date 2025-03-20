@@ -246,8 +246,11 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
+	#if DESKTOP
 	uint sampleTimes = 4;//Camera.NumberOfSamples;
-	
+	#else
+	uint sampleTimes = 1;//Camera.NumberOfSamples;
+	#endif
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
 		vec3 lightColor = albedo.rgb;
@@ -294,7 +297,11 @@ void main() {
 			albedoSingle = vec4(1);
 		}
 		
+		#if DESKTOP
 		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity : vec3(0.0);
+		#else
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
+		#endif
 		vec3 illumColor = vec3(0.0);
 		bool hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		if(!hit)
