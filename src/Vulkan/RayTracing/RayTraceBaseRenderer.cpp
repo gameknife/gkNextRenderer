@@ -305,6 +305,12 @@ namespace Vulkan::RayTracing
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         directLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
 
+                // bind the global bindless set
+                static const uint32_t k_bindless_set = 1;
+                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                         1, GlobalDescriptorSets, 0, nullptr );
+                
                 glm::uvec2 pushConst = { offsetInCubes, 1 };
 
                 vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
@@ -319,6 +325,12 @@ namespace Vulkan::RayTracing
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
 
+                // bind the global bindless set
+                static const uint32_t k_bindless_set = 1;
+                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                         1, GlobalDescriptorSets, 0, nullptr );
+                
                 glm::uvec2 pushConst = { offsetInCubes, 1 };
 
                 vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,

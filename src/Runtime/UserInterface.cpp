@@ -109,7 +109,7 @@ UserInterface::UserInterface(
 #elif __APPLE__
 	const auto scaleFactor = 1.0;
 #else
-    const auto scaleFactor = 1.0;//window.ContentScale();
+    const auto scaleFactor = 1.0f;
 #endif
 
 	const auto fontSize = 16;

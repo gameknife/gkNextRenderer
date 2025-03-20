@@ -1,48 +1,48 @@
 #version 460
-#extension GL_GOOGLE_include_directive : require
+#extension GL_GOOGLE_include_directive: require
 #include "Platform.glsl"
 #include "common/UniformBufferObject.h"
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
 
-layout(binding = 0, rgba16f) uniform image2D NewSourceImage;
-layout(binding = 1, rgba16f) uniform image2D AccumulateImage;
-layout(binding = 2, rgba16f) uniform image2D Accumulate1Image;
-layout(binding = 3, rg32f) uniform image2D MotionVectorImage;
-layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
+layout (binding = 0, rgba16f) uniform image2D NewSourceImage;
+layout (binding = 1, rgba16f) uniform image2D AccumulateImage;
+layout (binding = 2, rgba16f) uniform image2D Accumulate1Image;
+layout (binding = 3, rg32f) uniform image2D MotionVectorImage;
+layout (binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
-layout(binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
-layout(binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
-layout(binding = 7, rgba8) uniform image2D OutImage;
+layout (binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
+layout (binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
+layout (binding = 7, rgba8) uniform image2D OutImage;
 
-layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 uint FetchPrimitiveIndex(in uint InstanceID)
 {
-	return InstanceID;
+    return InstanceID;
 }
 
-bool EdgeDetect(in uint current_primitive_index, in bool isEvenFrame, in ivec2 ipos)
+bool EdgeDetect(in uint current_primitive_index, in ivec2 ipos)
 {
-	uint center = FetchPrimitiveIndex(current_primitive_index);
-	
-	uint prev_primitive_index0 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(2,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(2,0)).r);
-	uint prev_primitive_index1 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(-2,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(-2,0)).r);
-	uint prev_primitive_index2 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0, 2)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0, 2)).r);
-	uint prev_primitive_index3 = FetchPrimitiveIndex(isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0, -2)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0, -2)).r);
+    uint center = FetchPrimitiveIndex(current_primitive_index);
 
-	bool edge0 = any( notEqual( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center) ));
-	bool edge1 = any( equal( uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center) ));
+    uint prev_primitive_index0 = FetchPrimitiveIndex(imageLoad(VisibilityBuffer, ipos + ivec2(2, 0)).r);
+    uint prev_primitive_index1 = FetchPrimitiveIndex(imageLoad(VisibilityBuffer, ipos + ivec2(-2, 0)).r);
+    uint prev_primitive_index2 = FetchPrimitiveIndex(imageLoad(VisibilityBuffer, ipos + ivec2(0, 2)).r);
+    uint prev_primitive_index3 = FetchPrimitiveIndex(imageLoad(VisibilityBuffer, ipos + ivec2(0, -2)).r);
 
-	return edge0 && edge1;
+    bool edge0 = any(notEqual(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center)));
+    bool edge1 = any(equal(uvec4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(center)));
+
+    return edge0 && edge1;
 }
 
 const vec2 offsets5x5[25] = vec2[25](
 vec2(-2.0, -2.0), vec2(-1.0, -2.0), vec2(0.0, -2.0), vec2(1.0, -2.0), vec2(2.0, -2.0),
 vec2(-2.0, -1.0), vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0), vec2(2.0, -1.0),
-vec2(-2.0,  0.0), vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0), vec2(2.0,  0.0),
-vec2(-2.0,  1.0), vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0), vec2(2.0,  1.0),
-vec2(-2.0,  2.0), vec2(-1.0,  2.0), vec2(0.0,  2.0), vec2(1.0,  2.0), vec2(2.0,  2.0)
+vec2(-2.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(2.0, 0.0),
+vec2(-2.0, 1.0), vec2(-1.0, 1.0), vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(2.0, 1.0),
+vec2(-2.0, 2.0), vec2(-1.0, 2.0), vec2(0.0, 2.0), vec2(1.0, 2.0), vec2(2.0, 2.0)
 );
 
 // a simple accumulation shader, reproject can impl here later.
@@ -51,120 +51,119 @@ void main() {
 
     vec4 src = imageLoad(NewSourceImage, ipos);
 
-    bool isEvenFrame = true;//Camera.TotalFrames % 2 == 0 ? true : false;
-	bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
+    bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
     bool useHistory = true;
     vec4 final = src;
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
-	ivec2 previpos = ivec2( floor(ipos + motion) );
-	const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1,-1)));
-	// 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
-	// after, motionvector calculate last frame position
-	// 当前uv直接执行id比对，如果不同，直接check
-	uint current_primitive_index0 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos).r : imageLoad(Visibility1Buffer, ipos).r;
-	uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos).r : imageLoad(VisibilityBuffer, previpos).r;
-	const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
+    ivec2 previpos = ivec2(floor(ipos + motion));
+    const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1, -1)));
+    // 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
+    // after, motionvector calculate last frame position
+    // 当前uv直接执行id比对，如果不同，直接check
+    uint current_primitive_index0 = imageLoad(VisibilityBuffer, ipos).r;
+    uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
+    const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
     // fetch visibility to validate the history
-    
-	const bool miss = current_primitive_index0 == 65535 ? true : false;
-    if(miss || Camera.TotalFrames == 0 || !inside)
+
+    const bool miss = current_primitive_index0 == 65535 ? true : false;
+    if (miss || Camera.TotalFrames == 0 || !inside)
     {
         useHistory = false;
     }
 
-    if( useHistory )
+    if (useHistory)
     {
-		if( !Camera.ProgressiveRender )
-		{
-			// current 4
-			uint current_primitive_index1 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(1,0)).r : imageLoad(Visibility1Buffer, ipos + ivec2(1,0)).r;
-			uint current_primitive_index2 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(0,1)).r : imageLoad(Visibility1Buffer, ipos + ivec2(0,1)).r;
-			uint current_primitive_index3 = isEvenFrame ? imageLoad(VisibilityBuffer, ipos + ivec2(1,1)).r : imageLoad(Visibility1Buffer, ipos + ivec2(1,1)).r;
-			
-			// prev 9
-			uint prev_primitive_index1 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,0)).r;
-			uint prev_primitive_index2 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,1)).r;
-			uint prev_primitive_index3 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,1)).r;
-			uint prev_primitive_index4 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,0)).r;
-			uint prev_primitive_index5 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0,-1)).r;
-			uint prev_primitive_index6 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,-1)).r;
-			uint prev_primitive_index7 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(1,-1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(1,-1)).r;
-			uint prev_primitive_index8 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(-1,1)).r : imageLoad(VisibilityBuffer, previpos + ivec2(-1,1)).r;
-			
+        if (!Camera.ProgressiveRender)
+        {
+            // current 4
+            uint current_primitive_index1 = imageLoad(VisibilityBuffer, ipos + ivec2(1, 0)).r;
+            uint current_primitive_index2 = imageLoad(VisibilityBuffer, ipos + ivec2(0, 1)).r;
+            uint current_primitive_index3 = imageLoad(VisibilityBuffer, ipos + ivec2(1, 1)).r;
 
-			ivec4 match1 = ivec4(equal( uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
-			ivec4 match2 = ivec4(equal( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0) ));
-			ivec4 match3 = ivec4(equal( uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1) ));
-			ivec4 match4 = ivec4(equal( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1) ));
-			ivec4 match5 = ivec4(equal( uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2) ));
-			ivec4 match6 = ivec4(equal( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2) ));
-			ivec4 match7 = ivec4(equal( uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3) ));
-			ivec4 match8 = ivec4(equal( uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3) ));
-			ivec4 match9 = ivec4(equal( uvec4(prev_primitive_index0, prev_primitive_index0, prev_primitive_index0, prev_primitive_index0), uvec4(current_primitive_index0, current_primitive_index1, current_primitive_index2, current_primitive_index3) ));
+            // prev 9
+            uint prev_primitive_index1 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 0)).r;
+            uint prev_primitive_index2 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 1)).r;
+            uint prev_primitive_index3 = imageLoad(Visibility1Buffer, previpos + ivec2(1, 1)).r;
+            uint prev_primitive_index4 = imageLoad(Visibility1Buffer, previpos + ivec2(-1, 0)).r;
+            uint prev_primitive_index5 = imageLoad(Visibility1Buffer, previpos + ivec2(0, -1)).r;
+            uint prev_primitive_index6 = imageLoad(Visibility1Buffer, previpos + ivec2(-1, -1)).r;
+            uint prev_primitive_index7 = imageLoad(Visibility1Buffer, previpos + ivec2(1, -1)).r;
+            uint prev_primitive_index8 = imageLoad(Visibility1Buffer, previpos + ivec2(-1, 1)).r;
 
-			float sum = dot(match1, ivec4(1, 1, 1, 1));
-			sum += dot(match2, ivec4(1, 1, 1, 1));
-			sum += dot(match3, ivec4(1, 1, 1, 1));
-			sum += dot(match4, ivec4(1, 1, 1, 1));
-			sum += dot(match5, ivec4(1, 1, 1, 1));
-			sum += dot(match6, ivec4(1, 1, 1, 1));
-			sum += dot(match7, ivec4(1, 1, 1, 1));
-			sum += dot(match8, ivec4(1, 1, 1, 1));
-			sum += dot(match9, ivec4(1, 1, 1, 1));
 
-			bool miss = sum < 4 ? true : false;
-			if( miss )
-			{
-				useHistory = false;
-			}
-		}
+            ivec4 match1 = ivec4(equal(uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0)));
+            ivec4 match2 = ivec4(equal(uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0)));
+            ivec4 match3 = ivec4(equal(uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1)));
+            ivec4 match4 = ivec4(equal(uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1)));
+            ivec4 match5 = ivec4(equal(uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2)));
+            ivec4 match6 = ivec4(equal(uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2)));
+            ivec4 match7 = ivec4(equal(uvec4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3), uvec4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3)));
+            ivec4 match8 = ivec4(equal(uvec4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7), uvec4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3)));
+            ivec4 match9 = ivec4(equal(uvec4(prev_primitive_index0, prev_primitive_index0, prev_primitive_index0, prev_primitive_index0), uvec4(current_primitive_index0, current_primitive_index1, current_primitive_index2, current_primitive_index3)));
 
-		if(useHistory)
-		{
-			vec3 historyColor[4];
-			historyColor[0] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos).rgb : imageLoad(Accumulate1Image, previpos).rgb;
-			historyColor[1] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1,0)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,0)).rgb;
-			historyColor[2] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(0,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0,1)).rgb;
-			historyColor[3] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,1)).rgb;
+            float sum = dot(match1, ivec4(1, 1, 1, 1));
+            sum += dot(match2, ivec4(1, 1, 1, 1));
+            sum += dot(match3, ivec4(1, 1, 1, 1));
+            sum += dot(match4, ivec4(1, 1, 1, 1));
+            sum += dot(match5, ivec4(1, 1, 1, 1));
+            sum += dot(match6, ivec4(1, 1, 1, 1));
+            sum += dot(match7, ivec4(1, 1, 1, 1));
+            sum += dot(match8, ivec4(1, 1, 1, 1));
+            sum += dot(match9, ivec4(1, 1, 1, 1));
 
-			vec3 currentColor[25];
+            bool miss = sum < 4 ? true : false;
+            if (miss)
+            {
+                useHistory = false;
+            }
+        }
 
-			for(int i = 0; i < 25; i++)
-			{
-				currentColor[i] = imageLoad(NewSourceImage, ipos + ivec2(offsets5x5[i])).rgb;
-			}
-			
-			vec2 subpixel = fract(vec2(ipos) + motion);
-			vec3 history = mix(mix(historyColor[0], historyColor[1], subpixel.x),mix(historyColor[2], historyColor[3], subpixel.x),subpixel.y);
+        if (useHistory)
+        {
+            vec3 historyColor[4];
+            historyColor[0] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos).rgb : imageLoad(Accumulate1Image, previpos).rgb;
+            historyColor[1] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1, 0)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1, 0)).rgb;
+            historyColor[2] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(0, 1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0, 1)).rgb;
+            historyColor[3] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1, 1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1, 1)).rgb;
 
-			if( !Camera.ProgressiveRender )
-			{
-				vec3 AABBMin, AABBMax;
-				AABBMax = rgb2ycocg(src.rgb);
-				AABBMin = AABBMax;
-				// 取得YCoCg色彩空间下，Clip的范围
-				for(int k = 0; k < 25; k++)
-				{
-					AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
-					AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
-				}
-				// 需要 Clip处理的历史数据
-				vec3 HistoryYCoCg = rgb2ycocg(history);
+            vec3 currentColor[25];
 
-				// 简单地进行Clmap
-				vec3 ResultYCoCg =  clamp(HistoryYCoCg, AABBMin, AABBMax);
-				//还原到RGB色彩空间，得到最终结果
-				history = ycocg2rgb(ResultYCoCg);
-			}
-			
-			// judge current gbuffer / object id with prev frame, to deghosting
-			float currKeep = src.w / max(1, Camera.TemporalFrames);
-			final.rgb = mix(history, src.rgb, clamp(currKeep,0.0,1.0));
-		}
+            for (int i = 0; i < 25; i++)
+            {
+                currentColor[i] = imageLoad(NewSourceImage, ipos + ivec2(offsets5x5[i])).rgb;
+            }
+
+            vec2 subpixel = fract(vec2(ipos) + motion);
+            vec3 history = mix(mix(historyColor[0], historyColor[1], subpixel.x), mix(historyColor[2], historyColor[3], subpixel.x), subpixel.y);
+
+            if (!Camera.ProgressiveRender)
+            {
+                vec3 AABBMin, AABBMax;
+                AABBMax = rgb2ycocg(src.rgb);
+                AABBMin = AABBMax;
+                // 取得YCoCg色彩空间下，Clip的范围
+                for (int k = 0; k < 25; k++)
+                {
+                    AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
+                    AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
+                }
+                // 需要 Clip处理的历史数据
+                vec3 HistoryYCoCg = rgb2ycocg(history);
+
+                // 简单地进行Clmap
+                vec3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
+                //还原到RGB色彩空间，得到最终结果
+                history = ycocg2rgb(ResultYCoCg);
+            }
+
+            // judge current gbuffer / object id with prev frame, to deghosting
+            float currKeep = src.w / max(1, Camera.TemporalFrames);
+            final.rgb = mix(history, src.rgb, clamp(currKeep, 0.0, 1.0));
+        }
     }
-	
-    if(isEvenFrameActual)
+
+    if (isEvenFrameActual)
     {
         imageStore(Accumulate1Image, ipos, final);
     }
@@ -173,17 +172,17 @@ void main() {
         imageStore(AccumulateImage, ipos, final);
     }
 
-	if(Camera.ShowEdge)
-	{
-		uint realInstanceId = FetchPrimitiveIndex(current_primitive_index0);
-		if(realInstanceId == Camera.SelectedId)
-		{
-			if( EdgeDetect(current_primitive_index0, isEvenFrame, ipos ) )
-			{
-				final.rgb = vec3(1,1,0.05) * Camera.PaperWhiteNit;
-			}
-		}
-	}
-	
-    imageStore(OutImage, ipos, vec4( final.rgb, 1.0 ));
+    if (Camera.ShowEdge)
+    {
+        uint realInstanceId = FetchPrimitiveIndex(current_primitive_index0);
+        if (realInstanceId == Camera.SelectedId)
+        {
+            if (EdgeDetect(current_primitive_index0, ipos))
+            {
+                final.rgb = vec3(1, 1, 0.05) * Camera.PaperWhiteNit;
+            }
+        }
+    }
+
+    imageStore(OutImage, ipos, vec4(final.rgb, 1.0));
 }

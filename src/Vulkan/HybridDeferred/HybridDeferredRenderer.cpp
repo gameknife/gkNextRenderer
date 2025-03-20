@@ -63,25 +63,6 @@ namespace Vulkan::HybridDeferred
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT));
 
-        rtDirectLightSource.reset(new RenderImage(Device(), extent,
-                                             VK_FORMAT_R16G16B16A16_SFLOAT,
-                                             VK_IMAGE_TILING_OPTIMAL,
-                                             VK_IMAGE_USAGE_STORAGE_BIT));
-
-        rtDirectLightDest.reset(new RenderImage(Device(), extent,
-                                             VK_FORMAT_R16G16B16A16_SFLOAT,
-                                             VK_IMAGE_TILING_OPTIMAL,
-                                             VK_IMAGE_USAGE_STORAGE_BIT));
-        
-        rtDirectLight0.reset(new RenderImage(Device(), extent,
-                                             VK_FORMAT_R16G16B16A16_SFLOAT,
-                                             VK_IMAGE_TILING_OPTIMAL,
-                                             VK_IMAGE_USAGE_STORAGE_BIT));
-        rtDirectLight1.reset(new RenderImage(Device(), extent,
-                                             VK_FORMAT_R16G16B16A16_SFLOAT,
-                                             VK_IMAGE_TILING_OPTIMAL,
-                                             VK_IMAGE_USAGE_STORAGE_BIT));
-
         rtPingPong0.reset(new RenderImage(Device(), extent,
                                           VK_FORMAT_R16G16B16A16_SFLOAT,
                                           VK_IMAGE_TILING_OPTIMAL,
@@ -102,11 +83,8 @@ namespace Vulkan::HybridDeferred
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
                                                             GetScene().AmbientCubeBuffer(),
                                                          rtVisibility0->GetImageView(),
-                                                         rtVisibility1->GetImageView(),
                                                          rtAccumlation->GetImageView(),
                                                          rtMotionVector->GetImageView(),
-                                                         rtDirectLightDest->GetImageView(),
-                                                         rtDirectLightSource->GetImageView(),
                                                          rtAlbedo_->GetImageView(),
                                                          rtNormal_->GetImageView(),
                                                          rtNormalPrev_->GetImageView(),
@@ -135,7 +113,6 @@ namespace Vulkan::HybridDeferred
 
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
-        accumulateForLightPipeline_.reset();
         composePipeline_.reset();
         visualDebugPipeline_.reset();
         
@@ -148,10 +125,6 @@ namespace Vulkan::HybridDeferred
         rtMotionVector.reset();
 
         rtAccumlation.reset();
-        rtDirectLight0.reset();
-        rtDirectLight1.reset();
-        rtDirectLightSource.reset();
-        rtDirectLightDest.reset();
 
         rtPingPong0.reset();
         rtPingPong1.reset();
@@ -213,10 +186,6 @@ namespace Vulkan::HybridDeferred
             rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtDirectLight0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtDirectLight1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtDirectLightSource->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            rtDirectLightDest->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             rtNormalPrev_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -285,9 +254,6 @@ namespace Vulkan::HybridDeferred
         {
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                       VK_IMAGE_LAYOUT_GENERAL);
-            ImageMemoryBarrier::Insert(commandBuffer, rtDirectLight0->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
             ImageMemoryBarrier::Insert(commandBuffer, rtMotionVector->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
