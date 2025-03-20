@@ -47,7 +47,6 @@ namespace Vulkan::HybridDeferred
 
 	private:
 		std::unique_ptr<ModernDeferred::VisibilityPipeline> visibilityPipeline0_;
-		std::unique_ptr<ModernDeferred::VisibilityPipeline> visibilityPipeline1_;
 		
 		std::unique_ptr<class HybridShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
@@ -56,7 +55,6 @@ namespace Vulkan::HybridDeferred
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 		
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer0_;
-		std::unique_ptr<class FrameBuffer> deferredFrameBuffer1_;
 		
 		std::unique_ptr<RenderImage> rtAccumlation;
 

@@ -37,7 +37,6 @@ bool EdgeDetect(in uint current_primitive_index, in bool isEvenFrame, in ivec2 i
 	return edge0 && edge1;
 }
 
-// 
 const vec2 offsets5x5[25] = vec2[25](
 vec2(-2.0, -2.0), vec2(-1.0, -2.0), vec2(0.0, -2.0), vec2(1.0, -2.0), vec2(2.0, -2.0),
 vec2(-2.0, -1.0), vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0), vec2(2.0, -1.0),
@@ -45,15 +44,6 @@ vec2(-2.0,  0.0), vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0), vec2(2.0, 
 vec2(-2.0,  1.0), vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0), vec2(2.0,  1.0),
 vec2(-2.0,  2.0), vec2(-1.0,  2.0), vec2(0.0,  2.0), vec2(1.0,  2.0), vec2(2.0,  2.0)
 );
-//const vec2 offsets7x7[49] = vec2[49](
-//vec2(-3.0, -3.0), vec2(-2.0, -3.0), vec2(-1.0, -3.0), vec2(0.0, -3.0), vec2(1.0, -3.0), vec2(2.0, -3.0), vec2(3.0, -3.0),
-//vec2(-3.0, -2.0), vec2(-2.0, -2.0), vec2(-1.0, -2.0), vec2(0.0, -2.0), vec2(1.0, -2.0), vec2(2.0, -2.0), vec2(3.0, -2.0),
-//vec2(-3.0, -1.0), vec2(-2.0, -1.0), vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0), vec2(2.0, -1.0), vec2(3.0, -1.0),
-//vec2(-3.0,  0.0), vec2(-2.0,  0.0), vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0), vec2(2.0,  0.0), vec2(3.0,  0.0),
-//vec2(-3.0,  1.0), vec2(-2.0,  1.0), vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0), vec2(2.0,  1.0), vec2(3.0,  1.0),
-//vec2(-3.0,  2.0), vec2(-2.0,  2.0), vec2(-1.0,  2.0), vec2(0.0,  2.0), vec2(1.0,  2.0), vec2(2.0,  2.0), vec2(3.0,  2.0),
-//vec2(-3.0,  3.0), vec2(-2.0,  3.0), vec2(-1.0,  3.0), vec2(0.0,  3.0), vec2(1.0,  3.0), vec2(2.0,  3.0), vec2(3.0,  3.0)
-//);
 
 // a simple accumulation shader, reproject can impl here later.
 void main() {
@@ -61,8 +51,8 @@ void main() {
 
     vec4 src = imageLoad(NewSourceImage, ipos);
 
-    bool isEvenFrame = Camera.TotalFrames % 2 == 0 ? true : false;
-
+    bool isEvenFrame = true;//Camera.TotalFrames % 2 == 0 ? true : false;
+	bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
     bool useHistory = true;
     vec4 final = src;
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
@@ -122,7 +112,7 @@ void main() {
 			sum += dot(match7, ivec4(1, 1, 1, 1));
 			sum += dot(match8, ivec4(1, 1, 1, 1));
 			sum += dot(match9, ivec4(1, 1, 1, 1));
-			
+
 			bool miss = sum < 4 ? true : false;
 			if( miss )
 			{
@@ -133,10 +123,10 @@ void main() {
 		if(useHistory)
 		{
 			vec3 historyColor[4];
-			historyColor[0] = isEvenFrame ? imageLoad(AccumulateImage, previpos).rgb : imageLoad(Accumulate1Image, previpos).rgb;
-			historyColor[1] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,0)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,0)).rgb;
-			historyColor[2] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(0,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0,1)).rgb;
-			historyColor[3] = isEvenFrame ? imageLoad(AccumulateImage, previpos + ivec2(1,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,1)).rgb;
+			historyColor[0] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos).rgb : imageLoad(Accumulate1Image, previpos).rgb;
+			historyColor[1] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1,0)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,0)).rgb;
+			historyColor[2] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(0,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(0,1)).rgb;
+			historyColor[3] = isEvenFrameActual ? imageLoad(AccumulateImage, previpos + ivec2(1,1)).rgb : imageLoad(Accumulate1Image, previpos + ivec2(1,1)).rgb;
 
 			vec3 currentColor[25];
 
@@ -174,7 +164,7 @@ void main() {
 		}
     }
 	
-    if(isEvenFrame)
+    if(isEvenFrameActual)
     {
         imageStore(Accumulate1Image, ipos, final);
     }

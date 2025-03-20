@@ -65,8 +65,6 @@ void main() {
 
     const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
     
-    bool isEvenFrame = Camera.TotalFrames % 2 == 0;
-    
     vec3 pixelColor = vec3(0);
     vec4 albedo = vec4(0);
 	vec4 gbuffer = vec4(0);
@@ -144,7 +142,7 @@ void main() {
             // after, motionvector calculate last frame position
             if( !Camera.ProgressiveRender )
             {
-                uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
+                uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r;
                 if (prev_primitive_index0 != primitiveId)
                 {
                     sampleTimes = max(min(MAX_SAMPLE * Camera.NumberOfSamples, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps)), sampleTimes);
@@ -156,14 +154,8 @@ void main() {
     
     //imageStore(GBufferImage, ipos, gbuffer);
     imageStore(MotionVectorImage, ipos, motionvector);
-    if(isEvenFrame)
-    {
-        imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
-    }
-    else
-    {
-        imageStore(Visibility1Buffer, ipos, ivec4(primitiveId,0, 0, 0));
-    }
+    imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
+
     imageStore(OutAlbedoBuffer, ipos, albedo);
 
     //if(Camera.ShowHeatmap) gbuffer.rgb = uintToColor(primitiveId);

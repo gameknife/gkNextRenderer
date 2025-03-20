@@ -86,7 +86,7 @@ void main() {
 
     const ivec2 globalOffset = ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
     const ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + globalOffset;
-    bool isEvenFrame = Camera.TotalFrames % 2 == 0 ? true : false;
+    bool isEvenFrame = false;//Camera.TotalFrames % 2 == 0 ? true : false;
 
     vec3 Total = vec3(0);
     
