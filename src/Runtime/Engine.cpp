@@ -37,6 +37,27 @@
 #include "build.version"
 #include "NextPhysics.h"
 
+#if ANDROID
+
+#define GLFW_MOUSE_BUTTON_1         0
+#define GLFW_MOUSE_BUTTON_2         1
+#define GLFW_MOUSE_BUTTON_3         2
+#define GLFW_MOUSE_BUTTON_4         3
+#define GLFW_MOUSE_BUTTON_5         4
+#define GLFW_MOUSE_BUTTON_6         5
+#define GLFW_MOUSE_BUTTON_7         6
+#define GLFW_MOUSE_BUTTON_8         7
+#define GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
+#define GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
+#define GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
+#define GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+
+#define GLFW_RELEASE                0
+#define GLFW_PRESS                  1
+#define GLFW_REPEAT                 2
+
+#endif
+
 ENGINE_API Options* GOption = nullptr;
 
 namespace NextRenderer
@@ -855,6 +876,16 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
 #endif
 }
 
+void NextEngine::OnTouch(bool down, double xpos, double ypos)
+{
+    OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
+}
+
+void NextEngine::OnTouchMove(double xpos, double ypos)
+{
+    OnCursorPosition(xpos, ypos);
+}
+
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
@@ -922,16 +953,6 @@ void NextEngine::OnDropFile(int path_count, const char* paths[])
 void NextEngine::OnRendererBeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
-}
-
-void NextEngine::OnTouch(bool down, double xpos, double ypos)
-{
-
-}
-
-void NextEngine::OnTouchMove(double xpos, double ypos)
-{
-
 }
 
 void NextEngine::RequestLoadScene(std::string sceneFileName)

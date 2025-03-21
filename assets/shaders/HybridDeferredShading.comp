@@ -116,26 +116,6 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		// 这里都是hit了，那就走间接光照，直接用hitpos和normal，从AmbientCube里取
 		vec4 indirectFromAmbientCube = interpolateProbes(localPos, normal);
 		bounceColor = albedo * indirectFromAmbientCube.rgb;
-
-		// 这里是之前在屏幕空间trace历史DI的代码，没什么必要
-		
-//		vec4 hpos =  Camera.PrevViewProjection * node.combinedPrevTS * vec4(hitPos, 1);
-//		ivec2 size = imageSize(MiniGBuffer0);
-//		ivec2 ipos_new = ivec2((hpos.xy / hpos.w * 0.5 + 0.5) * size);
-//		if(ipos_new.x < 0 || ipos_new.y < 0 || ipos_new.x > size.x || ipos_new.y > size.y || hpos.z / hpos.w < 0)
-//		{
-//			return true;
-//		}
-//
-//		vec3 PrevNormal = imageLoad(PrevNormalBuffer, ipos_new).rgb;
-//		// compare prevnormal and normal
-//		if(dot(PrevNormal, normal) < 0.5)
-//		{
-//			return true;
-//		}
-//		
-//		// 这里从屏幕空间取出DirectLight的信息，IBL和SunLight，但这个hpos不一定是有效的
-//		bounceColor = imageLoad(InOutDirectLight0, ipos_new).rgb;
 		
 		return true;
 	}
@@ -247,7 +227,7 @@ void main() {
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
 	#if DESKTOP
-	uint sampleTimes = 4;//Camera.NumberOfSamples;
+	uint sampleTimes = 2;//Camera.NumberOfSamples;
 	#else
 	uint sampleTimes = 1;//Camera.NumberOfSamples;
 	#endif
@@ -298,7 +278,7 @@ void main() {
 		}
 		
 		#if DESKTOP
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
 		#else
 		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
 		#endif

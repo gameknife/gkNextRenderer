@@ -276,22 +276,21 @@ namespace Vulkan::RayTracing
         
         if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing && CurrentLogicRendererType() != ERT_LegacyDeferred)
         {
-            SCOPED_GPU_TIMER("ambient gen");
 #if !ANDROID
-            int cubesPerGroup = 32;
+            const int cubesPerGroup = 32;
 #else
-            int cubesPerGroup = 1024;
+            const int cubesPerGroup = 1024;
 #endif      
             
-            int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-            int group = count / cubesPerGroup;
+            const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            const int group = count / cubesPerGroup;
 
             // 每32个cube一个group
 
 #if !ANDROID
             int temporalFrames = 30;
 #else
-            int temporalFrames = 600;
+            int temporalFrames = 1250;
 #endif
             // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
             int frame = (int)(frameCount_ % temporalFrames);
@@ -300,6 +299,7 @@ namespace Vulkan::RayTracing
             int offsetInCubes = offset * cubesPerGroup;
 
             {
+                SCOPED_GPU_TIMER("ambient di");
                 VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -320,6 +320,7 @@ namespace Vulkan::RayTracing
             }
             
             {
+                SCOPED_GPU_TIMER("ambient ii");
                 VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,

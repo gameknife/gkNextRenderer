@@ -69,7 +69,7 @@ void ProcessMiss(const vec3 RayDirection)
 	if (Camera.HasSky)
 	{
 		// Sky color
-		const vec3 skyColor = SampleIBL(Camera.SkyIdx, RayDirection, Camera.SkyRotation, 0.0).rgb * Camera.SkyIntensity;
+		const vec3 skyColor = SampleIBL(Camera.SkyIdx, RayDirection, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity;
         Ray.Attenuation = vec3(1);
 		Ray.EmitColor = vec4(skyColor, -1);
 	}

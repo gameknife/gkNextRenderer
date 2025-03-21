@@ -1,7 +1,27 @@
 #include "ModelViewController.hpp"
-
 #include "Assets/Model.hpp"
 #include "Vulkan/Vulkan.hpp"
+
+#if ANDROID
+
+#define GLFW_MOUSE_BUTTON_1         0
+#define GLFW_MOUSE_BUTTON_2         1
+#define GLFW_MOUSE_BUTTON_3         2
+#define GLFW_MOUSE_BUTTON_4         3
+#define GLFW_MOUSE_BUTTON_5         4
+#define GLFW_MOUSE_BUTTON_6         5
+#define GLFW_MOUSE_BUTTON_7         6
+#define GLFW_MOUSE_BUTTON_8         7
+#define GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
+#define GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
+#define GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
+#define GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+
+#define GLFW_RELEASE                0
+#define GLFW_PRESS                  1
+#define GLFW_REPEAT                 2
+
+#endif
 
 void ModelViewController::Reset(const Assets::Camera& RenderCamera)
 {
@@ -96,7 +116,6 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 
 bool ModelViewController::OnMouseButton(const int button, const int action, const int mods)
 {
-#if !ANDROID
     if (button == GLFW_MOUSE_BUTTON_LEFT)
     {
         mouseLeftPressed_ = action == GLFW_PRESS;
@@ -114,7 +133,6 @@ bool ModelViewController::OnMouseButton(const int button, const int action, cons
             resetMousePos_ = true;
         }
     }
-#endif
     return true;
 }
 
