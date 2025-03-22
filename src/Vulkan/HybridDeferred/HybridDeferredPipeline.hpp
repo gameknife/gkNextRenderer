@@ -43,7 +43,6 @@ namespace Vulkan::HybridDeferred
 			const ImageView& miniGBuffer0ImageView,
 			const ImageView& finalImageView, const ImageView& motionVectorImageView,
 			const ImageView& albedoImageView, const ImageView& normalImageView,
-			const ImageView& prevNormalImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~HybridShadingPipeline();

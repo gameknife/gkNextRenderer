@@ -66,7 +66,7 @@ struct ALIGN_16 UniformBufferObject
 	glbool BakeWithGPU;
 	glbool FastGather;
 
-	glbool Reserve1;
+	glbool FastInterpole;
 	glbool Reserve2;
 	glbool Reserve3;
 	glbool Reserve4;

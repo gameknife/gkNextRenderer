@@ -21,7 +21,7 @@ namespace Vulkan::HybridDeferred
                                                 const Buffer& ambientCubeBuffer,
                                                 const ImageView& miniGBuffer0ImageView,
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
-                                                 const ImageView& albedoImageView, const ImageView& normalImageView, const ImageView& prevNormalImageView,
+                                                 const ImageView& albedoImageView, const ImageView& normalImageView,
                                                  const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
@@ -47,7 +47,6 @@ namespace Vulkan::HybridDeferred
 
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -73,7 +72,7 @@ namespace Vulkan::HybridDeferred
             VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info13 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info14 = {NULL, normalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info15 = {NULL, prevNormalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -131,7 +130,6 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 10, structureInfo),
                 descriptorSets.Bind(i, 13, Info13),
                 descriptorSets.Bind(i, 14, Info14),
-                descriptorSets.Bind(i, 15, Info15),
                 descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
                 descriptorSets.Bind(i, 17, hdrshBufferInfo),
                 descriptorSets.Bind(i, 18, lightBufferInfo),

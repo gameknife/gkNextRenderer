@@ -20,6 +20,7 @@ struct UserSettings final
 	bool TAA {};
 	bool BakeWithGPU = true;
 	bool FastGather = false;
+	bool FastInterpole = false;
 
 	// Camera
 	bool RequestRayCast;

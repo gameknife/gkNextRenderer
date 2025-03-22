@@ -656,6 +656,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.BakeWithGPU = userSettings_.BakeWithGPU;
     ubo.FastGather = userSettings_.FastGather;
+    ubo.FastInterpole = userSettings_.FastInterpole;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);

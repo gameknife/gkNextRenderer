@@ -214,6 +214,7 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &UserSetting.AdaptiveSteps, 2, 64);
 			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
 			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
+			ImGui::Checkbox(LOCTEXT("FastInterpole"), &UserSetting.FastInterpole);
 			
 			ImGui::NewLine();
 		}

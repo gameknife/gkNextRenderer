@@ -69,7 +69,6 @@ namespace Vulkan::HybridDeferred
 
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
-		std::unique_ptr<RenderImage> rtNormalPrev_;
 	};
 
 }
