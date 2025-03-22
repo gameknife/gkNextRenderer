@@ -123,15 +123,15 @@ uint FetchMaterialId(in NodeProxy node, uint offset)
 bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3 bounceColor, inout vec3 illumColor)
 {
 	rayQueryEXT rayQuery;
-//	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS2, direction, 20.f);
+	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin, EPS2, direction, 20.f);
+	rayQueryProceedEXT(rayQuery);
+	while( rayQueryProceedEXT(rayQuery) )
+	{
+
+	}
+//	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, EPS, direction, 20.0f);
 //	rayQueryProceedEXT(rayQuery);
 
-	rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, EPS, direction, 20.0f);
-	rayQueryProceedEXT(rayQuery);
-//	while( rayQueryProceedEXT(rayQuery) )
-//	{
-//
-//	}
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
 		RayPayload PayloadData;
 
@@ -139,11 +139,6 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 
 		PayloadData.PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
 		PayloadData.InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
-		PayloadData.InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
-
-		// World space parameters
-		PayloadData.RayOrigin  = rayQueryGetWorldRayOriginEXT(rayQuery);
-		PayloadData.RayDirection = rayQueryGetWorldRayDirectionEXT(rayQuery);
 
 		// Ray hit info
 		PayloadData.HitDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
