@@ -126,7 +126,8 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 #include "common/VertexFunc.glsl"
 
 void main() {
-
+	int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
+		
     // checker box
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
 	
@@ -283,7 +284,13 @@ void main() {
 		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
 		#endif
 		vec3 illumColor = vec3(0.0);
-		bool hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
+		
+		bool hit = true;
+		
+		if((gl_GlobalInvocationID.y + adder) % 2 == 0)
+		{
+			hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
+		}
 		if(!hit)
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;

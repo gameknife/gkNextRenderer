@@ -306,30 +306,30 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
     }
     
     // up cascade
-    if(totalWeight <= 0.0) {
-        baseIdx = baseIdx - ivec3(1,1,1);
-        for (int i = 0; i < 8; i++) {
-            ivec3 offset = ivec3(
-            i & 1,
-            (i >> 1) & 1,
-            (i >> 2) & 1
-            );
-
-            ivec3 probePos = baseIdx + offset * 3;
-            AmbientCube cube = FetchCube(probePos);
-            if (cube.Info.x != 1) continue;
-
-            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-            float weight = wx * wy * wz;
-
-            float occlusion;
-            vec4 sampleColor = sampleAmbientCubeHL2_Full(cube, normal, occlusion);
-            result += sampleColor * weight;
-            totalWeight += weight;
-        }
-    }
+//    if(totalWeight <= 0.0) {
+//        baseIdx = baseIdx - ivec3(1,1,1);
+//        for (int i = 0; i < 8; i++) {
+//            ivec3 offset = ivec3(
+//            i & 1,
+//            (i >> 1) & 1,
+//            (i >> 2) & 1
+//            );
+//
+//            ivec3 probePos = baseIdx + offset * 3;
+//            AmbientCube cube = FetchCube(probePos);
+//            if (cube.Info.x != 1) continue;
+//
+//            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+//            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+//            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+//            float weight = wx * wy * wz;
+//
+//            float occlusion;
+//            vec4 sampleColor = sampleAmbientCubeHL2_Full(cube, normal, occlusion);
+//            result += sampleColor * weight;
+//            totalWeight += weight;
+//        }
+//    }
 
     // Normalize result by total weight
     vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05);

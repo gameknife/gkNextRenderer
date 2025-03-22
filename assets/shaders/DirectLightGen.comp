@@ -75,12 +75,13 @@ int TraceShadow(vec3 origin, vec3 lightPos)
     return TracingOccludeFunction(origin, lightPos);
 }
 
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe)
+vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor)
 {
     float occlusion = 0.0;
     float hitDist = 0.0;
     float hitCount = 0.000001;
     vec3 rayColor = vec3(0.0);
+    bounceColor = vec4(0.0);
 
     // Generate a random angle for z-axis rotation
     float randAngle = 0;//RandomFloat(RandomSeed) * M_TWO_PI;
@@ -112,7 +113,12 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         {
             if( dot(OutNormal, rayDir) < 0.0 )
             {
-              
+                vec3 hitPos = origin + rayDir * OutRayDist;
+                const Material material = Materials[OutMaterialId];
+                vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
+                vec3 jit = (RandomFloat3(RandomSeed) - vec3(0.5f)) * CUBE_UNIT;
+                vec4 indirectLight = material.Diffuse * interpolateDIProbes(localPos + jit, OutNormal);
+                bounceColor.rgb += indirectLight.rgb;
             }
             else
             {
@@ -132,6 +138,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
+    bounceColor.rgb = bounceColor.rgb / float(FACE_TRACING);
 
     if(Camera.LightCount > 0)
     {
@@ -175,12 +182,20 @@ void main() {
 //    Cubes[gIdx].PosZ_D = LerpPackedColorAlt(Cubes[gIdx].PosZ_D, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.25);
 //    Cubes[gIdx].NegZ_D = LerpPackedColorAlt(Cubes[gIdx].NegZ_D, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.25);
 
-    Cubes[gIdx].PosY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe    ));
-    Cubes[gIdx].NegY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe   ));
-    Cubes[gIdx].PosX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ));
-    Cubes[gIdx].NegX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe   ));
-    Cubes[gIdx].PosZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ));
-    Cubes[gIdx].NegZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ));
+    
+    vec4 bounceColor = vec4(0.0);
+    Cubes[gIdx].PosY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe    ,bounceColor));
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.125);
+    Cubes[gIdx].NegY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe   ,bounceColor));
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.125);
+    Cubes[gIdx].PosX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ,bounceColor));
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.125);
+    Cubes[gIdx].NegX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe   ,bounceColor));
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.125);
+    Cubes[gIdx].PosZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ,bounceColor));
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.125);
+    Cubes[gIdx].NegZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ,bounceColor));
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
 
     Cubes[gIdx].Info.x = activeProbe;
 }
