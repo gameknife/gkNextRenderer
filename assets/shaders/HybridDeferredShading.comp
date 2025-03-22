@@ -228,7 +228,7 @@ void main() {
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
 	#if DESKTOP
-	uint sampleTimes = 2;//Camera.NumberOfSamples;
+	uint sampleTimes = Camera.FastGather ? 1 : 4;//Camera.NumberOfSamples;
 	#else
 	uint sampleTimes = 1;//Camera.NumberOfSamples;
 	#endif
@@ -287,10 +287,19 @@ void main() {
 		
 		bool hit = true;
 		
-		if((gl_GlobalInvocationID.y + adder) % 2 == 0)
+		if(Camera.FastGather)
+		{
+			if((gl_GlobalInvocationID.y + adder) % 2 == 0)
+			{
+				hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
+				bounceSingle *= 2.0f;
+			}
+		}
+		else
 		{
 			hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		}
+		
 		if(!hit)
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;

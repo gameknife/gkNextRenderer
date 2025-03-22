@@ -213,6 +213,8 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::SliderInt(LOCTEXT("Samples"), &UserSetting.NumberOfSamples, 1, 16);
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &UserSetting.AdaptiveSteps, 2, 64);
 			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
+			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
+			
 			ImGui::NewLine();
 		}
 

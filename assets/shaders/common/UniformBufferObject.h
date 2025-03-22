@@ -64,7 +64,12 @@ struct ALIGN_16 UniformBufferObject
 	uint BFSize;
 
 	glbool BakeWithGPU;
+	glbool FastGather;
+
 	glbool Reserve1;
+	glbool Reserve2;
+	glbool Reserve3;
+	glbool Reserve4;
 };
 
 struct ALIGN_16 NodeProxy

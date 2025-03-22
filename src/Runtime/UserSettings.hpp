@@ -19,6 +19,7 @@ struct UserSettings final
 	int AdaptiveSteps;
 	bool TAA {};
 	bool BakeWithGPU = true;
+	bool FastGather = false;
 
 	// Camera
 	bool RequestRayCast;
