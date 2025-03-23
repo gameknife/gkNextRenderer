@@ -157,10 +157,13 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
+
+    userSettings.FastGather = false;
     
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
+    userSettings.FastGather = true;
 #endif
 
     return userSettings;

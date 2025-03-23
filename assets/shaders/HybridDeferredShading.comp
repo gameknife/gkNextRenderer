@@ -232,11 +232,8 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	#if DESKTOP
-	uint sampleTimes = Camera.FastGather ? 1 : 4;//Camera.NumberOfSamples;
-	#else
-	uint sampleTimes = 1;//Camera.NumberOfSamples;
-	#endif
+	uint sampleTimes = Camera.FastGather ? 1 : 3;
+
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
 		vec3 lightColor = albedo.rgb;

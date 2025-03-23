@@ -75,16 +75,17 @@ int TraceShadow(vec3 origin, vec3 lightPos)
     return TracingOccludeFunction(origin, lightPos);
 }
 
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor)
+vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor, inout vec4 skyColor)
 {
     float occlusion = 0.0;
     float hitDist = 0.0;
     float hitCount = 0.000001;
     vec3 rayColor = vec3(0.0);
     bounceColor = vec4(0.0);
+    skyColor = vec4(0.0);
 
     // Generate a random angle for z-axis rotation
-    float randAngle = 0;//RandomFloat(RandomSeed) * M_TWO_PI;
+    float randAngle = RandomFloat(RandomSeed) * M_TWO_PI;
     float cosTheta = cos(randAngle);
     float sinTheta = sin(randAngle);
     float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
@@ -135,9 +136,11 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
             hitCount += 1;
             occlusion += 0.0;
             rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0).rgb * skyMultiplier;
+            
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
+    skyColor.rgb = rayColor;
     bounceColor.rgb = bounceColor.rgb / float(FACE_TRACING);
 
     if(Camera.LightCount > 0)
@@ -175,27 +178,27 @@ void main() {
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
 
     int activeProbe = 1;
-//    Cubes[gIdx].PosY_D = LerpPackedColorAlt(Cubes[gIdx].PosY_D, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.25);
-//    Cubes[gIdx].NegY_D = LerpPackedColorAlt(Cubes[gIdx].NegY_D, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.25);
-//    Cubes[gIdx].PosX_D = LerpPackedColorAlt(Cubes[gIdx].PosX_D, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.25);
-//    Cubes[gIdx].NegX_D = LerpPackedColorAlt(Cubes[gIdx].NegX_D, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.25);
-//    Cubes[gIdx].PosZ_D = LerpPackedColorAlt(Cubes[gIdx].PosZ_D, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.25);
-//    Cubes[gIdx].NegZ_D = LerpPackedColorAlt(Cubes[gIdx].NegZ_D, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.25);
-
     
     vec4 bounceColor = vec4(0.0);
-    Cubes[gIdx].PosY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe    ,bounceColor));
+    vec4 skyColor = vec4(0.0);
+    Cubes[gIdx].PosY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe     ,bounceColor, skyColor));
     Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.125);
-    Cubes[gIdx].NegY_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe   ,bounceColor));
+    Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.125);
+    Cubes[gIdx].NegY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe    ,bounceColor, skyColor));
     Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.125);
-    Cubes[gIdx].PosX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ,bounceColor));
+    Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.125);
+    Cubes[gIdx].PosX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ,bounceColor, skyColor));
     Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.125);
-    Cubes[gIdx].NegX_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe   ,bounceColor));
+    Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.125);
+    Cubes[gIdx].NegX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe    ,bounceColor, skyColor));
     Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.125);
-    Cubes[gIdx].PosZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ,bounceColor));
+    Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.125);
+    Cubes[gIdx].PosZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ,bounceColor, skyColor));
     Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.125);
-    Cubes[gIdx].NegZ_D = PackColor( TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ,bounceColor));
+    Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.125);
+    Cubes[gIdx].NegZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ,bounceColor, skyColor));
     Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
+    Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.125);
 
     Cubes[gIdx].Info.x = activeProbe;
 }

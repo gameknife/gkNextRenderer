@@ -18,8 +18,9 @@ layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
 layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10) buffer AmbientCubeArray { AmbientCube[] Cubes; };
+layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
-layout(set = 1, binding = 0) uniform sampler2D GlobalTextureSamplers[];
+layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/ColorFunc.glsl"
@@ -32,6 +33,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
 #include "common/VertexFunc.glsl"
+#include "common/SampleIBL.h"
 
 void main() {
 
@@ -117,7 +119,7 @@ void main() {
     
     if (mat.DiffuseTextureId >= 0)
     {
-        vec4 tex = texture(GlobalTextureSamplers[mat.DiffuseTextureId], v.TexCoord);
+        vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
         albedo *= tex * tex;
     }
     
@@ -127,34 +129,28 @@ void main() {
 	const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
 	const float metalProb = mat.Metalness;
-	
-	vec3 skyColor = vec3(1);
-	
-	const float t = 0.5*(v.Normal.y + 1);
-	skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0) * 20, t);
-	
+    	
 	const vec3 lightVector = Camera.SunDirection.xyz;
     const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 1;
+    const int jitcount = 4;
     const float range = 2.0f;
     for(int i = 0; i < jitcount; i++) {
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * range;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        indirectColor += interpolateProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
+        indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
     }
-    indirectColor = indirectColor  / float(jitcount);
-
-    //albedo = vec4(1,1,1,1); // for test
-    //vec4 outColor = albedo * d * indirectColor.w + albedo * vec4(indirectColor.rgb,1);
+    indirectColor = indirectColor / float(jitcount);
+    
     vec4 outColor = albedo * vec4(indirectColor.rgb,1);
+    
     if(Camera.HDR)
     {
         imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
     }
     else
     {
-        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 10000.0), 1.0));
+        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
     }
 }
