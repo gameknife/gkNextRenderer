@@ -27,7 +27,7 @@ void NextRendererGameInstance::OnInit()
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
-    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    modelViewController_.UpdateCamera(10.0f, deltaSeconds);
 }
 
 void NextRendererGameInstance::OnSceneLoaded()
@@ -215,6 +215,9 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
 			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
 			ImGui::Checkbox(LOCTEXT("FastInterpole"), &UserSetting.FastInterpole);
+			ImGui::SliderInt(LOCTEXT("AmbientSpeed"), &UserSetting.BakeSpeedLevel, 0, 2);
+
+			
 			
 			ImGui::NewLine();
 		}

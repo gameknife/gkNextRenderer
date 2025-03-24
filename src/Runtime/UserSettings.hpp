@@ -21,6 +21,7 @@ struct UserSettings final
 	bool BakeWithGPU = true;
 	bool FastGather = false;
 	bool FastInterpole = false;
+	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera
 	bool RequestRayCast;

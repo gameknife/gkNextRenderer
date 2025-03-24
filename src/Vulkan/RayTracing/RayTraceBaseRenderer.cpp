@@ -20,6 +20,7 @@
 #include <fmt/format.h>
 #include <numeric>
 
+#include "Runtime/Engine.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
@@ -287,8 +288,24 @@ namespace Vulkan::RayTracing
 
             // 每32个cube一个group
 
+            
 #if !ANDROID
-            int temporalFrames = 30;
+            int temporalFrames = 60;
+            switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
+            {
+            case 0:
+                temporalFrames = 1;
+                break;
+            case 1:
+                temporalFrames = 60;
+                break;
+            case 2:
+                temporalFrames = 300;
+                break;
+            default:
+                temporalFrames = 60;
+                break;
+            }
 #else
             int temporalFrames = 625;
 #endif
