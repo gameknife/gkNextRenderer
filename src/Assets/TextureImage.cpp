@@ -38,6 +38,76 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	stagingBuffer.reset();
 }
 
+TextureImage::TextureImage(
+    Vulkan::CommandPool& commandPool, 
+    size_t width, 
+    size_t height, 
+    uint32_t mipLevels, 
+    VkFormat format, 
+    const unsigned char* baseData, 
+    uint32_t baseSize,
+    const std::vector<float*>& mipLevelData, 
+    const std::vector<int>& mipWidths, 
+    const std::vector<int>& mipHeights)
+{
+    const auto& device = commandPool.Device();
+    
+    // Create the device side image, memory, view and sampler
+    image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, mipLevels, format));
+    imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+    imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT));
+    
+    // Configure sampler for mipmap levels
+    Vulkan::SamplerConfig samplerConfig;
+    samplerConfig.MipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerConfig.MinLod = 0.0f;
+    samplerConfig.MaxLod = static_cast<float>(mipLevels);
+    samplerConfig.MipLodBias = 0.0f;
+    sampler_.reset(new Vulkan::Sampler(device, samplerConfig));
+
+    // Transition image layout for transfer
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // Upload each mip level
+    for (uint32_t mipLevel = 0; mipLevel < mipLevels; ++mipLevel) {
+        VkDeviceSize mipSize;
+        const void* mipData;
+        uint32_t mipWidth, mipHeight;
+        
+        if (mipLevel == 0) {
+            // Base level
+            mipSize = baseSize;
+            mipData = baseData;
+            mipWidth = static_cast<uint32_t>(width);
+            mipHeight = static_cast<uint32_t>(height);
+        } else {
+            // Pre-calculated mip levels
+            mipWidth = static_cast<uint32_t>(mipWidths[mipLevel]);
+            mipHeight = static_cast<uint32_t>(mipHeights[mipLevel]);
+            mipSize = mipWidth * mipHeight * 4 * sizeof(float);
+            mipData = mipLevelData[mipLevel];
+        }
+        
+        // Create staging buffer for this mip level
+        auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, mipSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        
+        // Copy data to staging buffer
+        const auto stagingData = stagingBufferMemory.Map(0, mipSize);
+        std::memcpy(stagingData, mipData, mipSize);
+        stagingBufferMemory.Unmap();
+        
+        // Copy from staging buffer to specific mip level
+        image_->CopyFromToMipLevel(commandPool, *stagingBuffer, mipLevel, mipWidth, mipHeight);
+        
+        // Clean up staging resources for this mip level
+        stagingBuffer.reset();
+    }
+    
+    // Cannot transition to shader read only on non-graphics queue
+    // Will be done in MainThreadPostLoading
+}
+	
 TextureImage::~TextureImage()
 {
 	sampler_.reset();

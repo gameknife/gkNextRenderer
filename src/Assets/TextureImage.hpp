@@ -2,6 +2,7 @@
 
 #include "Vulkan/Image.hpp"
 #include <memory>
+#include <vector>
 
 namespace Vulkan
 {
@@ -26,6 +27,18 @@ namespace Assets
 		TextureImage& operator = (TextureImage&&) = delete;
 
 		TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, uint32_t miplevel, VkFormat format, const unsigned char* data, uint32_t size);
+		// Add to TextureImage.hpp in the public section
+		TextureImage(
+		    Vulkan::CommandPool& commandPool, 
+		    size_t width, 
+		    size_t height, 
+		    uint32_t mipLevels, 
+		    VkFormat format, 
+		    const unsigned char* baseData, 
+		    uint32_t baseSize,
+		    const std::vector<float*>& mipLevelData, 
+		    const std::vector<int>& mipWidths, 
+		    const std::vector<int>& mipHeights);
 		~TextureImage();
 
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }

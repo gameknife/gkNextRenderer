@@ -184,5 +184,38 @@ void Image::CopyFrom(CommandPool& commandPool, const Buffer& buffer)
 		vkCmdCopyBufferToImage(commandBuffer, buffer.Handle(), image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	});
 }
+		
+	// Implement in Image.cpp
+	void Image::CopyFromToMipLevel(
+	    CommandPool& commandPool, 
+	    const Buffer& buffer, 
+	    uint32_t mipLevel,
+	    uint32_t mipWidth,
+	    uint32_t mipHeight)
+	{
+		SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
+		{
+		    VkBufferImageCopy region = {};
+		    region.bufferOffset = 0;
+		    region.bufferRowLength = 0;
+		    region.bufferImageHeight = 0;
+		    
+		    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		    region.imageSubresource.mipLevel = mipLevel;
+		    region.imageSubresource.baseArrayLayer = 0;
+		    region.imageSubresource.layerCount = 1;
+		    
+		    region.imageOffset = {0, 0, 0};
+		    region.imageExtent = {mipWidth, mipHeight, 1};
+		    
+		    vkCmdCopyBufferToImage(
+		        commandBuffer,
+		        buffer.Handle(),
+		        image_,
+		        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		        1,
+		        &region);
+		});
+	}
 
 }
