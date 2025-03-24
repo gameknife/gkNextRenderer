@@ -45,6 +45,7 @@ namespace Vulkan
 		const VkExtent2D extent_;
 		const VkFormat format_;
 		VkImageLayout imageLayout_;
+		uint32_t mipLevel_;
 		bool external_;
 		VULKAN_HANDLE(VkImage, image_)
 	};

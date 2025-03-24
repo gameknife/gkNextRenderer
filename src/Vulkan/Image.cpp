@@ -24,6 +24,7 @@ Image::Image(
 	extent_(extent),
 	format_(format),
 	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED),
+	mipLevel_(miplevel),
 	external_(useForExternal)
 {
 	VkImageCreateInfo imageInfo = {};
@@ -110,7 +111,7 @@ void Image::TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLay
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = image_;
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.levelCount = mipLevel_;
 		barrier.subresourceRange.baseArrayLayer = 0;
 		barrier.subresourceRange.layerCount = 1;
 

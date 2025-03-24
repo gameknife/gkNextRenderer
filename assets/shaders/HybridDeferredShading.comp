@@ -198,7 +198,7 @@ void main() {
 	// x == y == 0, hit the sky, quick go
 	if(vBuffer.x == 0)
 	{
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, ray_dir, Camera.SkyRotation, 0.5f).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, ray_dir, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity : vec3(0.0);
 		imageStore(OutImage, ipos, vec4(iblColor,1));
 		imageStore(OutMotionVector, ipos, vec4(0));
 		imageStore(OutAlbedoBuffer, ipos, vec4(iblColor,1.0));
@@ -281,9 +281,9 @@ void main() {
 		}
 		
 		#if DESKTOP
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness).rgb * Camera.SkyIntensity : vec3(0.0);
 		#else
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness).rgb * Camera.SkyIntensity : vec3(0.0);
 		#endif
 		vec3 illumColor = vec3(0.0);
 		

@@ -55,7 +55,7 @@ TextureImage::TextureImage(
     // Create the device side image, memory, view and sampler
     image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, mipLevels, format));
     imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-    imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT));
+    imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT, mipLevels));
     
     // Configure sampler for mipmap levels
     Vulkan::SamplerConfig samplerConfig;

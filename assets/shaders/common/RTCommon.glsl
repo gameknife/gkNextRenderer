@@ -58,7 +58,7 @@ void ProcessHit(const int InstCustIndex, const vec3 RayDirection, const float Ra
 }
 
 void ProcessMiss(const vec3 RayDirection)
-{
+{    
 	Ray.GBuffer = vec4(0,1,0,0);
 	Ray.Albedo = vec4(1,1,1,1);
 	Ray.primitiveId = 65535;
@@ -69,7 +69,7 @@ void ProcessMiss(const vec3 RayDirection)
 	if (Camera.HasSky)
 	{
 		// Sky color
-		const vec3 skyColor = SampleIBL(Camera.SkyIdx, RayDirection, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity;
+		const vec3 skyColor = SampleIBL(Camera.SkyIdx, RayDirection, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity;
         Ray.Attenuation = vec3(1);
 		Ray.EmitColor = vec4(skyColor, -1);
 	}

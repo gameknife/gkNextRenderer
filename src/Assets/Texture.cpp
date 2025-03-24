@@ -452,10 +452,15 @@ namespace Assets
                         format = VK_FORMAT_R32G32B32A32_SFLOAT;
                         size = width * height * 4 * sizeof(float);
 
+                        // Extract spherical harmonics from the base level
+                        SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
+                        hdrSphericalHarmonics_[newTextureIdx] = sh;
+
                         // Calculate mipmap levels based on texture dimensions
                         int maxDimension = std::max(width, height);
                         int numMipLevels = static_cast<int>(std::floor(std::log2(maxDimension))) + 1;
-
+                        miplevel = numMipLevels;
+                        
                         // Original HDR data will be level 0
                         std::vector<float*> mipLevels(numMipLevels);
                         std::vector<int> mipWidths(numMipLevels);
@@ -483,9 +488,7 @@ namespace Assets
                                                  mipLevels[level], mipWidths[level], mipHeights[level], roughness);
                         }
 
-                        // Extract spherical harmonics from the base level
-                        SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
-                        hdrSphericalHarmonics_[newTextureIdx] = sh;
+
 
                         // Create a texture with all mip levels
                         textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
@@ -495,15 +498,6 @@ namespace Assets
                         for (int level = 1; level < numMipLevels; ++level) {
                             delete[] mipLevels[level];
                         }
-                        
-                        // ktx now don't support hdr, use stbi import
-                        // stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
-                        // pixels = stbdata;
-                        // format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                        // size = width * height * 4 * sizeof(float);
-                        //
-                        // SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
-                        // hdrSphericalHarmonics_[newTextureIdx] = sh;
                     }
                     else
                     {
