@@ -33,6 +33,12 @@ vec2 RandomFloat2(inout uvec4 v)
 	return uint_to_float(v.xy);
 }
 
+vec3 RandomFloat3(inout uvec4 v)
+{
+    pcg4d(v);
+    return uint_to_float(v.xyz);
+}
+
 vec2 concentric_sample_disk(vec2 offset) {
     offset += offset - vec2(1);
     if (isZERO(offset.x) && isZERO(offset.y)) {

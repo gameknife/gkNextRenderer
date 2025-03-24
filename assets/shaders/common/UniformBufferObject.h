@@ -6,8 +6,10 @@
 #define ALIGN_16
 #endif
 
-const int CUBE_SIZE = 100;
-const vec3 CUBE_OFFSET = vec3(-5.0, -4.99, -5.0);
+const int CUBE_SIZE_XY = 200;
+const int CUBE_SIZE_Z = 50;
+const float CUBE_UNIT = 0.25f;
+const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.5, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
 
 struct ALIGN_16 UniformBufferObject
 {
@@ -17,8 +19,8 @@ struct ALIGN_16 UniformBufferObject
 	mat4 ProjectionInverse;
 	mat4 ViewProjection;
 	mat4 PrevViewProjection;
+	
 	vec4 ViewportRect;
-
 	vec4 SunDirection;
 	vec4 SunColor;
 	vec4 BackGroundColor;	//not used
@@ -27,34 +29,47 @@ struct ALIGN_16 UniformBufferObject
 	float FocusDistance;
 	float SkyRotation;
 	float HeatmapScale;
+	
 	float PaperWhiteNit;
-
 	float SkyIntensity;
 	uint SkyIdx;
 	uint TotalFrames;
+	
 	uint MaxNumberOfBounces;
 	uint NumberOfSamples;
 	uint NumberOfBounces;
 	uint RandomSeed;
+	
 	uint LightCount;
 	glbool HasSky;
 	glbool ShowHeatmap;
 	glbool UseCheckerBoard;	//not used
+	
 	uint TemporalFrames;
 	glbool HasSun;
 	glbool HDR;
 	glbool AdaptiveSample;
+	
 	float AdaptiveVariance;
 	uint AdaptiveSteps;
 	glbool TAA;
 	uint SelectedId;
+	
 	glbool ShowEdge;
 	glbool ProgressiveRender;
-		
 	float BFSigma;
 	float BFSigmaLum;
+	
 	float BFSigmaNormal;
 	uint BFSize;
+
+	glbool BakeWithGPU;
+	glbool FastGather;
+
+	glbool FastInterpole;
+	glbool Reserve2;
+	glbool Reserve3;
+	glbool Reserve4;
 };
 
 struct ALIGN_16 NodeProxy
@@ -68,12 +83,39 @@ mat4 combinedPrevTS;
 uint matId[16];
 };
 
+// size = 24 x 4 bytes, 96 bytes, maximun compress to 64 bytes
+// if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
+// and we can use the active / inactive to adjust lerp value between probe
 struct ALIGN_16 AmbientCube
 {
-	vec4 PosZ;
-	vec4 NegZ;
-	vec4 PosY;
-	vec4 NegY;
-	vec4 PosX;
-	vec4 NegX;
+	uint PosZ;
+	uint NegZ;
+	uint PosY;
+	uint NegY;
+	uint PosX;
+	uint NegX;
+
+	uint PosZ_D;
+	uint NegZ_D;
+	uint PosY_D;
+	uint NegY_D;
+	uint PosX_D;
+	uint NegX_D;
+
+	uint PosZ_S;
+	uint NegZ_S;
+	uint PosY_S;
+	uint NegY_S;
+	uint PosX_S;
+	uint NegX_S;
+	
+	uvec4 Info;
+	uvec2 Info2;
+};
+
+struct ALIGN_16 SphericalHarmonics
+{
+	// 3 bands (9 coefficients per color channel)
+	float coefficients[3][9];
+	float padding;
 };

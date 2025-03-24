@@ -6,13 +6,13 @@
 #include <fmt/format.h>
 #include <iostream>
 #include <filesystem>
-
+#include <cpptrace/cpptrace.hpp>
 #include "Runtime/Platform/PlatformCommon.h"
 
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine
-    //try
+    try
     {
         // Handle command line options.
         Options options(argc, argv);
@@ -61,30 +61,19 @@ int main(int argc, const char* argv[]) noexcept
         return EXIT_SUCCESS;
     }
     // Exception Handle
-    /*catch (const Options::Help&)
-    {
-        return EXIT_SUCCESS;
-    }
     catch (const std::exception& exception)
     {
         Utilities::Console::Write(Utilities::Severity::Fatal, [&exception]()
         {
-            const auto stacktrace = boost::get_error_info<traced>(exception);
-
             std::cerr << "FATAL: " << exception.what() << std::endl;
-
-            if (stacktrace)
-            {
-                std::cerr << '\n' << *stacktrace << '\n';
-            }
         });
     }
-    catch (...)
-    {
-        Utilities::Console::Write(Utilities::Severity::Fatal, []()
-        {
-            fmt::print(stderr, "FATAL: caught unhandled exception\n");
-        });
-    }*/
+    // catch (...)
+    // {
+    //     Utilities::Console::Write(Utilities::Severity::Fatal, []()
+    //     {
+    //         fmt::print(stderr, "FATAL: caught unhandled exception\n");
+    //     });
+    // }
     return EXIT_FAILURE;
 }

@@ -53,7 +53,9 @@ endif ()
 if (ANDROID)
 find_package(game-activity REQUIRED CONFIG)
 else()
+find_package(cpptrace CONFIG REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(RapidJSON CONFIG REQUIRED)
 endif()
 
 find_package(cxxopts CONFIG REQUIRED)
@@ -65,10 +67,6 @@ find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Jolt CONFIG REQUIRED)
-
-if (!ANDROID)
-find_package(RapidJSON CONFIG REQUIRED)
-endif()
 
 find_package(fmt CONFIG REQUIRED)
 

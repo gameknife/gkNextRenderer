@@ -23,10 +23,11 @@ namespace NextRenderer
     }
 }
 #if ANDROID
+
 #include <imgui_impl_android.h>
 #include <android/log.h>
 #include <game-activity/native_app_glue/android_native_app_glue.h>
-
+#include <string>
 static void MakeExternalDirectory( android_app* app, std::string srcPath )
 {
     if( std::filesystem::exists(std::string("/sdcard/Android/data/com.gknextrenderer/files/") + srcPath) )

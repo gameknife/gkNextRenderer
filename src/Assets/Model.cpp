@@ -201,11 +201,12 @@ namespace Assets
         if (meshId != -1)
         {
             sceneNode->SetVisible(true);
-            std::vector<uint32_t> materialIdx;
+            std::array<uint32_t, 16> materialIdx {};
             for (int i = 0; i < model.meshes[node.mesh].primitives.size(); i++)
             {
+                assert( i < 16 );
                 auto& primitive = model.meshes[node.mesh].primitives[i];
-                materialIdx.push_back(max(0, primitive.material));
+                materialIdx[i] = (max(0, primitive.material));
             }
             sceneNode->SetMaterial(materialIdx);
         }
@@ -1234,7 +1235,7 @@ namespace Assets
         children_.erase(child);
     }
 
-    void Node::SetMaterial(const std::vector<uint32_t>& materials)
+    void Node::SetMaterial(const std::array<uint32_t, 16>& materials)
     {
         materialIdx_ = materials;
     }

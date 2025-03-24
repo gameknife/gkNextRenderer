@@ -12,7 +12,7 @@
 #include "Platform.glsl"
 #include "common/Heatmap.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -22,6 +22,7 @@ layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
+layout(binding = 9) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -63,8 +64,6 @@ vec2(0.0625, 0.8889)
 void main() {
 
     const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
-    
-    bool isEvenFrame = Camera.TotalFrames % 2 == 0;
     
     vec3 pixelColor = vec3(0);
     vec4 albedo = vec4(0);
@@ -143,7 +142,7 @@ void main() {
             // after, motionvector calculate last frame position
             if( !Camera.ProgressiveRender )
             {
-                uint prev_primitive_index0 = isEvenFrame ? imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r : imageLoad(VisibilityBuffer, previpos + ivec2(0, 0)).r;
+                uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos + ivec2(0, 0)).r;
                 if (prev_primitive_index0 != primitiveId)
                 {
                     sampleTimes = max(min(MAX_SAMPLE * Camera.NumberOfSamples, Camera.NumberOfSamples * max(1,Camera.TemporalFrames / Camera.AdaptiveSteps)), sampleTimes);
@@ -155,14 +154,8 @@ void main() {
     
     //imageStore(GBufferImage, ipos, gbuffer);
     imageStore(MotionVectorImage, ipos, motionvector);
-    if(isEvenFrame)
-    {
-        imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
-    }
-    else
-    {
-        imageStore(Visibility1Buffer, ipos, ivec4(primitiveId,0, 0, 0));
-    }
+    imageStore(VisibilityBuffer, ipos, ivec4(primitiveId,0, 0, 0));
+
     imageStore(OutAlbedoBuffer, ipos, albedo);
 
     //if(Camera.ShowHeatmap) gbuffer.rgb = uintToColor(primitiveId);

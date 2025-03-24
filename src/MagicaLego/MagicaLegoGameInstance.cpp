@@ -19,7 +19,6 @@ struct VertExtInfo
 #if WITH_CPURAYCAST
 // a cpu ray-cast if hardware not support
 // a cpu way to find the block location with simple bounds
-#define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 static tinybvh::BVH GCpuBvh;
 // represent every triangles verts one by one, triangle count is size / 3

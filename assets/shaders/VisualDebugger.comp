@@ -1,14 +1,14 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 #include "common/ColorFunc.glsl"
 
 layout(binding = 0, rgba8) uniform image2D OutImage;
 layout(binding = 1, rgba16f) uniform image2D InDebugImage1;
 layout(binding = 2, rgba16f) uniform image2D InDebugImage2;
 layout(binding = 3, r8ui) uniform uimage2D InDebugImage3;
-layout(binding = 4, rgba16f) uniform image2D InDebugImage4;
+layout(binding = 4, r8ui) uniform uimage2D InDebugImage4;
 //layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
@@ -55,6 +55,6 @@ void main() {
 
     DRAW(InDebugImage1,0u,3u,4u,ipos,isize,1.0);
     DRAWNORMAL(InDebugImage2,1u,3u,4u,ipos,isize);
-    DRAWINT(InDebugImage3,2u,3u,4u,ipos,isize);
-    DRAW(InDebugImage4,3u,3u,4u,ipos,isize,1.0);
+    DRAWINT(InDebugImage4,2u,3u,4u,ipos,isize);
+    DRAWINT(InDebugImage3,3u,3u,4u,ipos,isize);
 }

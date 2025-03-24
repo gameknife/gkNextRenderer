@@ -36,7 +36,6 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
-
 // return if hits, this function may differ between Shader & Cpp
 bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uint OutMaterialId, out float OutRayDist)
 {
@@ -76,19 +75,21 @@ int TraceShadow(vec3 origin, vec3 lightPos)
     return TracingOccludeFunction(origin, lightPos);
 }
 
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe)
+vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor, inout vec4 skyColor)
 {
     float occlusion = 0.0;
     float hitDist = 0.0;
     float hitCount = 0.000001;
     vec3 rayColor = vec3(0.0);
+    bounceColor = vec4(0.0);
+    skyColor = vec4(0.0);
 
     // Generate a random angle for z-axis rotation
     float randAngle = RandomFloat(RandomSeed) * M_TWO_PI;
     float cosTheta = cos(randAngle);
     float sinTheta = sin(randAngle);
     float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
-    
+
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
         #if HIGH_QUALITY
@@ -106,7 +107,6 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
 
         // Align with the surface normal
         vec3 rayDir = AlignWithNormal(rotatedVec, basis);
-        
         vec3 OutNormal;
         uint OutMaterialId;
         float OutRayDist;
@@ -114,17 +114,12 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         {
             if( dot(OutNormal, rayDir) < 0.0 )
             {
-                // 这里，就命中了表面，需要反弹。反弹只发生一次
-                // 因此，如果命中的表面，没有直接光照，这里的rayColor会是黑的
-                // 但如果考虑反弹，这里没有直接光照的面，也应该可以贡献光照，可以考虑从以前的buffer里取
                 vec3 hitPos = origin + rayDir * OutRayDist;
                 const Material material = Materials[OutMaterialId];
-
-                // 这里取出直接光照信息，信息是前一个pass生成的，包含最近一个probe的天光遮蔽，方向光，其他光源的亮度归一化信息
                 vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
                 vec3 jit = (RandomFloat3(RandomSeed) - vec3(0.5f)) * CUBE_UNIT;
                 vec4 indirectLight = material.Diffuse * interpolateDIProbes(localPos + jit, OutNormal);
-                rayColor += indirectLight.rgb;
+                bounceColor.rgb += indirectLight.rgb;
             }
             else
             {
@@ -137,17 +132,43 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
         }
         else
         {
+            hitDist += 1000.0;
+            hitCount += 1;
+            occlusion += 0.0;
+            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0).rgb * skyMultiplier;
             
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
-    vec4 indirectColor = vec4(rayColor, 1.0);
+    skyColor.rgb = rayColor;
+    bounceColor.rgb = bounceColor.rgb / float(FACE_TRACING);
+
+    if(Camera.LightCount > 0)
+    {
+        vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
+
+        //AmbientCube cube = FetchCube(cubePos);
+        float lightAtten = TracingOccludeFunction(origin, lightPos);
+
+        vec3 lightDir = normalize(lightPos - origin);
+        float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+        float distance = length(lightPos - origin);
+        float attenuation = 1.0f / (distance * distance);
+        rayColor += vec3(2000.0f, 2000.0f, 2000.0f) * ndotl * attenuation * lightAtten;
+    }
+
+    float sunAtten = TracingOccludeFunction(origin, origin + Camera.SunDirection.xyz * 1000.0);
+    float ndotl = clamp(dot(basis, Camera.SunDirection.xyz), 0.0f, 1.0f);
+    rayColor += Camera.SunColor.xyz * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+
+    float avgDist = hitDist / hitCount;
+    vec4 indirectColor = vec4(rayColor, avgDist);
     return indirectColor;
 }
 
 void main() {
     uint gIdx = gl_GlobalInvocationID.x + pushConsts.globalOffset;
-    
+
     // convert to local position
     uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
     uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
@@ -155,21 +176,29 @@ void main() {
 
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
-    
-    int activeProbe = 1;
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe),  0.125);
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe), 0.125);
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe),  0.125);
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe), 0.125);
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe),  0.125);
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe), 0.125);
 
-//    Cubes[gIdx].PosY = Cubes[gIdx].PosY_D;
-//    Cubes[gIdx].NegY = Cubes[gIdx].NegY_D;
-//    Cubes[gIdx].PosX = Cubes[gIdx].PosX_D;
-//    Cubes[gIdx].NegX = Cubes[gIdx].NegX_D;
-//    Cubes[gIdx].PosZ = Cubes[gIdx].PosZ_D;
-//    Cubes[gIdx].NegZ = Cubes[gIdx].NegZ_D;
+    int activeProbe = 1;
     
-//  Cubes[gIdx].Info.x = activeProbe;
+    vec4 bounceColor = vec4(0.0);
+    vec4 skyColor = vec4(0.0);
+    Cubes[gIdx].PosY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe     ,bounceColor, skyColor));
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.125);
+    Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.125);
+    Cubes[gIdx].NegY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe    ,bounceColor, skyColor));
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.125);
+    Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.125);
+    Cubes[gIdx].PosX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ,bounceColor, skyColor));
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.125);
+    Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.125);
+    Cubes[gIdx].NegX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe    ,bounceColor, skyColor));
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.125);
+    Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.125);
+    Cubes[gIdx].PosZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ,bounceColor, skyColor));
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.125);
+    Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.125);
+    Cubes[gIdx].NegZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ,bounceColor, skyColor));
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
+    Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.125);
+
+    Cubes[gIdx].Info.x = activeProbe;
 }

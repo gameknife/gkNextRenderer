@@ -37,6 +37,27 @@
 #include "build.version"
 #include "NextPhysics.h"
 
+#if ANDROID
+
+#define GLFW_MOUSE_BUTTON_1         0
+#define GLFW_MOUSE_BUTTON_2         1
+#define GLFW_MOUSE_BUTTON_3         2
+#define GLFW_MOUSE_BUTTON_4         3
+#define GLFW_MOUSE_BUTTON_5         4
+#define GLFW_MOUSE_BUTTON_6         5
+#define GLFW_MOUSE_BUTTON_7         6
+#define GLFW_MOUSE_BUTTON_8         7
+#define GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
+#define GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
+#define GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
+#define GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+
+#define GLFW_RELEASE                0
+#define GLFW_PRESS                  1
+#define GLFW_REPEAT                 2
+
+#endif
+
 ENGINE_API Options* GOption = nullptr;
 
 namespace NextRenderer
@@ -136,10 +157,13 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
+
+    userSettings.FastGather = false;
     
 #if ANDROID
     userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
+    userSettings.FastGather = true;
 #endif
 
     return userSettings;
@@ -226,10 +250,7 @@ void NextEngine::Start()
     physicsEngine_->Start();
     
     gameInstance_->OnInit();
-
-    //fmt::print("Load scene: {}\n", userSettings_.SceneIndex);
-    //RequestLoadScene( SceneList::AllScenes[userSettings_.SceneIndex] );
-
+    
     // init js engine
     InitJSEngine();
 }
@@ -610,13 +631,17 @@ glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
 void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
-    // set in gpu directly
-    renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
-
-    // it will batch together in next frame, then callback one by one
-
-
-    // TODO: currently the context only avaliable for single ray, support multiple later
+    if( renderer_->supportRayTracing_ )
+    {
+        // set in gpu directly
+        renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
+    }
+    else
+    {
+        // CPU Raycast in scene
+        // Assets::RayCastResult result = scene_->RayCastInCPU(rayOrigin, rayDir);
+        // callback(result);
+    }
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -631,7 +656,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
-    
+
+    ubo.BakeWithGPU = userSettings_.BakeWithGPU;
+    ubo.FastGather = userSettings_.FastGather;
+    ubo.FastInterpole = userSettings_.FastInterpole;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
@@ -666,48 +694,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
 
-    // Raycasting
-    {
-        // glm::vec2 pixel = mousePos_ - glm::vec2(offset.x, offset.y);
-        // glm::vec2 uv = pixel / glm::vec2(extent.width, extent.height) * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-        // glm::vec4 origin = ubo.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-        // glm::vec4 target = ubo.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-        // glm::vec3 raydir = ubo.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-        // glm::vec3 rayorg = glm::vec3(origin);
-        //
-        // // Send new
-        // renderer_->SetRaycastRay(rayorg, raydir);
-        // Assets::RayCastResult rayResult {};
-        // renderer_->GetLastRaycastResult(rayResult);
-        //
-        // if( userSettings_.RequestRayCast )
-        // {
-        //     if(rayResult.Hitted )
-        //     {
-        //         scene_->GetEnvSettings().FocusDistance = rayResult.T;
-        //         scene_->SetSelectedId(rayResult.InstanceId);
-        //
-        //         AddTickedTask([this, rayResult](double DeltaTimes)->bool
-        //         {
-        //             Assets::RayCastResult ray = rayResult;
-        //             gameInstance_->OnRayHitResponse(ray);
-        //             return true;
-        //         });
-        //         
-        //     }
-        //     else
-        //     {
-        //         scene_->SetSelectedId(-1);
-        //     }
-        //
-        //     // only active one frame
-        //     userSettings_.RequestRayCast = false;
-        // }
-        //
-        // userSettings_.HitResult = rayResult;
-    }
-
-
     ubo.SelectedId = scene_->GetSelectedId();
 
     // Camera Stuff
@@ -725,13 +711,19 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( glm::normalize(glm::vec3( sinf(float( scene_->GetEnvSettings().SunRotation * M_PI )), 0.75f, cosf(float( scene_->GetEnvSettings().SunRotation * M_PI )) )), 0.0f );
+    ubo.SunDirection = glm::vec4( scene_->GetEnvSettings().SunDirection(), 0.0f );
     ubo.SunColor = glm::vec4(1,1,1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
     ubo.HasSun =scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
+    
+    if (ubo.HasSun != prevUBO_.HasSun || ubo.SunDirection != prevUBO_.SunDirection)
+    {
+        scene_->MarkEnvDirty();
+    }
+
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
@@ -889,6 +881,16 @@ void NextEngine::OnKey(int key, int scancode, int action, int mods)
 #endif
 }
 
+void NextEngine::OnTouch(bool down, double xpos, double ypos)
+{
+    OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
+}
+
+void NextEngine::OnTouchMove(double xpos, double ypos)
+{
+    OnCursorPosition(xpos, ypos);
+}
+
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
@@ -956,16 +958,6 @@ void NextEngine::OnDropFile(int path_count, const char* paths[])
 void NextEngine::OnRendererBeforeNextFrame()
 {
     TaskCoordinator::GetInstance()->Tick();
-}
-
-void NextEngine::OnTouch(bool down, double xpos, double ypos)
-{
-
-}
-
-void NextEngine::OnTouchMove(double xpos, double ypos)
-{
-
 }
 
 void NextEngine::RequestLoadScene(std::string sceneFileName)

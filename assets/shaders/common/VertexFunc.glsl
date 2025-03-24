@@ -4,15 +4,16 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin, vec3 ray_d
     NodeProxy proxy = NodeProxies[vBuffer.x - 1];
 
     Vertex result;
-    vec3 positions[3], normals[3];
+    vec3 positions[3], normals[3], tangents[3];
     vec2 tex_coords[3];
-    uint matid;
+    uint matid = 0;
     uint vertex_index = vBuffer.y * 3;
 
     for (int i = 0; i != 3; ++i) {
     	const Vertex v = UnpackVertex(vertex_index);
     	positions[i] = (proxy.worldTS * vec4(v.Position, 1)).xyz;
     	normals[i] = (proxy.worldTS * vec4(v.Normal, 0)).xyz;
+        tangents[i] = (proxy.worldTS * vec4(v.Tangent.xyz, 0)).xyz;
     	tex_coords[i] = v.TexCoord;
     	if(i == 0) matid = v.MaterialIndex;
     	vertex_index++;
@@ -36,6 +37,7 @@ Vertex get_material_data(ivec2 pixel, uvec2 vBuffer, vec3 ray_origin, vec3 ray_d
 
     result.Position = fma(vec3(barycentrics[0]), positions[0], fma(vec3(barycentrics[1]), positions[1], barycentrics[2] * positions[2]));
     result.Normal = normalize(fma(vec3(barycentrics[0]), normals[0], fma(vec3(barycentrics[1]), normals[1], barycentrics[2] * normals[2])));
+    result.Tangent.xyz = normalize(fma(vec3(barycentrics[0]), tangents[0], fma(vec3(barycentrics[1]), tangents[1], barycentrics[2] * tangents[2])));
     result.TexCoord = fma(vec2(barycentrics[0]), tex_coords[0], fma(vec2(barycentrics[1]), tex_coords[1], barycentrics[2] * tex_coords[2]));
     result.MaterialIndex = matid;
 

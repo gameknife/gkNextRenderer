@@ -1,8 +1,8 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # directory naming
-file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp")
-file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp")
+file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
+file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
 file(GLOB_RECURSE src_files_vulkan "Vulkan/*.cpp" "Vulkan/*.hpp")
 file(GLOB_RECURSE src_files_thirdparty 
 	"ThirdParty/json11/*.cpp" 
@@ -78,7 +78,6 @@ add_executable(MagicaLego
 	DesktopMain.cpp
 )
 add_executable(Packager
-	${src_files_utilities} 
 	Packager/PackagerMain.cpp
 )
 endif()
@@ -135,10 +134,11 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE cxxopts::cxxopts Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw)
+		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt )
+		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
 	endif()
 
 	# for android
@@ -186,11 +186,12 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if ( ${target} STREQUAL MagicaLego )
-	if (UNIX AND NOT APPLE)
+	if (UNIX AND NOT APPLE AND NOT ANDROID)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
+
+	if ( ${target} STREQUAL MagicaLego )
 	if (MSVC)
 	add_custom_command(
 			TARGET ${target} POST_BUILD

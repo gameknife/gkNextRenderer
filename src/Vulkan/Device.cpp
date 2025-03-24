@@ -64,7 +64,11 @@ Device::Device(
 #if __APPLE__
 	const auto transferFamily = graphicsFamily;
 #else
+#if ANDROID
 	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_SPARSE_BINDING_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
+#else
+	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
+#endif
 #endif
 	
 	//Commented out for Macos compatibility, and this queue is not in use actually

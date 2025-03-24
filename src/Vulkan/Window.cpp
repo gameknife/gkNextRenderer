@@ -98,12 +98,39 @@ Window::Window(const WindowConfig& config) :
 
 	auto* const monitor = config.Fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
+	// Get the primary monitor scale
+	float xscale = 1.0f, yscale = 1.0f;
+	
+	// if (monitor) {
+	// 	glfwGetMonitorContentScale(monitor, &xscale, &yscale);
+	// } else {
+	// 	// Get content scale for windowed mode too
+	// 	GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+	// 	if (primaryMonitor) {
+	// 		glfwGetMonitorContentScale(primaryMonitor, &xscale, &yscale);
+	// 	}
+	// }
+	
+	// indow dimensions based on DPI
+	int scaledWidth = static_cast<int>(config.Width * xscale);
+	int scaledHeight = static_cast<int>(config.Height * yscale);
+
 	// create with hidden window
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-	window_ = glfwCreateWindow(config.Width, config.Height, config.Title.c_str(), monitor, nullptr);
+	window_ = glfwCreateWindow(scaledWidth, scaledHeight, config.Title.c_str(), monitor, nullptr);
 	if (window_ == nullptr)
 	{
 		Throw(std::runtime_error("failed to create window"));
+	}
+
+	// Center window position considering DPI
+	if (!config.Fullscreen) {
+		const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+		if (mode) {
+			int windowPosX = (mode->width - scaledWidth) / 2;
+			int windowPosY = (mode->height - scaledHeight) / 2;
+			glfwSetWindowPos(window_, windowPosX, windowPosY);
+		}
 	}
 
 #if !ANDROID
@@ -175,7 +202,7 @@ VkExtent2D Window::FramebufferSize() const
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 #else
 	float aspect = ANativeWindow_getWidth(window_) / static_cast<float>(ANativeWindow_getHeight(window_));
-	return VkExtent2D{ static_cast<uint32_t>(floorf(1920 * aspect)), 1920 };
+	return VkExtent2D{ static_cast<uint32_t>(floorf(1280 * aspect)), 1280 };
 #endif
 }
 

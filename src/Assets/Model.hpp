@@ -45,6 +45,11 @@ namespace Assets
             SkyRotation = 0;
             SunRotation = 0.5f;   
         }
+
+        glm::vec3 SunDirection() const 
+        {
+            return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
+        }
         
         float ControlSpeed;
         bool GammaCorrection;
@@ -96,8 +101,8 @@ namespace Assets
 
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
-        void SetMaterial(const std::vector<uint32_t>& materials);
-        std::vector<uint32_t>& Materials() { return materialIdx_; }
+        void SetMaterial(const std::array<uint32_t, 16>& materials);
+        std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
 
         void BindPhysicsBody(JPH::BodyID bodyId) { physicsBodyTemp_ = bodyId; }
@@ -118,7 +123,7 @@ namespace Assets
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
-        std::vector<uint32_t> materialIdx_;
+        std::array<uint32_t, 16> materialIdx_;
         JPH::BodyID physicsBodyTemp_;
     };
 
@@ -187,6 +192,7 @@ namespace Assets
         Model(Model&&) = default;
         ~Model() = default;
 
+        const std::vector<Vertex>& CPUVertices() const { return vertices_; }
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
         

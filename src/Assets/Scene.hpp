@@ -6,6 +6,7 @@
 #include <vector>
 #include <glm/vec2.hpp>
 
+#include "CPUAccelerationStructure.h"
 #include "Model.hpp"
 
 namespace Vulkan
@@ -44,6 +45,7 @@ namespace Assets
 			std::vector<AnimationTrack>& tracks);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
+		//void RebuildBVH();
 
 		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
@@ -57,6 +59,8 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+		const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
+		const bool HasSun() const { return envSettings_.HasSun; }
 
 		const uint32_t GetLightCount() const {return lightCount_;}
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
@@ -91,6 +95,14 @@ namespace Assets
 		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 
 		void PlayAllTracks();
+
+		void MarkEnvDirty();
+
+		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
+
+		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
+
+		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -122,6 +134,12 @@ namespace Assets
 		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
+
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};
 		uint32_t verticeCount_ {};
@@ -139,5 +157,7 @@ namespace Assets
 		
 		Assets::EnvironmentSetting envSettings_;
 		Camera renderCamera_;
+
+		FCPUAccelerationStructure cpuAccelerationStructure_;
 	};
 }

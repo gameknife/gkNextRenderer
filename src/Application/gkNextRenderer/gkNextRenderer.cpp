@@ -27,7 +27,7 @@ void NextRendererGameInstance::OnInit()
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
-    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    modelViewController_.UpdateCamera(10.0f, deltaSeconds);
 }
 
 void NextRendererGameInstance::OnSceneLoaded()
@@ -89,7 +89,9 @@ bool NextRendererGameInstance::OnMouseButton(int button, int action, int mods)
 			if (result.Hitted)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-				GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30 );
+				GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+				// log the pos
+				fmt::print("hit point: {}, {}\n", result.HitPoint.x, result.HitPoint.z);
 			}
 			return true;
 		});
@@ -210,6 +212,13 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("AntiAlias"), &UserSetting.TAA);
 			ImGui::SliderInt(LOCTEXT("Samples"), &UserSetting.NumberOfSamples, 1, 16);
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &UserSetting.AdaptiveSteps, 2, 64);
+			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
+			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
+			ImGui::Checkbox(LOCTEXT("FastInterpole"), &UserSetting.FastInterpole);
+			ImGui::SliderInt(LOCTEXT("AmbientSpeed"), &UserSetting.BakeSpeedLevel, 0, 2);
+
+			
+			
 			ImGui::NewLine();
 		}
 

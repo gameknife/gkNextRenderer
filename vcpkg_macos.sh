@@ -15,6 +15,7 @@ else
 fi
 
 ./vcpkg --recurse install \
+	cpptrace:arm64-osx \
 	cxxopts:arm64-osx \
 	glfw3:arm64-osx \
 	glm:arm64-osx \

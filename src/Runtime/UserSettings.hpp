@@ -17,7 +17,11 @@ struct UserSettings final
 	bool AdaptiveSample;
 	float AdaptiveVariance;
 	int AdaptiveSteps;
-	bool TAA;
+	bool TAA {};
+	bool BakeWithGPU = true;
+	bool FastGather = false;
+	bool FastInterpole = false;
+	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera
 	bool RequestRayCast;

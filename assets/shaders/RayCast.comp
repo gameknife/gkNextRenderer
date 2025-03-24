@@ -4,7 +4,7 @@
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.glsl"
+#include "common/UniformBufferObject.h"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) buffer RayCastInArray { RayCastContext[] RayIO; };

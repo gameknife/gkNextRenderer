@@ -20,6 +20,7 @@
 #include <fmt/format.h>
 #include <numeric>
 
+#include "Runtime/Engine.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
 #include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
 #include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
@@ -147,8 +148,9 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset(new Assets::RayCastBuffer(CommandPool()));
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
-        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), *ambientCubeBuffer_, topAs_[0], UniformBuffers(), GetScene()));
 #endif
+        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
+        directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -158,6 +160,7 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset();
         raycastPipeline_.reset();
         ambientGenPipeline_.reset();
+        directLightGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
@@ -270,20 +273,91 @@ namespace Vulkan::RayTracing
                                     raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
-
-        if(supportRayCast_)
-        {
-            SCOPED_GPU_TIMER("ambient gen");
-
-            int count = Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE;
-            int group = count / Assets::CUBE_SIZE;
-            VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, group, 1, 1);
-        }
 #endif
+        
+        if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing && CurrentLogicRendererType() != ERT_LegacyDeferred)
+        {
+#if !ANDROID
+            const int cubesPerGroup = 32;
+#else
+            const int cubesPerGroup = 1024;
+#endif      
+            
+            const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            const int group = count / cubesPerGroup;
+
+            // 每32个cube一个group
+
+            
+#if !ANDROID
+            int temporalFrames = 60;
+            switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
+            {
+            case 0:
+                temporalFrames = 1;
+                break;
+            case 1:
+                temporalFrames = 60;
+                break;
+            case 2:
+                temporalFrames = 300;
+                break;
+            default:
+                temporalFrames = 60;
+                break;
+            }
+#else
+            int temporalFrames = 625;
+#endif
+            // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
+            int frame = (int)(frameCount_ % temporalFrames);
+            int groupPerFrame = group / temporalFrames;
+            int offset = frame * groupPerFrame;
+            int offsetInCubes = offset * cubesPerGroup;
+
+            {
+                SCOPED_GPU_TIMER("ambient di");
+                VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        directLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+
+                // bind the global bindless set
+                static const uint32_t k_bindless_set = 1;
+                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                         1, GlobalDescriptorSets, 0, nullptr );
+                
+                glm::uvec2 pushConst = { offsetInCubes, 1 };
+
+                vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
+            
+                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            }
+            
+            // {
+            //     SCOPED_GPU_TIMER("ambient ii");
+            //     VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
+            //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
+            //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+            //                             ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            //
+            //     // bind the global bindless set
+            //     static const uint32_t k_bindless_set = 1;
+            //     VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+            //     vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+            //                              1, GlobalDescriptorSets, 0, nullptr );
+            //     
+            //     glm::uvec2 pushConst = { offsetInCubes, 1 };
+            //
+            //     vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+            //                        0, sizeof(glm::uvec2), &pushConst);
+            //
+            //     vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            // }
+            // 这里可以做一个模糊，或者说降噪，这个对于CPU GEN也可以
+        }
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
@@ -394,10 +468,6 @@ namespace Vulkan::RayTracing
         topScratchBufferMemory_.reset(new DeviceMemory(
             topScratchBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-
-        ambientCubeBuffer_.reset( new Buffer(Device(), Assets::CUBE_SIZE * Assets::CUBE_SIZE * Assets::CUBE_SIZE * sizeof(Assets::AmbientCube), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-        ambientCubeBufferMemory_.reset(new DeviceMemory(ambientCubeBuffer_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-
 
         debugUtils.SetObjectName(topBuffer_->Handle(), "TLAS Buffer");
         debugUtils.SetObjectName(topBufferMemory_->Handle(), "TLAS Memory");

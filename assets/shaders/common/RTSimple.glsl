@@ -19,3 +19,22 @@ void SimpleHit(const int InstCustIndex, const mat4x3 WorldToObject, const vec2 T
     HitTexcoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, barycentrics);
     OutInstanceId = node.instanceId;
 }
+
+int TracingOccludeFunction(in vec3 origin, in vec3 lightPos)
+{
+    float dist = length(lightPos - origin);
+    vec3 lightDir = (lightPos - origin) / dist;
+
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, EPS, lightDir, dist - EPS2);
+
+    rayQueryProceedEXT(rayQuery);
+
+    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}

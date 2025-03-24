@@ -7,6 +7,7 @@
 #include <atomic>
 #include <fmt/format.h>
 #include <cstring>
+#include <unordered_set>
 
 namespace details
 {
@@ -102,6 +103,12 @@ struct event_signal final
         return m_signaled.load();
     }
 
+    void reset() noexcept
+    {
+        std::lock_guard<std::mutex> mutexGuard{ m_mutex };
+        m_signaled = false;
+    }
+
     void wait() const
     {
         std::unique_lock<std::mutex> mutexLock{ m_mutex };
@@ -159,7 +166,13 @@ public:
         q.push(t);
         c.notify_one();
     }
-
+    
+    size_t size() const
+    {
+        std::lock_guard<std::mutex> lock(m);
+        return q.size();
+    }
+    
     // Get the front element.
     // If the queue is empty, wait till a element is avaiable.
     bool dequeue(T& result, bool wait)
@@ -229,6 +242,11 @@ public:
         thread_->join();
     }
 
+    bool IsIdle()
+    {
+        return complete_->is_set();
+    }
+
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
@@ -244,6 +262,18 @@ public:
         {
             threads_.push_back(std::make_unique<TaskThread>());
         }
+
+        // Get the number of CPU cores (use half of available cores for low-priority threads)
+        unsigned int numCores = std::thread::hardware_concurrency();
+        unsigned int lowThreadCount = std::max(1u, numCores / 1);
+
+        // Create low-priority threads based on CPU cores
+        for (unsigned int i = 0; i < lowThreadCount; i++)
+        {
+            lowThreads_.push_back(std::make_unique<TaskThread>());
+        }
+
+        fmt::print("low parrallel thread count: {}\n", lowThreadCount);
     }
 
     ~TaskCoordinator()
@@ -260,14 +290,36 @@ public:
     {
         completeTaskQueue_.enqueue(task);
     }
+
+    void MarkTaskEnd(const ResTask& task)
+    {
+        completedTaskIds_.insert(task.task_id);
+    }
     
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
+    uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
 
     void WaitForTask(uint32_t task_id)
     {
         // wait for specific task to complete, like sync load.
         // if task_id not found, it has been down, return immediately.
     }
+
+    void WaitForAllParralledTask();
+    
+    bool IsAllParralledTaskComplete()
+    {
+        for ( auto& thread : lowThreads_ )
+        {
+            if( !thread->IsIdle() )
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool IsAllTaskComplete(std::vector<uint32_t>& tasks);
 
     void Tick();
 
@@ -282,10 +334,13 @@ public:
 
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
+    // low-level thread, use for parrallel task
+    std::vector< std::unique_ptr<TaskThread> > lowThreads_;
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
+    tsqueue<ResTask> parralledTaskQueue_;
 
-
+    std::unordered_set<uint32_t> completedTaskIds_;
 private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();
