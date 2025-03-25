@@ -59,12 +59,8 @@ vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
 	 vec3 d = normalize(direction);
 	 vec2 t = vec2((atan(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
 
-	 // Calculate mip level based on roughness
-	 // Typically roughness^2 gives better visual results for GGX distribution
-	 float mipLevel = roughness * roughness * textureQueryLevels(TextureSamplers[skyIdx]);
-	 
 	 // Sample with explicit LOD based on roughness
-	 return min(vec4(10,10,10,1), textureLod(TextureSamplers[skyIdx], t, mipLevel));
+	 return min(vec4(10,10,10,1), texture(TextureSamplers[skyIdx], t));
 }
 #endif
 		

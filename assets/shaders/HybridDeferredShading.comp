@@ -232,7 +232,7 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	uint sampleTimes = Camera.FastGather ? 1 : 3;
+	uint sampleTimes = Camera.FastGather ? 1 : 4;
 
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
@@ -257,13 +257,11 @@ void main() {
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
 	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
-		const vec3 reflected = reflect( ray_dir, outwardNormal);
-		
-		const vec3 trace_dir = (RandomFloat(RandomSeed) < metalProb ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), reflected) :
-		chanceReflect ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), reflected) :
-		mat.MaterialModel != MaterialDielectric ? AlignWithNormal( RandomInHemiSphere1(RandomSeed), outwardNormal ) : ray_dir
-		);
-		
+		bool chanceMetal = RandomFloat(RandomSeed) < metalProb;
+		bool chanceGGX = chanceReflect || chanceMetal;
+		const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
+		const vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
+
 		vec3 posOffset = normal * 0.01;
 		if(mat.MaterialModel == MaterialDielectric)
 		{
@@ -309,7 +307,7 @@ void main() {
 		}
 		else
 		{
-			bounceColor += albedoSingle.rgb * bounceSingle;
+			bounceColor += albedoSingle.rgb * bounceSingle * 1.25f; // 这是一个经验值，理论上，应该为1.0，但是因为hybird方式缺少反弹，因此将这个值拉大可以增强二次反弹亮度，pbr场景，2.0刚好符合PT结果
 		}
 	}
 

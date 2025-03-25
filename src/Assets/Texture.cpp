@@ -27,115 +27,115 @@ namespace Assets
 
     void FilterEnvironmentMap(const float* srcPixels, int srcWidth, int srcHeight,
                          float* dstPixels, int dstWidth, int dstHeight, float roughness) {
-    // Constants for filtering
-    const int sampleCount = 16;  // Number of samples to take for each output pixel
-    const float roughness2 = roughness * roughness;
-    
-    // For each destination pixel
-    for (int y = 0; y < dstHeight; ++y) {
-        for (int x = 0; x < dstWidth; ++x) {
-            // Calculate spherical coordinates for this pixel
-            float u = (x + 0.5f) / dstWidth;
-            float v = (y + 0.5f) / dstHeight;
-            float phi = u * 2.0f * M_NEXT_PI;
-            float theta = v * M_NEXT_PI;
-            
-            // Direction vector
-            float dx = std::sin(theta) * std::cos(phi);
-            float dy = std::cos(theta);
-            float dz = std::sin(theta) * std::sin(phi);
-            
-            // Accumulate filtered color
-            float r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
-            float weight = 0.0f;
-            
-            // Monte Carlo integration with importance sampling
-            for (int i = 0; i < sampleCount; ++i) {
-                // Generate sample direction with roughness-based lobe
-                float u1 = static_cast<float>(rand()) / RAND_MAX;
-                float u2 = static_cast<float>(rand()) / RAND_MAX;
+        // Constants for filtering
+        const int sampleCount = 16;  // Number of samples to take for each output pixel
+        const float roughness2 = roughness * roughness;
+        
+        // For each destination pixel
+        for (int y = 0; y < dstHeight; ++y) {
+            for (int x = 0; x < dstWidth; ++x) {
+                // Calculate spherical coordinates for this pixel
+                float u = (x + 0.5f) / dstWidth;
+                float v = (y + 0.5f) / dstHeight;
+                float phi = u * 2.0f * M_NEXT_PI;
+                float theta = v * M_NEXT_PI;
                 
-                // Calculate sample direction with GGX distribution
-                float phi_sample = 2.0f * M_NEXT_PI * u1;
-                float cos_theta_sample = std::sqrt((1.0f - u2) / (1.0f + (roughness2 - 1.0f) * u2));
-                float sin_theta_sample = std::sqrt(1.0f - cos_theta_sample * cos_theta_sample);
+                // Direction vector
+                float dx = std::sin(theta) * std::cos(phi);
+                float dy = std::cos(theta);
+                float dz = std::sin(theta) * std::sin(phi);
                 
-                // Convert to Cartesian
-                float sx = sin_theta_sample * std::cos(phi_sample);
-                float sy = cos_theta_sample;
-                float sz = sin_theta_sample * std::sin(phi_sample);
+                // Accumulate filtered color
+                float r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
+                float weight = 0.0f;
                 
-                // Transform sample to world space around our main direction
-                // (This is a simplified orthonormal basis construction)
-                float rx, ry, rz;
-                // ... (rotate sx, sy, sz around dx, dy, dz to get rx, ry, rz)
-                // Simplified version that doesn't account for proper rotation:
-                rx = dx + sx * roughness;
-                ry = dy + sy * roughness;
-                rz = dz + sz * roughness;
-                float len = std::sqrt(rx*rx + ry*ry + rz*rz);
-                rx /= len; ry /= len; rz /= len;
+                // Monte Carlo integration with importance sampling
+                for (int i = 0; i < sampleCount; ++i) {
+                    // Generate sample direction with roughness-based lobe
+                    float u1 = static_cast<float>(rand()) / RAND_MAX;
+                    float u2 = static_cast<float>(rand()) / RAND_MAX;
+                    
+                    // Calculate sample direction with GGX distribution
+                    float phi_sample = 2.0f * M_NEXT_PI * u1;
+                    float cos_theta_sample = std::sqrt((1.0f - u2) / (1.0f + (roughness2 - 1.0f) * u2));
+                    float sin_theta_sample = std::sqrt(1.0f - cos_theta_sample * cos_theta_sample);
+                    
+                    // Convert to Cartesian
+                    float sx = sin_theta_sample * std::cos(phi_sample);
+                    float sy = cos_theta_sample;
+                    float sz = sin_theta_sample * std::sin(phi_sample);
+                    
+                    // Transform sample to world space around our main direction
+                    // (This is a simplified orthonormal basis construction)
+                    float rx, ry, rz;
+                    // ... (rotate sx, sy, sz around dx, dy, dz to get rx, ry, rz)
+                    // Simplified version that doesn't account for proper rotation:
+                    rx = dx + sx * roughness;
+                    ry = dy + sy * roughness;
+                    rz = dz + sz * roughness;
+                    float len = std::sqrt(rx*rx + ry*ry + rz*rz);
+                    rx /= len; ry /= len; rz /= len;
+                    
+                    // Convert to UV coordinates for sampling source
+                    float sample_phi = std::atan2(rz, rx);
+                    if (sample_phi < 0) sample_phi += 2.0f * M_NEXT_PI;
+                    float sample_theta = std::acos(std::clamp(ry, -1.0f, 1.0f));
+                    
+                    float sample_u = sample_phi / (2.0f * M_NEXT_PI);
+                    float sample_v = sample_theta / M_NEXT_PI;
+                    
+                    // Bilinear sampling from source
+                    float src_x = sample_u * srcWidth - 0.5f;
+                    float src_y = sample_v * srcHeight - 0.5f;
+                    int src_x1 = std::clamp(static_cast<int>(std::floor(src_x)), 0, srcWidth - 1);
+                    int src_y1 = std::clamp(static_cast<int>(std::floor(src_y)), 0, srcHeight - 1);
+                    int src_x2 = std::clamp(src_x1 + 1, 0, srcWidth - 1);
+                    int src_y2 = std::clamp(src_y1 + 1, 0, srcHeight - 1);
+                    float wx = src_x - src_x1;
+                    float wy = src_y - src_y1;
+                    
+                    // Sample the four pixels
+                    int idx11 = (src_y1 * srcWidth + src_x1) * 4;
+                    int idx12 = (src_y1 * srcWidth + src_x2) * 4;
+                    int idx21 = (src_y2 * srcWidth + src_x1) * 4;
+                    int idx22 = (src_y2 * srcWidth + src_x2) * 4;
+                    
+                    // Bilinear interpolation
+                    float sr = (1-wx)*(1-wy)*srcPixels[idx11] + wx*(1-wy)*srcPixels[idx12] + 
+                               (1-wx)*wy*srcPixels[idx21] + wx*wy*srcPixels[idx22];
+                    float sg = (1-wx)*(1-wy)*srcPixels[idx11+1] + wx*(1-wy)*srcPixels[idx12+1] + 
+                               (1-wx)*wy*srcPixels[idx21+1] + wx*wy*srcPixels[idx22+1];
+                    float sb = (1-wx)*(1-wy)*srcPixels[idx11+2] + wx*(1-wy)*srcPixels[idx12+2] + 
+                               (1-wx)*wy*srcPixels[idx21+2] + wx*wy*srcPixels[idx22+2];
+                    float sa = (1-wx)*(1-wy)*srcPixels[idx11+3] + wx*(1-wy)*srcPixels[idx12+3] + 
+                               (1-wx)*wy*srcPixels[idx21+3] + wx*wy*srcPixels[idx22+3];
+                    
+                    // Accumulate
+                    float sampleWeight = 1.0f;  // Could be modified for importance sampling
+                    r += sr * sampleWeight;
+                    g += sg * sampleWeight;
+                    b += sb * sampleWeight;
+                    a += sa * sampleWeight;
+                    weight += sampleWeight;
+                }
                 
-                // Convert to UV coordinates for sampling source
-                float sample_phi = std::atan2(rz, rx);
-                if (sample_phi < 0) sample_phi += 2.0f * M_NEXT_PI;
-                float sample_theta = std::acos(std::clamp(ry, -1.0f, 1.0f));
+                // Normalize
+                if (weight > 0) {
+                    r /= weight;
+                    g /= weight;
+                    b /= weight;
+                    a /= weight;
+                }
                 
-                float sample_u = sample_phi / (2.0f * M_NEXT_PI);
-                float sample_v = sample_theta / M_NEXT_PI;
-                
-                // Bilinear sampling from source
-                float src_x = sample_u * srcWidth - 0.5f;
-                float src_y = sample_v * srcHeight - 0.5f;
-                int src_x1 = std::clamp(static_cast<int>(std::floor(src_x)), 0, srcWidth - 1);
-                int src_y1 = std::clamp(static_cast<int>(std::floor(src_y)), 0, srcHeight - 1);
-                int src_x2 = std::clamp(src_x1 + 1, 0, srcWidth - 1);
-                int src_y2 = std::clamp(src_y1 + 1, 0, srcHeight - 1);
-                float wx = src_x - src_x1;
-                float wy = src_y - src_y1;
-                
-                // Sample the four pixels
-                int idx11 = (src_y1 * srcWidth + src_x1) * 4;
-                int idx12 = (src_y1 * srcWidth + src_x2) * 4;
-                int idx21 = (src_y2 * srcWidth + src_x1) * 4;
-                int idx22 = (src_y2 * srcWidth + src_x2) * 4;
-                
-                // Bilinear interpolation
-                float sr = (1-wx)*(1-wy)*srcPixels[idx11] + wx*(1-wy)*srcPixels[idx12] + 
-                           (1-wx)*wy*srcPixels[idx21] + wx*wy*srcPixels[idx22];
-                float sg = (1-wx)*(1-wy)*srcPixels[idx11+1] + wx*(1-wy)*srcPixels[idx12+1] + 
-                           (1-wx)*wy*srcPixels[idx21+1] + wx*wy*srcPixels[idx22+1];
-                float sb = (1-wx)*(1-wy)*srcPixels[idx11+2] + wx*(1-wy)*srcPixels[idx12+2] + 
-                           (1-wx)*wy*srcPixels[idx21+2] + wx*wy*srcPixels[idx22+2];
-                float sa = (1-wx)*(1-wy)*srcPixels[idx11+3] + wx*(1-wy)*srcPixels[idx12+3] + 
-                           (1-wx)*wy*srcPixels[idx21+3] + wx*wy*srcPixels[idx22+3];
-                
-                // Accumulate
-                float sampleWeight = 1.0f;  // Could be modified for importance sampling
-                r += sr * sampleWeight;
-                g += sg * sampleWeight;
-                b += sb * sampleWeight;
-                a += sa * sampleWeight;
-                weight += sampleWeight;
+                // Write to destination
+                int dstIdx = (y * dstWidth + x) * 4;
+                dstPixels[dstIdx] = r;
+                dstPixels[dstIdx+1] = g;
+                dstPixels[dstIdx+2] = b;
+                dstPixels[dstIdx+3] = a;
             }
-            
-            // Normalize
-            if (weight > 0) {
-                r /= weight;
-                g /= weight;
-                b /= weight;
-                a /= weight;
-            }
-            
-            // Write to destination
-            int dstIdx = (y * dstWidth + x) * 4;
-            dstPixels[dstIdx] = r;
-            dstPixels[dstIdx+1] = g;
-            dstPixels[dstIdx+2] = b;
-            dstPixels[dstIdx+3] = a;
         }
     }
-}
     
     SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
     {
@@ -456,6 +456,7 @@ namespace Assets
                         SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
                         hdrSphericalHarmonics_[newTextureIdx] = sh;
 
+#if 0
                         // Calculate mipmap levels based on texture dimensions
                         int maxDimension = std::max(width, height);
                         int numMipLevels = static_cast<int>(std::floor(std::log2(maxDimension))) + 1;
@@ -498,6 +499,7 @@ namespace Assets
                         for (int level = 1; level < numMipLevels; ++level) {
                             delete[] mipLevels[level];
                         }
+#endif
                     }
                     else
                     {
