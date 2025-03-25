@@ -279,7 +279,7 @@ void main() {
 		}
 		
 		#if DESKTOP
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity : vec3(0.0);
 		#else
 		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness).rgb * Camera.SkyIntensity : vec3(0.0);
 		#endif

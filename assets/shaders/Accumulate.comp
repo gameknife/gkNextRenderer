@@ -49,23 +49,78 @@ vec2(-2.0, 2.0), vec2(-1.0, 2.0), vec2(0.0, 2.0), vec2(1.0, 2.0), vec2(2.0, 2.0)
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
 
-    vec4 src = imageLoad(NewSourceImage, ipos);
-
+    // More flexible sampling algorithm with dynamic weights
+    vec4 src = vec4(0);
+    float temporalWeight = 0.0;
+    float totalWeight = 0.0;
+    
+    // Define 3x3 sampling pattern
+    const ivec2 offsets[9] = ivec2[9](
+        ivec2(0, 0),    // Center
+        ivec2(-1, -1),  // Top-left
+        ivec2(0, -1),   // Top
+        ivec2(1, -1),   // Top-right
+        ivec2(-1, 0),   // Left
+        ivec2(1, 0),    // Right
+        ivec2(-1, 1),   // Bottom-left
+        ivec2(0, 1),    // Bottom
+        ivec2(1, 1)     // Bottom-right
+    );
+    
     bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
     bool useHistory = true;
-    vec4 final = src;
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
     ivec2 previpos = ivec2(floor(ipos + motion));
     const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1, -1)));
-    // 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
-    // after, motionvector calculate last frame position
-    // 当前uv直接执行id比对，如果不同，直接check
     uint current_primitive_index0 = imageLoad(VisibilityBuffer, ipos).r;
     uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
-    // fetch visibility to validate the history
 
+
+
+    // Sample all 9 pixels with dynamically determined weights
+    for (int i = 0; i < 9; i++) {
+        ivec2 samplePos = ipos + offsets[i];
+        vec4 samplePixel = imageLoad(NewSourceImage, samplePos);
+        uint primitiveIdx = imageLoad(VisibilityBuffer, samplePos).r;
+        // Determine weight dynamically
+        float weight;
+        if (i == 0) {
+            // Center pixel typically has higher weight
+            weight = 0.4;
+            temporalWeight = samplePixel.w;
+        } else {
+            // Calculate distance-based weight
+            float dist = length(offsets[i]);
+            weight = 0.6 / (dist * 3.0 + 4.0);
+
+            if( luminance(samplePixel.rgb) > 2.0 )
+            {
+                weight += 0.2;
+            }
+            
+            if( primitiveIdx != current_primitive_index0 )
+            {
+                weight = 0.0;
+            }
+
+            // Could add other factors here:
+            // - Luminance-based weight
+            // - Similarity to center pixel
+            // - Edge detection
+        }
+
+        src += samplePixel * weight;
+        totalWeight += weight;
+    }
+
+    // Normalize
+    src /= totalWeight;
+
+    vec4 final = src;
+    
+    // fetch visibility to validate the history
     const bool miss = current_primitive_index0 == 65535 ? true : false;
     if (miss || Camera.TotalFrames == 0 || !inside)
     {
@@ -158,7 +213,7 @@ void main() {
             }
 
             // judge current gbuffer / object id with prev frame, to deghosting
-            float currKeep = src.w / max(1, Camera.TemporalFrames);
+            float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
             final.rgb = mix(history, src.rgb, clamp(currKeep, 0.0, 1.0));
         }
     }

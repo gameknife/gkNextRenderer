@@ -52,8 +52,8 @@ namespace Assets
                 // Monte Carlo integration with importance sampling
                 for (int i = 0; i < sampleCount; ++i) {
                     // Generate sample direction with roughness-based lobe
-                    float u1 = static_cast<float>(rand()) / RAND_MAX;
-                    float u2 = static_cast<float>(rand()) / RAND_MAX;
+                    float u1 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+                    float u2 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
                     
                     // Calculate sample direction with GGX distribution
                     float phi_sample = 2.0f * M_NEXT_PI * u1;
