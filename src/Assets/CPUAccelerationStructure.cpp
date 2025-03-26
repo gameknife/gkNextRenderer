@@ -63,7 +63,6 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
     UpdateBVH(scene);
 
     ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
-    ambientCubesCopy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
 }
 
 void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
@@ -243,113 +242,125 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
     Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
 
-    cube.Info = glm::vec4(1, 0, 0, 0);
+    cube.Active = 1;
+    cube.Lighting = 0;
+    cube.ExtInfo = glm::uvec4(0, 0,0,0);
 
     for (int face = 0; face < 6; face++)
     {
-    glm::vec3 baseDir = directions[face];
+        glm::vec3 baseDir = directions[face];
 
-    float occlusion = 0.0f;
-    glm::vec4 rayColor = glm::vec4(0, 0, 0, 0);
-    std::vector<glm::vec3> hemisphereSamples;
-    GetHemisphereSamples(baseDir, hemisphereSamples);
+        float occlusion = 0.0f;
+        glm::vec4 rayColor = glm::vec4(0, 0, 0, 0);
+        std::vector<glm::vec3> hemisphereSamples;
+        GetHemisphereSamples(baseDir, hemisphereSamples);
 
-    bool nextCube = false;
-    for (int i = 0; i < RAY_PERFACE; i++)
-    {
-        tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                         tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
-
-        GCpuBvh.Intersect(ray);
-
-        if (ray.hit.t < 10.0f)
+        bool nextCube = false;
+        for (int i = 0; i < RAY_PERFACE; i++)
         {
-            uint32_t primIdx = ray.hit.prim;
-            tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
-            FCPUTLASInstanceInfo& instContext = bvhTLASContexts[ray.hit.inst];
-            FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
-            glm::mat4* worldTS = ( glm::mat4*)instance.transform;
-            glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-            float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
-            
-            if (dotProduct < 0.0f)
+            tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
+                             tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
+
+            GCpuBvh.Intersect(ray);
+
+            if (ray.hit.t < 10.0f)
             {
-                // get the hit pos
-                auto hitPos = ray.O + ray.D * ray.hit.t;
-                glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
-                float power = 0.5f;
-                // occlude, bounce color, fade by distance
-                uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
+                uint32_t primIdx = ray.hit.prim;
+                tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
+                FCPUTLASInstanceInfo& instContext = bvhTLASContexts[ray.hit.inst];
+                FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
+                glm::mat4* worldTS = ( glm::mat4*)instance.transform;
+                glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+                float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
                 
-                rayColor += unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
-                occlusion += 1.0f;
+                if (dotProduct < 0.0f)
+                {
+                    // get the hit pos
+                    auto hitPos = ray.O + ray.D * ray.hit.t;
+                    glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
+                    //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
+                    float power = 0.5f;
+                    // occlude, bounce color, fade by distance
+                    uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
+                    
+                    rayColor += unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
+                    occlusion += 1.0f;
+                }
+                else
+                {
+                    cube.Active = 0;
+                    cube.Lighting = 0;
+                    nextCube = true;
+                    break;
+                }
             }
             else
             {
-                cube.Info.x = 0;
-                cube.Info.y = 0;
-                nextCube = true;
-                break;
+                // hit the sky, sky color, with a ibl is better
+                glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f);
+                rayColor += skyColor;
             }
         }
-        else
+
+        if (nextCube)
         {
-            // hit the sky, sky color, with a ibl is better
-            glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f);
-            rayColor += skyColor;
+            continue;
         }
-    }
 
-    if (nextCube)
-    {
-        continue;
-    }
+        occlusion /= RAY_PERFACE;
+        rayColor /= RAY_PERFACE;
 
-    occlusion /= RAY_PERFACE;
-    rayColor /= RAY_PERFACE;
-
-    // for each light in the scene, ray hit the center, if not occlude, add rayColor
-    for( auto& light : lightPos )
-    {
-        if( !IsInShadow( probePos, light, GCpuBvh) )
+        // for each light in the scene, ray hit the center, if not occlude, add rayColor
+        for( auto& light : lightPos )
         {
-            // ndotl + distance attenuation
-            glm::vec3 lightDir = glm::normalize(light - probePos);
-            float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
-            float distance = glm::length(light - probePos);
-            float attenuation = 40.0f / (distance * distance);
-            rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
+            if( !IsInShadow( probePos, light, GCpuBvh) )
+            {
+                // ndotl + distance attenuation
+                glm::vec3 lightDir = glm::normalize(light - probePos);
+                float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
+                float distance = glm::length(light - probePos);
+                float attenuation = 40.0f / (distance * distance);
+                rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
+            }
         }
-    }
 
-    float visibility = 1.0f - occlusion;
-    glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
-    uint32_t packedColor = packRGB10A2(indirectColor);
+        float visibility = 1.0f - occlusion;
+        glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
+        uint32_t packedColor = packRGB10A2(indirectColor);
 
-    switch (face)
-    {
-    case 0: cube.PosZ = packedColor;
-        break;
-    case 1: cube.NegZ = packedColor;
-        break;
-    case 2: cube.PosY = packedColor;
-        break;
-    case 3: cube.NegY = packedColor;
-        break;
-    case 4: cube.PosX = packedColor;
-        break;
-    case 5: cube.NegX = packedColor;
-        break;
-    }
+        switch (face)
+        {
+        case 0:
+            cube.PosZ = packedColor;
+            cube.PosZ_S = packedColor;
+            break;
+        case 1:
+            cube.NegZ = packedColor;
+            cube.NegZ_S = packedColor;
+            break;
+        case 2:
+            cube.PosY = packedColor;
+            cube.PosY_S = packedColor;
+            break;
+        case 3:
+            cube.NegY = packedColor;
+            cube.NegY_S = packedColor;
+            break;
+        case 4:
+            cube.PosX = packedColor;
+            cube.PosX_S = packedColor;
+            break;
+        case 5:
+            cube.NegX = packedColor;
+            cube.NegX_S = packedColor;
+            break;
+        }
     }
 
     if (!sunDir.empty())
     {
-        IsInShadow(probePos, probePos + sunDir[0] * 1000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
+        IsInShadow(probePos, probePos + sunDir[0] * 1000.0f, GCpuBvh) ? cube.Lighting = 0 : cube.Lighting = 1;
     }
-    
-    ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
@@ -373,7 +384,6 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
 {
-    return;
     if (bvhInstanceList.empty())
     {
         return;

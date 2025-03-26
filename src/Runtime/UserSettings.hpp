@@ -18,7 +18,7 @@ struct UserSettings final
 	float AdaptiveVariance;
 	int AdaptiveSteps;
 	bool TAA {};
-	bool BakeWithGPU = true;
+	bool BakeWithGPU = false;
 	bool FastGather = false;
 	bool FastInterpole = false;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low

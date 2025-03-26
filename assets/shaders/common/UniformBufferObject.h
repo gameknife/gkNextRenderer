@@ -108,9 +108,10 @@ struct ALIGN_16 AmbientCube
 	uint NegY_S;
 	uint PosX_S;
 	uint NegX_S;
-	
-	uvec4 Info;
-	uvec2 Info2;
+
+	uint Active;
+	uint Lighting;
+	uvec4 ExtInfo;
 };
 
 struct ALIGN_16 SphericalHarmonics

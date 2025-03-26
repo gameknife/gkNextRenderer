@@ -126,7 +126,7 @@ vec4 sampleAmbientCubeHL2(AmbientCube cube, vec3 normal, out float occlusion) {
     
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Info.y).x;
+    color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -152,7 +152,7 @@ vec4 sampleAmbientCubeHL2_DI(AmbientCube cube, vec3 normal, out float occlusion)
 
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Info.y).x;
+    color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -178,7 +178,7 @@ vec4 sampleAmbientCubeHL2_II(AmbientCube cube, vec3 normal, out float occlusion)
 
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Info.y).x;
+    color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -211,7 +211,7 @@ vec4 sampleAmbientCubeHL2_Sky(AmbientCube cube, vec3 normal, out float occlusion
 
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Info.y).x;
+    color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -244,7 +244,7 @@ vec4 sampleAmbientCubeHL2_Full(AmbientCube cube, vec3 normal, out float occlusio
 
     // 归一化处理
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Info.y).x;
+    color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -281,7 +281,7 @@ vec4 interpolateDIProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos);
-        if (cube.Info.x != 1) continue;
+        if (cube.Active != 1) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -306,7 +306,7 @@ vec4 interpolateDIProbes(vec3 pos, vec3 normal) {
 
             ivec3 probePos = baseIdx + offset * 3;
             AmbientCube cube = FetchCube(probePos);
-            if (cube.Info.x != 1) continue;
+            if (cube.Active != 1) continue;
 
             float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
             float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -350,7 +350,7 @@ vec4 interpolateIIProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos);
-        if (cube.Info.x != 1) continue;
+        if (cube.Active != 1) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -375,7 +375,7 @@ vec4 interpolateIIProbes(vec3 pos, vec3 normal) {
 
             ivec3 probePos = baseIdx + offset * 3;
             AmbientCube cube = FetchCube(probePos);
-            if (cube.Info.x != 1) continue;
+            if (cube.Active != 1) continue;
 
             float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
             float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -420,7 +420,7 @@ vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos);
-        if (cube.Info.x != 1) continue;
+        if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -445,7 +445,7 @@ vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
 
             ivec3 probePos = baseIdx + offset * 3;
             AmbientCube cube = FetchCube(probePos);
-            if (cube.Info.x != 1) continue;
+            if (cube.Active == 0) continue;
 
             float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
             float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -490,7 +490,7 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos);
-        if (cube.Info.x != 1) continue;
+        if (cube.Active != 1) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -515,7 +515,7 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
             ivec3 probePos = baseIdx + offset * 3;
             AmbientCube cube = FetchCube(probePos);
-            if (cube.Info.x != 1) continue;
+            if (cube.Active != 1) continue;
 
             float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
             float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;

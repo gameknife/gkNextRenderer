@@ -212,5 +212,5 @@ void main() {
     Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
     Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.125);
 
-    Cubes[gIdx].Info.x = activeProbe;
+    Cubes[gIdx].Active = activeProbe;
 }
