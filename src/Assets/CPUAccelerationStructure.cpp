@@ -221,7 +221,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
                     auto hitPos = ray.O + ray.D * ray.hit.t;
                     glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
                     //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
-                    float power = 0.5f;
+                    float power =5.0f;
                     // occlude, bounce color, fade by distance
                     uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
                     
@@ -239,7 +239,8 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
             else
             {
                 // hit the sky, sky color, with a ibl is better
-                glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f);
+                float skyatten = 10.0f;
+                glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f) * skyatten;
                 rayColor += skyColor;
             }
         }
@@ -261,40 +262,40 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
                 glm::vec3 lightDir = glm::normalize(light - probePos);
                 float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
                 float distance = glm::length(light - probePos);
-                float attenuation = 40.0f / (distance * distance);
-                rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
+                float attenuation = 1.0f / (distance * distance);
+                rayColor += vec4(2000.0f, 2000.0f, 2000.0f, 1.0f) * ndotl * attenuation;
             }
         }
 
         float visibility = 1.0f - occlusion;
         glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
         uint32_t packedColor = packRGB10A2(indirectColor);
-
+        uint32_t skyColor = packRGB10A2(vec4(0,0,0,0));
         switch (face)
         {
         case 0:
             cube.PosZ = packedColor;
-            cube.PosZ_S = packedColor;
+            cube.PosZ_S = skyColor;
             break;
         case 1:
             cube.NegZ = packedColor;
-            cube.NegZ_S = packedColor;
+            cube.NegZ_S = skyColor;
             break;
         case 2:
             cube.PosY = packedColor;
-            cube.PosY_S = packedColor;
+            cube.PosY_S = skyColor;
             break;
         case 3:
             cube.NegY = packedColor;
-            cube.NegY_S = packedColor;
+            cube.NegY_S = skyColor;
             break;
         case 4:
             cube.PosX = packedColor;
-            cube.PosX_S = packedColor;
+            cube.PosX_S = skyColor;
             break;
         case 5:
             cube.NegX = packedColor;
-            cube.NegX_S = packedColor;
+            cube.NegX_S = skyColor;
             break;
         }
     }

@@ -1,5 +1,5 @@
 
-#define HIGH_QUALITY 0
+#define HIGH_QUALITY 1
 #define MAX_ILLUMINANCE 512.f
 
 #if HIGH_QUALITY
