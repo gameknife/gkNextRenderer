@@ -5,7 +5,7 @@
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
@@ -28,7 +28,7 @@ layout(push_constant) uniform PushConsts {
 
 #include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
-#include "common/SampleIBL.h"
+#include "common/SampleIBL.glsl"
 
 #if DESKTOP
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
@@ -91,11 +91,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int a
     
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        #if HIGH_QUALITY
-        vec3 hemiVec = hemisphereVectors32[i];
-        #else
-        vec3 hemiVec = hemisphereVectors16[i];
-        #endif
+        vec3 hemiVec = hemisphereVectors[i];
 
         // Apply rotation around z-axis
         vec3 rotatedVec = vec3(

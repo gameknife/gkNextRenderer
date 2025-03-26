@@ -11,7 +11,8 @@
 
 Assets::SphericalHarmonics HDRSHs[100];
 using namespace glm;
-#include "../assets/shaders/common/SampleIBL.h"
+#include "../assets/shaders/common/SampleIBL.glsl"
+#include "../assets/shaders/common/AmbientCubeCommon.glsl"
 
 static tinybvh::BVH GCpuBvh;
 
@@ -121,63 +122,6 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-#define RAY_PERFACE 16
-
-// Pre-calculated hemisphere samples in the positive Z direction (up)
-// 这个需要是一个四棱锥范围内的射线，而不能是半球
-const vec3 hemisphereVectors32[32] = {
-    vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
-    vec3(-0.2713456981395, 0.13388146427413833, 0.953125),
-    vec3(0.3720439325965911, 0.1083041854826636, 0.921875),
-    vec3(-0.2360905314110366, -0.38864941831045413, 0.890625),
-    vec3(-0.0994527932145428, 0.5015812509422829, 0.859375),
-    vec3(0.4518001015172772, -0.3317915801282155, 0.828125),
-    vec3(-0.6006110862696151, -0.06524229782152816, 0.796875),
-    vec3(0.4246400102205648, 0.4832175711777031, 0.765625),
-    vec3(0.014025106917771066, -0.6785990390141627, 0.734375),
-    vec3(-0.4910499646725058, 0.5142812135107899, 0.703125),
-    vec3(0.7390090634100329, -0.04949331846649647, 0.671875),
-    vec3(-0.5995855814426192, -0.47968400004702705, 0.640625),
-    vec3(0.12194313936463708, 0.7834487731414841, 0.609375),
-    vec3(0.4520746755881747, -0.6792642873483389, 0.578125),
-    vec3(-0.8128288753565273, 0.2005915096948101, 0.546875),
-    vec3(0.7520560261769773, 0.41053939258723227, 0.515625),
-    vec3(-0.28306625928882, -0.8278009134008216, 0.48437499999999994),
-    vec3(-0.357091373373129, 0.8168007623879232, 0.4531249999999999),
-    vec3(0.8289528112710368, -0.36723115480694823, 0.42187500000000006),
-    vec3(-0.8724752793478753, -0.29359665580835004, 0.39062500000000006),
-    vec3(0.45112649883473616, 0.8169054360353547, 0.35937499999999994),
-    vec3(0.22185204734195418, -0.9182132941017481, 0.328125),
-    vec3(-0.792362708282336, 0.5329414347735422, 0.296875),
-    vec3(0.9533182286148584, 0.1436235160606669, 0.26562499999999994),
-    vec3(-0.6110028678351297, -0.756137457657169, 0.23437499999999994),
-    vec3(-0.06066310322190489, 0.9772718261990818, 0.20312499999999992),
-    vec3(0.7091634641369421, -0.683773475288631, 0.17187500000000008),
-    vec3(-0.9897399665274648, 0.025286518803760413, 0.14062500000000008),
-    vec3(0.749854715318357, 0.6524990538612495, 0.1093750000000001),
-    vec3(-0.11249484107422018, -0.9905762944401031, 0.0781250000000001),
-    vec3(-0.587325250956154, 0.8079924405365998, 0.046875),
-    vec3(0.9798239737002217, -0.19925069620281746, 0.01562500000000002)
-};
-const vec3 hemisphereVectors16[16] = {
-    vec3(0.0898831725494359, -0.23118056318048955, 0.96875),
-    vec3(-0.3791079112581037, 0.18705114039085075, 0.90625),
-    vec3(0.5153445316614019, 0.15001983597741456, 0.84375),
-    vec3(-0.3240808043433482, -0.5334979566560387, 0.78125),
-    vec3(-0.1352243320429325, 0.6819918016542008, 0.71875),
-    vec3(0.6081648613009205, -0.4466222553554984, 0.65625),
-    vec3(-0.7999438572571327, -0.08689512492988453, 0.59375),
-    vec3(0.559254806831153, 0.6364019944471022, 0.53125),
-    vec3(0.018252552906059358, -0.8831422772194816, 0.46875000000000006),
-    vec3(-0.6310280835640938, 0.66088160456577, 0.40624999999999994),
-    vec3(0.9369622623684265, -0.06275074818231247, 0.34374999999999994),
-    vec3(-0.7493392047328667, -0.5994907787033216, 0.2812499999999999),
-    vec3(0.1500724796134238, 0.9641715036043528, 0.21875),
-    vec3(0.5472431702110503, -0.8222596002220706, 0.15624999999999997),
-    vec3(-0.9665972247046685, 0.2385387655984508, 0.09375000000000008),
-    vec3(0.8773063928879596, 0.47891223673854594, 0.03125000000000001)
-};
-
 const glm::vec3 directions[6] = {
     glm::vec3(0, 0, 1), // PosZ
     glm::vec3(0, 0, -1), // NegZ
@@ -186,8 +130,6 @@ const glm::vec3 directions[6] = {
     glm::vec3(1, 0, 0), // PosX
     glm::vec3(-1, 0, 0) // NegX
 };
-
-#define MAX_ILLUMINANCE 10.f
 
 uint packRGB10A2(vec4 color) {
     vec4 clamped = clamp(color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
@@ -211,7 +153,7 @@ vec4 unpackRGB10A2(uint packed) {
 // Transform pre-calculated samples to align with given normal
 void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result)
 {
-    result.reserve(RAY_PERFACE);
+    result.reserve(FACE_TRACING);
 
     // Create orthonormal basis
     glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
@@ -222,7 +164,7 @@ void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& resul
     glm::mat3 transform(tangent, bitangent, normal);
 
     // Transform each pre-calculated sample
-    for (const auto& sample : hemisphereVectors16)
+    for (const auto& sample : hemisphereVectors)
     {
         result.push_back(transform * sample);
     }
@@ -256,7 +198,7 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
         GetHemisphereSamples(baseDir, hemisphereSamples);
 
         bool nextCube = false;
-        for (int i = 0; i < RAY_PERFACE; i++)
+        for (int i = 0; i < FACE_TRACING; i++)
         {
             tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
                              tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
@@ -307,8 +249,8 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
             continue;
         }
 
-        occlusion /= RAY_PERFACE;
-        rayColor /= RAY_PERFACE;
+        occlusion /= FACE_TRACING;
+        rayColor /= FACE_TRACING;
 
         // for each light in the scene, ray hit the center, if not occlude, add rayColor
         for( auto& light : lightPos )

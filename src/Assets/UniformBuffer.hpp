@@ -17,7 +17,7 @@ namespace Assets
 {
 	using namespace glm;
 
-	#include "../assets/shaders/common/UniformBufferObject.h"
+	#include "../assets/shaders/common/UniformBufferObject.glsl"
 	
 	struct alignas(16) LightObject final
 	{

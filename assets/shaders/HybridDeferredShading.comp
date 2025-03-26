@@ -5,7 +5,7 @@
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
 #include "common/GGXSample.glsl"
 
@@ -29,7 +29,7 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
 #include "common/Const_Func.glsl"
-#include "common/SampleIBL.h"
+#include "common/SampleIBL.glsl"
 #include "common/RTSimple.glsl"
 #include "common/AmbientCube.glsl"
 
@@ -256,8 +256,8 @@ void main() {
 	// emit ray without any guidance
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
-	    bool chanceReflect = RandomFloat(RandomSeed) < reflectProb;
-		bool chanceMetal = RandomFloat(RandomSeed) < metalProb;
+	    bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
+		bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
 		bool chanceGGX = chanceReflect || chanceMetal;
 		const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
 		const vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );

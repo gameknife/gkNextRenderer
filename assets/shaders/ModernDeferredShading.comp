@@ -4,7 +4,7 @@
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
@@ -33,7 +33,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
 #include "common/VertexFunc.glsl"
-#include "common/SampleIBL.h"
+#include "common/SampleIBL.glsl"
 
 void main() {
 

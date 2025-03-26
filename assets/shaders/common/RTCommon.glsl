@@ -4,7 +4,7 @@
 #define USE_FIREFLY_FILTER 1
 #include "Vertex.glsl"
 #include "Random.glsl"
-#include "common/SampleIBL.h"
+#include "common/SampleIBL.glsl"
 #include "Scatter.glsl"
 #include "RTSimple.glsl"
 

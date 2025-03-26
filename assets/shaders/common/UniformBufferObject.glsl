@@ -1,3 +1,5 @@
+#ifndef UniformBufferObject_glsl
+
 #ifdef __cplusplus
 #define glbool uint32_t
 #define ALIGN_16 alignas(16)
@@ -120,3 +122,6 @@ struct ALIGN_16 SphericalHarmonics
 	float coefficients[3][9];
 	float padding;
 };
+
+#define UniformBufferObject_glsl
+#endif
