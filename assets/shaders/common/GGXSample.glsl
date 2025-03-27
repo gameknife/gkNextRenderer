@@ -1,4 +1,4 @@
-#include "Const_Func.glsl" //pi consts
+#include "Const_Func.glsl"
 
 #ifndef GGXSample
 

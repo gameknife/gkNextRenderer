@@ -34,6 +34,7 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 #include "common/AmbientCube.glsl"
 
 #if DESKTOP
+
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 #else
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
@@ -232,7 +233,7 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	uint sampleTimes = Camera.FastGather ? 1 : 4;
+	uint sampleTimes = Camera.FastGather ? 1 : Camera.NumberOfSamples;
 
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
@@ -279,24 +280,24 @@ void main() {
 		}
 		
 		#if DESKTOP
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation,  Camera.FastGather ? 1 : 0).rgb * Camera.SkyIntensity : vec3(0.0);
 		#else
-		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness).rgb * Camera.SkyIntensity : vec3(0.0);
+		vec3 iblColor = Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
 		#endif
 		vec3 illumColor = vec3(0.0);
 		
 		bool hit = true;
 		
-		if(Camera.FastGather)
-		{
-			if((gl_GlobalInvocationID.y + adder) % 2 == 0)
-			{
-				hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
-				iblColor *= 2.0f;
-				bounceSingle *= 2.0f;
-			}
-		}
-		else
+//		if(Camera.FastGather)
+//		{
+//			if((gl_GlobalInvocationID.y + adder) % 2 == 0)
+//			{
+//				hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
+//				iblColor *= 2.0f;
+//				bounceSingle *= 2.0f;
+//			}
+//		}
+//		else
 		{
 			hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
 		}

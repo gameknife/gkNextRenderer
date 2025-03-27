@@ -14,6 +14,41 @@ using namespace glm;
 #include "../assets/shaders/common/SampleIBL.glsl"
 #include "../assets/shaders/common/AmbientCubeCommon.glsl"
 
+// void Onb(vec3 n, out vec3 b1, out vec3 b2) {
+//     float signZ = n.z < 0.f ? -1.f : 1.f;
+//     float a = -1.0f / (signZ + n.z);
+//     b2 = vec3(n.x * n.y * a, signZ + n.y * n.y * a, -n.y);
+//     b1 = vec3(1.0f + signZ * n.x * n.x * a, signZ * b2.x, -signZ * n.x);
+// }
+
+vec3 AlignWithNormal(vec3 ray, vec3 normal)
+{
+    vec3 T;
+    return T;
+}
+
+float RandomFloat(uvec4& v)
+{
+    return 1.0f;
+}
+
+int TracingOccludeFunction(vec3 origin, vec3 lightPos)
+{
+    return 0;
+}
+
+// return if hits, this function may differ between Shader & Cpp
+bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist)
+{
+    return false;
+}
+
+vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId)
+{
+    return vec4(0);
+}
+
+#include "../assets/shaders/common/AmbientCubeAlgo.glsl"
 static tinybvh::BVH GCpuBvh;
 
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
