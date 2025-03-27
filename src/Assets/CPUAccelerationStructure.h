@@ -81,7 +81,7 @@ private:
     
     std::vector<uint32_t> lastBatchTasks;
 
-    std::unordered_set<glm::ivec3>  needUpdateGroups;
+    std::vector<glm::ivec3> needUpdateGroups;
 
     bool needFlush = false;
 };

@@ -8,38 +8,40 @@
 #define TINYBVH_IMPLEMENTATION
 #include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
+#include "Utilities/Math.hpp"
 
 static tinybvh::BVH GCpuBvh;
 static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
 static std::vector<FCPUTLASInstanceInfo>* GbvhTLASContexts;
 static std::vector<FCPUBLASContext>* GbvhBLASContexts;
+static std::vector<Assets::AmbientCube>* GCubes;
 Assets::SphericalHarmonics HDRSHs[100];
 using namespace glm;
+using namespace Assets;
+
 #include "../assets/shaders/common/SampleIBL.glsl"
 #include "../assets/shaders/common/AmbientCubeCommon.glsl"
-
-// void Onb(vec3 n, out vec3 b1, out vec3 b2) {
-//     float signZ = n.z < 0.f ? -1.f : 1.f;
-//     float a = -1.0f / (signZ + n.z);
-//     b2 = vec3(n.x * n.y * a, signZ + n.y * n.y * a, -n.y);
-//     b1 = vec3(1.0f + signZ * n.x * n.x * a, signZ * b2.x, -signZ * n.x);
-// }
 
 vec3 AlignWithNormal(vec3 ray, vec3 normal)
 {
     glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
     glm::vec3 tangent = glm::normalize(glm::cross(up, normal));
     glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
-
-    // Transform matrix from Z-up to normal-up space
     glm::mat3 transform(tangent, bitangent, normal);
-    
     return transform * ray;
 }
 
 float RandomFloat(uvec4& v)
 {
-    return 1.0f;
+    // Wang hash for pseudo-random number generation
+    v.x = (v.x ^ 61) ^ (v.x >> 16);
+    v.x = v.x + (v.x << 3);
+    v.x = v.x ^ (v.x >> 4);
+    v.x = v.x * 0x27d4eb2d;
+    v.x = v.x ^ (v.x >> 15);
+    
+    // Convert uint to float in range [0,1)
+    return float(v.x) / float(0xFFFFFFFF);
 }
 
 int TracingOccludeFunction(vec3 origin, vec3 lightPos)
@@ -50,7 +52,6 @@ int TracingOccludeFunction(vec3 origin, vec3 lightPos)
     return GCpuBvh.IsOccluded(shadowRay) ? 0 : 1;
 }
 
-// return if hits, this function may differ between Shader & Cpp
 bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
 {
     tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z),
@@ -64,11 +65,11 @@ bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMateria
         tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
         FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
         FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
-        glm::mat4* worldTS = ( glm::mat4*)instance.transform;
-        glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+        mat4* worldTS = (mat4*)instance.transform;
+        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
 
         OutRayDist = ray.hit.t;
-        OutNormal = glm::vec3(normalWS.x, normalWS.y, normalWS.z);
+        OutNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
         OutMaterialId = context.extinfos[primIdx].matIdx;
         OutInstanceId = ray.hit.inst;
         return true;
@@ -79,10 +80,53 @@ bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMateria
     }
 }
 
-vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId)
+AmbientCube& FetchCube(ivec3 probePos)
 {
-    // bouncing from MaterialId, impl tonight
-    return vec4(0);
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+    probePos.z * CUBE_SIZE_XY + probePos.x;
+    return (*GCubes)[idx];
+}
+
+vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInstanceId)
+{
+    uint32_t diffuseColor = (*GbvhTLASContexts)[OutInstanceId].mats[OutMaterialId];
+    vec4 albedo = unpackUnorm4x8(diffuseColor);
+    
+    vec3 pos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
+    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
+    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
+        return vec4(1.0);
+    }
+    
+    ivec3 baseIdx = ivec3(floor(pos));
+    vec3 frac = fract(pos);
+    
+    float totalWeight = 0.0;
+    vec4 result = vec4(0.0);
+
+    for (int i = 0; i < 8; i++) {
+        ivec3 offset = ivec3(
+        i & 1,
+        (i >> 1) & 1,
+        (i >> 2) & 1
+        );
+
+        ivec3 probePos = baseIdx + offset;
+        AmbientCube cube = FetchCube(probePos);
+        if (cube.Active != 1) continue;
+
+        float wx = offset.x == 0 ? (1.0f - frac.x) : frac.x;
+        float wy = offset.y == 0 ? (1.0f - frac.y) : frac.y;
+        float wz = offset.z == 0 ? (1.0f - frac.z) : frac.z;
+        float weight = wx * wy * wz;
+        
+        vec4 sampleColor = sampleAmbientCubeHL2_DI(cube, normal);
+        result += sampleColor * weight;
+        totalWeight += weight;
+    }
+    
+    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05f);
+    return albedo * indirectColor;
 }
 
 #include "../assets/shaders/common/AmbientCubeAlgo.glsl"
@@ -132,15 +176,10 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
     std::chrono::high_resolution_clock::now() - timer).count();
 
     // ugly code for global accesss here
-    GbvhInstanceList = &bvhInstanceList;
-    GbvhTLASContexts = &bvhTLASContexts;
-    GbvhBLASContexts = &bvhBLASContexts;
-    
     fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 
-    UpdateBVH(scene);
-
     ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    UpdateBVH(scene);
 }
 
 void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
@@ -177,6 +216,12 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
     {
         GCpuBvh.Build( bvhInstanceList.data(), static_cast<int>(bvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
     }
+
+    // rebind with new address
+    GbvhInstanceList = &bvhInstanceList;
+    GbvhTLASContexts = &bvhTLASContexts;
+    GbvhBLASContexts = &bvhBLASContexts;
+    GCubes = &ambientCubes;
 }
 
 Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)
@@ -199,63 +244,6 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-const glm::vec3 directions[6] = {
-    glm::vec3(0, 0, 1), // PosZ
-    glm::vec3(0, 0, -1), // NegZ
-    glm::vec3(0, 1, 0), // PosY
-    glm::vec3(0, -1, 0), // NegY
-    glm::vec3(1, 0, 0), // PosX
-    glm::vec3(-1, 0, 0) // NegX
-};
-
-uint packRGB10A2(vec4 color) {
-    vec4 clamped = clamp(color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
-    
-    uint r = uint(clamped.r * 1023.0f);
-    uint g = uint(clamped.g * 1023.0f);
-    uint b = uint(clamped.b * 1023.0f);
-    uint a = uint(clamped.a * 3.0f);
-    
-    return r | (g << 10) | (b << 20) | (a << 30);
-}
-
-vec4 unpackRGB10A2(uint packed) {
-    float r = float((packed) & 0x3FF) / 1023.0f;
-    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
-    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
-    
-    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
-}
-
-// Transform pre-calculated samples to align with given normal
-void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result)
-{
-    result.reserve(FACE_TRACING);
-
-    // Create orthonormal basis
-    glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
-    glm::vec3 tangent = glm::normalize(glm::cross(up, normal));
-    glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
-
-    // Transform matrix from Z-up to normal-up space
-    glm::mat3 transform(tangent, bitangent, normal);
-
-    // Transform each pre-calculated sample
-    for (const auto& sample : hemisphereVectors)
-    {
-        result.push_back(transform * sample);
-    }
-}
-
-bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
-{
-    glm::vec3 direction = lightPos - point;
-    float length = glm::length(direction) - 0.02f;
-    tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
-
-    return bvh.IsOccluded(shadowRay);
-}
-
 void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos)
 {
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
@@ -270,153 +258,44 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
     vec4 bounceColor(0);
     vec4 skyColor(0);
 
-    cube.PosY = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.PosY_D = packRGB10A2( directColor );
-    cube.PosY_S = packRGB10A2( skyColor );
+    cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, bounceColor, skyColor, ubo) );
+    cube.PosY = packRGB10A2( bounceColor );
+    cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.5f);
+
+    if (cube.Active == 0) return;
     
     // 负Y方向
-    cube.NegY = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.NegY_D = packRGB10A2( directColor );
-    cube.NegY_S = packRGB10A2( skyColor );
+    cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, bounceColor, skyColor, ubo) );
+    cube.NegY = packRGB10A2( bounceColor );
+    cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.5f);
+
+    if (cube.Active == 0) return;
     
     // 正X方向
-    cube.PosX = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.PosX_D = packRGB10A2( directColor );
-    cube.PosX_S = packRGB10A2( skyColor );
+    cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, bounceColor, skyColor, ubo) );
+    cube.PosX = packRGB10A2( bounceColor );
+    cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.5f);
+
+    if (cube.Active == 0) return;
     
     // 负X方向 
-    cube.NegX = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.NegX_D = packRGB10A2( directColor );
-    cube.NegX_S = packRGB10A2( skyColor );
+    cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, bounceColor, skyColor, ubo) );
+    cube.NegX = packRGB10A2( bounceColor );
+    cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.5f);
+
+    if (cube.Active == 0) return;
     
     // 正Z方向
-    cube.PosZ = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.PosZ_D = packRGB10A2( directColor );
-    cube.PosZ_S = packRGB10A2( skyColor );
+    cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, bounceColor, skyColor, ubo) );
+    cube.PosZ = packRGB10A2( bounceColor );
+    cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.5f);
+
+    if (cube.Active == 0) return;
     
     // 负Z方向
-    cube.NegZ = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, bounceColor, skyColor, ubo) );
-    //cube.NegZ_D = packRGB10A2( directColor );
-    cube.NegZ_S = packRGB10A2( skyColor );
-   
-    return;
-
-    for (int face = 0; face < 6; face++)
-    {
-        glm::vec3 baseDir = directions[face];
-
-        float occlusion = 0.0f;
-        glm::vec4 rayColor = glm::vec4(0, 0, 0, 0);
-        std::vector<glm::vec3> hemisphereSamples;
-        GetHemisphereSamples(baseDir, hemisphereSamples);
-
-        bool nextCube = false;
-        for (int i = 0; i < FACE_TRACING; i++)
-        {
-            tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                             tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
-
-            GCpuBvh.Intersect(ray);
-
-            if (ray.hit.t < 10.0f)
-            {
-                uint32_t primIdx = ray.hit.prim;
-                tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
-                FCPUTLASInstanceInfo& instContext = bvhTLASContexts[ray.hit.inst];
-                FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
-                glm::mat4* worldTS = ( glm::mat4*)instance.transform;
-                glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-                float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
-                
-                if (dotProduct < 0.0f)
-                {
-                    // get the hit pos
-                    auto hitPos = ray.O + ray.D * ray.hit.t;
-                    glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                    //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
-                    float power =5.0f;
-                    // occlude, bounce color, fade by distance
-                    uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
-                    
-                    rayColor += unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
-                    occlusion += 1.0f;
-                }
-                else
-                {
-                    cube.Active = 0;
-                    cube.Lighting = 0;
-                    nextCube = true;
-                    break;
-                }
-            }
-            else
-            {
-                // hit the sky, sky color, with a ibl is better
-                float skyatten = 10.0f;
-                glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f) * skyatten;
-                rayColor += skyColor;
-            }
-        }
-
-        if (nextCube)
-        {
-            continue;
-        }
-
-        occlusion /= FACE_TRACING;
-        rayColor /= FACE_TRACING;
-
-        // for each light in the scene, ray hit the center, if not occlude, add rayColor
-        for( auto& light : lightPos )
-        {
-            if( !IsInShadow( probePos, light, GCpuBvh) )
-            {
-                // ndotl + distance attenuation
-                glm::vec3 lightDir = glm::normalize(light - probePos);
-                float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
-                float distance = glm::length(light - probePos);
-                float attenuation = 1.0f / (distance * distance);
-                rayColor += vec4(2000.0f, 2000.0f, 2000.0f, 1.0f) * ndotl * attenuation;
-            }
-        }
-
-        float visibility = 1.0f - occlusion;
-        glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
-        uint32_t packedColor = packRGB10A2(indirectColor);
-        uint32_t skyColor = packRGB10A2(vec4(0,0,0,0));
-        switch (face)
-        {
-        case 0:
-            cube.PosZ = packedColor;
-            cube.PosZ_S = skyColor;
-            break;
-        case 1:
-            cube.NegZ = packedColor;
-            cube.NegZ_S = skyColor;
-            break;
-        case 2:
-            cube.PosY = packedColor;
-            cube.PosY_S = skyColor;
-            break;
-        case 3:
-            cube.NegY = packedColor;
-            cube.NegY_S = skyColor;
-            break;
-        case 4:
-            cube.PosX = packedColor;
-            cube.PosX_S = skyColor;
-            break;
-        case 5:
-            cube.NegX = packedColor;
-            cube.NegX_S = skyColor;
-            break;
-        }
-    }
-
-    if (!sunDir.empty())
-    {
-        IsInShadow(probePos, probePos + sunDir[0] * 1000.0f, GCpuBvh) ? cube.Lighting = 0 : cube.Lighting = 1;
-    }
+    cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, bounceColor, skyColor, ubo) );
+    cube.NegZ = packRGB10A2( bounceColor );
+    cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.5f);
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
@@ -430,7 +309,16 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     {
         for (int z = 0; z < lengthZ - 1; z++)
         {   
-            needUpdateGroups.insert(glm::ivec3(x, 0, z));
+            needUpdateGroups.push_back(glm::ivec3(x, 0, z));
+        }
+    }
+
+    // 2nd pass, for second bounce
+    for (int x = 0; x < lengthX - 1; x++)
+    {
+        for (int z = 0; z < lengthZ - 1; z++)
+        {   
+            needUpdateGroups.push_back(glm::ivec3(x, 0, z));
         }
     }
     
@@ -525,7 +413,7 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
     for (int x = min.x; x <= max.x; ++x) {
         for (int z = min.z; z <= max.z; ++z) {
             glm::ivec3 point(x, 1, z);
-            needUpdateGroups.insert(point);
+            needUpdateGroups.push_back(point);
         }
     }
 }

@@ -36,7 +36,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
-vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId)
+vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId, uint OutInstanceId)
 {
     const Material material = Materials[OutMaterialId];
     vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
@@ -63,33 +63,33 @@ void main() {
     vec4 directColor = vec4(0.0);
     directColor = TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].PosY_D = LerpPackedColorAlt(Cubes[gIdx].PosY_D, directColor, 0.25);
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.125);
-    Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.125);
+    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.1);
+    Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.1);
     
     directColor = TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].NegY_D = LerpPackedColorAlt(Cubes[gIdx].NegY_D, directColor, 0.25);
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.125);
-    Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.125);
+    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.1);
+    Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.1);
     
     directColor = TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].PosX_D = LerpPackedColorAlt(Cubes[gIdx].PosX_D, directColor, 0.25);
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.125);
-    Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.125);
+    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.1);
+    Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.1);
     
     directColor = TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].NegX_D = LerpPackedColorAlt(Cubes[gIdx].NegX_D, directColor, 0.25);
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.125);
-    Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.125);
+    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.1);
+    Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.1);
     
     directColor = TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].PosZ_D = LerpPackedColorAlt(Cubes[gIdx].PosZ_D, directColor, 0.25);
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.125);
-    Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.125);
+    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.1);
+    Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.1);
     
     directColor = TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe, bounceColor, skyColor, Camera);
     Cubes[gIdx].NegZ_D = LerpPackedColorAlt(Cubes[gIdx].NegZ_D, directColor, 0.25);
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
-    Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.125);
+    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.1);
+    Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.1);
 
     Cubes[gIdx].Active = activeProbe;
 }

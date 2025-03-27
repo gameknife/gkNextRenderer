@@ -39,7 +39,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
             if( dot(OutNormal, rayDir) < 0.0 )
             {
                 vec3 hitPos = origin + rayDir * OutRayDist;
-                bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId);
+                bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId, OutInstanceId);
             }
             else
             {
@@ -77,6 +77,3 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
     rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
     return rayColor;
 }
-
-
-
