@@ -1,9 +1,9 @@
 
 #ifdef __cplusplus
-vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, int& activeProbe, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
+vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, uint& activeProbe, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
 {
 #else
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
+vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint activeProbe, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
 {
 #endif
     vec4 rayColor = vec4(0.0);

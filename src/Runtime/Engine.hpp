@@ -194,6 +194,8 @@ public:
 	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
 
 	NextPhysics* GetPhysicsEngine() { return physicsEngine_.get(); }
+
+	Assets::UniformBufferObject& GetUniformBufferObject() { return prevUBO_; }
 	
 protected:
 	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);

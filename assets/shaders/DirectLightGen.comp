@@ -56,7 +56,7 @@ void main() {
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
 
-    int activeProbe = 1;
+    uint activeProbe = 1;
     
     vec4 bounceColor = vec4(0.0);
     vec4 skyColor = vec4(0.0);
