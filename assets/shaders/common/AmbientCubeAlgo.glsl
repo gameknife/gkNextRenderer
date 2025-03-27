@@ -31,9 +31,10 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
         vec3 rayDir = AlignWithNormal(rotatedVec, basis);
         vec3 OutNormal;
         uint OutMaterialId;
+        uint OutInstanceId;
         float OutRayDist;
 
-        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist) )
+        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
         {
             if( dot(OutNormal, rayDir) < 0.0 )
             {
@@ -50,7 +51,6 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
         else
         {
             rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
-
         }
     }
     rayColor = rayColor / float(FACE_TRACING);

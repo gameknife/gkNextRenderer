@@ -40,7 +40,7 @@ int TracingOccludeFunction(in vec3 origin, in vec3 lightPos)
 }
 
 // return if hits, this function may differ between Shader & Cpp
-bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uint OutMaterialId, out float OutRayDist)
+bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uint OutMaterialId, out float OutRayDist, out uint OutInstanceId)
 {
     rayQueryEXT rayQuery;
     rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
@@ -61,7 +61,6 @@ bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uin
         OutRayDist = RayDist;
 
         vec2 OutTexcoord;
-        uint OutInstanceId;
         SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
         return true;
     }

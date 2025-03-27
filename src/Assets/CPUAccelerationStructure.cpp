@@ -44,11 +44,14 @@ float RandomFloat(uvec4& v)
 
 int TracingOccludeFunction(vec3 origin, vec3 lightPos)
 {
-    return 0;
+    glm::vec3 direction = lightPos - origin;
+    float length = glm::length(direction) - 0.02f;
+    tinybvh::Ray shadowRay(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
+    return GCpuBvh.IsOccluded(shadowRay) ? 0 : 1;
 }
 
 // return if hits, this function may differ between Shader & Cpp
-bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist)
+bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
 {
     tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z),
                              tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 11.f);
@@ -64,9 +67,10 @@ bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMateria
         glm::mat4* worldTS = ( glm::mat4*)instance.transform;
         glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
 
+        OutRayDist = ray.hit.t;
         OutNormal = glm::vec3(normalWS.x, normalWS.y, normalWS.z);
         OutMaterialId = context.extinfos[primIdx].matIdx;
-        
+        OutInstanceId = ray.hit.inst;
         return true;
     }
     else
@@ -77,7 +81,8 @@ bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMateria
 
 vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId)
 {
-    return vec4(1,1,1,1);
+    // bouncing from MaterialId, impl tonight
+    return vec4(0);
 }
 
 #include "../assets/shaders/common/AmbientCubeAlgo.glsl"
