@@ -83,8 +83,6 @@ namespace Vulkan::RayTracing
 		
 		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
 		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
-
-		std::unique_ptr<PipelineCommon::AmbientGenPipeline> ambientGenPipeline_;
 		std::unique_ptr<PipelineCommon::DirectLightGenPipeline> directLightGenPipeline_;
 
 		std::vector<Assets::RayCastRequest> rayRequested_;
