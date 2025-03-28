@@ -179,6 +179,8 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
     fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 
     ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    ambientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    
     UpdateBVH(scene);
 }
 
@@ -248,64 +250,168 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
 {
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
-    Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
+    uint32_t addressIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
+    Assets::AmbientCube& cube = ambientCubes[addressIdx];
 
-    cube.Active = 1;
-    cube.Lighting = 0;
-    cube.ExtInfo = glm::uvec4(0, 0,0,0);
+    switch (procType)
+    {
+        case ECubeProcType::ECPT_Clear:
+            {
+                
+            }
+            break;
+        case ECubeProcType::ECPT_Iterate:
+            {
+                cube.Active = 1;
+                cube.Lighting = 0;
+                cube.ExtInfo = glm::uvec4(0, 0,0,0);
 
-    uvec4 RandomSeed(0);
-    vec4 bounceColor(0);
-    vec4 skyColor(0);
+                uvec4 RandomSeed(0);
+                vec4 bounceColor(0);
+                vec4 skyColor(0);
 
-    cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 0.25f );
-    cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.25f );
+                cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, bounceColor, skyColor, ubo) );
+                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 0.25f );
+                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.25f );
 
-    if (cube.Active == 0) return;
+                if (cube.Active == 0) return;
 
-    // 负Y方向
-    cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 0.25f );
-    cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.25f );
+                // 负Y方向
+                cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, bounceColor, skyColor, ubo) );
+                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 0.25f );
+                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.25f );
 
-    if (cube.Active == 0) return;
+                if (cube.Active == 0) return;
 
-    // 正X方向
-    cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 0.25f );
-    cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.25f );
+                // 正X方向
+                cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, bounceColor, skyColor, ubo) );
+                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 0.25f );
+                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.25f );
 
-    if (cube.Active == 0) return;
+                if (cube.Active == 0) return;
 
-    // 负X方向
-    cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 0.25f );
-    cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.25f );
+                // 负X方向
+                cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, bounceColor, skyColor, ubo) );
+                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 0.25f );
+                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.25f );
 
-    if (cube.Active == 0) return;
+                if (cube.Active == 0) return;
 
-    // 正Z方向
-    cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 0.25f );
-    cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.25f );
+                // 正Z方向
+                cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, bounceColor, skyColor, ubo) );
+                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 0.25f );
+                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.25f );
 
-    if (cube.Active == 0) return;
+                if (cube.Active == 0) return;
     
-    // 负Z方向
-    cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 0.25f );
-    cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.25f);
+                // 负Z方向
+                cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, bounceColor, skyColor, ubo) );
+                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 0.25f );
+                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.25f);
+            }
+            break;
+        case ECubeProcType::ECPT_Copy:
+            {
+                ambientCubes_Copy[addressIdx] = ambientCubes[addressIdx];
+            }
+            break;
+        case ECubeProcType::ECPT_Blur:
+        {
+            uint32_t centerIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
+            Assets::AmbientCube& centerCube = ambientCubes[centerIdx];
+
+            // 如果当前立方体不活跃，不进行模糊处理
+            if (centerCube.Active != 1) return;
+
+            // 定义采样权重和累积值
+            float totalWeight = 0.0f;
+            vec4 blurredPosX(0), blurredNegX(0);
+            vec4 blurredPosY(0), blurredNegY(0);
+            vec4 blurredPosZ(0), blurredNegZ(0);
+
+            vec4 blurredPosX_S(0), blurredNegX_S(0);
+            vec4 blurredPosY_S(0), blurredNegY_S(0);
+            vec4 blurredPosZ_S(0), blurredNegZ_S(0);
+
+            // 在3x3x3的区域中采样
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        int nz = z + dz;
+
+                        // 检查边界
+                        if (nx < 0 || ny < 0 || nz < 0 ||
+                            nx >= Assets::CUBE_SIZE_XY ||
+                            ny >= Assets::CUBE_SIZE_Z ||
+                            nz >= Assets::CUBE_SIZE_XY) {
+                            continue;
+                        }
+
+                        uint32_t neighborIdx = ny * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + nz * Assets::CUBE_SIZE_XY + nx;
+                        Assets::AmbientCube& neighborCube = ambientCubes_Copy[neighborIdx];
+
+                        // 如果邻居立方体不活跃，跳过
+                        if (neighborCube.Active != 1) continue;
+
+                        // 计算权重 (距离越远权重越小)
+                        float dist = glm::length(glm::vec3(dx, dy, dz));
+                        float weight = 1.0f / (1.0f + dist);
+
+                        // 解包颜色值并累积加权颜色
+                        blurredPosX += unpackRGB10A2(neighborCube.PosX) * weight;
+                        blurredNegX += unpackRGB10A2(neighborCube.NegX) * weight;
+                        blurredPosY += unpackRGB10A2(neighborCube.PosY) * weight;
+                        blurredNegY += unpackRGB10A2(neighborCube.NegY) * weight;
+                        blurredPosZ += unpackRGB10A2(neighborCube.PosZ) * weight;
+                        blurredNegZ += unpackRGB10A2(neighborCube.NegZ) * weight;
+
+                        blurredPosX_S += unpackRGB10A2(neighborCube.PosX_S) * weight;
+                        blurredNegX_S += unpackRGB10A2(neighborCube.NegX_S) * weight;
+                        blurredPosY_S += unpackRGB10A2(neighborCube.PosY_S) * weight;
+                        blurredNegY_S += unpackRGB10A2(neighborCube.NegY_S) * weight;
+                        blurredPosZ_S += unpackRGB10A2(neighborCube.PosZ_S) * weight;
+                        blurredNegZ_S += unpackRGB10A2(neighborCube.NegZ_S) * weight;
+
+                        totalWeight += weight;
+                    }
+                }
+            }
+
+            // 如果有有效的邻居，计算平均值并更新当前立方体
+            if (totalWeight > 0.0f) {
+                float invWeight = 1.0f / totalWeight;
+
+                // 归一化并重新打包颜色值
+                centerCube.PosX = packRGB10A2(blurredPosX * invWeight);
+                centerCube.NegX = packRGB10A2(blurredNegX * invWeight);
+                centerCube.PosY = packRGB10A2(blurredPosY * invWeight);
+                centerCube.NegY = packRGB10A2(blurredNegY * invWeight);
+                centerCube.PosZ = packRGB10A2(blurredPosZ * invWeight);
+                centerCube.NegZ = packRGB10A2(blurredNegZ * invWeight);
+
+                centerCube.PosX_S = packRGB10A2(blurredPosX_S * invWeight);
+                centerCube.NegX_S = packRGB10A2(blurredNegX_S * invWeight);
+                centerCube.PosY_S = packRGB10A2(blurredPosY_S * invWeight);
+                centerCube.NegY_S = packRGB10A2(blurredNegY_S * invWeight);
+                centerCube.PosZ_S = packRGB10A2(blurredPosZ_S * invWeight);
+                centerCube.NegZ_S = packRGB10A2(blurredNegZ_S * invWeight);
+            }
+        }
+        break;
+    }
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
 {
+    return;
     needUpdateGroups.clear();
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     ClearAmbientCubes();
 
-    // add a full update tasks
+    // 目前的做法，只能以1m为单位，不过其实也够了
     int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
@@ -313,23 +419,45 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     // add 4 pass
     for(int pass = 0; pass < 4; ++pass)
     {
+        // 先创建所有坐标对
+        std::vector<std::pair<int, int>> coordinates;
+        for (int x = 0; x < lengthX - 1; x++) {
+            for (int z = 0; z < lengthZ - 1; z++) {
+                coordinates.push_back({x, z});
+            }
+        }
+
+        // 随机打乱坐标顺序
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(coordinates.begin(), coordinates.end(), g);
+
+        // 按打乱后的顺序添加任务
+        for (const auto& [x, z] : coordinates) {
+            needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Iterate});
+        }
+
+        // add 1 copy pass
         for (int x = 0; x < lengthX - 1; x++)
         {
             for (int z = 0; z < lengthZ - 1; z++)
             {
-                needUpdateGroups.push_back(glm::ivec3(x, 0, z));
+                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Copy});
+            }
+        }
+
+        // add 1 blur pass
+        for (int x = 0; x < lengthX - 1; x++)
+        {
+            for (int z = 0; z < lengthZ - 1; z++)
+            {
+                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Blur});
             }
         }
     }
-
-    // add 1 copy pass
-
-
-    // add 1 blur pass
-
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType)
 {
     if (bvhInstanceList.empty())
     {
@@ -354,12 +482,12 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
     }
 
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, sunDir, lightPos](ResTask& task)
+                [this, actualX, actualZ, groupSize, procType](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z, ECubeProcType::ECPT_Iterate);
+                            ProcessCube(x, y, z, procType);
             },
             [this](ResTask& task)
             {
@@ -397,8 +525,7 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 
             for( auto& group : needUpdateGroups)
             {
-                AsyncProcessGroup(group.x, group.z, scene);
-                //NextEngine::GetInstance()->DrawAuxPoint( glm::vec3(group) + Assets::CUBE_OFFSET, glm::vec4(1, 0, 0, 1), 2, 30 );
+                AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group));
             }
 
             needUpdateGroups.clear();
@@ -416,7 +543,7 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
     for (int x = min.x; x <= max.x; ++x) {
         for (int z = min.z; z <= max.z; ++z) {
             glm::ivec3 point(x, 1, z);
-            needUpdateGroups.push_back(point);
+            needUpdateGroups.push_back({point, ECubeProcType::ECPT_Iterate});
         }
     }
 }
@@ -430,7 +557,7 @@ void FCPUAccelerationStructure::ClearAmbientCubes()
         cube.ExtInfo = glm::uvec4(0, 0, 0, 0);
 
         // 清理所有面的颜色
-        uint32_t packedColor = packRGB10A2(vec4(10, 10, 10, 1));
+        uint32_t packedColor = packRGB10A2(vec4(0, 0, 0, 1));
 
         // 正Z面
         cube.PosZ = packedColor;

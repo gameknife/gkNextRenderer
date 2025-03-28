@@ -70,7 +70,7 @@ public:
 
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
     void AsyncProcessFull();
-    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene);
+    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
 
@@ -86,10 +86,11 @@ private:
 
     
     std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::AmbientCube> ambientCubes_Copy;
     
     std::vector<uint32_t> lastBatchTasks;
 
-    std::vector<glm::ivec3> needUpdateGroups;
+    std::vector<std::tuple<glm::ivec3, ECubeProcType> > needUpdateGroups;
 
     bool needFlush = false;
 };

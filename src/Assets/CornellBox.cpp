@@ -115,6 +115,7 @@ void CornellBox::Create(
 		light.p1 = vec4(vec3(x0, y1, z0) - offset, 1);
 		light.p3 = vec4(vec3(x1, y1, z1) - offset, 1);
 		light.normal_area = vec4(0, -1, 0, (x1 - x0) * (z0 - z1));
+		light.lightMatIdx = prev_mat_id + 3;
 		lights.push_back(light);
 	}
 

@@ -163,8 +163,8 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 
 		//const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
 		//const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
-		//const vec4 lightColor = material.MaterialModel == MaterialDiffuseLight ? material.Diffuse : vec4(0);
-		//illumColor = lightColor.rgb;
+		const vec4 lightColor = material.MaterialModel == MaterialDiffuseLight ? material.Diffuse : vec4(0);
+		illumColor = lightColor.rgb;
 		//const vec3 albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : texColor.rgb * texColor.rgb * material.Diffuse.rgb;
 		const vec3  albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : material.Diffuse.rgb;
 
@@ -228,7 +228,7 @@ void main() {
 	const vec3 outwardNormal = dotValue > 0 ? -normal : normal;
 	const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
 	const float reflectProb = Schlick(cosine, mat.RefractionIndex);
-	const float metalProb = mat.Metalness;
+	const float metalProb = mat.MaterialModel == MaterialMetallic ? 1.0 : mat.Metalness;
 	
 	
 	vec3 irradianceColor = vec3(0);
@@ -255,26 +255,29 @@ void main() {
 	imageStore(OutMotionVector, ipos, vec4(motion,0,0));
 
 	// emit ray without any guidance
+	float probalityOfReflection = 0.0f;
 	for (uint s = 0; s < sampleTimes; ++s)
 	{
 	    bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
 		bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
 		bool chanceGGX = chanceReflect || chanceMetal;
 		const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
-		const vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
+		vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
 
+		probalityOfReflection += chanceGGX ? 1.0f : 0.0f;
 		vec3 posOffset = normal * 0.01;
-		if(mat.MaterialModel == MaterialDielectric)
+		if(!chanceGGX && mat.MaterialModel == MaterialDielectric)
 		{
-			//albedo = vec4(1,1,1,1);
-			//posOffset = ray_dir * 0.1;
+			albedo = vec4(1,1,1,1);
+			posOffset = -outwardNormal * 0.05;
+			trace_dir = ray_dir;
 		}
 
 		// if miss, sample the sky
 		vec3 bounceSingle = vec3(0);
 		vec4 albedoSingle = albedo;
 		
-		if(chanceReflect && mat.MaterialModel == MaterialMixture)
+		if(chanceReflect && (mat.MaterialModel == MaterialMixture) )
 		{
 			albedoSingle = vec4(1);
 		}
@@ -308,13 +311,15 @@ void main() {
 		}
 		else
 		{
+			irradianceColor += albedoSingle.rgb * illumColor * probalityOfReflection;
 			bounceColor += albedoSingle.rgb * bounceSingle * 1.25f; // 这是一个经验值，理论上，应该为1.0，但是因为hybird方式缺少反弹，因此将这个值拉大可以增强二次反弹亮度，pbr场景，2.0刚好符合PT结果
 		}
 	}
 
 	irradianceColor = irradianceColor / sampleTimes;
 	bounceColor = bounceColor / sampleTimes;
-
+	probalityOfReflection = probalityOfReflection / sampleTimes;
+	
     vec4 outColor = vec4(irradianceColor,1);
 	outColor.a = 1.0;//sampleTimes / sampleTimes;
     
@@ -343,11 +348,12 @@ void main() {
 		vec3 lightPos = light.p0.xyz + (light.p1.xyz - light.p0.xyz) * RandomFloat(RandomSeed) + (light.p3.xyz - light.p0.xyz) *  RandomFloat(RandomSeed);
 		float lightAtten = TracingOccludeFunction(v.Position, lightPos);
 
+		vec4 lightPower = Materials[light.lightMatIdx].Diffuse;
 		vec3 lightDir = normalize(lightPos - v.Position);
-		float ndotl = sqrt(clamp(dot(normal, lightDir), 0.0f, 1.0f));
+		float ndotl = clamp(dot(normal, lightDir), 0.0f, 1.0f);
 		float distance = length(lightPos - v.Position);
-		float attenuation = 1.0f / (distance * distance);
-		outColor.rgb += albedo.rgb * vec3(2000.0f, 2000.0f, 2000.0f) * ndotl * attenuation * lightAtten;
+		float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+		outColor.rgb += albedo.rgb * lightPower.rgb * attenuation * lightAtten * (1.0f - probalityOfReflection);
 	}
 	
 	vec4 directLight = vec4(outColor.rgb, 1);

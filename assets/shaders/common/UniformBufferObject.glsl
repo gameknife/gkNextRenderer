@@ -123,5 +123,19 @@ struct ALIGN_16 SphericalHarmonics
 	float padding;
 };
 
+struct ALIGN_16 LightObject
+{
+	vec4 p0;
+	vec4 p1;
+	vec4 p3;
+	vec4 normal_area;
+	
+	uint lightMatIdx;
+	uint reserved1;
+	uint reserved2;
+	uint reserved3;
+};
+
+
 #define UniformBufferObject_glsl
 #endif

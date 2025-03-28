@@ -63,11 +63,12 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
         vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
         float lightAtten = TracingOccludeFunction(origin, lightPos);
 
+        vec4 lightPower = Materials[Lights[0].lightMatIdx].Diffuse;
         vec3 lightDir = normalize(lightPos - origin);
         float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
         float distance = length(lightPos - origin);
-        float attenuation = 1.0f / (distance * distance);
-        rayColor += vec4(2000.0f) * ndotl * attenuation * lightAtten;
+        float attenuation = ndotl * Lights[0].normal_area.w / (distance * distance * 3.14159f);
+        rayColor += lightPower * attenuation * lightAtten;
         #endif
     }
     
