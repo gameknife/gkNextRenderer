@@ -430,7 +430,7 @@ void FCPUAccelerationStructure::ClearAmbientCubes()
         cube.ExtInfo = glm::uvec4(0, 0, 0, 0);
 
         // 清理所有面的颜色
-        uint32_t packedColor = packRGB10A2(vec4(10, 10, 10, 10));
+        uint32_t packedColor = packRGB10A2(vec4(10, 10, 10, 1));
 
         // 正Z面
         cube.PosZ = packedColor;
