@@ -22,6 +22,14 @@ using namespace Assets;
 #include "../assets/shaders/common/SampleIBL.glsl"
 #include "../assets/shaders/common/AmbientCubeCommon.glsl"
 
+LightObject FetchLight(uint lightIdx, vec4& lightPower)
+{
+    auto Lights = NextEngine::GetInstance()->GetScene().Lights();
+    auto materials = NextEngine::GetInstance()->GetScene().Materials();
+    lightPower = materials[Lights[lightIdx].lightMatIdx].gpuMaterial_.Diffuse;
+    return Lights[lightIdx];
+}
+
 vec3 AlignWithNormal(vec3 ray, vec3 normal)
 {
     glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
@@ -405,7 +413,6 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
 
 void FCPUAccelerationStructure::AsyncProcessFull()
 {
-    return;
     needUpdateGroups.clear();
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();

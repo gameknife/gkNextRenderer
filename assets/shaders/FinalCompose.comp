@@ -17,7 +17,7 @@ layout(binding = 6, r32ui) uniform uimage2D InVisibility1;
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 const int WORK_GROUP_AXIS_SIZE = 8;
-const int WINDOW_R = 9; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
+const int WINDOW_R = 3; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
 const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
 
 // thread group is 16 x 16 = 256

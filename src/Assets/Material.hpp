@@ -17,6 +17,11 @@ namespace Assets
             return Material{glm::vec4(diffuse, 1), textureId, -1, -1, fuzziness, 1.45f, Enum::Metallic, 1};
         }
 
+        static Material Mixture(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)
+        {
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, fuzziness, 1.45f, Enum::Mixture, 0};
+        }
+
         static Material Dielectric(const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
         {
             return Material{glm::vec4(1.0f, 1.0f, 1.0f, 1), textureId, -1, -1, fuzziness, refractionIndex, Enum::Dielectric, 0, refractionIndex};

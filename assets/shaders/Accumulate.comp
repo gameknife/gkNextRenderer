@@ -53,7 +53,7 @@ float calculateWeight(float centerDist, bool sameObject, bool isCenter, vec3 Nor
         return 0.0; // 不同对象像素权重为0
     } else {
         // 基于法线相似度的阈值过滤
-        float normalDot = dot(Normal, CenterNormal);
+        float normalDot = clamp( dot(Normal, CenterNormal), 0.0f, 1.0f);
         const float normalThreshold = 0.98f; // 大约对应45度角
 
         if (normalDot < normalThreshold) {

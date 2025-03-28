@@ -59,17 +59,15 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
 
     if(Camera.LightCount > 0)
     {
-        #ifndef __cplusplus
-        vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
-        float lightAtten = TracingOccludeFunction(origin, lightPos);
-
-        vec4 lightPower = Materials[Lights[0].lightMatIdx].Diffuse;
+        vec4 lightPower = vec4(0.0);
+        LightObject light = FetchLight(0, lightPower);
+        vec3 lightPos = mix(vec3(light.p1), vec3(light.p3), 0.5f);
+        float lightAtten = float(TracingOccludeFunction(origin, lightPos));
         vec3 lightDir = normalize(lightPos - origin);
         float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
         float distance = length(lightPos - origin);
-        float attenuation = ndotl * Lights[0].normal_area.w / (distance * distance * 3.14159f);
+        float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
         rayColor += lightPower * attenuation * lightAtten;
-        #endif
     }
     
     vec3 sunDir = vec3(Camera.SunDirection);

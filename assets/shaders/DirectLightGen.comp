@@ -43,6 +43,12 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId, uint OutI
     return material.Diffuse * interpolateDIProbes(localPos, OutNormal);
 }
 
+LightObject FetchLight(uint lightIdx, inout vec4 lightPower)
+{
+    lightPower = Materials[Lights[lightIdx].lightMatIdx].Diffuse;
+    return Lights[lightIdx];
+}
+
 #include "common/AmbientCubeAlgo.glsl"
 
 void main() {
