@@ -319,6 +319,15 @@ public:
         return true;
     }
 
+    void CancelAllParralledTasks()
+    {
+        while(parralledTaskQueue_.size() > 0)
+        {
+            ResTask task;
+            parralledTaskQueue_.dequeue(task, true);
+        }
+    }
+
     bool IsAllTaskComplete(std::vector<uint32_t>& tasks);
 
     void Tick();

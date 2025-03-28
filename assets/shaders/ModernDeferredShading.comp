@@ -134,8 +134,8 @@ void main() {
     const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 4;
-    const float range = 2.0f;
+    const int jitcount = 1;
+    const float range = 0.0f;
     for(int i = 0; i < jitcount; i++) {
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * range;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;

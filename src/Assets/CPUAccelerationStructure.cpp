@@ -244,7 +244,7 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos)
+void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
     glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
@@ -259,71 +259,74 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm
     vec4 skyColor(0);
 
     cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosY = packRGB10A2( bounceColor );
-    cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.5f);
+    cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 0.25f );
+    cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.25f );
 
     if (cube.Active == 0) return;
-    
+
     // 负Y方向
     cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegY = packRGB10A2( bounceColor );
-    cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.5f);
+    cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 0.25f );
+    cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.25f );
 
     if (cube.Active == 0) return;
-    
+
     // 正X方向
     cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosX = packRGB10A2( bounceColor );
-    cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.5f);
+    cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 0.25f );
+    cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.25f );
 
     if (cube.Active == 0) return;
-    
-    // 负X方向 
+
+    // 负X方向
     cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegX = packRGB10A2( bounceColor );
-    cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.5f);
+    cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 0.25f );
+    cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.25f );
 
     if (cube.Active == 0) return;
-    
+
     // 正Z方向
     cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, bounceColor, skyColor, ubo) );
-    cube.PosZ = packRGB10A2( bounceColor );
-    cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.5f);
+    cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 0.25f );
+    cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.25f );
 
     if (cube.Active == 0) return;
     
     // 负Z方向
     cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, bounceColor, skyColor, ubo) );
-    cube.NegZ = packRGB10A2( bounceColor );
-    cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.5f);
+    cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 0.25f );
+    cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.25f);
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
 {
+    needUpdateGroups.clear();
+    lastBatchTasks.clear();
+    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    ClearAmbientCubes();
+
     // add a full update tasks
     int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
-    
-    for (int x = 0; x < lengthX - 1; x++)
+
+    // add 4 pass
+    for(int pass = 0; pass < 4; ++pass)
     {
-        for (int z = 0; z < lengthZ - 1; z++)
-        {   
-            needUpdateGroups.push_back(glm::ivec3(x, 0, z));
+        for (int x = 0; x < lengthX - 1; x++)
+        {
+            for (int z = 0; z < lengthZ - 1; z++)
+            {
+                needUpdateGroups.push_back(glm::ivec3(x, 0, z));
+            }
         }
     }
 
-    // 2nd pass, for second bounce
-    for (int x = 0; x < lengthX - 1; x++)
-    {
-        for (int z = 0; z < lengthZ - 1; z++)
-        {   
-            needUpdateGroups.push_back(glm::ivec3(x, 0, z));
-        }
-    }
-    
-    //TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-    //BlurAmbientCubes(ambientCubes, ambientCubesCopy);
+    // add 1 copy pass
+
+
+    // add 1 blur pass
+
 }
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
@@ -356,7 +359,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z, sunDir, lightPos);
+                            ProcessCube(x, y, z, ECubeProcType::ECPT_Iterate);
             },
             [this](ResTask& task)
             {
@@ -418,3 +421,47 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
     }
 }
 
+void FCPUAccelerationStructure::ClearAmbientCubes()
+{
+    for(auto& cube : ambientCubes)
+    {
+        cube.Active = 1;
+        cube.Lighting = 0;
+        cube.ExtInfo = glm::uvec4(0, 0, 0, 0);
+
+        // 清理所有面的颜色
+        uint32_t packedColor = packRGB10A2(vec4(10, 10, 10, 10));
+
+        // 正Z面
+        cube.PosZ = packedColor;
+        cube.PosZ_S = packedColor;
+        cube.PosZ_D = packedColor;
+
+        // 负Z面
+        cube.NegZ = packedColor;
+        cube.NegZ_S = packedColor;
+        cube.NegZ_D = packedColor;
+
+        // 正Y面
+        cube.PosY = packedColor;
+        cube.PosY_S = packedColor;
+        cube.PosY_D = packedColor;
+
+        // 负Y面
+        cube.NegY = packedColor;
+        cube.NegY_S = packedColor;
+        cube.NegY_D = packedColor;
+
+        // 正X面
+        cube.PosX = packedColor;
+        cube.PosX_S = packedColor;
+        cube.PosX_D = packedColor;
+
+        // 负X面
+        cube.NegX = packedColor;
+        cube.NegX_S = packedColor;
+        cube.NegX_D = packedColor;
+    }
+
+    needFlush = true;
+}

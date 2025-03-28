@@ -33,6 +33,13 @@ namespace Vulkan
 {
     class DeviceMemory;
 }
+enum class ECubeProcType : uint8_t
+{
+    ECPT_Clear,
+    ECPT_Iterate,
+    ECPT_Copy,
+    ECPT_Blur,
+};
 
 struct FCPUBLASVertInfo
 {
@@ -61,13 +68,15 @@ public:
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-    void ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos);
+    void ProcessCube(int x, int y, int z, ECubeProcType procType);
     void AsyncProcessFull();
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
+
+    void ClearAmbientCubes();
 
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
@@ -77,7 +86,6 @@ private:
 
     
     std::vector<Assets::AmbientCube> ambientCubes;
-    std::vector<Assets::AmbientCube> ambientCubesCopy;
     
     std::vector<uint32_t> lastBatchTasks;
 
