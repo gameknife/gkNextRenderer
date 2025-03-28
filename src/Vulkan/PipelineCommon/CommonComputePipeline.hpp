@@ -39,7 +39,7 @@ namespace Vulkan::PipelineCommon
 			const SwapChain& swapChain, 
 			const ImageView& sourceImageView, const ImageView& accumulateImageView, const ImageView& prevAccumulateImageView, const ImageView& motionVectorImageView,
 			const ImageView& visibilityBufferImageView,const ImageView& prevVisibilityBufferImageView,
-			const ImageView& outputImage1View,
+			const ImageView& outputImage1View, const ImageView& normalImage1View,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~AccumulatePipeline();

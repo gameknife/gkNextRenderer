@@ -14,6 +14,7 @@ layout (binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferO
 layout (binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
 layout (binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
 layout (binding = 7, rgba8) uniform image2D OutImage;
+layout (binding = 2, rgba16f) uniform image2D InNormal;
 
 layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -45,14 +46,24 @@ vec2(-2.0, 1.0), vec2(-1.0, 1.0), vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(2.0, 1.0)
 vec2(-2.0, 2.0), vec2(-1.0, 2.0), vec2(0.0, 2.0), vec2(1.0, 2.0), vec2(2.0, 2.0)
 );
 
-float calculateWeight(float centerDist, bool sameObject, bool isCenter) {
+float calculateWeight(float centerDist, bool sameObject, bool isCenter, vec3 Normal, vec3 CenterNormal) {
     if (isCenter) {
         return 0.4; // 中心像素权重
     } else if (!sameObject) {
         return 0.0; // 不同对象像素权重为0
     } else {
-        // 基于距离的权重衰减
-        return 2.0 / (centerDist * 1.5 + 4.0);
+        // 基于法线相似度的阈值过滤
+        float normalDot = dot(Normal, CenterNormal);
+        const float normalThreshold = 0.98f; // 大约对应45度角
+
+        if (normalDot < normalThreshold) {
+            return 0.0; // 法线差异过大，权重为0
+        }
+
+        // 将normalDot归一化到[0,1]区间用于权重计算
+        const float normalWeight = (normalDot - normalThreshold) / (1.0 - normalThreshold);
+        
+        return normalWeight * 2.0 / (centerDist * 1.5 + 4.0);
     }
 }
 
@@ -77,19 +88,22 @@ void main() {
     
     const int SAMPLE_RANGE = 1;
     
+    vec3 CenterNormal = imageLoad(InNormal, ipos).rgb;
+    
     for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
         for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
             ivec2 offset = ivec2(x, y);
             ivec2 samplePos = ipos + offset;
             vec4 samplePixel = imageLoad(NewSourceImage, samplePos);
             uint primitiveIdx = imageLoad(VisibilityBuffer, samplePos).r;
+            vec3 worldNormal = imageLoad(InNormal, samplePos).rgb;
 
             bool isCenter = (x == 0 && y == 0) ? true : false; 
             bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
             float centerDist = length(vec2(x, y));
 
             // 计算该采样点的权重
-            float weight = calculateWeight(centerDist, sameObject, isCenter);
+            float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
 
             if (isCenter) {
                 temporalWeight = samplePixel.w;
