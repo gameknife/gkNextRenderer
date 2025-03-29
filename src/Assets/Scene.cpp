@@ -3,6 +3,7 @@
 #include "Options.hpp"
 #include "Sphere.hpp"
 #include "Vulkan/BufferUtil.hpp"
+#include "Assets/TextureImage.hpp"
 #include <chrono>
 #include <unordered_set>
 
@@ -26,6 +27,9 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
                                                     ambientCubeBufferMemory_);
+
+
+        cpuShadowMap_.reset(new TextureImage(commandPool, 1024, 1024, 1, VK_FORMAT_R32_UINT, nullptr, 0));
     }
 
     Scene::~Scene()
@@ -52,6 +56,8 @@ namespace Assets
 
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
+
+        cpuShadowMap_.reset();
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,

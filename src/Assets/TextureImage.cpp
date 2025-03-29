@@ -6,6 +6,8 @@
 #include "Vulkan/Sampler.hpp"
 #include <cstring>
 
+#include "Vulkan/SingleTimeCommands.hpp"
+
 namespace Assets {
 
 TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, uint32_t miplevel, VkFormat format, const unsigned char* data, uint32_t size)
@@ -14,28 +16,32 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	const VkDeviceSize imageSize = size;
 	const auto& device = commandPool.Device();
 
-	auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-	auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	const auto stagingData = stagingBufferMemory.Map(0, imageSize);
-	std::memcpy(stagingData, data, imageSize);
-	stagingBufferMemory.Unmap();
-	
 	// Create the device side image, memory, view and sampler.
 	image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, miplevel, format));
 	imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT));
 	sampler_.reset(new Vulkan::Sampler(device, Vulkan::SamplerConfig()));
 
-	// Transfer the data to device side.
-	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	image_->CopyFrom(commandPool, *stagingBuffer);
+	if(data)
+	{
+		auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+		auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		const auto stagingData = stagingBufferMemory.Map(0, imageSize);
+		std::memcpy(stagingData, data, imageSize);
+		stagingBufferMemory.Unmap();
+
+
+		// Transfer the data to device side.
+		image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		image_->CopyFrom(commandPool, *stagingBuffer);
+
+		// Delete the buffer before the memory
+		stagingBuffer.reset();
+	}
 
 	// cannot done this on non-graphicbit queue
 	//image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	// Delete the buffer before the memory
-	stagingBuffer.reset();
 }
 
 TextureImage::TextureImage(
@@ -114,6 +120,63 @@ TextureImage::~TextureImage()
 	imageView_.reset();
 	image_.reset();
 	imageMemory_.reset();
+}
+
+void TextureImage::UpdateDataMainThread(
+    Vulkan::CommandPool& commandPool,
+    uint32_t startX,
+    uint32_t startY,
+    uint32_t width,
+    uint32_t height,
+    const unsigned char* data,
+    uint32_t size)
+{
+    const auto& device = commandPool.Device();
+
+    // 创建临时暂存缓冲区并复制数据
+    auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    auto stagingBufferMemory = stagingBuffer->AllocateMemory(
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    // 映射内存并复制数据
+    const auto stagingData = stagingBufferMemory.Map(0, size);
+    std::memcpy(stagingData, data, size);
+    stagingBufferMemory.Unmap();
+
+    // 将图像从着色器读取转换为传输目标布局
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // 定义复制区域
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;  // 紧凑排列
+    region.bufferImageHeight = 0;  // 紧凑排列
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageOffset = {static_cast<int32_t>(startX), static_cast<int32_t>(startY), 0};
+    region.imageExtent = {width, height, 1};
+
+    // 执行区域复制
+    Vulkan::SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
+    {
+        vkCmdCopyBufferToImage(
+            commandBuffer,
+            stagingBuffer->Handle(),
+            image_->Handle(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &region);
+    });
+
+    // 复制完成后，将图像转换回着色器只读布局
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // 清理临时资源
+    stagingBuffer.reset();
 }
 
 void TextureImage::MainThreadPostLoading(Vulkan::CommandPool& commandPool)

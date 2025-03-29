@@ -50,6 +50,32 @@ namespace Assets
         {
             return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
         }
+
+        glm::mat4 GetSunViewProjection() const
+        {
+            // 获取阳光方向并规范化
+            vec3 lightDir = normalize(-SunDirection());
+
+            // 计算向上向量（确保不与光线方向共线）
+            vec3 lightUp = abs(lightDir.y) > 0.99f ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.0f, 1.0f, 0.0f);
+
+            // 计算右向量和新的上向量（确保三个向量互相垂直）
+            vec3 lightRight = normalize(cross(lightUp, lightDir));
+            lightUp = normalize(cross(lightDir, lightRight));
+
+            // 定义阴影图覆盖的世界空间大小
+            float halfSize = 60.f;
+
+            // 构建从光源视角的观察矩阵（将光源放在远处）
+            vec3 lightPos = vec3(0) - lightDir * 500.f;
+            mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, lightUp);
+
+            // 创建正交投影矩阵
+            mat4 lightProj = glm::ortho(-halfSize, halfSize, -halfSize, halfSize, 0.1f, 2000.f);
+
+            // 返回组合的视图投影矩阵
+            return lightProj * lightView;
+        }
         
         float ControlSpeed;
         bool GammaCorrection;

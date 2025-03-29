@@ -45,6 +45,15 @@ namespace Assets
 		const Vulkan::Sampler& Sampler() const { return *sampler_; }
 		void MainThreadPostLoading(Vulkan::CommandPool& commandPool);
 
+		void UpdateDataMainThread(
+			Vulkan::CommandPool& commandPool,
+			uint32_t startX,
+			uint32_t startY,
+			uint32_t width,
+			uint32_t height,
+			const unsigned char* data,
+			uint32_t size);
+
 	private:
 
 		std::unique_ptr<Vulkan::Image> image_;

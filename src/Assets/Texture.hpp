@@ -44,6 +44,8 @@ namespace Assets
 		static uint32_t GetTextureIndexByName(const std::string& name);
 
 		std::vector<SphericalHarmonics>& GetHDRSphericalHarmonics() { return hdrSphericalHarmonics_; }
+		Vulkan::CommandPool& GetMainThreadCommandPool() { return mainThreadCommandPool_; }
+
 	private:
 		static GlobalTexturePool* instance_;
 

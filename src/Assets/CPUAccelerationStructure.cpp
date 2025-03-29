@@ -6,6 +6,7 @@
 #include <fstream>
 
 #define TINYBVH_IMPLEMENTATION
+#include "TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include "Utilities/Math.hpp"
@@ -615,30 +616,15 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     // 阴影图分辨率设置
     const int shadowMapSize = 1024;
     shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
-    
-    // 计算平行投影矩阵 - 构建正交边界
-    // 使用阳光方向作为视角方向
-    vec3 lightDir = normalize(-sunDir);
-    vec3 lightUp = abs(lightDir.y) > 0.99f ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.0f, 1.0f, 0.0f);
-    vec3 lightRight = normalize(cross(lightUp, lightDir));
-    lightUp = normalize(cross(lightDir, lightRight));
-    
-    // 计算世界空间大小
 
-    float halfSize = 60.f;
-    
-    // 构建从光源视角的观察矩阵
-    vec3 lightPos = vec3(0) - lightDir * 500.f;
-    mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, lightUp);
-    
-    // 创建正交投影矩阵
-    mat4 lightProj = glm::ortho(-halfSize, halfSize, -halfSize, halfSize, 0.1f, 2000.f);
-    mat4 lightViewProj = lightProj * lightView;
-    mat4 invLVP =  inverse(lightViewProj);
+    // 使用环境设置中的方法获取光源视图投影矩阵
+    mat4 lightViewProj = scene.GetEnvSettings().GetSunViewProjection();
+    mat4 invLVP = inverse(lightViewProj);
+    vec3 lightDir = normalize(-sunDir);
     
     // 多线程渲染阴影图
     TaskCoordinator::GetInstance()->AddParralledTask(
-        [this, shadowMapSize, invLVP, lightDir](ResTask& task)
+        [this, invLVP, lightDir](ResTask& task)
         {
             for (int y = 0; y < shadowMapSize; y++)
             {
@@ -662,32 +648,21 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
                         10000.0f
                     );
                     
-                    // 打射线
+                    // 打射线，后面可以考虑双向，这样还可以取得一个遮挡体积
                     GCpuBvh.Intersect(ray);
                     if (ray.hit.t < 9999.0f)
                     {
-                        shadowMapR32[y * shadowMapSize + x] = uint16_t(ray.hit.t * 50.0f);
+                        shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(ray.hit.t,0));
                     }
                     
                 }
             }
         },
-        [this](ResTask& task)
+        [this, &scene](ResTask& task)
         {
-            fmt::print("阴影图生成完成 ({}x{})\n", 
-                static_cast<int>(sqrt(shadowMapR32.size())),
-                static_cast<int>(sqrt(shadowMapR32.size())));
-            
-            // 可选：将阴影图保存到文件以便调试
-            //#ifdef _DEBUG
-            // std::ofstream outFile("shadowmap.raw", std::ios::binary);
-            // if (outFile)
-            // {
-            //     outFile.write(reinterpret_cast<const char*>(shadowMapR32.data()), 
-            //                   shadowMapR32.size() * sizeof(uint16_t));
-            //     outFile.close();
-            // }
-            //#endif
+            Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
+            scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
+                reinterpret_cast<const unsigned char *>(shadowMapR32.data()), shadowMapR32.size() * sizeof(uint32_t));
         }
     );
 }

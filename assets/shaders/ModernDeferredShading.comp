@@ -20,6 +20,8 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
+//layout(binding = 12) uniform sampler2D ShadowMapSampler;
+
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
