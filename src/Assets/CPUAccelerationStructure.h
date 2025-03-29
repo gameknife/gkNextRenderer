@@ -78,6 +78,8 @@ public:
 
     void ClearAmbientCubes();
 
+    void GenShadowMap(Assets::Scene& scene);
+
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
@@ -91,6 +93,8 @@ private:
     std::vector<uint32_t> lastBatchTasks;
 
     std::vector<std::tuple<glm::ivec3, ECubeProcType> > needUpdateGroups;
+
+    std::vector<uint16_t> shadowMapR32;
 
     bool needFlush = false;
 };

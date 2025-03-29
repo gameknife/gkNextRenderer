@@ -130,7 +130,7 @@ AmbientCube FetchCube(ivec3 probePos)
 vec4 interpolateDIProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
     }
 
@@ -197,7 +197,7 @@ vec4 interpolateDIProbes(vec3 pos, vec3 normal) {
 vec4 interpolateIIProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
     }
 
@@ -267,7 +267,7 @@ vec4 interpolateIIProbes(vec3 pos, vec3 normal) {
 vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
     }
 
@@ -337,7 +337,7 @@ vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
 vec4 interpolateProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY || pos.y > CUBE_SIZE_Z || pos.z > CUBE_SIZE_XY) {
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
     }
 

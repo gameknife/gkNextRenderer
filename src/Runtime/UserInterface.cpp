@@ -30,6 +30,7 @@
 
 #include "Engine.hpp"
 #include "Options.hpp"
+#include "TaskCoordinator.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
@@ -413,6 +414,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
 		
 		ImGui::Text("Texture: %d", statistics.TextureCount);
+
+		uint32_t tasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
+		ImGui::Text("Tasks: %d", tasks);
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display
