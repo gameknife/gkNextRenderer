@@ -27,6 +27,8 @@ struct ALIGN_16 UniformBufferObject
 	vec4 SunColor;
 	vec4 BackGroundColor;	//not used
 	
+	mat4 SunViewProjection;
+	
 	float Aperture;
 	float FocusDistance;
 	float SkyRotation;

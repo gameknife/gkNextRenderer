@@ -357,6 +357,9 @@ bool NextEngine::Tick()
 
 void NextEngine::End()
 {
+    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    
     physicsEngine_->Stop();
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
@@ -693,6 +696,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+
+    ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
 
     ubo.SelectedId = scene_->GetSelectedId();
 

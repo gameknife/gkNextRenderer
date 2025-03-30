@@ -10,6 +10,7 @@
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -225,6 +226,8 @@ namespace Vulkan::ModernDeferred
 
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
+            {12, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -274,6 +277,9 @@ namespace Vulkan::ModernDeferred
             VkDescriptorBufferInfo hdrshBufferInfo = {};
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
             hdrshBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorImageInfo Info12 = {scene.ShadowMap().Sampler().Handle(), scene.ShadowMap().ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -289,6 +295,7 @@ namespace Vulkan::ModernDeferred
 
                 descriptorSets.Bind(i, 10, ambientCubeBufferInfo),
                 descriptorSets.Bind(i, 11, hdrshBufferInfo),
+                descriptorSets.Bind(i, 12, Info12),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

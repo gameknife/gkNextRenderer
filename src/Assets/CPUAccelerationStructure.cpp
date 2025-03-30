@@ -624,7 +624,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     
     // 多线程渲染阴影图
     TaskCoordinator::GetInstance()->AddParralledTask(
-        [this, invLVP, lightDir](ResTask& task)
+        [this, lightViewProj, invLVP, lightDir](ResTask& task)
         {
             for (int y = 0; y < shadowMapSize; y++)
             {
@@ -652,7 +652,18 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
                     GCpuBvh.Intersect(ray);
                     if (ray.hit.t < 9999.0f)
                     {
-                        shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(ray.hit.t,0));
+                        // 计算光线与场景的交点
+                        vec3 hitPoint = origin + rayDir * ray.hit.t;
+                        
+                        // 将交点变换回光源的视图投影空间
+                        vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
+                        //hitPosInLightSpace.xyz /= hitPosInLightSpace.w; // 透视除法
+                        
+                        // 从NDC [-1,1]转换到[0,1]范围
+                        float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
+                        
+                        // 存储深度值
+                        shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(depth, 0));
                     }
                     
                 }
@@ -662,7 +673,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
         {
             Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
             scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
-                reinterpret_cast<const unsigned char *>(shadowMapR32.data()), shadowMapR32.size() * sizeof(uint32_t));
+                reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(uint32_t));
         }
     );
 }

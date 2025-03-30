@@ -20,7 +20,7 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
-//layout(binding = 12) uniform sampler2D ShadowMapSampler;
+layout(binding = 12) uniform usampler2D ShadowMapSampler;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -36,6 +36,106 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 #include "common/VertexFunc.glsl"
 #include "common/SampleIBL.glsl"
+
+float traceScreenSpaceContactShadow(vec3 position, vec3 lightDir, ivec2 pixelCoord, float maxDistance) {
+    // 屏幕空间步进参数
+    const int maxSteps = 16;
+    float stepSize = maxDistance / float(maxSteps);
+    vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
+
+    // 起始点
+    vec3 rayStart = position + lightDir * 0.1;
+
+    // 追踪光线
+    for (int i = 0; i < maxSteps; i++) {
+        // 移动光线
+        vec3 currentPos = rayStart + lightDir * (i * stepSize);
+
+        // 将当前位置转到屏幕空间
+        vec4 currentPosProj = Camera.ViewProjection * vec4(currentPos, 1.0);
+        currentPosProj.xyz /= currentPosProj.w;
+        vec2 currentUV = currentPosProj.xy * 0.5 + 0.5;
+
+        // 检查是否超出屏幕
+        if (any(lessThan(currentUV, vec2(0.0))) || any(greaterThan(currentUV, vec2(1.0))))
+        continue;
+
+        // 采样深度
+        ivec2 sampleCoord = ivec2(currentUV * vec2(imageSize(MiniGBuffer)));
+        uvec2 vBufferSample = imageLoad(MiniGBuffer, sampleCoord).rg;
+
+        // 如果没有命中物体，继续
+        if (vBufferSample.r == 0)
+        continue;
+
+        // 重建世界空间位置
+        vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
+        vec4 target = Camera.ProjectionInverse * (vec4(currentPosProj.x, currentPosProj.y, 1, 1));
+        vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+
+        vec3 ray_dir = normalize(dir.xyz);
+        
+        Vertex sampleVertex = get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir);
+
+        float sceneDepth = length(sampleVertex.Position - origin.xyz);
+        float rayDepth = length(currentPos - origin.xyz);
+        float depthDiff = sceneDepth - rayDepth;
+
+        // 正确的深度比较方法
+        // 将当前世界空间位置投影到屏幕空间
+        vec4 currentPosScreenSpace = Camera.ViewProjection * vec4(currentPos, 1.0);
+        currentPosScreenSpace.xyz /= currentPosScreenSpace.w;
+        float currentDepth = currentPosScreenSpace.z * 0.5 + 0.5; // 转换到[0,1]范围
+
+        // 获取场景中该点的屏幕空间深度
+        vec4 samplePosScreenSpace = Camera.ViewProjection * vec4(sampleVertex.Position, 1.0);
+        samplePosScreenSpace.xyz /= samplePosScreenSpace.w;
+        float sampleDepth = samplePosScreenSpace.z * 0.5 + 0.5; // 转换到[0,1]范围
+
+        // 比较深度值
+        float depthTolerance = 0.000001; // 屏幕空间深度的容差应该更小
+        // 如果当前点深度大于场景深度（在场景点后面），则没有遮挡
+        // 如果当前点深度小于场景深度（在场景点前面），则有遮挡
+        if (currentDepth > sampleDepth && currentDepth < sampleDepth + depthTolerance) {
+            // 发现阻挡（光线在穿过场景点之前被遮挡）
+            return 0.0;
+        }
+    }
+
+    // 没有发现阻挡
+    return 1.0;
+}
+
+float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
+    // 计算光源空间坐标
+    vec4 posInLightMap = Camera.SunViewProjection * vec4(worldPos + jit * 4.0f, 1.0f);
+
+    // 将光源空间坐标转换到NDC空间 [-1,1] 再转到 [0,1] 的纹理空间
+    vec3 projCoords = posInLightMap.xyz / posInLightMap.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.y = 1.0 - projCoords.y;
+
+    float currentDepth = projCoords.z;
+
+    // 基础偏移值
+    float bias = 0.0005;
+
+    // 根据法线与光照方向的夹角调整偏移值
+    float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
+    bias = mix(0.0005, 0.0002, cosTheta); // 斜面使用更大的偏移值
+
+    // 从阴影贴图中采样获取最近深度
+    float closestDepth = unpackHalf2x16(texture(ShadowMapSampler, projCoords.xy).x).x;
+    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
+
+    // 在主阴影通过的情况下进行屏幕空间接触阴影检测
+    if (shadow > 0.01) {
+        float contactShadow = traceScreenSpaceContactShadow(worldPos + jit, normalize(Camera.SunDirection.xyz), ipos, 1.0);
+        shadow = min(shadow, contactShadow); // 结合两种阴影结果
+    }
+
+    return shadow;
+}
 
 void main() {
 
@@ -136,16 +236,21 @@ void main() {
     const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 1;
-    const float range = 0.0f;
+
+    float shadow = 0.0f;
+    const int jitcount = 4;
+    const float range = 0.08f;
     for(int i = 0; i < jitcount; i++) {
-        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * range;
+        indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
+        shadow += getShadow(v.Position, jit, normal, ipos);
     }
-    indirectColor = indirectColor / float(jitcount);
-    
+    shadow /= float(jitcount);
+    indirectColor /= float(jitcount);
+
     vec4 outColor = albedo * vec4(indirectColor.rgb,1);
+    outColor += albedo * d * shadow;
     
     if(Camera.HDR)
     {
@@ -155,4 +260,6 @@ void main() {
     {
         imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
     }
+
+    //imageStore(OutImage, ipos, vec4(closestDepth));
 }
