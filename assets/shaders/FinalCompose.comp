@@ -142,6 +142,12 @@ void main() {
     {
         Total = imageLoad(InImage, ipos).rgb;
     }
+
+    if( Camera.DebugDraw_Lighting )
+    {
+        vec3 albedo = imageLoad(InAlbedo, ipos).rgb;
+        Total = Total / (albedo + vec3(0.001));
+    }
     
     if(Camera.HDR)
     {

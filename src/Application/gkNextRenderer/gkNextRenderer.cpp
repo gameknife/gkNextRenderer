@@ -214,7 +214,6 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &UserSetting.AdaptiveSteps, 2, 64);
 			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
 			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
-			ImGui::Checkbox(LOCTEXT("FastInterpole"), &UserSetting.FastInterpole);
 			ImGui::SliderInt(LOCTEXT("AmbientSpeed"), &UserSetting.BakeSpeedLevel, 0, 2);
 
 			
@@ -264,6 +263,7 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Separator();
 			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &UserSetting.ShowVisualDebug);
+			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &UserSetting.DebugDraw_Lighting);
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &UserSetting.HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 			ImGui::NewLine();
 

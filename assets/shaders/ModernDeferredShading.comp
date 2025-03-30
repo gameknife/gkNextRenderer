@@ -42,7 +42,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 // 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
 bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
     // 屏幕空间步进参数
-    const int maxSteps = 16;
+    const int maxSteps = 8;
     float stepSize = maxDistance / float(maxSteps);
     vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
 
@@ -95,7 +95,7 @@ bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, out vec3 
         float depthTolerance = 0.5f;
         if ( viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance) {
             // 发现阻挡（光线在穿过场景点之前被遮挡）
-            outPosition = currentPos;
+            outPosition = sampleVertex.Position;
             outNormal = normalize(sampleVertex.Normal.rgb);
 
             // 获取材质ID
@@ -120,46 +120,15 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
     vec3 offsetPos = position + normal * 0.01;
 
     // 在屏幕空间中查找反弹点
-    if (traceInScreenSpace(offsetPos, rayDir, 2.0, hitPosition, hitNormal, hitMaterialIdx)) {
+    if (traceInScreenSpace(offsetPos, rayDir, 1.0, hitPosition, hitNormal, hitMaterialIdx)) {
         // 获取反弹点的材质
         Material hitMaterial = Materials[hitMaterialIdx];
-
         // 计算反弹点的基础颜色
         vec4 hitAlbedo = hitMaterial.Diffuse;
-
-        // 如果有纹理，采样纹理颜色
-//        if (hitMaterial.DiffuseTextureId >= 0) {
-//            // 需要计算反弹点的UV坐标，这里使用一个近似值
-//            // 实际情况中可能需要更复杂的计算
-//            vec2 hitUV = vec2(0.5); // 简化处理，实际应从trace结果中计算
-//            vec4 tex = texture(TextureSamplers[hitMaterial.DiffuseTextureId], hitUV);
-//            hitAlbedo *= tex * tex;
-//        }
-
-        // 计算从光源到反弹点的阴影
-        //float hitShadow = getShadow(hitPosition, vec3(0), hitNormal, ipos);
-
-        // 计算反弹点接收到的直接光照
-        //vec3 lightVector = normalize(Camera.SunDirection.xyz);
-        //float NdotL = max(dot(lightVector, hitNormal), 0.0);
-        //vec4 directLight = Camera.SunColor * NdotL * 0.2 * hitShadow;
-
         // 计算反弹点的环境光照
-        vec4 hitAmbient = interpolateIIProbes((hitPosition - CUBE_OFFSET) / CUBE_UNIT, hitNormal) * 2.0f;
-
+        vec4 hitAmbient = interpolateProbes((hitPosition - CUBE_OFFSET) / CUBE_UNIT, hitNormal);
         // 组合反弹点的光照结果
         reflectionColor = hitAlbedo * hitAmbient;
-
-        // 根据材质的反射特性和入射角度，调整反射光强度
-        //float fresnel = Schlick(max(dot(-rayDir, normal), 0.0), 1.5);
-        //float reflectionStrength = mix(0.04, 1.0, fresnel);
-
-        // 考虑材质的金属度和粗糙度
-        //Material sourceMaterial = Materials[sourceMaterialIdx];
-        //reflectionStrength *= mix(0.5, 1.0, sourceMaterial.Metalness);
-        //reflectionStrength *= (1.0 - sourceMaterial.Roughness);
-
-        //reflectionColor *= reflectionStrength;
         return true;
     }
     return false;
@@ -192,7 +161,7 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
         vec3 outPosition;
         vec3 outNormal;
         uint outMaterialIdx;
-        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 2.0, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
+        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 1.0, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
         shadow = min(shadow, contactShadow); // 结合两种阴影结果
     }
 
@@ -304,7 +273,7 @@ void main() {
 	const float metalProb = mat.Metalness;
     	
 	const vec3 lightVector = Camera.SunDirection.xyz;
-    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
+    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.25f;
     
     vec4 indirectColor = vec4(0);
 
@@ -324,7 +293,7 @@ void main() {
         else
         {
             // 没命中，说明可能接受到了天光，直接采样skyprobes，还可以考虑远场遮蔽
-            indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
+            indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal) * 2.0f;
         }
         
         if(Camera.HasSun)
@@ -344,14 +313,4 @@ void main() {
     imageStore(OutAlbedoBuffer, ipos, albedo);
     imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
     imageStore(OutImage, ipos, outColor);
-//    if(Camera.HDR)
-//    {
-//        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
-//    }
-//    else
-//    {
-//        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
-//    }
-
-    //imageStore(OutImage, ipos, vec4(closestDepth));
 }
