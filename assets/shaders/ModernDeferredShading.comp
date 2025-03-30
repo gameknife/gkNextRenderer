@@ -36,20 +36,20 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 #include "common/VertexFunc.glsl"
 #include "common/SampleIBL.glsl"
-
-float traceScreenSpaceContactShadow(vec3 position, vec3 lightDir, ivec2 pixelCoord, float maxDistance) {
+// 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
+bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
     // 屏幕空间步进参数
-    const int maxSteps = 16;
+    const int maxSteps = 10;
     float stepSize = maxDistance / float(maxSteps);
     vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
 
     // 起始点
-    vec3 rayStart = position + lightDir * 0.1;
+    vec3 rayStart = position + rayDir * 0.1;
 
     // 追踪光线
     for (int i = 0; i < maxSteps; i++) {
         // 移动光线
-        vec3 currentPos = rayStart + lightDir * (i * stepSize);
+        vec3 currentPos = rayStart + rayDir * (i * stepSize);
 
         // 将当前位置转到屏幕空间
         vec4 currentPosProj = Camera.ViewProjection * vec4(currentPos, 1.0);
@@ -74,12 +74,8 @@ float traceScreenSpaceContactShadow(vec3 position, vec3 lightDir, ivec2 pixelCoo
         vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
 
         vec3 ray_dir = normalize(dir.xyz);
-        
-        Vertex sampleVertex = get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir);
 
-        float sceneDepth = length(sampleVertex.Position - origin.xyz);
-        float rayDepth = length(currentPos - origin.xyz);
-        float depthDiff = sceneDepth - rayDepth;
+        Vertex sampleVertex = get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir);
 
         // 正确的深度比较方法
         // 将当前世界空间位置投影到屏幕空间
@@ -94,16 +90,76 @@ float traceScreenSpaceContactShadow(vec3 position, vec3 lightDir, ivec2 pixelCoo
 
         // 比较深度值
         float depthTolerance = 0.000001; // 屏幕空间深度的容差应该更小
-        // 如果当前点深度大于场景深度（在场景点后面），则没有遮挡
-        // 如果当前点深度小于场景深度（在场景点前面），则有遮挡
         if (currentDepth > sampleDepth && currentDepth < sampleDepth + depthTolerance) {
             // 发现阻挡（光线在穿过场景点之前被遮挡）
-            return 0.0;
+            outPosition = currentPos;
+            outNormal = normalize(sampleVertex.Normal.rgb);
+
+            // 获取材质ID
+            NodeProxy hitNode = NodeProxies[vBufferSample.x - 1];
+            outMaterialIdx = hitNode.matId[sampleVertex.MaterialIndex];
+
+            return true;
         }
     }
 
     // 没有发现阻挡
-    return 1.0;
+    return false;
+}
+
+// 使用屏幕空间近场反弹光照计算
+bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
+    vec3 hitPosition, hitNormal;
+    uint hitMaterialIdx;
+    reflectionColor = vec4(0);
+
+    // 偏移起始位置，避免自相交
+    vec3 offsetPos = position + normal * 0.01;
+
+    // 在屏幕空间中查找反弹点
+    if (traceInScreenSpace(offsetPos, rayDir, 2.0, hitPosition, hitNormal, hitMaterialIdx)) {
+        // 获取反弹点的材质
+        Material hitMaterial = Materials[hitMaterialIdx];
+
+        // 计算反弹点的基础颜色
+        vec4 hitAlbedo = hitMaterial.Diffuse;
+
+        // 如果有纹理，采样纹理颜色
+//        if (hitMaterial.DiffuseTextureId >= 0) {
+//            // 需要计算反弹点的UV坐标，这里使用一个近似值
+//            // 实际情况中可能需要更复杂的计算
+//            vec2 hitUV = vec2(0.5); // 简化处理，实际应从trace结果中计算
+//            vec4 tex = texture(TextureSamplers[hitMaterial.DiffuseTextureId], hitUV);
+//            hitAlbedo *= tex * tex;
+//        }
+
+        // 计算从光源到反弹点的阴影
+        //float hitShadow = getShadow(hitPosition, vec3(0), hitNormal, ipos);
+
+        // 计算反弹点接收到的直接光照
+        //vec3 lightVector = normalize(Camera.SunDirection.xyz);
+        //float NdotL = max(dot(lightVector, hitNormal), 0.0);
+        //vec4 directLight = Camera.SunColor * NdotL * 0.2 * hitShadow;
+
+        // 计算反弹点的环境光照
+        vec4 hitAmbient = interpolateIIProbes((hitPosition - CUBE_OFFSET) / CUBE_UNIT, hitNormal) * 2.0f;
+
+        // 组合反弹点的光照结果
+        reflectionColor = hitAlbedo * hitAmbient;
+
+        // 根据材质的反射特性和入射角度，调整反射光强度
+        //float fresnel = Schlick(max(dot(-rayDir, normal), 0.0), 1.5);
+        //float reflectionStrength = mix(0.04, 1.0, fresnel);
+
+        // 考虑材质的金属度和粗糙度
+        //Material sourceMaterial = Materials[sourceMaterialIdx];
+        //reflectionStrength *= mix(0.5, 1.0, sourceMaterial.Metalness);
+        //reflectionStrength *= (1.0 - sourceMaterial.Roughness);
+
+        //reflectionColor *= reflectionStrength;
+        return true;
+    }
+    return false;
 }
 
 float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
@@ -130,7 +186,10 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 
     // 在主阴影通过的情况下进行屏幕空间接触阴影检测
     if (shadow > 0.01) {
-        float contactShadow = traceScreenSpaceContactShadow(worldPos + jit, normalize(Camera.SunDirection.xyz), ipos, 1.0);
+        vec3 outPosition;
+        vec3 outNormal;
+        uint outMaterialIdx;
+        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 2.0, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
         shadow = min(shadow, contactShadow); // 结合两种阴影结果
     }
 
@@ -238,10 +297,23 @@ void main() {
     vec4 indirectColor = vec4(0);
 
     float shadow = 0.0f;
-    const int jitcount = 4;
+    const int jitcount = 8;
     const float range = 0.08f;
     for(int i = 0; i < jitcount; i++) {
-        indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
+        
+        // 这里用traceInScreenSpace在屏幕空间trace，如果射到了物件，在采样interpolate反弹，来做近场反弹，如果没有trace结果，再fallback
+        //vec3 reflectDir = reflect(ray_dir, normal);
+        vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
+        vec4 reflectionColor;
+        if( calculateSSInterreflection(v.Position, reflectDir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
+        {
+            indirectColor += reflectionColor;
+        }
+        else
+        {
+            // 没命中，说明可能接受到了天光，直接采样skyprobes，还可以考虑远场遮蔽
+            indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
+        }
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
         shadow += getShadow(v.Position, jit, normal, ipos);
