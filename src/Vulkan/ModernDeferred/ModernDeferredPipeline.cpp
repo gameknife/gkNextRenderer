@@ -201,8 +201,10 @@ namespace Vulkan::ModernDeferred
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
-                                     const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
+    ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+        const ImageView& motionVectorImageView,
+        const ImageView& albedoImageView, const ImageView& normalImageView,
+        const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -228,6 +230,9 @@ namespace Vulkan::ModernDeferred
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             
             {12, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -239,6 +244,8 @@ namespace Vulkan::ModernDeferred
             VkDescriptorImageInfo Info0 = {NULL, miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info13 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info14 = {NULL, normalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
 
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -296,6 +303,8 @@ namespace Vulkan::ModernDeferred
                 descriptorSets.Bind(i, 10, ambientCubeBufferInfo),
                 descriptorSets.Bind(i, 11, hdrshBufferInfo),
                 descriptorSets.Bind(i, 12, Info12),
+                descriptorSets.Bind(i, 13, Info13),
+                descriptorSets.Bind(i, 14, Info14),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

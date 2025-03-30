@@ -30,6 +30,7 @@ namespace Assets
 
 
         cpuShadowMap_.reset(new TextureImage(commandPool, 1024, 1024, 1, VK_FORMAT_R32_UINT, nullptr, 0));
+        cpuShadowMap_->SetDebugName("Shadowmap");
     }
 
     Scene::~Scene()

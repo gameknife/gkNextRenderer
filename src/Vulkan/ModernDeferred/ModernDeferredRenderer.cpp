@@ -17,6 +17,8 @@
 #include "Utilities/Exception.hpp"
 #include <array>
 
+#include "Utilities/Math.hpp"
+
 namespace Vulkan::ModernDeferred {
 
 ModernDeferredRenderer::ModernDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
@@ -36,19 +38,73 @@ void ModernDeferredRenderer::CreateSwapChain()
 
 	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 	
-	rtVisibilityBuffer_.reset(new RenderImage(Device(), extent, VK_FORMAT_R32G32_UINT, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
+	rtVisibility0.reset(new RenderImage(Device(), extent,
+										VK_FORMAT_R32G32_UINT,
+										VK_IMAGE_TILING_OPTIMAL,
+										VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"visibility0"));
 
-	rtOutput_.reset(new RenderImage(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-
-	rtMotionVector_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT));
+	rtVisibility1.reset(new RenderImage(Device(), extent,
+										VK_FORMAT_R32G32_UINT,
+										VK_IMAGE_TILING_OPTIMAL,
+										VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"visibility1"));
 	
-	
-	deferredFrameBuffer_.reset(new FrameBuffer(rtVisibilityBuffer_->GetImageView(), visibilityPipeline_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), rtVisibilityBuffer_->GetImageView(), rtOutput_->GetImageView(), rtMotionVector_->GetImageView(), UniformBuffers(), GetScene()));
+	rtOutput_.reset(new RenderImage(Device(), extent,
+							   VK_FORMAT_R16G16B16A16_SFLOAT,
+							   VK_IMAGE_TILING_OPTIMAL,
+							   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 
+	rtMotionVector_.reset(new RenderImage(Device(), extent,
+										 VK_FORMAT_R32G32_SFLOAT,
+										 VK_IMAGE_TILING_OPTIMAL,
+										 VK_IMAGE_USAGE_STORAGE_BIT));
+
+	rtAccumlation.reset(new RenderImage(Device(), extent,
+										VK_FORMAT_R16G16B16A16_SFLOAT,
+										VK_IMAGE_TILING_OPTIMAL,
+										VK_IMAGE_USAGE_STORAGE_BIT));
+
+	rtPingPong0.reset(new RenderImage(Device(), extent,
+									  VK_FORMAT_R16G16B16A16_SFLOAT,
+									  VK_IMAGE_TILING_OPTIMAL,
+									  VK_IMAGE_USAGE_STORAGE_BIT));
+
+	rtPingPong1.reset(new RenderImage(Device(), extent,
+									  VK_FORMAT_R16G16B16A16_SFLOAT,
+									  VK_IMAGE_TILING_OPTIMAL,
+									  VK_IMAGE_USAGE_STORAGE_BIT));
+
+	rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
+	rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
+     
+	deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(),
+		visibilityPipeline_->RenderPass()));
+	
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(),
+		rtVisibility0->GetImageView(),
+		rtAccumlation->GetImageView(),
+		rtMotionVector_->GetImageView(),
+		rtAlbedo_->GetImageView(),
+		rtNormal_->GetImageView(),
+		UniformBuffers(), GetScene()));
+
+	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
+																		 rtAccumlation->GetImageView(),
+																		 rtPingPong0->GetImageView(),
+																		 rtPingPong1->GetImageView(),
+																		 rtMotionVector_->GetImageView(),
+																		 rtVisibility0->GetImageView(),
+																		 rtVisibility1->GetImageView(),
+																		 rtOutput_->GetImageView(),
+																		 rtNormal_->GetImageView(),
+																		 UniformBuffers(), GetScene()));
+
+	composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(),
+		rtOutput_->GetImageView(),
+		rtAlbedo_->GetImageView(),
+		rtNormal_->GetImageView(),
+		rtVisibility0->GetImageView(),
+		rtVisibility1->GetImageView(),
+		UniformBuffers()));
 }
 
 void ModernDeferredRenderer::DeleteSwapChain()
@@ -57,8 +113,20 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	deferredShadingPipeline_.reset();
 	
 	deferredFrameBuffer_.reset();
+	accumulatePipeline_.reset();
+	composePipeline_.reset();
 
-	rtVisibilityBuffer_.reset();
+	rtAccumlation.reset();
+
+	rtPingPong0.reset();
+	rtPingPong1.reset();
+	
+	rtVisibility0.reset();
+	rtVisibility1.reset();
+
+	rtNormal_.reset();
+	rtAlbedo_.reset();
+	
 	rtOutput_.reset();
 	rtMotionVector_.reset();
 }
@@ -73,7 +141,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
 
-	rtVisibilityBuffer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+	rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			   
 	std::array<VkClearValue, 2> clearValues = {};
@@ -112,14 +180,19 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		}
 		vkCmdEndRenderPass(commandBuffer);
 
-		rtOutput_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_GENERAL);
+		// always draw to visibility0, then copy to visibility1 after the shading, v0 is current frame, v1 is last frame
+		rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+		rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	}
 
-		rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_GENERAL);
-
-		rtVisibilityBuffer_->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-			VK_IMAGE_LAYOUT_GENERAL);
+	{
+		rtOutput_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtPingPong1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	}
 	
 	{
@@ -142,29 +215,50 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
 #endif
 
-		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		rtAccumlation->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	}
 
-		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
-								   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-								   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	{
+		SCOPED_GPU_TIMER("reproject pass");
+		VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 4), 1);
+
+		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 	
-	// Copy output image into swap-chain image.
-	VkImageCopy copyRegion;
-	copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-	copyRegion.srcOffset = {0, 0, 0};
-	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-	copyRegion.dstOffset = {0, 0, 0};
-	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+	{
+		SCOPED_GPU_TIMER("compose pass");
+            
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+					   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_GENERAL);
+            
+		VkDescriptorSet DescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								composePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
-	vkCmdCopyImage(commandBuffer,
-				   rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				   1, &copyRegion);
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
 
-	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
-							   VK_ACCESS_TRANSFER_WRITE_BIT,
-							   0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	{
+		SCOPED_GPU_TIMER("copyvb pass");
+		
+		rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        
+		VkImageCopy copyRegion;
+		copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		copyRegion.srcOffset = {0, 0, 0};
+		copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		copyRegion.dstOffset = {0, 0, 0};
+		copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+        
+		vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+	}
 }
 }

@@ -22,6 +22,9 @@ layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; }
 
 layout(binding = 12) uniform usampler2D ShadowMapSampler;
 
+layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
+layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
+
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 #include "common/Vertex.glsl"
@@ -39,7 +42,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 // 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
 bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
     // 屏幕空间步进参数
-    const int maxSteps = 10;
+    const int maxSteps = 16;
     float stepSize = maxDistance / float(maxSteps);
     vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
 
@@ -79,18 +82,18 @@ bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, out vec3 
 
         // 正确的深度比较方法
         // 将当前世界空间位置投影到屏幕空间
-        vec4 currentPosScreenSpace = Camera.ViewProjection * vec4(currentPos, 1.0);
-        currentPosScreenSpace.xyz /= currentPosScreenSpace.w;
-        float currentDepth = currentPosScreenSpace.z * 0.5 + 0.5; // 转换到[0,1]范围
+        //vec4 currentPosScreenSpace = Camera.ModelView * vec4(currentPos, 1.0);
 
         // 获取场景中该点的屏幕空间深度
-        vec4 samplePosScreenSpace = Camera.ViewProjection * vec4(sampleVertex.Position, 1.0);
-        samplePosScreenSpace.xyz /= samplePosScreenSpace.w;
-        float sampleDepth = samplePosScreenSpace.z * 0.5 + 0.5; // 转换到[0,1]范围
+        //vec4 samplePosScreenSpace = Camera.ModelView * vec4(sampleVertex.Position, 1.0);
+        
+        float viewSpaceCurrentDepth = (Camera.ModelView * vec4(currentPos, 1.0)).z;
+        float viewSpaceSampleDepth = (Camera.ModelView * vec4(sampleVertex.Position, 1.0)).z;
 
         // 比较深度值
-        float depthTolerance = 0.000001; // 屏幕空间深度的容差应该更小
-        if (currentDepth > sampleDepth && currentDepth < sampleDepth + depthTolerance) {
+        //float depthTolerance = 0.000001; // 屏幕空间深度的容差应该更小
+        float depthTolerance = 0.5f;
+        if ( viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance) {
             // 发现阻挡（光线在穿过场景点之前被遮挡）
             outPosition = currentPos;
             outNormal = normalize(sampleVertex.Normal.rgb);
@@ -215,12 +218,21 @@ void main() {
 
 
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
-
+    NodeProxy node = NodeProxies[vBuffer.x - 1];
+    
     vec3 normal = normalize( v.Normal.rgb);
     vec3 tangent = normalize( v.Tangent.rgb);
     vec3 bitangent = cross(normal, tangent);
+
+    // calculate the motion vector
+    vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+    vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
+
+    vec4 prevFrameHPos = Camera.PrevViewProjection * node.combinedPrevTS * vec4(v.Position, 1);
+    vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5) * vec2(size));
+    vec2 motion = prevfpos - currfpos;
+    imageStore(OutMotionVector, ipos, vec4(motion,0,0));
     
-    NodeProxy node = NodeProxies[vBuffer.x - 1];
     uint materialIndex = 0;
     // here if direct address with node.matId[v.MaterialIndex] will too slow on android
     switch (v.MaterialIndex) {
@@ -297,7 +309,7 @@ void main() {
     vec4 indirectColor = vec4(0);
 
     float shadow = 0.0f;
-    const int jitcount = 8;
+    const int jitcount = 1;
     const float range = 0.08f;
     for(int i = 0; i < jitcount; i++) {
         
@@ -314,24 +326,32 @@ void main() {
             // 没命中，说明可能接受到了天光，直接采样skyprobes，还可以考虑远场遮蔽
             indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal);
         }
-        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
-        vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        shadow += getShadow(v.Position, jit, normal, ipos);
+        
+        if(Camera.HasSun)
+        {
+            vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
+            vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
+            shadow += getShadow(v.Position, jit, normal, ipos);  
+        }
     }
     shadow /= float(jitcount);
     indirectColor /= float(jitcount);
 
     vec4 outColor = albedo * vec4(indirectColor.rgb,1);
     outColor += albedo * d * shadow;
-    
-    if(Camera.HDR)
-    {
-        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
-    }
-    else
-    {
-        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
-    }
+    outColor.a = 1.0f;
+
+    imageStore(OutAlbedoBuffer, ipos, albedo);
+    imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
+    imageStore(OutImage, ipos, outColor);
+//    if(Camera.HDR)
+//    {
+//        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
+//    }
+//    else
+//    {
+//        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
+//    }
 
     //imageStore(OutImage, ipos, vec4(closestDepth));
 }

@@ -95,6 +95,7 @@ private:
     std::vector<std::tuple<glm::ivec3, ECubeProcType> > needUpdateGroups;
 
     std::vector<uint32_t> shadowMapR32;
+    bool generatingShadowMap = false;
 
     bool needFlush = false;
 };

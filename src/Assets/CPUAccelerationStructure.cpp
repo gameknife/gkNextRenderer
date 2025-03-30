@@ -605,11 +605,13 @@ void FCPUAccelerationStructure::ClearAmbientCubes()
 
 void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
 {
-    if (bvhInstanceList.empty())
+    if (bvhInstanceList.empty() || generatingShadowMap)
     {
         fmt::print("无法生成阴影图：场景中没有实例\n");
         return;
     }
+
+    generatingShadowMap = true;
 
     const vec3& sunDir = scene.GetEnvSettings().SunDirection();
     
@@ -623,57 +625,63 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     vec3 lightDir = normalize(-sunDir);
     
     // 多线程渲染阴影图
-    TaskCoordinator::GetInstance()->AddParralledTask(
-        [this, lightViewProj, invLVP, lightDir](ResTask& task)
+    // TaskCoordinator::GetInstance()->AddParralledTask(
+    //     [this, lightViewProj, invLVP, lightDir](ResTask& task)
+    //     {
+    //         
+    //     },
+    //     [this, &scene](ResTask& task)
+    //     {
+    //
+    //     }
+    // );
+
+    for (int y = 0; y < shadowMapSize; y++)
+    {
+        for (int x = 0; x < shadowMapSize; x++)
         {
-            for (int y = 0; y < shadowMapSize; y++)
+            // 计算NDC坐标
+            float ndcX = (x / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
+            float ndcY = 1.0f - (y / static_cast<float>(shadowMapSize - 1)) * 2.0f; // 翻转Y轴
+                    
+            // 从NDC空间变换到世界空间
+            vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f); // 近平面
+            worldPos /= worldPos.w;
+                    
+            // 发射光线
+            vec3 origin = vec3(worldPos);
+            vec3 rayDir = normalize(lightDir);
+                    
+            tinybvh::Ray ray(
+                tinybvh::bvhvec3(origin.x, origin.y, origin.z),
+                tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
+                10000.0f
+            );
+                    
+            // 打射线，后面可以考虑双向，这样还可以取得一个遮挡体积
+            GCpuBvh.Intersect(ray);
+            if (ray.hit.t < 9999.0f)
             {
-                for (int x = 0; x < shadowMapSize; x++)
-                {
-                    // 计算NDC坐标
-                    float ndcX = (x / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
-                    float ndcY = 1.0f - (y / static_cast<float>(shadowMapSize - 1)) * 2.0f; // 翻转Y轴
-                    
-                    // 从NDC空间变换到世界空间
-                    vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f); // 近平面
-                    worldPos /= worldPos.w;
-                    
-                    // 发射光线
-                    vec3 origin = vec3(worldPos);
-                    vec3 rayDir = normalize(lightDir);
-                    
-                    tinybvh::Ray ray(
-                        tinybvh::bvhvec3(origin.x, origin.y, origin.z),
-                        tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
-                        10000.0f
-                    );
-                    
-                    // 打射线，后面可以考虑双向，这样还可以取得一个遮挡体积
-                    GCpuBvh.Intersect(ray);
-                    if (ray.hit.t < 9999.0f)
-                    {
-                        // 计算光线与场景的交点
-                        vec3 hitPoint = origin + rayDir * ray.hit.t;
+                // 计算光线与场景的交点
+                vec3 hitPoint = origin + rayDir * ray.hit.t;
                         
-                        // 将交点变换回光源的视图投影空间
-                        vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
-                        //hitPosInLightSpace.xyz /= hitPosInLightSpace.w; // 透视除法
+                // 将交点变换回光源的视图投影空间
+                vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
+                //hitPosInLightSpace.xyz /= hitPosInLightSpace.w; // 透视除法
                         
-                        // 从NDC [-1,1]转换到[0,1]范围
-                        float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
+                // 从NDC [-1,1]转换到[0,1]范围
+                float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
                         
-                        // 存储深度值
-                        shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(depth, 0));
-                    }
-                    
-                }
+                // 存储深度值
+                shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(depth, 0));
             }
-        },
-        [this, &scene](ResTask& task)
-        {
-            Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
-            scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
-                reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(uint32_t));
+                    
         }
-    );
+    }
+
+    Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
+    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
+        reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(uint32_t));
+
+    generatingShadowMap = false;
 }

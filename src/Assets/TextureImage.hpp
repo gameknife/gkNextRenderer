@@ -2,6 +2,7 @@
 
 #include "Vulkan/Image.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace Vulkan
@@ -53,6 +54,8 @@ namespace Assets
 			uint32_t height,
 			const unsigned char* data,
 			uint32_t size);
+
+		void SetDebugName(const std::string& name);
 
 	private:
 

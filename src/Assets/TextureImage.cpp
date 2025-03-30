@@ -6,6 +6,7 @@
 #include "Vulkan/Sampler.hpp"
 #include <cstring>
 
+#include "Utilities/Console.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
 
 namespace Assets {
@@ -20,7 +21,15 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, miplevel, format));
 	imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
 	imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT));
-	sampler_.reset(new Vulkan::Sampler(device, Vulkan::SamplerConfig()));
+	
+	Vulkan::SamplerConfig samplerConfig;
+	if (format == VK_FORMAT_R32_UINT || format == VK_FORMAT_R32_SINT)
+	{
+		samplerConfig.MagFilter = VK_FILTER_NEAREST;
+		samplerConfig.MinFilter = VK_FILTER_NEAREST;
+		samplerConfig.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	}
+	sampler_.reset(new Vulkan::Sampler(device, samplerConfig));
 
 	if(data)
 	{
@@ -173,10 +182,16 @@ void TextureImage::UpdateDataMainThread(
     });
 
     // 复制完成后，将图像转换回着色器只读布局
-    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
 
     // 清理临时资源
     stagingBuffer.reset();
+}
+
+void TextureImage::SetDebugName(const std::string& debugName)
+{
+	const auto& debugUtils = image_->Device().DebugUtils();
+	debugUtils.SetObjectName(image_->Handle(), debugName.c_str());
 }
 
 void TextureImage::MainThreadPostLoading(Vulkan::CommandPool& commandPool)
