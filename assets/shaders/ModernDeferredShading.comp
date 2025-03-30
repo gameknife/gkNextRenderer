@@ -6,6 +6,7 @@
 #include "common/Material.glsl"
 #include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
+#include "common/GGXSample.glsl"
 
 layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
 layout(binding = 1, rgba8) uniform image2D OutImage;
@@ -281,19 +282,32 @@ void main() {
     const int jitcount = 1;
     const float range = 0.08f;
     for(int i = 0; i < jitcount; i++) {
+
+        bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
+        bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
+        bool chanceGGX = chanceReflect || chanceMetal;
+        const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
+        vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
         
-        // 这里用traceInScreenSpace在屏幕空间trace，如果射到了物件，在采样interpolate反弹，来做近场反弹，如果没有trace结果，再fallback
-        //vec3 reflectDir = reflect(ray_dir, normal);
-        vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
+        //vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
         vec4 reflectionColor;
-        if( calculateSSInterreflection(v.Position, reflectDir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
+        if( calculateSSInterreflection(v.Position, trace_dir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
         {
             indirectColor += reflectionColor;
         }
         else
         {
             // 没命中，说明可能接受到了天光，直接采样skyprobes，还可以考虑远场遮蔽
-            indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal) * 2.0f;
+            
+            // 如果反射了，直接采天
+//            if(chanceGGX)
+//            {
+//                indirectColor += Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
+//            }
+//            else
+            {
+                indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal) * 2.0f;
+            }
         }
         
         if(Camera.HasSun)
