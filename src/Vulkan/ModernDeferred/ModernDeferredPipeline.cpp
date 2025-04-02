@@ -43,14 +43,14 @@ namespace Vulkan::ModernDeferred
         VkViewport viewport = {};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChain.Extent().width);
-        viewport.height = static_cast<float>(swapChain.Extent().height);
+        viewport.width = static_cast<float>(swapChain.RenderExtent().width);
+        viewport.height = static_cast<float>(swapChain.RenderExtent().height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
 
         VkRect2D scissor = {};
         scissor.offset = {0, 0};
-        scissor.extent = swapChain.Extent();
+        scissor.extent = swapChain.RenderExtent();
 
         VkPipelineViewportStateCreateInfo viewportState = {};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;

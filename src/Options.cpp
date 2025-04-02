@@ -29,6 +29,8 @@ Options::Options(const int argc, const char* argv[])
 		("renderdoc", "Attach renderdoc if avaliable.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
 		("forcesdr", "Force use SDR Display even supported.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
 		("locale", "Locale: en, zhCN, RU.", cxxopts::value<std::string>(locale)->default_value("en"))
+		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
+	
 
 		("h,help", "Print usage");
 	auto result = options.parse(argc, argv);

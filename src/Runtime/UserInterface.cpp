@@ -190,7 +190,7 @@ void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vu
 	
 	for (const auto& imageView : swapChain.ImageViews())
 	{
-		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
+		uiFrameBuffers_.emplace_back(swapChain.Extent(), *imageView, *renderPass_, false);
 	}
 }
 

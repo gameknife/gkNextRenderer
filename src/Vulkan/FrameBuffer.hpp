@@ -15,8 +15,8 @@ namespace Vulkan
 		FrameBuffer& operator = (const FrameBuffer&) = delete;
 		FrameBuffer& operator = (FrameBuffer&&) = delete;
 
-		explicit FrameBuffer(const ImageView& imageView, const RenderPass& renderPass, bool withDS = true);
-		explicit FrameBuffer(const ImageView& imageView, const ImageView& imageView1, const ImageView& imageView2,const RenderPass& renderPass);
+		explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const RenderPass& renderPass, bool withDS = true);
+		explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const ImageView& imageView1, const ImageView& imageView2,const RenderPass& renderPass);
 		FrameBuffer(FrameBuffer&& other) noexcept;
 		~FrameBuffer();
 

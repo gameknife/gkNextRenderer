@@ -18,6 +18,7 @@
 
 #include "Utilities/Console.hpp"
 #include "Utilities/Math.hpp"
+#include "Vulkan/DepthBuffer.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
 
@@ -31,12 +32,12 @@ namespace Vulkan::HybridDeferred
     {
     }
 
-    void HybridDeferredRenderer::CreateSwapChain()
+    void HybridDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
-        const auto extent = SwapChain().Extent();
         const auto format = SwapChain().Format();
-
-        visibilityPipeline0_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+ 
+        depthBuffer_.reset(new Vulkan::DepthBuffer(CommandPool(), extent));
+        visibilityPipeline0_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), *depthBuffer_, UniformBuffers(), GetScene()));
         
         rtVisibility0.reset(new RenderImage(Device(), extent,
                                             VK_FORMAT_R32G32_UINT,
@@ -75,7 +76,7 @@ namespace Vulkan::HybridDeferred
 
         rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
         rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
-        deferredFrameBuffer0_.reset(new FrameBuffer(rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
+        deferredFrameBuffer0_.reset(new FrameBuffer(extent, rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
 
         //baseRender_
         
@@ -130,6 +131,8 @@ namespace Vulkan::HybridDeferred
 
         rtAlbedo_.reset();
         rtNormal_.reset();
+
+        depthBuffer_.reset();
     }
 
     void HybridDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -150,7 +153,7 @@ namespace Vulkan::HybridDeferred
             renderPassInfo.framebuffer = deferredFrameBuffer0_->Handle();  
             
             renderPassInfo.renderArea.offset = {0, 0};
-            renderPassInfo.renderArea.extent = SwapChain().Extent();
+            renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
             renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
             renderPassInfo.pClearValues = clearValues.data();
 
@@ -242,6 +245,11 @@ namespace Vulkan::HybridDeferred
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     composePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+
+            glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(0, SwapChain().Extent().height / 2  ) : glm::uvec2(0,0);
+            vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+            
             vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -281,7 +289,7 @@ namespace Vulkan::HybridDeferred
             copyRegion.srcOffset = {0, 0, 0};
             copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.dstOffset = {0, 0, 0};
-            copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+            copyRegion.extent = {rtVisibility0->GetImage().Extent().width, rtVisibility0->GetImage().Extent().height, 1};
         
             vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         }

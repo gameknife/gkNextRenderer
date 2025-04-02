@@ -41,7 +41,7 @@ namespace Vulkan::HybridDeferred
 		HybridDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		~HybridDeferredRenderer();
 		
-		void CreateSwapChain() override;
+		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
@@ -53,7 +53,8 @@ namespace Vulkan::HybridDeferred
 
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
-		
+
+		std::unique_ptr<Vulkan::DepthBuffer> depthBuffer_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer0_;
 		
 		std::unique_ptr<RenderImage> rtAccumlation;

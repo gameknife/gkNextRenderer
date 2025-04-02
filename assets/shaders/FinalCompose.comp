@@ -14,6 +14,11 @@ layout(binding = 4, rgba16f) uniform image2D InNormal;
 layout(binding = 5, r32ui) uniform uimage2D InVisibility0;
 layout(binding = 6, r32ui) uniform uimage2D InVisibility1;
 
+layout(push_constant) uniform PushConsts {
+    uint offset_x;
+    uint offset_y;
+} pushConsts;
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 const int WORK_GROUP_AXIS_SIZE = 8;
@@ -151,10 +156,10 @@ void main() {
     
     if(Camera.HDR)
     {
-        imageStore(OutImage, ipos, vec4( LinearToST2084UE( Total * Camera.PaperWhiteNit / 230.0), 1.0));
+        imageStore(OutImage, ipos + ivec2(pushConsts.offset_x, pushConsts.offset_y), vec4( LinearToST2084UE( Total * Camera.PaperWhiteNit / 230.0), 1.0));
     }
     else
     {
-        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( Total * Camera.PaperWhiteNit / 20000.0), 1.0));
+        imageStore(OutImage, ipos + ivec2(pushConsts.offset_x, pushConsts.offset_y), vec4( Uncharted2_Tonemapping( Total * Camera.PaperWhiteNit / 20000.0), 1.0));
     }
 }

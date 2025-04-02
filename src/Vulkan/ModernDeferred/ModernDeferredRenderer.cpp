@@ -31,9 +31,8 @@ ModernDeferredRenderer::~ModernDeferredRenderer()
 	ModernDeferredRenderer::DeleteSwapChain();
 }
 
-void ModernDeferredRenderer::CreateSwapChain()
+void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
 	visibilityPipeline_.reset(new VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
@@ -76,7 +75,7 @@ void ModernDeferredRenderer::CreateSwapChain()
 	rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
 	rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
      
-	deferredFrameBuffer_.reset(new FrameBuffer(rtVisibility0->GetImageView(),
+	deferredFrameBuffer_.reset(new FrameBuffer(extent, rtVisibility0->GetImageView(),
 		visibilityPipeline_->RenderPass()));
 	
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(),
@@ -153,7 +152,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	renderPassInfo.renderPass = visibilityPipeline_->RenderPass().Handle();
 	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = SwapChain().Extent();
+	renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 
@@ -210,9 +209,9 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 								 1, GlobalDescriptorSets, 0, nullptr );
 		
 #if ANDROID
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32, SwapChain().Extent().height / 32, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 32, SwapChain().RenderExtent().height / 32, 1);	
 #else
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);	
 #endif
 
 		rtAccumlation->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -240,6 +239,11 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 								composePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		
+		glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(SwapChain().Extent().width / 2, 0  ) : glm::uvec2(0,0);
+		vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(glm::uvec2), &pushConst);
+		
 		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
 		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -256,7 +260,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		copyRegion.srcOffset = {0, 0, 0};
 		copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
 		copyRegion.dstOffset = {0, 0, 0};
-		copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+		copyRegion.extent = {rtVisibility0->GetImage().Extent().width, rtVisibility0->GetImage().Extent().height, 1};
         
 		vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 	}

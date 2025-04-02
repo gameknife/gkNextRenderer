@@ -119,7 +119,7 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
     vec3 offsetPos = position + normal * 0.01;
 
     // 在屏幕空间中查找反弹点
-    if (traceInScreenSpace(offsetPos, rayDir, 2.0, 5.0, hitPosition, hitNormal, hitMaterialIdx)) {
+    if (traceInScreenSpace(offsetPos, rayDir, 2.0, 1.0, hitPosition, hitNormal, hitMaterialIdx)) {
         // 获取反弹点的材质
         Material hitMaterial = Materials[hitMaterialIdx];
         // 计算反弹点的基础颜色
