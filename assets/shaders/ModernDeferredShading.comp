@@ -118,7 +118,8 @@ bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, float dep
 bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
     // 近场追踪参数
     const float nearDistance = 0.25;  // 近场追踪距离
-    const float stepSize = 0.35;      // 远场步进大小
+    const float longDistanceInit = 0.5;  // 原场开始距离，屏蔽掉自身
+    const float stepSize = 0.25;      // 远场步进大小
     const float maxTotalDistance = maxDistance;  // 最大总追踪距离
     
     // 首先尝试近场屏幕空间追踪
@@ -127,45 +128,30 @@ bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float dept
     }
     
     // 近场追踪失败，开始远场追踪
-    float tracedDistance = nearDistance * 2.0f;
-    vec3 currentPos = position + rayDir * nearDistance * 2.0f;
+    float tracedDistance = longDistanceInit;
+    vec3 currentPos = position + rayDir * longDistanceInit;
     
     // 远场步进追踪
     while (tracedDistance < maxTotalDistance) {
         // 检查当前点是否在物体内部
         vec3 probePos = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
-        bool isInSolid = inSolid(probePos);
+        uint matId = 0;
+        bool isInSolid = inSolid(probePos, matId);
         
         if (isInSolid) {
             // 找到了一个潜在的交点，从上一个步进点进行精确追踪
-            vec3 refinementStart = currentPos - rayDir * stepSize;
+//            vec3 refinementStart = currentPos - rayDir * stepSize;
             
             // 在找到的区域进行精确的屏幕空间追踪
-            if (traceInScreenSpace(refinementStart, rayDir, stepSize, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
-                return true;  // 精确追踪成功
-            }
+//            if (traceInScreenSpace(refinementStart, rayDir, stepSize, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
+//                return true;  // 精确追踪成功
+//            }
             
             // 即使精确追踪失败，我们也发现了一个固体，返回大致位置
             outPosition = currentPos;
-            
-            // 尝试估计法线（简化版本）
-            // 通过检查周围6个方向来估计法线
-//            vec3 normal = vec3(0.0);
-//            float epsilon = 0.1;
-//            
-//            vec3 probeCheck = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
-//            if (inSolid(probeCheck + vec3(epsilon, 0, 0)) != isInSolid) normal.x += isInSolid ? 1.0 : -1.0;
-//            if (inSolid(probeCheck - vec3(epsilon, 0, 0)) != isInSolid) normal.x += isInSolid ? -1.0 : 1.0;
-//            if (inSolid(probeCheck + vec3(0, epsilon, 0)) != isInSolid) normal.y += isInSolid ? 1.0 : -1.0;
-//            if (inSolid(probeCheck - vec3(0, epsilon, 0)) != isInSolid) normal.y += isInSolid ? -1.0 : 1.0;
-//            if (inSolid(probeCheck + vec3(0, 0, epsilon)) != isInSolid) normal.z += isInSolid ? 1.0 : -1.0;
-//            if (inSolid(probeCheck - vec3(0, 0, epsilon)) != isInSolid) normal.z += isInSolid ? -1.0 : 1.0;
-//            
-//            outNormal = normalize(normal);
             outNormal = vec3(0,1,0);
-            
             // 使用默认材质索引（可以根据需要调整）
-            outMaterialIdx = 0;
+            outMaterialIdx = matId;
             
             return true;
         }
@@ -190,7 +176,7 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
     vec3 offsetPos = position + normal * 0.01;
 
     // 在屏幕空间中查找反弹点
-    if (traceLongDistance(offsetPos, rayDir, 5.0, 1.0, hitPosition, hitNormal, hitMaterialIdx)) {
+    if (traceLongDistance(offsetPos, rayDir, 5.0, 0.5, hitPosition, hitNormal, hitMaterialIdx)) {
         // 获取反弹点的材质
         Material hitMaterial = Materials[hitMaterialIdx];
         // 计算反弹点的基础颜色
@@ -231,7 +217,7 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
         vec3 outPosition;
         vec3 outNormal;
         uint outMaterialIdx;
-        float contactShadow = traceLongDistance(worldPos + jit, normalize(Camera.SunDirection.xyz), 5.0, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
+        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
         shadow = min(shadow, contactShadow); // 结合两种阴影结果
     }
 
@@ -361,14 +347,14 @@ void main() {
         
         //vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
         vec4 reflectionColor;
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * 0.04f;
+        vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
         if( calculateSSInterreflection(v.Position, trace_dir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
         {
             indirectColor += reflectionColor;
         }
         else
         {
-            // 没命中，说明可能接受到了天光，直接采样skyprobes，还可以考虑远场遮蔽
-            
             // 如果反射了，直接采天
             // 其实就是这里，低配版就不要散布采样，直接用IBL处理好的mip，减少噪点
             if(chanceGGX)

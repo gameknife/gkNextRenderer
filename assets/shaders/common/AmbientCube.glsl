@@ -405,9 +405,9 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
 
 // Interpolate between 8 probes
-bool inSolid(vec3 pos) {
+bool inSolid(vec3 pos, inout uint matId) {
     // Early out if position is outside the probe grid
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
+    if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
     pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return false;
     }
@@ -415,5 +415,6 @@ bool inSolid(vec3 pos) {
     ivec3 baseIdx = ivec3(floor(pos));
 
     AmbientCube cube = FetchCube(baseIdx);
+    matId = cube.ExtInfo.x;
     return cube.Active == 1 ? false : true;
 }

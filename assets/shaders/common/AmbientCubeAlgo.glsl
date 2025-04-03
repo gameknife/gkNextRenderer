@@ -1,9 +1,9 @@
 
 #ifdef __cplusplus
-vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, uint& activeProbe, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
+vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
 {
 #else
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint activeProbe, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
+vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint activeProbe, inout uint materialId, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
 {
 #endif
     vec4 rayColor = vec4(0.0);
@@ -44,6 +44,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
             else
             {
                 // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
+                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
                 activeProbe = 0;
                 break;
             }
