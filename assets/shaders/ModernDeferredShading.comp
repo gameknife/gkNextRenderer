@@ -21,7 +21,7 @@ layout(binding = 9, rg16f) uniform image2D OutMotionVector;
 layout(binding = 10) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
-layout(binding = 12) uniform usampler2D ShadowMapSampler;
+layout(binding = 12) uniform sampler2D ShadowMapSampler;
 
 layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
@@ -149,10 +149,10 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 
     // 根据法线与光照方向的夹角调整偏移值
     float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-    bias = mix(0.0005, 0.0002, cosTheta); // 斜面使用更大的偏移值
+    bias = mix(0.00001, 0.000005, cosTheta); // 斜面使用更大的偏移值
 
     // 从阴影贴图中采样获取最近深度
-    float closestDepth = unpackHalf2x16(texture(ShadowMapSampler, projCoords.xy).x).x;
+    float closestDepth = texture(ShadowMapSampler, projCoords.xy).x;
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
     // 在主阴影通过的情况下进行屏幕空间接触阴影检测

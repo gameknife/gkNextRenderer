@@ -673,7 +673,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
                 float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
                         
                 // 存储深度值
-                shadowMapR32[y * shadowMapSize + x] = glm::packHalf2x16(vec2(depth, 0));
+                shadowMapR32[y * shadowMapSize + x] = depth;
             }
                     
         }
@@ -681,7 +681,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
 
     Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
     scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
-        reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(uint32_t));
+        reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(float));
 
     generatingShadowMap = false;
 }
