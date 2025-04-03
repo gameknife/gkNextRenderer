@@ -43,7 +43,7 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 // 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
 bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
     // 屏幕空间步进参数
-    const int maxSteps = 8;
+    const int maxSteps = 5;
     float stepSize = maxDistance / float(maxSteps);
     vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
 
@@ -109,6 +109,77 @@ bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, float dep
     return false;
 }
 
+// 这里增加一种远距离tracing的方法，最开始的0.25米，用屏幕空间tracing，精确度如果是0.05米，只需要5次即可追踪完成
+// 如果没有追到点，开始以0.25 - 0.35米为步长，取lightprobe的active状态，如果active为true，说明在空间中，继续前进
+// 直到active为false，说明到体内了，从最后的起始点，再进行0.25米的，屏幕空间tracing
+// 这个方法，可以追踪非常长的距离，当然，可以给定一个上限，追踪距离太远也可以terminate掉
+// 检查空间一个点是否在物体内可用inSolid
+// 长距离屏幕空间光线追踪函数，结合探针检查
+bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
+    // 近场追踪参数
+    const float nearDistance = 0.25;  // 近场追踪距离
+    const float stepSize = 0.35;      // 远场步进大小
+    const float maxTotalDistance = maxDistance;  // 最大总追踪距离
+    
+    // 首先尝试近场屏幕空间追踪
+    if (traceInScreenSpace(position, rayDir, nearDistance, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
+        return true;  // 近场追踪成功
+    }
+    
+    // 近场追踪失败，开始远场追踪
+    float tracedDistance = nearDistance * 2.0f;
+    vec3 currentPos = position + rayDir * nearDistance * 2.0f;
+    
+    // 远场步进追踪
+    while (tracedDistance < maxTotalDistance) {
+        // 检查当前点是否在物体内部
+        vec3 probePos = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
+        bool isInSolid = inSolid(probePos);
+        
+        if (isInSolid) {
+            // 找到了一个潜在的交点，从上一个步进点进行精确追踪
+            vec3 refinementStart = currentPos - rayDir * stepSize;
+            
+            // 在找到的区域进行精确的屏幕空间追踪
+            if (traceInScreenSpace(refinementStart, rayDir, stepSize, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
+                return true;  // 精确追踪成功
+            }
+            
+            // 即使精确追踪失败，我们也发现了一个固体，返回大致位置
+            outPosition = currentPos;
+            
+            // 尝试估计法线（简化版本）
+            // 通过检查周围6个方向来估计法线
+//            vec3 normal = vec3(0.0);
+//            float epsilon = 0.1;
+//            
+//            vec3 probeCheck = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
+//            if (inSolid(probeCheck + vec3(epsilon, 0, 0)) != isInSolid) normal.x += isInSolid ? 1.0 : -1.0;
+//            if (inSolid(probeCheck - vec3(epsilon, 0, 0)) != isInSolid) normal.x += isInSolid ? -1.0 : 1.0;
+//            if (inSolid(probeCheck + vec3(0, epsilon, 0)) != isInSolid) normal.y += isInSolid ? 1.0 : -1.0;
+//            if (inSolid(probeCheck - vec3(0, epsilon, 0)) != isInSolid) normal.y += isInSolid ? -1.0 : 1.0;
+//            if (inSolid(probeCheck + vec3(0, 0, epsilon)) != isInSolid) normal.z += isInSolid ? 1.0 : -1.0;
+//            if (inSolid(probeCheck - vec3(0, 0, epsilon)) != isInSolid) normal.z += isInSolid ? -1.0 : 1.0;
+//            
+//            outNormal = normalize(normal);
+            outNormal = vec3(0,1,0);
+            
+            // 使用默认材质索引（可以根据需要调整）
+            outMaterialIdx = 0;
+            
+            return true;
+        }
+        
+        // 继续步进
+        currentPos += rayDir * stepSize;
+        tracedDistance += stepSize;
+    }
+    
+    // 没有找到任何交点
+    return false;
+}
+
+
 // 使用屏幕空间近场反弹光照计算
 bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
     vec3 hitPosition, hitNormal;
@@ -119,7 +190,7 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
     vec3 offsetPos = position + normal * 0.01;
 
     // 在屏幕空间中查找反弹点
-    if (traceInScreenSpace(offsetPos, rayDir, 2.0, 1.0, hitPosition, hitNormal, hitMaterialIdx)) {
+    if (traceLongDistance(offsetPos, rayDir, 5.0, 1.0, hitPosition, hitNormal, hitMaterialIdx)) {
         // 获取反弹点的材质
         Material hitMaterial = Materials[hitMaterialIdx];
         // 计算反弹点的基础颜色
@@ -160,7 +231,7 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
         vec3 outPosition;
         vec3 outNormal;
         uint outMaterialIdx;
-        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 1.0, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
+        float contactShadow = traceLongDistance(worldPos + jit, normalize(Camera.SunDirection.xyz), 5.0, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
         shadow = min(shadow, contactShadow); // 结合两种阴影结果
     }
 
