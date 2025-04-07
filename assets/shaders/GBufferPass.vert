@@ -22,7 +22,7 @@ layout(location = 0) out vec3 FragColor;
 layout(location = 1) out vec3 FragNormal;
 layout(location = 2) out vec2 FragTexCoord;
 layout(location = 3) out flat uint FragMaterialIndex;
-
+layout(location = 4) out vec3 FragWorldPos;
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -39,4 +39,5 @@ void main()
 	FragNormal = (proxy.worldTS * vec4(v.Normal, 0.0)).xyz; 
 	FragTexCoord = v.TexCoord;
 	FragMaterialIndex = proxy.matId[v.MaterialIndex];
+	FragWorldPos = (proxy.worldTS * vec4(InPosition, 1.0)).xyz;
 }

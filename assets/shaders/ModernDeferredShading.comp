@@ -315,11 +315,16 @@ void main() {
     Material mat = Materials[materialIndex];
         
     vec4 albedo = mat.Diffuse;
-    
+    float roughness = mat.Fuzziness;
     if (mat.DiffuseTextureId >= 0)
     {
-        vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
-        albedo *= tex * tex;
+        vec4 tex = texture(TextureSamplers[nonuniformEXT(mat.DiffuseTextureId)], v.TexCoord);
+        albedo *= tex;
+    }
+    if (mat.MRATextureId >= 0)
+    {
+        vec4 mra = texture(TextureSamplers[nonuniformEXT(mat.MRATextureId)], v.TexCoord);
+        roughness = roughness * mra.g;
     }
     
 	// ibl
@@ -330,20 +335,20 @@ void main() {
 	const float metalProb = mat.Metalness;
     	
 	const vec3 lightVector = Camera.SunDirection.xyz;
-    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.25f;
+    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * M_1_PI;
     
     vec4 indirectColor = vec4(0);
 
     float shadow = 0.0f;
-    const uint jitcount = Camera.NumberOfSamples;
-    const float range = 0.08f;
+    const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 2);
+    const float range = 0.04f;
     for(int i = 0; i < jitcount; i++) {
 
         bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
         bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
         bool chanceGGX = chanceReflect || chanceMetal;
         const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
-        vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
+        vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
         
         //vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
         vec4 reflectionColor;

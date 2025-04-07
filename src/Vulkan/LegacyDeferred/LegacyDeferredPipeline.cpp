@@ -10,6 +10,7 @@
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -235,6 +236,8 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
 			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
 				{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{7, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -256,6 +259,12 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	VkDescriptorBufferInfo ambientCubeBufferInfo = {};
         	ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
         	ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+
+        	VkDescriptorBufferInfo hdrshBufferInfo = {};
+        	hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
+        	hdrshBufferInfo.range = VK_WHOLE_SIZE;
+
+        	VkDescriptorImageInfo Info12 = {scene.ShadowMap().Sampler().Handle(), scene.ShadowMap().ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -265,6 +274,8 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
             	descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, uniformBufferInfo),
             	descriptorSets.Bind(i, 5, ambientCubeBufferInfo),
+            	descriptorSets.Bind(i, 6, hdrshBufferInfo),
+				descriptorSets.Bind(i, 7, Info12),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

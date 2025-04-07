@@ -376,7 +376,7 @@ namespace Assets
             
             m.DiffuseTextureId = lambdaGetTexture( mat.pbrMetallicRoughness.baseColorTexture.index );
             m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index); // metallic in B, roughness in G
-           
+            
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
             
@@ -394,7 +394,7 @@ namespace Assets
 
             if (m.MRATextureId != -1)
             {
-                m.Metalness = 1.0f;
+                // m.Metalness = 1.0f; that makes huge problem, first dont change this
                 m.Fuzziness = 1.0f;
             }
 

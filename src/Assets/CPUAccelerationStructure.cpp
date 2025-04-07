@@ -280,50 +280,52 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
             {
                 cube.Active = 1;
                 cube.Lighting = 0;
-                cube.ExtInfo = glm::uvec4(0, 0,0,0);
+                cube.ExtInfo.x = 0;
+                cube.ExtInfo.y = cube.ExtInfo.y + 1;
 
                 uvec4 RandomSeed(0);
                 vec4 bounceColor(0);
                 vec4 skyColor(0);
 
+                // 正Y方向
                 cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 0.25f );
-                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.25f );
-
+                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.5f );
+                
                 if (cube.Active == 0) return;
-
+                
                 // 负Y方向
                 cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 0.25f );
-                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.25f );
-
+                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 0.5f );
+                
                 if (cube.Active == 0) return;
-
+                
                 // 正X方向
                 cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 0.25f );
-                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.25f );
-
+                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 0.5f );
+                
                 if (cube.Active == 0) return;
-
+                
                 // 负X方向
                 cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 0.25f );
-                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.25f );
-
+                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 0.5f );
+                
                 if (cube.Active == 0) return;
-
+                
                 // 正Z方向
                 cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 0.25f );
-                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.25f );
-
+                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 0.5f );
+                
                 if (cube.Active == 0) return;
-    
+                
                 // 负Z方向
                 cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, cube.ExtInfo.x, bounceColor, skyColor, ubo) );
-                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 0.25f );
-                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.25f);
+                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, cube.ExtInfo.y == 1 ? 1.0f: 0.5f );
+                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 0.5f );
             }
             break;
         case ECubeProcType::ECPT_Copy:
@@ -432,7 +434,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
 
     // add 4 pass
-    for(int pass = 0; pass < 4; ++pass)
+    for(int pass = 0; pass < 2; ++pass)
     {
         // 先创建所有坐标对
         std::vector<std::pair<int, int>> coordinates;
@@ -621,7 +623,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     const vec3& sunDir = scene.GetEnvSettings().SunDirection();
     
     // 阴影图分辨率设置
-    const int shadowMapSize = 1024;
+    const int shadowMapSize = 2048;
     shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
 
     // 使用环境设置中的方法获取光源视图投影矩阵
@@ -685,7 +687,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     }
 
     Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
-    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, 1024, 1024,
+    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, shadowMapSize, shadowMapSize,
         reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(float));
 
     generatingShadowMap = false;

@@ -36,11 +36,11 @@ void ScatterLambertian(inout RayPayload ray, const Material m, const LightObject
 	// Global Sun Check
 	if(Camera.HasSun && ray.BounceCount <= 2)
 	{
-		const vec3 hitpos = ray.HitPos;
+		const vec3 hitpos = ray.HitPos + normal * EPS2;
 		const vec3 lightVector = AlignWithNormal( RandomInCone(ray.RandomSeed, cos_0_5degree), Camera.SunDirection.xyz);
 		if(RandomFloat(ray.RandomSeed) < 0.33) {
 			rayQueryEXT rayQuery;
-			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, EPS, lightVector, INF);
+			rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, hitpos, 0, lightVector, INF);
 			rayQueryProceedEXT(rayQuery);
 			if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT  ) {
 				// sun
@@ -152,7 +152,7 @@ void Scatter(inout RayPayload ray, const Material m, const LightObject light, co
 	ray.Distance = t;
 	ray.GBuffer = vec4(normal, m.Fuzziness * mra.g);
 	ray.GBuffer.w = sqrt(ray.GBuffer.w);
-	ray.Metalness = m.Metalness * mra.b;
+	ray.Metalness = m.Metalness;// + mra.r;
 	ray.Albedo = texColor * m.Diffuse;
 	ray.FrontFace = dot(direction, normal) < 0;
 	ray.MaterialIndex = MaterialIndex;

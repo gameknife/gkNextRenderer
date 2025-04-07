@@ -215,11 +215,17 @@ void main() {
 	uint materialIndex = FetchMaterialId(node, v.MaterialIndex);
 	Material mat = Materials[materialIndex];
     vec4 albedo = mat.Diffuse;
+	float roughness = mat.Fuzziness;
     if (mat.DiffuseTextureId >= 0)
     {
-        vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
-        albedo *= tex * tex;
+        vec4 tex = texture(TextureSamplers[nonuniformEXT(mat.DiffuseTextureId)], v.TexCoord);
+        albedo *= tex;
     }
+	if (mat.MRATextureId >= 0)
+	{
+		vec4 mra = texture(TextureSamplers[nonuniformEXT(mat.MRATextureId)], v.TexCoord);
+		roughness = roughness * mra.g;
+	}
 	
 	vec3 normal = normalize( v.Normal.rgb);
 	
@@ -233,7 +239,7 @@ void main() {
 	
 	vec3 irradianceColor = vec3(0);
 	vec3 bounceColor = vec3(0);
-	uint sampleTimes = Camera.FastGather ? 1 : Camera.NumberOfSamples;
+	uint sampleTimes = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 2);
 
 	if (mat.MaterialModel == MaterialDiffuseLight)
 	{
@@ -262,7 +268,7 @@ void main() {
 		bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
 		bool chanceGGX = chanceReflect || chanceMetal;
 		const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
-		vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(mat.Fuzziness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
+		vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
 
 		probalityOfReflection += chanceGGX ? 1.0f : 0.0f;
 		vec3 posOffset = normal * 0.01;
@@ -289,30 +295,14 @@ void main() {
 		#endif
 		vec3 illumColor = vec3(0.0);
 		
-		bool hit = true;
-		
-//		if(Camera.FastGather)
-//		{
-//			if((gl_GlobalInvocationID.y + adder) % 2 == 0)
-//			{
-//				hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
-//				iblColor *= 2.0f;
-//				bounceSingle *= 2.0f;
-//			}
-//		}
-//		else
-		{
-			hit = TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor);
-		}
-		
-		if(!hit)
+		if(!TraceRay(ipos, v.Position + posOffset, trace_dir, iblColor, bounceSingle, illumColor))
 		{
 			irradianceColor += albedoSingle.rgb * iblColor;
 		}
 		else
 		{
 			irradianceColor += albedoSingle.rgb * illumColor * probalityOfReflection;
-			bounceColor += albedoSingle.rgb * bounceSingle * 1.25f; // 这是一个经验值，理论上，应该为1.0，但是因为hybird方式缺少反弹，因此将这个值拉大可以增强二次反弹亮度，pbr场景，2.0刚好符合PT结果
+			bounceColor += albedoSingle.rgb * bounceSingle;// * 1.25f; // 这是一个经验值，理论上，应该为1.0，但是因为hybird方式缺少反弹，因此将这个值拉大可以增强二次反弹亮度，pbr场景，2.0刚好符合PT结果
 		}
 	}
 
@@ -327,9 +317,9 @@ void main() {
     {
     	const vec3 lightVector = Camera.SunDirection.xyz;
 		float ndotl = clamp(dot(normal, lightVector), 0.0f, 1.0f);
-		vec3 d = Camera.SunColor.xyz * ndotl * 0.25;
+		vec3 d = Camera.SunColor.xyz * ndotl * M_1_PI;
         
-        d = mix(d, vec3(0.0), vec3(metalProb));
+        d = mix(d, vec3(0.0), vec3(probalityOfReflection));
     
         const vec3 lightVectorCone = AlignWithNormal( RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
 
