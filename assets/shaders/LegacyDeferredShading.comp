@@ -46,25 +46,13 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 
     float currentDepth = projCoords.z;
 
-    // 基础偏移值
     float bias = 0.0005;
-
-    // 根据法线与光照方向的夹角调整偏移值
+    
     float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-    bias = mix(0.00001, 0.000005, cosTheta); // 斜面使用更大的偏移值
-
-    // 从阴影贴图中采样获取最近深度
+    bias = mix(0.00001, 0.000005, cosTheta);
+    
     float closestDepth = texture(ShadowMapSampler, projCoords.xy).x;
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
-
-    // 在主阴影通过的情况下进行屏幕空间接触阴影检测
-    if (shadow > 0.01) {
-//        vec3 outPosition;
-//        vec3 outNormal;
-//        uint outMaterialIdx;
-//        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
-//        shadow = min(shadow, contactShadow); // 结合两种阴影结果
-    }
 
     return shadow;
 }
@@ -103,9 +91,22 @@ void main() {
         vec3 jit = vec3(0);
         shadow += getShadow(pbr_param.xyz, jit, normal, ipos);
     }
+
+    if( Camera.DebugDraw_Lighting )
+    {
+        albedo = vec4(0.5,0.5,0.5,1);
+    }
     
     vec4 outColor = albedo * d * shadow + vec4(iblLight,0) * albedo;
-    outColor.rgb = LinearToST2084UE(outColor.rgb * Camera.PaperWhiteNit / 230.0);
+
     
-    imageStore(OutImage, ipos, outColor);
+    
+    if(Camera.HDR)
+    {
+        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
+    }
+    else
+    {
+        imageStore(OutImage, ipos , vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
+    }
 }
