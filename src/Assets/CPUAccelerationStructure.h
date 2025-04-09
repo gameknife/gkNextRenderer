@@ -50,6 +50,7 @@ struct FCPUBLASVertInfo
 struct FCPUTLASInstanceInfo
 {
     std::array<uint32_t, 16> mats;
+    std::array<uint32_t, 16> matIdxs;
 };
 
 struct FCPUBLASContext

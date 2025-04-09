@@ -104,5 +104,5 @@ void main() {
     Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.1);
 
     Cubes[gIdx].Active = activeProbe;
-    Cubes[gIdx].ExtInfo = uvec4(matId, 0, 0, 0);
+    Cubes[gIdx].ExtInfo1 = matId;
 }

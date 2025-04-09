@@ -121,69 +121,40 @@ bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float dept
     const float longDistanceInit = 0.5;  // 原场开始距离，屏蔽掉自身
     const float stepSize = 0.25;      // 远场步进大小
     const float maxTotalDistance = maxDistance;  // 最大总追踪距离
-    
-    // 首先尝试近场屏幕空间追踪
+
     if (traceInScreenSpace(position, rayDir, nearDistance, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
-        return true;  // 近场追踪成功
+        return true;
     }
-    
-    // 近场追踪失败，开始远场追踪
+
     float tracedDistance = longDistanceInit;
     vec3 currentPos = position + rayDir * longDistanceInit;
     
-    // 远场步进追踪
     while (tracedDistance < maxTotalDistance) {
-        // 检查当前点是否在物体内部
         vec3 probePos = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
         uint matId = 0;
         bool isInSolid = inSolid(probePos, matId);
         
         if (isInSolid) {
-            // 找到了一个潜在的交点，从上一个步进点进行精确追踪
-//            vec3 refinementStart = currentPos - rayDir * stepSize;
-            
-            // 在找到的区域进行精确的屏幕空间追踪
-//            if (traceInScreenSpace(refinementStart, rayDir, stepSize, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
-//                return true;  // 精确追踪成功
-//            }
-            
-            // 即使精确追踪失败，我们也发现了一个固体，返回大致位置
             outPosition = currentPos;
             outNormal = vec3(0,1,0);
-            // 使用默认材质索引（可以根据需要调整）
             outMaterialIdx = matId;
-            
             return true;
         }
-        
-        // 继续步进
         currentPos += rayDir * stepSize;
         tracedDistance += stepSize;
     }
-    
-    // 没有找到任何交点
     return false;
 }
 
-
-// 使用屏幕空间近场反弹光照计算
 bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
     vec3 hitPosition, hitNormal;
     uint hitMaterialIdx;
     reflectionColor = vec4(0);
-
-    // 偏移起始位置，避免自相交
     vec3 offsetPos = position + normal * 0.01;
-
-    // 在屏幕空间中查找反弹点
-    if (traceLongDistance(offsetPos, rayDir, 5.0, 0.5, hitPosition, hitNormal, hitMaterialIdx)) {
-        // 获取反弹点的材质
+    if (traceLongDistance(offsetPos, rayDir, 5.0, 0.2, hitPosition, hitNormal, hitMaterialIdx)) {
         Material hitMaterial = Materials[hitMaterialIdx];
-        // 计算反弹点的基础颜色
         vec4 hitAlbedo = hitMaterial.Diffuse;
-        // 计算反弹点的环境光照
         vec4 hitAmbient = interpolateProbes((hitPosition - CUBE_OFFSET) / CUBE_UNIT, hitNormal);
-        // 组合反弹点的光照结果
         reflectionColor = hitAlbedo * hitAmbient;
         return true;
     }
@@ -241,8 +212,7 @@ void main() {
 	vec4 dir = vec4(Camera.ModelViewInverse * vec4(normalize(target.xyz), 0));
 	
 	vec3 ray_dir = normalize(dir.xyz);
-
-
+    
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     NodeProxy node = NodeProxies[vBuffer.x - 1];
     
@@ -350,7 +320,6 @@ void main() {
         const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
         vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
         
-        //vec3 reflectDir = AlignWithNormal( RandomInHemiSphere1(RandomSeed), normal );
         vec4 reflectionColor;
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * 0.04f;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;

@@ -415,6 +415,6 @@ bool inSolid(vec3 pos, inout uint matId) {
     ivec3 baseIdx = ivec3(floor(pos));
 
     AmbientCube cube = FetchCube(baseIdx);
-    matId = cube.ExtInfo.x;
+    matId = cube.ExtInfo1;
     return cube.Active == 1 ? false : true;
 }

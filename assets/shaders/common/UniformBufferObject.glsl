@@ -115,7 +115,10 @@ struct ALIGN_16 AmbientCube
 
 	uint Active;
 	uint Lighting;
-	uvec4 ExtInfo;
+	uint ExtInfo1;
+	uint ExtInfo2;
+	uint ExtInfo3;
+	uint ExtInfo4;
 };
 
 struct ALIGN_16 SphericalHarmonics
