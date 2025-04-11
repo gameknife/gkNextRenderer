@@ -616,83 +616,91 @@ void FCPUAccelerationStructure::ClearAmbientCubes()
 
 void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
 {
-    if (bvhInstanceList.empty() || generatingShadowMap)
+    if (bvhInstanceList.empty())
     {
-        fmt::print("无法生成阴影图：场景中没有实例\n");
         return;
     }
 
-    generatingShadowMap = true;
-
+    if (!scene.GetEnvSettings().HasSun)
+    {
+        return;
+    }
+    
     const vec3& sunDir = scene.GetEnvSettings().SunDirection();
     
     // 阴影图分辨率设置
     const int shadowMapSize = 2048;
+    const int tileSize = 64; // 每个tile的大小
+    const int tilesPerRow = shadowMapSize / tileSize;
     shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
 
     // 使用环境设置中的方法获取光源视图投影矩阵
     mat4 lightViewProj = scene.GetEnvSettings().GetSunViewProjection();
     mat4 invLVP = inverse(lightViewProj);
     vec3 lightDir = normalize(-sunDir);
-    
-    // 多线程渲染阴影图
-    // TaskCoordinator::GetInstance()->AddParralledTask(
-    //     [this, lightViewProj, invLVP, lightDir](ResTask& task)
-    //     {
-    //         
-    //     },
-    //     [this, &scene](ResTask& task)
-    //     {
-    //
-    //     }
-    // );
 
-    for (int y = 0; y < shadowMapSize; y++)
+    
+    // 计算当前tile的起始像素坐标
+    for ( int currentTileX = 0; currentTileX < tilesPerRow; ++currentTileX )
     {
-        for (int x = 0; x < shadowMapSize; x++)
+        for ( int currentTileY = 0; currentTileY < tilesPerRow; ++currentTileY )
         {
-            // 计算NDC坐标
-            float ndcX = (x / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
-            float ndcY = 1.0f - (y / static_cast<float>(shadowMapSize - 1)) * 2.0f; // 翻转Y轴
+            int startX = currentTileX * tileSize;
+            int startY = currentTileY * tileSize;
+
+                // 处理当前tile
+            TaskCoordinator::GetInstance()->AddTask(
+                [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](ResTask& task)
+                {
+                    for (int y = 0; y < tileSize; y++)
+                    {
+                        for (int x = 0; x < tileSize; x++)
+                        {
+                            int pixelX = startX + x;
+                            int pixelY = startY + y;
+                            
+                            // 计算NDC坐标
+                            float ndcX = (pixelX / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
+                            float ndcY = 1.0f - (pixelY / static_cast<float>(shadowMapSize - 1)) * 2.0f;
+                            
+                            // 从NDC空间变换到世界空间
+                            vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f);
+                            worldPos /= worldPos.w;
+                            
+                            // 发射光线
+                            vec3 origin = vec3(worldPos);
+                            vec3 rayDir = normalize(lightDir);
+                            
+                            tinybvh::Ray ray(
+                                tinybvh::bvhvec3(origin.x, origin.y, origin.z),
+                                tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
+                                10000.0f
+                            );
+                            
+                            GCpuBvh.Intersect(ray);
+                            if (ray.hit.t < 9999.0f)
+                            {
+                                vec3 hitPoint = origin + rayDir * ray.hit.t;
+                                vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
+                                float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
+                                shadowMapR32[pixelY * shadowMapSize + pixelX] = depth;
+                            }
+                        }
+                    }
+                },
+                [this, &scene, startX, startY, tileSize, shadowMapSize](ResTask& task)
+                {
+                    // 更新当前tile到GPU
+                    Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
                     
-            // 从NDC空间变换到世界空间
-            vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f); // 近平面
-            worldPos /= worldPos.w;
+                    // shadowmap也是一个全图，因此需要把
+                    const unsigned char* tileData = reinterpret_cast<const unsigned char*>(shadowMapR32.data());
                     
-            // 发射光线
-            vec3 origin = vec3(worldPos);
-            vec3 rayDir = normalize(lightDir);
-                    
-            tinybvh::Ray ray(
-                tinybvh::bvhvec3(origin.x, origin.y, origin.z),
-                tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
-                10000.0f
+                    // 更新单个tile到GPU
+                    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, shadowMapSize, shadowMapSize,
+                        tileData, shadowMapSize * shadowMapSize * sizeof(float));
+                }
             );
-                    
-            // 打射线，后面可以考虑双向，这样还可以取得一个遮挡体积
-            GCpuBvh.Intersect(ray);
-            if (ray.hit.t < 9999.0f)
-            {
-                // 计算光线与场景的交点
-                vec3 hitPoint = origin + rayDir * ray.hit.t;
-                        
-                // 将交点变换回光源的视图投影空间
-                vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
-                //hitPosInLightSpace.xyz /= hitPosInLightSpace.w; // 透视除法
-                        
-                // 从NDC [-1,1]转换到[0,1]范围
-                float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
-                        
-                // 存储深度值
-                shadowMapR32[y * shadowMapSize + x] = depth;
-            }
-                    
         }
     }
-
-    Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
-    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, shadowMapSize, shadowMapSize,
-        reinterpret_cast<const unsigned char *>(shadowMapR32.data()), uint32_t(shadowMapR32.size()) * sizeof(float));
-
-    generatingShadowMap = false;
 }

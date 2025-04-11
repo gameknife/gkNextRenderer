@@ -333,6 +333,8 @@ public:
         return uint32_t(parralledTaskQueue_.size());
     }
 
+    uint32_t GetMainTaskCount();
+
     bool IsAllTaskComplete(std::vector<uint32_t>& tasks);
 
     void Tick();

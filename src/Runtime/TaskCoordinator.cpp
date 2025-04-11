@@ -82,6 +82,16 @@ void TaskCoordinator::WaitForAllParralledTask()
 }
 
 
+uint32_t TaskCoordinator::GetMainTaskCount()
+{
+    uint32_t count = 0;
+    for ( auto& thread : threads_ )
+    {
+        count += uint32_t(thread->taskQueue_.size());
+    }
+    return count;
+}
+
 bool TaskCoordinator::IsAllTaskComplete(std::vector<uint32_t>& tasks)
 {
     for (uint32_t task_id : tasks)
