@@ -629,9 +629,9 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     const vec3& sunDir = scene.GetEnvSettings().SunDirection();
     
     // 阴影图分辨率设置
-    const int shadowMapSize = 2048;
-    const int tileSize = 64; // 每个tile的大小
-    const int tilesPerRow = shadowMapSize / tileSize;
+    int shadowMapSize = 2048;
+    int tileSize = 64; // 每个tile的大小
+    int tilesPerRow = shadowMapSize / tileSize;
     shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
 
     // 使用环境设置中的方法获取光源视图投影矩阵
@@ -688,7 +688,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
                         }
                     }
                 },
-                [this, &scene, startX, startY, tileSize, shadowMapSize](ResTask& task)
+                [this, &scene, shadowMapSize](ResTask& task)
                 {
                     // 更新当前tile到GPU
                     Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
