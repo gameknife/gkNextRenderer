@@ -1,5 +1,37 @@
 
 #ifdef __cplusplus
+bool IsInside( vec3 origin, vec3& offset, uint& materialId)
+#else
+bool IsInside( vec3 origin, inout vec3 offset, inout uint materialId)
+#endif
+{
+    for( uint i = 0; i < 6; i++ )
+    {
+        vec3 rayDir = cubeVectors[i];
+        
+        // Align with the surface normal
+        vec3 OutNormal;
+        uint OutMaterialId;
+        uint OutInstanceId;
+        float OutRayDist;
+
+        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
+        {
+             if( dot(OutNormal, rayDir) > 0.0 )
+            {
+                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
+                offset = rayDir * (OutRayDist + 0.05f);
+                if(OutRayDist < CUBE_UNIT)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+#ifdef __cplusplus
 vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
 {
 #else
@@ -50,15 +82,7 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
                 // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
                 materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
                 activeProbe = 0;
-                
-                // 但是，可以根据hit的点，将probe推出体内，mateiralId留下
-                probeOffset = hitPos - origin + rayDir * 0.01f;
-                if(length(probeOffset) < 0.125f)
-                {
-                    activeProbe = 1;
-                    offsetProbe = true;
-                    break;
-                }
+                break;
             }
         }
         else
@@ -66,52 +90,6 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
             rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
         }
     }
-    
-    if(offsetProbe)
-    {
-        origin = origin + probeOffset;
-        rayColor = vec4(0.0);
-        bounceColor = vec4(0.0);
-        skyColor = vec4(0.0);
-        
-        for( uint i = 0; i < FACE_TRACING; i++ )
-        {
-            vec3 hemiVec = hemisphereVectors[i];
-
-            // Apply rotation around z-axis
-            vec3 rotatedVec = vec3(
-            hemiVec.x * cosTheta - hemiVec.y * sinTheta,
-            hemiVec.x * sinTheta + hemiVec.y * cosTheta,
-            hemiVec.z
-            );
-
-            // Align with the surface normal
-            vec3 rayDir = AlignWithNormal(rotatedVec, basis);
-            vec3 OutNormal;
-            uint OutMaterialId;
-            uint OutInstanceId;
-            float OutRayDist;
-
-            if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
-            {
-                if( dot(OutNormal, rayDir) < 0.0 )
-                {
-                    vec3 hitPos = origin + rayDir * OutRayDist;
-                    bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId, OutInstanceId);
-                }
-                else
-                {
-                    activeProbe = 0;
-                    break;
-                }
-            }
-            else
-            {
-                rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
-            }
-        }
-    }
-    
     rayColor = rayColor / float(FACE_TRACING);
     skyColor = rayColor;
     bounceColor = bounceColor / float(FACE_TRACING);

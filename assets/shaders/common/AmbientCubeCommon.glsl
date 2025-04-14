@@ -6,6 +6,15 @@
 
 #define MAX_ILLUMINANCE 512.f
 
+const vec3 cubeVectors[6] = {
+vec3(0, 1, 0),
+vec3(0, -1, 0),
+vec3(0, 0, 1),
+vec3(0, 0, -1),
+vec3(1, 0, 0),
+vec3(-1, 0, 0),
+};
+        
 #if HIGH_QUALITY
 const uint FACE_TRACING = 32;
 const vec3 hemisphereVectors[32] = {

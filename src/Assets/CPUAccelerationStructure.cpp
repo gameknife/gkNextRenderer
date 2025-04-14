@@ -289,13 +289,22 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
                 vec4 skyColor(0);
                 uint matId = 0;
 
+                vec3 offset = vec3(0);
+                bool Inside = IsInside( probePos, offset, matId);
+
+                if (Inside)
+                {
+                    probePos = probePos + offset;
+                    cube.Active = 0;
+                }
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
                 // 正Y方向
                 cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
                 cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 0.5f );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
-                
                 // 负Y方向
                 cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
