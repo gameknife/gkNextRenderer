@@ -13,6 +13,9 @@ const int CUBE_SIZE_Z = 40;
 const float CUBE_UNIT = 0.25f;
 const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
 
+const float CUBE_UNIT_FAR = 8.0f;
+const vec3 CUBE_OFFSET_FAR = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
+
 struct ALIGN_16 UniformBufferObject
 {
 	mat4 ModelView;
