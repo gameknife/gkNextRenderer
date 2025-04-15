@@ -194,6 +194,9 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 
     ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
     ambientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+
+    farAmbientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    farAmbientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
     
     UpdateBVH(scene);
 }

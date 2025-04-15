@@ -18,7 +18,6 @@
 namespace Vulkan::HybridDeferred
 {
     HybridShadingPipeline::HybridShadingPipeline(const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-                                                const Buffer& ambientCubeBuffer,
                                                 const ImageView& miniGBuffer0ImageView,
                                                  const ImageView& finalImageView, const ImageView& motionVectorImageView,
                                                  const ImageView& albedoImageView, const ImageView& normalImageView,
@@ -49,8 +48,10 @@ namespace Vulkan::HybridDeferred
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
             {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {19, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -104,8 +105,12 @@ namespace Vulkan::HybridDeferred
             nodesBufferInfo.range = VK_WHOLE_SIZE;
             
             VkDescriptorBufferInfo ambientCubeBufferInfo = {};
-            ambientCubeBufferInfo.buffer = ambientCubeBuffer.Handle();
+            ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
             ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo farAmbientCubeBufferInfo = {};
+            farAmbientCubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            farAmbientCubeBufferInfo.range = VK_WHOLE_SIZE;
 
             VkDescriptorBufferInfo hdrshBufferInfo = {};
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
@@ -131,8 +136,10 @@ namespace Vulkan::HybridDeferred
                 descriptorSets.Bind(i, 13, Info13),
                 descriptorSets.Bind(i, 14, Info14),
                 descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
-                descriptorSets.Bind(i, 17, hdrshBufferInfo),
-                descriptorSets.Bind(i, 18, lightBufferInfo),
+                descriptorSets.Bind(i, 17, farAmbientCubeBufferInfo),
+                
+                descriptorSets.Bind(i, 18, hdrshBufferInfo),
+                descriptorSets.Bind(i, 19, lightBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

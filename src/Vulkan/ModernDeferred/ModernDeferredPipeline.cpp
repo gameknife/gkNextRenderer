@@ -227,12 +227,14 @@ namespace Vulkan::ModernDeferred
             {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             
-            {12, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
+            {13, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-                {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -280,6 +282,10 @@ namespace Vulkan::ModernDeferred
             VkDescriptorBufferInfo ambientCubeBufferInfo = {};
             ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
             ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo farAmbientCubeBufferInfo = {};
+            farAmbientCubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            farAmbientCubeBufferInfo.range = VK_WHOLE_SIZE;
             
             VkDescriptorBufferInfo hdrshBufferInfo = {};
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
@@ -301,10 +307,12 @@ namespace Vulkan::ModernDeferred
                 descriptorSets.Bind(i, 9, Info8),
 
                 descriptorSets.Bind(i, 10, ambientCubeBufferInfo),
-                descriptorSets.Bind(i, 11, hdrshBufferInfo),
-                descriptorSets.Bind(i, 12, Info12),
-                descriptorSets.Bind(i, 13, Info13),
-                descriptorSets.Bind(i, 14, Info14),
+                descriptorSets.Bind(i, 11, farAmbientCubeBufferInfo),
+                
+                descriptorSets.Bind(i, 12, hdrshBufferInfo),
+                descriptorSets.Bind(i, 13, Info12),
+                descriptorSets.Bind(i, 14, Info13),
+                descriptorSets.Bind(i, 15, Info14),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

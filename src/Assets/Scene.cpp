@@ -27,7 +27,9 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
                                                     ambientCubeBufferMemory_);
-
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "FarAmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), farAmbientCubeBuffer_,
+                                                    farAmbientCubeBufferMemory_);
+        
 
         cpuShadowMap_.reset(new TextureImage(commandPool, 2048, 2048, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");
@@ -54,6 +56,9 @@ namespace Assets
 
         ambientCubeBuffer_.reset();
         ambientCubeBufferMemory_.reset();
+
+        farAmbientCubeBuffer_.reset();
+        farAmbientCubeBufferMemory_.reset();
 
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();

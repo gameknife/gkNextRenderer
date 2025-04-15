@@ -14,8 +14,9 @@ layout(binding = 2, rgba16f) readonly uniform image2D GBuffer2Image;
 layout(binding = 3, rgba8) writeonly uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 5) buffer AmbientCubeArray { AmbientCube[] Cubes; };
-layout(binding = 6) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
-layout(binding = 7) uniform sampler2D ShadowMapSampler;
+layout(binding = 6) buffer FarAmbientCubeArray { AmbientCube[] FarCubes; };
+layout(binding = 7) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
+layout(binding = 8) uniform sampler2D ShadowMapSampler;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 

@@ -39,7 +39,6 @@ namespace Vulkan::HybridDeferred
 	
 		HybridShadingPipeline(
 			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-			const Buffer& ambientCubeBuffer,
 			const ImageView& miniGBuffer0ImageView,
 			const ImageView& finalImageView, const ImageView& motionVectorImageView,
 			const ImageView& albedoImageView, const ImageView& normalImageView,

@@ -90,6 +90,9 @@ private:
     
     std::vector<Assets::AmbientCube> ambientCubes;
     std::vector<Assets::AmbientCube> ambientCubes_Copy;
+
+    std::vector<Assets::AmbientCube> farAmbientCubes;
+    std::vector<Assets::AmbientCube> farAmbientCubes_Copy;
     
     std::vector<uint32_t> lastBatchTasks;
 

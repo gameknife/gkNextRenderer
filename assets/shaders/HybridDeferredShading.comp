@@ -22,8 +22,9 @@ layout(binding = 10, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 13, rgba16f) uniform image2D OutAlbedoBuffer;
 layout(binding = 14, rgba16f) uniform image2D OutNormalBuffer;
 layout(binding = 16) buffer AmbientCubeArray { AmbientCube[] Cubes; };
-layout(binding = 17) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
-layout(binding = 18) readonly buffer LightObjectArray { LightObject[] Lights; };
+layout(binding = 17) buffer FarAmbientCubeArray { AmbientCube[] FarCubes; };
+layout(binding = 18) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
+layout(binding = 19) readonly buffer LightObjectArray { LightObject[] Lights; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
