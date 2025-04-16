@@ -15,7 +15,9 @@ static tinybvh::BVH GCpuBvh;
 static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
 static std::vector<FCPUTLASInstanceInfo>* GbvhTLASContexts;
 static std::vector<FCPUBLASContext>* GbvhBLASContexts;
-static std::vector<Assets::AmbientCube>* GCubes;
+
+static FCpuBakeContext GContext;
+
 Assets::SphericalHarmonics HDRSHs[100];
 using namespace glm;
 using namespace Assets;
@@ -93,7 +95,7 @@ AmbientCube& FetchCube(ivec3 probePos)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
     probePos.z * CUBE_SIZE_XY + probePos.x;
-    return (*GCubes)[idx];
+    return (*GContext.Cubes)[idx];
 }
 
 uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
@@ -106,7 +108,7 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInst
     uint32_t diffuseColor = (*GbvhTLASContexts)[OutInstanceId].mats[OutMaterialId];
     vec4 albedo = unpackUnorm4x8(diffuseColor);
     
-    vec3 pos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
+    vec3 pos = (hitPos - GContext.CUBE_OFFSET) / GContext.CUBE_UNIT;
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
     pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
@@ -194,9 +196,6 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 
     ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
     ambientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
-
-    farAmbientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
-    farAmbientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
     
     UpdateBVH(scene);
 }
@@ -241,8 +240,7 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
     GbvhInstanceList = &bvhInstanceList;
     GbvhTLASContexts = &bvhTLASContexts;
     GbvhBLASContexts = &bvhBLASContexts;
-    GCubes = &ambientCubes;
-
+   
     GenShadowMap(scene);
 }
 
@@ -269,9 +267,9 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
 void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
-    glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
+    glm::vec3 probePos = glm::vec3(x, y, z) * GContext.CUBE_UNIT + GContext.CUBE_OFFSET;
     uint32_t addressIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
-    Assets::AmbientCube& cube = ambientCubes[addressIdx];
+    Assets::AmbientCube& cube = (*GContext.Cubes)[addressIdx];
 
     switch (procType)
     {
@@ -346,13 +344,13 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
             break;
         case ECubeProcType::ECPT_Copy:
             {
-                ambientCubes_Copy[addressIdx] = ambientCubes[addressIdx];
+                (*GContext.CubesCopy)[addressIdx] = (*GContext.Cubes)[addressIdx];
             }
             break;
         case ECubeProcType::ECPT_Blur:
         {
             uint32_t centerIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
-            Assets::AmbientCube& centerCube = ambientCubes[centerIdx];
+            Assets::AmbientCube& centerCube = (*GContext.Cubes)[centerIdx];
 
             // 如果当前立方体不活跃，不进行模糊处理
             if (centerCube.Active != 1) return;
@@ -442,13 +440,19 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     needUpdateGroups.clear();
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    ClearAmbientCubes();
+    
+    GContext.Cubes = &ambientCubes;
+    GContext.CubesCopy = &ambientCubes_Copy;
+    GContext.CUBE_UNIT = Assets::CUBE_UNIT;
+    GContext.CUBE_OFFSET = Assets::CUBE_OFFSET;
 
+    ClearAmbientCubes();
+    
     // 目前的做法，只能以1m为单位，不过其实也够了
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int groupSize = static_cast<int>(std::round(1.0f / GContext.CUBE_UNIT));
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
-
+        
     // add 4 pass
     for(int pass = 0; pass < 2; ++pass)
     {
@@ -497,7 +501,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
         return;
     }
     
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int groupSize = static_cast<int>(std::round(1.0f / GContext.CUBE_UNIT));
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
@@ -583,7 +587,7 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
 
 void FCPUAccelerationStructure::ClearAmbientCubes()
 {
-    for(auto& cube : ambientCubes)
+    for(auto& cube : (*GContext.Cubes))
     {
         cube.Active = 1;
         cube.Lighting = 0;

@@ -60,6 +60,14 @@ struct FCPUBLASContext
     std::vector<FCPUBLASVertInfo> extinfos;
 };
 
+struct FCpuBakeContext
+{
+    std::vector<Assets::AmbientCube>* Cubes;
+    std::vector<Assets::AmbientCube>* CubesCopy;
+    float CUBE_UNIT;
+    glm::vec3 CUBE_OFFSET;
+};
+
 class FCPUAccelerationStructure
 {
 public:
@@ -86,13 +94,9 @@ private:
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
     std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;
     std::vector<tinybvh::BVHBase*> bvhBLASList;
-
     
     std::vector<Assets::AmbientCube> ambientCubes;
     std::vector<Assets::AmbientCube> ambientCubes_Copy;
-
-    std::vector<Assets::AmbientCube> farAmbientCubes;
-    std::vector<Assets::AmbientCube> farAmbientCubes_Copy;
     
     std::vector<uint32_t> lastBatchTasks;
 
@@ -100,4 +104,12 @@ private:
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
+};
+
+// 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
+// 由CpuAS来控制
+class FCPUProbeBaker
+{
+    std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::AmbientCube> ambientCubes_Copy;
 };
