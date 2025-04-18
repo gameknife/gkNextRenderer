@@ -193,7 +193,7 @@ namespace Assets
 
         if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
         {
-            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get() );
+            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get() );
         }
     }
 

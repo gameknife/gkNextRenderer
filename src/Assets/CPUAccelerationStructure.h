@@ -96,7 +96,7 @@ public:
     void AsyncProcessFull();
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType);
     
-    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
+    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
 

@@ -541,7 +541,10 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
+                        {
                             probeBaker.ProcessCube(x, y, z, procType);
+                            farProbeBaker.ProcessCube(x, y, z, procType);
+                        }
             },
             [this](ResTask& task)
             {
@@ -551,12 +554,13 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
     lastBatchTasks.push_back(taskId);
 }
 
-void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory)
+void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory)
 {
     if (needFlush)
     {
         // Upload to GPU, now entire range
         probeBaker.UploadGPU(*GPUMemory);
+        farProbeBaker.UploadGPU(*FarGPUMemory);
         needFlush = false;
     }
 

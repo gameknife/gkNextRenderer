@@ -263,7 +263,6 @@ vec4 interpolateIIProbes(vec3 pos, vec3 normal) {
     return indirectColor;
 }
 
-
 vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
     // Early out if position is outside the probe grid
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
