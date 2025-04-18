@@ -63,9 +63,24 @@ struct FCPUBLASContext
 struct FCpuBakeContext
 {
     std::vector<Assets::AmbientCube>* Cubes;
-    std::vector<Assets::AmbientCube>* CubesCopy;
     float CUBE_UNIT;
     glm::vec3 CUBE_OFFSET;
+};
+
+// 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
+// 由CpuAS来控制
+struct FCPUProbeBaker
+{
+    float UNIT_SIZE;
+    glm::vec3 CUBE_OFFSET;
+    
+    std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::AmbientCube> ambientCubes_Copy;
+
+    void Init( float unit_size, glm::vec3 offset );
+    void ProcessCube(int x, int y, int z, ECubeProcType procType);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+    void ClearAmbientCubes();
 };
 
 class FCPUAccelerationStructure
@@ -77,15 +92,13 @@ public:
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-    void ProcessCube(int x, int y, int z, ECubeProcType procType);
+   
     void AsyncProcessFull();
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
-
-    void ClearAmbientCubes();
 
     void GenShadowMap(Assets::Scene& scene);
 
@@ -94,22 +107,14 @@ private:
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
     std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;
     std::vector<tinybvh::BVHBase*> bvhBLASList;
-    
-    std::vector<Assets::AmbientCube> ambientCubes;
-    std::vector<Assets::AmbientCube> ambientCubes_Copy;
-    
+        
     std::vector<uint32_t> lastBatchTasks;
 
     std::vector<std::tuple<glm::ivec3, ECubeProcType> > needUpdateGroups;
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
-};
 
-// 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
-// 由CpuAS来控制
-class FCPUProbeBaker
-{
-    std::vector<Assets::AmbientCube> ambientCubes;
-    std::vector<Assets::AmbientCube> ambientCubes_Copy;
+    FCPUProbeBaker probeBaker;
+    FCPUProbeBaker farProbeBaker;
 };

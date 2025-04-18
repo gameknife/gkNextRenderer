@@ -16,7 +16,7 @@ static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
 static std::vector<FCPUTLASInstanceInfo>* GbvhTLASContexts;
 static std::vector<FCPUBLASContext>* GbvhBLASContexts;
 
-static FCpuBakeContext GContext;
+thread_local FCpuBakeContext TLSContext;
 
 Assets::SphericalHarmonics HDRSHs[100];
 using namespace glm;
@@ -95,7 +95,7 @@ AmbientCube& FetchCube(ivec3 probePos)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
     probePos.z * CUBE_SIZE_XY + probePos.x;
-    return (*GContext.Cubes)[idx];
+    return (*TLSContext.Cubes)[idx];
 }
 
 uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
@@ -108,7 +108,7 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInst
     uint32_t diffuseColor = (*GbvhTLASContexts)[OutInstanceId].mats[OutMaterialId];
     vec4 albedo = unpackUnorm4x8(diffuseColor);
     
-    vec3 pos = (hitPos - GContext.CUBE_OFFSET) / GContext.CUBE_UNIT;
+    vec3 pos = (hitPos - TLSContext.CUBE_OFFSET) / TLSContext.CUBE_UNIT;
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
     pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
         return vec4(1.0);
@@ -146,6 +146,15 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInst
 }
 
 #include "../assets/shaders/common/AmbientCubeAlgo.glsl"
+
+void FCPUProbeBaker::Init(float unit_size, glm::vec3 offset)
+{
+    UNIT_SIZE = unit_size;
+    CUBE_OFFSET = offset;
+    
+    ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    ambientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+}
 
 void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
 {
@@ -194,8 +203,9 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
     // ugly code for global accesss here
     fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
 
-    ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
-    ambientCubes_Copy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
+    
+    probeBaker.Init( Assets::CUBE_UNIT, Assets::CUBE_OFFSET );
+    farProbeBaker.Init( Assets::CUBE_UNIT_FAR, Assets::CUBE_OFFSET_FAR );
     
     UpdateBVH(scene);
 }
@@ -264,13 +274,17 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType procType)
+void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
-    glm::vec3 probePos = glm::vec3(x, y, z) * GContext.CUBE_UNIT + GContext.CUBE_OFFSET;
+    glm::vec3 probePos = glm::vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
     uint32_t addressIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
-    Assets::AmbientCube& cube = (*GContext.Cubes)[addressIdx];
+    Assets::AmbientCube& cube = ambientCubes[addressIdx];
 
+    TLSContext.Cubes = &ambientCubes;
+    TLSContext.CUBE_UNIT = UNIT_SIZE;
+    TLSContext.CUBE_OFFSET = CUBE_OFFSET;
+    
     switch (procType)
     {
         case ECubeProcType::ECPT_Clear:
@@ -344,13 +358,13 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
             break;
         case ECubeProcType::ECPT_Copy:
             {
-                (*GContext.CubesCopy)[addressIdx] = (*GContext.Cubes)[addressIdx];
+                ambientCubes_Copy[addressIdx] = ambientCubes[addressIdx];
             }
             break;
         case ECubeProcType::ECPT_Blur:
         {
             uint32_t centerIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
-            Assets::AmbientCube& centerCube = (*GContext.Cubes)[centerIdx];
+            Assets::AmbientCube& centerCube = ambientCubes[centerIdx];
 
             // 如果当前立方体不活跃，不进行模糊处理
             if (centerCube.Active != 1) return;
@@ -435,21 +449,24 @@ void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, ECubeProcType p
     }
 }
 
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory)
+{
+    Assets::AmbientCube* data = reinterpret_cast<Assets::AmbientCube*>(GPUMemory.Map(0, sizeof(Assets::AmbientCube) * ambientCubes.size()));
+    std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(Assets::AmbientCube));
+    GPUMemory.Unmap();
+}
+
 void FCPUAccelerationStructure::AsyncProcessFull()
 {
     needUpdateGroups.clear();
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    
-    GContext.Cubes = &ambientCubes;
-    GContext.CubesCopy = &ambientCubes_Copy;
-    GContext.CUBE_UNIT = Assets::CUBE_UNIT;
-    GContext.CUBE_OFFSET = Assets::CUBE_OFFSET;
 
-    ClearAmbientCubes();
+    probeBaker.ClearAmbientCubes();
+    farProbeBaker.ClearAmbientCubes();
     
     // 目前的做法，只能以1m为单位，不过其实也够了
-    int groupSize = static_cast<int>(std::round(1.0f / GContext.CUBE_UNIT));
+    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
         
@@ -501,7 +518,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
         return;
     }
     
-    int groupSize = static_cast<int>(std::round(1.0f / GContext.CUBE_UNIT));
+    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
@@ -524,7 +541,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z, procType);
+                            probeBaker.ProcessCube(x, y, z, procType);
             },
             [this](ResTask& task)
             {
@@ -539,10 +556,7 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
     if (needFlush)
     {
         // Upload to GPU, now entire range
-        Assets::AmbientCube* data = reinterpret_cast<Assets::AmbientCube*>(GPUMemory->Map(0, sizeof(Assets::AmbientCube) * ambientCubes.size()));
-        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(Assets::AmbientCube));
-        GPUMemory->Unmap();
-
+        probeBaker.UploadGPU(*GPUMemory);
         needFlush = false;
     }
 
@@ -585,9 +599,9 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
     }
 }
 
-void FCPUAccelerationStructure::ClearAmbientCubes()
+void FCPUProbeBaker::ClearAmbientCubes()
 {
-    for(auto& cube : (*GContext.Cubes))
+    for(auto& cube : ambientCubes)
     {
         cube.Active = 1;
         cube.Lighting = 0;
@@ -626,8 +640,6 @@ void FCPUAccelerationStructure::ClearAmbientCubes()
         cube.NegX_S = packedColor;
         cube.NegX_D = packedColor;
     }
-
-    needFlush = true;
 }
 
 void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
