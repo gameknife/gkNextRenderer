@@ -488,7 +488,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
         // 按打乱后的顺序添加任务
         for (const auto& [x, z] : coordinates) {
-            needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Iterate});
+            needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
         }
 
         // add 1 copy pass
@@ -496,7 +496,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
         {
             for (int z = 0; z < lengthZ - 1; z++)
             {
-                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Copy});
+                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Copy, EBakerType::EBT_Probe});
             }
         }
 
@@ -505,13 +505,13 @@ void FCPUAccelerationStructure::AsyncProcessFull()
         {
             for (int z = 0; z < lengthZ - 1; z++)
             {
-                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Blur});
+                needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Blur, EBakerType::EBT_Probe});
             }
         }
     }
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType)
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType)
 {
     if (bvhInstanceList.empty())
     {
@@ -580,7 +580,7 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 
             for( auto& group : needUpdateGroups)
             {
-                AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group));
+                AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group));
             }
 
             needUpdateGroups.clear();
@@ -598,7 +598,7 @@ void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
     for (int x = min.x; x <= max.x; ++x) {
         for (int z = min.z; z <= max.z; ++z) {
             glm::ivec3 point(x, 1, z);
-            needUpdateGroups.push_back({point, ECubeProcType::ECPT_Iterate});
+            needUpdateGroups.push_back({point, ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
         }
     }
 }

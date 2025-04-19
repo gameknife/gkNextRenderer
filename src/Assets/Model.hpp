@@ -64,14 +64,14 @@ namespace Assets
             lightUp = normalize(cross(lightDir, lightRight));
 
             // 定义阴影图覆盖的世界空间大小
-            float halfSize = 40.f;
+            float halfSize = 200.f;
 
             // 构建从光源视角的观察矩阵（将光源放在远处）
-            vec3 lightPos = vec3(0) - lightDir * 500.f;
+            vec3 lightPos = vec3(0) - lightDir * 1000.f;
             mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, lightUp);
 
             // 创建正交投影矩阵
-            mat4 lightProj = glm::ortho(-halfSize, halfSize, -halfSize, halfSize, 0.1f, 2000.f);
+            mat4 lightProj = glm::ortho(-halfSize, halfSize, -halfSize, halfSize, 500.f, 2000.f);
 
             // 返回组合的视图投影矩阵
             return lightProj * lightView;

@@ -33,12 +33,19 @@ namespace Vulkan
 {
     class DeviceMemory;
 }
+
 enum class ECubeProcType : uint8_t
 {
     ECPT_Clear,
     ECPT_Iterate,
     ECPT_Copy,
     ECPT_Blur,
+};
+
+enum class EBakerType : uint8_t
+{
+    EBT_Probe,
+    EBT_FarProbe,
 };
 
 struct FCPUBLASVertInfo
@@ -94,7 +101,7 @@ public:
 
    
     void AsyncProcessFull();
-    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType);
+    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory);
 
@@ -110,7 +117,7 @@ private:
         
     std::vector<uint32_t> lastBatchTasks;
 
-    std::vector<std::tuple<glm::ivec3, ECubeProcType> > needUpdateGroups;
+    std::vector<std::tuple<glm::ivec3, ECubeProcType, EBakerType> > needUpdateGroups;
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;

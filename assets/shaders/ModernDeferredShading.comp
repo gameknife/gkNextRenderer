@@ -178,7 +178,7 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 
     // 根据法线与光照方向的夹角调整偏移值
     float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-    bias = mix(0.00001, 0.000005, cosTheta); // 斜面使用更大的偏移值
+    bias = mix(0.0001, 0.00005, cosTheta); // 斜面使用更大的偏移值
 
     // 从阴影贴图中采样获取最近深度
     float closestDepth = texture(ShadowMapSampler, projCoords.xy).x;
