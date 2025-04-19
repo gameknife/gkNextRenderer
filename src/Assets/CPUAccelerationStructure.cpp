@@ -469,7 +469,15 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     int groupSize = 16;
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
-        
+
+    for (int x = 0; x < lengthX - 1; x++)
+    {
+        for (int z = 0; z < lengthZ - 1; z++)
+        {
+            needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_FarProbe});
+        }
+    }
+    
     // add 4 pass
     for(int pass = 0; pass < 2; ++pass)
     {
@@ -561,7 +569,7 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
     {
         // Upload to GPU, now entire range, optimize to partial upload later
         probeBaker.UploadGPU(*GPUMemory);
-        //farProbeBaker.UploadGPU(*FarGPUMemory);
+        farProbeBaker.UploadGPU(*FarGPUMemory);
         needFlush = false;
     }
 
