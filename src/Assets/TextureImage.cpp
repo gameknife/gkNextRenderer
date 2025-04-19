@@ -137,6 +137,8 @@ void TextureImage::UpdateDataMainThread(
     uint32_t startY,
     uint32_t width,
     uint32_t height,
+    uint32_t sourceWidth,
+    uint32_t sourceHeight,
     const unsigned char* data,
     uint32_t size)
 {
@@ -157,9 +159,9 @@ void TextureImage::UpdateDataMainThread(
 
     // 定义复制区域
     VkBufferImageCopy region{};
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;  // 紧凑排列
-    region.bufferImageHeight = 0;  // 紧凑排列
+    region.bufferOffset = (sourceWidth * startY + startX) * 4;  // 4 bytes per pixel
+    region.bufferRowLength = sourceWidth;  // 紧凑排列
+    region.bufferImageHeight = sourceHeight;  // 紧凑排列
 
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.imageSubresource.mipLevel = 0;

@@ -419,6 +419,10 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Main Tasks: %d", mainTasks);
 		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
 		ImGui::Text("Low Tasks: %d", lowTasks);
+		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+		ImGui::Text("Comp Queue: %d", completeTasks);
+
+
 		
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);

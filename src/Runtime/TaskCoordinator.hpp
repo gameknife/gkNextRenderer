@@ -335,6 +335,11 @@ public:
 
     uint32_t GetMainTaskCount();
 
+    uint32_t GetComleteTaskQueueCount()
+    {
+        return uint32_t(completeTaskQueue_.size());
+    }
+
     bool IsAllTaskComplete(std::vector<uint32_t>& tasks);
 
     void Tick();

@@ -466,7 +466,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     farProbeBaker.ClearAmbientCubes();
     
     // 目前的做法，只能以1m为单位，不过其实也够了
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int groupSize = 16;
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
         
@@ -518,7 +518,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
         return;
     }
     
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int groupSize = 16; // 4 x 4 x 40 a group
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
@@ -536,18 +536,19 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
     }
 
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, procType](ResTask& task)
+                [this, actualX, actualZ, groupSize, procType, bakerType](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
                         {
-                            probeBaker.ProcessCube(x, y, z, procType);
-                            farProbeBaker.ProcessCube(x, y, z, procType);
+                            bakerType == EBakerType::EBT_Probe ? probeBaker.ProcessCube(x, y, z, procType) : farProbeBaker.ProcessCube(x, y, z, procType);
                         }
             },
             [this](ResTask& task)
             {
+                // flush here
+                //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
                 needFlush = true;
             });
 
@@ -558,9 +559,9 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
 {
     if (needFlush)
     {
-        // Upload to GPU, now entire range
+        // Upload to GPU, now entire range, optimize to partial upload later
         probeBaker.UploadGPU(*GPUMemory);
-        farProbeBaker.UploadGPU(*FarGPUMemory);
+        //farProbeBaker.UploadGPU(*FarGPUMemory);
         needFlush = false;
     }
 
@@ -661,8 +662,8 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
     const vec3& sunDir = scene.GetEnvSettings().SunDirection();
     
     // 阴影图分辨率设置
-    int shadowMapSize = 2048;
-    int tileSize = 64; // 每个tile的大小
+    int shadowMapSize = SHADOWMAP_SIZE;
+    int tileSize = 256; // 每个tile的大小
     int tilesPerRow = shadowMapSize / tileSize;
     shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
 
@@ -681,7 +682,7 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
             int startY = currentTileY * tileSize;
 
                 // 处理当前tile
-            TaskCoordinator::GetInstance()->AddTask(
+            TaskCoordinator::GetInstance()->AddParralledTask(
                 [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](ResTask& task)
                 {
                     for (int y = 0; y < tileSize; y++)
@@ -720,16 +721,12 @@ void FCPUAccelerationStructure::GenShadowMap(Assets::Scene& scene)
                         }
                     }
                 },
-                [this, &scene, shadowMapSize](ResTask& task)
+                [this, &scene, shadowMapSize, startX, startY, tileSize](ResTask& task)
                 {
                     // 更新当前tile到GPU
                     Vulkan::CommandPool& commandPool = Assets::GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
-                    
-                    // shadowmap也是一个全图，因此需要把
                     const unsigned char* tileData = reinterpret_cast<const unsigned char*>(shadowMapR32.data());
-                    
-                    // 更新单个tile到GPU
-                    scene.ShadowMap().UpdateDataMainThread(commandPool, 0, 0, shadowMapSize, shadowMapSize,
+                    scene.ShadowMap().UpdateDataMainThread(commandPool, startX, startY, tileSize, tileSize, shadowMapSize, shadowMapSize,
                         tileData, shadowMapSize * shadowMapSize * sizeof(float));
                 }
             );

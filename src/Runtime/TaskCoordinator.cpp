@@ -85,10 +85,14 @@ void TaskCoordinator::WaitForAllParralledTask()
 uint32_t TaskCoordinator::GetMainTaskCount()
 {
     uint32_t count = 0;
+#if __APPLE__
+    count = mainthreadTaskQueue_.size();
+#else
     for ( auto& thread : threads_ )
     {
         count += uint32_t(thread->taskQueue_.size());
     }
+#endif
     return count;
 }
 
@@ -121,8 +125,8 @@ void TaskCoordinator::Tick()
     {
         // Check if we've exceeded 2ms
         auto currentTime = std::chrono::high_resolution_clock::now();
-        auto elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - startTime);
-        if (elapsedTime.count() > 2000) // 2ms = 2000µs
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime);
+        if (elapsedTime.count() > 4) // 4ms
         {
             break;
         }

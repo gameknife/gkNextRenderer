@@ -52,6 +52,8 @@ namespace Assets
 			uint32_t startY,
 			uint32_t width,
 			uint32_t height,
+			uint32_t sourcewidth,
+			uint32_t sourceheight,
 			const unsigned char* data,
 			uint32_t size);
 

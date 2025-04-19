@@ -8,6 +8,7 @@
 #define ALIGN_16
 #endif
 
+const int SHADOWMAP_SIZE = 4096;
 const int CUBE_SIZE_XY = 250;
 const int CUBE_SIZE_Z = 40;
 const float CUBE_UNIT = 0.25f;

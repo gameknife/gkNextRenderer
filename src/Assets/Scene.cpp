@@ -31,7 +31,7 @@ namespace Assets
                                                     farAmbientCubeBufferMemory_);
         
 
-        cpuShadowMap_.reset(new TextureImage(commandPool, 2048, 2048, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+        cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");
     }
 
