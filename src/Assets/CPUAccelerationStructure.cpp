@@ -470,9 +470,9 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     int lengthX = Assets::CUBE_SIZE_XY / groupSize;
     int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
 
-    for (int x = 0; x < lengthX - 1; x++)
+    for (int x = 0; x < lengthX; x++)
     {
-        for (int z = 0; z < lengthZ - 1; z++)
+        for (int z = 0; z < lengthZ; z++)
         {
             needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_FarProbe});
         }
@@ -483,8 +483,8 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     {
         // 先创建所有坐标对
         std::vector<std::pair<int, int>> coordinates;
-        for (int x = 0; x < lengthX - 1; x++) {
-            for (int z = 0; z < lengthZ - 1; z++) {
+        for (int x = 0; x < lengthX; x++) {
+            for (int z = 0; z < lengthZ; z++) {
                 coordinates.push_back({x, z});
             }
         }
@@ -500,18 +500,18 @@ void FCPUAccelerationStructure::AsyncProcessFull()
         }
 
         // add 1 copy pass
-        for (int x = 0; x < lengthX - 1; x++)
+        for (int x = 0; x < lengthX; x++)
         {
-            for (int z = 0; z < lengthZ - 1; z++)
+            for (int z = 0; z < lengthZ; z++)
             {
                 needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Copy, EBakerType::EBT_Probe});
             }
         }
 
         // add 1 blur pass
-        for (int x = 0; x < lengthX - 1; x++)
+        for (int x = 0; x < lengthX; x++)
         {
-            for (int z = 0; z < lengthZ - 1; z++)
+            for (int z = 0; z < lengthZ; z++)
             {
                 needUpdateGroups.push_back({glm::ivec3(x, 0, z), ECubeProcType::ECPT_Blur, EBakerType::EBT_Probe});
             }

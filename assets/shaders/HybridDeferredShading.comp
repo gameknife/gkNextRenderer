@@ -170,9 +170,8 @@ bool TraceRay(ivec2 ipos, vec3 origin, vec3 direction, vec3 iblColor, inout vec3
 		const vec3  albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : material.Diffuse.rgb;
 
 		vec3 hitPos = origin + direction * PayloadData.HitDist;
-		vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
 		// 这里都是hit了，那就走间接光照，直接用hitpos和normal，从AmbientCube里取
-		vec4 indirectFromAmbientCube = Camera.FastInterpole ? vec4(0) : interpolateProbes(localPos, normal);
+		vec4 indirectFromAmbientCube = Camera.FastInterpole ? vec4(0) : interpolateProbes(hitPos, normal);
 		bounceColor = albedo * indirectFromAmbientCube.rgb;
 		
 		return true;

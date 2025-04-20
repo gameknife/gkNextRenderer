@@ -155,7 +155,7 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
     if (traceLongDistance(offsetPos, rayDir, 5.0, 0.2, hitPosition, hitNormal, hitMaterialIdx)) {
         Material hitMaterial = Materials[hitMaterialIdx];
         vec4 hitAlbedo = hitMaterial.Diffuse;
-        vec4 hitAmbient = interpolateProbes((hitPosition - CUBE_OFFSET) / CUBE_UNIT, hitNormal);
+        vec4 hitAmbient = interpolateProbes(hitPosition, hitNormal);
         reflectionColor = hitAlbedo * hitAmbient;
         return true;
     }
@@ -338,7 +338,7 @@ void main() {
             }
             else
             {
-                indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET) / CUBE_UNIT, normal) * 2.0f;
+                indirectColor += interpolateSkyProbes(v.Position, normal) * 2.0f;
             }
         }
     }
