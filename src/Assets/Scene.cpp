@@ -133,6 +133,7 @@ namespace Assets
         MarkDirty();
 
         cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::PlayAllTracks()

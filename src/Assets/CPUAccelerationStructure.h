@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <functional>
+#include <queue>
 
 #include "Material.hpp"
 
@@ -40,6 +41,7 @@ enum class ECubeProcType : uint8_t
     ECPT_Iterate,
     ECPT_Copy,
     ECPT_Blur,
+    ECPT_Fence,
 };
 
 enum class EBakerType : uint8_t
@@ -117,7 +119,7 @@ private:
         
     std::vector<uint32_t> lastBatchTasks;
 
-    std::vector<std::tuple<glm::ivec3, ECubeProcType, EBakerType> > needUpdateGroups;
+    std::queue<std::tuple<glm::ivec3, ECubeProcType, EBakerType> > needUpdateGroups;
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
