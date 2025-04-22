@@ -363,6 +363,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
         {
             uint32_t centerIdx = y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x;
             Assets::AmbientCube& centerCube = ambientCubes[centerIdx];
+            centerCube.ExtInfo3 = 0;
 
             // 如果当前立方体不活跃，不进行模糊处理
            // if (centerCube.Active != 1) return;
@@ -442,7 +443,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
                 centerCube.PosZ_S = packRGB10A2(blurredPosZ_S * invWeight);
                 centerCube.NegZ_S = packRGB10A2(blurredNegZ_S * invWeight);
 
-                centerCube.Active = 1;
+                centerCube.ExtInfo3 = 1;
             }
         }
         break;

@@ -114,7 +114,7 @@ vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, useFar);
-        if (cube.Active == 0) continue;
+        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -171,7 +171,7 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, useFar);
-        if (cube.Active != 1) continue;
+        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;

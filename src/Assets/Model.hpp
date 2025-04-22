@@ -64,7 +64,7 @@ namespace Assets
             lightUp = normalize(cross(lightDir, lightRight));
 
             // 定义阴影图覆盖的世界空间大小
-            float halfSize = 200.f;
+            float halfSize = 100.f;
 
             // 构建从光源视角的观察矩阵（将光源放在远处）
             vec3 lightPos = vec3(0) - lightDir * 1000.f;

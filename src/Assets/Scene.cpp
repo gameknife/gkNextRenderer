@@ -147,6 +147,8 @@ namespace Assets
     void Scene::MarkEnvDirty()
     {
         //cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::Tick(float DeltaSeconds)
