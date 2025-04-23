@@ -125,4 +125,5 @@
         "xutility": "cpp",
         "slist": "cpp"
     },
+    "glsllint.glslangValidatorArgs": ["-V"]
 }
