@@ -125,5 +125,6 @@
         "xutility": "cpp",
         "slist": "cpp"
     },
-    "glsllint.glslangValidatorArgs": ["-V"]
+    "glsllint.glslangValidatorArgs": ["-V"],
+    "cmake.buildDirectory": "${workspaceFolder}/build/windows-vscode",
 }
