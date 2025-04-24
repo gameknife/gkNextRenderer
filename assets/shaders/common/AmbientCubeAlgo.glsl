@@ -32,10 +32,10 @@ bool IsInside( vec3 origin, inout vec3 offset, inout uint materialId)
 }
 
 #ifdef __cplusplus
-vec4 TraceOcclusion(uvec4& RandomSeed, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
+vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
 {
 #else
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint activeProbe, inout uint materialId, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
+vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProbe, inout uint materialId, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
 {
 #endif
     vec4 rayColor = vec4(0.0);
@@ -43,9 +43,9 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
     skyColor = vec4(0.0);
 
     // Generate a random angle for z-axis rotation
-    float randAngle = RandomFloat(RandomSeed) * 6.283185f;
-    float cosTheta = cos(randAngle);
-    float sinTheta = sin(randAngle);
+//    float randAngle = RandomFloat(RandomSeed) * 6.283185f;
+//    float cosTheta = cos(randAngle);
+//    float sinTheta = sin(randAngle);
     float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
     
     bool offsetProbe = false;
@@ -53,17 +53,17 @@ vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout uint 
 
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        vec3 hemiVec = hemisphereVectors[i];
+        vec3 hemiVec = hemisphereVectors[i + iterate * FACE_TRACING];
 
         // Apply rotation around z-axis
-        vec3 rotatedVec = vec3(
-        hemiVec.x * cosTheta - hemiVec.y * sinTheta,
-        hemiVec.x * sinTheta + hemiVec.y * cosTheta,
-        hemiVec.z
-        );
+//        vec3 rotatedVec = vec3(
+//        hemiVec.x * cosTheta - hemiVec.y * sinTheta,
+//        hemiVec.x * sinTheta + hemiVec.y * cosTheta,
+//        hemiVec.z
+//        );
 
         // Align with the surface normal
-        vec3 rayDir = AlignWithNormal(rotatedVec, basis);
+        vec3 rayDir = AlignWithNormal(hemiVec, basis);
         vec3 OutNormal;
         uint OutMaterialId;
         uint OutInstanceId;

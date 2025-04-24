@@ -298,43 +298,43 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 // 正Y方向
-                cube.PosY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.PosY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 // 负Y方向
-                cube.NegY_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.NegY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 
                 // 正X方向
-                cube.PosX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.PosX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 
                 // 负X方向
-                cube.NegX_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(-1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.NegX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(-1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 
                 // 正Z方向
-                cube.PosZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,1), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.PosZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,1), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
                 
                 // 负Z方向
-                cube.NegZ_D = packRGB10A2( TraceOcclusion( RandomSeed, probePos, vec3(0,0,-1), cube.Active, matId, bounceColor, skyColor, ubo) );
-                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
-                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, cube.ExtInfo2 == 1 ? 1.0f: 0.5f );
+                cube.NegZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,-1), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 1.0f / cube.ExtInfo2 );
                 cube.ExtInfo1 = matId;
                 if (cube.Active == 0) return;
             }
