@@ -152,6 +152,8 @@ void main() {
     vec3 offset = vec3(0.0);
     bool Inside = IsInside( origin, offset, matId);
 
+    Cubes[gIdx].ExtInfo2 = Cubes[gIdx].ExtInfo2 + 1;
+
     if (Inside)
     {
         origin = origin + offset;

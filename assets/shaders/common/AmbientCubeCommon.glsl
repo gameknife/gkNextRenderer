@@ -1,7 +1,7 @@
 #ifdef __cplusplus
-#define HIGH_QUALITY 1
+#define HIGH_QUALITY 0
 #else
-#define HIGH_QUALITY 1
+#define HIGH_QUALITY 0
 #endif
 
 #define MAX_ILLUMINANCE 512.f

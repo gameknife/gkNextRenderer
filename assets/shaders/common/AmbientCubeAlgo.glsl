@@ -53,7 +53,7 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
 
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        vec3 hemiVec = hemisphereVectors[i + iterate * FACE_TRACING];
+        vec3 hemiVec = hemisphereVectors[i + (iterate % 32) * FACE_TRACING];
 
         // Apply rotation around z-axis
 //        vec3 rotatedVec = vec3(
