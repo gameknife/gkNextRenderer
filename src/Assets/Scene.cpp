@@ -132,7 +132,10 @@ namespace Assets
         UpdateMaterial();
         MarkDirty();
 
-        cpuAccelerationStructure_.AsyncProcessFull();
+        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
+        {
+            cpuAccelerationStructure_.AsyncProcessFull();
+        }
         cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
@@ -146,8 +149,10 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        //cpuAccelerationStructure_.AsyncProcessFull();
-        cpuAccelerationStructure_.AsyncProcessFull();
+        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
+        {
+            cpuAccelerationStructure_.AsyncProcessFull();
+        }
         cpuAccelerationStructure_.GenShadowMap(*this);
     }
 

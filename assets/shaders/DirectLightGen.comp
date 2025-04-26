@@ -23,7 +23,7 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 layout(push_constant) uniform PushConsts {
     uint globalOffset;
-    uint unitSize;
+    uint cascade;
 } pushConsts;
 
 #include "common/RTSimple.glsl"
@@ -119,7 +119,7 @@ uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
 vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId, uint OutInstanceId)
 {
     const Material material = Materials[OutMaterialId];
-    vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
+    vec3 localPos = (hitPos - (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR)) / (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR);
     return material.Diffuse * interpolateDIProbes(localPos, OutNormal);
 }
 
@@ -140,7 +140,7 @@ void main() {
     uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
-    vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
+    vec3 origin = vec3(x, y, z) * (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
 
     uint activeProbe = 1;
     uint matId = 0;

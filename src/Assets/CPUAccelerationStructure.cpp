@@ -440,7 +440,7 @@ void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory)
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
-{
+{    
     // clean
     while (!needUpdateGroups.empty())
         needUpdateGroups.pop();
