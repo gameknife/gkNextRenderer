@@ -1,20 +1,22 @@
 #version 460
 #extension GL_GOOGLE_include_directive: require
+#extension GL_EXT_shader_image_load_formatted : require
+
 #include "Platform.glsl"
 #include "common/UniformBufferObject.glsl"
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
 
-layout (binding = 0, rgba16f) uniform image2D NewSourceImage;
-layout (binding = 1, rgba16f) uniform image2D AccumulateImage;
-layout (binding = 2, rgba16f) uniform image2D Accumulate1Image;
-layout (binding = 3, rg32f) uniform image2D MotionVectorImage;
+layout (binding = 0) uniform image2D NewSourceImage;
+layout (binding = 1) uniform image2D AccumulateImage;
+layout (binding = 2) uniform image2D Accumulate1Image;
+layout (binding = 3) uniform image2D MotionVectorImage;
 layout (binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
-layout (binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
-layout (binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
-layout (binding = 7, rgba8) uniform image2D OutImage;
-layout (binding = 2, rgba16f) uniform image2D InNormal;
+layout (binding = 5) uniform uimage2D VisibilityBuffer;
+layout (binding = 6) uniform uimage2D Visibility1Buffer;
+layout (binding = 7) uniform image2D OutImage;
+layout (binding = 8) uniform image2D InNormal;
 
 layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 

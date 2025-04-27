@@ -1,7 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_shader_image_load_formatted : require
 
-layout(binding = 0, rgba8) uniform image2D OutImage;
+layout(binding = 0) uniform image2D OutImage;
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 void main() {

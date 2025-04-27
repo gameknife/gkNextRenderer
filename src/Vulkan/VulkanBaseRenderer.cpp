@@ -308,6 +308,8 @@ namespace Vulkan
     {
         deviceFeatures.fillModeNonSolid = true;
         deviceFeatures.samplerAnisotropy = true;
+        deviceFeatures.shaderStorageImageReadWithoutFormat = true;
+        deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
 
         // Required extensions. windows only
 #if WIN32

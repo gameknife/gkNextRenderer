@@ -162,9 +162,10 @@ GBufferPipeline::GBufferPipeline(
 
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_B8G8R8A8_UNORM, depthBuffer,
+	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R16G16B16A16_SFLOAT, depthBuffer,
 		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
-
+	renderPass_->SetDebugName("Deferred GBuffer Render Pass");
+	
 	// Load shaders.
 	const ShaderModule vertShader(device, "assets/shaders/GBufferPass.vert.spv");
 	const ShaderModule fragShader(device, "assets/shaders/GBufferPass.frag.spv");

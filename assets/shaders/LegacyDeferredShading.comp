@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_shader_image_load_formatted : require
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
@@ -8,10 +9,10 @@
 #include "common/ColorFunc.glsl"
 #include "common/Random.glsl"
 
-layout(binding = 0, rgba8) readonly uniform image2D GBuffer0Image;
-layout(binding = 1, rgba16f) readonly uniform image2D GBuffer1Image;
-layout(binding = 2, rgba16f) readonly uniform image2D GBuffer2Image;
-layout(binding = 3, rgba8) writeonly uniform image2D OutImage;
+layout(binding = 0) readonly uniform image2D GBuffer0Image;
+layout(binding = 1) readonly uniform image2D GBuffer1Image;
+layout(binding = 2) readonly uniform image2D GBuffer2Image;
+layout(binding = 3) writeonly uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 layout(binding = 5) buffer AmbientCubeArray { AmbientCube[] Cubes; };
 layout(binding = 6) buffer FarAmbientCubeArray { AmbientCube[] FarCubes; };

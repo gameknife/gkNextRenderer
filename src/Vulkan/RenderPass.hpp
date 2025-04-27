@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include "Vulkan.hpp"
 
 namespace Vulkan
@@ -22,6 +23,7 @@ namespace Vulkan
 		const class SwapChain& SwapChain() const { return swapChain_; }
 		const class DepthBuffer& DepthBuffer() const { return depthBuffer_; }
 
+		void SetDebugName(const std::string& name);
 	private:
 
 		const class SwapChain& swapChain_;

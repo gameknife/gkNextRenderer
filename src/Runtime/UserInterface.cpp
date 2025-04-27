@@ -62,6 +62,7 @@ UserInterface::UserInterface(
 	};
 	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	renderPass_->SetDebugName("ImGui Render Pass");
 	
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
@@ -187,6 +188,7 @@ UserInterface::~UserInterface()
 void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
 {
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	renderPass_->SetDebugName("ImGui Render Pass");
 	
 	for (const auto& imageView : swapChain.ImageViews())
 	{
