@@ -272,9 +272,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     switch (procType)
     {
         case ECubeProcType::ECPT_Clear:
-            {
-                
-            }
+        case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Iterate:
             {
@@ -459,7 +457,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
             needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_FarProbe});
     
     // 2 pass near probe iterate
-    for(int pass = 0; pass < 2; ++pass)
+    for(int pass = 0; pass < 4; ++pass)
     {
         // shuffle
         std::vector<std::pair<int, int>> coordinates;
