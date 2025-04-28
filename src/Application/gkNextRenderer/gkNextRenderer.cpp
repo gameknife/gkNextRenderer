@@ -212,7 +212,6 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("AntiAlias"), &UserSetting.TAA);
 			ImGui::SliderInt(LOCTEXT("Samples"), &UserSetting.NumberOfSamples, 1, 16);
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &UserSetting.AdaptiveSteps, 2, 64);
-			ImGui::Checkbox(LOCTEXT("BakeWithGPU"), &UserSetting.BakeWithGPU);
 			ImGui::Checkbox(LOCTEXT("FastGather"), &UserSetting.FastGather);
 			ImGui::SliderInt(LOCTEXT("AmbientSpeed"), &UserSetting.BakeSpeedLevel, 0, 2);
 

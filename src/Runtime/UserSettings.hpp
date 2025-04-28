@@ -18,7 +18,6 @@ struct UserSettings final
 	float AdaptiveVariance;
 	int AdaptiveSteps;
 	bool TAA {};
-	bool BakeWithGPU = false;
 	bool FastGather = false;
 	bool FastInterpole = false;
 	bool DebugDraw_Lighting = false;

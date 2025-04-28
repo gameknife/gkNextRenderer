@@ -275,7 +275,7 @@ namespace Vulkan::RayTracing
         }
 #endif
         
-        if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing)
+        if(supportRayCast_ && CurrentLogicRendererType() != ERT_PathTracing)
         {
 #if !ANDROID
             const int cubesPerGroup = 32;
@@ -290,20 +290,20 @@ namespace Vulkan::RayTracing
 
             
 #if !ANDROID
-            int temporalFrames = 60;
+            int temporalFrames = 120;
             switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
             {
             case 0:
-                temporalFrames = 1;
+                temporalFrames = 30;
                 break;
             case 1:
-                temporalFrames = 60;
+                temporalFrames = 120;
                 break;
             case 2:
                 temporalFrames = 300;
                 break;
             default:
-                temporalFrames = 60;
+                temporalFrames = 120;
                 break;
             }
 #else

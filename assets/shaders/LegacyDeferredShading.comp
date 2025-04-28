@@ -14,14 +14,11 @@ layout(binding = 1) readonly uniform image2D GBuffer1Image;
 layout(binding = 2) readonly uniform image2D GBuffer2Image;
 layout(binding = 3) writeonly uniform image2D OutImage;
 layout(binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
-layout(binding = 5) buffer AmbientCubeArray { AmbientCube[] Cubes; };
-layout(binding = 6) buffer FarAmbientCubeArray { AmbientCube[] FarCubes; };
 layout(binding = 7) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 layout(binding = 8) uniform sampler2D ShadowMapSampler;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
-#include "common/AmbientCube.glsl"
 #include "common/SampleIBL.glsl"
 
 #if DESKTOP
@@ -29,7 +26,6 @@ layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 #else
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
-
 
 float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
     // 计算光源空间坐标
@@ -51,105 +47,6 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
     return shadow;
-}
-
-
-bool interpolateNearProbes(vec3 pos, vec3 normal, out vec4 outResult) {
-    // Early out if position is outside the probe grid
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
-        return false;
-    }
-
-    // Get the base indices and fractional positions
-    ivec3 baseIdx = ivec3(floor(pos));
-    vec3 frac = fract(pos);
-
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
-    float totalWeight = 0.0;
-    vec4 result = vec4(0.0);
-
-    for (int i = 0; i < 8; i++) {
-        ivec3 offset = ivec3(
-        i & 1,
-        (i >> 1) & 1,
-        (i >> 2) & 1
-        );
-
-        ivec3 probePos = baseIdx + offset;
-        int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
-        probePos.z * CUBE_SIZE_XY + probePos.x;
-        AmbientCube cube = Cubes[idx];
-        if (cube.Active == 0) continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        vec4 sampleColor = sampleAmbientCubeHL2_Sky(cube, normal, occlusion);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    if(totalWeight > 0.0)
-    {
-        outResult = result / totalWeight;
-        return true;
-    }
-    return false;
-}
-
-bool interpolateFarProbes(vec3 pos, vec3 normal, out vec4 outResult) {
-    // Early out if position is outside the probe grid
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
-        return false;
-    }
-
-    // Get the base indices and fractional positions
-    ivec3 baseIdx = ivec3(floor(pos));
-    vec3 frac = fract(pos);
-
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
-    float totalWeight = 0.0;
-    vec4 result = vec4(0.0);
-
-    for (int i = 0; i < 8; i++) {
-        ivec3 offset = ivec3(
-        i & 1,
-        (i >> 1) & 1,
-        (i >> 2) & 1
-        );
-
-        ivec3 probePos = baseIdx + offset;
-        int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
-        probePos.z * CUBE_SIZE_XY + probePos.x;
-        AmbientCube cube = FarCubes[idx];
-        if (cube.Active == 0) continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        vec4 sampleColor = sampleAmbientCubeHL2_Sky(cube, normal, occlusion);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    if(totalWeight > 0.0)
-    {
-        outResult = result / totalWeight;
-        return true;
-    }
-    return false;
 }
 
 void main() {
@@ -175,9 +72,7 @@ void main() {
     vec3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1);
-    //vec3 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1).rgb * Camera.SkyIntensity : vec3(0.0);
-    vec4 iblLight = interpolateSkyProbes(pbr_param.xyz, normal);
-    iblLight *= 2.0f;
+    vec4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
     
     const vec3 lightVector = Camera.SunDirection.xyz;
     const vec4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;
@@ -195,8 +90,6 @@ void main() {
     }
     
     vec4 outColor = albedo * d * shadow + iblLight * albedo;
-
-    
     
     if(Camera.HDR)
     {

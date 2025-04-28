@@ -659,8 +659,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
-
-    ubo.BakeWithGPU = userSettings_.BakeWithGPU;
+    
     ubo.FastGather = userSettings_.FastGather;
     ubo.FastInterpole = userSettings_.FastInterpole;
     ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;

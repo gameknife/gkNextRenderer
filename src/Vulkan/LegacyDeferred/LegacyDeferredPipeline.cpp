@@ -236,9 +236,6 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	// Others like in frag
 			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-				{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-        	
 			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{8, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
@@ -258,15 +255,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	VkDescriptorBufferInfo uniformBufferInfo = {};
         	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
         	uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-        	VkDescriptorBufferInfo ambientCubeBufferInfo = {};
-        	ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
-        	ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
-
-        	VkDescriptorBufferInfo farAmbientCubeBufferInfo = {};
-        	farAmbientCubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
-        	farAmbientCubeBufferInfo.range = VK_WHOLE_SIZE;
-
+        	
         	VkDescriptorBufferInfo hdrshBufferInfo = {};
         	hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
         	hdrshBufferInfo.range = VK_WHOLE_SIZE;
@@ -280,8 +269,6 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
             	descriptorSets.Bind(i, 2, Info2),
             	descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, uniformBufferInfo),
-            	descriptorSets.Bind(i, 5, ambientCubeBufferInfo),
-            	descriptorSets.Bind(i, 6, farAmbientCubeBufferInfo),
             	descriptorSets.Bind(i, 7, hdrshBufferInfo),
 				descriptorSets.Bind(i, 8, Info12),
             };
