@@ -33,17 +33,25 @@ Options::Options(const int argc, const char* argv[])
 	
 
 		("h,help", "Print usage");
-	auto result = options.parse(argc, argv);
-
-	if (result.count("help"))
+	try
 	{
-		std::cout << options.help() << std::endl;
-		exit(0);
+		auto result = options.parse(argc, argv);
+
+		if (result.count("help"))
+		{
+			std::cout << options.help() << std::endl;
+			exit(0);
+		}
+
+		if (PresentMode > 3)
+		{
+			Throw(std::out_of_range("Invalid present mode."));
+		}
 	}
-
-	if (PresentMode > 3)
+	catch ( const cxxopts::exceptions::exception& e)
 	{
-		Throw(std::out_of_range("Invalid present mode."));
+		std::cerr << e.what() << std::endl;
+		exit(0);
 	}
 }
 

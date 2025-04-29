@@ -276,7 +276,7 @@ namespace Vulkan::RayTracing
 #endif
 
 #if !ANDROID
-        if(supportRayCast_ && CurrentLogicRendererType() != ERT_PathTracing)
+        if(supportRayCast_ && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
         {
 #if !ANDROID
             const int cubesPerGroup = 32;
