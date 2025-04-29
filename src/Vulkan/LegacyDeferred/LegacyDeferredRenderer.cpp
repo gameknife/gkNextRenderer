@@ -28,9 +28,8 @@ LegacyDeferredRenderer::~LegacyDeferredRenderer()
 	LegacyDeferredRenderer::DeleteSwapChain();
 }
 	
-void LegacyDeferredRenderer::CreateSwapChain()
+void LegacyDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	const auto extent = SwapChain().Extent();
 	const auto format = SwapChain().Format();
 
 	gbufferPipeline_.reset(new GBufferPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
@@ -41,14 +40,14 @@ void LegacyDeferredRenderer::CreateSwapChain()
 	rtGBuffer1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 
-	rtGBuffer2_.reset(new RenderImage(Device(), extent, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
+	rtGBuffer2_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT));
 
 	rtOutput_.reset(new RenderImage(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
 
 	// MRT
-	deferredFrameBuffer_.reset(new FrameBuffer(rtGBuffer0_->GetImageView(), rtGBuffer1_->GetImageView(), rtGBuffer2_->GetImageView(), gbufferPipeline_->RenderPass()));
+	deferredFrameBuffer_.reset(new FrameBuffer(extent, rtGBuffer0_->GetImageView(), rtGBuffer1_->GetImageView(), rtGBuffer2_->GetImageView(), gbufferPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), rtGBuffer0_->GetImageView(), rtGBuffer1_->GetImageView(), rtGBuffer2_->GetImageView(), rtOutput_->GetImageView(), UniformBuffers(), GetScene()));
 }
 
@@ -91,7 +90,7 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	renderPassInfo.renderPass = gbufferPipeline_->RenderPass().Handle();
 	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
 	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = SwapChain().Extent();
+	renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 	
@@ -144,9 +143,9 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
 								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
 #if ANDROID
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 32, SwapChain().Extent().height / 32, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 32, SwapChain().RenderExtent().height / 32, 1);	
 #else
-		vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 4, 1);	
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);	
 #endif
 		// copy to swap-buffer
 		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
@@ -164,7 +163,7 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	copyRegion.srcOffset = {0, 0, 0};
 	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
 	copyRegion.dstOffset = {0, 0, 0};
-	copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+	copyRegion.extent = {rtOutput_->GetImage().Extent().width, rtOutput_->GetImage().Extent().height, 1};
 
 	vkCmdCopyImage(commandBuffer,
 				   rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,

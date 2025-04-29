@@ -37,7 +37,7 @@ namespace Vulkan::ModernDeferred
 		ModernDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		~ModernDeferredRenderer();
 		
-		void CreateSwapChain() override;
+		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
@@ -45,10 +45,23 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<class VisibilityPipeline> visibilityPipeline_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
+		
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 
-		std::unique_ptr<RenderImage> rtVisibilityBuffer_;
+		std::unique_ptr<RenderImage> rtAccumlation;
+		
+		std::unique_ptr<RenderImage> rtPingPong0;
+		std::unique_ptr<RenderImage> rtPingPong1;
+		
+		std::unique_ptr<RenderImage> rtVisibility0;
+		std::unique_ptr<RenderImage> rtVisibility1;
+		
 		std::unique_ptr<RenderImage> rtOutput_;
 		std::unique_ptr<RenderImage> rtMotionVector_;
+
+		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtNormal_;
 	};
 
 }

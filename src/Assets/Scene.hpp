@@ -15,6 +15,7 @@ namespace Vulkan
 	class CommandPool;
 	class DeviceMemory;
 	class Image;
+	class RenderImage;
 }
 
 namespace Assets
@@ -101,8 +102,11 @@ namespace Assets
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
+		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
 
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
+
+		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -136,9 +140,15 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
+		
+		std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
+		
 
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
+
+		std::unique_ptr<TextureImage> cpuShadowMap_;
 
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};

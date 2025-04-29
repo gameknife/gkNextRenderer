@@ -281,4 +281,10 @@ namespace Vulkan
             renderPass_ = nullptr;
         }
     }
+
+    void RenderPass::SetDebugName(const std::string& name)
+    {
+        const auto& debugUtils = swapChain_.Device().DebugUtils();
+        debugUtils.SetObjectName(renderPass_, name.c_str());
+    }
 }

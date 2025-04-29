@@ -3,6 +3,7 @@
 #include "Options.hpp"
 #include "Sphere.hpp"
 #include "Vulkan/BufferUtil.hpp"
+#include "Assets/TextureImage.hpp"
 #include <chrono>
 #include <unordered_set>
 
@@ -26,6 +27,12 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
                                                     ambientCubeBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "FarAmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), farAmbientCubeBuffer_,
+                                                    farAmbientCubeBufferMemory_);
+        
+
+        cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+        cpuShadowMap_->SetDebugName("Shadowmap");
     }
 
     Scene::~Scene()
@@ -50,8 +57,13 @@ namespace Assets
         ambientCubeBuffer_.reset();
         ambientCubeBufferMemory_.reset();
 
+        farAmbientCubeBuffer_.reset();
+        farAmbientCubeBufferMemory_.reset();
+
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
+
+        cpuShadowMap_.reset();
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
@@ -120,7 +132,15 @@ namespace Assets
         UpdateMaterial();
         MarkDirty();
 
+#if ANDROID
         cpuAccelerationStructure_.AsyncProcessFull();
+#else
+        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
+        {
+            cpuAccelerationStructure_.AsyncProcessFull();
+        }
+#endif
+        cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::PlayAllTracks()
@@ -133,7 +153,15 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
+#if ANDROID
         cpuAccelerationStructure_.AsyncProcessFull();
+#else
+        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
+        {
+            cpuAccelerationStructure_.AsyncProcessFull();
+        }
+#endif
+        cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::Tick(float DeltaSeconds)
@@ -181,7 +209,7 @@ namespace Assets
 
         if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
         {
-            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get() );
+            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get() );
         }
     }
 

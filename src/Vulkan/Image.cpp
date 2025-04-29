@@ -24,6 +24,7 @@ Image::Image(
 	extent_(extent),
 	format_(format),
 	imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED),
+	mipLevel_(miplevel),
 	external_(useForExternal)
 {
 	VkImageCreateInfo imageInfo = {};
@@ -110,7 +111,7 @@ void Image::TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLay
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = image_;
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.levelCount = mipLevel_;
 		barrier.subresourceRange.baseArrayLayer = 0;
 		barrier.subresourceRange.layerCount = 1;
 
@@ -155,6 +156,20 @@ void Image::TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLay
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		}
+		else if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) 
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
+		else if (newLayout == VK_IMAGE_LAYOUT_GENERAL) 
+		{
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
 		else 
 		{
 			Throw(std::invalid_argument("unsupported layout transition"));
@@ -184,5 +199,38 @@ void Image::CopyFrom(CommandPool& commandPool, const Buffer& buffer)
 		vkCmdCopyBufferToImage(commandBuffer, buffer.Handle(), image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	});
 }
+		
+	// Implement in Image.cpp
+	void Image::CopyFromToMipLevel(
+	    CommandPool& commandPool, 
+	    const Buffer& buffer, 
+	    uint32_t mipLevel,
+	    uint32_t mipWidth,
+	    uint32_t mipHeight)
+	{
+		SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
+		{
+		    VkBufferImageCopy region = {};
+		    region.bufferOffset = 0;
+		    region.bufferRowLength = 0;
+		    region.bufferImageHeight = 0;
+		    
+		    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		    region.imageSubresource.mipLevel = mipLevel;
+		    region.imageSubresource.baseArrayLayer = 0;
+		    region.imageSubresource.layerCount = 1;
+		    
+		    region.imageOffset = {0, 0, 0};
+		    region.imageExtent = {mipWidth, mipHeight, 1};
+		    
+		    vkCmdCopyBufferToImage(
+		        commandBuffer,
+		        buffer.Handle(),
+		        image_,
+		        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		        1,
+		        &region);
+		});
+	}
 
 }

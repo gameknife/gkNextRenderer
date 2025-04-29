@@ -38,3 +38,32 @@ int TracingOccludeFunction(in vec3 origin, in vec3 lightPos)
         return 1;
     }
 }
+
+// return if hits, this function may differ between Shader & Cpp
+bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uint OutMaterialId, out float OutRayDist, out uint OutInstanceId)
+{
+    rayQueryEXT rayQuery;
+    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
+
+    while( rayQueryProceedEXT(rayQuery) )
+    {
+
+    }
+
+    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
+        const bool IsCommitted = true;
+        const int InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
+        const float RayDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
+        const mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
+        const vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
+        const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
+        const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
+        OutRayDist = RayDist;
+
+        vec2 OutTexcoord;
+        SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
+        return true;
+    }
+
+    return false;
+}

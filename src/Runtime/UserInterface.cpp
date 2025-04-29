@@ -30,6 +30,7 @@
 
 #include "Engine.hpp"
 #include "Options.hpp"
+#include "TaskCoordinator.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
@@ -61,6 +62,7 @@ UserInterface::UserInterface(
 	};
 	descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	renderPass_->SetDebugName("ImGui Render Pass");
 	
 	// Initialise ImGui
 	IMGUI_CHECKVERSION();
@@ -186,10 +188,11 @@ UserInterface::~UserInterface()
 void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
 {
 	renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
+	renderPass_->SetDebugName("ImGui Render Pass");
 	
 	for (const auto& imageView : swapChain.ImageViews())
 	{
-		uiFrameBuffers_.emplace_back(*imageView, *renderPass_, false);
+		uiFrameBuffers_.emplace_back(swapChain.Extent(), *imageView, *renderPass_, false);
 	}
 }
 
@@ -413,6 +416,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
 		
 		ImGui::Text("Texture: %d", statistics.TextureCount);
+
+		uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
+		ImGui::Text("Main Tasks: %d", mainTasks);
+		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
+		ImGui::Text("Low Tasks: %d", lowTasks);
+		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+		ImGui::Text("Comp Queue: %d", completeTasks);
+
+
+		
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display

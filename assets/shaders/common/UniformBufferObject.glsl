@@ -1,3 +1,5 @@
+#ifndef UniformBufferObject_glsl
+
 #ifdef __cplusplus
 #define glbool uint32_t
 #define ALIGN_16 alignas(16)
@@ -6,10 +8,14 @@
 #define ALIGN_16
 #endif
 
-const int CUBE_SIZE_XY = 200;
-const int CUBE_SIZE_Z = 50;
+const int SHADOWMAP_SIZE = 4096;
+const int CUBE_SIZE_XY = 192;//256;
+const int CUBE_SIZE_Z = 48;
 const float CUBE_UNIT = 0.25f;
-const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.5, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
+const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
+
+const float CUBE_UNIT_FAR = 4.0f; // cover 0.8km x 0.8km x 0.16km
+const vec3 CUBE_OFFSET_FAR = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
 
 struct ALIGN_16 UniformBufferObject
 {
@@ -24,6 +30,8 @@ struct ALIGN_16 UniformBufferObject
 	vec4 SunDirection;
 	vec4 SunColor;
 	vec4 BackGroundColor;	//not used
+	
+	mat4 SunViewProjection;
 	
 	float Aperture;
 	float FocusDistance;
@@ -62,12 +70,11 @@ struct ALIGN_16 UniformBufferObject
 	
 	float BFSigmaNormal;
 	uint BFSize;
-
-	glbool BakeWithGPU;
+	
 	glbool FastGather;
 
 	glbool FastInterpole;
-	glbool Reserve2;
+	glbool DebugDraw_Lighting;
 	glbool Reserve3;
 	glbool Reserve4;
 };
@@ -108,9 +115,13 @@ struct ALIGN_16 AmbientCube
 	uint NegY_S;
 	uint PosX_S;
 	uint NegX_S;
-	
-	uvec4 Info;
-	uvec2 Info2;
+
+	uint Active;
+	uint Lighting;
+	uint ExtInfo1;
+	uint ExtInfo2;
+	uint ExtInfo3;
+	uint ExtInfo4;
 };
 
 struct ALIGN_16 SphericalHarmonics
@@ -119,3 +130,20 @@ struct ALIGN_16 SphericalHarmonics
 	float coefficients[3][9];
 	float padding;
 };
+
+struct ALIGN_16 LightObject
+{
+	vec4 p0;
+	vec4 p1;
+	vec4 p3;
+	vec4 normal_area;
+	
+	uint lightMatIdx;
+	uint reserved1;
+	uint reserved2;
+	uint reserved3;
+};
+
+
+#define UniformBufferObject_glsl
+#endif

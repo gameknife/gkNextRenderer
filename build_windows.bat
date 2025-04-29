@@ -9,9 +9,17 @@ set CMAKE="%CD%\build\vcpkg.windows\downloads\tools\cmake-3.29.2-windows\cmake-3
 
 for %%X in (msbuild.exe) do (set FOUND=%%~$PATH:X)
 if defined FOUND (
-set MSBUILD=msbuild
+    set MSBUILD=msbuild
 ) ELSE (
-set MSBUILD="%programfiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\msbuild.exe"
+    REM Check fallback paths
+    if exist "%programfiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\msbuild.exe" (
+        set MSBUILD="%programfiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\msbuild.exe"
+    ) ELSE if exist "%programfiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\msbuild.exe" (
+        set MSBUILD="%programfiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\msbuild.exe"
+    ) ELSE (
+        echo Error: msbuild.exe not found. Please ensure Visual Studio is installed and msbuild.exe is in PATH.
+        exit /b 1
+    )
 )
 
 cd build || goto :error

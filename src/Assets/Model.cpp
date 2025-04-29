@@ -196,7 +196,8 @@ namespace Assets
                 out_camera.cameras.push_back({ std::to_string(node.camera) + " " + node.name, ModelView, 40});
             }
         }
-        
+
+        uint32_t primaryMatIdx = 0;
         std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, meshId, out_nodes.size(), false);
         if (meshId != -1)
         {
@@ -207,6 +208,7 @@ namespace Assets
                 assert( i < 16 );
                 auto& primitive = model.meshes[node.mesh].primitives[i];
                 materialIdx[i] = (max(0, primitive.material));
+                primaryMatIdx = primitive.material;
             }
             sceneNode->SetMaterial(materialIdx);
         }
@@ -231,6 +233,7 @@ namespace Assets
             vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
             light.normal_area = glm::vec4(glm::normalize(dir),0);
             light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+            light.lightMatIdx = primaryMatIdx;
             
             out_lights.push_back(light);
         }
@@ -373,7 +376,7 @@ namespace Assets
             
             m.DiffuseTextureId = lambdaGetTexture( mat.pbrMetallicRoughness.baseColorTexture.index );
             m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index); // metallic in B, roughness in G
-           
+            
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
             
@@ -391,7 +394,7 @@ namespace Assets
 
             if (m.MRATextureId != -1)
             {
-                m.Metalness = 1.0f;
+                // m.Metalness = 1.0f; that makes huge problem, first dont change this
                 m.Fuzziness = 1.0f;
             }
 
@@ -1103,6 +1106,7 @@ namespace Assets
         light.p3 = vec4(p3,1);
         light.normal_area = vec4(dir, 0);
         light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
+        light.lightMatIdx = materialIdx;
         
         lights.push_back(light);
 

@@ -206,7 +206,7 @@ namespace
         auto boxPos = vec3(-1.30, 0, -0.80);
         
         materials.push_back({"cbox_white", 4, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
-        materials.push_back({"cball_white", 5, Material::Dielectric(1.85f, 0.0f)});
+        materials.push_back({"cball_white", 5, Material::Mixture(vec3(0.73f, 0.73f, 0.73f), 0.01f)});
         auto box0 = Model::CreateBox(vec3(-0.80, 0, -0.80), vec3(0.80, 1.60, 0.80));
         models.push_back(box0);
         auto ball0 = Model::CreateSphere(vec3(0, 0, 0), 1.0f);
@@ -214,7 +214,7 @@ namespace
         nodes.push_back(Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), cbox_model + 2, static_cast<uint32_t>(nodes.size()),
                                                  false));
         nodes.back()->SetVisible(true);
-        nodes.back()->SetMaterial({4});
+        nodes.back()->SetMaterial({5});
 
         auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, JPH::EMotionType::Dynamic);
         nodes.back()->BindPhysicsBody(id);

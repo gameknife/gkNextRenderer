@@ -68,9 +68,9 @@ namespace Vulkan::RayTracing
 #endif
     }
 
-    void RayQueryRenderer::CreateSwapChain()
+    void RayQueryRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
-        CreateOutputImage();
+        CreateOutputImage(extent);
         rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
@@ -84,6 +84,7 @@ namespace Vulkan::RayTracing
                                                                         rtVisibility0_->GetImageView(),
                                                                         rtVisibility1_->GetImageView(),
                                                                         rtOutput_->GetImageView(),
+                                                                        rtNormal_->GetImageView(),
                                                                         UniformBuffers(), GetScene()));
 
 
@@ -212,7 +213,12 @@ namespace Vulkan::RayTracing
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineNonDenoiser_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         composePipelineNonDenoiser_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 16), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 16), 1);
+
+                glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2) : glm::uvec2(0,0);
+                vkCmdPushConstants(commandBuffer, composePipelineNonDenoiser_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
+
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
             }
             
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
@@ -263,7 +269,7 @@ namespace Vulkan::RayTracing
             copyRegion.srcOffset = {0, 0, 0};
             copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.dstOffset = {0, 0, 0};
-            copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+            copyRegion.extent = { rtVisibility0_->GetImage().Extent().width, rtVisibility0_->GetImage().Extent().height, 1};
         
             vkCmdCopyImage(commandBuffer, rtVisibility0_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         }
@@ -318,9 +324,8 @@ namespace Vulkan::RayTracing
         }
     }
     
-    void RayQueryRenderer::CreateOutputImage()
+    void RayQueryRenderer::CreateOutputImage(const VkExtent2D& extent)
     {
-        const auto extent = SwapChain().Extent();
         const auto format = SwapChain().Format();
         const auto tiling = VK_IMAGE_TILING_OPTIMAL;
 

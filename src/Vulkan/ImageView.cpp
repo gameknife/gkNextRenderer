@@ -3,7 +3,7 @@
 
 namespace Vulkan {
 
-ImageView::ImageView(const class Device& device, const VkImage image, const VkFormat format, const VkImageAspectFlags aspectFlags) :
+ImageView::ImageView(const class Device& device, const VkImage image, const VkFormat format, const VkImageAspectFlags aspectFlags, const uint32_t miplevel) :
 	device_(device)
 {
 	VkImageViewCreateInfo createInfo = {};
@@ -17,7 +17,7 @@ ImageView::ImageView(const class Device& device, const VkImage image, const VkFo
 	createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 	createInfo.subresourceRange.aspectMask = aspectFlags;
 	createInfo.subresourceRange.baseMipLevel = 0;
-	createInfo.subresourceRange.levelCount = 1;
+	createInfo.subresourceRange.levelCount = miplevel;
 	createInfo.subresourceRange.baseArrayLayer = 0;
 	createInfo.subresourceRange.layerCount = 1;
 

@@ -12,7 +12,7 @@
 #include "Platform.glsl"
 #include "common/Heatmap.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
 layout(binding = 1) readonly buffer LightObjectArray { LightObject[] Lights; };
@@ -26,7 +26,7 @@ layout(binding = 9) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
-layout(binding = 10, rgba32f) uniform image2D AccumulationImage;
+layout(binding = 10, rgba16f) uniform image2D AccumulationImage;
 layout(binding = 11, rg32f) uniform image2D MotionVectorImage;
 layout(binding = 12, r32ui) uniform uimage2D VisibilityBuffer;
 layout(binding = 13, r32ui) uniform uimage2D Visibility1Buffer;

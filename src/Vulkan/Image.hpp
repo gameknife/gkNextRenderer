@@ -32,12 +32,20 @@ namespace Vulkan
 		void TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLayout);
 		void CopyFrom(CommandPool& commandPool, const Buffer& buffer);
 
+		void CopyFromToMipLevel(
+			Vulkan::CommandPool& commandPool, 
+			const Vulkan::Buffer& buffer, 
+			uint32_t mipLevel,
+			uint32_t mipWidth,
+			uint32_t mipHeight);
+		
 	private:
 
 		const class Device& device_;
 		const VkExtent2D extent_;
 		const VkFormat format_;
 		VkImageLayout imageLayout_;
+		uint32_t mipLevel_;
 		bool external_;
 		VULKAN_HANDLE(VkImage, image_)
 	};

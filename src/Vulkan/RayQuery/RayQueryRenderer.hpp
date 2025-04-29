@@ -45,13 +45,13 @@ namespace Vulkan::RayTracing
 			void* nextDeviceFeatures);// override;
 		
 		void OnDeviceSet() override;
-		void CreateSwapChain() override;
+		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		void BeforeNextFrame() override;
 	
 	private:
-		void CreateOutputImage();
+		void CreateOutputImage(const VkExtent2D& extent);
 
 		
 		

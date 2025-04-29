@@ -10,6 +10,7 @@
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -42,14 +43,14 @@ namespace Vulkan::ModernDeferred
         VkViewport viewport = {};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChain.Extent().width);
-        viewport.height = static_cast<float>(swapChain.Extent().height);
+        viewport.width = static_cast<float>(swapChain.RenderExtent().width);
+        viewport.height = static_cast<float>(swapChain.RenderExtent().height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
 
         VkRect2D scissor = {};
         scissor.offset = {0, 0};
-        scissor.extent = swapChain.Extent();
+        scissor.extent = swapChain.RenderExtent();
 
         VkPipelineViewportStateCreateInfo viewportState = {};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -148,7 +149,7 @@ namespace Vulkan::ModernDeferred
         // Create pipeline layout and render pass.
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32G32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
-
+        renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
         const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.spv");
         const ShaderModule fragShader(device, "assets/shaders/VisibilityPass.frag.spv");
@@ -200,8 +201,10 @@ namespace Vulkan::ModernDeferred
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView, const ImageView& motionVectorImageView,
-                                     const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
+    ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& miniGBufferImageView, const ImageView& finalImageView,
+        const ImageView& motionVectorImageView,
+        const ImageView& albedoImageView, const ImageView& normalImageView,
+        const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -223,8 +226,15 @@ namespace Vulkan::ModernDeferred
 
             {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-                {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
+            {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
+            {13, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -236,6 +246,8 @@ namespace Vulkan::ModernDeferred
             VkDescriptorImageInfo Info0 = {NULL, miniGBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info13 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info14 = {NULL, normalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
 
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -270,10 +282,17 @@ namespace Vulkan::ModernDeferred
             VkDescriptorBufferInfo ambientCubeBufferInfo = {};
             ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
             ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo farAmbientCubeBufferInfo = {};
+            farAmbientCubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            farAmbientCubeBufferInfo.range = VK_WHOLE_SIZE;
             
             VkDescriptorBufferInfo hdrshBufferInfo = {};
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
             hdrshBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorImageInfo Info12 = {scene.ShadowMap().Sampler().Handle(), scene.ShadowMap().ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -288,7 +307,12 @@ namespace Vulkan::ModernDeferred
                 descriptorSets.Bind(i, 9, Info8),
 
                 descriptorSets.Bind(i, 10, ambientCubeBufferInfo),
-                descriptorSets.Bind(i, 11, hdrshBufferInfo),
+                descriptorSets.Bind(i, 11, farAmbientCubeBufferInfo),
+                
+                descriptorSets.Bind(i, 12, hdrshBufferInfo),
+                descriptorSets.Bind(i, 13, Info12),
+                descriptorSets.Bind(i, 14, Info13),
+                descriptorSets.Bind(i, 15, Info14),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

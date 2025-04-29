@@ -10,6 +10,7 @@
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -42,14 +43,14 @@ GBufferPipeline::GBufferPipeline(
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(swapChain.Extent().width);
-	viewport.height = static_cast<float>(swapChain.Extent().height);
+	viewport.width = static_cast<float>(swapChain.RenderExtent().width);
+	viewport.height = static_cast<float>(swapChain.RenderExtent().height);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
 	VkRect2D scissor = {};
 	scissor.offset = { 0, 0 };
-	scissor.extent = swapChain.Extent();
+	scissor.extent = swapChain.RenderExtent();
 
 	VkPipelineViewportStateCreateInfo viewportState = {};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -161,9 +162,10 @@ GBufferPipeline::GBufferPipeline(
 
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_B8G8R8A8_UNORM, depthBuffer,
+	renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R16G16B16A16_SFLOAT, depthBuffer,
 		VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
-
+	renderPass_->SetDebugName("Deferred GBuffer Render Pass");
+	
 	// Load shaders.
 	const ShaderModule vertShader(device, "assets/shaders/GBufferPass.vert.spv");
 	const ShaderModule fragShader(device, "assets/shaders/GBufferPass.frag.spv");
@@ -234,7 +236,8 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	// Others like in frag
 			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-				{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{8, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -252,10 +255,12 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	VkDescriptorBufferInfo uniformBufferInfo = {};
         	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
         	uniformBufferInfo.range = VK_WHOLE_SIZE;
+        	
+        	VkDescriptorBufferInfo hdrshBufferInfo = {};
+        	hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
+        	hdrshBufferInfo.range = VK_WHOLE_SIZE;
 
-        	VkDescriptorBufferInfo ambientCubeBufferInfo = {};
-        	ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
-        	ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
+        	VkDescriptorImageInfo Info12 = {scene.ShadowMap().Sampler().Handle(), scene.ShadowMap().ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -264,7 +269,8 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
             	descriptorSets.Bind(i, 2, Info2),
             	descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, uniformBufferInfo),
-            	descriptorSets.Bind(i, 5, ambientCubeBufferInfo),
+            	descriptorSets.Bind(i, 7, hdrshBufferInfo),
+				descriptorSets.Bind(i, 8, Info12),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

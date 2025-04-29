@@ -11,6 +11,7 @@ layout(location = 0) in vec3 FragColor;
 layout(location = 1) in vec3 FragNormal;
 layout(location = 2) in vec2 FragTexCoord;
 layout(location = 3) in flat uint FragMaterialIndex;
+layout(location = 4) in vec3 FragWorldPos;
 
 layout(location = 0) out vec4 OutColor;
 layout(location = 1) out vec4 OutNormal;
@@ -29,5 +30,5 @@ void main()
 
 	OutColor = vec4(c, 1);
 	OutNormal = vec4(FragNormal, Materials[FragMaterialIndex].Fuzziness);
-	OutReserved = vec4(0,0,0,0);
+	OutReserved = vec4(FragWorldPos, 0);
 }

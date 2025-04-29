@@ -1,14 +1,16 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_shader_image_load_formatted : require
 
 #include "Platform.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
+#include "common/GGXSample.glsl"
 
-layout(binding = 0, rg32ui) uniform uimage2D MiniGBuffer;
-layout(binding = 1, rgba8) uniform image2D OutImage;
+layout(binding = 0) uniform uimage2D MiniGBuffer;
+layout(binding = 1) uniform image2D OutImage;
 layout(binding = 2) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
 layout(binding = 4) readonly buffer VertexArray { float Vertices[]; };
@@ -16,9 +18,15 @@ layout(binding = 5) readonly buffer IndexArray { uint Indices[]; };
 layout(binding = 6) readonly buffer MaterialArray { Material[] Materials; };
 layout(binding = 7) readonly buffer OffsetArray { uvec2[] Offsets; };
 layout(binding = 8) readonly buffer NodeProxyArray { NodeProxy[] NodeProxies; };
-layout(binding = 9, rg16f) uniform image2D OutMotionVector;
+layout(binding = 9) uniform image2D OutMotionVector;
 layout(binding = 10) buffer AmbientCubeArray { AmbientCube[] Cubes; };
-layout(binding = 11) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
+layout(binding = 11) buffer FarAmbientCubeArray { AmbientCube[] FarCubes; };
+layout(binding = 12) readonly buffer HDRSHArray { SphericalHarmonics[] HDRSHs; };
+
+layout(binding = 13) uniform sampler2D ShadowMapSampler;
+
+layout(binding = 14) uniform image2D OutAlbedoBuffer;
+layout(binding = 15) uniform image2D OutNormalBuffer;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
@@ -33,7 +41,161 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 #endif
 
 #include "common/VertexFunc.glsl"
-#include "common/SampleIBL.h"
+#include "common/SampleIBL.glsl"
+// 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
+bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
+    // 屏幕空间步进参数
+    const int maxSteps = 5;
+    float stepSize = maxDistance / float(maxSteps);
+    vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
+
+    // 起始点
+    vec3 rayStart = position + rayDir * 0.1;
+
+    // 追踪光线
+    for (int i = 0; i < maxSteps; i++) {
+        // 移动光线
+        vec3 currentPos = rayStart + rayDir * (i * stepSize);
+
+        // 将当前位置转到屏幕空间
+        vec4 currentPosProj = Camera.ViewProjection * vec4(currentPos, 1.0);
+        currentPosProj.xyz /= currentPosProj.w;
+        vec2 currentUV = currentPosProj.xy * 0.5 + 0.5;
+
+        // 检查是否超出屏幕
+        if (any(lessThan(currentUV, vec2(0.0))) || any(greaterThan(currentUV, vec2(1.0))))
+        continue;
+
+        // 采样深度
+        ivec2 sampleCoord = ivec2(currentUV * vec2(imageSize(MiniGBuffer)));
+        uvec2 vBufferSample = imageLoad(MiniGBuffer, sampleCoord).rg;
+
+        // 如果没有命中物体，继续
+        if (vBufferSample.r == 0)
+        continue;
+
+        // 重建世界空间位置
+        vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
+        vec4 target = Camera.ProjectionInverse * (vec4(currentPosProj.x, currentPosProj.y, 1, 1));
+        vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+
+        vec3 ray_dir = normalize(dir.xyz);
+
+        Vertex sampleVertex = get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir);
+
+        // 正确的深度比较方法
+        // 将当前世界空间位置投影到屏幕空间
+        //vec4 currentPosScreenSpace = Camera.ModelView * vec4(currentPos, 1.0);
+
+        // 获取场景中该点的屏幕空间深度
+        //vec4 samplePosScreenSpace = Camera.ModelView * vec4(sampleVertex.Position, 1.0);
+        
+        float viewSpaceCurrentDepth = (Camera.ModelView * vec4(currentPos, 1.0)).z;
+        float viewSpaceSampleDepth = (Camera.ModelView * vec4(sampleVertex.Position, 1.0)).z;
+
+        // 比较深度值
+        if ( viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance) {
+            // 发现阻挡（光线在穿过场景点之前被遮挡）
+            outPosition = sampleVertex.Position;
+            outNormal = normalize(sampleVertex.Normal.rgb);
+
+            // 获取材质ID
+            NodeProxy hitNode = NodeProxies[vBufferSample.x - 1];
+            outMaterialIdx = hitNode.matId[sampleVertex.MaterialIndex];
+
+            return true;
+        }
+    }
+
+    // 没有发现阻挡
+    return false;
+}
+
+// 这里增加一种远距离tracing的方法，最开始的0.25米，用屏幕空间tracing，精确度如果是0.05米，只需要5次即可追踪完成
+// 如果没有追到点，开始以0.25 - 0.35米为步长，取lightprobe的active状态，如果active为true，说明在空间中，继续前进
+// 直到active为false，说明到体内了，从最后的起始点，再进行0.25米的，屏幕空间tracing
+// 这个方法，可以追踪非常长的距离，当然，可以给定一个上限，追踪距离太远也可以terminate掉
+// 检查空间一个点是否在物体内可用inSolid
+// 长距离屏幕空间光线追踪函数，结合探针检查
+bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
+    // 近场追踪参数
+    const float nearDistance = 0.25;  // 近场追踪距离
+    const float longDistanceInit = 0.5;  // 原场开始距离，屏蔽掉自身
+    const float stepSize = 0.25;      // 远场步进大小
+    const float maxTotalDistance = maxDistance;  // 最大总追踪距离
+
+    if (traceInScreenSpace(position, rayDir, nearDistance, depthTolerance, outPosition, outNormal, outMaterialIdx)) {
+        return true;
+    }
+
+    float tracedDistance = longDistanceInit;
+    vec3 currentPos = position + rayDir * longDistanceInit;
+    
+    while (tracedDistance < maxTotalDistance) {
+        vec3 probePos = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
+        uint matId = 0;
+        bool isInSolid = inSolid(probePos, matId);
+        
+        if (isInSolid) {
+            outPosition = currentPos;
+            outNormal = vec3(0,1,0);
+            outMaterialIdx = matId;
+            return true;
+        }
+        currentPos += rayDir * stepSize;
+        tracedDistance += stepSize;
+    }
+    return false;
+}
+
+bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
+    vec3 hitPosition, hitNormal;
+    uint hitMaterialIdx;
+    reflectionColor = vec4(0);
+    vec3 offsetPos = position + normal * 0.01;
+    if (traceLongDistance(offsetPos, rayDir, 5.0, 0.2, hitPosition, hitNormal, hitMaterialIdx)) {
+        Material hitMaterial = Materials[hitMaterialIdx];
+        vec4 hitAlbedo = hitMaterial.Diffuse;
+        vec4 hitAmbient = interpolateProbes(hitPosition, hitNormal);
+        reflectionColor = hitAlbedo * hitAmbient;
+        return true;
+    }
+    return false;
+}
+
+float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
+    // 计算光源空间坐标
+    vec4 posInLightMap = Camera.SunViewProjection * vec4(worldPos + jit * 4.0f, 1.0f);
+
+    // 将光源空间坐标转换到NDC空间 [-1,1] 再转到 [0,1] 的纹理空间
+    vec3 projCoords = posInLightMap.xyz / posInLightMap.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.y = 1.0 - projCoords.y;
+
+    float currentDepth = projCoords.z;
+
+    // 基础偏移值
+    float bias = 0.0005;
+
+    // 根据法线与光照方向的夹角调整偏移值
+    float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
+    bias = mix(0.0001, 0.00005, cosTheta); // 斜面使用更大的偏移值
+
+    // 从阴影贴图中采样获取最近深度
+    float closestDepth = texture(ShadowMapSampler, projCoords.xy).x;
+    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
+
+    // 在主阴影通过的情况下进行屏幕空间接触阴影检测
+    if (shadow > 0.01) {
+        vec3 outPosition;
+        vec3 outNormal;
+        uint outMaterialIdx;
+        float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx) ? 0.0 : 1.0;
+        shadow = min(shadow, contactShadow); // 结合两种阴影结果
+    }
+
+    return shadow;
+}
 
 void main() {
 
@@ -46,20 +208,29 @@ void main() {
 	ivec2 size = imageSize(MiniGBuffer);
     uvec2 vBuffer = imageLoad(MiniGBuffer, ipos).rg;
     vec2 uv = vec2(ipos) / vec2(size) * 2.0 - 1.0;
-    vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
-	vec4 target = Camera.ProjectionInverse * (vec4(uv.x, uv.y, 1, 1));
-	vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
+
+    vec4 origin = vec4(Camera.ModelViewInverse * vec4(0, 0, 0, 1));
+	vec4 target = vec4(Camera.ProjectionInverse * vec4(uv.x, uv.y, 1, 1));
+	vec4 dir = vec4(Camera.ModelViewInverse * vec4(normalize(target.xyz), 0));
 	
 	vec3 ray_dir = normalize(dir.xyz);
-
-
+    
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
-
+    NodeProxy node = NodeProxies[vBuffer.x - 1];
+    
     vec3 normal = normalize( v.Normal.rgb);
     vec3 tangent = normalize( v.Tangent.rgb);
     vec3 bitangent = cross(normal, tangent);
+
+    // calculate the motion vector
+    vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
+    vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
+
+    vec4 prevFrameHPos = Camera.PrevViewProjection * node.combinedPrevTS * vec4(v.Position, 1);
+    vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5) * vec2(size));
+    vec2 motion = prevfpos - currfpos;
+    imageStore(OutMotionVector, ipos, vec4(motion,0,0));
     
-    NodeProxy node = NodeProxies[vBuffer.x - 1];
     uint materialIndex = 0;
     // here if direct address with node.matId[v.MaterialIndex] will too slow on android
     switch (v.MaterialIndex) {
@@ -116,11 +287,16 @@ void main() {
     Material mat = Materials[materialIndex];
         
     vec4 albedo = mat.Diffuse;
-    
+    float roughness = mat.Fuzziness;
     if (mat.DiffuseTextureId >= 0)
     {
-        vec4 tex = texture(TextureSamplers[mat.DiffuseTextureId], v.TexCoord);
-        albedo *= tex * tex;
+        vec4 tex = texture(TextureSamplers[nonuniformEXT(mat.DiffuseTextureId)], v.TexCoord);
+        albedo *= tex;
+    }
+    if (mat.MRATextureId >= 0)
+    {
+        vec4 mra = texture(TextureSamplers[nonuniformEXT(mat.MRATextureId)], v.TexCoord);
+        roughness = roughness * mra.g;
     }
     
 	// ibl
@@ -131,26 +307,57 @@ void main() {
 	const float metalProb = mat.Metalness;
     	
 	const vec3 lightVector = Camera.SunDirection.xyz;
-    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * 0.2f;
+    const vec4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * M_1_PI;
     
     vec4 indirectColor = vec4(0);
-    const int jitcount = 4;
-    const float range = 2.0f;
+
+    float shadow = 0.0f;
+    const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
+    const float range = 0.04f;
     for(int i = 0; i < jitcount; i++) {
-        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * CUBE_UNIT * range;
+
+        bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
+        bool chanceMetal = bool(RandomFloat(RandomSeed) < metalProb);
+        bool chanceGGX = chanceReflect || chanceMetal;
+        const vec3 trace_next = chanceGGX ? reflect( ray_dir, outwardNormal) : outwardNormal;
+        vec3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal( RandomInHemiSphere1(RandomSeed), trace_next );
+        
+        vec4 reflectionColor;
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * 0.04f;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        indirectColor += interpolateSkyProbes((v.Position - CUBE_OFFSET + jit) / CUBE_UNIT, normal);
+        if( calculateSSInterreflection(v.Position, trace_dir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
+        {
+            indirectColor += reflectionColor;
+        }
+        else
+        {
+            // 如果反射了，直接采天
+            // 其实就是这里，低配版就不要散布采样，直接用IBL处理好的mip，减少噪点
+            if(chanceGGX)
+            {
+                indirectColor += Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness) * Camera.SkyIntensity : vec4(0.0);
+            }
+            else
+            {
+                indirectColor += interpolateSkyProbes(v.Position, normal) * 2.0f;
+            }
+        }
     }
-    indirectColor = indirectColor / float(jitcount);
     
+    indirectColor /= float(jitcount);
+
+    if(Camera.HasSun)
+    {
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
+        vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
+        shadow += getShadow(v.Position, jit, normal, ipos);
+    }
+
     vec4 outColor = albedo * vec4(indirectColor.rgb,1);
-    
-    if(Camera.HDR)
-    {
-        imageStore(OutImage, ipos, vec4( LinearToST2084UE( outColor.rgb * Camera.PaperWhiteNit / 230.0), 1.0));
-    }
-    else
-    {
-        imageStore(OutImage, ipos, vec4( Uncharted2_Tonemapping( outColor.rgb * Camera.PaperWhiteNit / 20000.0), 1.0));
-    }
+    outColor += albedo * d * shadow;
+    outColor.a = 1.0f;
+
+    imageStore(OutAlbedoBuffer, ipos, albedo);
+    imageStore(OutNormalBuffer, ipos, vec4(normal,1.0));
+    imageStore(OutImage, ipos, outColor);
 }

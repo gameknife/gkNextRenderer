@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <functional>
+#include <queue>
 
 #include "Material.hpp"
 
@@ -34,6 +35,21 @@ namespace Vulkan
     class DeviceMemory;
 }
 
+enum class ECubeProcType : uint8_t
+{
+    ECPT_Clear,
+    ECPT_Iterate,
+    ECPT_Copy,
+    ECPT_Blur,
+    ECPT_Fence,
+};
+
+enum class EBakerType : uint8_t
+{
+    EBT_Probe,
+    EBT_FarProbe,
+};
+
 struct FCPUBLASVertInfo
 {
     glm::vec3 normal;
@@ -43,6 +59,7 @@ struct FCPUBLASVertInfo
 struct FCPUTLASInstanceInfo
 {
     std::array<uint32_t, 16> mats;
+    std::array<uint32_t, 16> matIdxs;
 };
 
 struct FCPUBLASContext
@@ -50,6 +67,29 @@ struct FCPUBLASContext
     tinybvh::BVH bvh;
     std::vector<tinybvh::bvhvec4> triangles;
     std::vector<FCPUBLASVertInfo> extinfos;
+};
+
+struct FCpuBakeContext
+{
+    std::vector<Assets::AmbientCube>* Cubes;
+    float CUBE_UNIT;
+    glm::vec3 CUBE_OFFSET;
+};
+
+// 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
+// 由CpuAS来控制
+struct FCPUProbeBaker
+{
+    float UNIT_SIZE;
+    glm::vec3 CUBE_OFFSET;
+    
+    std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::AmbientCube> ambientCubes_Copy;
+
+    void Init( float unit_size, glm::vec3 offset );
+    void ProcessCube(int x, int y, int z, ECubeProcType procType);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+    void ClearAmbientCubes();
 };
 
 class FCPUAccelerationStructure
@@ -61,27 +101,29 @@ public:
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-    void ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos);
+   
     void AsyncProcessFull();
-    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene);
+    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
     
-    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory);
+    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
+
+    void GenShadowMap(Assets::Scene& scene);
 
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
     std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;
     std::vector<tinybvh::BVHBase*> bvhBLASList;
-
-    
-    std::vector<Assets::AmbientCube> ambientCubes;
-    std::vector<Assets::AmbientCube> ambientCubesCopy;
-    
+        
     std::vector<uint32_t> lastBatchTasks;
 
-    std::unordered_set<glm::ivec3>  needUpdateGroups;
+    std::queue<std::tuple<glm::ivec3, ECubeProcType, EBakerType> > needUpdateGroups;
 
+    std::vector<float> shadowMapR32;
     bool needFlush = false;
+
+    FCPUProbeBaker probeBaker;
+    FCPUProbeBaker farProbeBaker;
 };

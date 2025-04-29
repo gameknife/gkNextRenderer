@@ -12,7 +12,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(ImageView)
 
-		explicit ImageView(const Device& device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+		explicit ImageView(const Device& device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, const uint32_t miplevel = 1);
 		~ImageView();
 
 		const class Device& Device() const { return device_; }

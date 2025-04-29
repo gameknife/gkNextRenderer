@@ -17,16 +17,8 @@ namespace Assets
 {
 	using namespace glm;
 
-	#include "../assets/shaders/common/UniformBufferObject.h"
+	#include "../assets/shaders/common/UniformBufferObject.glsl"
 	
-	struct alignas(16) LightObject final
-	{
-		glm::vec4 p0;
-		glm::vec4 p1;
-		glm::vec4 p3;
-		glm::vec4 normal_area;
-	};
-
 	class UniformBuffer
 	{
 	public:

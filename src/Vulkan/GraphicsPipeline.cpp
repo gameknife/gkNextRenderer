@@ -155,6 +155,7 @@ GraphicsPipeline::GraphicsPipeline(
 	// Create pipeline layout and render pass.
 	pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
 	renderPass_.reset(new class RenderPass(swapChain, swapChain.Format(), depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
+	renderPass_->SetDebugName("Wireframe Render Pass");
 	swapRenderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
 
 	// Load shaders.

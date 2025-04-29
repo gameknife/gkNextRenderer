@@ -8,7 +8,7 @@
 
 namespace Vulkan {
 
-FrameBuffer::FrameBuffer(const class ImageView& imageView, const class RenderPass& renderPass, bool withDS ) : device_(imageView.Device())
+FrameBuffer::FrameBuffer(const VkExtent2D& extent, const class ImageView& imageView, const class RenderPass& renderPass, bool withDS ) : device_(imageView.Device())
 {
 	std::vector<VkImageView> attachments;
 	attachments.push_back(imageView.Handle());
@@ -22,15 +22,15 @@ FrameBuffer::FrameBuffer(const class ImageView& imageView, const class RenderPas
 	framebufferInfo.renderPass = renderPass.Handle();
 	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = renderPass.SwapChain().Extent().width;
-	framebufferInfo.height = renderPass.SwapChain().Extent().height;
+	framebufferInfo.width = extent.width;
+	framebufferInfo.height = extent.height;
 	framebufferInfo.layers = 1;
 
 	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
 		"create framebuffer");
 }
 
-FrameBuffer::FrameBuffer(const Vulkan::ImageView& imageView, const Vulkan::ImageView& imageView1,
+FrameBuffer::FrameBuffer(const VkExtent2D& extent, const Vulkan::ImageView& imageView, const Vulkan::ImageView& imageView1,
 const Vulkan::ImageView& imageView2, const Vulkan::RenderPass& renderPass): device_(imageView.Device())
 {
 	std::array<VkImageView, 4> attachments =
@@ -46,8 +46,8 @@ const Vulkan::ImageView& imageView2, const Vulkan::RenderPass& renderPass): devi
 	framebufferInfo.renderPass = renderPass.Handle();
 	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = renderPass.SwapChain().Extent().width;
-	framebufferInfo.height = renderPass.SwapChain().Extent().height;
+	framebufferInfo.width = extent.width;
+	framebufferInfo.height = extent.height;
 	framebufferInfo.layers = 1;
 
 	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),

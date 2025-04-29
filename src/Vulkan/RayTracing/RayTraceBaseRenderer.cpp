@@ -149,8 +149,8 @@ namespace Vulkan::RayTracing
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
-        ambientGenPipeline_.reset(new PipelineCommon::AmbientGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
         directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
+        farDirectLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().FarAmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -159,8 +159,8 @@ namespace Vulkan::RayTracing
 
         rayCastBuffer_.reset();
         raycastPipeline_.reset();
-        ambientGenPipeline_.reset();
         directLightGenPipeline_.reset();
+        farDirectLightGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
@@ -274,8 +274,9 @@ namespace Vulkan::RayTracing
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
 #endif
-        
-        if(supportRayCast_ && lastUBO.BakeWithGPU && CurrentLogicRendererType() != ERT_PathTracing && CurrentLogicRendererType() != ERT_LegacyDeferred)
+
+#if !ANDROID
+        if(supportRayCast_ && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
         {
 #if !ANDROID
             const int cubesPerGroup = 32;
@@ -290,32 +291,34 @@ namespace Vulkan::RayTracing
 
             
 #if !ANDROID
-            int temporalFrames = 60;
+            int temporalFrames = 120;
             switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
             {
             case 0:
-                temporalFrames = 1;
+                temporalFrames = 30;
                 break;
             case 1:
-                temporalFrames = 60;
+                temporalFrames = 120;
                 break;
             case 2:
                 temporalFrames = 300;
                 break;
             default:
-                temporalFrames = 60;
+                temporalFrames = 120;
                 break;
             }
 #else
             int temporalFrames = 625;
 #endif
             // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
-            int frame = (int)(frameCount_ % temporalFrames);
-            int groupPerFrame = group / temporalFrames;
-            int offset = frame * groupPerFrame;
-            int offsetInCubes = offset * cubesPerGroup;
+
 
             {
+                int frame = (int)(frameCount_ % temporalFrames);
+                int groupPerFrame = group / temporalFrames;
+                int offset = frame * groupPerFrame;
+                int offsetInCubes = offset * cubesPerGroup;
+                
                 SCOPED_GPU_TIMER("ambient di");
                 VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
@@ -328,7 +331,7 @@ namespace Vulkan::RayTracing
                 vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
                                          1, GlobalDescriptorSets, 0, nullptr );
                 
-                glm::uvec2 pushConst = { offsetInCubes, 1 };
+                glm::uvec2 pushConst = { offsetInCubes, 0 };
 
                 vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
                                    0, sizeof(glm::uvec2), &pushConst);
@@ -336,28 +339,33 @@ namespace Vulkan::RayTracing
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
             }
             
-            // {
-            //     SCOPED_GPU_TIMER("ambient ii");
-            //     VkDescriptorSet DescriptorSets[] = {ambientGenPipeline_->DescriptorSet(0)};
-            //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->Handle());
-            //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            //                             ambientGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            //
-            //     // bind the global bindless set
-            //     static const uint32_t k_bindless_set = 1;
-            //     VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-            //     vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambientGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
-            //                              1, GlobalDescriptorSets, 0, nullptr );
-            //     
-            //     glm::uvec2 pushConst = { offsetInCubes, 1 };
-            //
-            //     vkCmdPushConstants(commandBuffer, ambientGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-            //                        0, sizeof(glm::uvec2), &pushConst);
-            //
-            //     vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
-            // }
-            // 这里可以做一个模糊，或者说降噪，这个对于CPU GEN也可以
+            {
+                int frame = (int)(frameCount_ % 600);
+                int groupPerFrame = group / 600;
+                int offset = frame * groupPerFrame;
+                int offsetInCubes = offset * cubesPerGroup;
+                
+                SCOPED_GPU_TIMER("ambient far di");
+                VkDescriptorSet DescriptorSets[] = {farDirectLightGenPipeline_->DescriptorSet(0)};
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->Handle());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                        farDirectLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+
+                // bind the global bindless set
+                static const uint32_t k_bindless_set = 1;
+                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                         1, GlobalDescriptorSets, 0, nullptr );
+                
+                glm::uvec2 pushConst = { offsetInCubes, 1 };
+
+                vkCmdPushConstants(commandBuffer, farDirectLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
+            
+                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            }
         }
+#endif
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)

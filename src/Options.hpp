@@ -26,6 +26,7 @@ public:
 	bool RenderDoc{};
 	bool NoDenoiser{};
 	bool ForceSDR{};
+	bool ReferenceMode{};
 	std::string locale{};
 
 	// Renderer options.

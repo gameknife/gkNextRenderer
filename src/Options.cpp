@@ -12,7 +12,7 @@ Options::Options(const int argc, const char* argv[])
 		("bounces", "The general limit number of bounces per ray.", cxxopts::value<uint32_t>(Bounces)->default_value("4"))
 		("max-bounces", "The maximum bounces per ray.", cxxopts::value<uint32_t>(MaxBounces)->default_value("10"))
 		("temporal", "The number of temporal frames.", cxxopts::value<uint32_t>(Temporal)->default_value("8"))
-		("nodenoiser", "Not Use Denoiser.", cxxopts::value<bool>(NoDenoiser)->default_value("false"))
+		("nodenoiser", "Not Use Denoiser.", cxxopts::value<bool>(NoDenoiser)->default_value("true"))
 		("adaptivesample", "use adaptive sample to improve render quality.", cxxopts::value<bool>(AdaptiveSample)->default_value("false"))
 
 		("load-scene", "The scene to load. absolute path or relative path to project root.", cxxopts::value<std::string>(SceneName)->default_value(""))
@@ -29,19 +29,29 @@ Options::Options(const int argc, const char* argv[])
 		("renderdoc", "Attach renderdoc if avaliable.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
 		("forcesdr", "Force use SDR Display even supported.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
 		("locale", "Locale: en, zhCN, RU.", cxxopts::value<std::string>(locale)->default_value("en"))
+		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
+	
 
 		("h,help", "Print usage");
-	auto result = options.parse(argc, argv);
-
-	if (result.count("help"))
+	try
 	{
-		std::cout << options.help() << std::endl;
-		exit(0);
+		auto result = options.parse(argc, argv);
+
+		if (result.count("help"))
+		{
+			std::cout << options.help() << std::endl;
+			exit(0);
+		}
+
+		if (PresentMode > 3)
+		{
+			Throw(std::out_of_range("Invalid present mode."));
+		}
 	}
-
-	if (PresentMode > 3)
+	catch ( const cxxopts::exceptions::exception& e)
 	{
-		Throw(std::out_of_range("Invalid present mode."));
+		std::cerr << e.what() << std::endl;
+		exit(0);
 	}
 }
 

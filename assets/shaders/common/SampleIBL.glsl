@@ -51,15 +51,16 @@ vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
 #else
 vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
 {
-	if(roughness > 0.6f)
-	{
-		vec3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
-		return vec4(rayColor * 1.0f, 1.0);
-	}
-	vec3 d = normalize(direction);
-	vec2 t = vec2((atan(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
+	 if(roughness > 0.6f)
+	 {
+		  vec3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
+		  return vec4(rayColor * 1.0f, 1.0);
+	 }
+	 vec3 d = normalize(direction);
+	 vec2 t = vec2((atan(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
 
-	return min( vec4(10,10,10,1), texture(TextureSamplers[skyIdx], t));
+	 // Sample with explicit LOD based on roughness
+	 return min(vec4(10,10,10,1), texture(TextureSamplers[skyIdx], t));
 }
 #endif
 		

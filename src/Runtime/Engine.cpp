@@ -357,6 +357,9 @@ bool NextEngine::Tick()
 
 void NextEngine::End()
 {
+    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    
     physicsEngine_->Stop();
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
@@ -656,10 +659,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     scene_->OverrideModelView(ubo.ModelView);
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.width / static_cast<float>(extent.height), 0.1f, 10000.0f);
-
-    ubo.BakeWithGPU = userSettings_.BakeWithGPU;
+    
     ubo.FastGather = userSettings_.FastGather;
     ubo.FastInterpole = userSettings_.FastInterpole;
+    ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
@@ -693,6 +696,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
 
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+
+    ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
 
     ubo.SelectedId = scene_->GetSelectedId();
 
@@ -976,6 +981,10 @@ void NextEngine::RequestLoadScene(std::string sceneFileName)
 
 void NextEngine::LoadScene(std::string sceneFileName)
 {
+    // wait all task finish
+    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    
     status_ = NextRenderer::EApplicationStatus::Loading;
     
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();

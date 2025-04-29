@@ -1,19 +1,22 @@
 #version 460
 #extension GL_GOOGLE_include_directive: require
+#extension GL_EXT_shader_image_load_formatted : require
+
 #include "Platform.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Const_Func.glsl"
 #include "common/ColorFunc.glsl"
 
-layout (binding = 0, rgba16f) uniform image2D NewSourceImage;
-layout (binding = 1, rgba16f) uniform image2D AccumulateImage;
-layout (binding = 2, rgba16f) uniform image2D Accumulate1Image;
-layout (binding = 3, rg32f) uniform image2D MotionVectorImage;
+layout (binding = 0) uniform image2D NewSourceImage;
+layout (binding = 1) uniform image2D AccumulateImage;
+layout (binding = 2) uniform image2D Accumulate1Image;
+layout (binding = 3) uniform image2D MotionVectorImage;
 layout (binding = 4) readonly uniform UniformBufferObjectStruct { UniformBufferObject Camera; };
 
-layout (binding = 5, r32ui) uniform uimage2D VisibilityBuffer;
-layout (binding = 6, r32ui) uniform uimage2D Visibility1Buffer;
-layout (binding = 7, rgba8) uniform image2D OutImage;
+layout (binding = 5) uniform uimage2D VisibilityBuffer;
+layout (binding = 6) uniform uimage2D Visibility1Buffer;
+layout (binding = 7) uniform image2D OutImage;
+layout (binding = 8) uniform image2D InNormal;
 
 layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
@@ -45,27 +48,80 @@ vec2(-2.0, 1.0), vec2(-1.0, 1.0), vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(2.0, 1.0)
 vec2(-2.0, 2.0), vec2(-1.0, 2.0), vec2(0.0, 2.0), vec2(1.0, 2.0), vec2(2.0, 2.0)
 );
 
+float calculateWeight(float centerDist, bool sameObject, bool isCenter, vec3 Normal, vec3 CenterNormal) {
+    if (isCenter) {
+        return 0.4; // 中心像素权重
+    } else if (!sameObject) {
+        return 0.0; // 不同对象像素权重为0
+    } else {
+        // 基于法线相似度的阈值过滤
+        float normalDot = clamp( dot(Normal, CenterNormal), 0.0f, 1.0f);
+        const float normalThreshold = 0.98f; // 大约对应45度角
+
+        if (normalDot < normalThreshold) {
+            return 0.0; // 法线差异过大，权重为0
+        }
+
+        // 将normalDot归一化到[0,1]区间用于权重计算
+        const float normalWeight = (normalDot - normalThreshold) / (1.0 - normalThreshold);
+        
+        return normalWeight * 2.0 / (centerDist * 1.5 + 4.0);
+    }
+}
+
 // a simple accumulation shader, reproject can impl here later.
 void main() {
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy) + ivec2(Camera.ViewportRect.x, Camera.ViewportRect.y);
 
-    vec4 src = imageLoad(NewSourceImage, ipos);
-
+    // More flexible sampling algorithm with dynamic weights
+    vec4 src = vec4(0);
+    float temporalWeight = 0.0;
+    float totalWeight = 0.0;
+        
     bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
     bool useHistory = true;
-    vec4 final = src;
     vec2 motion = imageLoad(MotionVectorImage, ipos).rg;
     ivec2 previpos = ivec2(floor(ipos + motion));
     const bool inside = all(lessThan(previpos, ivec2(Camera.ViewportRect.xy + Camera.ViewportRect.zw))) && all(greaterThanEqual(previpos, ivec2(Camera.ViewportRect.xy) + ivec2(-1, -1)));
-    // 以前的稳定，是一种偶然，当相机不动的时候，我们假设不check，所以都是直接用histroy，但是在边缘的位置，总会有闪烁。这种闪烁因为motion归0而消除，这是不对的
-    // after, motionvector calculate last frame position
-    // 当前uv直接执行id比对，如果不同，直接check
     uint current_primitive_index0 = imageLoad(VisibilityBuffer, ipos).r;
     uint prev_primitive_index0 = imageLoad(Visibility1Buffer, previpos).r;
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
-    // fetch visibility to validate the history
+    
+    const int SAMPLE_RANGE = 1;
+    
+    vec3 CenterNormal = imageLoad(InNormal, ipos).rgb;
+    
+    for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
+        for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
+            ivec2 offset = ivec2(x, y);
+            ivec2 samplePos = ipos + offset;
+            vec4 samplePixel = imageLoad(NewSourceImage, samplePos);
+            uint primitiveIdx = imageLoad(VisibilityBuffer, samplePos).r;
+            vec3 worldNormal = imageLoad(InNormal, samplePos).rgb;
 
+            bool isCenter = (x == 0 && y == 0) ? true : false; 
+            bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
+            float centerDist = length(vec2(x, y));
+
+            // 计算该采样点的权重
+            float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
+
+            if (isCenter) {
+                temporalWeight = samplePixel.w;
+            }
+
+            src += samplePixel * weight;
+            totalWeight += weight;
+        }
+    }
+
+    // Normalize
+    src /= totalWeight;
+
+    vec4 final = src;
+    
+    // fetch visibility to validate the history
     const bool miss = current_primitive_index0 == 65535 ? true : false;
     if (miss || Camera.TotalFrames == 0 || !inside)
     {
@@ -158,7 +214,7 @@ void main() {
             }
 
             // judge current gbuffer / object id with prev frame, to deghosting
-            float currKeep = src.w / max(1, Camera.TemporalFrames);
+            float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
             final.rgb = mix(history, src.rgb, clamp(currKeep, 0.0, 1.0));
         }
     }

@@ -308,6 +308,8 @@ namespace Vulkan
     {
         deviceFeatures.fillModeNonSolid = true;
         deviceFeatures.samplerAnisotropy = true;
+        deviceFeatures.shaderStorageImageReadWithoutFormat = true;
+        deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
 
         // Required extensions. windows only
 #if WIN32
@@ -379,6 +381,12 @@ namespace Vulkan
         }
 
         swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
+
+        if (GOption->ReferenceMode)
+        {
+            swapChain_->UpdateEditorViewport(0,0, swapChain_->Extent().width / 2, swapChain_->Extent().height / 2);
+        }
+        
         depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
 
         for (size_t i = 0; i != swapChain_->ImageViews().size(); ++i)
@@ -394,7 +402,7 @@ namespace Vulkan
 
         for (const auto& imageView : swapChain_->ImageViews())
         {
-            swapChainFramebuffers_.emplace_back(*imageView, graphicsPipeline_->SwapRenderPass());
+            swapChainFramebuffers_.emplace_back(swapChain_->Extent(), *imageView, graphicsPipeline_->SwapRenderPass());
         }
 
         commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChainFramebuffers_.size())));
@@ -408,7 +416,7 @@ namespace Vulkan
 
         for (auto& logicRenderer : logicRenderers_)
         {
-            logicRenderer.second->CreateSwapChain();
+            logicRenderer.second->CreateSwapChain(swapChain_->RenderExtent());
         }
 
         if (DelegateCreateSwapChain)
@@ -731,10 +739,21 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if (logicRenderers_.find(currentLogicRenderer_) != logicRenderers_.end())
+        if (GOption->ReferenceMode)
         {
-            logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+            for (auto& logicRenderer : logicRenderers_)
+            {
+                logicRenderer.second->Render(commandBuffer, imageIndex);
+            }
         }
+        else
+        {
+            if (logicRenderers_.find(currentLogicRenderer_) != logicRenderers_.end())
+            {
+                logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
+            }
+        }
+
 
         if (showWireframe_)
         {

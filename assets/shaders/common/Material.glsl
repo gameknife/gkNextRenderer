@@ -22,15 +22,6 @@ struct Material
 	float Reserverd2;
 };
 
-
-struct LightObject
-{
-	vec4 p0;
-	vec4 p1;
-	vec4 p3;
-	vec4 normal_area;
-};
-
 struct RayCastContext
 {
 	// in

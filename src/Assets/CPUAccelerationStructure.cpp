@@ -6,42 +6,178 @@
 #include <fstream>
 
 #define TINYBVH_IMPLEMENTATION
+#include "TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "ThirdParty/tinybvh/tiny_bvh.h"
-
-Assets::SphericalHarmonics HDRSHs[100];
-using namespace glm;
-#include "../assets/shaders/common/SampleIBL.h"
+#include "Utilities/Math.hpp"
 
 static tinybvh::BVH GCpuBvh;
+static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
+static std::vector<FCPUTLASInstanceInfo>* GbvhTLASContexts;
+static std::vector<FCPUBLASContext>* GbvhBLASContexts;
 
-void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
+thread_local FCpuBakeContext TLSContext;
+thread_local glm::uvec4 RandomSeed(0);
+
+Assets::SphericalHarmonics HDRSHs[100];
+
+using namespace Assets;
+
+#include "../assets/shaders/common/SampleIBL.glsl"
+#include "../assets/shaders/common/AmbientCubeCommon.glsl"
+
+//=========================
+// Function Implement for Hybrid CPU / GPU Code
+LightObject FetchLight(uint lightIdx, vec4& lightPower)
 {
-    auto& HDR = Assets::GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
-    std::memcpy(HDRSHs, HDR.data(), HDR.size() * sizeof(Assets::SphericalHarmonics));
+    auto Lights = NextEngine::GetInstance()->GetScene().Lights();
+    auto materials = NextEngine::GetInstance()->GetScene().Materials();
+    lightPower = materials[Lights[lightIdx].lightMatIdx].gpuMaterial_.Diffuse;
+    return Lights[lightIdx];
+}
+
+vec3 AlignWithNormal(vec3 ray, vec3 normal)
+{
+    vec3 up = abs(normal.y) < 0.999f ? vec3(0, 1, 0) : vec3(1, 0, 0);
+    vec3 tangent = normalize(cross(up, normal));
+    vec3 bitangent = normalize(cross(normal, tangent));
+    mat3 transform(tangent, bitangent, normal);
+    return transform * ray;
+}
+
+float RandomFloat(uvec4& v)
+{
+    v.x = (v.x ^ 61) ^ (v.x >> 16);
+    v.x = v.x + (v.x << 3);
+    v.x = v.x ^ (v.x >> 4);
+    v.x = v.x * 0x27d4eb2d;
+    v.x = v.x ^ (v.x >> 15);
+    return float(v.x) / float(0xFFFFFFFF);
+}
+
+int TracingOccludeFunction(vec3 origin, vec3 lightPos)
+{
+    vec3 direction = lightPos - origin;
+    float length = glm::length(direction) - 0.02f;
+    tinybvh::Ray shadowRay(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
+    return GCpuBvh.IsOccluded(shadowRay) ? 0 : 1;
+}
+
+bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
+{
+    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 11.f);
+    GCpuBvh.Intersect(ray);
+
+    if (ray.hit.t < 10.0f)
+    {
+        uint32_t primIdx = ray.hit.prim;
+        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
+        FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
+        FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
+        mat4* worldTS = (mat4*)instance.transform;
+        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+
+        OutRayDist = ray.hit.t;
+        OutNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
+        OutMaterialId = context.extinfos[primIdx].matIdx;
+        OutInstanceId = ray.hit.inst;
+        return true;
+    }
+    
+    return false;
+}
+
+AmbientCube& FetchCube(ivec3 probePos)
+{
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
+    return (*TLSContext.Cubes)[idx];
+}
+
+uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
+{
+    return (*GbvhTLASContexts)[InstanceId].matIdxs[MaterialIdx];
+}
+
+vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInstanceId)
+{
+    uint32_t diffuseColor = (*GbvhTLASContexts)[OutInstanceId].mats[OutMaterialId];
+    vec4 albedo = unpackUnorm4x8(diffuseColor);
+    
+    vec3 pos = (hitPos - TLSContext.CUBE_OFFSET) / TLSContext.CUBE_UNIT;
+    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
+        return vec4(1.0);
+    }
+
+    ivec3 baseIdx = ivec3(floor(pos));
+    vec3 frac = fract(pos);
+
+    float totalWeight = 0.0;
+    vec4 result = vec4(0.0);
+
+    for (int i = 0; i < 8; i++) {
+        ivec3 offset = ivec3(
+        i & 1,
+        (i >> 1) & 1,
+        (i >> 2) & 1
+        );
+
+        ivec3 probePos = baseIdx + offset;
+        AmbientCube cube = FetchCube(probePos);
+        if (cube.Active != 1) continue;
+
+        float wx = offset.x == 0 ? (1.0f - frac.x) : frac.x;
+        float wy = offset.y == 0 ? (1.0f - frac.y) : frac.y;
+        float wz = offset.z == 0 ? (1.0f - frac.z) : frac.z;
+        float weight = wx * wy * wz;
+
+        vec4 sampleColor = sampleAmbientCubeHL2_DI(cube, normal);
+        result += sampleColor * weight;
+        totalWeight += weight;
+    }
+
+    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05f);
+    return albedo * indirectColor;
+}
+//=========================
+
+#include "../assets/shaders/common/AmbientCubeAlgo.glsl"
+
+
+void FCPUProbeBaker::Init(float unit_size, vec3 offset)
+{
+    UNIT_SIZE = unit_size;
+    CUBE_OFFSET = offset;
+    ambientCubes.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
+    ambientCubes_Copy.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
+}
+
+void FCPUAccelerationStructure::InitBVH(Scene& scene)
+{
+    auto& HDR = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
+    std::memcpy(HDRSHs, HDR.data(), HDR.size() * sizeof(SphericalHarmonics));
     
     const auto timer = std::chrono::high_resolution_clock::now();
 
     bvhBLASList.clear();
     bvhBLASContexts.clear();
+
     bvhBLASContexts.resize(scene.Models().size());
     for ( size_t m = 0; m < scene.Models().size(); ++m )
     {
-        const Assets::Model& model = scene.Models()[m];
-        
+        const Model& model = scene.Models()[m];
         for (size_t i = 0; i < model.CPUIndices().size(); i += 3)
         {
             // Get the three vertices of the triangle
-            const Assets::Vertex& v0 = model.CPUVertices()[model.CPUIndices()[i]];
-            const Assets::Vertex& v1 = model.CPUVertices()[model.CPUIndices()[i + 1]];
-            const Assets::Vertex& v2 = model.CPUVertices()[model.CPUIndices()[i + 2]];
+            const Vertex& v0 = model.CPUVertices()[model.CPUIndices()[i]];
+            const Vertex& v1 = model.CPUVertices()[model.CPUIndices()[i + 1]];
+            const Vertex& v2 = model.CPUVertices()[model.CPUIndices()[i + 2]];
             
             // Calculate face normal
-            glm::vec3 edge1 = glm::vec3(v1.Position) - glm::vec3(v0.Position);
-            glm::vec3 edge2 = glm::vec3(v2.Position) - glm::vec3(v1.Position);
-            glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
-
-
+            vec3 edge1 = vec3(v1.Position) - vec3(v0.Position);
+            vec3 edge2 = vec3(v2.Position) - vec3(v1.Position);
+            vec3 normal = normalize(cross(edge1, edge2));
+            
             // Add triangle vertices to BVH
             bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v0.Position.x, v0.Position.y, v0.Position.z, 0));
             bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v1.Position.x, v1.Position.y, v1.Position.z, 0));
@@ -50,23 +186,17 @@ void FCPUAccelerationStructure::InitBVH(Assets::Scene& scene)
             // Store additional triangle information
             bvhBLASContexts[m].extinfos.push_back({normal, v0.MaterialIndex});
         }
-
         bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
         bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
     }
-
-    double elapsed = std::chrono::duration<float, std::chrono::milliseconds::period>(
-    std::chrono::high_resolution_clock::now() - timer).count();
-
-    fmt::print("build bvh takes: {:.0f}ms\n", elapsed);
-
+    
+    probeBaker.Init( CUBE_UNIT, CUBE_OFFSET );
+    farProbeBaker.Init( CUBE_UNIT_FAR, CUBE_OFFSET_FAR );
+    
     UpdateBVH(scene);
-
-    ambientCubes.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
-    ambientCubesCopy.resize( Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z );
 }
 
-void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
+void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 {
     bvhInstanceList.clear();
     bvhTLASContexts.clear();
@@ -78,7 +208,7 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
         uint32_t modelId = node->GetModel();
         if (modelId == -1) continue;
 
-        glm::mat4 worldTS = node->WorldTransform();
+        mat4 worldTS = node->WorldTransform();
         worldTS = transpose(worldTS);
 
         tinybvh::BLASInstance instance;
@@ -90,8 +220,9 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
         for ( int i = 0; i < node->Materials().size(); ++i )
         {
             uint32_t matId = node->Materials()[i];
-            Assets::FMaterial& mat = scene.Materials()[matId];
-            info.mats[i] = glm::packUnorm4x8( mat.gpuMaterial_.Diffuse );
+            FMaterial& mat = scene.Materials()[matId];
+            info.mats[i] = packUnorm4x8( mat.gpuMaterial_.Diffuse );
+            info.matIdxs[i] = matId;
         }
         bvhTLASContexts.push_back( info );
     }
@@ -100,21 +231,26 @@ void FCPUAccelerationStructure::UpdateBVH(Assets::Scene& scene)
     {
         GCpuBvh.Build( bvhInstanceList.data(), static_cast<int>(bvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
     }
+
+    // rebind with new address
+    GbvhInstanceList = &bvhInstanceList;
+    GbvhTLASContexts = &bvhTLASContexts;
+    GbvhBLASContexts = &bvhBLASContexts;
 }
 
-Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir)
+RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDir)
 {
-    Assets::RayCastResult Result;
+    RayCastResult Result;
 
     // tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
     // GCpuBvh.Intersect(ray);
     //
     // if (ray.hit.t < 100000.f)
     // {
-    //     glm::vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+    //     vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
     //
-    //     Result.HitPoint = glm::vec4(hitPos, 0);
-    //     Result.Normal = glm::vec4(GExtInfos[ray.hit.prim].normal, 0);
+    //     Result.HitPoint = vec4(hitPos, 0);
+    //     Result.Normal = vec4(GExtInfos[ray.hit.prim].normal, 0);
     //     Result.Hitted = true;
     //     Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
     // }
@@ -122,270 +258,251 @@ Assets::RayCastResult FCPUAccelerationStructure::RayCastInCPU(glm::vec3 rayOrigi
     return Result;
 }
 
-#define RAY_PERFACE 16
-
-// Pre-calculated hemisphere samples in the positive Z direction (up)
-// 这个需要是一个四棱锥范围内的射线，而不能是半球
-const vec3 hemisphereVectors32[32] = {
-    vec3(0.06380871270368209, -0.16411674977923174, 0.984375),
-    vec3(-0.2713456981395, 0.13388146427413833, 0.953125),
-    vec3(0.3720439325965911, 0.1083041854826636, 0.921875),
-    vec3(-0.2360905314110366, -0.38864941831045413, 0.890625),
-    vec3(-0.0994527932145428, 0.5015812509422829, 0.859375),
-    vec3(0.4518001015172772, -0.3317915801282155, 0.828125),
-    vec3(-0.6006110862696151, -0.06524229782152816, 0.796875),
-    vec3(0.4246400102205648, 0.4832175711777031, 0.765625),
-    vec3(0.014025106917771066, -0.6785990390141627, 0.734375),
-    vec3(-0.4910499646725058, 0.5142812135107899, 0.703125),
-    vec3(0.7390090634100329, -0.04949331846649647, 0.671875),
-    vec3(-0.5995855814426192, -0.47968400004702705, 0.640625),
-    vec3(0.12194313936463708, 0.7834487731414841, 0.609375),
-    vec3(0.4520746755881747, -0.6792642873483389, 0.578125),
-    vec3(-0.8128288753565273, 0.2005915096948101, 0.546875),
-    vec3(0.7520560261769773, 0.41053939258723227, 0.515625),
-    vec3(-0.28306625928882, -0.8278009134008216, 0.48437499999999994),
-    vec3(-0.357091373373129, 0.8168007623879232, 0.4531249999999999),
-    vec3(0.8289528112710368, -0.36723115480694823, 0.42187500000000006),
-    vec3(-0.8724752793478753, -0.29359665580835004, 0.39062500000000006),
-    vec3(0.45112649883473616, 0.8169054360353547, 0.35937499999999994),
-    vec3(0.22185204734195418, -0.9182132941017481, 0.328125),
-    vec3(-0.792362708282336, 0.5329414347735422, 0.296875),
-    vec3(0.9533182286148584, 0.1436235160606669, 0.26562499999999994),
-    vec3(-0.6110028678351297, -0.756137457657169, 0.23437499999999994),
-    vec3(-0.06066310322190489, 0.9772718261990818, 0.20312499999999992),
-    vec3(0.7091634641369421, -0.683773475288631, 0.17187500000000008),
-    vec3(-0.9897399665274648, 0.025286518803760413, 0.14062500000000008),
-    vec3(0.749854715318357, 0.6524990538612495, 0.1093750000000001),
-    vec3(-0.11249484107422018, -0.9905762944401031, 0.0781250000000001),
-    vec3(-0.587325250956154, 0.8079924405365998, 0.046875),
-    vec3(0.9798239737002217, -0.19925069620281746, 0.01562500000000002)
-};
-const vec3 hemisphereVectors16[16] = {
-    vec3(0.0898831725494359, -0.23118056318048955, 0.96875),
-    vec3(-0.3791079112581037, 0.18705114039085075, 0.90625),
-    vec3(0.5153445316614019, 0.15001983597741456, 0.84375),
-    vec3(-0.3240808043433482, -0.5334979566560387, 0.78125),
-    vec3(-0.1352243320429325, 0.6819918016542008, 0.71875),
-    vec3(0.6081648613009205, -0.4466222553554984, 0.65625),
-    vec3(-0.7999438572571327, -0.08689512492988453, 0.59375),
-    vec3(0.559254806831153, 0.6364019944471022, 0.53125),
-    vec3(0.018252552906059358, -0.8831422772194816, 0.46875000000000006),
-    vec3(-0.6310280835640938, 0.66088160456577, 0.40624999999999994),
-    vec3(0.9369622623684265, -0.06275074818231247, 0.34374999999999994),
-    vec3(-0.7493392047328667, -0.5994907787033216, 0.2812499999999999),
-    vec3(0.1500724796134238, 0.9641715036043528, 0.21875),
-    vec3(0.5472431702110503, -0.8222596002220706, 0.15624999999999997),
-    vec3(-0.9665972247046685, 0.2385387655984508, 0.09375000000000008),
-    vec3(0.8773063928879596, 0.47891223673854594, 0.03125000000000001)
-};
-
-const glm::vec3 directions[6] = {
-    glm::vec3(0, 0, 1), // PosZ
-    glm::vec3(0, 0, -1), // NegZ
-    glm::vec3(0, 1, 0), // PosY
-    glm::vec3(0, -1, 0), // NegY
-    glm::vec3(1, 0, 0), // PosX
-    glm::vec3(-1, 0, 0) // NegX
-};
-
-#define MAX_ILLUMINANCE 10.f
-
-uint packRGB10A2(vec4 color) {
-    vec4 clamped = clamp(color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
-    
-    uint r = uint(clamped.r * 1023.0f);
-    uint g = uint(clamped.g * 1023.0f);
-    uint b = uint(clamped.b * 1023.0f);
-    uint a = uint(clamped.a * 3.0f);
-    
-    return r | (g << 10) | (b << 20) | (a << 30);
-}
-
-vec4 unpackRGB10A2(uint packed) {
-    float r = float((packed) & 0x3FF) / 1023.0f;
-    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
-    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
-    
-    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
-}
-
-// Transform pre-calculated samples to align with given normal
-void GetHemisphereSamples(const glm::vec3& normal, std::vector<glm::vec3>& result)
+void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
-    result.reserve(RAY_PERFACE);
+    auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
+    vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
+    uint32_t addressIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
+    AmbientCube& cube = ambientCubes[addressIdx];
 
-    // Create orthonormal basis
-    glm::vec3 up = glm::abs(normal.y) < 0.999f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
-    glm::vec3 tangent = glm::normalize(glm::cross(up, normal));
-    glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
-
-    // Transform matrix from Z-up to normal-up space
-    glm::mat3 transform(tangent, bitangent, normal);
-
-    // Transform each pre-calculated sample
-    for (const auto& sample : hemisphereVectors16)
+    TLSContext.Cubes = &ambientCubes;
+    TLSContext.CUBE_UNIT = UNIT_SIZE;
+    TLSContext.CUBE_OFFSET = CUBE_OFFSET;
+    
+    switch (procType)
     {
-        result.push_back(transform * sample);
-    }
-}
-
-bool IsInShadow(const glm::vec3& point, const glm::vec3& lightPos, const tinybvh::BVH& bvh)
-{
-    glm::vec3 direction = lightPos - point;
-    float length = glm::length(direction) - 0.02f;
-    tinybvh::Ray shadowRay(tinybvh::bvhvec3(point.x, point.y, point.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
-
-    return bvh.IsOccluded(shadowRay);
-}
-
-void FCPUAccelerationStructure::ProcessCube(int x, int y, int z, std::vector<glm::vec3> sunDir, std::vector<glm::vec3> lightPos)
-{
-    glm::vec3 probePos = glm::vec3(x, y, z) * Assets::CUBE_UNIT + Assets::CUBE_OFFSET;
-    Assets::AmbientCube& cube = ambientCubes[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x];
-
-    cube.Info = glm::vec4(1, 0, 0, 0);
-
-    for (int face = 0; face < 6; face++)
-    {
-    glm::vec3 baseDir = directions[face];
-
-    float occlusion = 0.0f;
-    glm::vec4 rayColor = glm::vec4(0, 0, 0, 0);
-    std::vector<glm::vec3> hemisphereSamples;
-    GetHemisphereSamples(baseDir, hemisphereSamples);
-
-    bool nextCube = false;
-    for (int i = 0; i < RAY_PERFACE; i++)
-    {
-        tinybvh::Ray ray(tinybvh::bvhvec3(probePos.x, probePos.y, probePos.z),
-                         tinybvh::bvhvec3(hemisphereSamples[i].x, hemisphereSamples[i].y, hemisphereSamples[i].z), 11.f);
-
-        GCpuBvh.Intersect(ray);
-
-        if (ray.hit.t < 10.0f)
-        {
-            uint32_t primIdx = ray.hit.prim;
-            tinybvh::BLASInstance& instance = bvhInstanceList[ray.hit.inst];
-            FCPUTLASInstanceInfo& instContext = bvhTLASContexts[ray.hit.inst];
-            FCPUBLASContext& context = bvhBLASContexts[instance.blasIdx];
-            glm::mat4* worldTS = ( glm::mat4*)instance.transform;
-            glm::vec4 normalWS = glm::vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-            float dotProduct = glm::dot(hemisphereSamples[i], glm::vec3(normalWS));
-            
-            if (dotProduct < 0.0f)
+        case ECubeProcType::ECPT_Clear:
+        case ECubeProcType::ECPT_Fence:
+            break;
+        case ECubeProcType::ECPT_Iterate:
             {
-                // get the hit pos
-                auto hitPos = ray.O + ray.D * ray.hit.t;
-                glm::vec3* glmPosPtr = (glm::vec3*)(&hitPos);
-                //float power = IsInShadow(*glmPosPtr, *glmPosPtr + lightDir * -1000.0f, GCpuBvh) ? 0.5f: 1.0f;
-                float power = 0.5f;
-                // occlude, bounce color, fade by distance
-                uint32_t diffuseColor = instContext.mats[context.extinfos[primIdx].matIdx];
+                cube.Active = 1;
+                cube.Lighting = 0;
+                cube.ExtInfo1 = 0;
+                cube.ExtInfo2 = cube.ExtInfo2 + 1;
                 
-                rayColor += unpackUnorm4x8(diffuseColor) * power;// * glm::clamp(1.0f - ray.hit.t / 5.0f, 0.0f, 1.0f) * 0.5f;
-                occlusion += 1.0f;
+                vec4 bounceColor(0);
+                vec4 skyColor(0);
+                uint matId = 0;
+
+                vec3 offset = vec3(0);
+                bool Inside = IsInside( probePos, offset, matId);
+
+                if (Inside)
+                {
+                    probePos = probePos + offset;
+                    cube.Active = 0;
+                }
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                // 正Y方向
+                cube.PosY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                // 负Y方向
+                cube.NegY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                
+                // 正X方向
+                cube.PosX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                
+                // 负X方向
+                cube.NegX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(-1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                
+                // 正Z方向
+                cube.PosZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,1), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
+                
+                // 负Z方向
+                cube.NegZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,-1), cube.Active, matId, bounceColor, skyColor, ubo) );
+                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 1.0f / cube.ExtInfo2 );
+                cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 1.0f / cube.ExtInfo2 );
+                cube.ExtInfo1 = matId;
+                if (cube.Active == 0) return;
             }
-            else
+            break;
+        case ECubeProcType::ECPT_Copy:
             {
-                cube.Info.x = 0;
-                cube.Info.y = 0;
-                nextCube = true;
-                break;
+                ambientCubes_Copy[addressIdx] = ambientCubes[addressIdx];
+            }
+            break;
+        case ECubeProcType::ECPT_Blur:
+        {
+            uint32_t centerIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
+            AmbientCube& centerCube = ambientCubes[centerIdx];
+            centerCube.ExtInfo3 = 0;
+
+            // 定义采样权重和累积值
+            float totalWeight = 0.0f;
+            vec4 blurredPosX(0), blurredNegX(0);
+            vec4 blurredPosY(0), blurredNegY(0);
+            vec4 blurredPosZ(0), blurredNegZ(0);
+
+            vec4 blurredPosX_S(0), blurredNegX_S(0);
+            vec4 blurredPosY_S(0), blurredNegY_S(0);
+            vec4 blurredPosZ_S(0), blurredNegZ_S(0);
+
+            // 在3x3x3的区域中采样
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        int nz = z + dz;
+
+                        // 检查边界
+                        if (nx < 0 || ny < 0 || nz < 0 ||
+                            nx >= CUBE_SIZE_XY ||
+                            ny >= CUBE_SIZE_Z ||
+                            nz >= CUBE_SIZE_XY) {
+                            continue;
+                        }
+
+                        uint32_t neighborIdx = ny * CUBE_SIZE_XY * CUBE_SIZE_XY + nz * CUBE_SIZE_XY + nx;
+                        AmbientCube& neighborCube = ambientCubes_Copy[neighborIdx];
+
+                        // 如果邻居立方体不活跃，跳过
+                        if (neighborCube.Active != 1) continue;
+
+                        // 计算权重 (距离越远权重越小)
+                        float dist = length(vec3(dx, dy, dz));
+                        float weight = 1.0f / (1.0f + dist);
+
+                        // 解包颜色值并累积加权颜色
+                        blurredPosX += unpackRGB10A2(neighborCube.PosX) * weight;
+                        blurredNegX += unpackRGB10A2(neighborCube.NegX) * weight;
+                        blurredPosY += unpackRGB10A2(neighborCube.PosY) * weight;
+                        blurredNegY += unpackRGB10A2(neighborCube.NegY) * weight;
+                        blurredPosZ += unpackRGB10A2(neighborCube.PosZ) * weight;
+                        blurredNegZ += unpackRGB10A2(neighborCube.NegZ) * weight;
+
+                        blurredPosX_S += unpackRGB10A2(neighborCube.PosX_S) * weight;
+                        blurredNegX_S += unpackRGB10A2(neighborCube.NegX_S) * weight;
+                        blurredPosY_S += unpackRGB10A2(neighborCube.PosY_S) * weight;
+                        blurredNegY_S += unpackRGB10A2(neighborCube.NegY_S) * weight;
+                        blurredPosZ_S += unpackRGB10A2(neighborCube.PosZ_S) * weight;
+                        blurredNegZ_S += unpackRGB10A2(neighborCube.NegZ_S) * weight;
+
+                        totalWeight += weight;
+                    }
+                }
+            }
+
+            // 如果有有效的邻居，计算平均值并更新当前立方体
+            if (totalWeight > 0.0f) {
+                float invWeight = 1.0f / totalWeight;
+
+                // 归一化并重新打包颜色值
+                centerCube.PosX = packRGB10A2(blurredPosX * invWeight);
+                centerCube.NegX = packRGB10A2(blurredNegX * invWeight);
+                centerCube.PosY = packRGB10A2(blurredPosY * invWeight);
+                centerCube.NegY = packRGB10A2(blurredNegY * invWeight);
+                centerCube.PosZ = packRGB10A2(blurredPosZ * invWeight);
+                centerCube.NegZ = packRGB10A2(blurredNegZ * invWeight);
+
+                centerCube.PosX_S = packRGB10A2(blurredPosX_S * invWeight);
+                centerCube.NegX_S = packRGB10A2(blurredNegX_S * invWeight);
+                centerCube.PosY_S = packRGB10A2(blurredPosY_S * invWeight);
+                centerCube.NegY_S = packRGB10A2(blurredNegY_S * invWeight);
+                centerCube.PosZ_S = packRGB10A2(blurredPosZ_S * invWeight);
+                centerCube.NegZ_S = packRGB10A2(blurredNegZ_S * invWeight);
+
+                centerCube.ExtInfo3 = 1;
             }
         }
-        else
-        {
-            // hit the sky, sky color, with a ibl is better
-            glm::vec4 skyColor = SampleIBL(0, hemisphereSamples[i], 0.f, 1.f);
-            rayColor += skyColor;
-        }
-    }
-
-    if (nextCube)
-    {
-        continue;
-    }
-
-    occlusion /= RAY_PERFACE;
-    rayColor /= RAY_PERFACE;
-
-    // for each light in the scene, ray hit the center, if not occlude, add rayColor
-    for( auto& light : lightPos )
-    {
-        if( !IsInShadow( probePos, light, GCpuBvh) )
-        {
-            // ndotl + distance attenuation
-            glm::vec3 lightDir = glm::normalize(light - probePos);
-            float ndotl = glm::clamp(glm::dot(baseDir, lightDir), 0.0f, 1.0f);
-            float distance = glm::length(light - probePos);
-            float attenuation = 40.0f / (distance * distance);
-            rayColor += glm::vec4(0.6f, 0.6f, 0.6f, 1.0f) * ndotl * attenuation;
-        }
-    }
-
-    float visibility = 1.0f - occlusion;
-    glm::vec4 indirectColor = rayColor;//glm::vec4(visibility);
-    uint32_t packedColor = packRGB10A2(indirectColor);
-
-    switch (face)
-    {
-    case 0: cube.PosZ = packedColor;
-        break;
-    case 1: cube.NegZ = packedColor;
-        break;
-    case 2: cube.PosY = packedColor;
-        break;
-    case 3: cube.NegY = packedColor;
-        break;
-    case 4: cube.PosX = packedColor;
-        break;
-    case 5: cube.NegX = packedColor;
         break;
     }
-    }
+}
 
-    if (!sunDir.empty())
-    {
-        IsInShadow(probePos, probePos + sunDir[0] * 1000.0f, GCpuBvh) ? cube.Info.y = 0 : cube.Info.y = 1;
-    }
-    
-    ambientCubesCopy[y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x] = cube;
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory)
+{
+    AmbientCube* data = reinterpret_cast<AmbientCube*>(GPUMemory.Map(0, sizeof(AmbientCube) * ambientCubes.size()));
+    std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
+    GPUMemory.Unmap();
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
-{
-    // add a full update tasks
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
-    int lengthX = Assets::CUBE_SIZE_XY / groupSize;
-    int lengthZ = Assets::CUBE_SIZE_XY / groupSize;
+{    
+    // clean
+    while (!needUpdateGroups.empty())
+        needUpdateGroups.pop();
+    lastBatchTasks.clear();
+    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    probeBaker.ClearAmbientCubes();
+    farProbeBaker.ClearAmbientCubes();
     
-    for (int x = 0; x < lengthX - 1; x++)
+    const int groupSize = 16;
+    const int lengthX = CUBE_SIZE_XY / groupSize;
+    const int lengthZ = CUBE_SIZE_XY / groupSize;
+
+    // far probe gen
+    for (int x = 0; x < lengthX; x++)
+        for (int z = 0; z < lengthZ; z++)
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_FarProbe});
+    
+    // 2 pass near probe iterate
+    for(int pass = 0; pass < 4; ++pass)
     {
-        for (int z = 0; z < lengthZ - 1; z++)
-        {   
-            needUpdateGroups.insert(glm::ivec3(x, 0, z));
-        }
+        // shuffle
+        std::vector<std::pair<int, int>> coordinates;
+        for (int x = 0; x < lengthX; x++)
+            for (int z = 0; z < lengthZ; z++)
+                coordinates.push_back({x, z});
+        
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(coordinates.begin(), coordinates.end(), g);
+
+        // dispatch
+        for (const auto& [x, z] : coordinates)
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
+        // add fence
+        needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
     }
-    
-    //TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-    //BlurAmbientCubes(ambientCubes, ambientCubesCopy);
+
+    // copy for blur
+    for (int x = 0; x < lengthX; x++)
+        for (int z = 0; z < lengthZ; z++)
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Copy, EBakerType::EBT_Probe});
+    needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
+
+    // blur pass
+    for (int x = 0; x < lengthX; x++)
+        for (int z = 0; z < lengthZ; z++)
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Blur, EBakerType::EBT_Probe});
+    needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene)
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Scene& scene, ECubeProcType procType, EBakerType bakerType)
 {
-    return;
     if (bvhInstanceList.empty())
     {
         return;
     }
     
-    int groupSize = static_cast<int>(std::round(1.0f / Assets::CUBE_UNIT));
+    int groupSize = 16; // 4 x 4 x 40 a group
     
     int actualX = xInMeter * groupSize;
     int actualZ = zInMeter * groupSize;
 
-    std::vector<glm::vec3> lightPos;
-    std::vector<glm::vec3> sunDir;
+    std::vector<vec3> lightPos;
+    std::vector<vec3> sunDir;
     for( auto& light : scene.Lights() )
     {
         lightPos.push_back(mix(light.p1, light.p3, 0.5f));
@@ -397,30 +514,32 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, As
     }
 
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, sunDir, lightPos](ResTask& task)
+                [this, actualX, actualZ, groupSize, procType, bakerType](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
-                    for (int y = 0; y < Assets::CUBE_SIZE_Z; y++)
+                    for (int y = 0; y < CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
-                            ProcessCube(x, y, z, sunDir, lightPos);
+                        {
+                            bakerType == EBakerType::EBT_Probe ? probeBaker.ProcessCube(x, y, z, procType) : farProbeBaker.ProcessCube(x, y, z, procType);
+                        }
             },
             [this](ResTask& task)
             {
+                // flush here
+                //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
                 needFlush = true;
             });
 
     lastBatchTasks.push_back(taskId);
 }
 
-void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory)
+void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory)
 {
     if (needFlush)
     {
-        // Upload to GPU, now entire range
-        Assets::AmbientCube* data = reinterpret_cast<Assets::AmbientCube*>(GPUMemory->Map(0, sizeof(Assets::AmbientCube) * ambientCubes.size()));
-        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(Assets::AmbientCube));
-        GPUMemory->Unmap();
-
+        // Upload to GPU, now entire range, optimize to partial upload later
+        probeBaker.UploadGPU(*GPUMemory);
+        farProbeBaker.UploadGPU(*FarGPUMemory);
         needFlush = false;
     }
 
@@ -433,34 +552,132 @@ void FCPUAccelerationStructure::Tick(Assets::Scene& scene, Vulkan::DeviceMemory*
     }
     else
     {
-        if(!needUpdateGroups.empty())
+        while (!needUpdateGroups.empty())
         {
-            // if we got upadte task, rebuild bvh and dispatch
-            UpdateBVH(scene);
-
-            for( auto& group : needUpdateGroups)
+            auto& group = needUpdateGroups.front();
+            ECubeProcType type = std::get<1>(group);
+            if (type == ECubeProcType::ECPT_Fence)
             {
-                AsyncProcessGroup(group.x, group.z, scene);
-                //NextEngine::GetInstance()->DrawAuxPoint( glm::vec3(group) + Assets::CUBE_OFFSET, glm::vec4(1, 0, 0, 1), 2, 30 );
+                if (!TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+                {
+                    break; 
+                }
+                needUpdateGroups.pop();
+                continue;
             }
-
-            needUpdateGroups.clear();
+            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group));
+            needUpdateGroups.pop();
         }
     }
 }
 
-void FCPUAccelerationStructure::RequestUpdate(glm::vec3 worldPos, float radius)
+void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
 {
-    glm::ivec3 center = glm::ivec3(worldPos - Assets::CUBE_OFFSET);
-    glm::ivec3 min = center - glm::ivec3(static_cast<int>(radius));
-    glm::ivec3 max = center + glm::ivec3(static_cast<int>(radius));
+    ivec3 center = ivec3(worldPos - CUBE_OFFSET);
+    ivec3 min = center - ivec3(static_cast<int>(radius));
+    ivec3 max = center + ivec3(static_cast<int>(radius));
 
     // Insert all points within the radius (using manhattan distance for simplicity)
     for (int x = min.x; x <= max.x; ++x) {
-        for (int z = min.z; z <= max.z; ++z) {
-            glm::ivec3 point(x, 1, z);
-            needUpdateGroups.insert(point);
+        for (int z = min.z; x <= max.z; ++z) {
+            ivec3 point(x, 1, z);
+            needUpdateGroups.push({point, ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
         }
     }
 }
 
+void FCPUProbeBaker::ClearAmbientCubes()
+{
+    for(auto& cube : ambientCubes)
+    {
+        cube = {};
+        cube.Active = 1;
+    }
+}
+
+void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
+{
+    if (bvhInstanceList.empty())
+    {
+        return;
+    }
+
+    if (!scene.GetEnvSettings().HasSun)
+    {
+        return;
+    }
+    
+    const vec3& sunDir = scene.GetEnvSettings().SunDirection();
+    
+    // 阴影图分辨率设置
+    int shadowMapSize = SHADOWMAP_SIZE;
+    int tileSize = 256; // 每个tile的大小
+    int tilesPerRow = shadowMapSize / tileSize;
+    shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
+
+    // 使用环境设置中的方法获取光源视图投影矩阵
+    mat4 lightViewProj = scene.GetEnvSettings().GetSunViewProjection();
+    mat4 invLVP = inverse(lightViewProj);
+    vec3 lightDir = normalize(-sunDir);
+
+    
+    // 计算当前tile的起始像素坐标
+    for ( int currentTileX = 0; currentTileX < tilesPerRow; ++currentTileX )
+    {
+        for ( int currentTileY = 0; currentTileY < tilesPerRow; ++currentTileY )
+        {
+            int startX = currentTileX * tileSize;
+            int startY = currentTileY * tileSize;
+
+                // 处理当前tile
+            TaskCoordinator::GetInstance()->AddParralledTask(
+                [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](ResTask& task)
+                {
+                    for (int y = 0; y < tileSize; y++)
+                    {
+                        for (int x = 0; x < tileSize; x++)
+                        {
+                            int pixelX = startX + x;
+                            int pixelY = startY + y;
+                            
+                            // 计算NDC坐标
+                            float ndcX = (pixelX / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
+                            float ndcY = 1.0f - (pixelY / static_cast<float>(shadowMapSize - 1)) * 2.0f;
+                            
+                            // 从NDC空间变换到世界空间
+                            vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f);
+                            worldPos /= worldPos.w;
+                            
+                            // 发射光线
+                            vec3 origin = vec3(worldPos);
+                            vec3 rayDir = normalize(lightDir);
+                            
+                            tinybvh::Ray ray(
+                                tinybvh::bvhvec3(origin.x, origin.y, origin.z),
+                                tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
+                                10000.0f
+                            );
+                            
+                            GCpuBvh.Intersect(ray);
+                            if (ray.hit.t < 9999.0f)
+                            {
+                                vec3 hitPoint = origin + rayDir * ray.hit.t;
+                                vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
+                                float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
+                                shadowMapR32[pixelY * shadowMapSize + pixelX] = depth;
+                            }
+                        }
+                    }
+                },
+                [this, &scene, shadowMapSize, startX, startY, tileSize](ResTask& task)
+                {
+                    // 更新当前tile到GPU
+                    Vulkan::CommandPool& commandPool = GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
+                    const unsigned char* tileData = reinterpret_cast<const unsigned char*>(shadowMapR32.data());
+                    scene.ShadowMap().UpdateDataMainThread(commandPool, startX, startY, tileSize, tileSize, shadowMapSize, shadowMapSize,
+                        tileData, shadowMapSize * shadowMapSize * sizeof(float));
+                }
+            );
+        }
+    }
+}

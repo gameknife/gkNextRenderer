@@ -5,7 +5,7 @@
 #include "Platform.glsl"
 #include "common/Const_Func.glsl"
 #include "common/Material.glsl"
-#include "common/UniformBufferObject.h"
+#include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT Scene;
@@ -23,12 +23,12 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
 layout(push_constant) uniform PushConsts {
     uint globalOffset;
-    uint unitSize;
+    uint cascade;
 } pushConsts;
 
 #include "common/RTSimple.glsl"
-#include "common/AmbientCube.glsl"
-#include "common/SampleIBL.h"
+#include "common/AmbientCubeCommon.glsl"
+#include "common/SampleIBL.glsl"
 
 #if DESKTOP
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
@@ -36,135 +36,100 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 #endif
 
-// return if hits, this function may differ between Shader & Cpp
-bool TracingFunction(in vec3 origin, in vec3 rayDir, out vec3 OutNormal, out uint OutMaterialId, out float OutRayDist)
+AmbientCube FetchCube(ivec3 probePos)
 {
-    rayQueryEXT rayQuery;
-    rayQueryInitializeEXT(rayQuery, Scene, gl_RayFlagsNoneEXT, 0xFF, origin.xyz, EPS, rayDir, 10.0f);
-
-    while( rayQueryProceedEXT(rayQuery) )
-    {
-
-    }
-
-    if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT  ) {
-        const bool IsCommitted = true;
-        const int InstCustIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, IsCommitted);
-        const float RayDist = rayQueryGetIntersectionTEXT(rayQuery, IsCommitted);
-        const mat4x3 WorldToObject = rayQueryGetIntersectionWorldToObjectEXT(rayQuery, IsCommitted);
-        const vec2 TwoBaryCoords = rayQueryGetIntersectionBarycentricsEXT(rayQuery, IsCommitted);
-        const int PrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, IsCommitted);
-        const int InstanceID = rayQueryGetIntersectionInstanceIdEXT(rayQuery, IsCommitted);
-        OutRayDist = RayDist;
-
-        vec2 OutTexcoord;
-        uint OutInstanceId;
-        SimpleHit(InstCustIndex, WorldToObject, TwoBaryCoords, PrimitiveIndex, InstanceID, OutNormal, OutTexcoord, OutMaterialId, OutInstanceId);
-        return true;
-    }
-
-    return false;
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+    probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
 }
 
-int TraceShadow(vec3 origin, vec3 lightPos)
-{
-    if( !Camera.HasSun )
-    {
-        return 0;
+vec4 interpolateDIProbes(vec3 pos, vec3 normal) {
+    // Early out if position is outside the probe grid
+    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
+    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
+        return vec4(1.0);
     }
-    return TracingOccludeFunction(origin, lightPos);
-}
 
-vec4 TraceOcclusion(inout uvec4 RandomSeed, vec3 origin, vec3 basis, inout int activeProbe, inout vec4 bounceColor, inout vec4 skyColor)
-{
-    float occlusion = 0.0;
-    float hitDist = 0.0;
-    float hitCount = 0.000001;
-    vec3 rayColor = vec3(0.0);
-    bounceColor = vec4(0.0);
-    skyColor = vec4(0.0);
+    // Get the base indices and fractional positions
+    ivec3 baseIdx = ivec3(floor(pos));
+    vec3 frac = fract(pos);
 
-    // Generate a random angle for z-axis rotation
-    float randAngle = RandomFloat(RandomSeed) * M_TWO_PI;
-    float cosTheta = cos(randAngle);
-    float sinTheta = sin(randAngle);
-    float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
+    // Trilinear interpolation between 8 nearest probes
+    // Try immediate neighbors first
+    float totalWeight = 0.0;
+    vec4 result = vec4(0.0);
 
-    for( uint i = 0; i < FACE_TRACING; i++ )
-    {
-        #if HIGH_QUALITY
-        vec3 hemiVec = hemisphereVectors32[i];
-        #else
-        vec3 hemiVec = hemisphereVectors16[i];
-        #endif
-
-        // Apply rotation around z-axis
-        vec3 rotatedVec = vec3(
-        hemiVec.x * cosTheta - hemiVec.y * sinTheta,
-        hemiVec.x * sinTheta + hemiVec.y * cosTheta,
-        hemiVec.z
+    for (int i = 0; i < 8; i++) {
+        ivec3 offset = ivec3(
+        i & 1,
+        (i >> 1) & 1,
+        (i >> 2) & 1
         );
 
-        // Align with the surface normal
-        vec3 rayDir = AlignWithNormal(rotatedVec, basis);
-        vec3 OutNormal;
-        uint OutMaterialId;
-        float OutRayDist;
-        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist) )
-        {
-            if( dot(OutNormal, rayDir) < 0.0 )
-            {
-                vec3 hitPos = origin + rayDir * OutRayDist;
-                const Material material = Materials[OutMaterialId];
-                vec3 localPos = (hitPos - CUBE_OFFSET) / CUBE_UNIT;
-                vec3 jit = (RandomFloat3(RandomSeed) - vec3(0.5f)) * CUBE_UNIT;
-                vec4 indirectLight = material.Diffuse * interpolateDIProbes(localPos + jit, OutNormal);
-                bounceColor.rgb += indirectLight.rgb;
-            }
-            else
-            {
-                // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
-                hitDist = 0.0;
-                hitCount = 1;
-                activeProbe = 0;
-                break;
-            }
-        }
-        else
-        {
-            hitDist += 1000.0;
-            hitCount += 1;
-            occlusion += 0.0;
-            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0).rgb * skyMultiplier;
-            
-        }
-    }
-    rayColor = rayColor / float(FACE_TRACING);
-    skyColor.rgb = rayColor;
-    bounceColor.rgb = bounceColor.rgb / float(FACE_TRACING);
+        ivec3 probePos = baseIdx + offset;
+        AmbientCube cube = FetchCube(probePos);
+        if (cube.Active != 1) continue;
 
-    if(Camera.LightCount > 0)
-    {
-        vec3 lightPos = mix(Lights[0].p1.rgb, Lights[0].p3.rgb, 0.5f);
+        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+        float weight = wx * wy * wz;
 
-        //AmbientCube cube = FetchCube(cubePos);
-        float lightAtten = TracingOccludeFunction(origin, lightPos);
-
-        vec3 lightDir = normalize(lightPos - origin);
-        float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-        float distance = length(lightPos - origin);
-        float attenuation = 1.0f / (distance * distance);
-        rayColor += vec3(2000.0f, 2000.0f, 2000.0f) * ndotl * attenuation * lightAtten;
+        vec4 sampleColor = sampleAmbientCubeHL2_DI(cube, normal);
+        result += sampleColor * weight;
+        totalWeight += weight;
     }
 
-    float sunAtten = TracingOccludeFunction(origin, origin + Camera.SunDirection.xyz * 1000.0);
-    float ndotl = clamp(dot(basis, Camera.SunDirection.xyz), 0.0f, 1.0f);
-    rayColor += Camera.SunColor.xyz * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+    // up cascade
+    if(totalWeight <= 0.0) {
+        baseIdx = baseIdx - ivec3(1,1,1);
+        for (int i = 0; i < 8; i++) {
+            ivec3 offset = ivec3(
+            i & 1,
+            (i >> 1) & 1,
+            (i >> 2) & 1
+            );
 
-    float avgDist = hitDist / hitCount;
-    vec4 indirectColor = vec4(rayColor, avgDist);
+            ivec3 probePos = baseIdx + offset * 3;
+            AmbientCube cube = FetchCube(probePos);
+            if (cube.Active != 1) continue;
+
+            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+            float weight = wx * wy * wz;
+
+            vec4 sampleColor = sampleAmbientCubeHL2_DI(cube, normal);
+            result += sampleColor * weight;
+            totalWeight += weight;
+        }
+    }
+
+    // Normalize result by total weight
+    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05);
     return indirectColor;
 }
+
+
+uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
+{
+    return MaterialIdx;
+}
+
+vec4 FetchDirectLight(vec3 hitPos, vec3 OutNormal, uint OutMaterialId, uint OutInstanceId)
+{
+    const Material material = Materials[OutMaterialId];
+    vec3 localPos = (hitPos - (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR)) / (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR);
+    return material.Diffuse * interpolateDIProbes(localPos, OutNormal);
+}
+
+LightObject FetchLight(uint lightIdx, inout vec4 lightPower)
+{
+    lightPower = Materials[Lights[lightIdx].lightMatIdx].Diffuse;
+    return Lights[lightIdx];
+}
+
+#include "common/AmbientCubeAlgo.glsl"
 
 void main() {
     uint gIdx = gl_GlobalInvocationID.x + pushConsts.globalOffset;
@@ -175,30 +140,59 @@ void main() {
     uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
     uvec4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
-    vec3 origin = vec3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
+    vec3 origin = vec3(x, y, z) * (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
 
-    int activeProbe = 1;
+    uint activeProbe = 1;
+    uint matId = 0;
     
     vec4 bounceColor = vec4(0.0);
     vec4 skyColor = vec4(0.0);
-    Cubes[gIdx].PosY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,1,0), activeProbe     ,bounceColor, skyColor));
-    Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.125);
-    Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.125);
-    Cubes[gIdx].NegY_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,-1,0), activeProbe    ,bounceColor, skyColor));
-    Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.125);
-    Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.125);
-    Cubes[gIdx].PosX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(1,0,0), activeProbe    ,bounceColor, skyColor));
-    Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.125);
-    Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.125);
-    Cubes[gIdx].NegX_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(-1,0,0), activeProbe    ,bounceColor, skyColor));
-    Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.125);
-    Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.125);
-    Cubes[gIdx].PosZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,1), activeProbe    ,bounceColor, skyColor));
-    Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.125);
-    Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.125);
-    Cubes[gIdx].NegZ_D = PackColor(TraceOcclusion(RandomSeed, origin, vec3(0,0,-1), activeProbe   ,bounceColor, skyColor));
-    Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.125);
-    Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.125);
+    vec4 directColor = vec4(0.0);
 
-    Cubes[gIdx].Info.x = activeProbe;
+    vec3 offset = vec3(0.0);
+    bool Inside = IsInside( origin, offset, matId);
+
+    Cubes[gIdx].ExtInfo2 = Cubes[gIdx].ExtInfo2 + 1;
+
+    if (Inside)
+    {
+        origin = origin + offset;
+        activeProbe = 0;
+    }
+    
+    if(activeProbe != 0)
+    {
+        directColor = TraceOcclusion( Cubes[gIdx].ExtInfo2, origin, vec3(0,1,0), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].PosY_D = LerpPackedColorAlt(Cubes[gIdx].PosY_D, directColor, 0.25);
+        Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.1);
+        Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.1);
+
+        directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,-1,0), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].NegY_D = LerpPackedColorAlt(Cubes[gIdx].NegY_D, directColor, 0.25);
+        Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.1);
+        Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.1);
+
+        directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(1,0,0), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].PosX_D = LerpPackedColorAlt(Cubes[gIdx].PosX_D, directColor, 0.25);
+        Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.1);
+        Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.1);
+
+        directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(-1,0,0), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].NegX_D = LerpPackedColorAlt(Cubes[gIdx].NegX_D, directColor, 0.25);
+        Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.1);
+        Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.1);
+
+        directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,0,1), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].PosZ_D = LerpPackedColorAlt(Cubes[gIdx].PosZ_D, directColor, 0.25);
+        Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.1);
+        Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.1);
+
+        directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,0,-1), activeProbe, matId, bounceColor, skyColor, Camera);
+        Cubes[gIdx].NegZ_D = LerpPackedColorAlt(Cubes[gIdx].NegZ_D, directColor, 0.25);
+        Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.1);
+        Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.1);
+    }
+
+    Cubes[gIdx].Active = activeProbe;
+    Cubes[gIdx].ExtInfo1 = matId;
 }

@@ -6,5 +6,19 @@
     {
         "name": "linux-vcpkg-toolchain",
         "toolchainFile": "./build/vcpkg.linux/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+        "name": "windows-vcpkg-toolchain",
+        "toolchainFile": "./build/vcpkg.windows/scripts/buildsystems/vcpkg.cmake",
+        "visualStudio": "Visual Studio 17 2022",
+        "visualStudioArchitecture": "x64",
+        "cmakeSettings": {
+            "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+        },
+        "preferredGenerator": {
+            "name": "Visual Studio 17 2022",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "v143"
+        }
     }
 ]
