@@ -274,7 +274,8 @@ namespace Vulkan::RayTracing
             vkCmdDispatch(commandBuffer, 1, 1, 1);
         }
 #endif
-        
+
+#if !ANDROID
         if(supportRayCast_ && CurrentLogicRendererType() != ERT_PathTracing)
         {
 #if !ANDROID
@@ -364,6 +365,7 @@ namespace Vulkan::RayTracing
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
             }
         }
+#endif
     }
 
     void RayTraceBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
