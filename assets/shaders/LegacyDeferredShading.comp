@@ -3,11 +3,8 @@
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_shader_image_load_formatted : require
 
-#include "Platform.glsl"
-#include "common/Material.glsl"
+#include "common/Const_Func.glsl"
 #include "common/UniformBufferObject.glsl"
-#include "common/ColorFunc.glsl"
-#include "common/Random.glsl"
 
 layout(binding = 0) readonly uniform image2D GBuffer0Image;
 layout(binding = 1) readonly uniform image2D GBuffer1Image;
@@ -19,13 +16,7 @@ layout(binding = 8) uniform sampler2D ShadowMapSampler;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
-#include "common/SampleIBL.glsl"
-
-#if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
-#else
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-#endif
 
 float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
     // 计算光源空间坐标
@@ -51,20 +42,8 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 
 void main() {
 
-    // checker box
-    int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
-    
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
-    if(Camera.UseCheckerBoard)
-    {
-        ipos = ipos * ivec2(2,1);
-        if((gl_GlobalInvocationID.y + adder) % 2 == 0) {
-            ipos.x += 1;
-        }
-    }
-    
-    uvec4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
-    
+
     vec4 albedo = imageLoad(GBuffer0Image, ipos);
     vec4 normalraw = imageLoad(GBuffer1Image, ipos);
     vec4 pbr_param = imageLoad(GBuffer2Image, ipos);
@@ -72,7 +51,7 @@ void main() {
     vec3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1);
-    vec4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
+    vec4 iblLight = vec4(Camera.SkyIntensity);//Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
     
     const vec3 lightVector = Camera.SunDirection.xyz;
     const vec4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;

@@ -34,11 +34,7 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 #include "common/ColorFunc.glsl"
 #include "common/AmbientCube.glsl"
 
-#if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
-#else
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-#endif
 
 #include "common/VertexFunc.glsl"
 #include "common/SampleIBL.glsl"

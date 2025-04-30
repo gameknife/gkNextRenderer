@@ -3,7 +3,7 @@
 #extension GL_EXT_shader_image_load_formatted : require
 
 #include "common/UniformBufferObject.glsl"
-#include "common/ColorFunc.glsl"
+#include "common/Const_Func.glsl"
 
 layout(binding = 0) uniform image2D InImage;
 layout(binding = 1) uniform image2D OutImage;
