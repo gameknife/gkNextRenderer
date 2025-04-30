@@ -34,6 +34,8 @@ namespace Vulkan
 		void SetObjectName(const VkSemaphore& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_SEMAPHORE); }
 		void SetObjectName(const VkShaderModule& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_SHADER_MODULE); }
 		void SetObjectName(const VkSwapchainKHR& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_SWAPCHAIN_KHR); }
+		void SetObjectName(const VkPipelineLayout& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_PIPELINE_LAYOUT); }
+		
 		
 	private:
 

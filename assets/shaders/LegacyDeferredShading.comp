@@ -16,6 +16,7 @@ layout(binding = 8) uniform sampler2D ShadowMapSampler;
 
 layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 
+#include "common/SampleIBL.glsl"
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
 float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
@@ -51,7 +52,7 @@ void main() {
     vec3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1);
-    vec4 iblLight = vec4(Camera.SkyIntensity);//Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
+    vec4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
     
     const vec3 lightVector = Camera.SunDirection.xyz;
     const vec4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;

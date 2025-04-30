@@ -21,6 +21,8 @@ PipelineLayout::PipelineLayout(const Device & device, const DescriptorSetLayout&
 	
 	Check(vkCreatePipelineLayout(device_.Handle(), &pipelineLayoutInfo, nullptr, &pipelineLayout_),
 		"create pipeline layout");
+
+	device_.DebugUtils().SetObjectName(pipelineLayout_, "global texture desc layout");
 }
 
 PipelineLayout::~PipelineLayout()

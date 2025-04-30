@@ -8,12 +8,13 @@
 [[vk::binding(3, 0)]] RWTexture2D<float4> OutImage;
 [[vk::binding(4, 0)]] cbuffer UniformBufferObjectStruct { UniformBufferObject Camera; };
 [[vk::binding(7, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
-[[vk::binding(8, 0)]] Texture2D<float> ShadowMapSampler;
-[[vk::binding(8, 0)]] SamplerState ShadowMapSamplerState;
+[[vk::combinedImageSampler]][[vk::binding(8, 0)]] Texture2D<float> ShadowMapSampler;
+[[vk::combinedImageSampler]][[vk::binding(8, 0)]] SamplerState ShadowMapSamplerState;
 
 // 全局纹理数组
 [[vk::binding(0, 1)]] Texture2D<float4> TextureSamplers[];
-[[vk::binding(0, 1)]] SamplerState TextureSamplersState;
+[[vk::binding(0, 1)]] SamplerState TextureSamplersState[];
+#include "common/SampleIBL.hlsli"
 
 // 获取阴影值
 float getShadow(float3 worldPos, float3 jit, float3 normal, int2 ipos) {
@@ -49,7 +50,7 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     float3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1.0);
-    float4 iblLight = float4(Camera.SkyIntensity, Camera.SkyIntensity, Camera.SkyIntensity, Camera.SkyIntensity);
+    float4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : float4(0.f, 0.f, 0.f, 0.f);
 
     const float3 lightVector = Camera.SunDirection.xyz;
     const float4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;
