@@ -1,41 +1,19 @@
-#include "common/Const_Func.hlsli"
-#include "common/UniformBufferObject.hlsli"
+import Common;
+
+#include "common/Const_Func.slang"
 
 // 资源绑定
 [[vk::binding(0, 0)]] RWTexture2D<float4> GBuffer0Image;
 [[vk::binding(1, 0)]] RWTexture2D<float4> GBuffer1Image;
 [[vk::binding(2, 0)]] RWTexture2D<float4> GBuffer2Image;
 [[vk::binding(3, 0)]] RWTexture2D<float4> OutImage;
-[[vk::binding(4, 0)]] cbuffer UniformBufferObjectStruct { UniformBufferObject Camera; };
+[[vk::binding(4, 0)]] ConstantBuffer<UniformBufferObject> Camera;
 [[vk::binding(7, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(8, 0)]] Sampler2D ShadowMapSampler;
 
 // 全局纹理数组
 [[vk::binding(0, 1)]] Sampler2D TextureSamplers[];
 #include "common/SampleIBL.hlsli"
-
-// 获取阴影值
-float getShadow(float3 worldPos, float3 jit, float3 normal, int2 ipos) {
-    // 计算光源空间坐标
-    float4 posInLightMap = mul(Camera.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
-
-    // 将光源空间坐标转换到NDC空间 [-1,1] 再转到 [0,1] 的纹理空间
-    float3 projCoords = posInLightMap.xyz / posInLightMap.w;
-    projCoords = projCoords * 0.5 + 0.5;
-    projCoords.y = 1.0 - projCoords.y;
-
-    float currentDepth = projCoords.z;
-
-    float bias = 0.0005;
-
-    float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-    bias = lerp(0.0001, 0.00005, cosTheta);
-
-    float closestDepth = ShadowMapSampler.Sample(projCoords.xy).x;
-    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
-
-    return shadow;
-}
 
 [shader("compute")]
 [numthreads(8, 4, 1)]
@@ -58,7 +36,7 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     if(Camera.HasSun)
     {
         float3 jit = float3(0, 0, 0);
-        shadow += getShadow(pbr_param.xyz, jit, normal, ipos);
+        shadow += Common.getShadow(pbr_param.xyz, jit, normal, ipos, Camera, ShadowMapSampler);
     }
 
     if(Camera.DebugDraw_Lighting)

@@ -1,5 +1,3 @@
-#ifndef CONST_FUNC_H
-
 #define to_world(v, t, b, n) (mul(float3x3((t), (b), (n)), (v)))
 #define to_local(v, T, B, N) (mul((v), float3x3((T), (B), (N))))
 
@@ -191,6 +189,3 @@ float4 srgbToLinear(in float4 sRgb)
     //float3 rgb = sRgb.xyz * (sRgb.xyz * (sRgb.xyz * 0.305306011F + 0.682171111F) + 0.012522878F);
     return float4(sRgb.rgb, sRgb.a);
 }
-
-#define CONST_FUNC_H
-#endif
