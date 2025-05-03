@@ -21,7 +21,7 @@ jobs:
 
     runs-on: macos-latest
     env: 
-      SDK_VERSION: 1.4.309.0
+      SDK_VERSION: 1.4.309
     steps:
     - uses: actions/checkout@v4
     - name: Install macOS dependencies
@@ -58,4 +58,6 @@ jobs:
         key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
 
     - name: Compile gkNextRenderer
-      run: ./build_macos.sh
+      run: |
+        slangc -v
+        ./build_macos.sh
