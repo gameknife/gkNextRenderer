@@ -287,7 +287,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "assets/shaders/VisualDebugger.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/VisualDebugger.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
