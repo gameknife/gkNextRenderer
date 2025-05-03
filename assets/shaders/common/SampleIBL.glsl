@@ -1,10 +1,8 @@
-#define M_NEXT_PI			3.14159265358979323846f	// pi
-
-#ifndef SampleIBL
+#ifndef SAMPLEIBL_H_
 
 vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
     // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
-	float angle = rotate * M_NEXT_PI;
+	float angle = rotate * 3.14159265358979323846f;
 	float cosAngle = cos(angle);
 	float sinAngle = sin(angle);
 	
@@ -42,6 +40,7 @@ vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
 	
 	return color;
 }
+
 #ifdef __cplusplus
 vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
 {
@@ -63,5 +62,6 @@ vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
 	 return min(vec4(10,10,10,1), texture(TextureSamplers[skyIdx], t));
 }
 #endif
-		
+
+#define SAMPLEIBL_H_
 #endif

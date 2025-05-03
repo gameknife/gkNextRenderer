@@ -80,7 +80,7 @@ void Editor::GUI::ShowSidebar(Assets::Scene* scene)
 
         ImGui::Spacing();
         
-        if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_F4))))
+        if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGuiKey_F4)))
         {
             state = false;
         }

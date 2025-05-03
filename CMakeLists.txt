@@ -95,9 +95,18 @@ find_program(Vulkan_GLSLANG_VALIDATOR
 	NAMES glslangValidator 
 	HINTS ENV VULKAN_SDK 
 	PATH_SUFFIXES bin)
+
+find_program(Vulkan_SLANGC 
+	NAMES slangc 
+	HINTS ENV VULKAN_SDK 
+	PATH_SUFFIXES bin)
 	
 if (NOT Vulkan_GLSLANG_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
+endif()
+
+if (NOT Vulkan_SLANGC)
+    message(FATAL_ERROR "slangc not found!")
 endif()
 
 set(MAIN_PROJECT "gkNextRenderer")

@@ -12,7 +12,6 @@ else
 	cd vcpkg.linux
 fi
 
-git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \

@@ -12,7 +12,6 @@ else
 	cd vcpkg.android
 fi
 
-git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 #replace the triplets/arm64-android.cmake file with ours

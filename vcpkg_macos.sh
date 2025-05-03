@@ -10,7 +10,6 @@ if [ -d "vcpkg.macos" ]; then
 else
 	git clone https://github.com/Microsoft/vcpkg.git vcpkg.macos
 	cd vcpkg.macos
-	git checkout 2024.08.23
   ./bootstrap-vcpkg.sh
 fi
 

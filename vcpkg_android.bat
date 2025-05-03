@@ -13,7 +13,6 @@ IF EXIST vcpkg.android (
 	cd vcpkg.android || goto :error
 )
 
-git checkout 2024.08.23 || goto :error
 call bootstrap-vcpkg.bat || goto :error
 
 rem replace the triplets/arm64-android.cmake file with ours

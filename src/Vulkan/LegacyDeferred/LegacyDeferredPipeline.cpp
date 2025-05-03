@@ -277,7 +277,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "assets/shaders/LegacyDeferredShading.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/LegacyDeferredShading.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

@@ -95,7 +95,11 @@ namespace NextRenderer
         auto fallbackptr =  new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
         fallbackptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
         fallbackptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
-        fallbackptr->SwitchLogicRenderer(Vulkan::ERT_ModernDeferred);
+        if( rendererType != Vulkan::ERT_ModernDeferred && rendererType != Vulkan::ERT_LegacyDeferred )
+        {
+            rendererType = Vulkan::ERT_ModernDeferred;
+        }
+        fallbackptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
         return fallbackptr;
     }
 

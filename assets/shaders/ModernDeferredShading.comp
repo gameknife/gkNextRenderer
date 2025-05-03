@@ -8,6 +8,7 @@
 #include "common/UniformBufferObject.glsl"
 #include "common/Random.glsl"
 #include "common/GGXSample.glsl"
+#include "common/ShadingFunc.glsl"
 
 layout(binding = 0) uniform uimage2D MiniGBuffer;
 layout(binding = 1) uniform image2D OutImage;
@@ -34,80 +35,48 @@ layout(set = 1, binding = 0) uniform sampler2D TextureSamplers[];
 #include "common/ColorFunc.glsl"
 #include "common/AmbientCube.glsl"
 
-#if DESKTOP
 layout(local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
-#else
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-#endif
 
 #include "common/VertexFunc.glsl"
 #include "common/SampleIBL.glsl"
-// 在现有的traceInScreenSpace基础上，添加一个可以获取反弹表面材质的版本
+
 bool traceInScreenSpace(vec3 position, vec3 rayDir, float maxDistance, float depthTolerance, out vec3 outPosition, out vec3 outNormal, out uint outMaterialIdx) {
-    // 屏幕空间步进参数
     const int maxSteps = 5;
     float stepSize = maxDistance / float(maxSteps);
     vec2 texelSize = 1.0 / vec2(imageSize(MiniGBuffer));
-
-    // 起始点
     vec3 rayStart = position + rayDir * 0.1;
 
-    // 追踪光线
     for (int i = 0; i < maxSteps; i++) {
-        // 移动光线
         vec3 currentPos = rayStart + rayDir * (i * stepSize);
-
-        // 将当前位置转到屏幕空间
         vec4 currentPosProj = Camera.ViewProjection * vec4(currentPos, 1.0);
         currentPosProj.xyz /= currentPosProj.w;
         vec2 currentUV = currentPosProj.xy * 0.5 + 0.5;
-
-        // 检查是否超出屏幕
         if (any(lessThan(currentUV, vec2(0.0))) || any(greaterThan(currentUV, vec2(1.0))))
         continue;
 
-        // 采样深度
         ivec2 sampleCoord = ivec2(currentUV * vec2(imageSize(MiniGBuffer)));
         uvec2 vBufferSample = imageLoad(MiniGBuffer, sampleCoord).rg;
-
-        // 如果没有命中物体，继续
         if (vBufferSample.r == 0)
         continue;
-
-        // 重建世界空间位置
+        
         vec4 origin = Camera.ModelViewInverse * vec4(0, 0, 0, 1);
         vec4 target = Camera.ProjectionInverse * (vec4(currentPosProj.x, currentPosProj.y, 1, 1));
         vec4 dir = Camera.ModelViewInverse * vec4(normalize(target.xyz), 0);
-
         vec3 ray_dir = normalize(dir.xyz);
-
+        
         Vertex sampleVertex = get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir);
-
-        // 正确的深度比较方法
-        // 将当前世界空间位置投影到屏幕空间
-        //vec4 currentPosScreenSpace = Camera.ModelView * vec4(currentPos, 1.0);
-
-        // 获取场景中该点的屏幕空间深度
-        //vec4 samplePosScreenSpace = Camera.ModelView * vec4(sampleVertex.Position, 1.0);
         
         float viewSpaceCurrentDepth = (Camera.ModelView * vec4(currentPos, 1.0)).z;
         float viewSpaceSampleDepth = (Camera.ModelView * vec4(sampleVertex.Position, 1.0)).z;
-
-        // 比较深度值
+        
         if ( viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance) {
-            // 发现阻挡（光线在穿过场景点之前被遮挡）
             outPosition = sampleVertex.Position;
             outNormal = normalize(sampleVertex.Normal.rgb);
-
-            // 获取材质ID
             NodeProxy hitNode = NodeProxies[vBufferSample.x - 1];
             outMaterialIdx = hitNode.matId[sampleVertex.MaterialIndex];
-
             return true;
         }
     }
-
-    // 没有发现阻挡
     return false;
 }
 
@@ -148,7 +117,7 @@ bool traceLongDistance(vec3 position, vec3 rayDir, float maxDistance, float dept
     return false;
 }
 
-bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
+bool SoftwareRayTraceScene(vec3 position, vec3 rayDir, vec3 normal, uint sourceMaterialIdx, ivec2 ipos, uvec4 RandomSeed, out vec4 reflectionColor) {
     vec3 hitPosition, hitNormal;
     uint hitMaterialIdx;
     reflectionColor = vec4(0);
@@ -164,28 +133,18 @@ bool calculateSSInterreflection(vec3 position, vec3 rayDir, vec3 normal, uint so
 }
 
 float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
-    // 计算光源空间坐标
-    vec4 posInLightMap = Camera.SunViewProjection * vec4(worldPos + jit * 4.0f, 1.0f);
-
-    // 将光源空间坐标转换到NDC空间 [-1,1] 再转到 [0,1] 的纹理空间
+    vec4 posInLightMap = Camera.SunViewProjection * vec4(worldPos + jit, 1.0f);
     vec3 projCoords = posInLightMap.xyz / posInLightMap.w;
     projCoords = projCoords * 0.5 + 0.5;
     projCoords.y = 1.0 - projCoords.y;
 
     float currentDepth = projCoords.z;
-
-    // 基础偏移值
-    float bias = 0.0005;
-
-    // 根据法线与光照方向的夹角调整偏移值
     float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-    bias = mix(0.0001, 0.00005, cosTheta); // 斜面使用更大的偏移值
-
-    // 从阴影贴图中采样获取最近深度
+    float bias = mix(0.0001, 0.00005, cosTheta);
+    
     float closestDepth = texture(ShadowMapSampler, projCoords.xy).x;
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
-
-    // 在主阴影通过的情况下进行屏幕空间接触阴影检测
+    
     if (shadow > 0.01) {
         vec3 outPosition;
         vec3 outNormal;
@@ -198,10 +157,6 @@ float getShadow(vec3 worldPos, vec3 jit, vec3 normal, ivec2 ipos) {
 }
 
 void main() {
-
-    // checker box
-    int adder = Camera.TotalFrames % 2 == 0 ? 1 : 0;
-    
     ivec2 ipos = ivec2(gl_GlobalInvocationID.xy);
     uvec4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
     
@@ -218,74 +173,22 @@ void main() {
     Vertex v = get_material_data(ipos, vBuffer, origin.xyz, ray_dir);
     NodeProxy node = NodeProxies[vBuffer.x - 1];
     
+    // geometry info
     vec3 normal = normalize( v.Normal.rgb);
     vec3 tangent = normalize( v.Tangent.rgb);
     vec3 bitangent = cross(normal, tangent);
-
-    // calculate the motion vector
+    
+    // motion info
     vec4 currFrameHPos = Camera.ViewProjection * vec4(v.Position, 1);
     vec2 currfpos = vec2((currFrameHPos.xy / currFrameHPos.w * 0.5) * vec2(size));
-
     vec4 prevFrameHPos = Camera.PrevViewProjection * node.combinedPrevTS * vec4(v.Position, 1);
     vec2 prevfpos = vec2((prevFrameHPos.xy / prevFrameHPos.w * 0.5) * vec2(size));
     vec2 motion = prevfpos - currfpos;
     imageStore(OutMotionVector, ipos, vec4(motion,0,0));
     
-    uint materialIndex = 0;
-    // here if direct address with node.matId[v.MaterialIndex] will too slow on android
-    switch (v.MaterialIndex) {
-        case 0:
-            materialIndex = node.matId[0];
-            break;
-        case 1:
-            materialIndex = node.matId[1];
-            break;
-        case 2:
-            materialIndex = node.matId[2];
-            break;
-        case 3:
-            materialIndex = node.matId[3];
-            break;
-        case 4:
-            materialIndex = node.matId[4];
-            break;
-        case 5:
-            materialIndex = node.matId[5];
-            break;
-        case 6:
-            materialIndex = node.matId[6];
-            break;
-        case 7:
-            materialIndex = node.matId[7];
-            break;
-        case 8:
-            materialIndex = node.matId[8];
-            break;
-        case 9:
-            materialIndex = node.matId[9];
-            break;
-        case 10:
-            materialIndex = node.matId[10];
-            break;
-        case 11:
-            materialIndex = node.matId[11];
-            break;
-        case 12:
-            materialIndex = node.matId[12];
-            break;
-        case 13:
-            materialIndex = node.matId[13];
-            break;
-        case 14:
-            materialIndex = node.matId[14];
-            break;
-        case 15:
-            materialIndex = node.matId[15];
-            break;
-    }
-    
+    // mat info
+    uint materialIndex = FetchMaterialId(node, v.MaterialIndex);
     Material mat = Materials[materialIndex];
-        
     vec4 albedo = mat.Diffuse;
     float roughness = mat.Fuzziness;
     if (mat.DiffuseTextureId >= 0)
@@ -313,7 +216,6 @@ void main() {
 
     float shadow = 0.0f;
     const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
-    const float range = 0.04f;
     for(int i = 0; i < jitcount; i++) {
 
         bool chanceReflect = bool(RandomFloat(RandomSeed) < reflectProb);
@@ -325,14 +227,12 @@ void main() {
         vec4 reflectionColor;
         vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * 0.04f;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        if( calculateSSInterreflection(v.Position, trace_dir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
+        if( SoftwareRayTraceScene(v.Position, trace_dir, normal, materialIndex, ipos, RandomSeed, reflectionColor) )
         {
             indirectColor += reflectionColor;
         }
         else
         {
-            // 如果反射了，直接采天
-            // 其实就是这里，低配版就不要散布采样，直接用IBL处理好的mip，减少噪点
             if(chanceGGX)
             {
                 indirectColor += Camera.HasSky ? SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness) * Camera.SkyIntensity : vec4(0.0);
@@ -348,7 +248,7 @@ void main() {
 
     if(Camera.HasSun)
     {
-        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * range;
+        vec2 jitter2D = (RandomFloat2(RandomSeed) - vec2(0.5f)) * 0.125f;
         vec3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
         shadow += getShadow(v.Position, jit, normal, ipos);
     }
