@@ -21,7 +21,7 @@ jobs:
 
     runs-on: macos-latest
     env: 
-      SDK_VERSION: 1.3.280
+      SDK_VERSION: 1.4.309.0
     steps:
     - uses: actions/checkout@v4
     - name: Install macOS dependencies
