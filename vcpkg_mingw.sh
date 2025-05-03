@@ -13,7 +13,6 @@ else
 fi
 
 # handle vcpkg update
-git checkout 2024.08.23
 ./bootstrap-vcpkg.sh
 
 ./vcpkg --recurse install \

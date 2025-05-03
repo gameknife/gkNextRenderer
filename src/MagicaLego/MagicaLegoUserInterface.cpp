@@ -916,7 +916,7 @@ void MagicaLegoUserInterface::DrawRightBar()
             for (auto& block : BasicBlocks)
             {
                 std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
-                ImTextureID id = GetGameInstance()->GetEngine().GetUserInterface()->RequestImTextureByName(filename);
+                ImTextureID id = (ImTextureID)(intptr_t)GetGameInstance()->GetEngine().GetUserInterface()->RequestImTextureByName(filename);
                 if (MaterialButton(block, id, WindowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_))
                 {
                     GetGameInstance()->SetCurrentBrushIdx(block.brushId_);

@@ -91,7 +91,7 @@ void Editor::GUI::ShowTextureBrowser()
                 ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(32, 32, 32, 255));
                 //ImGui::Button(icon, ImVec2(ICON_SIZE, ICON_SIZE));
                 //ImGui::GetWindowDrawList()->AddImage(GUserInterface->RequestImTextureId(texId), CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3));
-                ImGui::Image(GUserInterface->RequestImTextureId(texId), ImVec2(ICON_SIZE, ICON_SIZE) );
+                ImGui::Image((ImTextureID)(intptr_t)GUserInterface->RequestImTextureId(texId), ImVec2(ICON_SIZE, ICON_SIZE) );
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
                 
