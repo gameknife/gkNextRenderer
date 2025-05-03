@@ -59,7 +59,7 @@ float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness)
      float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
 
      // Sample with explicit LOD based on roughness
-     return min(float4(10,10,10,1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(TextureSamplersState[NonUniformResourceIndex(skyIdx)], t, roughness * 10.0f));
+     return min(float4(10,10,10,1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 10.0f));
 }
 #endif
 

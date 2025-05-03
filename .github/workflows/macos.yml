@@ -31,7 +31,13 @@ jobs:
       run: |
         brew install molten-vk
         brew install glslang
-
+    - name: Download and setup slangc
+      run: |
+        curl -L https://github.com/shader-slang/slang/releases/download/v2025.7.1/slang-macos-dist-aarch64.zip -o slang.zip
+        mkdir -p slang
+        unzip slang.zip -d slang
+        echo "$PWD/slang/bin" >> $GITHUB_PATH
+        echo "Downloaded and added slangc to PATH"
     - name: Restore cached Primes
       id: cache-primes-restore
       uses: actions/cache/restore@v4

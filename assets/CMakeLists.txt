@@ -5,7 +5,7 @@ file(GLOB lego_files legos/*.mls)
 file(GLOB sfx_files sfx/*.mp3 sfx/*.wav)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.comp)
-file(GLOB hlsl_shader_files shaders/*.hlsl)
+file(GLOB hlsl_shader_files shaders/*.slang)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
 file(GLOB shader_extra_files shaders/*.glsl)
 file(GLOB shader_common_files shaders/common/*.glsl shaders/common/*.h shaders/common/*.hlsli)
@@ -98,9 +98,10 @@ foreach(shader ${hlsl_shader_files})
 	set_source_files_properties(${shader} PROPERTIES VS_TOOL_OVERRIDE "None")
         add_custom_command(
             TARGET Assets POST_BUILD
-			COMMAND echo \"compiling hlsl shader: ${file_name} -> ${file_name}.spv\"
+			COMMAND echo \"compiling slang shader: ${file_name} -> ${file_name}.spv\"
             COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
-            COMMAND ${Vulkan_DXC} -spirv -fspv-target-env=vulkan1.2 -T cs_6_4 -E main ${full_path} -Fo ${output_file}
+            #COMMAND ${Vulkan_DXC} -spirv -fspv-target-env=vulkan1.2 -T cs_6_4 -E main ${full_path} -Fo ${output_file}
+			COMMAND ${Vulkan_SLANGC} -target spirv ${full_path} -o ${output_file}
 			DEPENDS ${full_path}
         )
 endforeach()

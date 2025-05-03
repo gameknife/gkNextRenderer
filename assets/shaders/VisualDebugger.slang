@@ -35,9 +35,11 @@ bool DrawQuad(uint quadx, uint quady, uint divider, int2 ipos, int2 isize, out i
         uv = (ipos - int2(elementx * quadx, elementy * quady)) * int2(divider, divider);
         return true;
     }
+    uv = int2(0, 0);
     return false;
 }
 
+[shader("compute")]
 [numthreads(8, 4, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {

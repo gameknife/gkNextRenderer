@@ -8,12 +8,10 @@
 [[vk::binding(3, 0)]] RWTexture2D<float4> OutImage;
 [[vk::binding(4, 0)]] cbuffer UniformBufferObjectStruct { UniformBufferObject Camera; };
 [[vk::binding(7, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
-[[vk::combinedImageSampler]][[vk::binding(8, 0)]] Texture2D<float> ShadowMapSampler;
-[[vk::combinedImageSampler]][[vk::binding(8, 0)]] SamplerState ShadowMapSamplerState;
+[[vk::binding(8, 0)]] Sampler2D ShadowMapSampler;
 
 // 全局纹理数组
-[[vk::binding(0, 1)]] Texture2D<float4> TextureSamplers[];
-[[vk::binding(0, 1)]] SamplerState TextureSamplersState[];
+[[vk::binding(0, 1)]] Sampler2D TextureSamplers[];
 #include "common/SampleIBL.hlsli"
 
 // 获取阴影值
@@ -33,12 +31,13 @@ float getShadow(float3 worldPos, float3 jit, float3 normal, int2 ipos) {
     float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
     bias = lerp(0.0001, 0.00005, cosTheta);
 
-    float closestDepth = ShadowMapSampler.Sample(ShadowMapSamplerState, projCoords.xy).x;
+    float closestDepth = ShadowMapSampler.Sample(projCoords.xy).x;
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
     return shadow;
 }
 
+[shader("compute")]
 [numthreads(8, 4, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     int2 ipos = int2(DTid.xy);
