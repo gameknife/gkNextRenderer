@@ -2,9 +2,9 @@
 #include "common/UniformBufferObject.hlsli"
 
 // 资源绑定
-[[vk::binding(0, 0)]] Texture2D<float4> GBuffer0Image;
-[[vk::binding(1, 0)]] Texture2D<float4> GBuffer1Image;
-[[vk::binding(2, 0)]] Texture2D<float4> GBuffer2Image;
+[[vk::binding(0, 0)]] RWTexture2D<float4> GBuffer0Image;
+[[vk::binding(1, 0)]] RWTexture2D<float4> GBuffer1Image;
+[[vk::binding(2, 0)]] RWTexture2D<float4> GBuffer2Image;
 [[vk::binding(3, 0)]] RWTexture2D<float4> OutImage;
 [[vk::binding(4, 0)]] cbuffer UniformBufferObjectStruct { UniformBufferObject Camera; };
 [[vk::binding(7, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
