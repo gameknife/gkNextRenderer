@@ -1,6 +1,6 @@
-import Common;
+#include "common/PreProcessor.slang"
 
-#include "common/Const_Func.slang"
+import Common;
 
 // 资源绑定
 [[vk::binding(0, 0)]] RWTexture2D<float4> GBuffer0Image;
@@ -13,7 +13,6 @@ import Common;
 
 // 全局纹理数组
 [[vk::binding(0, 1)]] Sampler2D TextureSamplers[];
-#include "common/SampleIBL.hlsli"
 
 [shader("compute")]
 [numthreads(8, 4, 1)]
@@ -27,7 +26,7 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     float3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1.0);
-    float4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : float4(0.f, 0.f, 0.f, 0.f);
+    float4 iblLight = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1, HDRSHs, TextureSamplers) * Camera.SkyIntensity : float4(0.f, 0.f, 0.f, 0.f);
 
     const float3 lightVector = Camera.SunDirection.xyz;
     const float4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;

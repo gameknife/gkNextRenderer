@@ -1,29 +1,5 @@
-#define to_world(v, t, b, n) (mul(float3x3((t), (b), (n)), (v)))
-#define to_local(v, T, B, N) (mul((v), float3x3((T), (B), (N))))
-
-#define M_PI            3.14159265358979323846  // pi
-#define M_TWO_PI        6.283185307179586476925 // 2*pi
-#define M_PI_2          1.57079632679489661923  // pi/2
-#define M_PI_4          0.785398163397448309616 // pi/4
-#define M_1_PI          0.318309886183790671538 // 1/pi
-#define M_2_PI          0.636619772367581343076 // 2/pi
-#define M_1_OVER_TWO_PI 0.159154943091895335768 // 1/(2*pi)
-
-#define INF 1e32f
-#define EPS 1e-3f
-#define EPS2 2e-3f
-
-#define NEARzero 1e-35f
-#define isZERO(x) ((x) > -NEARzero && (x) < NEARzero)
-#define allLessThanZERO(a)  ((a).x + (a).y + (a).z < NEARzero)
-#define allGreaterZERO(a)   ((a).x + (a).y + (a).z >= NEARzero)
-#define sum_is_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) < NEARzero)
-#define sum_is_not_empty_abs(a) (abs((a).x) + abs((a).y) + abs((a).z) >= NEARzero)
-
-#define Mix(a, b, c, bary) ((a) + ((b) - (a)) * (bary).y + ((c) - (a)) * (bary).z)
-#define luminance(rgb) (dot((rgb), float3(0.212671F, 0.715160F, 0.072169F)))
-
-#define saturate(x) (clamp((x), 0.0F, 1.0F))
+implementing Common;
+#include "Preprocessor.slang"
 
 float pow5(float x) { return x*x*x*x*x; }
 float pow4(float x) { return x*x*x*x; }
@@ -72,7 +48,7 @@ float3 AlignWithNormal(float3 ray, float3 normal)
     return to_world(ray, T, B, normal);
 }
 
-float3 LinearToST2084UE(float3 lin)
+public float3 LinearToST2084UE(float3 lin)
 {
     const float m1 = 0.1593017578125; // = 2610. / 4096. * .25;
     const float m2 = 78.84375; // = 2523. / 4096. *  128;
@@ -91,7 +67,7 @@ float3 LinearToST2084UE(float3 lin)
     return P;
 }
 
-float3 ACES_Tonemapping(float3 color){
+public float3 ACES_Tonemapping(float3 color){
     float3x3 m1 = float3x3(
         0.59719, 0.07600, 0.02840,
         0.35458, 0.90834, 0.13383,
@@ -119,7 +95,7 @@ float3 uncharted2Tonemap(float3 x) {
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-float3 Uncharted2_Tonemapping(float3 color) {
+public float3 Uncharted2_Tonemapping(float3 color) {
     const float W = 11.2;
     float exposureBias = 2.0;
     float3 curr = uncharted2Tonemap(exposureBias * color);
