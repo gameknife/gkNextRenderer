@@ -165,3 +165,161 @@ float4 srgbToLinear(in float4 sRgb)
     //float3 rgb = sRgb.xyz * (sRgb.xyz * (sRgb.xyz * 0.305306011F + 0.682171111F) + 0.012522878F);
     return float4(sRgb.rgb, sRgb.a);
 }
+
+void pcg4d(inout uint4 v)
+{
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+    v = v ^ (v >> 16u);
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+}
+// Returns a float between 0 and 1
+#define uint_to_float(x) ( asfloat(0x3f800000 | ((x) >> 9)) - 1.0f )
+
+public uint4 InitRandomSeed(uint val0, uint val1, uint frame_num)
+{
+    return uint4(val0, val1, frame_num, 0);
+}
+
+public float RandomFloat(inout uint4 v)
+{
+    pcg4d(v);
+    return uint_to_float(v.x);
+}
+
+public float2 RandomFloat2(inout uint4 v)
+{
+    pcg4d(v);
+    return uint_to_float(v.xy);
+}
+
+public float3 RandomFloat3(inout uint4 v)
+{
+    pcg4d(v);
+    return uint_to_float(v.xyz);
+}
+
+float2 concentric_sample_disk(float2 offset) {
+    offset += offset - float2(1);
+    if (isZERO(offset.x) && isZERO(offset.y)) {
+        return float2(0);
+    }
+
+    float theta;
+
+    if (abs(offset.x) > abs(offset.y)) {
+        theta = M_PI_4 * offset.y / offset.x;
+        return offset.x * float2(cos(theta), sin(theta));
+    }
+
+    float cos_theta = sin(M_PI_4 * offset.x / offset.y);
+    return offset.y * float2(cos_theta, sqrt(1. - cos_theta * cos_theta));
+}
+
+public float2 RandomInUnitDisk(inout uint4 seed)
+{
+    return concentric_sample_disk(RandomFloat2(seed));
+}
+
+public float3 RandomInCone(inout uint4 seed, float cos_theta) {
+    const float2 u = RandomFloat2(seed);
+    float phi = M_TWO_PI * u.x;
+
+    cos_theta = 1.0f + u.y * (cos_theta - 1.f);
+
+    return float3(sqrt(1.0f - cos_theta * cos_theta) * float2(cos(phi), sin(phi)), cos_theta);
+}
+
+public float3 RandomInHemiSphere(inout uint4 seed)
+{
+    const float2 u = RandomFloat2(seed);
+    float phi = M_TWO_PI * u.x;
+
+    return float3(sqrt(1.0f - u.y) * float2(cos(phi), sin(phi)), sqrt(u.y));
+}
+
+public float3 RandomInHemiSphere1(inout uint4 seed)
+{
+    const float2 u = RandomFloat2(seed);
+    float phi = M_TWO_PI * u.x;
+
+    return float3(sqrt(u.y) * float2(cos(phi), sin(phi)), sqrt(1.0-u.y));
+}
+
+// Kenta Eto and Yusuke Tokuyoshi. 2023. Bounded VNDF Sampling for Smith-GGX Reflections.
+// In SIGGRAPH Asia 2023 Technical Communications (SA Technical Communications '23), December 12-15, 2023, Sydney, NSW, Australia. ACM, New York, NY, USA, 4 pages.
+// https://doi.org/10.1145/3610543.3626163
+float3 ggx_sample_vndf(float2 alpha, float3 wi_, float2 uv) {
+    float3 wi = normalize(float3(wi_.xy * alpha, wi_.z));
+    // Sample a spherical cap
+    //float k = (1.0f - a2) * s2 / (s2 + a2 * wi_.z * wi_.z); // Eq. 5
+
+    float b = wi.z;
+    if(wi_.z > 0.f) {
+        float a = saturate(min(alpha.x, alpha.y)); // Eq. 6
+        float awiz_s = a * wi_.z / (1.0f + length(wi_.xy));
+        b *= ((1.0f - a * a) / (1.0f + awiz_s * awiz_s));
+    }
+
+    float z = fma(1.0f - uv.y, 1.0f + b, -b);
+    float phi = M_TWO_PI * uv.x;
+    float3 o_std = float3(sqrt(saturate(1.0f - z * z)) * float2(cos(phi), sin(phi)), z);
+    // Compute the microfacet normal m
+    float3 m_std = wi + o_std;
+    return normalize(float3(m_std.xy * alpha, m_std.z));
+}
+
+public float3 ggxSampling(inout uint4 RandomSeed, float roughness, float3 normal)
+{
+    float3 tangent, bitangent;
+    ONB(normal, tangent, bitangent);
+    float3 wm_ = ggx_sample_vndf(
+        float2(roughness * roughness),
+        to_local(normal, tangent, bitangent, normal),
+        RandomFloat2(RandomSeed)
+    );
+    return to_world(wm_, tangent, bitangent, normal);
+}
+
+public Vertex UncompressVertex(in float3 Position, in uint TexcoordXY, in uint NormalXY, in uint NormalZTangentX, in uint TangentYZ, in uint TangentWMatIdx)
+{
+    Vertex v;
+    
+    v.Position = Position;
+    v.Normal = float3(
+        f16tof32(NormalXY & 0xFFFF),
+        f16tof32(NormalXY >> 16),
+        f16tof32(NormalZTangentX & 0xFFFF)
+    );
+    v.Tangent = float4(
+        f16tof32(NormalZTangentX >> 16),
+        f16tof32(TangentYZ & 0xFFFF),
+        f16tof32(TangentYZ >> 16),
+        float((TangentWMatIdx >> 16) & 0xFFFF) - 1.0f
+    );
+    v.TexCoord = float2(
+        f16tof32(TexcoordXY & 0xFFFF),
+        f16tof32(TexcoordXY >> 16)
+    );
+    v.MaterialIndex = TangentWMatIdx & 0xFFFF;
+
+    return v;
+}
+
+public Vertex UnpackVertex(uint index, in StructuredBuffer<float> Vertices)
+{
+    const uint vertexSize = 8;
+    const uint offset = index * vertexSize;
+
+    float3 Position = float3(Vertices[offset + 0], Vertices[offset + 1], Vertices[offset + 2]);
+    uint TexcoordXY = asuint(Vertices[offset + 3]);
+    uint NormalXY = asuint(Vertices[offset + 4]);
+    uint NormalZTangentX = asuint(Vertices[offset + 5]);
+    uint TangentYZ = asuint(Vertices[offset + 6]);
+    uint TangentWMatIdx = asuint(Vertices[offset + 7]);
+
+    uint TangentW = (TangentWMatIdx >> 16) & 0xFFFF;
+    uint matIdx = TangentWMatIdx & 0xFFFF;
+    
+    return UncompressVertex(Position, TexcoordXY, NormalXY, NormalZTangentX, TangentYZ, TangentWMatIdx);
+}

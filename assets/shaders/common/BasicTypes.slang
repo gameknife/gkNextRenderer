@@ -126,3 +126,63 @@ public struct LightObject
     uint reserved2;
     uint reserved3;
 };
+public const static uint MaterialLambertian = 0;
+public const static uint MaterialMetallic = 1;
+public const static uint MaterialDielectric = 2;
+public const static uint MaterialIsotropic = 3;
+public const static uint MaterialDiffuseLight = 4;
+public const static uint MaterialMixture = 5;
+
+public struct Material
+{
+    public float4 Diffuse;
+    public int DiffuseTextureId;
+    public int MRATextureId;
+    public int NormalTextureId;
+    public float Fuzziness;
+    public float RefractionIndex;
+    public uint MaterialModel;
+    public float Metalness;
+
+    public float RefractionIndex2;
+    public float NormalTextureScale;
+    public float Reserverd2;
+};
+
+public struct RayCastContext
+{
+    // in
+    public float4 Origin;
+    public float4 Direction;
+    public float TMin;
+    public float TMax;
+    public float Reversed0;
+    public float Reversed1;
+    // out
+    public float4 HitPoint;
+    public float4 Normal;
+    public float T;
+    public uint InstanceId;
+    public uint MaterialId;
+    public uint Hitted;
+};
+
+public struct Vertex
+{
+  public float3 Position;
+  public float3 Normal;
+  public float4 Tangent;
+  public float2 TexCoord;
+  public uint MaterialIndex;
+};
+
+public struct GPUVertex
+{
+	public float3 Position;
+	public uint TexcoordXY;
+	public uint NormalXY;
+	public uint NormalZTangentX;
+	public uint TangentYZ;
+	public uint TangentWMatIdx;
+};
+
