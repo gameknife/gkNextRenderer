@@ -52,7 +52,7 @@ void main() {
     vec3 normal = normalize(normalraw.rgb);
 
     const float t = 0.5*(normal.y + 1);
-    vec4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1) * Camera.SkyIntensity : vec4(0.0);
+    vec4 iblLight = Camera.HasSky ? SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 0) * Camera.SkyIntensity : vec4(0.0);
     
     const vec3 lightVector = Camera.SunDirection.xyz;
     const vec4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;

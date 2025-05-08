@@ -19,14 +19,24 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID) {
     int2 ipos = int2(DTid.xy);
 
+    int2 size;
+    GBuffer0Image.GetDimensions(size.x, size.y);
+    float2 uv = float2(ipos) / float2(size) * 2.0 - 1.0;
+
+    float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+    float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+    float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+    float3 ray_dir = normalize(dir.xyz);
+
+
     float4 albedo = GBuffer0Image[ipos];
     float4 normalraw = GBuffer1Image[ipos];
     float4 pbr_param = GBuffer2Image[ipos];
 
     float3 normal = normalize(normalraw.rgb);
 
-    const float t = 0.5*(normal.y + 1.0);
-    float4 iblLight = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, normal, Camera.SkyRotation, 1, HDRSHs, TextureSamplers) * Camera.SkyIntensity : float4(0.f, 0.f, 0.f, 0.f);
+    float3 reflectDir = reflect(ray_dir, normal);
+    float4 iblLight = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, reflectDir, Camera.SkyRotation, 1, HDRSHs, TextureSamplers) * Camera.SkyIntensity : float4(0.f, 0.f, 0.f, 0.f);
 
     const float3 lightVector = Camera.SunDirection.xyz;
     const float4 d = Camera.SunColor * max(dot(lightVector, normal), 0.0) * M_1_PI;
