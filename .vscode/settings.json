@@ -127,4 +127,7 @@
     },
     "glsllint.glslangValidatorArgs": ["-V"],
     "cmake.buildDirectory": "${workspaceFolder}/build/windows-vscode",
+    "files.exclude": {
+        "build": true,
+    }
 }
