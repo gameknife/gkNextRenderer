@@ -1,5 +1,5 @@
-#define to_world(v, t, b, n) (mul(float3x3((t), (b), (n)), (v)))
-#define to_local(v, T, B, N) (mul((v), float3x3((T), (B), (N))))
+#define to_local(v, t, b, n) (mul(float3x3((t), (b), (n)), (v)))
+#define to_world(v, T, B, N) (mul((v), float3x3((T), (B), (N))))
 
 #define M_PI            3.14159265358979323846  // pi
 #define M_TWO_PI        6.283185307179586476925 // 2*pi
