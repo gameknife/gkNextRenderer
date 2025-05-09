@@ -24,97 +24,12 @@ import Common;
 [[vk::binding(19)]] StructuredBuffer<LightObject> Lights;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
-
-public bool traceRayFirstHit(
-    RaytracingAccelerationStructure sceneBVH,
-    float3 rayOrigin,
-    float3 rayDir)
-{
-    RayDesc ray;
-    ray.Origin = rayOrigin;
-    ray.TMin = 0.01f;
-    ray.Direction = rayDir;
-    ray.TMax = 1e4f;
-    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
-             RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
-    let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
-                   RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
-
-    q.TraceRayInline(
-        sceneBVH,
-        rayFlags,
-        0xff,
-        ray);
-    q.Proceed();
-
-    if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-    {
-        return true;
-    }
-    return false;
-}
-
-public bool HardWareRayTraceScene(float3 rayOrigin, float3 rayDir, float3 normal, uint sourceMaterialIdx, int2 ipos, out float4 reflectionColor, in StructuredBuffer<Material> Materials,
-                                  in ConstantBuffer<UniformBufferObject> Camera, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices,
-                                  in RaytracingAccelerationStructure sceneBVH, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
-{
-    float t;
-    int primitiveIndex;
-
-    RayDesc ray;
-    ray.Origin = rayOrigin;
-    ray.TMin = 0.01f;
-    ray.Direction = rayDir;
-    ray.TMax = 1e4f;
-    RayQuery<RAY_FLAG_NONE> q;
-    let rayFlags = RAY_FLAG_NONE;
-
-    q.TraceRayInline(
-        sceneBVH,
-        rayFlags,
-        0xff,
-        ray);
-
-    q.Proceed();
-    if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-    {
-        t = q.CommittedRayT();
-
-        float2 TwoBaryCoords = q.CommittedRayBarycentrics();
-        float3 BaryCoords = float3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
-
-        float4x3 WorldToObject = q.CommittedWorldToObject4x3();
-
-        const NodeProxy node = NodeProxies[q.CommittedInstanceID()];
-        const uint2 offsets = Offsets[node.modelId];
-        const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
-        const uint vertexOffset = offsets.y;
-        const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
-        const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
-        const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
-        uint matIdx = FetchMaterialId(node, v0.MaterialIndex);
-        const Material material = Materials[matIdx];
-        const float3 normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
-
-        // const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
-        // const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
-        // const vec3 albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : texColor.rgb * texColor.rgb * material.Diffuse.rgb;
-        const float4 albedo = material.MaterialModel == MaterialDiffuseLight ? float4(0) : material.Diffuse;
-
-        float3 hitPos = rayOrigin + rayDir * t;
-        // 这里都是hit了，那就走间接光照，直接用hitpos和normal，从AmbientCube里取
-        float4 indirectFromAmbientCube = interpolateProbes(hitPos, normal, Cubes, FarCubes);
-        reflectionColor = albedo * indirectFromAmbientCube;
-        return true;
-    }
-    reflectionColor = float4(0, 0, 0, 0);
-    return false;
-}
-
 [shader("compute")]
 [numthreads(8, 4, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    FSoftwareRayTracingRenderer renderer = { Vertices, Indices };
+    
     int2 ipos = int2(DTid.xy);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
@@ -186,7 +101,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float4 reflectionColor;
         float2 jitter2D = (RandomFloat2(RandomSeed) - float2(0.5f)) * 0.04f;
         float3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-        if (HardWareRayTraceScene(v.Position, trace_dir, normal, materialIndex, ipos, reflectionColor, Materials, Camera, NodeProxies, Vertices, Scene, Cubes, FarCubes))
+        if (Common.HardWareRayTraceScene(v.Position, trace_dir, normal, materialIndex, ipos, reflectionColor, Materials, Camera, NodeProxies, Vertices, Indices, Offsets, Scene, Cubes, FarCubes))
         {
             indirectColor += reflectionColor;
         }
@@ -210,7 +125,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         const float3 lightVector = Camera.SunDirection.xyz;
         const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
         shadow = 1;
-        if (traceRayFirstHit(Scene, v.Position, lightVectorCone))
+        if (Common.HardWareRayOcclusionCheck(Scene, v.Position, lightVectorCone))
         {
             shadow = 0;
         }
