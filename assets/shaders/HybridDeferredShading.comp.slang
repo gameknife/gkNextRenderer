@@ -44,7 +44,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float3 ray_dir = normalize(dir.xyz);
 
-    Vertex v = Common.get_material_data(ipos, vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
+    Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
     NodeProxy node = NodeProxies[vBuffer.x - 1];
 
     // geometry info
