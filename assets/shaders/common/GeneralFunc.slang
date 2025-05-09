@@ -3,7 +3,7 @@ implementing Common;
 
 namespace Common
 {
-   public Vertex get_material_data(int2 pixel, uint2 vBuffer, float3 ray_origin, float3 ray_direction, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices)
+   public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices)
    {
        // fetch primitive_index high 14bit as instance index and low 18bit as triangle index
        NodeProxy proxy = NodeProxies[vBuffer.x - 1];

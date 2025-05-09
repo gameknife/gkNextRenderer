@@ -146,7 +146,7 @@ namespace Common
             float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
             float3 ray_dir = normalize(dir.xyz);
 
-            Vertex sampleVertex = Common.get_material_data(sampleCoord, vBufferSample, origin.xyz, ray_dir, NodeProxies, Vertices);
+            Vertex sampleVertex = Common.get_material_data(vBufferSample, origin.xyz, ray_dir, NodeProxies, Vertices);
     
             float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
             float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
@@ -235,11 +235,11 @@ namespace Common
             float2 TwoBaryCoords = q.CommittedRayBarycentrics();
             float3 BaryCoords = float3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 
-            float4x3 WorldToObject = q.CommittedWorldToObject4x3();
+            float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
-            const NodeProxy node = NodeProxies[q.CommittedInstanceID()];
+            const NodeProxy node = NodeProxies[q.CommittedRayInstanceId()];
             const uint2 offsets = Offsets[node.modelId];
-            const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
+            const uint indexOffset = offsets.x + q.CommittedRayPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.y;
             const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
             const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
@@ -280,4 +280,11 @@ public struct FSoftwareRayTracingRenderer : IRayTracingRenderer
 
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
+    StructuredBuffer<Material> Materials;
+    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<NodeProxy> NodeProxies;
+    RaytracingAccelerationStructure Scene;
+    RWStructuredBuffer<AmbientCube> Cubes;
+    RWStructuredBuffer<AmbientCube> FarCubes;
+    StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
