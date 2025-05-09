@@ -178,4 +178,106 @@ namespace Common
         }
         return false;
     };
+
+    public bool HardWareRayOcclusionCheck(
+        RaytracingAccelerationStructure sceneBVH,
+        float3 rayOrigin,
+        float3 rayDir)
+    {
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = 0.01f;
+        ray.Direction = rayDir;
+        ray.TMax = 1e4f;
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                 RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+        let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+
+        q.TraceRayInline(
+            sceneBVH,
+            rayFlags,
+            0xff,
+            ray);
+        q.Proceed();
+
+        if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    public bool HardWareRayTraceScene(float3 rayOrigin, float3 rayDir, float3 normal, uint sourceMaterialIdx, int2 ipos, out float4 reflectionColor, in StructuredBuffer<Material> Materials,
+                                      in ConstantBuffer<UniformBufferObject> Camera, in StructuredBuffer<NodeProxy> NodeProxies, 
+                                      in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices, in StructuredBuffer<uint2> Offsets,
+                                      in RaytracingAccelerationStructure sceneBVH, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+    {
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = 0.01f;
+        ray.Direction = rayDir;
+        ray.TMax = 1e4f;
+        RayQuery<RAY_FLAG_NONE> q;
+        let rayFlags = RAY_FLAG_NONE;
+
+        q.TraceRayInline(
+            sceneBVH,
+            rayFlags,
+            0xff,
+            ray);
+
+        q.Proceed();
+        if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+        {
+            float t = q.CommittedRayT();
+
+            float2 TwoBaryCoords = q.CommittedRayBarycentrics();
+            float3 BaryCoords = float3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
+
+            float4x3 WorldToObject = q.CommittedWorldToObject4x3();
+
+            const NodeProxy node = NodeProxies[q.CommittedInstanceID()];
+            const uint2 offsets = Offsets[node.modelId];
+            const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
+            const uint vertexOffset = offsets.y;
+            const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
+            const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
+            const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
+            uint matIdx = FetchMaterialId(node, v0.MaterialIndex);
+            const Material material = Materials[matIdx];
+            const float3 normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
+
+            // const vec2 texCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, PayloadData.BaryCoords);
+            // const vec4 texColor = material.DiffuseTextureId >= 0 ? texture(TextureSamplers[nonuniformEXT(material.DiffuseTextureId)], texCoord) : vec4(1);
+            // const vec3 albedo = material.MaterialModel == MaterialDiffuseLight ? vec3(0) : texColor.rgb * texColor.rgb * material.Diffuse.rgb;
+            const float4 albedo = material.MaterialModel == MaterialDiffuseLight ? float4(0) : material.Diffuse;
+
+            float3 hitPos = rayOrigin + rayDir * t;
+            // 这里都是hit了，那就走间接光照，直接用hitpos和normal，从AmbientCube里取
+            float4 indirectFromAmbientCube = interpolateProbes(hitPos, normal, Cubes, FarCubes);
+            reflectionColor = albedo * indirectFromAmbientCube;
+            return true;
+        }
+        reflectionColor = float4(0, 0, 0, 0);
+        return false;
+    }
+}
+
+public interface IRayTracingRenderer
+{
+    bool TraceRay(float3 rayOrigin, float3 rayDir, out float t);
+}
+
+public struct FSoftwareRayTracingRenderer : IRayTracingRenderer
+{
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, out float t) { return false; }
+
+    public void Render()
+    {
+        
+    }
+
+    StructuredBuffer<float> Vertices;
+    StructuredBuffer<uint> Indices;
 }
