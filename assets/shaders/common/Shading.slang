@@ -58,7 +58,7 @@ namespace Common
     };
 
     // 获取阴影值
-    public float getShadow(float3 worldPos, float3 jit, float3 normal, int2 ipos, in UniformBufferObject ubo, in Sampler2D shadowmap) {
+    public float getShadow(float3 worldPos, float3 jit, float3 normal, in UniformBufferObject ubo, in Sampler2D shadowmap) {
         // 计算光源空间坐标
         float4 posInLightMap = mul(ubo.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
     
@@ -270,6 +270,16 @@ public interface IRayTracer
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
 }
 
+public interface IDirectIlluminator
+{
+    void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor);
+}
+
+public interface IRenderer
+{
+    void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor);
+}
+
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir) {
@@ -370,14 +380,52 @@ public struct FSoftwareRayTracer : IRayTracer
     RWStructuredBuffer<AmbientCube> FarCubes;
 }
 
-public interface IRenderer
+public struct FHardwareDirectIlluminator : IDirectIlluminator
 {
-    void Render(IRayTracer tracer, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor);
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor) {
+
+        float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            const float3 lightVector = Camera.SunDirection.xyz;
+            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+            shadow = 1;
+            if (Common.HardWareRayOcclusionCheck(Scene, position, lightVectorCone))
+            {
+                shadow = 0;
+            }
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    // all stuffs like pointers
+    ConstantBuffer<UniformBufferObject> Camera;
+    RaytracingAccelerationStructure Scene;
+}
+
+public struct FSoftwareDirectIlluminator : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor) {
+       float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            float3 jitter = (RandomFloat3(RandomSeed) - float3(0.5f)) * 0.125f;
+            shadow += Common.getShadow(position, jitter, normal, Camera, ShadowMapSampler);
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    Sampler2D ShadowMapSampler;
 }
 
 public struct FHybridRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
     {
         // construct ray
         float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
@@ -455,6 +503,10 @@ public struct FHybridRenderer : IRenderer
             }
         }
         indirectColor /= float(jitcount);
+
+        float4 directColor = float4(0, 0, 0, 0);
+        directIllum.DirectIlluminate(RandomSeed, v.Position, normal, directColor);
+        indirectColor += directColor;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -471,7 +523,7 @@ public struct FHybridRenderer : IRenderer
 
 public struct FPathTracingRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
     {
     }
 }

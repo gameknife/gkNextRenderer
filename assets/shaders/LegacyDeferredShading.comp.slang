@@ -1,5 +1,4 @@
 #include "common/PreProcessor.slang"
-
 import Common;
 
 // 资源绑定
@@ -45,7 +44,7 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     if(Camera.HasSun)
     {
         float3 jit = float3(0, 0, 0);
-        shadow += Common.getShadow(pbr_param.xyz, jit, normal, ipos, Camera, ShadowMapSampler);
+        shadow += Common.getShadow(pbr_param.xyz, jit, normal, Camera, ShadowMapSampler);
     }
 
     if(Camera.DebugDraw_Lighting)

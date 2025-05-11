@@ -1,5 +1,3 @@
-#include "common/PreProcessor.slang"
-
 import Common;
 
 [[vk::binding(0)]] RWTexture2D<uint2> MiniGBuffer;
@@ -32,6 +30,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
+    FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs};
     
     int2 ipos = int2(DTid.xy);
@@ -47,25 +46,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 indirectColor = float4(0, 0, 0, 1);
     float3 normal = float3(0, 0, 0);
     float2 motion = float2(0, 0);
-    renderer.Render(tracer, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
+    renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
     OutMotionVector[ipos] = float4(motion * float2(size),0,0);
 
-    float shadow = 0.0f;
-    const float3 lightVector = Camera.SunDirection.xyz;
-    //const float4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * M_1_PI;
-    // if (Camera.HasSun)
-    // {
-    //     const float3 lightVector = Camera.SunDirection.xyz;
-    //     const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-    //     shadow = 1;
-    //     if (Common.HardWareRayOcclusionCheck(Scene, v.Position, lightVectorCone))
-    //     {
-    //         shadow = 0;
-    //     }
-    // }
-
     float4 outColor = albedo * float4(indirectColor.rgb, 1);
-    //outColor += albedo * d * shadow;
     outColor.a = 1.0f;
 
     OutAlbedoBuffer[ipos] = albedo;

@@ -1,5 +1,3 @@
-#include "common/PreProcessor.slang"
-
 import Common;
 
 [[vk::binding(0)]] RWTexture2D<uint2> MiniGBuffer;
@@ -27,10 +25,6 @@ import Common;
 [numthreads(8, 4, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    // compose with renderer and tracer
-    FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Materials, NodeProxies, Cubes, FarCubes };
-    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
-
     int2 ipos = int2(DTid.xy);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
@@ -41,38 +35,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 uv = float2(ipos) / float2(size) * 2.0 - 1.0;
 
     float4 albedo = float4(0, 0, 0, 1);
-    float4 indirectColor = float4(0, 0, 0, 1);
+    float4 irrandiaceColor = float4(0, 0, 0, 1);
     float3 normal = float3(0, 0, 0);
     float2 motion = float2(0, 0);
-    renderer.Render(tracer, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
+
+    // compose with renderer and tracer
+    FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Materials, NodeProxies, Cubes, FarCubes };
+    FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
+    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+
+    // execute the renderer
+    renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, irrandiaceColor);
+
+    // compose
+    float4 outColor = albedo * irrandiaceColor;
+
+    // write to output buffers
     OutMotionVector[ipos] = float4(motion * float2(size), 0, 0);
-
-    float shadow = 0.0f;
-    const float3 lightVector = Camera.SunDirection.xyz;
-    // const float4 d = Camera.SunColor * max(dot(lightVector, normalize(v.Normal.rgb)), 0.0) * M_1_PI;
-    //  if (Camera.HasSun)
-    //  {
-    //      const float3 lightVector = Camera.SunDirection.xyz;
-    //      const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-    //      shadow = 1;
-    //      if (Common.HardWareRayOcclusionCheck(Scene, v.Position, lightVectorCone))
-    //      {
-    //          shadow = 0;
-    //      }
-    //  }
-
-    float4 outColor = albedo * float4(indirectColor.rgb, 1);
-    // outColor += albedo * d * shadow;
-    outColor.a = 1.0f;
-
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = float4(normal, 1.0);
     OutImage[ipos] = outColor;
-
-    // if (Camera.HasSun)
-    // {
-    //     float2 jitter2D = (RandomFloat2(RandomSeed) - float2(0.5f)) * 0.125f;
-    //     float3 jit = tangent * jitter2D.x + bitangent * jitter2D.y;
-    //     shadow += Common.getShadow(v.Position, jit, normal, ipos, Camera, ShadowMapSampler);
-    // }
 }
