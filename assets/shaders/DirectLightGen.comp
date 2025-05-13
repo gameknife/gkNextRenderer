@@ -143,6 +143,7 @@ void main() {
     vec3 origin = vec3(x, y, z) * (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
 
     uint activeProbe = 1;
+    uint activeOut = 1;
     uint matId = 0;
     
     vec4 bounceColor = vec4(0.0);
@@ -157,42 +158,51 @@ void main() {
     if (Inside)
     {
         origin = origin + offset;
-        activeProbe = 0;
+        activeOut = 0;
     }
+
+    float lerpvalue = max(0.04, 1.0 / Cubes[gIdx].ExtInfo2);
     
-    if(activeProbe != 0)
+    if(activeOut != 0)
     {
         directColor = TraceOcclusion( Cubes[gIdx].ExtInfo2, origin, vec3(0,1,0), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].PosY_D = LerpPackedColorAlt(Cubes[gIdx].PosY_D, directColor, 0.25);
-        Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, 0.1);
-        Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, 0.1);
+        Cubes[gIdx].PosY = LerpPackedColorAlt(Cubes[gIdx].PosY, bounceColor, lerpvalue);
+        Cubes[gIdx].PosY_S = LerpPackedColorAlt(Cubes[gIdx].PosY_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
 
         directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,-1,0), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].NegY_D = LerpPackedColorAlt(Cubes[gIdx].NegY_D, directColor, 0.25);
-        Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, 0.1);
-        Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, 0.1);
+        Cubes[gIdx].NegY = LerpPackedColorAlt(Cubes[gIdx].NegY, bounceColor, lerpvalue);
+        Cubes[gIdx].NegY_S = LerpPackedColorAlt(Cubes[gIdx].NegY_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
 
         directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(1,0,0), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].PosX_D = LerpPackedColorAlt(Cubes[gIdx].PosX_D, directColor, 0.25);
-        Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, 0.1);
-        Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, 0.1);
+        Cubes[gIdx].PosX = LerpPackedColorAlt(Cubes[gIdx].PosX, bounceColor, lerpvalue);
+        Cubes[gIdx].PosX_S = LerpPackedColorAlt(Cubes[gIdx].PosX_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
 
         directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(-1,0,0), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].NegX_D = LerpPackedColorAlt(Cubes[gIdx].NegX_D, directColor, 0.25);
-        Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, 0.1);
-        Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, 0.1);
+        Cubes[gIdx].NegX = LerpPackedColorAlt(Cubes[gIdx].NegX, bounceColor, lerpvalue);
+        Cubes[gIdx].NegX_S = LerpPackedColorAlt(Cubes[gIdx].NegX_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
 
         directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,0,1), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].PosZ_D = LerpPackedColorAlt(Cubes[gIdx].PosZ_D, directColor, 0.25);
-        Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, 0.1);
-        Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, 0.1);
+        Cubes[gIdx].PosZ = LerpPackedColorAlt(Cubes[gIdx].PosZ, bounceColor, lerpvalue);
+        Cubes[gIdx].PosZ_S = LerpPackedColorAlt(Cubes[gIdx].PosZ_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
 
         directColor = TraceOcclusion(Cubes[gIdx].ExtInfo2, origin, vec3(0,0,-1), activeProbe, matId, bounceColor, skyColor, Camera);
         Cubes[gIdx].NegZ_D = LerpPackedColorAlt(Cubes[gIdx].NegZ_D, directColor, 0.25);
-        Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, 0.1);
-        Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, 0.1);
+        Cubes[gIdx].NegZ = LerpPackedColorAlt(Cubes[gIdx].NegZ, bounceColor, lerpvalue);
+        Cubes[gIdx].NegZ_S = LerpPackedColorAlt(Cubes[gIdx].NegZ_S, skyColor, lerpvalue);
+        activeOut *= activeProbe;
     }
 
-    Cubes[gIdx].Active = activeProbe;
+    Cubes[gIdx].Active = activeOut;
+    Cubes[gIdx].ExtInfo3 = activeOut;
     Cubes[gIdx].ExtInfo1 = matId;
 }

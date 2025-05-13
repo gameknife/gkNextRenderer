@@ -49,6 +49,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // compose
     float4 outColor = albedo * irrandiaceColor;
+    outColor.a = 1.0;
 
     // write to output buffers
     OutMotionVector[ipos] = float4(motion * float2(size), 0, 0);
