@@ -47,6 +47,7 @@ namespace Assets
 		const std::unordered_map<std::string, FTextureBindingGroup>& TotalTextureMap() {return textureNameMap_;}
 
 		void FreeNonSystemTextures();
+		void CreateDefaultTextures();
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 		static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data, size_t bytelength, bool srgb);
@@ -75,6 +76,8 @@ namespace Assets
 		std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;
 
 		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
+
+		std::unique_ptr<TextureImage> defaultWhiteTexture_;
 	};
 
 }

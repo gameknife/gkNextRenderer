@@ -27,6 +27,7 @@ public:
 	bool NoDenoiser{};
 	bool ForceSDR{};
 	bool ReferenceMode{};
+	bool ForceNoRT{};
 	std::string locale{};
 
 	// Renderer options.

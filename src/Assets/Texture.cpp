@@ -346,7 +346,7 @@ namespace Assets
         
         GlobalTexturePool::instance_ = this;
 
-        
+        CreateDefaultTextures();
     }
 
     GlobalTexturePool::~GlobalTexturePool()
@@ -362,6 +362,9 @@ namespace Assets
             vkDestroyDescriptorSetLayout(device_.Handle(), layout_, nullptr);
             layout_ = nullptr;
         }
+
+        defaultWhiteTexture_.reset();
+        textureImages_.clear();
     }
 
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
@@ -622,7 +625,8 @@ namespace Assets
             if( i > 10 )
             {
                 // free up TextureImage;, rebind with a default texture sampler
-                // textureImages_[i].reset();
+                textureImages_[i].reset();
+                BindTexture(i, *defaultWhiteTexture_);
             }
         }
 
@@ -633,6 +637,11 @@ namespace Assets
                 textureGroup.second.Status_ = ETextureStatus::ETS_Unloaded;
             }
         }
+    }
+
+    void GlobalTexturePool::CreateDefaultTextures()
+    {
+        defaultWhiteTexture_ = std::make_unique<TextureImage>(commandPool_, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, nullptr, 0);
     }
 
     GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;

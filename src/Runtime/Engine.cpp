@@ -1005,6 +1005,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
     physicsEngine_->OnSceneDestroyed();
+    Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
     
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
@@ -1037,8 +1038,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
             renderer_->Device().WaitIdle();
             renderer_->DeleteSwapChain();
             renderer_->OnPreLoadScene();
-
-            Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
+            
             scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
             scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
                     
