@@ -33,7 +33,7 @@ jobs:
         brew install glslang
     - name: Download and setup slangc
       run: |
-        curl -L https://github.com/shader-slang/slang/releases/download/v2025.7.1/slang-macos-dist-aarch64.zip -o slang.zip
+        curl -L https://github.com/shader-slang/slang/releases/download/v2025.8.1/slang-macos-dist-aarch64.zip -o slang.zip
         mkdir -p slang
         unzip slang.zip -d slang
         echo "$PWD/slang" >> $GITHUB_PATH
