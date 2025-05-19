@@ -620,6 +620,9 @@ namespace Assets
 
     void GlobalTexturePool::FreeNonSystemTextures()
     {
+        // make sure the binded image not in use
+        device_.WaitIdle();
+        
         for( int i = 0; i < textureImages_.size(); ++i)
         {
             if( i > 10 )
