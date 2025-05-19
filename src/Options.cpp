@@ -30,6 +30,7 @@ Options::Options(const int argc, const char* argv[])
 		("forcesdr", "Force use SDR Display even supported.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
 		("locale", "Locale: en, zhCN, RU.", cxxopts::value<std::string>(locale)->default_value("en"))
 		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
+		("forcenort", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
 	
 
 		("h,help", "Print usage");

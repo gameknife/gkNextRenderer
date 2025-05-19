@@ -16,6 +16,18 @@ namespace Vulkan {
 namespace Assets
 {
 	class TextureImage;
+
+	enum class ETextureStatus : uint8
+	{
+		ETS_Loaded,
+		ETS_Unloaded,
+	};
+
+	struct FTextureBindingGroup
+	{
+		uint32_t GlobalIdx_;
+		ETextureStatus Status_;
+	};
 	
 	class GlobalTexturePool final
 	{
@@ -32,7 +44,10 @@ namespace Assets
 		uint32_t RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr, const unsigned char* data, size_t bytelength, bool srgb);
 		
 		uint32_t TotalTextures() const {return static_cast<uint32_t>(textureImages_.size());}
-		const std::unordered_map<std::string, uint32_t>& TotalTextureMap() {return textureNameMap_;}
+		const std::unordered_map<std::string, FTextureBindingGroup>& TotalTextureMap() {return textureNameMap_;}
+
+		void FreeNonSystemTextures();
+		void CreateDefaultTextures();
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 		static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data, size_t bytelength, bool srgb);
@@ -58,9 +73,11 @@ namespace Assets
 		std::vector<VkDescriptorSet> descriptorSets_;
 
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
-		std::unordered_map<std::string, uint32_t> textureNameMap_;
+		std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;
 
 		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
+
+		std::unique_ptr<TextureImage> defaultWhiteTexture_;
 	};
 
 }

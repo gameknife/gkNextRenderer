@@ -262,7 +262,7 @@ namespace Assets
     {
         if (GetInstance()->textureNameMap_.find(name) != GetInstance()->textureNameMap_.end())
         {
-            return GetInstance()->textureNameMap_[name];
+            return GetInstance()->textureNameMap_[name].GlobalIdx_;
         }
         return -1;
     }
@@ -346,7 +346,7 @@ namespace Assets
         
         GlobalTexturePool::instance_ = this;
 
-        
+        CreateDefaultTextures();
     }
 
     GlobalTexturePool::~GlobalTexturePool()
@@ -362,6 +362,9 @@ namespace Assets
             vkDestroyDescriptorSetLayout(device_.Handle(), layout_, nullptr);
             layout_ = nullptr;
         }
+
+        defaultWhiteTexture_.reset();
+        textureImages_.clear();
     }
 
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
@@ -391,7 +394,7 @@ namespace Assets
     {
         if (textureNameMap_.find(textureName) != textureNameMap_.end())
         {
-            return textureNameMap_.at(textureName);
+            return textureNameMap_.at(textureName).GlobalIdx_;
         }
         return -1;
     }
@@ -399,13 +402,29 @@ namespace Assets
     uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr,
                                                           const unsigned char* data, size_t bytelength, bool srgb)
     {
+        uint32_t newTextureIdx = 0;
         if (textureNameMap_.find(texname) != textureNameMap_.end())
         {
-            return textureNameMap_[texname];
+            // 这里要判断一下，如果TextureUnLoaded，重新绑定
+            if(textureNameMap_[texname].Status_ == ETextureStatus::ETS_Unloaded)
+            {
+                textureNameMap_[texname].Status_ = ETextureStatus::ETS_Loaded;
+                newTextureIdx = textureNameMap_[texname].GlobalIdx_;
+            }
+            else
+            {
+                // 这里要判断一下，如果已经加载了，直接返回
+                return textureNameMap_[texname].GlobalIdx_;
+            }
+        }
+        else
+        {
+            textureImages_.emplace_back(nullptr);
+            newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
+            textureNameMap_[texname] = { newTextureIdx, ETextureStatus::ETS_Loaded };
         }
 
-        textureImages_.emplace_back(nullptr);
-        uint32_t newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
+        // load parse bind texture into newTextureIdx with transfer queue
 
         uint8_t* copyedData = new uint8_t[bytelength];
         memcpy(copyedData, data, bytelength);
@@ -567,7 +586,7 @@ namespace Assets
                 }
 
                 // create texture image
-                if ( !textureImages_[newTextureIdx] )
+                //if ( !textureImages_[newTextureIdx] )
                 {
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
                 }
@@ -596,9 +615,33 @@ namespace Assets
                 delete[] copyedData;
             }, 0);
 
-        // cache in namemap
-        textureNameMap_[texname] = newTextureIdx;
         return newTextureIdx;
+    }
+
+    void GlobalTexturePool::FreeNonSystemTextures()
+    {
+        for( int i = 0; i < textureImages_.size(); ++i)
+        {
+            if( i > 10 )
+            {
+                // free up TextureImage;, rebind with a default texture sampler
+                textureImages_[i].reset();
+                BindTexture(i, *defaultWhiteTexture_);
+            }
+        }
+
+        for( auto& textureGroup : textureNameMap_ )
+        {
+            if( textureGroup.second.GlobalIdx_ > 10 )
+            {
+                textureGroup.second.Status_ = ETextureStatus::ETS_Unloaded;
+            }
+        }
+    }
+
+    void GlobalTexturePool::CreateDefaultTextures()
+    {
+        defaultWhiteTexture_ = std::make_unique<TextureImage>(commandPool_, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, nullptr, 0);
     }
 
     GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;

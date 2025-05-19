@@ -168,8 +168,8 @@ namespace Vulkan
         forceSDR_ = GOption->ForceSDR;
 
         uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-
-        supportRayTracing_ = SupportRayQuery(*this);
+        
+        supportRayTracing_ = !GOption->ForceNoRT && SupportRayQuery(*this);
     }
 
     VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)

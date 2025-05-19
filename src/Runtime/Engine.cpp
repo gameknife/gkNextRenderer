@@ -779,6 +779,12 @@ void NextEngine::OnRendererDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
 
+    // texture id 11 - 99: system texture
+    //Assets::GlobalTexturePool::LoadTexture("assets/textures/white.png", true);
+
+
+    // fill to 100, id > 100, general textures
+
     //if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
         
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
@@ -999,6 +1005,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
     physicsEngine_->OnSceneDestroyed();
+    Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
     
     // dispatch in thread task and reset in main thread
     TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
@@ -1031,7 +1038,7 @@ void NextEngine::LoadScene(std::string sceneFileName)
             renderer_->Device().WaitIdle();
             renderer_->DeleteSwapChain();
             renderer_->OnPreLoadScene();
-                    
+            
             scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
             scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
                     

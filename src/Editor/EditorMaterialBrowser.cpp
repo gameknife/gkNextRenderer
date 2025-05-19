@@ -125,8 +125,8 @@ void Editor::GUI::ShowTextureBrowser()
 
             for ( auto& textureGroup : totalTextureMap )
             {
-                Assets::TextureImage* texture = Assets::GlobalTexturePool::GetTextureImage(textureGroup.second);
-                elementLambda(textureGroup.second, textureGroup.first, texture, ICON_FA_BOWLING_BALL, IM_COL32(255, 72, 72, 255), [this]()
+                Assets::TextureImage* texture = Assets::GlobalTexturePool::GetTextureImage(textureGroup.second.GlobalIdx_);
+                elementLambda(textureGroup.second.GlobalIdx_, textureGroup.first, texture, ICON_FA_BOWLING_BALL, IM_COL32(255, 72, 72, 255), [this]()
                 {
                     
                 });
