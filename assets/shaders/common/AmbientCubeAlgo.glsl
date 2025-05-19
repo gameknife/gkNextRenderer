@@ -42,6 +42,7 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
     bounceColor = vec4(0.0);
     skyColor = vec4(0.0);
 
+    const vec2 offset = grid5x5[iterate % 25] * 0.25f;
     // Generate a random angle for z-axis rotation
 //    float randAngle = RandomFloat(RandomSeed) * 6.283185f;
 //    float cosTheta = cos(randAngle);
@@ -53,7 +54,7 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
 
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        vec3 hemiVec = hemisphereVectors[i + (iterate % 32) * FACE_TRACING];
+        vec3 hemiVec = vec3(grid4x4[i] + offset, 1.0);
 
         // Apply rotation around z-axis
 //        vec3 rotatedVec = vec3(
