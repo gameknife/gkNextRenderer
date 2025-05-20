@@ -78,33 +78,33 @@ public struct NodeProxy
 // and we can use the active / inactive to adjust lerp value between probe
 public struct AmbientCube
 {
-    uint PosZ;
-    uint NegZ;
-    uint PosY;
-    uint NegY;
-    uint PosX;
-    uint NegX;
-
-    uint PosZ_D;
-    uint NegZ_D;
-    uint PosY_D;
-    uint NegY_D;
-    uint PosX_D;
-    uint NegX_D;
-
-    uint PosZ_S;
-    uint NegZ_S;
-    uint PosY_S;
-    uint NegY_S;
-    uint PosX_S;
-    uint NegX_S;
-
-    uint Active;
-    uint Lighting;
-    uint ExtInfo1;
-    uint ExtInfo2;
-    uint ExtInfo3;
-    uint ExtInfo4;
+    public uint PosZ;
+    public uint NegZ;
+    public uint PosY;
+    public uint NegY;
+    public uint PosX;
+    public uint NegX;
+ 
+    public uint PosZ_D;
+    public uint NegZ_D;
+    public uint PosY_D;
+    public uint NegY_D;
+    public uint PosX_D;
+    public uint NegX_D;
+ 
+    public uint PosZ_S;
+    public uint NegZ_S;
+    public uint PosY_S;
+    public uint NegY_S;
+    public uint PosX_S;
+    public uint NegX_S;
+ 
+    public uint Active;
+    public uint Lighting;
+    public uint ExtInfo1;
+    public uint ExtInfo2;
+    public uint ExtInfo3;
+    public uint ExtInfo4;
 };
 
 public struct SphericalHarmonics

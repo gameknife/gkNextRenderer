@@ -203,6 +203,6 @@ void main() {
     }
 
     Cubes[gIdx].Active = activeOut;
-    Cubes[gIdx].ExtInfo3 = activeOut;
+    Cubes[gIdx].ExtInfo3 = Cubes[gIdx].Active;
     Cubes[gIdx].ExtInfo1 = matId;
 }
