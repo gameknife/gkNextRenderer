@@ -3,14 +3,14 @@ implementing Common;
 
 #define MAX_ILLUMINANCE 512.f
 
-static const int SHADOWMAP_SIZE = 4096;
-static const int CUBE_SIZE_XY = 192; // 256;
-static const int CUBE_SIZE_Z = 48;
-static const float CUBE_UNIT = 0.25f;
-static const float3 CUBE_OFFSET = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
-
-static const float CUBE_UNIT_FAR = 4.0f; // cover 0.8km x 0.8km x 0.16km
-static const float3 CUBE_OFFSET_FAR = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
+public static const int SHADOWMAP_SIZE = 4096;
+public static const int CUBE_SIZE_XY = 192; // 256;
+public static const int CUBE_SIZE_Z = 48;
+public static const float CUBE_UNIT = 0.25f;
+public static const float3 CUBE_OFFSET = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
+ 
+public static const float CUBE_UNIT_FAR = 4.0f; // cover 0.8km x 0.8km x 0.16km
+public static const float3 CUBE_OFFSET_FAR = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
 
 public static const float3 cubeVectors[6] = {
     float3(0, 1, 0),
