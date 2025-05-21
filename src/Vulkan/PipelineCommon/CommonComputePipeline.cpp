@@ -527,8 +527,9 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/DirectLightGen.comp.spv");
-
+        //const ShaderModule denoiseShader(device, "assets/shaders/DirectLightGen.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/AmbientCubeGen.comp.slang.spv");
+ 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);

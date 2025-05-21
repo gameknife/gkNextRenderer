@@ -43,10 +43,6 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
     skyColor = vec4(0.0);
 
     const vec2 offset = grid5x5[iterate % 25] * 0.25f;
-    // Generate a random angle for z-axis rotation
-//    float randAngle = RandomFloat(RandomSeed) * 6.283185f;
-//    float cosTheta = cos(randAngle);
-//    float sinTheta = sin(randAngle);
     float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
     
     bool offsetProbe = false;
@@ -56,15 +52,9 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
     {
         vec3 hemiVec = vec3(grid4x4[i] + offset, 1.0);
 
-        // Apply rotation around z-axis
-//        vec3 rotatedVec = vec3(
-//        hemiVec.x * cosTheta - hemiVec.y * sinTheta,
-//        hemiVec.x * sinTheta + hemiVec.y * cosTheta,
-//        hemiVec.z
-//        );
-
         // Align with the surface normal
         vec3 rayDir = AlignWithNormal(hemiVec, basis);
+        
         vec3 OutNormal;
         uint OutMaterialId;
         uint OutInstanceId;
