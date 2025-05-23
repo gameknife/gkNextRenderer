@@ -1,6 +1,17 @@
 implementing Common;
 #include "PreProcessor.slang"
 
+static const float2 haltonSeq[8] = {
+    float2(0.5, 0.3333),
+    float2(0.25, 0.6667),
+    float2(0.75, 0.1111),
+    float2(0.125, 0.4444),
+    float2(0.625, 0.7778),
+    float2(0.375, 0.2222),
+    float2(0.875, 0.5556),
+    float2(0.0625, 0.8889)
+};
+
 namespace Common
 {
 float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
@@ -279,6 +290,13 @@ public bool HardWareRayTraceScene(float3 rayOrigin, float3 rayDir, float3 normal
 }
 }
 
+// emit primary ray, return hit-info
+public interface IPrimaryRayCaster
+{
+    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout float3 hitPos, inout float3 hitNormal, inout uint hitMaterialIdx);
+}
+
+// ray tracer for rendering
 public interface IRayTracer
 {
     bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout float t, inout float3 hitNormal, out Material hitMat, out uint hitMaterialIdx);
@@ -286,14 +304,44 @@ public interface IRayTracer
     bool TraceSegment(float3 rayOrigin, float3 rayTarget);
 }
 
+// direct illum 
 public interface IDirectIlluminator
 {
     void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor);
 }
 
+// renderer
 public interface IRenderer
 {
     void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor);
+}
+
+public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
+{
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout float3 hitPos, inout float3 hitNormal, inout uint hitMaterialIdx)
+    {
+        float2 uvOffset = float2(0);
+        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
+        if (Camera.TAA)
+        {
+            // here should offset a non-random offset and consider in motion vector
+            uvOffset = (haltonSeq[Camera.TotalFrames % 8] - float2(0.5, 0.5)) / isize;
+        }
+        uv += uvOffset;
+        float2 offset = Camera.Aperture / 2 * RandomInUnitDisk(RandomSeed);
+        float4 origin = mul(Camera.ModelViewInverse, float4(offset, 0, 1));
+        float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        float4 direction = mul(Camera.ModelViewInverse, float4(normalize(target.xyz * Camera.FocusDistance - float3(offset, 0)), 0));
+
+        Material hitMaterial;
+        float t = 0;
+        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, hitNormal, t, hitNormal, hitMaterial, hitMaterialIdx);
+        hitPos = origin.xyz + direction.xyz * t;
+        return hitted;
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    FHardwareRayTracer HWTracer;
 }
 
 public struct FHardwareRayTracer : IRayTracer
@@ -476,6 +524,23 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
     Sampler2D ShadowMapSampler;
 }
 
+public struct FPathTracingRenderer : IRenderer
+{
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
+    {
+
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    StructuredBuffer<float> Vertices;
+    StructuredBuffer<uint> Indices;
+    StructuredBuffer<Material> Materials;
+    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<NodeProxy> NodeProxies;
+
+    StructuredBuffer<SphericalHarmonics> HDRSHs;
+}
+
 public struct FHybridRenderer : IRenderer
 {
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
@@ -574,11 +639,4 @@ public struct FHybridRenderer : IRenderer
     RWStructuredBuffer<AmbientCube> Cubes;
     RWStructuredBuffer<AmbientCube> FarCubes;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
-}
-
-public struct FPathTracingRenderer : IRenderer
-{
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
-    {
-    }
 }
