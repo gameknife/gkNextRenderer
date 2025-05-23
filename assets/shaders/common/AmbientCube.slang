@@ -308,7 +308,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         for (uint i = 0; i < FACE_TRACING; i++)
         {
-            float3 hemiVec = float3(grid4x4[i] + offset, 1.0);
+            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
 
             // Align with the surface normal
             float3 rayDir = AlignWithNormal(hemiVec, basis);
@@ -355,7 +355,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         }
 
         float3 sunDir = Camera.SunDirection.xyz;
-        float sunAtten = float(tracer.TraceOcclusion(origin, sunDir));
+        float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
         float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
         rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
 
