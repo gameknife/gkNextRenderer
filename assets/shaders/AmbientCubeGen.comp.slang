@@ -31,16 +31,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
-    FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, HDRSHs };
+    FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, HDRSHs, Lights };
     
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     float3 origin = float3(x, y, z) * (pushConst.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConst.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
 
     probeGen.Render(tracer, origin, gIdx, RandomSeed);
-    
-
-    // Cubes[gIdx].ExtInfo2 = 0;//Cubes[gIdx].ExtInfo2 + 1;
-    // Cubes[gIdx].Active = 0;
-    // Cubes[gIdx].ExtInfo3 = 0;//Cubes[gIdx].Active;
-    // Cubes[gIdx].ExtInfo1 = 0;
 }

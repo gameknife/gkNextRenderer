@@ -102,10 +102,7 @@ float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal) {
     color += wz * UnpackColor(cube.PosZ_D);
     color += wnz * UnpackColor(cube.NegZ_D);
 
-    // 归一化处理
     color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    
-    // HLSL中使用f16tof32替代unpackHalf2x16
     color.w = f16tof32(cube.Lighting & 0xFFFF);
     return color;
 }
@@ -176,6 +173,35 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal) {
     return color;
 }
 
+interface IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal);
+}
+
+struct SkyAmbientCubeSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_Sky(cube, normal);
+    }
+};
+
+struct FullAmbientCubeSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_Full(cube, normal);
+    }
+};
+
+struct DIAmbientCubeSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_DI(cube, normal);
+    }
+};
+
 AmbientCube FetchCube(int3 probePos, bool useFar, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
@@ -183,7 +209,8 @@ AmbientCube FetchCube(int3 probePos, bool useFar, in RWStructuredBuffer<AmbientC
     return useFar ? FarCubes[idx] : Cubes[idx];
 }
 
-public float4 interpolateSkyProbes(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes) {
+public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+{
     bool useFar = false;
 
     float3 nearpos = (pos - CUBE_OFFSET) / CUBE_UNIT;
@@ -229,64 +256,7 @@ public float4 interpolateSkyProbes(float3 pos, float3 normal, in RWStructuredBuf
         float weight = wx * wy * wz;
 
         float occlusion;
-        float4 sampleColor = sampleAmbientCubeHL2_Sky(cube, normal);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.05, 0.05, 0.05, 0.05);
-    return indirectColor;
-}
-
-// Interpolate between 8 probes
-public float4 interpolateProbes(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes) {
-    bool useFar = false;
-
-    float3 nearpos = (pos - CUBE_OFFSET) / CUBE_UNIT;
-    float3 farpos = (pos - CUBE_OFFSET_FAR) / CUBE_UNIT_FAR;
-
-    pos = nearpos;
-
-    // Early out if position is outside the probe grid
-    if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
-        useFar = true;
-        pos = farpos;
-
-        if (farpos.x < 0 || farpos.y < 0 || farpos.z < 0 ||
-            farpos.x > CUBE_SIZE_XY - 1 || farpos.y > CUBE_SIZE_Z - 1 || farpos.z > CUBE_SIZE_XY - 1) {
-            return float4(0, 0, 0, 0);
-        }
-    }
-
-    // Get the base indices and fractional positions
-    int3 baseIdx = int3(floor(pos));
-    float3 frac = frac(pos);
-
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
-    float totalWeight = 0.0;
-    float4 result = float4(0.0, 0.0, 0.0, 0.0);
-
-    for (int i = 0; i < 8; i++) {
-        int3 offset = int3(
-            i & 1,
-            (i >> 1) & 1,
-            (i >> 2) & 1
-        );
-
-        int3 probePos = baseIdx + offset;
-        AmbientCube cube = FetchCube(probePos, useFar, Cubes, FarCubes);
-        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        float4 sampleColor = sampleAmbientCubeHL2_Full(cube, normal);
+        float4 sampleColor = T.Sample(cube, normal);
         result += sampleColor * weight;
         totalWeight += weight;
     }
@@ -318,6 +288,12 @@ public interface IProbeGenerator
 
 public struct FGpuProbeGenerator : IProbeGenerator
 {
+    LightObject FetchLight(uint lightIdx, inout float4 lightPower)
+    {
+        lightPower = Materials[Lights[lightIdx].lightMatIdx].Diffuse;
+        return Lights[lightIdx];
+    }
+
     bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyLight)
     {
         float4 rayColor = float4(0.0);
@@ -343,51 +319,45 @@ public struct FGpuProbeGenerator : IProbeGenerator
             uint OutInstanceId;
             float OutRayDist;
 
-            if (tracer.TraceRay(origin, rayDir, OutNormal, OutRayDist, OutNormal, OutMaterial))
+            if (tracer.TraceRay(origin, rayDir, OutNormal, OutRayDist, OutNormal, OutMaterial, OutMaterialId))
             {
                 float3 hitPos = origin + rayDir * OutRayDist;
 
                 if (dot(OutNormal, rayDir) < 0.0)
                 {
-                    // float3 localPos = (hitPos - (pushConsts.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR)) / (pushConsts.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR);
-                    // return OutMaterial.Diffuse;// * interpolateDIProbes(localPos, OutNormal);
-                    bounceColor += OutMaterial.Diffuse;
+                    bounceColor += OutMaterial.Diffuse * interpolateAmbientCubes<DIAmbientCubeSampler>(hitPos, OutNormal, Cubes, Cubes);
                 }
                 else
                 {
-                    // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
-                    // materialId = FetchMaterialId(OutMaterialId, OutInstanceId);
-                    // activeProbe = 0;
                     return true;
                 }
             }
             else
             {
-                rayColor += float4(10, 10, 10, 1); // Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
+                rayColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs ) * skyMultiplier;
             }
         }
         rayColor = rayColor / float(FACE_TRACING);
         skyColor = rayColor;
         bounceColor = bounceColor / float(FACE_TRACING);
 
-        // if (Camera.LightCount > 0)
-        // {
-        //     vec4 lightPower = vec4(0.0);
-        //     LightObject light = FetchLight(0, lightPower);
-        //     vec3 lightPos = mix(vec3(light.p1), vec3(light.p3), 0.5f);
-        //     float lightAtten = float(TracingOccludeFunction(origin, lightPos));
-        //     vec3 lightDir = normalize(lightPos - origin);
-        //     float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-        //     float distance = length(lightPos - origin);
-        //     float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-        //     rayColor += lightPower * attenuation * lightAtten;
-        // }
+        if (Camera.LightCount > 0)
+        {
+            float4 lightPower = float4(0.0);
+            LightObject light = FetchLight(0, lightPower);
+            float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
+            float lightAtten = float(tracer.TraceSegment(origin, lightPos));
+            float3 lightDir = normalize(lightPos - origin);
+            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+            float distance = length(lightPos - origin);
+            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+            rayColor += lightPower * attenuation * lightAtten;
+        }
 
-        // vec3 sunDir = vec3(Camera.SunDirection);
-        // float sunAtten = float(TracingOccludeFunction(origin, origin + sunDir * 1000.0f));
-        // float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-        // rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
-        // return rayColor;
+        float3 sunDir = Camera.SunDirection.xyz;
+        float sunAtten = float(tracer.TraceOcclusion(origin, sunDir));
+        float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+        rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
 
         DirectLight = LerpPackedColorAlt(DirectLight, rayColor, 0.25);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.25);
@@ -396,14 +366,49 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return false;
     }
 
+    bool InsideGeometry(IRayTracer tracer, float3 origin, inout float3 offset, out uint OutMaterialId)
+    {
+        for (uint i = 0; i < 6; i++)
+        {
+            float3 rayDir = cubeVectors[i];
+
+            // Align with the surface normal
+            float3 OutNormal;
+            Material OutMaterial;
+            uint OutInstanceId;
+            float OutRayDist;
+
+            if (tracer.TraceRay(origin, rayDir, OutNormal, OutRayDist, OutNormal, OutMaterial, OutMaterialId))
+            {
+                if (dot(OutNormal, rayDir) > 0.0)
+                {
+                    offset = rayDir * (OutRayDist + 0.05f);
+                    if (OutRayDist < CUBE_UNIT)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        OutMaterialId = 0;
+        return false;
+    }
+
     public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed)
     {
         // target
         // Cubes[CubeIdx];
-        float3 basis = float3(0, 1, 0);
+        float3 offset = float3(0, 0, 0);
         uint iterate = Cubes[CubeIdx].ExtInfo2;
         Cubes[CubeIdx].ExtInfo2 = Cubes[CubeIdx].ExtInfo2 + 1;
         bool Solid = false;
+
+        if (InsideGeometry(tracer, origin, offset, Cubes[CubeIdx].ExtInfo1))
+        {
+            // INSIDE
+            origin += offset;
+            Solid = true;
+        }
 
         Solid = Solid || FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S);
         Solid = Solid || FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S);
@@ -414,7 +419,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         Cubes[CubeIdx].Active = Solid ? 0 : 1;
         Cubes[CubeIdx].ExtInfo3 = Cubes[CubeIdx].Active;
-        Cubes[CubeIdx].ExtInfo1 = 0;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -426,4 +430,5 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     RWStructuredBuffer<AmbientCube> Cubes;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
+    StructuredBuffer<LightObject> Lights;
 }
