@@ -56,42 +56,34 @@ float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
     return color;
 };
 
-public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness, in StructuredBuffer<SphericalHarmonics> HDRSHs, in Sampler2D[] TextureSamplers)
-{
-    if (roughness > 0.6f)
-    {
-        float3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
-        return float4(rayColor * 1.0f, 1.0);
-    }
-    float3 d = normalize(direction);
-    float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
-    // Sample with explicit LOD based on roughness
-    return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 10.0f));
-};
-
 public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate, in StructuredBuffer<SphericalHarmonics> HDRSHs)
 {
     float3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
     return float4(rayColor * 1.0f, 1.0);
 };
 
-// 获取阴影值
+public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness, in StructuredBuffer<SphericalHarmonics> HDRSHs, in Sampler2D[] TextureSamplers)
+{
+    if (roughness > 0.6f)
+    {
+        return SampleIBLRough(skyIdx, direction, rotate, HDRSHs);
+    }
+    float3 d = normalize(direction);
+    float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
+    return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 10.0f));
+};
+
 public float getShadow(float3 worldPos, float3 jit, float3 normal, in UniformBufferObject ubo, in Sampler2D shadowmap)
 {
-    // 计算光源空间坐标
     float4 posInLightMap = mul(ubo.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
 
-    // 将光源空间坐标转换到NDC空间 [-1,1] 再转到 [0,1] 的纹理空间
     float3 projCoords = posInLightMap.xyz / posInLightMap.w;
     projCoords = projCoords * 0.5 + 0.5;
     projCoords.y = 1.0 - projCoords.y;
 
     float currentDepth = projCoords.z;
-
-    float bias = 0.0005;
-
     float cosTheta = max(dot(normal, normalize(ubo.SunDirection.xyz)), 0.0);
-    bias = lerp(0.0001, 0.00005, cosTheta);
+    float bias = lerp(0.0001, 0.00005, cosTheta);
 
     float closestDepth = shadowmap.Sample(projCoords.xy).x;
     float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
