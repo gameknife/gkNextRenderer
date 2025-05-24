@@ -46,7 +46,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 indirectColor = float4(0, 0, 0, 1);
     float3 normal = float3(0, 0, 0);
     float2 motion = float2(0, 0);
-    renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
+    //renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
     OutMotionVector[ipos] = float4(motion * float2(size),0,0);
 
     float4 outColor = albedo * float4(indirectColor.rgb, 1);

@@ -40,12 +40,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 motion = float2(0, 0);
 
     // compose with renderer and tracer
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Materials, NodeProxies, Cubes, FarCubes };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
 
+    Vertex hitVertex;
+    NodeProxy hitNode;
+    rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode );
+
     // execute the renderer
-    renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, irrandiaceColor);
+    renderer.Render(tracer, dIlluminator, hitVertex, TextureArray, RandomSeed, albedo, normal, motion, irrandiaceColor);
 
     // compose
     float4 outColor = albedo * irrandiaceColor;

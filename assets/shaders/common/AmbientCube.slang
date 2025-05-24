@@ -313,19 +313,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
             // Align with the surface normal
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
-            float3 OutNormal;
-            Material OutMaterial;
-            uint OutMaterialId;
-            uint OutInstanceId;
-            float OutRayDist;
-
-            if (tracer.TraceRay(origin, rayDir, OutNormal, OutRayDist, OutNormal, OutMaterial, OutMaterialId))
+            Vertex hitVertex;
+            NodeProxy hitNode;
+            if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
             {
-                float3 hitPos = origin + rayDir * OutRayDist;
-
-                if (dot(OutNormal, rayDir) < 0.0)
+                Material hitMaterial = Materials[hitVertex.MaterialIndex];
+                if (dot(hitVertex.Normal, rayDir) < 0.0)
                 {
-                    bounceColor += OutMaterial.Diffuse * interpolateAmbientCubes<DIAmbientCubeSampler>(hitPos, OutNormal, Cubes, Cubes);
+                    bounceColor += hitMaterial.Diffuse * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
                 }
                 else
                 {
@@ -373,18 +368,18 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float3 rayDir = cubeVectors[i];
 
             // Align with the surface normal
-            float3 OutNormal;
-            Material OutMaterial;
-            uint OutInstanceId;
-            float OutRayDist;
+            Vertex hitVertex;
+            NodeProxy hitNode;
 
-            if (tracer.TraceRay(origin, rayDir, OutNormal, OutRayDist, OutNormal, OutMaterial, OutMaterialId))
+            if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
             {
-                if (dot(OutNormal, rayDir) > 0.0)
+                if (dot(hitVertex.Normal, rayDir) > 0.0)
                 {
-                    offset = rayDir * (OutRayDist + 0.05f);
-                    if (OutRayDist < CUBE_UNIT)
+                    float hitRayDist = length(hitVertex.Position - origin);
+                    offset = rayDir * (hitRayDist + 0.05f);
+                    if (hitRayDist < CUBE_UNIT)
                     {
+                        OutMaterialId = hitVertex.MaterialIndex;
                         return true;
                     }
                 }

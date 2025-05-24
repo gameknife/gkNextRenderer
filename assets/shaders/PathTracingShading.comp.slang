@@ -39,14 +39,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
     // do a primary ray here
-    float3 hitPos;
-    float3 hitNormal = float3(0, 1, 0);
-    uint hitMaterialIndex = 0;
-    rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitPos, hitNormal, hitMaterialIndex);
+    Vertex hitVertex;
+    NodeProxy hitNode;
+    rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitVertex, hitNode);
     
-    Material hitMaterial = Materials[hitMaterialIndex];
+    Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
     OutAlbedoBuffer[ipos] = hitMaterial.Diffuse;
-    OutNormalBuffer[ipos] = float4(hitNormal, hitMaterial.Fuzziness);
+    OutNormalBuffer[ipos] = float4(hitVertex.Normal, hitMaterial.Fuzziness);
     AccumulationImage[ipos] = hitMaterial.Diffuse;
 }
