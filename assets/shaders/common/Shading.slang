@@ -285,13 +285,13 @@ public bool HardWareRayTraceScene(float3 rayOrigin, float3 rayDir, float3 normal
 // emit primary ray, return hit-info
 public interface IPrimaryRayCaster
 {
-    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout float3 hitPos, inout float3 hitNormal, inout uint hitMaterialIdx);
+    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode);
 }
 
 // ray tracer for rendering
 public interface IRayTracer
 {
-    bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout float t, inout float3 hitNormal, out Material hitMat, out uint hitMaterialIdx);
+    bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
     bool TraceSegment(float3 rayOrigin, float3 rayTarget);
 }
@@ -305,12 +305,12 @@ public interface IDirectIlluminator
 // renderer
 public interface IRenderer
 {
-    void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor);
+    void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor);
 }
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout float3 hitPos, inout float3 hitNormal, inout uint hitMaterialIdx)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
     {
         float2 uvOffset = float2(0);
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
@@ -327,13 +327,44 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
         Material hitMaterial;
         float t = 0;
-        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, hitNormal, t, hitNormal, hitMaterial, hitMaterialIdx);
-        hitPos = origin.xyz + direction.xyz * t;
+        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, outVertex.Normal, outVertex, outNode);
+        outVertex.Position = origin.xyz + direction.xyz * t;
         return hitted;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
     FHardwareRayTracer HWTracer;
+}
+
+public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
+{
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        uint2 vBuffer = VisibilityBuffer[ipos].rg;
+        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
+        
+        // construct ray
+        float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+
+        float3 ray_dir = normalize(dir.xyz);
+
+        Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
+        outNode = NodeProxies[vBuffer.x - 1];
+
+        // geometry info
+        outVertex.Position = v.Position;
+        outVertex.Normal = normalize(v.Normal.rgb);
+        outVertex.MaterialIndex = FetchMaterialId(outNode, v.MaterialIndex);
+
+        return true;
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    StructuredBuffer<float> Vertices;
+    StructuredBuffer<NodeProxy> NodeProxies;
+    RWTexture2D<uint2> VisibilityBuffer;
 }
 
 public struct FHardwareRayTracer : IRayTracer
@@ -384,7 +415,7 @@ public struct FHardwareRayTracer : IRayTracer
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout float t, inout float3 hitNormal, out Material hitMat, out uint hitMaterialIdx)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
@@ -403,27 +434,27 @@ public struct FHardwareRayTracer : IRayTracer
         q.Proceed();
         if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
         {
-            t = q.CommittedRayT();
+            float t = q.CommittedRayT();
 
             float2 TwoBaryCoords = q.CommittedRayBarycentrics();
             float3 BaryCoords = float3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
 
             float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
-            const NodeProxy node = NodeProxies[q.CommittedRayInstanceId()];
-            const uint2 offsets = Offsets[node.modelId];
+            outNode = NodeProxies[q.CommittedRayInstanceId()];
+            const uint2 offsets = Offsets[outNode.modelId];
             const uint indexOffset = offsets.x + q.CommittedRayPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.y;
             const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
             const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
             const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
-            hitMaterialIdx = FetchMaterialId(node, v0.MaterialIndex);
-            hitMat = Materials[hitMaterialIdx];
-            hitNormal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
+            outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
+            outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
+            outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
+            outVertex.Position = rayOrigin + rayDir * t;
+            //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
             return true;
         }
-        hitMat = Materials[0];
-        hitMaterialIdx = 0;
         return false;
     }
 
@@ -445,18 +476,13 @@ public struct FSoftwareRayTracer : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout float t, inout float3 hitNormal, out Material hitMat, out uint hitMaterialIdx)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
     {
-        float3 hitPosition;
         float3 offsetPos = rayOrigin + normal * 0.01;
-        if (Common.traceLongDistance(offsetPos, rayDir, 5.0, 0.2, hitPosition, hitNormal, hitMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices, Cubes, FarCubes))
+        if (Common.traceLongDistance(offsetPos, rayDir, 5.0, 0.2, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices, Cubes, FarCubes))
         {
-            hitMat = Materials[hitMaterialIdx];
-            t = length(hitPosition - rayOrigin);
             return true;
         }
-        hitMat = Materials[0];
-        hitMaterialIdx = 0;
         return false;
     }
 
@@ -518,7 +544,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
 
 public struct FPathTracingRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
     {
 
     }
@@ -535,47 +561,48 @@ public struct FPathTracingRenderer : IRenderer
 
 public struct FHybridRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, float2 uv, uint2 vBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 normal, inout float2 motion, inout float4 indirectColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 albedo, inout float3 outNormal, inout float2 motion, inout float4 indirectColor)
     {
         // construct ray
-        float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-        float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
-        float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+        float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+        // float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        // float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
 
-        float3 ray_dir = normalize(dir.xyz);
+        // float3 ray_dir = normalize(dir.xyz);
 
-        Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
-        NodeProxy node = NodeProxies[vBuffer.x - 1];
+        // Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
+        // NodeProxy node = NodeProxies[vBuffer.x - 1];
 
-        // geometry info
-        normal = normalize(v.Normal.rgb);
+        // // geometry info
+        // normal = normalize(v.Normal.rgb);
 
         // motion info
-        float4 currFrameHPos = mul(Camera.ViewProjection, float4(v.Position, 1));
-        float2 currfpos = float2((currFrameHPos.xy / currFrameHPos.w * 0.5));
-        float4 prevFrameHPos = mul(mul(Camera.PrevViewProjection, node.combinedPrevTS), float4(v.Position, 1));
-        float2 prevfpos = float2((prevFrameHPos.xy / prevFrameHPos.w * 0.5));
-        motion = prevfpos - currfpos;
+        // float4 currFrameHPos = mul(Camera.ViewProjection, float4(v.Position, 1));
+        // float2 currfpos = float2((currFrameHPos.xy / currFrameHPos.w * 0.5));
+        // float4 prevFrameHPos = mul(mul(Camera.PrevViewProjection, node.combinedPrevTS), float4(v.Position, 1));
+        // float2 prevfpos = float2((prevFrameHPos.xy / prevFrameHPos.w * 0.5));
+        // motion = prevfpos - currfpos;
 
         // mat info
-        uint materialIndex = FetchMaterialId(node, v.MaterialIndex);
-        Material mat = Materials[materialIndex];
+        // uint materialIndex = FetchMaterialId(node, v.MaterialIndex);
+        Material mat = Materials[inVertex.MaterialIndex];
         albedo = mat.Diffuse;
         float roughness = mat.Fuzziness;
-        if (mat.DiffuseTextureId >= 0)
-        {
-            float4 tex = TextureArray[NonUniformResourceIndex(mat.DiffuseTextureId)].Sample(v.TexCoord);
-            albedo *= tex;
-        }
-        if (mat.MRATextureId >= 0)
-        {
-            float4 mra = TextureArray[NonUniformResourceIndex(mat.MRATextureId)].Sample(v.TexCoord);
-            roughness = roughness * mra.g;
-        }
+        // if (mat.DiffuseTextureId >= 0)
+        // {
+        //     float4 tex = TextureArray[NonUniformResourceIndex(mat.DiffuseTextureId)].Sample(v.TexCoord);
+        //     albedo *= tex;
+        // }
+        // if (mat.MRATextureId >= 0)
+        // {
+        //     float4 mra = TextureArray[NonUniformResourceIndex(mat.MRATextureId)].Sample(v.TexCoord);
+        //     roughness = roughness * mra.g;
+        // }
 
         // ibl
-        const float dotValue = dot(ray_dir, normal);
-        const float3 outwardNormal = dotValue > 0 ? -normal : normal;
+        const float dotValue = dot(ray_dir, inVertex.Normal);
+        const float3 outwardNormal = dotValue > 0 ? -inVertex.Normal : inVertex.Normal;
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);
         const float metalProb = mat.Metalness;
@@ -593,14 +620,12 @@ public struct FHybridRenderer : IRenderer
             float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
 
             float4 reflectionColor;
-            float t;
-            float3 hitNormal;
-            Material hitMat;
-            uint hitMaterialIdx;
-            if (tracer.TraceRay(v.Position, trace_dir, normal, t, hitNormal, hitMat, hitMaterialIdx))
+            Vertex hitVertex;
+            NodeProxy hitNode;
+            if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, hitVertex, hitNode))
             {
-                float3 hitPos = v.Position + trace_dir * t;
-                indirectColor += hitMat.Diffuse * interpolateAmbientCubes<FullAmbientCubeSampler>(hitPos, hitNormal, Cubes, FarCubes);
+                Material hitMat = Materials[hitVertex.MaterialIndex];
+                indirectColor += hitMat.Diffuse * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
             }
             else
             {
@@ -610,14 +635,14 @@ public struct FHybridRenderer : IRenderer
                 }
                 else
                 {
-                    indirectColor += interpolateAmbientCubes<SkyAmbientCubeSampler>(v.Position, normal, Cubes, FarCubes) * 2.0f;
+                    indirectColor += interpolateAmbientCubes<SkyAmbientCubeSampler>(inVertex.Position, inVertex.Normal, Cubes, FarCubes) * 2.0f;
                 }
             }
         }
         indirectColor /= float(jitcount);
 
         float4 directColor = float4(0, 0, 0, 0);
-        directIllum.DirectIlluminate(RandomSeed, v.Position, normal, directColor);
+        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
         indirectColor += directColor;
     }
 
