@@ -254,7 +254,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         Material hitMaterial;
         float t = 0;
         bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, outVertex.Normal, outVertex, outNode);
-        outVertex.Position = origin.xyz + direction.xyz * t;
+        //outVertex.Position = origin.xyz + direction.xyz * t;
         return hitted;
     }
 
@@ -347,7 +347,7 @@ public struct FHardwareRayTracer : IRayTracer
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = 0.01f;
+        ray.TMin = 0.1f;
         ray.Direction = rayDir;
         ray.TMax = 1e4f;
         RayQuery<RAY_FLAG_NONE> q;
@@ -472,10 +472,63 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
 
 public struct FPathTracingRenderer : IRenderer
 {
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
+    {
+        Material mat = Materials[inVertex.MaterialIndex];
+        float roughness = mat.Fuzziness;
+        const float dotValue = dot(rayDir, inVertex.Normal);
+        const float3 outwardNormal = dotValue > 0 ? -inVertex.Normal : inVertex.Normal;
+        const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
+        const float reflectProb = Schlick(cosine, mat.RefractionIndex);
+        const float metalProb = mat.Metalness;
+
+        bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
+        bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);
+        bool chanceGGX = chanceReflect || chanceMetal;
+        const float3 trace_next = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
+        float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
+        rayDir = trace_dir;
+
+        NodeProxy hitNode;
+        if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, inVertex, hitNode))
+        {
+            rayColor *= mat.Diffuse;
+            if (mat.MaterialModel == MaterialDiffuseLight)
+            {
+                return true;
+            }
+            return false;
+        }
+        else
+        {
+            float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            // miss, FinalColor to SkyIBL
+            rayColor *= skyColor;
+            return true;
+        }
+    }
+
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor)
     {
         Material mat = Materials[inVertex.MaterialIndex];
-        FinalColor = float4(mat.Diffuse.rgb, 1);
+        FinalColor = float4(1, 1, 1, 0);
+
+        float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+
+        float3 direction = ray_dir;
+        Vertex vertexStart = inVertex;
+
+        // Path tracing 本质上是一个递归的过程，所以这里要再抽象一个private函数
+        for (uint b = 0; b < Camera.MaxNumberOfBounces; ++b)
+        {
+            if (GetRayColor(tracer, vertexStart, direction, FinalColor, RandomSeed, TextureArray) )
+            {
+                break;
+            }
+
+            FinalColor = float4(0, 0, 0, 0);
+        }
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
