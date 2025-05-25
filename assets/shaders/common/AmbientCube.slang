@@ -202,14 +202,21 @@ struct DIAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-AmbientCube FetchCube(int3 probePos, bool useFar, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+AmbientCube FetchCube(int3 probePos, bool useFar, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
     return useFar ? FarCubes[idx] : Cubes[idx];
 }
 
-public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+AmbientCube RWFetchCube(int3 probePos, bool useFar, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+{
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+              probePos.z * CUBE_SIZE_XY + probePos.x;
+    return useFar ? FarCubes[idx] : Cubes[idx];
+}
+
+public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes)
 {
     bool useFar = false;
 
@@ -266,8 +273,65 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
     return indirectColor;
 }
 
+public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+{
+    bool useFar = false;
+
+    float3 nearpos = (pos - CUBE_OFFSET) / CUBE_UNIT;
+    float3 farpos = (pos - CUBE_OFFSET_FAR) / CUBE_UNIT_FAR;
+
+    pos = nearpos;
+
+    // Early out if position is outside the probe grid
+    if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
+        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
+        useFar = true;
+        pos = farpos;
+
+        if (farpos.x < 0 || farpos.y < 0 || farpos.z < 0 ||
+            farpos.x > CUBE_SIZE_XY - 1 || farpos.y > CUBE_SIZE_Z - 1 || farpos.z > CUBE_SIZE_XY - 1) {
+            return float4(0, 0, 0, 0);
+        }
+    }
+
+    // Get the base indices and fractional positions
+    int3 baseIdx = int3(floor(pos));
+    float3 frac = frac(pos);
+
+    // Trilinear interpolation between 8 nearest probes
+    // Try immediate neighbors first
+    float totalWeight = 0.0;
+    float4 result = float4(0.0, 0.0, 0.0, 0.0);
+
+    for (int i = 0; i < 8; i++) {
+        int3 offset = int3(
+            i & 1,
+            (i >> 1) & 1,
+            (i >> 2) & 1
+        );
+
+        int3 probePos = baseIdx + offset;
+        AmbientCube cube = RWFetchCube(probePos, useFar, Cubes, FarCubes);
+        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
+
+        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+        float weight = wx * wy * wz;
+
+        float occlusion;
+        float4 sampleColor = T.Sample(cube, normal);
+        result += sampleColor * weight;
+        totalWeight += weight;
+    }
+
+    // Normalize result by total weight
+    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.05, 0.05, 0.05, 0.05);
+    return indirectColor;
+}
+
 // Interpolate between 8 probes
-public bool inSolid(float3 pos, inout uint matId, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes) {
+public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes) {
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
@@ -320,7 +384,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 if (dot(hitVertex.Normal, rayDir) < 0.0)
                 {
-                    bounceColor += hitMaterial.Diffuse * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
+                    bounceColor += hitMaterial.Diffuse * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
                 }
                 else
                 {
