@@ -16,8 +16,8 @@ import Common;
 [[vk::binding(13)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(14)]] RWTexture2D<float4> OutNormalBuffer;
 
-[[vk::binding(16)]] RWStructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(17)]] RWStructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(16)]] StructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(17)]] StructuredBuffer<AmbientCube> FarCubes;
 [[vk::binding(18)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(19)]] StructuredBuffer<LightObject> Lights;
 
@@ -29,30 +29,39 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs};
-    
-    int2 ipos = int2(DTid.xy);
-    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
+    int2 ipos = int2(DTid.xy);
     int2 size;
+    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
     MiniGBuffer.GetDimensions(size.x, size.y);
 
-    uint2 vBuffer = MiniGBuffer[ipos].rg;
-    float2 uv = float2(ipos) / float2(size) * 2.0 - 1.0;
+    // 第一次Tracing
+    Vertex hitVertex;
+    NodeProxy hitNode;
+    rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode);
 
+    // MotionVector解析
+    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
+    OutMotionVector[ipos] = float4(motion * size, 0, 0);
+
+    // GBuffer解析
     float4 albedo = float4(0, 0, 0, 1);
-    float4 indirectColor = float4(0, 0, 0, 1);
-    float3 normal = float3(0, 0, 0);
-    float2 motion = float2(0, 0);
-    //renderer.Render(tracer, dIlluminator, uv, vBuffer, TextureArray, RandomSeed, albedo, normal, motion, indirectColor);
-    OutMotionVector[ipos] = float4(motion * float2(size),0,0);
+    float4 illuminaceColor = float4(0, 0, 0, 1);
+    float4 gbuffer = float4(0, 0, 0, 0);
+    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
+    OutAlbedoBuffer[ipos] = albedo;
+    OutNormalBuffer[ipos] = gbuffer;
 
-    float4 outColor = albedo * float4(indirectColor.rgb, 1);
+    // 着色
+    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
+
+    // 合成
+    float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
 
-    OutAlbedoBuffer[ipos] = albedo;
-    OutNormalBuffer[ipos] = float4(normal, 1.0);
     OutImage[ipos] = outColor;
 }

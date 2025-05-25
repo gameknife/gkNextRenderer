@@ -12,7 +12,7 @@ import Common;
 [[vk::binding(9)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 
 [[vk::binding(10)]] RWTexture2D<float4> AccumulationImage;
-[[vk::binding(11)]] RWTexture2D<float4> MotionVectorImage;
+[[vk::binding(11)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(12)]] RWTexture2D<uint> VisibilityBuffer;
 [[vk::binding(13)]] RWTexture2D<uint> Visibility1Buffer;
 [[vk::binding(14)]] RWTexture2D<float4> OutAlbedoBuffer;
@@ -42,10 +42,25 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Vertex hitVertex;
     NodeProxy hitNode;
     rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitVertex, hitNode);
-    
-    Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
-    OutAlbedoBuffer[ipos] = hitMaterial.Diffuse;
-    OutNormalBuffer[ipos] = float4(hitVertex.Normal, hitMaterial.Fuzziness);
-    AccumulationImage[ipos] = hitMaterial.Diffuse;
+    // MotionVector解析
+    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
+    OutMotionVector[ipos] = float4(motion * isize, 0, 0);
+
+    // GBuffer解析
+    float4 albedo = float4(0, 0, 0, 1);
+    float4 illuminaceColor = float4(0, 0, 0, 1);
+    float4 gbuffer = float4(0, 0, 0, 0);
+    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
+    OutAlbedoBuffer[ipos] = albedo;
+    OutNormalBuffer[ipos] = gbuffer;
+
+    // 着色
+    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
+
+    // 合成
+    float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
+    outColor.a = 1.0f;
+
+    AccumulationImage[ipos] = outColor;
 }
