@@ -383,7 +383,7 @@ public struct FHardwareRayTracer : IRayTracer
             outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
-            outVertex.Position = rayOrigin + rayDir * (t - EPS2);
+            outVertex.Position = rayOrigin + rayDir * t;// * (t - EPS2);
             
             //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
             return true;
@@ -537,10 +537,10 @@ public struct FPathTracingRenderer : IRenderer
                     break;
                 }
 
-                if (b == Camera.NumberOfBounces - 1)
+                if (b == Camera.NumberOfBounces - 1 || RandomFloat(RandomSeed) < 0.5f)
                 {
-                    // 跑完了bounces但没有找到结果
-                    RayColor = float4(0, 0, 0, 0);
+                    RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
+                    break;
                 }
             }
 
@@ -561,6 +561,8 @@ public struct FPathTracingRenderer : IRenderer
     StructuredBuffer<uint2> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
+    StructuredBuffer<AmbientCube> Cubes;
+    StructuredBuffer<AmbientCube> FarCubes;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
 
