@@ -518,7 +518,7 @@ public struct FPathTracingRenderer : IRenderer
     {
         FinalColor = float4(0, 0, 0, 0);
 
-        const uint sample = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
+        const uint sample = Camera.FastGather ? 1 : Camera.NumberOfSamples;
         for (int i = 0; i < sample; i++)
         {
             float4 RayColor = float4(1, 1, 1, 1);
@@ -539,6 +539,7 @@ public struct FPathTracingRenderer : IRenderer
 
                 if (b == Camera.NumberOfBounces - 1)
                 {
+                    // 跑完了bounces但没有找到结果
                     RayColor = float4(0, 0, 0, 0);
                 }
             }
@@ -604,7 +605,7 @@ public struct FHybridRenderer : IRenderer
             {
                 if (chanceGGX)
                 {
-                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, mat.Fuzziness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
                 }
                 else
                 {
