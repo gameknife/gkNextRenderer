@@ -61,7 +61,10 @@ namespace Vulkan::RayTracing
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-                {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {19, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -150,6 +153,14 @@ namespace Vulkan::RayTracing
             VkDescriptorImageInfo outShaderTimerImageInfo = {};
             outShaderTimerImageInfo.imageView = OutShaderTimerImageView.Handle();
             outShaderTimerImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorBufferInfo cubeBufferInfo = {};
+            cubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
+            cubeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo farcubeBufferInfo = {};
+            farcubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            farcubeBufferInfo.range = VK_WHOLE_SIZE;
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -170,6 +181,8 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 15, outNormalImageInfo),
                 descriptorSets.Bind(i, 16, adaptiveSampleImageInfo),
                 descriptorSets.Bind(i, 17, outShaderTimerImageInfo),
+                descriptorSets.Bind(i, 18, cubeBufferInfo),
+                descriptorSets.Bind(i, 19, farcubeBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

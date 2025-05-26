@@ -276,7 +276,7 @@ namespace Vulkan::RayTracing
 #endif
 
 #if !ANDROID
-        if(supportRayCast_ && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
+        if(supportRayCast_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
         {
 #if !ANDROID
             const int cubesPerGroup = 32;
