@@ -269,7 +269,7 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
     }
 
     // Normalize result by total weight
-    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.05, 0.05, 0.05, 0.05);
+    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.0, 0.0, 0.0, 0.0);
     return indirectColor;
 }
 
@@ -326,7 +326,7 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, flo
     }
 
     // Normalize result by total weight
-    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.05, 0.05, 0.05, 0.05);
+    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.0, 0.0, 0.0, 0.0);
     return indirectColor;
 }
 
@@ -382,14 +382,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
             if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
-                if (dot(hitVertex.Normal, rayDir) < 0.0)
-                {
-                    bounceColor += hitMaterial.Diffuse * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
-                }
-                else
-                {
-                    return true;
-                }
+                // if (dot(hitVertex.Normal, rayDir) < 0.0)
+                // {
+                bounceColor += hitMaterial.Diffuse * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
+                // }
+                // else
+                // {
+                //     return true;
+                // }
             }
             else
             {
@@ -425,27 +425,22 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return false;
     }
 
-    bool InsideGeometry(IRayTracer tracer, float3 origin, inout float3 offset, out uint OutMaterialId)
+    bool InsideGeometry(IRayTracer tracer, float3 origin, float3 rayDir, inout float3 offset, out uint OutMaterialId)
     {
-        for (uint i = 0; i < 6; i++)
+        // Align with the surface normal
+        Vertex hitVertex;
+        NodeProxy hitNode;
+
+        if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
         {
-            float3 rayDir = cubeVectors[i];
-
-            // Align with the surface normal
-            Vertex hitVertex;
-            NodeProxy hitNode;
-
-            if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
+            if (dot(hitVertex.Normal, rayDir) > 0.0)
             {
-                if (dot(hitVertex.Normal, rayDir) > 0.0)
+                float hitRayDist = length(hitVertex.Position - origin) + EPS2;
+                offset = rayDir * (hitRayDist + 0.05f);
+                if (hitRayDist < CUBE_UNIT)
                 {
-                    float hitRayDist = length(hitVertex.Position - origin);
-                    offset = rayDir * (hitRayDist + 0.05f);
-                    if (hitRayDist < CUBE_UNIT)
-                    {
-                        OutMaterialId = hitVertex.MaterialIndex;
-                        return true;
-                    }
+                    OutMaterialId = hitVertex.MaterialIndex;
+                    return true;
                 }
             }
         }
@@ -462,19 +457,24 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Cubes[CubeIdx].ExtInfo2 = Cubes[CubeIdx].ExtInfo2 + 1;
         bool Solid = false;
 
-        if (InsideGeometry(tracer, origin, offset, Cubes[CubeIdx].ExtInfo1))
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), offset, Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), offset, Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0), offset, Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0), offset, Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), offset, Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), offset, Cubes[CubeIdx].ExtInfo1);
+
+        if(Solid)
         {
-            // INSIDE
             origin += offset;
-            Solid = true;
         }
 
-        Solid = Solid || FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S);
-        Solid = Solid || FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S);
-        Solid = Solid || FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, Cubes[CubeIdx].PosX_S);
-        Solid = Solid || FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, Cubes[CubeIdx].NegX_S);
-        Solid = Solid || FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, Cubes[CubeIdx].PosZ_S);
-        Solid = Solid || FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, Cubes[CubeIdx].NegZ_S);
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, Cubes[CubeIdx].PosX_S);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, Cubes[CubeIdx].NegX_S);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, Cubes[CubeIdx].PosZ_S);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, Cubes[CubeIdx].NegZ_S);
 
         Cubes[CubeIdx].Active = Solid ? 0 : 1;
         Cubes[CubeIdx].ExtInfo3 = Cubes[CubeIdx].Active;
