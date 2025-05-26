@@ -55,7 +55,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
     VisibilityBuffer[ipos] = uint2(hitNode.instanceId, 0);
-    
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
