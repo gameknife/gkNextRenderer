@@ -360,6 +360,10 @@ public struct FHardwareRayTracer : IRayTracer
             ray);
 
         q.Proceed();
+        // while (q.Proceed())
+        // {
+
+        // }
         if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
         {
             float t = q.CommittedRayT();
@@ -379,7 +383,8 @@ public struct FHardwareRayTracer : IRayTracer
             outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
-            outVertex.Position = rayOrigin + rayDir * t;
+            outVertex.Position = rayOrigin + rayDir * (t - EPS2);
+            
             //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
             return true;
         }
@@ -492,8 +497,9 @@ public struct FPathTracingRenderer : IRenderer
         NodeProxy hitNode;
         if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, inVertex, hitNode))
         {
-            rayColor *= mat.Diffuse;
-            if (mat.MaterialModel == MaterialDiffuseLight)
+            Material hitMat = Materials[inVertex.MaterialIndex];
+            rayColor *= hitMat.Diffuse;
+            if (hitMat.MaterialModel == MaterialDiffuseLight)
             {
                 return true;
             }
@@ -510,25 +516,41 @@ public struct FPathTracingRenderer : IRenderer
 
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor)
     {
-        Material mat = Materials[inVertex.MaterialIndex];
-        FinalColor = float4(1, 1, 1, 0);
+        FinalColor = float4(0, 0, 0, 0);
 
-        float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-        float3 ray_dir = normalize(inVertex.Position - eye.xyz);
-
-        float3 direction = ray_dir;
-        Vertex vertexStart = inVertex;
-
-        // Path tracing 本质上是一个递归的过程，所以这里要再抽象一个private函数
-        for (uint b = 0; b < Camera.MaxNumberOfBounces; ++b)
+        const uint sample = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
+        for (int i = 0; i < sample; i++)
         {
-            if (GetRayColor(tracer, vertexStart, direction, FinalColor, RandomSeed, TextureArray) )
+            float4 RayColor = float4(1, 1, 1, 1);
+
+            float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+            float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+
+            float3 direction = ray_dir;
+            Vertex vertexStart = inVertex;
+
+            // Path tracing 本质上是一个递归的过程，所以这里要再抽象一个private函数
+            for (uint b = 0; b < Camera.NumberOfBounces; ++b)
             {
-                break;
+                if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, TextureArray))
+                {
+                    break;
+                }
+
+                if (b == Camera.NumberOfBounces - 1)
+                {
+                    RayColor = float4(0, 0, 0, 0);
+                }
             }
 
-            FinalColor = float4(0, 0, 0, 0);
+            FinalColor += RayColor;
         }
+
+        FinalColor /= float(sample);
+
+        float4 directColor = float4(0, 0, 0, 0);
+        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
+        FinalColor += directColor;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
