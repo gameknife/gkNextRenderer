@@ -43,7 +43,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // do a primary ray here
     Vertex hitVertex;
     NodeProxy hitNode;
-    rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitVertex, hitNode);
+    if( !rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitVertex, hitNode))
+    {
+        // 如果没有命中，直接返回
+        AccumulationImage[ipos] = float4(0, 0, 0, 1);
+        OutMotionVector[ipos] = float4(0, 0, 0, 0);
+        OutAlbedoBuffer[ipos] = float4(0, 0, 0, 1);
+        OutNormalBuffer[ipos] = float4(0, 0, 0, 1);
+        VisibilityBuffer[ipos] = uint2(0, 0);
+        return;
+    }
 
     // MotionVector解析
     float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);

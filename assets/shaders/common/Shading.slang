@@ -301,7 +301,7 @@ public struct FHardwareRayTracer : IRayTracer
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = 0.01f;
+        ray.TMin = EPS;
         ray.Direction = rayDir;
         ray.TMax = 1e4f;
         RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
@@ -324,7 +324,7 @@ public struct FHardwareRayTracer : IRayTracer
         float3 dir = rayTarget - rayOrigin;
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = 0.01f;
+        ray.TMin = EPS;
         ray.TMax = length(dir);
         ray.Direction = dir / ray.TMax;
         
@@ -347,7 +347,7 @@ public struct FHardwareRayTracer : IRayTracer
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = 0.1f;
+        ray.TMin = EPS;
         ray.Direction = rayDir;
         ray.TMax = 1e4f;
         RayQuery<RAY_FLAG_NONE> q;
@@ -360,10 +360,6 @@ public struct FHardwareRayTracer : IRayTracer
             ray);
 
         q.Proceed();
-        // while (q.Proceed())
-        // {
-
-        // }
         if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
         {
             float t = q.CommittedRayT();
@@ -375,7 +371,7 @@ public struct FHardwareRayTracer : IRayTracer
 
             outNode = NodeProxies[q.CommittedRayInstanceId()];
             const uint2 offsets = Offsets[outNode.modelId];
-            const uint indexOffset = offsets.x + q.CommittedRayPrimitiveIndex() * 3;
+            const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.y;
             const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
             const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
@@ -384,10 +380,10 @@ public struct FHardwareRayTracer : IRayTracer
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
             outVertex.Position = rayOrigin + rayDir * t;// * (t - EPS2);
-            
             //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
             return true;
         }
+        q.CandidatePrimitiveIndex();
         return false;
     }
 
@@ -482,7 +478,8 @@ public struct FPathTracingRenderer : IRenderer
         Material mat = Materials[inVertex.MaterialIndex];
         float roughness = mat.Fuzziness;
         const float dotValue = dot(rayDir, inVertex.Normal);
-        const float3 outwardNormal = dotValue > 0 ? -inVertex.Normal : inVertex.Normal;
+        const bool BackFace = dotValue > 0;
+        const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);
         const float metalProb = mat.Metalness;
@@ -498,7 +495,18 @@ public struct FPathTracingRenderer : IRenderer
         if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, inVertex, hitNode))
         {
             Material hitMat = Materials[inVertex.MaterialIndex];
-            rayColor *= hitMat.Diffuse;
+            float4 outAlbedo = hitMat.Diffuse;
+            if (hitMat.DiffuseTextureId >= 0)
+            {
+                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].Sample(inVertex.TexCoord);
+                outAlbedo *= tex;
+            }
+            rayColor *= outAlbedo;
+            if (BackFace)
+            {
+                rayColor = 0.0f;
+                return true;
+            }
             if (hitMat.MaterialModel == MaterialDiffuseLight)
             {
                 return true;
@@ -517,6 +525,12 @@ public struct FPathTracingRenderer : IRenderer
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor)
     {
         FinalColor = float4(0, 0, 0, 0);
+        Material mat = Materials[inVertex.MaterialIndex];
+        if (mat.MaterialModel == MaterialDiffuseLight)
+        {
+            FinalColor = mat.Diffuse;
+            return;
+        }
 
         const uint sample = Camera.FastGather ? 1 : Camera.NumberOfSamples;
         for (int i = 0; i < sample; i++)
@@ -536,10 +550,10 @@ public struct FPathTracingRenderer : IRenderer
                 {
                     break;
                 }
-
+                
                 if (b == Camera.NumberOfBounces - 1 || RandomFloat(RandomSeed) < 0.5f)
                 {
-                    RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
+                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
                     break;
                 }
             }
@@ -601,7 +615,12 @@ public struct FHybridRenderer : IRenderer
             if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
-                FinalColor += hitMat.Diffuse * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+                float4 outAlbedo = hitMat.Diffuse;
+                if(hitMat.MaterialModel == MaterialDiffuseLight)
+                {
+                    outAlbedo *= 0.05f;
+                }
+                FinalColor += outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
             }
             else
             {

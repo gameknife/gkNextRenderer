@@ -107,6 +107,38 @@ float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal) {
     return color;
 }
 
+float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
+    float4 color = float4(0.0, 0.0, 0.0, 0.0);
+    float sum = 0.0;
+
+    float wx = max(normal.x, 0.0f);
+    float wnx = max(-normal.x, 0.0f);
+    float wy = max(normal.y, 0.0f);
+    float wny = max(-normal.y, 0.0f);
+    float wz = max(normal.z, 0.0f);
+    float wnz = max(-normal.z, 0.0f);
+
+    sum = wx + wnx + wy + wny + wz + wnz;
+
+    color += wx * UnpackColor(cube.PosX_S);
+    color += wnx * UnpackColor(cube.NegX_S);
+    color += wy * UnpackColor(cube.PosY_S);
+    color += wny * UnpackColor(cube.NegY_S);
+    color += wz * UnpackColor(cube.PosZ_S);
+    color += wnz * UnpackColor(cube.NegZ_S);
+
+    color += wx * UnpackColor(cube.PosX_D);
+    color += wnx * UnpackColor(cube.NegX_D);
+    color += wy * UnpackColor(cube.PosY_D);
+    color += wny * UnpackColor(cube.NegY_D);
+    color += wz * UnpackColor(cube.PosZ_D);
+    color += wnz * UnpackColor(cube.NegZ_D);
+
+    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    color.w = f16tof32(cube.Lighting & 0xFFFF);
+    return color;
+}
+
 float4 sampleAmbientCubeHL2_Sky(AmbientCube cube, float3 normal) {
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
     float sum = 0.0;
@@ -199,6 +231,14 @@ struct DIAmbientCubeSampler : IAmbientCubeSampler
     static float4 Sample(AmbientCube cube, float3 normal)
     {
         return sampleAmbientCubeHL2_DI(cube, normal);
+    }
+};
+
+struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_LightCache(cube, normal);
     }
 };
 
@@ -405,7 +445,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float4 lightPower = float4(0.0);
             LightObject light = FetchLight(0, lightPower);
             float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
-            float lightAtten = float(tracer.TraceSegment(origin, lightPos));
+            float lightAtten = tracer.TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
             float3 lightDir = normalize(lightPos - origin);
             float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
             float distance = length(lightPos - origin);
