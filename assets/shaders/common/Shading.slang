@@ -480,6 +480,7 @@ public struct FPathTracingRenderer : IRenderer
         const float dotValue = dot(rayDir, inVertex.Normal);
         const bool BackFace = dotValue > 0;
         const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
+        const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);
         const float metalProb = mat.Metalness;
@@ -489,6 +490,16 @@ public struct FPathTracingRenderer : IRenderer
         bool chanceGGX = chanceReflect || chanceMetal;
         const float3 trace_next = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
         float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
+        
+
+        if (mat.MaterialModel == MaterialDielectric)
+        {
+            if (!chanceReflect)
+            {
+                trace_dir = refract(rayDir, outwardNormal, niOverNt);
+            }
+        }
+
         rayDir = trace_dir;
 
         NodeProxy hitNode;
@@ -501,8 +512,11 @@ public struct FPathTracingRenderer : IRenderer
                 float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].Sample(inVertex.TexCoord);
                 outAlbedo *= tex;
             }
-            rayColor *= outAlbedo;
-            if (BackFace)
+            if (!chanceReflect)
+            {
+                rayColor *= outAlbedo;
+            }
+            if (BackFace && mat.MaterialModel != MaterialDielectric)
             {
                 rayColor = 0.0f;
                 return true;
@@ -550,11 +564,21 @@ public struct FPathTracingRenderer : IRenderer
                 {
                     break;
                 }
-                
-                if (b == Camera.NumberOfBounces - 1 || RandomFloat(RandomSeed) < 0.5f)
+
+                // 提前退出
+                const bool earlyExit = (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+
+                // 终结路径
+                if (b == Camera.NumberOfBounces - 1 || earlyExit)
                 {
                     RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
                     break;
+                }
+
+                // 如果命中了折射物体，延长bounces
+                if (mat.MaterialModel == MaterialDielectric)
+                {
+                    b = b - 1;
                 }
             }
 
