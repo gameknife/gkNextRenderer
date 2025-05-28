@@ -512,7 +512,7 @@ public struct FPathTracingRenderer : IRenderer
                 float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].Sample(inVertex.TexCoord);
                 outAlbedo *= tex;
             }
-            if (!chanceReflect)
+            if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
             {
                 rayColor *= outAlbedo;
             }
@@ -557,28 +557,24 @@ public struct FPathTracingRenderer : IRenderer
             float3 direction = ray_dir;
             Vertex vertexStart = inVertex;
 
+            uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
+
             // Path tracing 本质上是一个递归的过程，所以这里要再抽象一个private函数
-            for (uint b = 0; b < Camera.NumberOfBounces; ++b)
+            for (uint b = 0; b < maxBounces; ++b)
             {
-                if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, TextureArray))
+                if ( GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, TextureArray) )
                 {
                     break;
                 }
 
                 // 提前退出
-                const bool earlyExit = (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+                const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
 
                 // 终结路径
-                if (b == Camera.NumberOfBounces - 1 || earlyExit)
+                if (b == maxBounces - 1 || earlyExit)
                 {
                     RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
                     break;
-                }
-
-                // 如果命中了折射物体，延长bounces
-                if (mat.MaterialModel == MaterialDielectric)
-                {
-                    b = b - 1;
                 }
             }
 

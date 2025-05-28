@@ -32,7 +32,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
-    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs};
+    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+    FPathTracingRenderer PTRenderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
 
     int2 ipos = int2(DTid.xy);
     int2 size;
@@ -52,13 +53,20 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
+    Material material = Materials[hitVertex.MaterialIndex];
+    Common.FetchGBuffer(hitVertex, material, TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
 
-    // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
-
+    if (material.MaterialModel == MaterialDielectric)
+    {
+        PTRenderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
+    }
+    else
+    {
+        renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
+    }
+    
     // 合成
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
