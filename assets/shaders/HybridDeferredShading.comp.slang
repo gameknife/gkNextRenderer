@@ -43,7 +43,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // 第一次Tracing
     Vertex hitVertex;
     NodeProxy hitNode;
-    rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode);
+    if( !rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode))
+    {
+        // 如果没有命中，直接返回
+        OutImage[ipos] = float4(0, 0, 0, 1);
+        OutMotionVector[ipos] = float4(0, 0, 0, 0);
+        OutAlbedoBuffer[ipos] = float4(0, 0, 0, 1);
+        OutNormalBuffer[ipos] = float4(0, 0, 0, 1);
+        return;
+    }
 
     // MotionVector解析
     float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
