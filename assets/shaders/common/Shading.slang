@@ -286,6 +286,11 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         outVertex.TexCoord = v.TexCoord;
         outVertex.Tangent = v.Tangent;
 
+        if (vBuffer.x == 0)
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -609,6 +614,11 @@ public struct FHybridRenderer : IRenderer
         float3 ray_dir = normalize(inVertex.Position - eye.xyz);
 
         Material mat = Materials[inVertex.MaterialIndex];
+        if (mat.MaterialModel == MaterialDiffuseLight)
+        {
+            FinalColor = mat.Diffuse;
+            return;
+        }
         float roughness = inGBuffer.a;
 
         // ibl
@@ -639,31 +649,28 @@ public struct FHybridRenderer : IRenderer
                 float4 outAlbedo = hitMat.Diffuse;
                 if (hitMat.MaterialModel == MaterialDiffuseLight)
                 {
-                    if (chanceGGX)
-                    {
-                        FinalColor += outAlbedo;
-                    }
-                    else
-                    {
-                        FinalColor += outAlbedo;//interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
-                    }
+                    FinalColor += outAlbedo;
                 }
                 else
                 {
+                    if (chanceReflect && !chanceMetal)
+                    {
+                        outAlbedo = float4(1, 1, 1, 1);
+                    }
                     FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
                 }
-                
             }
             else
             {
-                if (chanceGGX)
-                {
-                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                }
-                else
-                {
-                    FinalColor += interpolateAmbientCubes<SkyAmbientCubeSampler>(inVertex.Position, inVertex.Normal, Cubes, FarCubes) * 2.0f;
-                }
+                FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                // if (chanceGGX)
+                // {
+                //     FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                // }
+                // else
+                // {
+                //     FinalColor += interpolateAmbientCubes<SkyAmbientCubeSampler>(inVertex.Position, inVertex.Normal, Cubes, FarCubes) * 2.0f;
+                // }
             }
         }
         FinalColor /= float(jitcount);

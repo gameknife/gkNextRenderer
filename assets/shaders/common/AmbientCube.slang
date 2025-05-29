@@ -387,7 +387,7 @@ public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<AmbientCub
 
 public interface IProbeGenerator
 {
-    void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed);
+    void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray);
 }
 
 public struct FGpuProbeGenerator : IProbeGenerator
@@ -398,7 +398,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyLight)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyLight, in Sampler2D[] TextureArray)
     {
         float4 rayColor = float4(0.0);
         float4 bounceColor = float4(0.0);
@@ -422,9 +422,11 @@ public struct FGpuProbeGenerator : IProbeGenerator
             if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
-                // if (dot(hitVertex.Normal, rayDir) < 0.0)
-                // {
-                bounceColor += hitMaterial.Diffuse * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
+                float4 outAlbedo = hitMaterial.Diffuse;
+                //if (dot(hitVertex.Normal, rayDir) < 0.0)
+                {
+                    bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
+                }
                 // }
                 // else
                 // {
@@ -488,7 +490,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return false;
     }
 
-    public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed)
+    public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
         // target
         // Cubes[CubeIdx];
@@ -509,12 +511,12 @@ public struct FGpuProbeGenerator : IProbeGenerator
             origin += offset;
         }
 
-        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S);
-        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S);
-        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, Cubes[CubeIdx].PosX_S);
-        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, Cubes[CubeIdx].NegX_S);
-        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, Cubes[CubeIdx].PosZ_S);
-        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, Cubes[CubeIdx].NegZ_S);
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S, TextureArray);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S, TextureArray);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, Cubes[CubeIdx].PosX_S, TextureArray);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, Cubes[CubeIdx].NegX_S, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, Cubes[CubeIdx].PosZ_S, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, Cubes[CubeIdx].NegZ_S, TextureArray);
 
         Cubes[CubeIdx].Active = Solid ? 0 : 1;
         Cubes[CubeIdx].ExtInfo3 = Cubes[CubeIdx].Active;
