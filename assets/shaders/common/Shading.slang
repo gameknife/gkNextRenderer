@@ -620,7 +620,8 @@ public struct FHybridRenderer : IRenderer
 
         FinalColor = float4(0, 0, 0, 0);
 
-        const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
+        //const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
+        const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
         for (int i = 0; i < jitcount; i++)
         {
             bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
@@ -636,11 +637,22 @@ public struct FHybridRenderer : IRenderer
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
-                if(hitMat.MaterialModel == MaterialDiffuseLight)
+                if (hitMat.MaterialModel == MaterialDiffuseLight)
                 {
-                    outAlbedo *= 0.05f;
+                    if (chanceGGX)
+                    {
+                        FinalColor += outAlbedo;
+                    }
+                    else
+                    {
+                        FinalColor += outAlbedo;//interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+                    }
                 }
-                FinalColor += outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+                else
+                {
+                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+                }
+                
             }
             else
             {
