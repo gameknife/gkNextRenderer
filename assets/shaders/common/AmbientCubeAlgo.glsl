@@ -50,7 +50,7 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
 
     for( uint i = 0; i < FACE_TRACING; i++ )
     {
-        vec3 hemiVec = vec3(grid4x4[i] + offset, 1.0);
+        vec3 hemiVec = normalize(vec3(grid4x4[i] + offset, 1.0));
 
         // Align with the surface normal
         vec3 rayDir = AlignWithNormal(hemiVec, basis);
@@ -64,17 +64,17 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
         {
             vec3 hitPos = origin + rayDir * OutRayDist;
             
-            if( dot(OutNormal, rayDir) < 0.0 )
+            //if( dot(OutNormal, rayDir) < 0.0 )
             {
                 bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId, OutInstanceId);
             }
-            else
-            {
-                // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
-                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
-                activeProbe = 0;
-                break;
-            }
+//            else
+//            {
+//                // 这里，命中了背面，说明这个probe位于几何体内部，如果hitDist小于probe的间隔，可以考虑将probe推到表面，再次发出
+//                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
+//                //activeProbe = 0;
+//                break;
+//            }
         }
         else
         {

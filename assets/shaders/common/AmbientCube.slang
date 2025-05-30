@@ -210,7 +210,7 @@ interface IAmbientCubeSampler
     static float4 Sample(AmbientCube cube, float3 normal);
 }
 
-struct SkyAmbientCubeSampler : IAmbientCubeSampler
+public struct SkyAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
@@ -218,7 +218,7 @@ struct SkyAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-struct FullAmbientCubeSampler : IAmbientCubeSampler
+public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
@@ -226,7 +226,7 @@ struct FullAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-struct DIAmbientCubeSampler : IAmbientCubeSampler
+public struct DIAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
@@ -234,7 +234,7 @@ struct DIAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
+public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
@@ -372,6 +372,7 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, flo
 
 // Interpolate between 8 probes
 public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes) {
+    
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {

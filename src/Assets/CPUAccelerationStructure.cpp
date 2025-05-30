@@ -65,10 +65,10 @@ int TracingOccludeFunction(vec3 origin, vec3 lightPos)
 
 bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
 {
-    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 11.f);
+    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 21.f);
     GCpuBvh.Intersect(ray);
 
-    if (ray.hit.t < 10.0f)
+    if (ray.hit.t < 20.0f)
     {
         uint32_t primIdx = ray.hit.prim;
         tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
@@ -294,47 +294,37 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
                     cube.Active = 0;
                 }
                 cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
+                cube.ExtInfo3 = cube.Active;
+                //if (cube.Active == 0) return;
                 // 正Y方向
                 cube.PosY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.PosY_S = LerpPackedColorAlt( cube.PosY_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
+
                 // 负Y方向
                 cube.NegY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.NegY_S = LerpPackedColorAlt( cube.NegY_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
                 
                 // 正X方向
                 cube.PosX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.PosX_S = LerpPackedColorAlt( cube.PosX_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
                 
                 // 负X方向
                 cube.NegX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(-1,0,0), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.NegX_S = LerpPackedColorAlt( cube.NegX_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
                 
                 // 正Z方向
                 cube.PosZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,1), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.PosZ_S = LerpPackedColorAlt( cube.PosZ_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
                 
                 // 负Z方向
                 cube.NegZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,-1), cube.Active, matId, bounceColor, skyColor, ubo) );
                 cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 1.0f / cube.ExtInfo2 );
                 cube.NegZ_S = LerpPackedColorAlt( cube.NegZ_S, skyColor, 1.0f / cube.ExtInfo2 );
-                cube.ExtInfo1 = matId;
-                if (cube.Active == 0) return;
             }
             break;
         case ECubeProcType::ECPT_Copy:
@@ -477,16 +467,16 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     }
 
     // copy for blur
-    for (int x = 0; x < lengthX; x++)
-        for (int z = 0; z < lengthZ; z++)
-            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Copy, EBakerType::EBT_Probe});
-    needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
-
-    // blur pass
-    for (int x = 0; x < lengthX; x++)
-        for (int z = 0; z < lengthZ; z++)
-            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Blur, EBakerType::EBT_Probe});
-    needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
+    // for (int x = 0; x < lengthX; x++)
+    //     for (int z = 0; z < lengthZ; z++)
+    //         needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Copy, EBakerType::EBT_Probe});
+    // needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
+    //
+    // // blur pass
+    // for (int x = 0; x < lengthX; x++)
+    //     for (int z = 0; z < lengthZ; z++)
+    //         needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Blur, EBakerType::EBT_Probe});
+    // needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
 }
 
 void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Scene& scene, ECubeProcType procType, EBakerType bakerType)

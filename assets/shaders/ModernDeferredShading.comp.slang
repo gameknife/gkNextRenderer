@@ -30,6 +30,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Materials, NodeProxies, Cubes, FarCubes };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+    FVoxelRayCaster rayCasterVoxel = { Camera, Cubes, FarCubes };
 
     int2 ipos = int2(DTid.xy);
     int2 size;
@@ -39,6 +40,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // 第一次Tracing
     Vertex hitVertex;
     NodeProxy hitNode;
+
+    // if( rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode) )
+    // {
+    //     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+    //     OutImage[ipos] = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+    // }
+    // else
+    // {
+    //     OutImage[ipos] = float4(10,10,10,0);
+    // }
+
+    // return;
+
     rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode);
 
     // MotionVector解析
@@ -59,6 +73,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // 合成
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
-
     OutImage[ipos] = outColor;
 }
