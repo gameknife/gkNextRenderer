@@ -300,6 +300,48 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     RWTexture2D<uint2> VisibilityBuffer;
 }
 
+public struct FVoxelRayCaster : IPrimaryRayCaster
+{
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
+        
+        // construct ray
+        float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+
+        float3 ray_dir = normalize(dir.xyz);
+
+        float3 detectPos = origin.xyz + ray_dir * 1.0f;
+        uint hitMatId = 0;
+        bool hit = false;
+        for( uint i = 0; i < 200; ++i )
+        {
+            detectPos += ray_dir * 0.25f;
+
+            float3 probePos = (detectPos - CUBE_OFFSET) / CUBE_UNIT;
+
+            if( inSolid(probePos, hitMatId, Cubes, FarCubes) )
+            {
+                hit = true;
+                break;
+            }
+        }
+
+        // geometry info
+        outVertex.Position = detectPos;
+        outVertex.Normal = float3(0,1,0);
+        outVertex.MaterialIndex = hitMatId;
+
+        return hit;
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    StructuredBuffer<AmbientCube> Cubes;
+    StructuredBuffer<AmbientCube> FarCubes;
+}
+
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
