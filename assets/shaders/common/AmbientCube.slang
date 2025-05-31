@@ -420,7 +420,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
+            if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
@@ -474,7 +474,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Vertex hitVertex;
         NodeProxy hitNode;
 
-        if (tracer.TraceRay(origin, rayDir, hitVertex.Normal, hitVertex, hitNode))
+        if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
         {
             if (dot(hitVertex.Normal, rayDir) > 0.0)
             {
