@@ -313,27 +313,74 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 
         float3 ray_dir = normalize(dir.xyz);
 
-        float3 detectPos = origin.xyz + ray_dir * 1.0f;
         uint hitMatId = 0;
+
+        uint maxSteps = 500; // 0.25f per step, so 500 steps is about 125m
+
+        // DDA voxel traversal
+        float3 voxelPos = (origin.xyz - CUBE_OFFSET) / CUBE_UNIT;
+        float3 tDelta = abs(CUBE_UNIT / ray_dir); // Step size along each axis
+        float3 tMax = float3(0, 0, 0);     // Distance to next voxel boundary
+        float3 stepSign = sign(ray_dir);    // Direction to step
+        
+        // Calculate initial tMax values
+        if (ray_dir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
+        if (ray_dir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
+        if (ray_dir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+        
+        float3 lastPos = voxelPos;
         bool hit = false;
-        for( uint i = 0; i < 200; ++i )
+        float3 normal = float3(0, 0, 0);
+        int stepAxis = 0; // 0=x, 1=y, 2=z
+        
+        // Traverse the grid
+        for (uint i = 0; i < maxSteps; i++)
         {
-            detectPos += ray_dir * 0.25f;
-
-            float3 probePos = (detectPos - CUBE_OFFSET) / CUBE_UNIT;
-
-            if( inSolid(probePos, hitMatId, Cubes, FarCubes) )
+            // Check current voxel
+            if (inSolid(voxelPos, hitMatId, Cubes, FarCubes))
             {
                 hit = true;
+                
+                // Use the saved normal from the last step
+                // This gives us the face we entered through
+                outVertex.Normal = normalize(normal);
+
+                // Calculate the exact hit position on the voxel face
+                // Move back along the face normal to get the exact intersection point
+                outVertex.Position = CUBE_OFFSET + lastPos * CUBE_UNIT;
+                outVertex.MaterialIndex = hitMatId;
                 break;
             }
+            
+            // Store last position before stepping
+            lastPos = voxelPos;
+            
+            // Reset normal
+            normal = float3(0, 0, 0);
+            
+            // Find the closest axis to step along
+            if (tMax.x < tMax.y && tMax.x < tMax.z)
+            {
+                voxelPos.x += stepSign.x;
+                tMax.x += tDelta.x;
+                normal.x = -stepSign.x; // Set normal based on the face we're crossing
+                stepAxis = 0;
+            }
+            else if (tMax.y < tMax.z)
+            {
+                voxelPos.y += stepSign.y;
+                tMax.y += tDelta.y;
+                normal.y = -stepSign.y; // Set normal based on the face we're crossing
+                stepAxis = 1;
+            }
+            else
+            {
+                voxelPos.z += stepSign.z;
+                tMax.z += tDelta.z;
+                normal.z = -stepSign.z; // Set normal based on the face we're crossing
+                stepAxis = 2;
+            }
         }
-
-        // geometry info
-        outVertex.Position = detectPos;
-        outVertex.Normal = float3(0,1,0);
-        outVertex.MaterialIndex = hitMatId;
-
         return hit;
     }
 
