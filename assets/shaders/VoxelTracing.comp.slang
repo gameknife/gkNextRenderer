@@ -26,13 +26,9 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FVoxelDDARayTracer voxelTracer = { Cubes, FarCubes };
-    FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, NodeProxies, voxelTracer };
-    FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
-    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+    FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
 
-    
     int2 ipos = int2(DTid.xy);
     int2 size;
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
@@ -41,25 +37,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // 第一次Tracing
     Vertex hitVertex;
     NodeProxy hitNode;
-    rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode);
 
-    // MotionVector解析
-    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
-    OutMotionVector[ipos] = float4(motion * size, 0, 0);
-
-    // GBuffer解析
-    float4 albedo = float4(0, 0, 0, 1);
-    float4 illuminaceColor = float4(0, 0, 0, 1);
-    float4 gbuffer = float4(0, 0, 0, 0);
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
-    OutAlbedoBuffer[ipos] = albedo;
-    OutNormalBuffer[ipos] = gbuffer;
-
-    // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
-
-    // 合成
-    float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
-    outColor.a = 1.0f;
-    OutImage[ipos] = outColor;
+    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode))
+    {
+        float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+        OutImage[ipos] = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+    }
+    else
+    {
+        OutImage[ipos] = float4(10,10,10,0);
+    }
 }
