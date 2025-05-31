@@ -424,6 +424,11 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
+                // if (hitMaterial.DiffuseTextureId >= 0)
+                // {
+                //     float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].Sample(hitVertex.TexCoord);
+                //     outAlbedo *= tex;
+                // }
                 //if (dot(hitVertex.Normal, rayDir) < 0.0)
                 {
                     bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
@@ -474,17 +479,19 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Vertex hitVertex;
         NodeProxy hitNode;
 
-        if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT, hitVertex, hitNode))
         {
+            OutMaterialId = hitVertex.MaterialIndex;
+            Material hitMaterial = Materials[hitVertex.MaterialIndex];
             if (dot(hitVertex.Normal, rayDir) > 0.0)
             {
-                float hitRayDist = length(hitVertex.Position - origin) + EPS2;
-                offset = rayDir * (hitRayDist + 0.05f);
-                if (hitRayDist < CUBE_UNIT)
-                {
-                    OutMaterialId = hitVertex.MaterialIndex;
-                    return true;
-                }
+                float hitRayDist = length(hitVertex.Position - origin) + 0.05f;
+                offset = rayDir * hitRayDist;
+                return true;
+            }
+            if (hitMaterial.MaterialModel == MaterialDiffuseLight)
+            {
+                return true;
             }
         }
         OutMaterialId = 0;
