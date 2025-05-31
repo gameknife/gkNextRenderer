@@ -12,8 +12,8 @@ static const float2 haltonSeq[8] = {
     float2(0.0625, 0.8889)
 };
 
-static const float PT_MAX_TRACE_DISTANCE = 100.f;
-static const float FAST_MAX_TRACE_DISTANCE = 10.f;
+static const float PT_MAX_TRACE_DISTANCE = 1000.f;
+static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 
 namespace Common
 {
@@ -259,7 +259,6 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         Material hitMaterial;
         float t = 0;
         bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode);
-        //outVertex.Position = origin.xyz + direction.xyz * t;
         return hitted;
     }
 
@@ -318,7 +317,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 
         float3 ray_dir = normalize(dir.xyz);
 
-        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 40.0f, outVertex, outNode);
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 80.0f, outVertex, outNode);
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -340,6 +339,8 @@ public struct FVoxelDDARayTracer : IRayTracer
         uint hitMatId = 0;
 
         uint maxSteps = uint(maxDistance / CUBE_UNIT); // 10meter
+
+        // TODO: can speed up by using far cube to skip empty space
 
         // DDA voxel traversal
         float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
@@ -431,11 +432,12 @@ public struct FHardwareRayTracer : IRayTracer
     public bool TraceSegment(float3 rayOrigin, float3 rayTarget)
     {
         float3 dir = rayTarget - rayOrigin;
+        float len = length(dir);
         RayDesc ray;
         ray.Origin = rayOrigin;
         ray.TMin = EPS;
-        ray.TMax = length(dir);
-        ray.Direction = dir / ray.TMax;
+        ray.TMax = len - EPS2;
+        ray.Direction = dir / len;
         
         RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
                  RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
@@ -519,7 +521,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 0.75;         // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip

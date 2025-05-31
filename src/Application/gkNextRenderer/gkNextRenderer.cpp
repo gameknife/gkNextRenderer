@@ -46,6 +46,47 @@ void NextRendererGameInstance::OnPreConfigUI()
 bool NextRendererGameInstance::OnRenderUI()
 {
 	DrawSettings();
+	if (GOption->ReferenceMode)
+	{
+		// 获取屏幕尺寸
+		ImGuiIO& io = ImGui::GetIO();
+        
+		// 渲染器名称数组
+		const char* rendererNames[] = {"AmbientCubes", "SoftTracing", "HybridTracing" , "PathTracing"};
+        
+		// 四个象限的位置
+		ImVec2 positions[] = {
+			ImVec2(io.DisplaySize.x * 0.25f, io.DisplaySize.y * 0.45f),  // 左上
+			ImVec2(io.DisplaySize.x * 0.75f, io.DisplaySize.y * 0.45f),  // 右上
+			ImVec2(io.DisplaySize.x * 0.25f, io.DisplaySize.y * 0.95f),  // 左下
+			ImVec2(io.DisplaySize.x * 0.75f, io.DisplaySize.y * 0.95f)   // 右下
+		};
+        
+		// 为每个象限添加渲染器名称标签
+		for (int i = 0; i < 4; i++)
+		{
+			ImGui::SetNextWindowPos(positions[i], ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+			ImGui::SetNextWindowBgAlpha(0.5f);
+            
+			char windowName[32];
+			snprintf(windowName, sizeof(windowName), "RendererName%d", i);
+            
+			if (ImGui::Begin(windowName, nullptr, 
+				ImGuiWindowFlags_NoDecoration | 
+				ImGuiWindowFlags_AlwaysAutoResize | 
+				ImGuiWindowFlags_NoSavedSettings |
+				ImGuiWindowFlags_NoMove |
+				ImGuiWindowFlags_NoFocusOnAppearing))
+			{
+				// 如果i小于渲染器数量，则显示对应渲染器名称
+				if (i < sizeof(rendererNames)/sizeof(rendererNames[0]))
+				{
+					ImGui::Text("%s", rendererNames[i]);
+				}
+			}
+			ImGui::End();
+		}
+	}
     return false;
 }
 

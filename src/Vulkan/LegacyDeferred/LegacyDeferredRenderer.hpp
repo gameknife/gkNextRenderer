@@ -51,3 +51,26 @@ namespace Vulkan::LegacyDeferred
 	};
 
 }
+
+namespace Vulkan::VoxelTracing
+{
+	class VoxelTracingRenderer final : public Vulkan::LogicRendererBase
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(VoxelTracingRenderer)
+		
+		VoxelTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		~VoxelTracingRenderer();
+
+		void CreateSwapChain(const VkExtent2D& extent) override;
+		void DeleteSwapChain() override;
+		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+
+	private:
+		// just one computer pass is enough
+		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
+		std::unique_ptr<RenderImage> rtOutput_;
+	};
+
+}

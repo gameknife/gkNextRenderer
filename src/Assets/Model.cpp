@@ -606,10 +606,17 @@ namespace Assets
         }
 
         // gltf scenes contain the rootnodes
+        //std::shared_ptr<Node> sceneNode = Node::CreateNode("Root", glm::vec3(0,0,0), glm::quat(1,0,0,0), glm::vec3(10,10,10), -1, nodes.size(), false);
+        //nodes.push_back(sceneNode);
+        
         std::map<int, std::shared_ptr<Node> > nodeMap;
         for (int nodeIdx : model.scenes[0].nodes)
         {
             ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
+            // if (nodeMap.find(nodeIdx) != nodeMap.end())
+            // {
+            //     nodeMap[nodeIdx]->SetParent(sceneNode);
+            // }
         }
 
         // if no camera, add default
