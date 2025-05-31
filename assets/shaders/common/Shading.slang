@@ -12,8 +12,13 @@ static const float2 haltonSeq[8] = {
     float2(0.0625, 0.8889)
 };
 
+static const float PT_MAX_TRACE_DISTANCE = 100.f;
+static const float FAST_MAX_TRACE_DISTANCE = 10.f;
+
 namespace Common
 {
+
+
     public float2 CalculateMotionVector(ConstantBuffer<UniformBufferObject> Camera, NodeProxy node, Vertex v )
     {
         // motion info
@@ -217,7 +222,7 @@ public interface IPrimaryRayCaster
 // ray tracer for rendering
 public interface IRayTracer
 {
-    bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode);
+    bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
     bool TraceSegment(float3 rayOrigin, float3 rayTarget);
 }
@@ -253,7 +258,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
         Material hitMaterial;
         float t = 0;
-        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, outVertex.Normal, outVertex, outNode);
+        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode);
         //outVertex.Position = origin.xyz + direction.xyz * t;
         return hitted;
     }
@@ -313,7 +318,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 
         float3 ray_dir = normalize(dir.xyz);
 
-        return DDARayTracer.TraceRay(origin.xyz, ray_dir, outVertex.Normal, outVertex, outNode);
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 40.0f, outVertex, outNode);
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -330,11 +335,11 @@ public struct FVoxelDDARayTracer : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 inNormal, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
     {
         uint hitMatId = 0;
 
-        uint maxSteps = 40; // 10meter
+        uint maxSteps = uint(maxDistance / CUBE_UNIT); // 10meter
 
         // DDA voxel traversal
         float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
@@ -350,7 +355,6 @@ public struct FVoxelDDARayTracer : IRayTracer
         float3 lastPos = voxelPos;
         bool hit = false;
         float3 normal = float3(0, 0, 0);
-        int stepAxis = 0; // 0=x, 1=y, 2=z
 
         // Traverse the grid
         for (uint i = 0; i < maxSteps; i++)
@@ -379,21 +383,18 @@ public struct FVoxelDDARayTracer : IRayTracer
                 voxelPos.x += stepSign.x;
                 tMax.x += tDelta.x;
                 normal.x = -stepSign.x; // Set normal based on the face we're crossing
-                stepAxis = 0;
             }
             else if (tMax.y < tMax.z)
             {
                 voxelPos.y += stepSign.y;
                 tMax.y += tDelta.y;
                 normal.y = -stepSign.y; // Set normal based on the face we're crossing
-                stepAxis = 1;
             }
             else
             {
                 voxelPos.z += stepSign.z;
                 tMax.z += tDelta.z;
                 normal.z = -stepSign.z; // Set normal based on the face we're crossing
-                stepAxis = 2;
             }
         }
         return hit;
@@ -411,7 +412,7 @@ public struct FHardwareRayTracer : IRayTracer
         ray.Origin = rayOrigin;
         ray.TMin = EPS;
         ray.Direction = rayDir;
-        ray.TMax = 1e4f;
+        ray.TMax = PT_MAX_TRACE_DISTANCE;
         RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
                  RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
         let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
@@ -451,13 +452,13 @@ public struct FHardwareRayTracer : IRayTracer
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
         ray.TMin = EPS;
         ray.Direction = rayDir;
-        ray.TMax = 1e4f;
+        ray.TMax = maxDistance;
         RayQuery<RAY_FLAG_NONE> q;
         let rayFlags = RAY_FLAG_NONE;
 
@@ -513,27 +514,24 @@ public struct FSoftwareRayTracer : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
     {
-        float3 offsetPos = rayOrigin + normal * 0.01;
+        float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float nearDistance = 0.25;            // Near field tracing distance
         const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
-        const float stepSize = 0.25;                // Far field step size
-        const float maxTotalDistance = 5.0;         // Maximum total tracing distance
+        const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
-
-        // if (Common.traceInScreenSpace(offsetPos, rayDir, 5.0, 0.2, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices))
-        // {
-        //     outVertex.TexCoord = float2(0.5, 0.5);
-        //     return true;
-        // }
+        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices))
+        {
+            outVertex.TexCoord = float2(0.5, 0.5);
+            return true;
+        }
 
         // use dda directly
         offsetPos = offsetPos + rayDir * longDistanceInit;
-        if (DDARayTracer.TraceRay(offsetPos, rayDir, outVertex.Normal, outVertex, outNode))
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode))
         {
             return true;
         }
@@ -627,7 +625,7 @@ public struct FPathTracingRenderer : IRenderer
         rayDir = trace_dir;
 
         NodeProxy hitNode;
-        if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, inVertex, hitNode))
+        if (tracer.TraceRay(inVertex.Position, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
         {
             Material hitMat = Materials[inVertex.MaterialIndex];
             float4 outAlbedo = hitMat.Diffuse;
@@ -762,7 +760,7 @@ public struct FHybridRenderer : IRenderer
             float4 reflectionColor;
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position, trace_dir, inVertex.Normal, hitVertex, hitNode))
+            if (tracer.TraceRay(inVertex.Position, trace_dir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
