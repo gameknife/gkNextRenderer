@@ -41,17 +41,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Vertex hitVertex;
     NodeProxy hitNode;
 
-    // if( rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode) )
-    // {
-    //     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
-    //     OutImage[ipos] = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
-    // }
-    // else
-    // {
-    //     OutImage[ipos] = float4(10,10,10,0);
-    // }
+    if( rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode) )
+    {
+        float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+        OutImage[ipos] = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+    }
+    else
+    {
+        OutImage[ipos] = float4(10,10,10,0);
+    }
 
-    // return;
+    return;
 
     rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode);
 
