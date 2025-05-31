@@ -313,26 +313,45 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 
         float3 ray_dir = normalize(dir.xyz);
 
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, outVertex.Normal, outVertex, outNode);
+    }
+
+    ConstantBuffer<UniformBufferObject> Camera;
+    FVoxelDDARayTracer DDARayTracer;
+}
+
+public struct FVoxelDDARayTracer : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        return false;
+    }
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
+    {
+        return false;
+    }
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
+    {
         uint hitMatId = 0;
 
         uint maxSteps = 500; // 0.25f per step, so 500 steps is about 125m
 
         // DDA voxel traversal
-        float3 voxelPos = (origin.xyz - CUBE_OFFSET) / CUBE_UNIT;
-        float3 tDelta = abs(CUBE_UNIT / ray_dir); // Step size along each axis
-        float3 tMax = float3(0, 0, 0);     // Distance to next voxel boundary
-        float3 stepSign = sign(ray_dir);    // Direction to step
-        
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
+        float3 tDelta = abs(CUBE_UNIT / rayDir); // Step size along each axis
+        float3 tMax = float3(0, 0, 0);           // Distance to next voxel boundary
+        float3 stepSign = sign(rayDir);          // Direction to step
+
         // Calculate initial tMax values
-        if (ray_dir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
-        if (ray_dir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
-        if (ray_dir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
-        
+        if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
+        if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
+        if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+
         float3 lastPos = voxelPos;
         bool hit = false;
         float3 normal = float3(0, 0, 0);
         int stepAxis = 0; // 0=x, 1=y, 2=z
-        
+
         // Traverse the grid
         for (uint i = 0; i < maxSteps; i++)
         {
@@ -340,24 +359,20 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
             if (inSolid(voxelPos, hitMatId, Cubes, FarCubes))
             {
                 hit = true;
-                
-                // Use the saved normal from the last step
-                // This gives us the face we entered through
-                outVertex.Normal = normalize(normal);
 
-                // Calculate the exact hit position on the voxel face
-                // Move back along the face normal to get the exact intersection point
-                outVertex.Position = CUBE_OFFSET + lastPos * CUBE_UNIT;
+                outVertex.Normal = normalize(normal);
+                outVertex.Position = CUBE_OFFSET + (lastPos + normal) * CUBE_UNIT;
                 outVertex.MaterialIndex = hitMatId;
+                outVertex.TexCoord = float2(0.5, 0.5);
                 break;
             }
-            
+
             // Store last position before stepping
             lastPos = voxelPos;
-            
+
             // Reset normal
             normal = float3(0, 0, 0);
-            
+
             // Find the closest axis to step along
             if (tMax.x < tMax.y && tMax.x < tMax.z)
             {
@@ -384,7 +399,6 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         return hit;
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
     StructuredBuffer<AmbientCube> Cubes;
     StructuredBuffer<AmbientCube> FarCubes;
 }
