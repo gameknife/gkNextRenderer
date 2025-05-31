@@ -330,11 +330,11 @@ public struct FVoxelDDARayTracer : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 inNormal, inout Vertex outVertex, inout NodeProxy outNode)
     {
         uint hitMatId = 0;
 
-        uint maxSteps = 500; // 0.25f per step, so 500 steps is about 125m
+        uint maxSteps = 40; // 10meter
 
         // DDA voxel traversal
         float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
@@ -516,10 +516,28 @@ public struct FSoftwareRayTracer : IRayTracer
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float3 normal, inout Vertex outVertex, inout NodeProxy outNode)
     {
         float3 offsetPos = rayOrigin + normal * 0.01;
-        if (Common.traceLongDistance(offsetPos, rayDir, 5.0, 0.2, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices, Cubes, FarCubes))
+
+        // Near field tracing parameters
+        const float nearDistance = 0.25;            // Near field tracing distance
+        const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
+        const float stepSize = 0.25;                // Far field step size
+        const float maxTotalDistance = 5.0;         // Maximum total tracing distance
+
+        // screenspace tracing is heavy, skip
+
+        // if (Common.traceInScreenSpace(offsetPos, rayDir, 5.0, 0.2, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices))
+        // {
+        //     outVertex.TexCoord = float2(0.5, 0.5);
+        //     return true;
+        // }
+
+        // use dda directly
+        offsetPos = offsetPos + rayDir * longDistanceInit;
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, outVertex.Normal, outVertex, outNode))
         {
             return true;
         }
+ 
         return false;
     }
 
@@ -527,11 +545,9 @@ public struct FSoftwareRayTracer : IRayTracer
     RWTexture2D<uint2> MiniGBuffer;
 
     StructuredBuffer<float> Vertices;
-    StructuredBuffer<Material> Materials;
     StructuredBuffer<NodeProxy> NodeProxies;
 
-    StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<AmbientCube> FarCubes;
+    FVoxelDDARayTracer DDARayTracer;
 }
 
 public struct FHardwareDirectIlluminator : IDirectIlluminator
