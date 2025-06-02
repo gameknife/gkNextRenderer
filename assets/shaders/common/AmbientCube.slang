@@ -392,7 +392,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
             else
             {
-                rayColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs ) * skyMultiplier * 0.5f;
+                rayColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs ) * skyMultiplier;
             }
         }
         rayColor = rayColor / float(FACE_TRACING);
