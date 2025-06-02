@@ -6,15 +6,15 @@ import Common;
 [[vk::binding(3)]] RWTexture2D<float4> MotionVectorImage;
 [[vk::binding(4)]] ConstantBuffer<UniformBufferObject> Camera;
 
-[[vk::binding(5)]] RWTexture2D<uint> VisibilityBuffer;
-[[vk::binding(6)]] RWTexture2D<uint> Visibility1Buffer;
+[[vk::binding(5)]] RWTexture2D<uint2> VisibilityBuffer;
+[[vk::binding(6)]] RWTexture2D<uint2> Visibility1Buffer;
 [[vk::binding(7)]] RWTexture2D<float4> OutImage;
 [[vk::binding(8)]] RWTexture2D<float4> InNormal;
 
 // Helper functions
-uint FetchPrimitiveIndex(uint InstanceID)
+uint FetchPrimitiveIndex(uint2 InstanceID)
 {
-    return InstanceID;
+    return InstanceID.x;
 }
 
 bool EdgeDetect(uint current_primitive_index, int2 ipos)
@@ -78,10 +78,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     bool useHistory = true;
     float2 motion = MotionVectorImage[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
-    const bool inside = all(previpos < int2(Camera.ViewportRect.xy + Camera.ViewportRect.zw)) && 
+    const bool inside = all(previpos < int2(Camera.ViewportRect.xy + Camera.ViewportRect.zw)) &&
                         all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
-    uint current_primitive_index0 = VisibilityBuffer[ipos];
-    uint prev_primitive_index0 = Visibility1Buffer[previpos];
+    uint current_primitive_index0 = FetchPrimitiveIndex(VisibilityBuffer[ipos]);
+    uint prev_primitive_index0 = FetchPrimitiveIndex(Visibility1Buffer[previpos]);
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
     
@@ -94,7 +94,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             int2 offset = int2(x, y);
             int2 samplePos = ipos + offset;
             float4 samplePixel = NewSourceImage[samplePos];
-            uint primitiveIdx = VisibilityBuffer[samplePos];
+            uint primitiveIdx = FetchPrimitiveIndex(VisibilityBuffer[samplePos]);
             float3 worldNormal = InNormal[samplePos].rgb;
 
             bool isCenter = (x == 0 && y == 0) ? true : false; 
@@ -130,19 +130,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (!Camera.ProgressiveRender)
         {
             // current 4
-            uint current_primitive_index1 = VisibilityBuffer[ipos + int2(1, 0)];
-            uint current_primitive_index2 = VisibilityBuffer[ipos + int2(0, 1)];
-            uint current_primitive_index3 = VisibilityBuffer[ipos + int2(1, 1)];
+            uint current_primitive_index1 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(1, 0)]);
+            uint current_primitive_index2 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(0, 1)]);
+            uint current_primitive_index3 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(1, 1)]);
 
             // prev 9
-            uint prev_primitive_index1 = Visibility1Buffer[previpos + int2(1, 0)];
-            uint prev_primitive_index2 = Visibility1Buffer[previpos + int2(0, 1)];
-            uint prev_primitive_index3 = Visibility1Buffer[previpos + int2(1, 1)];
-            uint prev_primitive_index4 = Visibility1Buffer[previpos + int2(-1, 0)];
-            uint prev_primitive_index5 = Visibility1Buffer[previpos + int2(0, -1)];
-            uint prev_primitive_index6 = Visibility1Buffer[previpos + int2(-1, -1)];
-            uint prev_primitive_index7 = Visibility1Buffer[previpos + int2(1, -1)];
-            uint prev_primitive_index8 = Visibility1Buffer[previpos + int2(-1, 1)];
+            uint prev_primitive_index1 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, 0)]);
+            uint prev_primitive_index2 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(0, 1)]);
+            uint prev_primitive_index3 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, 1)]);
+            uint prev_primitive_index4 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, 0)]);
+            uint prev_primitive_index5 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(0, -1)]);
+            uint prev_primitive_index6 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, -1)]);
+            uint prev_primitive_index7 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, -1)]);
+            uint prev_primitive_index8 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, 1)]);
 
             bool4 match1 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
                             uint4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0);

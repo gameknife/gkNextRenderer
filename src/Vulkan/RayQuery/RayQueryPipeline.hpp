@@ -37,7 +37,6 @@ namespace Vulkan::RayTracing
 			const ImageView& accumulationImageView,
 			const ImageView& motionVectorImageView,
 			const ImageView& visibilityBufferImageView,
-			const ImageView& visibility1BufferImageView,
 			const ImageView& OutAlbedoImageView,
 			const ImageView& OutNormalImageView,
 			const ImageView& OutShaderTimerImageView,

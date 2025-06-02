@@ -415,6 +415,16 @@ namespace Vulkan
         rtEditorViewport_.reset(new RenderImage(*device_, {1280, 720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 
 
+        rtOutput.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                               VK_FORMAT_R16G16B16A16_SFLOAT,
+                               VK_IMAGE_TILING_OPTIMAL,
+                               VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+
+        rtAccumlation.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R16G16B16A16_SFLOAT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT));
+        
         rtVisibility0.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                     VK_FORMAT_R32G32_UINT,
                                     VK_IMAGE_TILING_OPTIMAL,
@@ -456,6 +466,8 @@ namespace Vulkan
             DelegateDeleteSwapChain();
         }
 
+        rtOutput.reset();
+        rtAccumlation.reset();
         rtVisibility0.reset();
         rtVisibility1.reset();
         rtNormal_.reset();
@@ -780,6 +792,19 @@ namespace Vulkan
             }
         }
 
+         {
+            rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        
+            VkImageCopy copyRegion;
+            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.srcOffset = {0, 0, 0};
+            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.dstOffset = {0, 0, 0};
+            copyRegion.extent = {rtVisibility0->GetImage().Extent().width, rtVisibility0->GetImage().Extent().height, 1};
+        
+            vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+        }
 
         if (showWireframe_)
         {

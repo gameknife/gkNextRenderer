@@ -54,8 +54,6 @@ namespace Vulkan::RayTracing
 		void CreateOutputImage(const VkExtent2D& extent);
 
 		// individual textures
-		std::unique_ptr<RenderImage> rtAccumulation_;
-		std::unique_ptr<RenderImage> rtOutput_;
 		std::unique_ptr<RenderImage> rtPingPong0;
 
 		// this texture could pass to global scope, it may contained by base renderer

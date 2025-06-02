@@ -14,7 +14,7 @@ import Common;
 [[vk::binding(10)]] RWTexture2D<float4> AccumulationImage;
 [[vk::binding(11)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(12)]] RWTexture2D<uint2> VisibilityBuffer;
-[[vk::binding(13)]] RWTexture2D<uint2> Visibility1Buffer;
+
 [[vk::binding(14)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(15)]] RWTexture2D<float4> OutNormalBuffer;
 
@@ -23,7 +23,6 @@ import Common;
 [[vk::binding(19)]] StructuredBuffer<AmbientCube> FarCubes;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
-
 
 [shader("compute")]
 [numthreads(8, 4, 1)]
@@ -65,7 +64,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
-    VisibilityBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    VisibilityBuffer[ipos] = uint2(hitNode.instanceId + 1, 0);
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);

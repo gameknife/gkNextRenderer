@@ -217,9 +217,8 @@ VkDescriptorSet GBufferPipeline::DescriptorSet(const uint32_t index) const
 	return descriptorSetManager_->DescriptorSets().Handle(index);
 }
 
-ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gbuffer0ImageView,
-	const ImageView& gbuffer1ImageView,
-	const ImageView& gbuffer2ImageView,
+ShadingPipeline::ShadingPipeline(const SwapChain& swapChain,
+	const ImageView& visibiliyBufferImageView,
 	const ImageView& finalImageView,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
 {
@@ -227,20 +226,21 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         const auto& device = swapChain.Device();
         const std::vector<DescriptorBinding> descriptorBindings =
         {
-            // MiniGbuffer and output
-            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-			{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-			{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-        	
-        	// Others like in frag
-			{4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+	        {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{2, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+        	// all buffer here
+			{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 			{7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-			{8, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-
+			{8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+			{11, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -249,15 +249,38 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info0 = {NULL,  gbuffer0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-        	VkDescriptorImageInfo Info1 = {NULL,  gbuffer1ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-        	VkDescriptorImageInfo Info2 = {NULL,  gbuffer2ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info3 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info0 = {NULL,  visibiliyBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL,  finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
         	
         	// Uniform buffer
         	VkDescriptorBufferInfo uniformBufferInfo = {};
         	uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
         	uniformBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Vertex buffer
+        	VkDescriptorBufferInfo vertexBufferInfo = {};
+        	vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+        	vertexBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Index buffer
+        	VkDescriptorBufferInfo indexBufferInfo = {};
+        	indexBufferInfo.buffer = scene.IndexBuffer().Handle();
+        	indexBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Material buffer
+        	VkDescriptorBufferInfo materialBufferInfo = {};
+        	materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
+        	materialBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Offsets buffer
+        	VkDescriptorBufferInfo offsetsBufferInfo = {};
+        	offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
+        	offsetsBufferInfo.range = VK_WHOLE_SIZE;
+
+        	// Nodes buffer
+        	VkDescriptorBufferInfo nodesBufferInfo = {};
+        	nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
+        	nodesBufferInfo.range = VK_WHOLE_SIZE;
         	
         	VkDescriptorBufferInfo hdrshBufferInfo = {};
         	hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
@@ -275,15 +298,20 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain, const ImageView& gb
         	
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 0, Info0),
-                descriptorSets.Bind(i, 1, Info1),
-            	descriptorSets.Bind(i, 2, Info2),
-            	descriptorSets.Bind(i, 3, Info3),
-                descriptorSets.Bind(i, 4, uniformBufferInfo),
-            	descriptorSets.Bind(i, 5, ambientCubeBufferInfo),
-            	descriptorSets.Bind(i, 6, farAmbientCubeBufferInfo),
-            	descriptorSets.Bind(i, 7, hdrshBufferInfo),
-				descriptorSets.Bind(i, 8, Info12),
+            	descriptorSets.Bind(i, 0, Info0),
+            	descriptorSets.Bind(i, 1, Info1),
+                descriptorSets.Bind(i, 2, uniformBufferInfo),
+
+            	descriptorSets.Bind(i, 3, vertexBufferInfo),
+				descriptorSets.Bind(i, 4, indexBufferInfo),
+				descriptorSets.Bind(i, 5, materialBufferInfo),
+				descriptorSets.Bind(i, 6, offsetsBufferInfo),
+				descriptorSets.Bind(i, 7, nodesBufferInfo),
+            	
+            	descriptorSets.Bind(i, 8, ambientCubeBufferInfo),
+            	descriptorSets.Bind(i, 9, farAmbientCubeBufferInfo),
+            	descriptorSets.Bind(i, 10, hdrshBufferInfo),
+				descriptorSets.Bind(i, 11, Info12),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

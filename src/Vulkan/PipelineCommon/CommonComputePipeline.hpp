@@ -81,6 +81,28 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
 
+	class SimpleComposePipeline final
+	{
+	public:
+		VULKAN_NON_COPIABLE(SimpleComposePipeline)
+	
+		SimpleComposePipeline(
+			const SwapChain& swapChain, 
+			const ImageView& sourceImageView,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers);
+		~SimpleComposePipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+	private:
+		const SwapChain& swapChain_;
+		
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
+
 	class BufferClearPipeline final
 	{
 	public:

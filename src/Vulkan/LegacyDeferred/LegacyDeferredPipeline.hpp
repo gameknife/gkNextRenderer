@@ -57,10 +57,8 @@ namespace Vulkan::LegacyDeferred
 		VULKAN_NON_COPIABLE(ShadingPipeline)
 	
 		ShadingPipeline(
-			const SwapChain& swapChain, 
-			const ImageView& gbuffer0ImageView,
-			const ImageView& gbuffer1ImageView,
-			const ImageView& gbuffer2ImageView,
+			const SwapChain& swapChain,
+			const ImageView& visibiliyBufferImageView,
 			const ImageView& finalImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);

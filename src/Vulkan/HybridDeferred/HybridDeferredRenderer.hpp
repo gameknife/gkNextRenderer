@@ -53,13 +53,10 @@ namespace Vulkan::HybridDeferred
 
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
-
-		std::unique_ptr<Vulkan::DepthBuffer> depthBuffer_;
+		
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer0_;
 		
-		std::unique_ptr<RenderImage> rtAccumlation;
 		std::unique_ptr<RenderImage> rtPingPong0;
-		std::unique_ptr<RenderImage> rtOutput;
 	};
 
 }

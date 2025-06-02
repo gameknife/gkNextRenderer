@@ -330,6 +330,8 @@ namespace Vulkan
 		bool visualDebug_{};
 
 		// this texture could pass to global scope, it may contained by base renderer
+		std::unique_ptr<RenderImage> rtOutput;
+		std::unique_ptr<RenderImage> rtAccumlation;
 		std::unique_ptr<RenderImage> rtVisibility0;
 		std::unique_ptr<RenderImage> rtVisibility1;
 		std::unique_ptr<RenderImage> rtMotionVector_;
