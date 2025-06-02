@@ -120,14 +120,15 @@ foreach(target IN LISTS AllTargets)
 	target_include_directories(${target} PRIVATE ${Vulkan_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
-
+	target_include_directories(${target} PRIVATE ${HLSLPP_INCLUDE_DIRS})
+	
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 	# if debug
 	# 假设你的目标名称是 MyTarget
 	# target_compile_definitions(${target} PRIVATE JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED)
-	
+
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)

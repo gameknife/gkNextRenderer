@@ -1,20 +1,24 @@
+#ifdef __cplusplus
+#define public
+#else
 implementing Common;
+#endif
 
 public struct UniformBufferObject
 {
-    public matrix ModelView;
-    public matrix Projection;
-    public matrix ModelViewInverse;
-    public matrix ProjectionInverse;
-    public matrix ViewProjection;
-    public matrix PrevViewProjection;
+    public float4x4 ModelView;
+    public float4x4 Projection;
+    public float4x4 ModelViewInverse;
+    public float4x4 ProjectionInverse;
+    public float4x4 ViewProjection;
+    public float4x4 PrevViewProjection;
 
     public float4 ViewportRect;
     public float4 SunDirection;
     public float4 SunColor;
     public float4 BackGroundColor;    //not used
 
-    public matrix SunViewProjection;
+    public float4x4 SunViewProjection;
 
     public float Aperture;
     public float FocusDistance;
@@ -68,8 +72,8 @@ public struct NodeProxy
     public uint modelId;
     public uint reserved1;
     public uint reserved2;
-    public matrix worldTS;
-    public matrix combinedPrevTS;
+    public float4x4 worldTS;
+    public float4x4 combinedPrevTS;
     public uint matId[16];
 };
 
@@ -124,22 +128,6 @@ public const static uint MaterialIsotropic = 3;
 public const static uint MaterialDiffuseLight = 4;
 public const static uint MaterialMixture = 5;
 
-public struct Material
-{
-    public float4 Diffuse;
-    public int DiffuseTextureId;
-    public int MRATextureId;
-    public int NormalTextureId;
-    public float Fuzziness;
-    public float RefractionIndex;
-    public uint MaterialModel;
-    public float Metalness;
-
-    public float RefractionIndex2;
-    public float NormalTextureScale;
-    public float Reserverd2;
-};
-
 public struct RayCastContext
 {
     // in
@@ -156,6 +144,22 @@ public struct RayCastContext
     public uint InstanceId;
     public uint MaterialId;
     public uint Hitted;
+};
+#ifndef __cplusplus
+public struct Material
+{
+    public float4 Diffuse;
+    public int DiffuseTextureId;
+    public int MRATextureId;
+    public int NormalTextureId;
+    public float Fuzziness;
+    public float RefractionIndex;
+    public uint MaterialModel;
+    public float Metalness;
+
+    public float RefractionIndex2;
+    public float NormalTextureScale;
+    public float Reserverd2;
 };
 
 public struct Vertex
@@ -176,4 +180,10 @@ public struct GPUVertex
 	public uint TangentYZ;
 	public uint TangentWMatIdx;
 };
+#endif
 
+#ifdef __cplusplus
+#undef public
+#else
+
+#endif
