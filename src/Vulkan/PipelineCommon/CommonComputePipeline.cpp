@@ -17,7 +17,7 @@
 namespace Vulkan::PipelineCommon
 {
     AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const ImageView& sourceImageView,
-                                           const ImageView& accumulateImageView, const ImageView& accumulateImage1View,
+                                           const ImageView& accumulateImageView,
                                            const ImageView& motionVectorImageView,
                                            const ImageView& visibilityBufferImageView,
                                            const ImageView& prevVisibilityBufferImageView,
@@ -31,7 +31,7 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+
             {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {4, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -48,7 +48,7 @@ namespace Vulkan::PipelineCommon
         {
             VkDescriptorImageInfo Info0 = {NULL, sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info1 = {NULL, accumulateImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info2 = {NULL, accumulateImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+
             VkDescriptorImageInfo Info3 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info5 = {NULL, visibilityBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
             VkDescriptorImageInfo Info6 = {NULL, prevVisibilityBufferImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
@@ -64,7 +64,6 @@ namespace Vulkan::PipelineCommon
             {
                 descriptorSets.Bind(i, 0, Info0),
                 descriptorSets.Bind(i, 1, Info1),
-                descriptorSets.Bind(i, 2, Info2),
                 descriptorSets.Bind(i, 3, Info3),
                 descriptorSets.Bind(i, 4, uniformBufferInfo),
                 descriptorSets.Bind(i, 5, Info5),
@@ -77,7 +76,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "assets/shaders/Accumulate.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Accumulate.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

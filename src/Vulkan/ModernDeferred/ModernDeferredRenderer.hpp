@@ -52,7 +52,6 @@ namespace Vulkan::ModernDeferred
 		std::unique_ptr<RenderImage> rtAccumlation;
 		
 		std::unique_ptr<RenderImage> rtPingPong0;
-		std::unique_ptr<RenderImage> rtPingPong1;
 		
 		std::unique_ptr<RenderImage> rtVisibility0;
 		std::unique_ptr<RenderImage> rtVisibility1;

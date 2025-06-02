@@ -59,7 +59,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<RenderImage> rtOutput_;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtPingPong0;
-		std::unique_ptr<RenderImage> rtPingPong1;
+		
 		std::unique_ptr<RenderImage> rtVisibility0_;
 		std::unique_ptr<RenderImage> rtVisibility1_;
 
