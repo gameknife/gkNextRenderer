@@ -84,7 +84,6 @@ struct FCPUProbeBaker
     glm::vec3 CUBE_OFFSET;
     
     std::vector<Assets::AmbientCube> ambientCubes;
-    std::vector<Assets::AmbientCube> ambientCubes_Copy;
 
     void Init( float unit_size, glm::vec3 offset );
     void ProcessCube(int x, int y, int z, ECubeProcType procType);

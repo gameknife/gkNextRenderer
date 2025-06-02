@@ -120,13 +120,6 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
 
     sum = wx + wnx + wy + wny + wz + wnz;
 
-    color += wx * UnpackColor(cube.PosX_S);
-    color += wnx * UnpackColor(cube.NegX_S);
-    color += wy * UnpackColor(cube.PosY_S);
-    color += wny * UnpackColor(cube.NegY_S);
-    color += wz * UnpackColor(cube.PosZ_S);
-    color += wnz * UnpackColor(cube.NegZ_S);
-
     color += wx * UnpackColor(cube.PosX_D);
     color += wnx * UnpackColor(cube.NegX_D);
     color += wy * UnpackColor(cube.PosY_D);
@@ -135,39 +128,6 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
     color += wnz * UnpackColor(cube.NegZ_D);
 
     color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = f16tof32(cube.Lighting & 0xFFFF);
-    return color;
-}
-
-float4 sampleAmbientCubeHL2_Sky(AmbientCube cube, float3 normal) {
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float sum = 0.0;
-
-    float wx = max(normal.x, 0.0);
-    float wnx = max(-normal.x, 0.0);
-    float wy = max(normal.y, 0.0);
-    float wny = max(-normal.y, 0.0);
-    float wz = max(normal.z, 0.0);
-    float wnz = max(-normal.z, 0.0);
-
-    sum = wx + wnx + wy + wny + wz + wnz;
-
-    color += wx * UnpackColor(cube.PosX_S);
-    color += wnx * UnpackColor(cube.NegX_S);
-    color += wy * UnpackColor(cube.PosY_S);
-    color += wny * UnpackColor(cube.NegY_S);
-    color += wz * UnpackColor(cube.PosZ_S);
-    color += wnz * UnpackColor(cube.NegZ_S);
-
-    color += wx * UnpackColor(cube.PosX);
-    color += wnx * UnpackColor(cube.NegX);
-    color += wy * UnpackColor(cube.PosY);
-    color += wny * UnpackColor(cube.NegY);
-    color += wz * UnpackColor(cube.PosZ);
-    color += wnz * UnpackColor(cube.NegZ);
-
-    // Normalize
-    color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
     color.w = f16tof32(cube.Lighting & 0xFFFF);
     return color;
 }
@@ -209,14 +169,6 @@ interface IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal);
 }
-
-public struct SkyAmbientCubeSampler : IAmbientCubeSampler
-{
-    static float4 Sample(AmbientCube cube, float3 normal)
-    {
-        return sampleAmbientCubeHL2_Sky(cube, normal);
-    }
-};
 
 public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
@@ -295,7 +247,7 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
 
         int3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, useFar, Cubes, FarCubes);
-        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
+        if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -352,7 +304,7 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, flo
 
         int3 probePos = baseIdx + offset;
         AmbientCube cube = RWFetchCube(probePos, useFar, Cubes, FarCubes);
-        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
+        if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -399,11 +351,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyLight, in Sampler2D[] TextureArray)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, in Sampler2D[] TextureArray)
     {
         float4 rayColor = float4(0.0);
         float4 bounceColor = float4(0.0);
-        float4 skyColor = float4(0.0);
 
         const float2 offset = grid5x5[iterate % 25] * 0.25f;
         float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
@@ -445,7 +396,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
         }
         rayColor = rayColor / float(FACE_TRACING);
-        skyColor = rayColor;
         bounceColor = bounceColor / float(FACE_TRACING);
 
         if (Camera.LightCount > 0)
@@ -468,8 +418,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         DirectLight = LerpPackedColorAlt(DirectLight, rayColor, 0.25);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.25);
-        SkyLight = LerpPackedColorAlt(SkyLight, skyColor, 0.25);
-
         return false;
     }
 
@@ -519,15 +467,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
             origin += offset;
         }
 
-        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, Cubes[CubeIdx].PosY_S, TextureArray);
-        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, Cubes[CubeIdx].NegY_S, TextureArray);
-        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, Cubes[CubeIdx].PosX_S, TextureArray);
-        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, Cubes[CubeIdx].NegX_S, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, Cubes[CubeIdx].PosZ_S, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, Cubes[CubeIdx].NegZ_S, TextureArray);
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, TextureArray);
 
         Cubes[CubeIdx].Active = Solid ? 0 : 1;
-        Cubes[CubeIdx].ExtInfo3 = Cubes[CubeIdx].Active;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;

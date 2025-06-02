@@ -73,7 +73,7 @@ public struct NodeProxy
     public uint matId[16];
 };
 
-// size = 24 x 4 bytes, 96 bytes, maximun compress to 64 bytes
+// size = 16 x 4 bytes, 64 bytes, maximun compress to 64 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
 public struct AmbientCube
@@ -92,19 +92,10 @@ public struct AmbientCube
     public uint PosX_D;
     public uint NegX_D;
  
-    public uint PosZ_S;
-    public uint NegZ_S;
-    public uint PosY_S;
-    public uint NegY_S;
-    public uint PosX_S;
-    public uint NegX_S;
- 
     public uint Active;
     public uint Lighting;
     public uint ExtInfo1;
     public uint ExtInfo2;
-    public uint ExtInfo3;
-    public uint ExtInfo4;
 };
 
 public struct SphericalHarmonics

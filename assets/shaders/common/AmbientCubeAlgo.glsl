@@ -32,15 +32,14 @@ bool IsInside( vec3 origin, inout vec3 offset, inout uint materialId)
 }
 
 #ifdef __cplusplus
-vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, vec4& skyColor, Assets::UniformBufferObject& Camera)
+vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, Assets::UniformBufferObject& Camera)
 {
 #else
-vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProbe, inout uint materialId, inout vec4 bounceColor, inout vec4 skyColor, in UniformBufferObject Camera)
+vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProbe, inout uint materialId, inout vec4 bounceColor, in UniformBufferObject Camera)
 {
 #endif
     vec4 rayColor = vec4(0.0);
     bounceColor = vec4(0.0);
-    skyColor = vec4(0.0);
 
     const vec2 offset = grid5x5[iterate % 25] * 0.25f;
     float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
@@ -82,7 +81,6 @@ vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, inout uint activeProb
         }
     }
     rayColor = rayColor / float(FACE_TRACING);
-    skyColor = rayColor;
     bounceColor = bounceColor / float(FACE_TRACING);
 
     if(Camera.LightCount > 0)
