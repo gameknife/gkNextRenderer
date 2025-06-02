@@ -414,6 +414,25 @@ namespace Vulkan
 
         rtEditorViewport_.reset(new RenderImage(*device_, {1280, 720}, swapChain_->Format(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
 
+
+        rtVisibility0.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                    VK_FORMAT_R32G32_UINT,
+                                    VK_IMAGE_TILING_OPTIMAL,
+                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"visibility0"));
+
+        rtVisibility1.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R32G32_UINT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"visibility1"));
+
+        rtMotionVector_.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                         VK_FORMAT_R32G32_SFLOAT,
+                                         VK_IMAGE_TILING_OPTIMAL,
+                                         VK_IMAGE_USAGE_STORAGE_BIT));
+	
+        rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
+        rtNormal_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
+        
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->CreateSwapChain(swapChain_->RenderExtent());
@@ -437,6 +456,12 @@ namespace Vulkan
             DelegateDeleteSwapChain();
         }
 
+        rtVisibility0.reset();
+        rtVisibility1.reset();
+        rtNormal_.reset();
+        rtAlbedo_.reset();
+        rtMotionVector_.reset();
+        
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
         commandBuffers_.reset();
@@ -449,6 +474,7 @@ namespace Vulkan
         imageAvailableSemaphores_.clear();
         depthBuffer_.reset();
         swapChain_.reset();
+        
         fence = nullptr;
     }
 

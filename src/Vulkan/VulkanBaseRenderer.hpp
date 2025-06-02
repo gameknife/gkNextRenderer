@@ -328,10 +328,17 @@ namespace Vulkan
 		int frameCount_{};
 		bool forceSDR_{};
 		bool visualDebug_{};
+
+		// this texture could pass to global scope, it may contained by base renderer
+		std::unique_ptr<RenderImage> rtVisibility0;
+		std::unique_ptr<RenderImage> rtVisibility1;
+		std::unique_ptr<RenderImage> rtMotionVector_;
+		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtNormal_;
+		
 	protected:
 		Assets::UniformBufferObject lastUBO;
-
-		
+	
 	private:
 
 		void UpdateUniformBuffer(uint32_t imageIndex);
