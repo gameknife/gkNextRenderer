@@ -27,7 +27,6 @@ namespace Vulkan::RayTracing
         const ImageView& visibility1BufferImageView,
         const ImageView& OutAlbedoImageView,
         const ImageView& OutNormalImageView,
-        const ImageView& AdaptiveSampleImageView,
         const ImageView& OutShaderTimerImageView,
         
         const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
@@ -58,8 +57,6 @@ namespace Vulkan::RayTracing
 
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
@@ -146,10 +143,6 @@ namespace Vulkan::RayTracing
             outNormalImageInfo.imageView = OutNormalImageView.Handle();
             outNormalImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-            VkDescriptorImageInfo adaptiveSampleImageInfo = {};
-            adaptiveSampleImageInfo.imageView = AdaptiveSampleImageView.Handle();
-            adaptiveSampleImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
             VkDescriptorImageInfo outShaderTimerImageInfo = {};
             outShaderTimerImageInfo.imageView = OutShaderTimerImageView.Handle();
             outShaderTimerImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -179,7 +172,6 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 13, visibility1BufferImageInfo),
                 descriptorSets.Bind(i, 14, outAlbedoImageInfo),
                 descriptorSets.Bind(i, 15, outNormalImageInfo),
-                descriptorSets.Bind(i, 16, adaptiveSampleImageInfo),
                 descriptorSets.Bind(i, 17, outShaderTimerImageInfo),
                 descriptorSets.Bind(i, 18, cubeBufferInfo),
                 descriptorSets.Bind(i, 19, farcubeBufferInfo),

@@ -17,7 +17,7 @@ import Common;
 [[vk::binding(13)]] RWTexture2D<uint2> Visibility1Buffer;
 [[vk::binding(14)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(15)]] RWTexture2D<float4> OutNormalBuffer;
-[[vk::binding(16)]] RWTexture2D<uint> AdaptiveSampleBuffer;
+
 [[vk::binding(17)]] RWTexture2D<float4> ShaderTimerBuffer;
 [[vk::binding(18)]] StructuredBuffer<AmbientCube> Cubes;
 [[vk::binding(19)]] StructuredBuffer<AmbientCube> FarCubes;

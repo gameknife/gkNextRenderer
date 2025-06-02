@@ -74,7 +74,7 @@ namespace Vulkan::RayTracing
         rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], rtAccumulation_->GetImageView(), rtMotionVector_->GetImageView(),
                                                          rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                          rtAlbedo_->GetImageView(), rtNormal_->GetImageView(),
-                                                         rtAdaptiveSample_->GetImageView(), rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));
+                                                         rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));
 
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                         rtAccumulation_->GetImageView(),
@@ -88,8 +88,9 @@ namespace Vulkan::RayTracing
 
 
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtOutput_->GetImageView(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
+#if WITH_OIDN
         composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
-        
+#endif
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
                                                                       rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0_->GetImageView(), rtVisibility1_->GetImageView(),
                                                                       UniformBuffers()));
@@ -100,7 +101,11 @@ namespace Vulkan::RayTracing
         rayTracingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
+#if WITH_OIDN
         composePipelineDenoiser_.reset();
+        rtDenoise0_.reset();
+        rtDenoise1_.reset();
+#endif
         visualDebugPipeline_.reset();
         
         rtAccumulation_.reset();
@@ -113,11 +118,6 @@ namespace Vulkan::RayTracing
         rtAlbedo_.reset();
         rtNormal_.reset();
         rtShaderTimer_.reset();
-
-        rtAdaptiveSample_.reset();
-
-        rtDenoise0_.reset();
-        rtDenoise1_.reset();
     }
 
     void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -139,7 +139,6 @@ namespace Vulkan::RayTracing
         rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        rtAdaptiveSample_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Execute ray tracing shaders.
         {
@@ -235,9 +234,6 @@ namespace Vulkan::RayTracing
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
             ImageMemoryBarrier::Insert(commandBuffer, rtNormal_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                                       VK_IMAGE_LAYOUT_GENERAL);
-            ImageMemoryBarrier::Insert(commandBuffer, rtAdaptiveSample_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
             ImageMemoryBarrier::Insert(commandBuffer, rtMotionVector_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
@@ -358,12 +354,10 @@ namespace Vulkan::RayTracing
         
         rtShaderTimer_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, false, "shadertimer"));
         
-        rtAdaptiveSample_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "adaptive sample"));
-
+#if WITH_OIDN   
         rtDenoise0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, externalIfOiDN, "denoise0"));
         rtDenoise1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, externalIfOiDN, "denoise1"));
 
-#if WITH_OIDN
         size_t SrcImageSize = extent.width * extent.height * 4 * 2;
         size_t SrcImageW8 = 4 * 2 * extent.width;
         size_t SrcImage8 = 4 * 2;

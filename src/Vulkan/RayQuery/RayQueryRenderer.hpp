@@ -65,22 +65,18 @@ namespace Vulkan::RayTracing
 
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
-
-		std::unique_ptr<RenderImage> rtDenoise0_;
-		std::unique_ptr<RenderImage> rtDenoise1_;
 		
-		std::unique_ptr<RenderImage> rtAdaptiveSample_;
-
 		std::unique_ptr<RenderImage> rtShaderTimer_;
 		
 		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
-
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
-		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 
 #if WITH_OIDN
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		oidn::DeviceRef device;
 		oidn::FilterRef filter;
 #endif
