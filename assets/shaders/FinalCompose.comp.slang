@@ -94,7 +94,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
                  uint3 groupId: SV_GroupID,
                  uint groupIndex: SV_GroupIndex)
 {
-    const int2 globalOffset = int2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    const int2 globalOffset = int2(Camera.ViewportRect.xy);
     const int2 ipos = int2(dispatchThreadId.xy) + globalOffset;
     bool isEvenFrame = false; // Camera.TotalFrames % 2 == 0 ? true : false;
 

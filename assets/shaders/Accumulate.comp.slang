@@ -67,7 +67,7 @@ float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 N
 [numthreads(8, 4, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);
 
     // More flexible sampling algorithm with dynamic weights
     float4 src = float4(0, 0, 0, 0);
@@ -164,15 +164,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
                             uint4(current_primitive_index0, current_primitive_index1, current_primitive_index2, current_primitive_index3);
 
             // 在点积计算中，bool 会自动转换为 0 或 1
-            float sum = dot(match1, float4(1, 1, 1, 1));
-            sum += dot(match2, float4(1, 1, 1, 1));
-            sum += dot(match3, float4(1, 1, 1, 1));
-            sum += dot(match4, float4(1, 1, 1, 1));
-            sum += dot(match5, float4(1, 1, 1, 1));
-            sum += dot(match6, float4(1, 1, 1, 1));
-            sum += dot(match7, float4(1, 1, 1, 1));
-            sum += dot(match8, float4(1, 1, 1, 1));
-            sum += dot(match9, float4(1, 1, 1, 1));
+            float sum = dot(float4(match1), float4(1, 1, 1, 1));
+            sum += dot(float4(match2), float4(1, 1, 1, 1));
+            sum += dot(float4(match3), float4(1, 1, 1, 1));
+            sum += dot(float4(match4), float4(1, 1, 1, 1));
+            sum += dot(float4(match5), float4(1, 1, 1, 1));
+            sum += dot(float4(match6), float4(1, 1, 1, 1));
+            sum += dot(float4(match7), float4(1, 1, 1, 1));
+            sum += dot(float4(match8), float4(1, 1, 1, 1));
+            sum += dot(float4(match9), float4(1, 1, 1, 1));
 
             bool miss = sum < 4 ? true : false;
             if (miss)

@@ -18,7 +18,7 @@ struct PushConstant
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    const int2 globalOffset = int2(Camera.ViewportRect.x, Camera.ViewportRect.y);
+    const int2 globalOffset = int2(Camera.ViewportRect.xy);
     const int2 ipos = int2(DTid.xy) + globalOffset;
     const int2 offset = int2(pushConst.offset_x, pushConst.offset_y);
     float4 outColor = SourceImage[ipos];
