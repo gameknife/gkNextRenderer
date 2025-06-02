@@ -43,17 +43,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // do a primary ray here
     Vertex hitVertex;
     NodeProxy hitNode;
-    if( !rayCaster.TracePrimaryRay( ipos, isize, RandomSeed, hitVertex, hitNode))
+    float3 rayDir;
+    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir))
     {
-        // 如果没有命中，直接返回
-        AccumulationImage[ipos] = float4(0, 0, 0, 1);
+        float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
+        AccumulationImage[ipos] = skyColor;
         OutMotionVector[ipos] = float4(0, 0, 0, 0);
-        OutAlbedoBuffer[ipos] = float4(0, 0, 0, 1);
-        OutNormalBuffer[ipos] = float4(0, 0, 0, 1);
+        OutAlbedoBuffer[ipos] = skyColor;
+        OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
         VisibilityBuffer[ipos] = uint2(0, 0);
         return;
     }
-
     // MotionVector解析
     float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
     OutMotionVector[ipos] = float4(motion * isize, 0, 0);

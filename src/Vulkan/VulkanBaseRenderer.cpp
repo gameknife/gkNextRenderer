@@ -724,7 +724,7 @@ namespace Vulkan
             logicRenderers_[type] = std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this);
             break;
         case ERendererType::ERT_LegacyDeferred:
-            logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this);
             break;
         default:
             assert(false);

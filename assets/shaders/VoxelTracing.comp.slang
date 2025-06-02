@@ -28,7 +28,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     NodeProxy hitNode;
 
     float4 outColor = float4(0, 0, 0, 1);
-    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode))
+    float3 rayDir;
+    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir))
     {
         float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
         outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;

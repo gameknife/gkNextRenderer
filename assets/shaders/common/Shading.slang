@@ -13,7 +13,7 @@ static const float2 haltonSeq[8] = {
 };
 
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
-static const float FAST_MAX_TRACE_DISTANCE = 20.f;
+static const float FAST_MAX_TRACE_DISTANCE = 10.f;
 
 namespace Common
 {
@@ -125,43 +125,6 @@ namespace Common
         return shadow;
     };
 
-    bool traceLongDistance(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                        in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices,
-                        in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes)
-    {
-        // Near field tracing parameters
-        const float nearDistance = 0.25;            // Near field tracing distance
-        const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
-        const float stepSize = 0.25;                // Far field step size
-        const float maxTotalDistance = maxDistance; // Maximum total tracing distance
-
-        if (traceInScreenSpace(position, rayDir, nearDistance, depthTolerance, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices))
-        {
-            return true;
-        }
-
-        float tracedDistance = longDistanceInit;
-        float3 currentPos = position + rayDir * longDistanceInit;
-
-        while (tracedDistance < maxTotalDistance)
-        {
-            float3 probePos = (currentPos - CUBE_OFFSET) / CUBE_UNIT;
-            uint matId = 0;
-            bool isInSolid = inSolid(probePos, matId, Cubes, FarCubes);
-
-            if (isInSolid)
-            {
-                outPosition = currentPos;
-                outNormal = float3(0, 1, 0);
-                outMaterialIdx = matId;
-                return true;
-            }
-            currentPos += rayDir * stepSize;
-            tracedDistance += stepSize;
-        }
-        return false;
-    };
-
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
                             in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices)
     {
@@ -216,7 +179,7 @@ namespace Common
 // emit primary ray, return hit-info
 public interface IPrimaryRayCaster
 {
-    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode);
+    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir);
 }
 
 // ray tracer for rendering
@@ -241,7 +204,7 @@ public interface IRenderer
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
         float2 uvOffset = float2(0);
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
@@ -255,6 +218,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         float4 origin = mul(Camera.ModelViewInverse, float4(offset, 0, 1));
         float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
         float4 direction = mul(Camera.ModelViewInverse, float4(normalize(target.xyz * Camera.FocusDistance - float3(offset, 0)), 0));
+        outRayDir = normalize(direction.xyz);
 
         Material hitMaterial;
         float t = 0;
@@ -268,7 +232,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
         uint2 vBuffer = VisibilityBuffer[ipos].rg;
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
@@ -279,16 +243,16 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
 
         float3 ray_dir = normalize(dir.xyz);
-
         Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
         outNode = NodeProxies[vBuffer.x - 1];
-
+       
         // geometry info
         outVertex.Position = v.Position;
         outVertex.Normal = normalize(v.Normal.rgb);
         outVertex.MaterialIndex = FetchMaterialId(outNode, v.MaterialIndex);
         outVertex.TexCoord = v.TexCoord;
         outVertex.Tangent = v.Tangent;
+        outRayDir = ray_dir;
 
         if (vBuffer.x == 0)
         {
@@ -306,7 +270,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
@@ -316,6 +280,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
 
         float3 ray_dir = normalize(dir.xyz);
+        outRayDir = ray_dir;
 
         return DDARayTracer.TraceRay(origin.xyz, ray_dir, 80.0f, outVertex, outNode);
     }
@@ -781,15 +746,8 @@ public struct FHybridRenderer : IRenderer
             }
             else
             {
+                // 这里非常影响噪点，直接使用IBL数据，是最精确的。如果使用预处理数据，由于IBL的明度变化不大，因此噪点会小，但丢失光照细节
                 FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                // if (chanceGGX)
-                // {
-                //     FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                // }
-                // else
-                // {
-                //     FinalColor += interpolateAmbientCubes<SkyAmbientCubeSampler>(inVertex.Position, inVertex.Normal, Cubes, FarCubes) * 2.0f;
-                // }
             }
         }
         FinalColor /= float(jitcount);
