@@ -22,35 +22,6 @@ namespace Vulkan
 
 namespace Vulkan::LegacyDeferred
 {
-
-	class GBufferPipeline final
-	{
-	public:
-
-		VULKAN_NON_COPIABLE(GBufferPipeline)
-
-		GBufferPipeline(
-			const SwapChain& swapChain, 
-			const DepthBuffer& depthBuffer,
-			const std::vector<Assets::UniformBuffer>& uniformBuffers,
-			const Assets::Scene& scene);
-		~GBufferPipeline();
-
-		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
-		const Vulkan::RenderPass& RenderPass() const { return *renderPass_; }
-
-	private:
-		const SwapChain& swapChain_;
-
-		VULKAN_HANDLE(VkPipeline, pipeline_)
-
-		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
-		std::unique_ptr<Vulkan::RenderPass> renderPass_;
-		std::unique_ptr<Vulkan::RenderPass> swapRenderPass_;
-	};
-
 	class ShadingPipeline final
 	{
 	public:

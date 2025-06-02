@@ -151,8 +151,8 @@ namespace Vulkan::ModernDeferred
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32G32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
-        const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.spv");
-        const ShaderModule fragShader(device, "assets/shaders/VisibilityPass.frag.spv");
+        const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.slang.spv");
+        const ShaderModule fragShader(device, "assets/shaders/VisibilityPass.frag.slang.spv");
 
         VkPipelineShaderStageCreateInfo shaderStages[] =
         {

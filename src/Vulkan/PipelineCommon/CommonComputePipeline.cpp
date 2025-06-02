@@ -162,7 +162,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/FinalCompose.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/FinalCompose.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -288,7 +288,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "assets/shaders/BufferClear.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/BufferClear.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -466,7 +466,7 @@ namespace Vulkan::PipelineCommon
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        const ShaderModule denoiseShader(device, "assets/shaders/RayCast.comp.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/RayCast.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -597,7 +597,6 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-        //const ShaderModule denoiseShader(device, "assets/shaders/DirectLightGen.comp.spv");
         const ShaderModule denoiseShader(device, "assets/shaders/AmbientCubeGen.comp.slang.spv");
  
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

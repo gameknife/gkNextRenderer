@@ -181,7 +181,6 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
                                                        &pushConstantRange, 1));
-        //const ShaderModule denoiseShader(device, "assets/shaders/RayQuery.comp.spv");
         const ShaderModule denoiseShader(device, "assets/shaders/PathTracingShading.comp.slang.spv");
         
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
