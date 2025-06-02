@@ -70,6 +70,7 @@ find_package(Jolt CONFIG REQUIRED)
 
 find_package(fmt CONFIG REQUIRED)
 
+
 if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
 endif()
@@ -82,6 +83,7 @@ endif()
 
 find_package(draco CONFIG REQUIRED)
 
+find_path(HLSLPP_INCLUDE_DIRS "hlslpp/hlsl++.h")
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 find_path(CPP_BASE64_INCLUDE_DIRS "cpp-base64/base64.cpp")
 

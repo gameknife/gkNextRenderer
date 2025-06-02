@@ -223,7 +223,7 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback)
     {
-        Assets::RayCastContext context;
+        Assets::RayCastIn context;
         context.Origin = glm::vec4(org, 1);
         context.Direction = glm::vec4(dir, 0);
         rayRequested_.push_back({context, callback});

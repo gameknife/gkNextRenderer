@@ -18,6 +18,7 @@ fi
 	cxxopts:arm64-osx \
 	glfw3:arm64-osx \
 	glm:arm64-osx \
+	hlslpp:arm64-osx \
 	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:arm64-osx \
 	stb:arm64-osx \
 	tinyobjloader:arm64-osx \

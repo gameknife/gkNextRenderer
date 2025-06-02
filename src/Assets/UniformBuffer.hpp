@@ -1,6 +1,7 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Utilities/Glm.hpp"
+#include "hlslpp/hlsl++.h"
 #include <memory>
 
 namespace Vulkan
@@ -11,14 +12,13 @@ namespace Vulkan
 	class CommandPool;
 }
 
-
-
 namespace Assets
 {
 	using namespace glm;
+	using namespace hlslpp;
 
 	#include "../assets/shaders/common/UniformBufferObject.glsl"
-	
+		
 	class UniformBuffer
 	{
 	public:
@@ -41,7 +41,7 @@ namespace Assets
 		std::unique_ptr<Vulkan::DeviceMemory> memory_;
 	};
 
-	struct RayCastContext
+	struct RayCastIn
 	{
 		vec4 Origin;
 		vec4 Direction;
@@ -63,13 +63,13 @@ namespace Assets
 
 	struct RayCastIO
 	{
-		RayCastContext Context;
+		RayCastIn Context;
 		RayCastResult Result;
 	};
 
 	struct RayCastRequest
 	{
-		RayCastContext context;
+		RayCastIn context;
 		std::function<bool(RayCastResult)> callback;
 	};
 

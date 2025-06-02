@@ -19,6 +19,7 @@ fi
 	cxxopts:x64-linux \
 	glfw3:x64-linux \
 	glm:x64-linux \
+	hlslpp:x64-linux \
 	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:x64-linux \
 	stb:x64-linux \
 	tinyobjloader:x64-linux \
