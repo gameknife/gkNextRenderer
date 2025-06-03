@@ -20,7 +20,6 @@ fi
 	cxxopts:x64-mingw-static \
 	glfw3:x64-mingw-static \
 	glm:x64-mingw-static \
-	hlslpp:x64-mingw-static \
 	imgui[core,freetype,glfw-binding,vulkan-binding,docking-experimental]:x64-mingw-static \
 	stb:x64-mingw-static \
 	tinyobjloader:x64-mingw-static \
