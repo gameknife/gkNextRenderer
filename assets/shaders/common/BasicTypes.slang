@@ -1,10 +1,13 @@
 #ifdef __cplusplus
 #define public
+#define bool uint32_t
+#define ALIGN_16 alignas(16)
 #else
+#define ALIGN_16 
 implementing Common;
 #endif
 
-public struct UniformBufferObject
+public struct ALIGN_16 UniformBufferObject
 {
     public float4x4 ModelView;
     public float4x4 Projection;
@@ -66,7 +69,7 @@ public struct UniformBufferObject
     public bool Reserve4;
 };
 
-public struct NodeProxy
+public struct ALIGN_16 NodeProxy
 {
     public uint instanceId;
     public uint modelId;
@@ -80,7 +83,7 @@ public struct NodeProxy
 // size = 16 x 4 bytes, 64 bytes, maximun compress to 64 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
-public struct AmbientCube
+public struct ALIGN_16 AmbientCube
 {
     public uint PosZ;
     public uint NegZ;
@@ -102,14 +105,14 @@ public struct AmbientCube
     public uint ExtInfo2;
 };
 
-public struct SphericalHarmonics
+public struct ALIGN_16 SphericalHarmonics
 {
     // 3 bands (9 coefficients per color channel)
     public float coefficients[3][9];
     public float padding;
 };
 
-public struct LightObject
+public struct ALIGN_16 LightObject
 {
     float4 p0;
     float4 p1;
@@ -128,7 +131,7 @@ public const static uint MaterialIsotropic = 3;
 public const static uint MaterialDiffuseLight = 4;
 public const static uint MaterialMixture = 5;
 
-public struct RayCastContext
+public struct ALIGN_16 RayCastContext
 {
     // in
     public float4 Origin;
@@ -146,7 +149,7 @@ public struct RayCastContext
     public uint Hitted;
 };
 #ifndef __cplusplus
-public struct Material
+public struct ALIGN_16 Material
 {
     public float4 Diffuse;
     public int DiffuseTextureId;
@@ -162,7 +165,7 @@ public struct Material
     public float Reserverd2;
 };
 
-public struct Vertex
+public struct ALIGN_16 Vertex
 {
   public float3 Position;
   public float3 Normal;
@@ -171,7 +174,7 @@ public struct Vertex
   public uint MaterialIndex;
 };
 
-public struct GPUVertex
+public struct ALIGN_16 GPUVertex
 {
 	public float3 Position;
 	public uint TexcoordXY;
@@ -184,6 +187,8 @@ public struct GPUVertex
 
 #ifdef __cplusplus
 #undef public
+#undef bool
+#undef ALIGN_16
 #else
 
 #endif
