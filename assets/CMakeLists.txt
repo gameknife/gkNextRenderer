@@ -5,7 +5,7 @@ file(GLOB lego_files legos/*.mls)
 file(GLOB sfx_files sfx/*.mp3 sfx/*.wav)
 file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.vert shaders/*.frag shaders/*.comp)
-file(GLOB hlsl_shader_files shaders/*.comp.slang)
+file(GLOB hlsl_shader_files shaders/*.comp.slang shaders/*.vert.slang shaders/*.frag.slang)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
 file(GLOB shader_extra_files shaders/*.glsl)
 file(GLOB shader_common_files shaders/common/*.glsl shaders/common/*.h shaders/common/*.slang shaders/*.slang)
@@ -107,28 +107,28 @@ foreach(shader ${hlsl_shader_files})
 endforeach()
 
 # Shader Preprocessor -> PRE_BUILDZ
-if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-if ( ANDROID )
-add_custom_command(
-    TARGET Assets PRE_BUILD
-	COMMAND copy /y \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\common\\Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\Platform.glsl\"
-)
-else()
-add_custom_command(
-    TARGET Assets PRE_BUILD
-    COMMAND copy /y \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\common\\Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\Platform.glsl\"
-)
-endif()
-else()
-if ( ANDROID )
-add_custom_command(
-	TARGET Assets PRE_BUILD
-	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
-)
-else()
-add_custom_command(
-	TARGET Assets PRE_BUILD
-	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
-)
-endif()
-endif()
+# if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
+# if ( ANDROID )
+# add_custom_command(
+#     TARGET Assets PRE_BUILD
+# 	COMMAND copy /y \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\common\\Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\Platform.glsl\"
+# )
+# else()
+# add_custom_command(
+#     TARGET Assets PRE_BUILD
+#     COMMAND copy /y \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\common\\Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}\\shaders\\Platform.glsl\"
+# )
+# endif()
+# else()
+# if ( ANDROID )
+# add_custom_command(
+# 	TARGET Assets PRE_BUILD
+# 	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_MOBILE.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
+# )
+# else()
+# add_custom_command(
+# 	TARGET Assets PRE_BUILD
+# 	COMMAND cp -f -L \"${CMAKE_CURRENT_LIST_DIR}/shaders/common/Platform_DESKTOP.glsl\" \"${CMAKE_CURRENT_LIST_DIR}/shaders/Platform.glsl\"
+# )
+# endif()
+# endif()

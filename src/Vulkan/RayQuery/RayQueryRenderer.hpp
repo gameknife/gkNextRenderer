@@ -53,34 +53,22 @@ namespace Vulkan::RayTracing
 	private:
 		void CreateOutputImage(const VkExtent2D& extent);
 
-		
-		
-		std::unique_ptr<RenderImage> rtAccumulation_;
-		std::unique_ptr<RenderImage> rtOutput_;
-		std::unique_ptr<RenderImage> rtMotionVector_;
+		// individual textures
 		std::unique_ptr<RenderImage> rtPingPong0;
-		std::unique_ptr<RenderImage> rtPingPong1;
-		std::unique_ptr<RenderImage> rtVisibility0_;
-		std::unique_ptr<RenderImage> rtVisibility1_;
 
-		std::unique_ptr<RenderImage> rtAlbedo_;
-		std::unique_ptr<RenderImage> rtNormal_;
-
-		std::unique_ptr<RenderImage> rtDenoise0_;
-		std::unique_ptr<RenderImage> rtDenoise1_;
-		
-		std::unique_ptr<RenderImage> rtAdaptiveSample_;
-
+		// this texture could pass to global scope, it may contained by base renderer
 		std::unique_ptr<RenderImage> rtShaderTimer_;
+
 		
 		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
-
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
-		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 
 #if WITH_OIDN
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
 		oidn::DeviceRef device;
 		oidn::FilterRef filter;
 #endif

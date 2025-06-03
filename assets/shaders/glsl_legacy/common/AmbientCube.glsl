@@ -14,13 +14,6 @@ vec4 sampleAmbientCubeHL2_Sky(AmbientCube cube, vec3 normal, out float occlusion
 
     sum = wx + wnx + wy + wny + wz + wnz;
 
-    color += wx *   UnpackColor(cube.PosX_S);
-    color += wnx *  UnpackColor(cube.NegX_S);
-    color += wy *   UnpackColor(cube.PosY_S);
-    color += wny *  UnpackColor(cube.NegY_S);
-    color += wz *   UnpackColor(cube.PosZ_S);
-    color += wnz *  UnpackColor(cube.NegZ_S);
-
     color += wx *   UnpackColor(cube.PosX);
     color += wnx *  UnpackColor(cube.NegX);
     color += wy *   UnpackColor(cube.PosY);
@@ -114,7 +107,7 @@ vec4 interpolateSkyProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, useFar);
-        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
+        if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -171,7 +164,7 @@ vec4 interpolateProbes(vec3 pos, vec3 normal) {
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, useFar);
-        if (cube.Active == 0 && cube.ExtInfo3 == 0) continue;
+        if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;

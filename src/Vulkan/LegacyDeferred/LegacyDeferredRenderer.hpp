@@ -9,6 +9,8 @@
 #include <vector>
 #include <memory>
 
+#include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
+
 namespace Vulkan
 {
 	class RenderImage;
@@ -37,16 +39,32 @@ namespace Vulkan::LegacyDeferred
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
 	private:
-		std::unique_ptr<class GBufferPipeline> gbufferPipeline_;
+		std::unique_ptr<Vulkan::ModernDeferred::VisibilityPipeline> visibilityPipeline0_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
+		std::unique_ptr<Vulkan::PipelineCommon::SimpleComposePipeline> composePipeline_;
 		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
+	};
 
-		// simple gbuffer, shading mode may increase
-		// gbuffer0 albedo, gbuffer1 normal+roughness. gbuffer2 reserved
-		// simulating total size of 32 + 128 + 32 = 192 bits
-		std::unique_ptr<RenderImage> rtGBuffer0_;
-		std::unique_ptr<RenderImage> rtGBuffer1_;
-		std::unique_ptr<RenderImage> rtGBuffer2_;
+}
+
+namespace Vulkan::VoxelTracing
+{
+	class VoxelTracingRenderer final : public Vulkan::LogicRendererBase
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(VoxelTracingRenderer)
+		
+		VoxelTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		~VoxelTracingRenderer();
+
+		void CreateSwapChain(const VkExtent2D& extent) override;
+		void DeleteSwapChain() override;
+		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+
+	private:
+		// just one computer pass is enough
+		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<RenderImage> rtOutput_;
 	};
 

@@ -127,14 +127,14 @@ float3 yuv2rgb(float3 yuv) {
     return float3(R, G, B);
 }
 
-float3 rgb2ycocg(float3 rgb) {
+public float3 rgb2ycocg(float3 rgb) {
     float Y  = 0.25 * rgb.r + 0.5 * rgb.g + 0.25 * rgb.b;
     float Co = 0.5 * rgb.r - 0.5 * rgb.b;
     float Cg = -0.25 * rgb.r + 0.5 * rgb.g - 0.25 * rgb.b;
     return float3(Y, Co, Cg);
 }
 
-float3 ycocg2rgb(float3 ycocg) {
+public float3 ycocg2rgb(float3 ycocg) {
     float Y  = ycocg.r;
     float Co = ycocg.g;
     float Cg = ycocg.b;

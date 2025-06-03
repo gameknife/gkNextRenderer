@@ -48,20 +48,8 @@ namespace Vulkan::ModernDeferred
 		
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
-
-		std::unique_ptr<RenderImage> rtAccumlation;
 		
 		std::unique_ptr<RenderImage> rtPingPong0;
-		std::unique_ptr<RenderImage> rtPingPong1;
-		
-		std::unique_ptr<RenderImage> rtVisibility0;
-		std::unique_ptr<RenderImage> rtVisibility1;
-		
-		std::unique_ptr<RenderImage> rtOutput_;
-		std::unique_ptr<RenderImage> rtMotionVector_;
-
-		std::unique_ptr<RenderImage> rtAlbedo_;
-		std::unique_ptr<RenderImage> rtNormal_;
 	};
 
 }

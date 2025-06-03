@@ -24,10 +24,8 @@ namespace Vulkan::RayTracing
         const ImageView& accumulationImageView,
         const ImageView& motionVectorImageView,
         const ImageView& visibilityBufferImageView,
-        const ImageView& visibility1BufferImageView,
         const ImageView& OutAlbedoImageView,
         const ImageView& OutNormalImageView,
-        const ImageView& AdaptiveSampleImageView,
         const ImageView& OutShaderTimerImageView,
         
         const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
@@ -54,14 +52,14 @@ namespace Vulkan::RayTracing
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
-                {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {19, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -130,11 +128,7 @@ namespace Vulkan::RayTracing
             VkDescriptorImageInfo visibilityBufferImageInfo = {};
             visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
             visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            VkDescriptorImageInfo visibility1BufferImageInfo = {};
-            visibility1BufferImageInfo.imageView = visibility1BufferImageView.Handle();
-            visibility1BufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
+            
             VkDescriptorImageInfo outAlbedoImageInfo = {};
             outAlbedoImageInfo.imageView = OutAlbedoImageView.Handle();
             outAlbedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -143,13 +137,17 @@ namespace Vulkan::RayTracing
             outNormalImageInfo.imageView = OutNormalImageView.Handle();
             outNormalImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-            VkDescriptorImageInfo adaptiveSampleImageInfo = {};
-            adaptiveSampleImageInfo.imageView = AdaptiveSampleImageView.Handle();
-            adaptiveSampleImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
             VkDescriptorImageInfo outShaderTimerImageInfo = {};
             outShaderTimerImageInfo.imageView = OutShaderTimerImageView.Handle();
             outShaderTimerImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorBufferInfo cubeBufferInfo = {};
+            cubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
+            cubeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo farcubeBufferInfo = {};
+            farcubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            farcubeBufferInfo.range = VK_WHOLE_SIZE;
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
@@ -165,11 +163,11 @@ namespace Vulkan::RayTracing
                 descriptorSets.Bind(i, 10, accumulationImageInfo),
                 descriptorSets.Bind(i, 11, motionVectorImageInfo),
                 descriptorSets.Bind(i, 12, visibilityBufferImageInfo),
-                descriptorSets.Bind(i, 13, visibility1BufferImageInfo),
                 descriptorSets.Bind(i, 14, outAlbedoImageInfo),
                 descriptorSets.Bind(i, 15, outNormalImageInfo),
-                descriptorSets.Bind(i, 16, adaptiveSampleImageInfo),
                 descriptorSets.Bind(i, 17, outShaderTimerImageInfo),
+                descriptorSets.Bind(i, 18, cubeBufferInfo),
+                descriptorSets.Bind(i, 19, farcubeBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -183,8 +181,8 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
                                                        &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/RayQuery.comp.spv");
-
+        const ShaderModule denoiseShader(device, "assets/shaders/PathTracingShading.comp.slang.spv");
+        
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);

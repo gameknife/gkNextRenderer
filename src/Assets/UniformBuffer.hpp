@@ -11,13 +11,26 @@ namespace Vulkan
 	class CommandPool;
 }
 
-
-
 namespace Assets
 {
 	using namespace glm;
 
-	#include "../assets/shaders/common/UniformBufferObject.glsl"
+	const int SHADOWMAP_SIZE = 4096;
+	const int CUBE_SIZE_XY = 192;//256;
+	const int CUBE_SIZE_Z = 48;
+	const float CUBE_UNIT = 0.25f;
+	const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
+
+	const float CUBE_UNIT_FAR = 4.0f; // cover 0.8km x 0.8km x 0.16km
+	const vec3 CUBE_OFFSET_FAR = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
+	
+#define float4 vec4
+#define float4x4 mat4
+	
+	#include "../assets/shaders/common/BasicTypes.slang"
+	
+#undef float4
+#undef float4x4
 	
 	class UniformBuffer
 	{
@@ -41,7 +54,7 @@ namespace Assets
 		std::unique_ptr<Vulkan::DeviceMemory> memory_;
 	};
 
-	struct RayCastContext
+	struct RayCastIn
 	{
 		vec4 Origin;
 		vec4 Direction;
@@ -63,13 +76,13 @@ namespace Assets
 
 	struct RayCastIO
 	{
-		RayCastContext Context;
+		RayCastIn Context;
 		RayCastResult Result;
 	};
 
 	struct RayCastRequest
 	{
-		RayCastContext context;
+		RayCastIn context;
 		std::function<bool(RayCastResult)> callback;
 	};
 
