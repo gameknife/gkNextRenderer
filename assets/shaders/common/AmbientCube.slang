@@ -353,20 +353,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, in Sampler2D[] TextureArray)
     {
-        float4 rayColor = float4(0.0);
+        // 输出结果
+        float4 directColor = float4(0.0);
         float4 bounceColor = float4(0.0);
 
+        // 抖动
         const float2 offset = grid5x5[iterate % 25] * 0.25f;
-        float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
 
-        bool offsetProbe = false;
-        float3 probeOffset = float3(0.0);
-
+        // 天光直接光照和反弹
         for (uint i = 0; i < FACE_TRACING; i++)
         {
             float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
-
-            // Align with the surface normal
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
             Vertex hitVertex;
@@ -375,29 +372,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
-                // if (hitMaterial.DiffuseTextureId >= 0)
-                // {
-                //     float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].Sample(hitVertex.TexCoord);
-                //     outAlbedo *= tex;
-                // }
-                //if (dot(hitVertex.Normal, rayDir) < 0.0)
-                {
-                    bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
-                }
-                // }
-                // else
-                // {
-                //     return true;
-                // }
+                bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
             }
             else
             {
-                rayColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs ) * skyMultiplier;
+                directColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
             }
         }
-        rayColor = rayColor / float(FACE_TRACING);
+        directColor = directColor / float(FACE_TRACING);
         bounceColor = bounceColor / float(FACE_TRACING);
 
+        // 参数光源，目前只取了一盏光源
         if (Camera.LightCount > 0)
         {
             float4 lightPower = float4(0.0);
@@ -408,22 +393,27 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
             float distance = length(lightPos - origin);
             float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-            rayColor += lightPower * attenuation * lightAtten;
+            directColor += lightPower * attenuation * lightAtten;
         }
 
-        float3 sunDir = Camera.SunDirection.xyz;
-        float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
-        float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-        rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+        // 太阳光
+        if (Camera.HasSun)
+        {
+            float3 sunDir = Camera.SunDirection.xyz;
+            float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
+            float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+        }
 
-        DirectLight = LerpPackedColorAlt(DirectLight, rayColor, 0.25);
-        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.25);
+        // 累积，gpu直接只保留4帧
+        DirectLight = LerpPackedColorAlt(DirectLight, directColor, 0.25);
+        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.125);
         return false;
     }
 
-    bool InsideGeometry(IRayTracer tracer, float3 origin, float3 rayDir, inout float3 offset, out uint OutMaterialId)
+    bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, out uint OutMaterialId)
     {
-        // Align with the surface normal
+        // 求交测试
         Vertex hitVertex;
         NodeProxy hitNode;
 
@@ -431,12 +421,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
         {
             OutMaterialId = hitVertex.MaterialIndex;
             Material hitMaterial = Materials[hitVertex.MaterialIndex];
+            // 命中反面，识别为固体，并将lightprobe推出体外
             if (dot(hitVertex.Normal, rayDir) > 0.0)
             {
                 float hitRayDist = length(hitVertex.Position - origin) + 0.05f;
-                offset = rayDir * hitRayDist;
+                origin += rayDir * hitRayDist;
                 return true;
             }
+            // 命中光源，不论正反，识别为固体
             if (hitMaterial.MaterialModel == MaterialDiffuseLight)
             {
                 return true;
@@ -448,24 +440,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        // target
-        // Cubes[CubeIdx];
         float3 offset = float3(0, 0, 0);
         uint iterate = Cubes[CubeIdx].ExtInfo2;
         Cubes[CubeIdx].ExtInfo2 = Cubes[CubeIdx].ExtInfo2 + 1;
         bool Solid = false;
 
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), offset, Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), offset, Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0), offset, Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0), offset, Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), offset, Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), offset, Cubes[CubeIdx].ExtInfo1);
-
-        if(Solid)
-        {
-            origin += offset;
-        }
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), Cubes[CubeIdx].ExtInfo1);
 
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
