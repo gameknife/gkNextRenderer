@@ -58,7 +58,7 @@ find_package(glfw3 REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 endif()
 
-find_package(cxxopts CONFIG REQUIRED)
+#find_package(cxxopts CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -69,6 +69,7 @@ find_package(Ktx CONFIG REQUIRED)
 find_package(Jolt CONFIG REQUIRED)
 
 find_package(fmt CONFIG REQUIRED)
+
 
 if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)

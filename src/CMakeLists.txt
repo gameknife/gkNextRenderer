@@ -120,18 +120,18 @@ foreach(target IN LISTS AllTargets)
 	target_include_directories(${target} PRIVATE ${Vulkan_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
-
+	
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 	# if debug
 	# 假设你的目标名称是 MyTarget
 	# target_compile_definitions(${target} PRIVATE JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED)
-	
+
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
-		target_link_libraries(${target} PRIVATE cxxopts::cxxopts Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw)
 		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
