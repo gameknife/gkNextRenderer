@@ -1,6 +1,8 @@
 # gknex trends
 
-[English](README.en.md)\|[Simplified Chinese](README.md)\|[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextRenderer)
+[English](README.en.md)\|[Simplified Chinese](README.md)
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextRenderer)
 
 ![windows ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/windows.yml/badge.svg)![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)![macOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/macos.yml/badge.svg)![android ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
 
@@ -190,4 +192,4 @@ SteamDeck Archlinux
 
 ## Feelings
 
-The development of the project, learning experience, and some casual thoughts recorded in[Thoughts.md](doc/Thoughts.md)，随时更新。
+The development of the project, learning experience, and some casual thoughts recorded in[Thoughts.md](doc/Thoughts.md), update at any time.
