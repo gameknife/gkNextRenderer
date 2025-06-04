@@ -24,7 +24,9 @@ Assets::SphericalHarmonics HDRSHs[100];
 using namespace Assets;
 
 #define MAX_ILLUMINANCE 512.f
-const uint FACE_TRACING = 16;
+static const uint FACE_TRACING = 16;
+static const float PT_MAX_TRACE_DISTANCE = 1000.f;
+static const float FAST_MAX_TRACE_DISTANCE = 10.f;
 
 const vec3 cubeVectors[6] = {
     vec3(0, 1, 0),
@@ -91,7 +93,7 @@ vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
     return color;
 }
 
-vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
+vec4 SampleIBLRough(uint skyIdx, vec3 direction, float rotate)
 {
     vec3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0f - rotate);
     return vec4(rayColor, 1.0);
@@ -156,8 +158,8 @@ vec4 sampleAmbientCubeHL2_DI(AmbientCube cube, vec3 normal) {
 
 LightObject FetchLight(uint lightIdx, vec4& lightPower)
 {
-    auto Lights = NextEngine::GetInstance()->GetScene().Lights();
-    auto materials = NextEngine::GetInstance()->GetScene().Materials();
+    auto& Lights = NextEngine::GetInstance()->GetScene().Lights();
+    auto& materials = NextEngine::GetInstance()->GetScene().Materials();
     lightPower = materials[Lights[lightIdx].lightMatIdx].gpuMaterial_.Diffuse;
     return Lights[lightIdx];
 }
@@ -171,42 +173,16 @@ vec3 AlignWithNormal(vec3 ray, vec3 normal)
     return transform * ray;
 }
 
-int TracingOccludeFunction(vec3 origin, vec3 lightPos)
-{
-    vec3 direction = lightPos - origin;
-    float length = glm::length(direction) - 0.02f;
-    tinybvh::Ray shadowRay(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
-    return GCpuBvh.IsOccluded(shadowRay) ? 0 : 1;
-}
-
-bool TracingFunction(vec3 origin, vec3 rayDir, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
-{
-    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 21.f);
-    GCpuBvh.Intersect(ray);
-
-    if (ray.hit.t < 20.0f)
-    {
-        uint32_t primIdx = ray.hit.prim;
-        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
-        FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
-        FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
-        mat4* worldTS = (mat4*)instance.transform;
-        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-
-        OutRayDist = ray.hit.t;
-        OutNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
-        OutMaterialId = context.extinfos[primIdx].matIdx;
-        OutInstanceId = ray.hit.inst;
-        return true;
-    }
-    
-    return false;
-}
-
 AmbientCube& FetchCube(ivec3 probePos)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
     return (*TLSContext.Cubes)[idx];
+}
+
+FMaterial& FetchMaterial(uint matId)
+{
+    auto& materials = NextEngine::GetInstance()->GetScene().Materials();
+    return materials[matId];
 }
 
 uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
@@ -214,11 +190,8 @@ uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
     return (*GbvhTLASContexts)[InstanceId].matIdxs[MaterialIdx];
 }
 
-vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInstanceId)
+vec4 FetchDirectLight(vec3 hitPos, vec3 normal)
 {
-    uint32_t diffuseColor = (*GbvhTLASContexts)[OutInstanceId].mats[OutMaterialId];
-    vec4 albedo = unpackUnorm4x8(diffuseColor);
-    
     vec3 pos = (hitPos - TLSContext.CUBE_OFFSET) / TLSContext.CUBE_UNIT;
     if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
     pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
@@ -253,87 +226,164 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInst
     }
 
     vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05f);
-    return albedo * indirectColor;
+    return indirectColor;
 }
 
-bool IsInside( vec3 origin, vec3& offset, uint& materialId)
+bool TraceSegment(vec3 origin, vec3 lightPos)
 {
-    for( uint i = 0; i < 6; i++ )
+    vec3 direction = lightPos - origin;
+    float length = glm::length(direction) - 0.02f;
+    tinybvh::Ray shadowRay(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
+    return GCpuBvh.IsOccluded(shadowRay);
+}
+
+bool TraceRay(vec3 origin, vec3 rayDir, float Dist, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
+{
+    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), Dist);
+    GCpuBvh.Intersect(ray);
+
+    if (ray.hit.t < Dist)
     {
-        vec3 rayDir = cubeVectors[i];
-        
-        vec3 OutNormal;
-        uint OutMaterialId;
-        uint OutInstanceId;
-        float OutRayDist;
-        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
-        {
-             if( dot(OutNormal, rayDir) > 0.0 )
-            {
-                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
-                offset = rayDir * (OutRayDist + 0.05f);
-                if(OutRayDist < CUBE_UNIT)
-                {
-                    return true;
-                }
-            }
-        }
+        uint32_t primIdx = ray.hit.prim;
+        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
+        FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
+        FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
+        mat4* worldTS = (mat4*)instance.transform;
+        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+
+        OutRayDist = ray.hit.t;
+        OutNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
+        OutMaterialId =  FetchMaterialId( context.extinfos[primIdx].matIdx, ray.hit.inst );
+        OutInstanceId = ray.hit.inst;
+        return true;
     }
+    
     return false;
 }
 
-vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, Assets::UniformBufferObject& Camera)
+#define float2 vec2
+#define float3 vec3
+#define float4 vec4
+
+bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
 {
-    vec4 rayColor = vec4(0.0);
-    bounceColor = vec4(0.0);
+    // 求交测试
+    vec3 OutNormal;
+    uint OutInstanceId;
+    float OutRayDist;
 
-    const vec2 offset = grid5x5[iterate % 25] * 0.25f;
-    float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
-    
-    for( uint i = 0; i < FACE_TRACING; i++ )
+    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, OutMaterialId, OutRayDist, OutInstanceId))
     {
-        vec3 hemiVec = normalize(vec3(grid4x4[i] + offset, 1.0));
-
-        // Align with the surface normal
-        vec3 rayDir = AlignWithNormal(hemiVec, basis);
-        
-        vec3 OutNormal;
-        uint OutMaterialId;
-        uint OutInstanceId;
-        float OutRayDist;
-
-        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
+        vec3 hitPos = origin + rayDir * OutRayDist;
+        FMaterial hitMaterial = FetchMaterial(OutMaterialId);
+        // 命中反面，识别为固体，并将lightprobe推出体外
+        if (dot(OutNormal, rayDir) > 0.0)
         {
-            vec3 hitPos = origin + rayDir * OutRayDist;
-            bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId, OutInstanceId);
+            float hitRayDist = OutRayDist + 0.05f;
+            origin += rayDir * hitRayDist;
+            return true;
         }
-        else
+        // 命中光源，不论正反，识别为固体
+        if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
         {
-            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
+            return true;
         }
     }
-    rayColor = rayColor / float(FACE_TRACING);
-    bounceColor = bounceColor / float(FACE_TRACING);
-
-    if(Camera.LightCount > 0)
-    {
-        vec4 lightPower = vec4(0.0);
-        LightObject light = FetchLight(0, lightPower);
-        vec3 lightPos = mix(vec3(light.p1), vec3(light.p3), 0.5f);
-        float lightAtten = float(TracingOccludeFunction(origin, lightPos));
-        vec3 lightDir = normalize(lightPos - origin);
-        float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-        float distance = length(lightPos - origin);
-        float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-        rayColor += lightPower * attenuation * lightAtten;
-    }
-    
-    vec3 sunDir = vec3(Camera.SunDirection);
-    float sunAtten = float(TracingOccludeFunction(origin, origin + sunDir * 1000.0f));
-    float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-    rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
-    return rayColor;
+    OutMaterialId = 0;
+    return false;
 }
+
+    bool FaceTask(float3 origin, float3 basis, uint iterate, uint& DirectLight, uint& IndirectLight)
+    {
+        auto& Camera = NextEngine::GetInstance()->GetUniformBufferObject();
+    
+        // 输出结果
+        float4 directColor = float4(0.0);
+        float4 bounceColor = float4(0.0);
+
+        // 抖动
+        const float2 offset = grid5x5[iterate % 25] * 0.25f;
+
+        // 天光直接光照和反弹
+        for (uint i = 0; i < FACE_TRACING; i++)
+        {
+            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
+            float3 rayDir = AlignWithNormal(hemiVec, basis);
+
+            vec3 OutNormal;
+            uint OutInstanceId;
+            uint OutMaterialId;
+            float OutRayDist;
+            if (TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, OutNormal, OutMaterialId, OutRayDist, OutInstanceId))
+            {
+                vec3 hitPos = origin + rayDir * OutRayDist;
+                FMaterial hitMaterial = FetchMaterial(OutMaterialId);
+                float4 outAlbedo = hitMaterial.gpuMaterial_.Diffuse;
+                bounceColor += outAlbedo * FetchDirectLight(hitPos, OutNormal);
+            }
+            else
+            {
+                directColor += SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+            }
+        }
+        directColor = directColor / float(FACE_TRACING);
+        bounceColor = bounceColor / float(FACE_TRACING);
+
+        // 参数光源，目前只取了一盏光源
+        if (Camera.LightCount > 0)
+        {
+            float4 lightPower = float4(0.0);
+            LightObject light = FetchLight(0, lightPower);
+            float3 lightPos = mix(vec3(light.p1.x, light.p1.y, light.p1.z), vec3(light.p3.x, light.p3.y, light.p3.z), 0.5f);
+            float lightAtten = TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
+            float3 lightDir = normalize(lightPos - origin);
+            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+            float distance = length(lightPos - origin);
+            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+            directColor += lightPower * attenuation * lightAtten;
+        }
+
+        // 太阳光
+        if (Camera.HasSun)
+        {
+            float3 sunDir = float3(Camera.SunDirection.x, Camera.SunDirection.y, Camera.SunDirection.z);
+            float sunAtten = TraceSegment(origin, origin + sunDir * 50.0f) ? 0.0f : 1.0f;
+            float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+        }
+
+        // 累积，gpu直接只保留4帧
+        DirectLight = LerpPackedColorAlt(DirectLight, directColor, 0.25);
+        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.125);
+        return false;
+    }
+
+void RenderCube(AmbientCube& Cube, float3 origin)
+{
+    uint iterate = Cube.ExtInfo2;
+    Cube.ExtInfo2 = Cube.ExtInfo2 + 1;
+    bool Solid = false;
+
+    Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
+
+    FaceTask(origin, float3(0, 1, 0), iterate, Cube.PosY_D, Cube.PosY);
+    FaceTask(origin, float3(0, -1, 0), iterate, Cube.NegY_D, Cube.NegY);
+    FaceTask(origin, float3(1, 0, 0), iterate, Cube.PosX_D, Cube.PosX);
+    FaceTask(origin, float3(-1, 0, 0), iterate, Cube.NegX_D, Cube.NegX);
+    FaceTask(origin, float3(0, 0, 1), iterate, Cube.PosZ_D, Cube.PosZ);
+    FaceTask(origin, float3(0, 0, -1), iterate, Cube.NegZ_D, Cube.NegZ);
+
+    Cube.Active = Solid ? 0 : 1;
+}
+
+#undef float2
+#undef float3
+#undef float4
 
 void FCPUProbeBaker::Init(float unit_size, vec3 offset)
 {
@@ -463,63 +513,14 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     {
         case ECubeProcType::ECPT_Clear:
         case ECubeProcType::ECPT_Fence:
+        case ECubeProcType::ECPT_Copy:
+        case ECubeProcType::ECPT_Blur:
             break;
         case ECubeProcType::ECPT_Iterate:
             {
-                cube.Active = 1;
-                cube.Lighting = 0;
-                cube.ExtInfo1 = 0;
-                cube.ExtInfo2 = cube.ExtInfo2 + 1;
-                
-                vec4 bounceColor(0);
-                vec4 skyColor(0);
-                uint matId = 0;
-
-                vec3 offset = vec3(0);
-                bool Inside = IsInside( probePos, offset, matId);
-
-                if (Inside)
-                {
-                    probePos = probePos + offset;
-                    cube.Active = 0;
-                }
-                cube.ExtInfo1 = matId;
-                //if (cube.Active == 0) return;
-                // 正Y方向
-                cube.PosY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,1,0), cube.Active, matId, bounceColor, ubo) );
-                cube.PosY = LerpPackedColorAlt( cube.PosY, bounceColor, 1.0f / cube.ExtInfo2 );
-                
-                // 负Y方向
-                cube.NegY_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,-1,0), cube.Active, matId, bounceColor, ubo) );
-                cube.NegY = LerpPackedColorAlt( cube.NegY, bounceColor, 1.0f / cube.ExtInfo2 );
-                
-                // 正X方向
-                cube.PosX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(1,0,0), cube.Active, matId, bounceColor, ubo) );
-                cube.PosX = LerpPackedColorAlt( cube.PosX, bounceColor, 1.0f / cube.ExtInfo2 );
-                
-                // 负X方向
-                cube.NegX_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(-1,0,0), cube.Active, matId, bounceColor, ubo) );
-                cube.NegX = LerpPackedColorAlt( cube.NegX, bounceColor, 1.0f / cube.ExtInfo2 );
-                
-                // 正Z方向
-                cube.PosZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,1), cube.Active, matId, bounceColor, ubo) );
-                cube.PosZ = LerpPackedColorAlt( cube.PosZ, bounceColor, 1.0f / cube.ExtInfo2 );
-                
-                // 负Z方向
-                cube.NegZ_D = packRGB10A2( TraceOcclusion(  cube.ExtInfo2, probePos, vec3(0,0,-1), cube.Active, matId, bounceColor, ubo) );
-                cube.NegZ = LerpPackedColorAlt( cube.NegZ, bounceColor, 1.0f / cube.ExtInfo2 );
+                RenderCube(cube, probePos);
             }
             break;
-        case ECubeProcType::ECPT_Copy:
-            {
-              
-            }
-            break;
-        case ECubeProcType::ECPT_Blur:
-        {
-           
-        }
-        break;
     }
 }
 
