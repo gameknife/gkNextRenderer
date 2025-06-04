@@ -33,6 +33,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
         outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+        outColor = Materials[hitVertex.MaterialIndex].Diffuse;
     }
     else
     {

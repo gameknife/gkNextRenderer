@@ -358,6 +358,18 @@ bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
         return false;
     }
 
+void VoxelizeCube(AmbientCube& Cube, float3 origin)
+{
+    // just write matid and solid status
+    bool Solid = false;
+    Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
+    Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
+    Cube.Active = Solid ? 0 : 1;
+}
 void RenderCube(AmbientCube& Cube, float3 origin)
 {
     uint iterate = Cube.ExtInfo2;
@@ -519,9 +531,10 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
         case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Iterate:
-            {
-                RenderCube(cube, probePos);
-            }
+            RenderCube(cube, probePos);
+            break;
+        case ECubeProcType::ECPT_Voxelize:
+            VoxelizeCube(cube, probePos);
             break;
     }
 }

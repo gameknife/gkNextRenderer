@@ -40,6 +40,7 @@ enum class ECubeProcType : uint8_t
     ECPT_Clear,
     ECPT_Iterate,
     ECPT_Fence,
+    ECPT_Voxelize,
 };
 
 enum class EBakerType : uint8_t
