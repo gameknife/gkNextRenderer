@@ -1,33 +1,35 @@
-# gkNextRenders
+# gknex trends
 
 [English](README.en.md)\|[Simplified Chinese](README.md)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextRenderer)
+
 ![windows ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/windows.yml/badge.svg)![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)![macOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/macos.yml/badge.svg)![android ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
 
-## What kind of project is this?
+## What project is this?
 
-### One sentence introduction
+### A brief introduction to one sentence
 
-A real-time path tracing renderer based on Vulkan with the goal of "**quality**"and"**efficiency**"Can be used for"**real time gaming**"Path tracing rendering.
+A Vulkan-based real-time path tracking renderer with the goal of implementing "**quality**"and"**efficiency**"Can be used"**Real-time game**"Path tracking rendering.
 
-### Technical features
+### Technical Features
 
-Different from various ray tracing auxiliary technologies currently implemented in games, the goal of this project is the path tracking closest to GroundTruth.
-Different from other GPU PathTracer implementations, the goal of this project is real-time, Benchmark uses full dynamic scenes,
-It also provides a runtime environment (lightweight game engine) closest to the game, verifies the feasibility of real-time ray tracing, and experiments with the latest GPU features to prepare for the next generation of rendering architecture.
+Unlike the various ray tracing assistive technologies currently implemented in the game, the goal of this project is to track the path closest to GroundTruth.
+Unlike other GPU PathTracer implementations, the goal of this project is to use full dynamic scenarios in real time.
+It also provides the runtime environment closest to the game (lightweight game engine), verify the feasibility of real-time ray tracing, and experiments with the latest GPU features to prepare for the next generation of rendering architectures.
 
 ### Development premise
 
-The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technology, intentionally avoid old technologies, use new C++ specifications and standard libraries, and develop cross-platform full-time.
+The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technologies, deliberately avoid outdated technologies, and use new C++ specifications and standard libraries to develop across the board.
 
 ### Subproject
 
--   **gkNextRenders**: Main project, path tracing renderer
--   **gkNextEditor**: Editor framework based on imgui, used for editing scenarios, completely dependent on glb reading and writing
--   **MagicaLego**: A Lego building game similar to MagicaVoxel, with full real-time path tracing rendering to verify goals
--   **gkNextBenchmark**: Dedicated Benchmark program for benchmarking static and real-time scenes
+-   **gknex trends**: Main project, path tracking renderer
+-   **gkNextEditor**: Imgui-based editor framework for editing scenes, relying entirely on glb's reading and writing
+-   **MagicaLego**: A LEGO built game similar to MagicaVoxel, with full real-time path tracking and rendering to verify the target
+-   **gkNextBenchmark**: Dedicated Benchmark program for Benchmark for static and real-time scenarios
 -   **Packager**: Package assets into pkg files for rapid deployment
--   **Portal**: Sub-project combination caller, providing various visual deployment and debugging tools (planned)
+-   **Portal**: Sub-project portfolio calls the program, providing various visual deployments and debugging tools (planned)
 
 ## Gallery (TrueHDR)
 
@@ -75,11 +77,11 @@ The original intention of this project is: learning, verification, and progress.
 
 > _Hybrid Renderer (Android) - Complex Cubes_
 
-## Technical characteristics
+## Technical Features
 
 -   Rendering
     -   Importance Sampling (BRDF / Light)
-    -   VNDF Sampling for GGX, by[tigrazone](https://github.com/tigrazone)
+    -   VNDF Sampling for GGX, by[Tigrazone](https://github.com/tigrazone)
     -   Ground Truth Path Tracing
     -   Temporal Reproject with MultiSample catchup
     -   High Performance Bilateral Filter Denoiser
@@ -97,7 +99,7 @@ The original intention of this project is: learning, verification, and progress.
     -   MultiThread Task Dispatcher ( Async Resource Loading and etc )
     -   Full-Scope File Package System
     -   Gpu scene updating
-    -   Aux Rendering
+    -   To the rendering
     -   HDR Display Support
     -   Screenshot HDR and encode to avif / jpg
 
@@ -110,17 +112,17 @@ The original intention of this project is: learning, verification, and progress.
 
 ## run
 
-1.  Download the latest MagicaLego game version and launch it through bin/MagicaLego.exe
+1.  Download the latest MagicaLego game version and start it through bin/MagicaLego.exe
 2.  Download the latest Release version and start it directly through bin/\*.exe
 3.  Build and run from scratch
 
 ## How to build
 
-First, you need to install[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform completes the installation according to lunarG's instructions. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build and execute subsequent scripts to complete the compilation.
+First, installation is required[Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Each platform will complete the installation according to the guidance of lunarG. Other dependencies are based on[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)Build, execute subsequent scripts to complete the compilation.
 
-project[Github Action](.github/workflows)Contains automatic ci scripts for windows, linux, android, and the author will maintain their correctness. If you have any environmental problems, please refer to the solution.
+Project[Github Action](.github/workflows)Automatic ci scripts containing windows, linux, android, and the author will maintain its correctness. If you have any environmental problems, please refer to the solution.
 
-After the local development environment is deployed, each platform can click the script to build
+After the local development environment is deployed, each platform can be built by clicking the script
 
 **Windows (Visual Studio 2022)**
 
@@ -153,7 +155,7 @@ Install Android Studio or Android SDK Tool, with NDK 25.1.8937393 installed
 
 **Linux**
 
-Each platform needs to install the corresponding dependencies in advance so that vcpkg can run correctly.
+Each platform needs to install the corresponding dependencies in advance before vcpkg can run correctly.
 
 For example, ubuntu
 
@@ -178,16 +180,16 @@ SteamDeck Archlinux
 
 ## Next Todolist
 
--   [ ] GPU Frustum / Occlusion Culling
+-   [ ] Luc frustum / managel colling
 -   [ ] GPU Lod Swtiching
 -   [ ] Huge Landscape
 
 ## Reference project
 
--   [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
--   [Volcano tutorial](https://vulkan-tutorial.com/)
--   [Volcano Samples](https://github.com/KhronosGroup/Vulkan-Samples)
+-   [Raytracingin Dove](https://github.com/GPSnoopy/RayTracingInVulkan)
+-   [Vulkan tutorial](https://vulkan-tutorial.com/)
+-   [Volcano-samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
-## Random thoughts
+## Feelings
 
-The development of the project, learning experience, and some random thoughts are recorded in[Thoughts.md](doc/Thoughts.md), updated at any time.
+The development of the project, learning experience, and some casual thoughts recorded in[Thoughts.md](doc/Thoughts.md), update at any time.

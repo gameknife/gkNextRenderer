@@ -107,6 +107,8 @@ namespace Assets
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 
 		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
+
+		FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
 		
 	private:
 		std::vector<FMaterial> materials_;
