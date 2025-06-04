@@ -39,8 +39,6 @@ enum class ECubeProcType : uint8_t
 {
     ECPT_Clear,
     ECPT_Iterate,
-    ECPT_Copy,
-    ECPT_Blur,
     ECPT_Fence,
 };
 
@@ -58,7 +56,6 @@ struct FCPUBLASVertInfo
 
 struct FCPUTLASInstanceInfo
 {
-    std::array<uint32_t, 16> mats;
     std::array<uint32_t, 16> matIdxs;
 };
 

@@ -461,7 +461,6 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         {
             uint32_t matId = node->Materials()[i];
             FMaterial& mat = scene.Materials()[matId];
-            info.mats[i] = packUnorm4x8( mat.gpuMaterial_.Diffuse );
             info.matIdxs[i] = matId;
         }
         bvhTLASContexts.push_back( info );
@@ -482,18 +481,23 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 {
     RayCastResult Result;
 
-    // tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
-    // GCpuBvh.Intersect(ray);
-    //
-    // if (ray.hit.t < 100000.f)
-    // {
-    //     vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
-    //
-    //     Result.HitPoint = vec4(hitPos, 0);
-    //     Result.Normal = vec4(GExtInfos[ray.hit.prim].normal, 0);
-    //     Result.Hitted = true;
-    //     Result.InstanceId = GExtInfos[ray.hit.prim].instanceId;
-    // }
+    tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
+    GCpuBvh.Intersect(ray);
+    
+    if (ray.hit.t < 100000.f)
+    {
+        vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+        uint32_t primIdx = ray.hit.prim;
+        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
+        FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
+        FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
+        mat4* worldTS = (mat4*)instance.transform;
+        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+        Result.HitPoint = vec4(hitPos, 0);
+        Result.Normal = normalWS;
+        Result.Hitted = true;
+        Result.InstanceId = ray.hit.inst;
+    }
 
     return Result;
 }
@@ -513,8 +517,6 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     {
         case ECubeProcType::ECPT_Clear:
         case ECubeProcType::ECPT_Fence:
-        case ECubeProcType::ECPT_Copy:
-        case ECubeProcType::ECPT_Blur:
             break;
         case ECubeProcType::ECPT_Iterate:
             {
