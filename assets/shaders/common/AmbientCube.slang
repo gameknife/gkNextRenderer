@@ -440,7 +440,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        float3 offset = float3(0, 0, 0);
         uint iterate = Cubes[CubeIdx].ExtInfo2;
         Cubes[CubeIdx].ExtInfo2 = Cubes[CubeIdx].ExtInfo2 + 1;
         bool Solid = false;
