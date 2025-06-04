@@ -232,33 +232,143 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
+        public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
+        // 第一步：先追踪一次顶点，计算距离
         uint2 vBuffer = VisibilityBuffer[ipos].rg;
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
-        // construct ray
+        // 构造初始光线
         float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
         float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
         float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
-
         float3 ray_dir = normalize(dir.xyz);
-        Vertex v = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
-        outNode = NodeProxies[vBuffer.x - 1];
-       
-        // geometry info
-        outVertex.Position = v.Position;
-        outVertex.Normal = normalize(v.Normal.rgb);
-        outVertex.MaterialIndex = FetchMaterialId(outNode, v.MaterialIndex);
-        outVertex.TexCoord = v.TexCoord;
-        outVertex.Tangent = v.Tangent;
-        outRayDir = ray_dir;
-
+        
+        // 获取初始顶点数据
+        Vertex initialVertex = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices);
+        
         if (vBuffer.x == 0)
         {
+            // 没有几何体，直接返回
+            outRayDir = ray_dir;
             return false;
         }
-
+        
+        // 第二步：计算顶点到相机的距离
+        float vertexDistance = length(initialVertex.Position - origin.xyz);
+        
+        // 第三步：根据距离和焦距计算散焦圆半径
+        float cocRadius = 0.0f;
+        if (abs(vertexDistance - Camera.FocusDistance) > 0.001f) // 避免除零
+        {
+            // 计算散焦圆半径：CoC = (光圈大小 * |物距 - 焦距|) / 物距
+            cocRadius = (Camera.Aperture * abs(vertexDistance - Camera.FocusDistance)) / vertexDistance;
+        }
+        
+        // 第四步：根据散焦圆半径计算像素偏移
+        float2 pixelOffset = float2(0, 0);
+        if (cocRadius > 0.001f)
+        {
+            // 在散焦圆内随机采样
+            float2 diskSample = RandomInUnitDisk(RandomSeed);
+            
+            // 计算垂直于视线方向的两个点，用于确定散焦圆在屏幕空间的大小
+            float3 right = normalize(cross(ray_dir, float3(0, 1, 0)));
+            float3 up = normalize(cross(right, ray_dir));
+            
+            // 散焦圆边缘的世界坐标点
+            float3 circleEdge = initialVertex.Position + right * cocRadius;
+            
+            // 投影到屏幕空间
+            float4 centerProj = mul(Camera.ViewProjection, float4(initialVertex.Position, 1.0));
+            float4 edgeProj = mul(Camera.ViewProjection, float4(circleEdge, 1.0));
+            
+            centerProj.xyz /= centerProj.w;
+            edgeProj.xyz /= edgeProj.w;
+            
+            // 计算屏幕空间中的散焦圆半径（以NDC单位）
+            float screenSpaceRadius = length(edgeProj.xy - centerProj.xy);
+            
+            // 转换为像素偏移
+            pixelOffset = diskSample * screenSpaceRadius * float2(isize) * 0.5f;
+        }
+        
+        // 第五步：计算偏移后的像素位置
+        int2 offsetPos = ipos + int2(pixelOffset);
+        
+        // 确保偏移后的位置在屏幕范围内
+        offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
+        
+        // 第六步：使用偏移后的位置重新追踪
+        uint2 finalVBuffer = VisibilityBuffer[offsetPos].rg;
+        float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
+        
+        // 构造最终光线
+        float4 finalTarget = mul(Camera.ProjectionInverse, float4(finalUV.x, finalUV.y, 1, 1));
+        float4 finalDir = mul(Camera.ModelViewInverse, float4(normalize(finalTarget.xyz), 0));
+        float3 final_ray_dir = normalize(finalDir.xyz);
+        
+        // 获取最终顶点数据
+        if (finalVBuffer.x == 0)
+        {
+            // 偏移后的位置没有几何体，使用原始结果
+            outVertex.Position = initialVertex.Position;
+            outVertex.Normal = normalize(initialVertex.Normal.rgb);
+            outNode = NodeProxies[vBuffer.x - 1];
+            outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
+            outVertex.TexCoord = initialVertex.TexCoord;
+            outVertex.Tangent = initialVertex.Tangent;
+            outRayDir = ray_dir;
+        }
+        else
+        {
+            // 使用偏移后的结果
+            Vertex finalVertex = Common.get_material_data(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Vertices);
+            
+            // 只在焦平面附近才进行深度检查
+            float distanceToFocus = abs(vertexDistance - Camera.FocusDistance);
+            float focusThreshold = Camera.FocusDistance * 0.1f; // 焦距的10%作为阈值
+            
+            bool shouldCancelOffset = false;
+            if (distanceToFocus < focusThreshold)
+            {
+                // 检查重新采样的顶点是否比原始顶点更靠近相机
+                float finalVertexDistance = length(finalVertex.Position - origin.xyz);
+                float depthDifference = vertexDistance - finalVertexDistance;
+                float depthThreshold = Camera.FocusDistance * 0.05f; // 深度差异阈值
+                
+                // 只有当深度差异超过阈值时才取消偏移
+                if (depthDifference > depthThreshold)
+                {
+                    shouldCancelOffset = true;
+                }
+            }
+            
+            if (shouldCancelOffset)
+            {
+                // 取消偏移，使用原始结果
+                outVertex.Position = initialVertex.Position;
+                outVertex.Normal = normalize(initialVertex.Normal.rgb);
+                outNode = NodeProxies[vBuffer.x - 1];
+                outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
+                outVertex.TexCoord = initialVertex.TexCoord;
+                outVertex.Tangent = initialVertex.Tangent;
+                outRayDir = ray_dir;
+            }
+            else
+            {
+                // 使用偏移后的结果
+                outNode = NodeProxies[finalVBuffer.x - 1];
+                
+                outVertex.Position = finalVertex.Position;
+                outVertex.Normal = normalize(finalVertex.Normal.rgb);
+                outVertex.MaterialIndex = FetchMaterialId(outNode, finalVertex.MaterialIndex);
+                outVertex.TexCoord = finalVertex.TexCoord;
+                outVertex.Tangent = finalVertex.Tangent;
+                outRayDir = final_ray_dir;
+            }
+        }
+        
         return true;
     }
 
