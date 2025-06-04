@@ -23,11 +23,137 @@ Assets::SphericalHarmonics HDRSHs[100];
 
 using namespace Assets;
 
-#include "../assets/shaders/common/SampleIBL.glsl"
-#include "../assets/shaders/common/AmbientCubeCommon.glsl"
+#define MAX_ILLUMINANCE 512.f
+const uint FACE_TRACING = 16;
 
-//=========================
-// Function Implement for Hybrid CPU / GPU Code
+const vec3 cubeVectors[6] = {
+    vec3(0, 1, 0),
+    vec3(0, -1, 0),
+    vec3(0, 0, 1),
+    vec3(0, 0, -1),
+    vec3(1, 0, 0),
+    vec3(-1, 0, 0),
+    };
+
+const vec2 grid4x4[16] = {
+    vec2(-0.75, -0.75), vec2(-0.25, -0.75), vec2(0.25, -0.75), vec2(0.75, -0.75),
+    vec2(-0.75, -0.25), vec2(-0.25, -0.25), vec2(0.25, -0.25), vec2(0.75, -0.25),
+    vec2(-0.75,  0.25), vec2(-0.25,  0.25), vec2(0.25,  0.25), vec2(0.75,  0.25),
+    vec2(-0.75,  0.75), vec2(-0.25,  0.75), vec2(0.25,  0.75), vec2(0.75,  0.75)
+};
+
+const vec2 grid5x5[25] = {
+    vec2(-0.8, -0.8), vec2(-0.4, -0.8), vec2(0.0, -0.8), vec2(0.4, -0.8), vec2(0.8, -0.8),
+    vec2(-0.8, -0.4), vec2(-0.4, -0.4), vec2(0.0, -0.4), vec2(0.4, -0.4), vec2(0.8, -0.4),
+    vec2(-0.8,  0.0), vec2(-0.4,  0.0), vec2(0.0,  0.0), vec2(0.4,  0.0), vec2(0.8,  0.0),
+    vec2(-0.8,  0.4), vec2(-0.4,  0.4), vec2(0.0,  0.4), vec2(0.4,  0.4), vec2(0.8,  0.4),
+    vec2(-0.8,  0.8), vec2(-0.4,  0.8), vec2(0.0,  0.8), vec2(0.4,  0.8), vec2(0.8,  0.8)
+};
+
+vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
+    // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
+    float angle = rotate * 3.14159265358979323846f;
+    float cosAngle = cos(angle);
+    float sinAngle = sin(angle);
+	
+    // Rotate the normal vector around Y-axis
+    vec3 rotatedNormal = vec3(
+        normal.x * cosAngle + normal.z * sinAngle,
+        normal.y,
+        -normal.x * sinAngle + normal.z * cosAngle
+    );
+	
+    // SH basis function evaluation
+    const float SH_C0 = 0.282095f;
+    const float SH_C1 = 0.488603f;
+    const float SH_C2 = 1.092548f;
+    const float SH_C3 = 0.315392f;
+    const float SH_C4 = 0.546274f;
+	
+    float basis[9];
+    basis[0] = SH_C0;
+    basis[1] = -SH_C1 * rotatedNormal.y;
+    basis[2] = SH_C1 * rotatedNormal.z;
+    basis[3] = -SH_C1 * rotatedNormal.x;
+    basis[4] = SH_C2 * rotatedNormal.x * rotatedNormal.y;
+    basis[5] = -SH_C2 * rotatedNormal.y * rotatedNormal.z;
+    basis[6] = SH_C3 * (3.f * rotatedNormal.y * rotatedNormal.y - 1.0f);
+    basis[7] = -SH_C2 * rotatedNormal.x * rotatedNormal.z;
+    basis[8] = SH_C4 * (rotatedNormal.x * rotatedNormal.x - rotatedNormal.z * rotatedNormal.z);
+	
+    vec3 color = vec3(0.0);
+    for (int i = 0; i < 9; ++i) {
+        color.r += SHCoefficients[0][i] * basis[i];
+        color.g += SHCoefficients[1][i] * basis[i];
+        color.b += SHCoefficients[2][i] * basis[i];
+    }
+	
+    return color;
+}
+
+vec4 SampleIBL(uint skyIdx, vec3 direction, float rotate, float roughness)
+{
+    vec3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0f - rotate);
+    return vec4(rayColor, 1.0);
+}
+
+uint packRGB10A2(vec4 color) {
+    vec4 clamped = clamp( color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
+    uint r = uint(clamped.r * 1023.0f);
+    uint g = uint(clamped.g * 1023.0f);
+    uint b = uint(clamped.b * 1023.0f);
+    uint a = uint(clamped.a * 3.0f);
+    return r | (g << 10) | (b << 20) | (a << 30);
+}
+
+vec4 unpackRGB10A2(uint packed) {
+    float r = float((packed) & 0x3FF) / 1023.0f;
+    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
+    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
+    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
+}
+
+uint PackColor(vec4 source) {
+    return packRGB10A2(source);
+}
+
+vec4 UnpackColor(uint packed) {
+    return unpackRGB10A2(packed);
+}
+
+uint LerpPackedColor(uint c0, uint c1, float t) {
+    vec4 color0 = UnpackColor(c0);
+    vec4 color1 = UnpackColor(c1);
+    return PackColor(mix(color0, color1, t));
+}
+
+uint LerpPackedColorAlt(uint c0, vec4 c1, float t) {
+    vec4 color0 = UnpackColor(c0);
+    vec4 color1 = c1;
+    return PackColor(mix(color0, color1, t));
+}
+
+vec4 sampleAmbientCubeHL2_DI(AmbientCube cube, vec3 normal) {
+    vec4 color = vec4(0.0);
+    float sum = 0.0;
+    float wx = max(normal.x, 0.0f);
+    float wnx = max(-normal.x, 0.0f);
+    float wy = max(normal.y, 0.0f);
+    float wny = max(-normal.y, 0.0f);
+    float wz = max(normal.z, 0.0f);
+    float wnz = max(-normal.z, 0.0f);
+    sum = wx + wnx + wy + wny + wz + wnz;
+    color += wx *   UnpackColor(cube.PosX_D);
+    color += wnx *  UnpackColor(cube.NegX_D);
+    color += wy *   UnpackColor(cube.PosY_D);
+    color += wny *  UnpackColor(cube.NegY_D);
+    color += wz *   UnpackColor(cube.PosZ_D);
+    color += wnz *  UnpackColor(cube.NegZ_D);
+    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    color.w = unpackHalf2x16(cube.Lighting).x;
+    return color;
+}
+
 LightObject FetchLight(uint lightIdx, vec4& lightPower)
 {
     auto Lights = NextEngine::GetInstance()->GetScene().Lights();
@@ -43,16 +169,6 @@ vec3 AlignWithNormal(vec3 ray, vec3 normal)
     vec3 bitangent = normalize(cross(normal, tangent));
     mat3 transform(tangent, bitangent, normal);
     return transform * ray;
-}
-
-float RandomFloat(uvec4& v)
-{
-    v.x = (v.x ^ 61) ^ (v.x >> 16);
-    v.x = v.x + (v.x << 3);
-    v.x = v.x ^ (v.x >> 4);
-    v.x = v.x * 0x27d4eb2d;
-    v.x = v.x ^ (v.x >> 15);
-    return float(v.x) / float(0xFFFFFFFF);
 }
 
 int TracingOccludeFunction(vec3 origin, vec3 lightPos)
@@ -139,10 +255,85 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal, uint OutMaterialId, uint OutInst
     vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05f);
     return albedo * indirectColor;
 }
-//=========================
 
-#include "../assets/shaders/common/AmbientCubeAlgo.glsl"
+bool IsInside( vec3 origin, vec3& offset, uint& materialId)
+{
+    for( uint i = 0; i < 6; i++ )
+    {
+        vec3 rayDir = cubeVectors[i];
+        
+        vec3 OutNormal;
+        uint OutMaterialId;
+        uint OutInstanceId;
+        float OutRayDist;
+        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
+        {
+             if( dot(OutNormal, rayDir) > 0.0 )
+            {
+                materialId = FetchMaterialId( OutMaterialId, OutInstanceId );
+                offset = rayDir * (OutRayDist + 0.05f);
+                if(OutRayDist < CUBE_UNIT)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
+vec4 TraceOcclusion(uint iterate, vec3 origin, vec3 basis, uint& activeProbe, uint& materialId, vec4& bounceColor, Assets::UniformBufferObject& Camera)
+{
+    vec4 rayColor = vec4(0.0);
+    bounceColor = vec4(0.0);
+
+    const vec2 offset = grid5x5[iterate % 25] * 0.25f;
+    float skyMultiplier = Camera.HasSky ? Camera.SkyIntensity : 0.0f;
+    
+    for( uint i = 0; i < FACE_TRACING; i++ )
+    {
+        vec3 hemiVec = normalize(vec3(grid4x4[i] + offset, 1.0));
+
+        // Align with the surface normal
+        vec3 rayDir = AlignWithNormal(hemiVec, basis);
+        
+        vec3 OutNormal;
+        uint OutMaterialId;
+        uint OutInstanceId;
+        float OutRayDist;
+
+        if( TracingFunction(origin, rayDir, OutNormal, OutMaterialId, OutRayDist, OutInstanceId) )
+        {
+            vec3 hitPos = origin + rayDir * OutRayDist;
+            bounceColor += FetchDirectLight(hitPos, OutNormal, OutMaterialId, OutInstanceId);
+        }
+        else
+        {
+            rayColor += SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 1.0) * skyMultiplier;
+        }
+    }
+    rayColor = rayColor / float(FACE_TRACING);
+    bounceColor = bounceColor / float(FACE_TRACING);
+
+    if(Camera.LightCount > 0)
+    {
+        vec4 lightPower = vec4(0.0);
+        LightObject light = FetchLight(0, lightPower);
+        vec3 lightPos = mix(vec3(light.p1), vec3(light.p3), 0.5f);
+        float lightAtten = float(TracingOccludeFunction(origin, lightPos));
+        vec3 lightDir = normalize(lightPos - origin);
+        float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+        float distance = length(lightPos - origin);
+        float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+        rayColor += lightPower * attenuation * lightAtten;
+    }
+    
+    vec3 sunDir = vec3(Camera.SunDirection);
+    float sunAtten = float(TracingOccludeFunction(origin, origin + sunDir * 1000.0f));
+    float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+    rayColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+    return rayColor;
+}
 
 void FCPUProbeBaker::Init(float unit_size, vec3 offset)
 {
