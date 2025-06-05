@@ -98,11 +98,19 @@ public struct ALIGN_16 AmbientCube
     public uint NegY_D;
     public uint PosX_D;
     public uint NegX_D;
- 
-    public uint Active;
-    public uint Lighting;
-    public uint ExtInfo1;
-    public uint ExtInfo2;
+};
+
+// 16 bytes per voxel
+// simplfy scene reprent, matId like Minecraft blockId, skyVisibility and sunVisibility represent a simple gi
+// skyVisibility could use to occlution the skylight
+// sunVisibility could use to occlution the sun, instead of realtime shadowmap, and could use to render volume effects
+// airMatId could use to represent cloud/smoke etc.
+public struct ALIGN_16 VoxelData
+{
+    public uint matId; // 0 is void, that is clean default value
+    public uint age;
+    public float skyVisibility;
+    public float sunVisibility;
 };
 
 public struct ALIGN_16 SphericalHarmonics

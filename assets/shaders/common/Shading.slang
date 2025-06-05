@@ -436,7 +436,7 @@ public struct FVoxelDDARayTracer : IRayTracer
         for (uint i = 0; i < maxSteps; i++)
         {
             // Check current voxel
-            if (inSolid(voxelPos, hitMatId, Cubes, FarCubes))
+            if (inSolid(voxelPos, hitMatId, Voxels))
             {
                 hit = true;
 
@@ -477,7 +477,7 @@ public struct FVoxelDDARayTracer : IRayTracer
     }
 
     StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<AmbientCube> FarCubes;
+    StructuredBuffer<VoxelData> Voxels;
 }
 
 public struct FHardwareRayTracer : IRayTracer
@@ -773,7 +773,7 @@ public struct FPathTracingRenderer : IRenderer
                 // 终结路径
                 if (b == maxBounces - 1 || earlyExit)
                 {
-                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, FarCubes);// * 2.0f;
+                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes);// * 2.0f;
                     break;
                 }
             }
@@ -796,7 +796,7 @@ public struct FPathTracingRenderer : IRenderer
     StructuredBuffer<NodeProxy> NodeProxies;
 
     StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<AmbientCube> FarCubes;
+    StructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
 
@@ -852,7 +852,7 @@ public struct FHybridRenderer : IRenderer
                     {
                         outAlbedo = float4(1, 1, 1, 1);
                     }
-                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
                 }
             }
             else
@@ -876,6 +876,6 @@ public struct FHybridRenderer : IRenderer
     StructuredBuffer<NodeProxy> NodeProxies;
 
     StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<AmbientCube> FarCubes;
+    StructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
