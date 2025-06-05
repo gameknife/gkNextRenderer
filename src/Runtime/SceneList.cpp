@@ -283,6 +283,7 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
 {
     std::filesystem::path filepath = filename;
     std::string ext = filepath.extension().string();
+    materials.push_back({"root_default", 0, Material::Lambertian(vec3(0.73f, 0.73f, 0.73f))});
     if (ext == ".glb" || ext == ".gltf")
     {
         return Model::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);

@@ -6,7 +6,7 @@ import Common;
 [[vk::binding(2)]] StructuredBuffer<Material> Materials;
 [[vk::binding(3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(4)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(5)]] StructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(5)]] StructuredBuffer<VoxelData> Voxels;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
@@ -15,7 +15,7 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
-    FVoxelDDARayTracer voxelTracer = { Cubes, FarCubes };
+    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels };
     FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
 
     int2 ipos = int2(DTid.xy);
@@ -31,13 +31,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 rayDir;
     if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir))
     {
-        float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
-        outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
-        outColor = Materials[hitVertex.MaterialIndex].Diffuse;
+        //float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+        //outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+        outColor = Materials[hitVertex.MaterialIndex].Diffuse * 50.0f;
     }
     else
     {
-        outColor= float4(0,0,0,0);
+        outColor= float4(10,10,10,0);
     }
 
     if (Camera.HDR)

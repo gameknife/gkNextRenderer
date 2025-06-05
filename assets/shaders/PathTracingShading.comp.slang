@@ -20,7 +20,7 @@ import Common;
 
 [[vk::binding(17)]] RWTexture2D<float4> ShaderTimerBuffer;
 [[vk::binding(18)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(19)]] StructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(19)]] StructuredBuffer<VoxelData> Voxels;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
@@ -32,7 +32,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
     FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
-    FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs};
+    FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};
 
     int2 ipos = int2(DTid.xy);
     int2 isize;

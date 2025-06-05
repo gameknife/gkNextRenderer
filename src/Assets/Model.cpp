@@ -158,7 +158,7 @@ namespace Assets
     }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& out_camera, std::vector<Assets::LightObject>& out_lights,
-        tinygltf::Model& model, int node_idx, int modelIdx)
+        tinygltf::Model& model, int node_idx, int modelIdx, int materialOffset)
     {
         tinygltf::Node& node = model.nodes[node_idx];
         
@@ -207,8 +207,8 @@ namespace Assets
             {
                 assert( i < 16 );
                 auto& primitive = model.meshes[node.mesh].primitives[i];
-                materialIdx[i] = (max(0, primitive.material));
-                primaryMatIdx = primitive.material;
+                materialIdx[i] = (max(0, primitive.material + materialOffset));
+                primaryMatIdx = primitive.material + materialOffset;
             }
             sceneNode->SetMaterial(materialIdx);
         }
@@ -241,7 +241,7 @@ namespace Assets
         // for each child node
         for (int child : node.children)
         {
-            ParseGltfNode(out_nodes, nodeMap, out_camera, out_lights, model, child, modelIdx);
+            ParseGltfNode(out_nodes, nodeMap, out_camera, out_lights, model, child, modelIdx, materialOffset);
             nodeMap[child]->SetParent(sceneNode);
         }
     }
@@ -260,7 +260,7 @@ namespace Assets
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
-        int32_t matieralIdx = static_cast<int32_t>(materials.size());
+        int32_t materialOffset = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
@@ -612,7 +612,7 @@ namespace Assets
         std::map<int, std::shared_ptr<Node> > nodeMap;
         for (int nodeIdx : model.scenes[0].nodes)
         {
-            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
+            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx, materialOffset);
             // if (nodeMap.find(nodeIdx) != nodeMap.end())
             // {
             //     nodeMap[nodeIdx]->SetParent(sceneNode);

@@ -12,7 +12,7 @@ import Common;
 [[vk::binding(7)]] StructuredBuffer<NodeProxy> NodeProxies;
 
 [[vk::binding(8, 0)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(9, 0)]] StructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(9, 0)]] StructuredBuffer<VoxelData> Voxels;
 [[vk::binding(10, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(11, 0)]] Sampler2D ShadowMapSampler;
 
@@ -44,6 +44,6 @@ void main(uint3 DTid : SV_DispatchThreadID) {
 
     Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
-    float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, FarCubes);
+    float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
     OutImage[ipos] = hitMaterial.Diffuse * radiance;
 }

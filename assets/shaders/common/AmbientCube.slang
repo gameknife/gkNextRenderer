@@ -103,7 +103,6 @@ float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal) {
     color += wnz * UnpackColor(cube.NegZ_D);
 
     color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = f16tof32(cube.Lighting & 0xFFFF);
     return color;
 }
 
@@ -128,7 +127,6 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
     color += wnz * UnpackColor(cube.NegZ_D);
 
     color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = f16tof32(cube.Lighting & 0xFFFF);
     return color;
 }
 
@@ -161,7 +159,6 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal) {
 
     // Normalize
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = f16tof32(cube.Lighting & 0xFFFF);
     return color;
 }
 
@@ -194,21 +191,28 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-AmbientCube FetchCube(int3 probePos, bool useFar, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes)
+AmbientCube FetchCube(int3 probePos, in StructuredBuffer<AmbientCube> Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
-    return useFar ? FarCubes[idx] : Cubes[idx];
+    return Cubes[idx];
 }
 
-AmbientCube RWFetchCube(int3 probePos, bool useFar, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+VoxelData FetchVoxel(int3 probePos, in StructuredBuffer<VoxelData> Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
-    return useFar ? FarCubes[idx] : Cubes[idx];
+    return Cubes[idx];
 }
 
-public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes)
+AmbientCube RWFetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
+{
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+              probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
+}
+
+public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in StructuredBuffer<AmbientCube> Cubes)
 {
     bool useFar = false;
 
@@ -246,8 +250,8 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
         );
 
         int3 probePos = baseIdx + offset;
-        AmbientCube cube = FetchCube(probePos, useFar, Cubes, FarCubes);
-        if (cube.Active == 0) continue;
+        AmbientCube cube = FetchCube(probePos, Cubes);
+        //if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -265,7 +269,7 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
     return indirectColor;
 }
 
-public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<AmbientCube> FarCubes)
+public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes)
 {
     bool useFar = false;
 
@@ -303,8 +307,8 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, flo
         );
 
         int3 probePos = baseIdx + offset;
-        AmbientCube cube = RWFetchCube(probePos, useFar, Cubes, FarCubes);
-        if (cube.Active == 0) continue;
+        AmbientCube cube = RWFetchCube(probePos, Cubes);
+        //if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -323,7 +327,7 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, flo
 }
 
 // Interpolate between 8 probes
-public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<AmbientCube> FarCubes) {
+public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<VoxelData> Cubes) {
     
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
@@ -333,9 +337,9 @@ public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<AmbientCub
 
     int3 baseIdx = int3(floor(pos));
 
-    AmbientCube cube = FetchCube(baseIdx, false, Cubes, FarCubes);
-    matId = cube.ExtInfo1;
-    return cube.Active == 1 ? false : true;
+    VoxelData cube = FetchVoxel(baseIdx, Cubes);
+    matId = cube.matId;
+    return cube.matId > 0;
 }
 
 public interface IProbeGenerator
@@ -372,7 +376,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
-                bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Cubes);
+                bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
             }
             else
             {
@@ -440,16 +444,16 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        uint iterate = Cubes[CubeIdx].ExtInfo2;
-        Cubes[CubeIdx].ExtInfo2 = Cubes[CubeIdx].ExtInfo2 + 1;
+        uint iterate = Voxels[CubeIdx].age;
+        Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
         bool Solid = false;
 
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0), Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0), Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), Cubes[CubeIdx].ExtInfo1);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), Cubes[CubeIdx].ExtInfo1);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0),    Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0),   Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1),    Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1),   Voxels[CubeIdx].matId);
 
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
@@ -457,8 +461,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
         FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, TextureArray);
         FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, TextureArray);
         FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, TextureArray);
-
-        Cubes[CubeIdx].Active = Solid ? 0 : 1;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -469,6 +471,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     StructuredBuffer<NodeProxy> NodeProxies;
 
     RWStructuredBuffer<AmbientCube> Cubes;
+    RWStructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
     StructuredBuffer<LightObject> Lights;
 }

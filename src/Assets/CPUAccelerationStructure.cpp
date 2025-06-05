@@ -152,7 +152,7 @@ vec4 sampleAmbientCubeHL2_DI(AmbientCube cube, vec3 normal) {
     color += wz *   UnpackColor(cube.PosZ_D);
     color += wnz *  UnpackColor(cube.NegZ_D);
     color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.w = unpackHalf2x16(cube.Lighting).x;
+    //color.w = unpackHalf2x16(cube.Lighting).x;
     return color;
 }
 
@@ -213,7 +213,7 @@ vec4 FetchDirectLight(vec3 hitPos, vec3 normal)
 
         ivec3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos);
-        if (cube.Active != 1) continue;
+        //if (cube.Active != 1) continue;
 
         float wx = offset.x == 0 ? (1.0f - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0f - frac.y) : frac.y;
@@ -271,25 +271,28 @@ bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
     vec3 OutNormal;
     uint OutInstanceId;
     float OutRayDist;
+    uint TempMaterialId;
 
-    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, OutMaterialId, OutRayDist, OutInstanceId))
+    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, TempMaterialId, OutRayDist, OutInstanceId))
     {
         vec3 hitPos = origin + rayDir * OutRayDist;
-        FMaterial hitMaterial = FetchMaterial(OutMaterialId);
+        FMaterial hitMaterial = FetchMaterial(TempMaterialId);
         // 命中反面，识别为固体，并将lightprobe推出体外
         if (dot(OutNormal, rayDir) > 0.0)
         {
             float hitRayDist = OutRayDist + 0.05f;
             origin += rayDir * hitRayDist;
+            OutMaterialId = TempMaterialId;
             return true;
         }
         // 命中光源，不论正反，识别为固体
         if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
         {
+            OutMaterialId = TempMaterialId;
             return true;
         }
     }
-    OutMaterialId = 0;
+    //OutMaterialId = 0;
     return false;
 }
 
@@ -358,39 +361,39 @@ bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
         return false;
     }
 
-void VoxelizeCube(AmbientCube& Cube, float3 origin)
+void VoxelizeCube(VoxelData& Cube, float3 origin)
 {
     // just write matid and solid status
-    bool Solid = false;
-    Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
-    Cube.Active = Solid ? 0 : 1;
+    Cube.matId = 0;
+
+    InsideGeometry(origin, float3(0, 1, 0), Cube.matId);
+    InsideGeometry(origin, float3(0, -1, 0), Cube.matId);
+    InsideGeometry(origin, float3(1, 0, 0), Cube.matId);
+    InsideGeometry(origin, float3(-1, 0, 0), Cube.matId);
+    InsideGeometry(origin, float3(0, 0, 1), Cube.matId);
+    InsideGeometry(origin, float3(0, 0, -1), Cube.matId);
 }
 void RenderCube(AmbientCube& Cube, float3 origin)
 {
-    uint iterate = Cube.ExtInfo2;
-    Cube.ExtInfo2 = Cube.ExtInfo2 + 1;
-    bool Solid = false;
-
-    Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
-    Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
-
-    FaceTask(origin, float3(0, 1, 0), iterate, Cube.PosY_D, Cube.PosY);
-    FaceTask(origin, float3(0, -1, 0), iterate, Cube.NegY_D, Cube.NegY);
-    FaceTask(origin, float3(1, 0, 0), iterate, Cube.PosX_D, Cube.PosX);
-    FaceTask(origin, float3(-1, 0, 0), iterate, Cube.NegX_D, Cube.NegX);
-    FaceTask(origin, float3(0, 0, 1), iterate, Cube.PosZ_D, Cube.PosZ);
-    FaceTask(origin, float3(0, 0, -1), iterate, Cube.NegZ_D, Cube.NegZ);
-
-    Cube.Active = Solid ? 0 : 1;
+    // uint iterate = Cube.ExtInfo2;
+    // Cube.ExtInfo2 = Cube.ExtInfo2 + 1;
+    // bool Solid = false;
+    //
+    // Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
+    // Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
+    // Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
+    // Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
+    // Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
+    // Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
+    //
+    // FaceTask(origin, float3(0, 1, 0), iterate, Cube.PosY_D, Cube.PosY);
+    // FaceTask(origin, float3(0, -1, 0), iterate, Cube.NegY_D, Cube.NegY);
+    // FaceTask(origin, float3(1, 0, 0), iterate, Cube.PosX_D, Cube.PosX);
+    // FaceTask(origin, float3(-1, 0, 0), iterate, Cube.NegX_D, Cube.NegX);
+    // FaceTask(origin, float3(0, 0, 1), iterate, Cube.PosZ_D, Cube.PosZ);
+    // FaceTask(origin, float3(0, 0, -1), iterate, Cube.NegZ_D, Cube.NegZ);
+    //
+    // Cube.Active = Solid ? 0 : 1;
 }
 
 #undef float2
@@ -402,6 +405,7 @@ void FCPUProbeBaker::Init(float unit_size, vec3 offset)
     UNIT_SIZE = unit_size;
     CUBE_OFFSET = offset;
     ambientCubes.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
+    voxels.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
 }
 
 void FCPUAccelerationStructure::InitBVH(Scene& scene)
@@ -443,8 +447,7 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     }
     
     probeBaker.Init( CUBE_UNIT, CUBE_OFFSET );
-    farProbeBaker.Init( CUBE_UNIT_FAR, CUBE_OFFSET_FAR );
-    
+
     UpdateBVH(scene);
 }
 
@@ -520,6 +523,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
     uint32_t addressIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
     AmbientCube& cube = ambientCubes[addressIdx];
+    VoxelData& voxel = voxels[addressIdx];
 
     TLSContext.Cubes = &ambientCubes;
     TLSContext.CUBE_UNIT = UNIT_SIZE;
@@ -534,16 +538,25 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
             RenderCube(cube, probePos);
             break;
         case ECubeProcType::ECPT_Voxelize:
-            VoxelizeCube(cube, probePos);
+            VoxelizeCube(voxel, probePos);
             break;
     }
 }
 
-void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory)
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory, Vulkan::DeviceMemory& VoxelGPUMemory)
 {
-    AmbientCube* data = reinterpret_cast<AmbientCube*>(GPUMemory.Map(0, sizeof(AmbientCube) * ambientCubes.size()));
-    std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
+    {
+        AmbientCube* data = reinterpret_cast<AmbientCube*>(GPUMemory.Map(0, sizeof(AmbientCube) * ambientCubes.size()));
+        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
+    }
+
+    {
+        VoxelData* data = reinterpret_cast<VoxelData*>(VoxelGPUMemory.Map(0, sizeof(VoxelData) * voxels.size()));
+        std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
+    }
+
     GPUMemory.Unmap();
+    VoxelGPUMemory.Unmap();
 }
 
 void FCPUAccelerationStructure::AsyncProcessFull()
@@ -554,19 +567,18 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     probeBaker.ClearAmbientCubes();
-    farProbeBaker.ClearAmbientCubes();
-    
+
     const int groupSize = 16;
     const int lengthX = CUBE_SIZE_XY / groupSize;
     const int lengthZ = CUBE_SIZE_XY / groupSize;
 
     // far probe gen
-    for (int x = 0; x < lengthX; x++)
-        for (int z = 0; z < lengthZ; z++)
-            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_FarProbe});
+    // for (int x = 0; x < lengthX; x++)
+    //     for (int z = 0; z < lengthZ; z++)
+    //         needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_FarProbe});
     
     // 2 pass near probe iterate
-    for(int pass = 0; pass < 4; ++pass)
+    for(int pass = 0; pass < 1; ++pass)
     {
         // shuffle
         std::vector<std::pair<int, int>> coordinates;
@@ -580,7 +592,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
 
         // dispatch
         for (const auto& [x, z] : coordinates)
-            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe});
         // add fence
         needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
     }
@@ -611,13 +623,13 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
     }
 
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, procType, bakerType](ResTask& task)
+                [this, actualX, actualZ, groupSize, procType](ResTask& task)
             {
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
                         {
-                            bakerType == EBakerType::EBT_Probe ? probeBaker.ProcessCube(x, y, z, procType) : farProbeBaker.ProcessCube(x, y, z, procType);
+                            probeBaker.ProcessCube(x, y, z, procType);
                         }
             },
             [this](ResTask& task)
@@ -630,13 +642,12 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
     lastBatchTasks.push_back(taskId);
 }
 
-void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory)
+void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* VoxelGPUMemory)
 {
     if (needFlush)
     {
         // Upload to GPU, now entire range, optimize to partial upload later
-        probeBaker.UploadGPU(*GPUMemory);
-        farProbeBaker.UploadGPU(*FarGPUMemory);
+        probeBaker.UploadGPU(*GPUMemory, *VoxelGPUMemory);
         needFlush = false;
     }
 
@@ -688,7 +699,11 @@ void FCPUProbeBaker::ClearAmbientCubes()
     for(auto& cube : ambientCubes)
     {
         cube = {};
-        cube.Active = 1;
+    }
+
+    for(auto& voxel : voxels)
+    {
+        voxel = {};
     }
 }
 

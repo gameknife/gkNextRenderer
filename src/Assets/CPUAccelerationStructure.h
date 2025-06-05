@@ -46,7 +46,6 @@ enum class ECubeProcType : uint8_t
 enum class EBakerType : uint8_t
 {
     EBT_Probe,
-    EBT_FarProbe,
 };
 
 struct FCPUBLASVertInfo
@@ -82,10 +81,11 @@ struct FCPUProbeBaker
     glm::vec3 CUBE_OFFSET;
     
     std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::VoxelData> voxels;
 
     void Init( float unit_size, glm::vec3 offset );
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
-    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, Vulkan::DeviceMemory& voxelDeviceMemory);
     void ClearAmbientCubes();
 };
 
@@ -122,5 +122,4 @@ private:
     bool needFlush = false;
 
     FCPUProbeBaker probeBaker;
-    FCPUProbeBaker farProbeBaker;
 };

@@ -17,7 +17,7 @@ import Common;
 [[vk::binding(14)]] RWTexture2D<float4> OutNormalBuffer;
 
 [[vk::binding(16)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(17)]] StructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(17)]] StructuredBuffer<VoxelData> Voxels;
 [[vk::binding(18)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(19)]] StructuredBuffer<LightObject> Lights;
 
@@ -32,8 +32,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
-    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
-    FPathTracingRenderer PTRenderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
+    FPathTracingRenderer PTRenderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
 
     int2 ipos = int2(DTid.xy);
     int2 size;

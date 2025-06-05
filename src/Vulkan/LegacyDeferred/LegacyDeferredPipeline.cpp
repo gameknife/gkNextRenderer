@@ -206,7 +206,7 @@ namespace Vulkan::VoxelTracing
 	            	descriptorSets.Bind(i, 2, matBufferInfo),
             		descriptorSets.Bind(i, 3, hdrshBufferInfo),
             		descriptorSets.Bind(i, 4, ambientCubeBufferInfo),
-	                descriptorSets.Bind(i, 5, ambientCubeBufferInfo),
+	                descriptorSets.Bind(i, 5, farAmbientCubeBufferInfo),
 	            };
 
 	            descriptorSets.UpdateDescriptors(i, descriptorWrites);

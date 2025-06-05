@@ -11,7 +11,7 @@ import Common;
 [[vk::binding(8)]] StructuredBuffer<NodeProxy> NodeProxies;
 [[vk::binding(9)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(10)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(11)]] StructuredBuffer<AmbientCube> FarCubes;
+[[vk::binding(11)]] StructuredBuffer<VoxelData> Voxels;
 [[vk::binding(12)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 
 [[vk::binding(13)]] Sampler2D ShadowMapSampler;
@@ -27,10 +27,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
-    FVoxelDDARayTracer voxelTracer = { Cubes, FarCubes };
+    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, NodeProxies, voxelTracer };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
-    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, FarCubes, HDRSHs };
+    FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
 
     
     int2 ipos = int2(DTid.xy);
