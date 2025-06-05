@@ -496,7 +496,7 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    DirectLightGenPipeline::DirectLightGenPipeline(const SwapChain& swapChain, const DeviceProcedures& deviceProcedures, const Buffer& ioBuffer,
+    DirectLightGenPipeline::DirectLightGenPipeline(const SwapChain& swapChain, const DeviceProcedures& deviceProcedures,
         const RayTracing::TopLevelAccelerationStructure& accelerationStructure, const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):deviceProcedures_(deviceProcedures)
     {
                 // Create descriptor pool/sets.
@@ -504,7 +504,7 @@ namespace Vulkan::PipelineCommon
         const std::vector<DescriptorBinding> descriptorBindings =
         {
             {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            
             {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
@@ -515,6 +515,9 @@ namespace Vulkan::PipelineCommon
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
@@ -530,10 +533,6 @@ namespace Vulkan::PipelineCommon
             structureInfo.pNext = nullptr;
             structureInfo.accelerationStructureCount = 1;
             structureInfo.pAccelerationStructures = &accelerationStructureHandle;
-        
-            VkDescriptorBufferInfo ioBufferInfo = {};
-            ioBufferInfo.buffer = ioBuffer.Handle();
-            ioBufferInfo.range = VK_WHOLE_SIZE;
 
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -573,11 +572,19 @@ namespace Vulkan::PipelineCommon
             VkDescriptorBufferInfo shBufferInfo = {};
             shBufferInfo.buffer = scene.HDRSHBuffer().Handle();
             shBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo probeBufferInfo = {};
+            probeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
+            probeBufferInfo.range = VK_WHOLE_SIZE;
+
+            VkDescriptorBufferInfo voxBufferInfo = {};
+            voxBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
+            voxBufferInfo.range = VK_WHOLE_SIZE;
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(0, 0, structureInfo),
-                descriptorSets.Bind(0, 1, ioBufferInfo),
+                
                 descriptorSets.Bind(0, 2, lightBufferInfo),
                 descriptorSets.Bind(0, 3, uniformBufferInfo),
                 descriptorSets.Bind(0, 4, vertexBufferInfo),
@@ -586,6 +593,9 @@ namespace Vulkan::PipelineCommon
                 descriptorSets.Bind(0, 7, offsetsBufferInfo),
                 descriptorSets.Bind(0, 8, nodesBufferInfo),
                 descriptorSets.Bind(0, 9, shBufferInfo),
+
+                descriptorSets.Bind(0, 10, probeBufferInfo),
+                descriptorSets.Bind(0, 11, voxBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

@@ -149,8 +149,8 @@ namespace Vulkan::RayTracing
 #if !ANDROID
         raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
 #endif
-        directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().AmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
-        farDirectLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().FarAmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
+        directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), topAs_[0], UniformBuffers(), GetScene()));
+        //farDirectLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().FarAmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -160,7 +160,7 @@ namespace Vulkan::RayTracing
         rayCastBuffer_.reset();
         raycastPipeline_.reset();
         directLightGenPipeline_.reset();
-        farDirectLightGenPipeline_.reset();
+        //farDirectLightGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
@@ -339,31 +339,31 @@ namespace Vulkan::RayTracing
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
             }
             
-            {
-                int frame = (int)(frameCount_ % 600);
-                int groupPerFrame = group / 600;
-                int offset = frame * groupPerFrame;
-                int offsetInCubes = offset * cubesPerGroup;
-                
-                SCOPED_GPU_TIMER("ambient far di");
-                VkDescriptorSet DescriptorSets[] = {farDirectLightGenPipeline_->DescriptorSet(0)};
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->Handle());
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                        farDirectLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-
-                // bind the global bindless set
-                static const uint32_t k_bindless_set = 1;
-                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
-                                         1, GlobalDescriptorSets, 0, nullptr );
-                
-                glm::uvec2 pushConst = { offsetInCubes, 1 };
-
-                vkCmdPushConstants(commandBuffer, farDirectLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(glm::uvec2), &pushConst);
-            
-                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
-            }
+            // {
+            //     int frame = (int)(frameCount_ % 600);
+            //     int groupPerFrame = group / 600;
+            //     int offset = frame * groupPerFrame;
+            //     int offsetInCubes = offset * cubesPerGroup;
+            //     
+            //     SCOPED_GPU_TIMER("ambient far di");
+            //     VkDescriptorSet DescriptorSets[] = {farDirectLightGenPipeline_->DescriptorSet(0)};
+            //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->Handle());
+            //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+            //                             farDirectLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            //
+            //     // bind the global bindless set
+            //     static const uint32_t k_bindless_set = 1;
+            //     VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+            //     vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+            //                              1, GlobalDescriptorSets, 0, nullptr );
+            //     
+            //     glm::uvec2 pushConst = { offsetInCubes, 1 };
+            //
+            //     vkCmdPushConstants(commandBuffer, farDirectLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+            //                        0, sizeof(glm::uvec2), &pushConst);
+            //
+            //     vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+            // }
         }
 #endif
     }
