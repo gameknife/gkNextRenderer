@@ -23,14 +23,6 @@ void NextRendererGameInstance::OnInit()
 		initializedScene = GOption->SceneName;
 	}
 	GetEngine().RequestLoadScene(initializedScene);
-
-	GetEngine().GetWindow().OnGamepadInput = [this](float leftStickX, float leftStickY,
-											 float rightStickX, float rightStickY,
-											 float leftTrigger, float rightTrigger) {
-		return modelViewController_.OnGamepadInput(leftStickX, leftStickY, 
-												rightStickX, rightStickY, 
-												leftTrigger, rightTrigger);
-	};
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
@@ -153,6 +145,12 @@ bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 {
 	modelViewController_.OnScroll( xoffset,  yoffset);
 	return true;
+}
+
+bool NextRendererGameInstance::OnGamepadInput(float leftStickX, float leftStickY, float rightStickX, float rightStickY,
+	float leftTrigger, float rightTrigger)
+{
+	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
 }
 
 

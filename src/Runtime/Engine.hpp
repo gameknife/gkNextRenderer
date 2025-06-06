@@ -47,6 +47,9 @@ public:
 	virtual bool OnCursorPosition(double xpos, double ypos) =0;
 	virtual bool OnMouseButton(int button, int action, int mods) =0;
 	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
+	virtual bool OnGamepadInput(float leftStickX, float leftStickY,
+						float rightStickX, float rightStickY,
+						float leftTrigger, float rightTrigger) {return false;}
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase

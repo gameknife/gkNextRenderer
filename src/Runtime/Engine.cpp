@@ -218,7 +218,11 @@ NextEngine::NextEngine(Options& options, void* userdata)
     window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
     window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
     window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
-
+    window_->OnGamepadInput = [this](float leftStickX, float leftStickY,float rightStickX, float rightStickY,float leftTrigger, float rightTrigger) {
+        if (gameInstance_) return gameInstance_->OnGamepadInput(leftStickX, leftStickY,rightStickX, rightStickY,leftTrigger, rightTrigger);
+        return false;
+    };
+    
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
