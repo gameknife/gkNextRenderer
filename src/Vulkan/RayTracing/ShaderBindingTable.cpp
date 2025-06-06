@@ -12,7 +12,7 @@ namespace Vulkan::RayTracing {
 
 namespace
 {
-	size_t RoundUp(size_t size, size_t powerOf2Alignment)
+	size_t TempRoundUp(size_t size, size_t powerOf2Alignment)
 	{
 		return (size+powerOf2Alignment-1) & ~(powerOf2Alignment-1);
 	}
@@ -29,7 +29,7 @@ namespace
 
 		// A SBT entry is made of a program ID and a set of 4-byte parameters (see shaderRecordEXT).
 		// Its size is ShaderGroupHandleSize (plus parameters) and must be aligned to ShaderGroupBaseAlignment.
-		return RoundUp(rayTracingProperties.ShaderGroupHandleSize() + maxArgs, rayTracingProperties.ShaderGroupBaseAlignment());
+		return TempRoundUp(rayTracingProperties.ShaderGroupHandleSize() + maxArgs, rayTracingProperties.ShaderGroupBaseAlignment());
 	}
 
 	size_t CopyShaderData(
