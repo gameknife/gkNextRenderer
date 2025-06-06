@@ -296,6 +296,7 @@ bool NextEngine::Tick()
     // Renderer Tick
 #if !ANDROID
     glfwPollEvents();
+    window_->PollGamepadInput();
 #endif
     // tick
     if (status_ == NextRenderer::EApplicationStatus::Running)
