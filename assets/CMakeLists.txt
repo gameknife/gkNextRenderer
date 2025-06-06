@@ -62,7 +62,7 @@ source_group("Paks" FILES ${pak_files})
 add_custom_target(
 	Assets 
 	DEPENDS ${copied_paks} ${copied_fonts} ${copied_legos} ${copied_sfx} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
-	SOURCES ${pak_files} ${font_files} ${lego_files} ${sfx_files} ${locale_files} ${model_files} ${shader_files} ${texture_files} ${shader_common_files})
+	SOURCES ${pak_files} ${font_files} ${lego_files} ${sfx_files} ${locale_files} ${model_files} ${texture_files})
 
 # Setup shader compilation with a single target but parallel execution
 set(all_shader_outputs "")
@@ -90,7 +90,11 @@ foreach(shader ${shader_files})
 endforeach()
 
 # Create a single target that depends on all shader outputs
-add_custom_target(CompileShaders DEPENDS ${all_shader_outputs})
+add_custom_target(gkNextShaders 
+DEPENDS ${all_shader_outputs}
+SOURCES ${shader_files} ${shader_common_files})
 
 # Make the Assets target depend on the CompileShaders target
-add_dependencies(Assets CompileShaders)
+add_dependencies(Assets gkNextShaders)
+
+set_target_properties(gkNextShaders PROPERTIES FOLDER "Shaders")

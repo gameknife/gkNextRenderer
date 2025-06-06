@@ -128,9 +128,22 @@ foreach(target IN LISTS AllTargets)
 	# 假设你的目标名称是 MyTarget
 	# target_compile_definitions(${target} PRIVATE JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED)
 
+
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
+		
+		# Enable Unity Build for gkNextEngine
+		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 8)
+		
+		# Group files for Unity Build optimization
+		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
+		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
+		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
+		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+		
 		target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw)
