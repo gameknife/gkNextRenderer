@@ -613,7 +613,7 @@ public struct FSoftwareRayTracer : IRayTracer
         }
 
         // use dda directly
-        offsetPos = offsetPos + rayDir * longDistanceInit;
+        // offsetPos = offsetPos + rayDir * longDistanceInit; no need to offset, dda tracing will handle it
         if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode))
         {
             return true;

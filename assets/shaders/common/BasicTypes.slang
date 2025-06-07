@@ -113,6 +113,17 @@ public struct ALIGN_16 VoxelData
     public float sunVisibility;
 };
 
+// PageIndexer is align with world, 16x16 meter per page
+// a 1km map is 64x64 pages, 4096 pages in total
+// now is used to boost the dda tracing performance
+public struct ALIGN_16 PageIndex
+{
+    public uint pageId;
+    public uint voxelCount;
+    public uint voxelDataIdx;
+    public uint probeDataIdx;
+};
+
 public struct ALIGN_16 SphericalHarmonics
 {
     // 3 bands (9 coefficients per color channel)
