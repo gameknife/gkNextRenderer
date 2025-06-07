@@ -15,7 +15,9 @@ namespace Assets
 {
 	using namespace glm;
 
+
 	const int PAGE_SIZE = 64; // 64x64x64
+	const vec3 PAGE_OFFSET = vec3( -PAGE_SIZE * 32, 0, -PAGE_SIZE * 32);
 	const int SHADOWMAP_SIZE = 4096;
 	const int CUBE_SIZE_XY = 192;//256;
 	const int CUBE_SIZE_Z = 48;
