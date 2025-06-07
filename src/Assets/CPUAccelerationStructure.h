@@ -89,6 +89,15 @@ struct FCPUProbeBaker
     void ClearAmbientCubes();
 };
 
+struct FCPUPageIndex
+{
+    std::vector<Assets::PageIndex> pageIndex;
+
+    void Init();
+    void UpdateData();
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+};
+
 class FCPUAccelerationStructure
 {
 public:
@@ -102,7 +111,7 @@ public:
     void AsyncProcessFull();
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
     
-    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory);
+    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
 
@@ -122,4 +131,5 @@ private:
     bool needFlush = false;
 
     FCPUProbeBaker probeBaker;
+    FCPUPageIndex cpuPageIndex;
 };

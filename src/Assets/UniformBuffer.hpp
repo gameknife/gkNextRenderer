@@ -15,6 +15,7 @@ namespace Assets
 {
 	using namespace glm;
 
+	const int PAGE_SIZE = 64; // 64x64x64
 	const int SHADOWMAP_SIZE = 4096;
 	const int CUBE_SIZE_XY = 192;//256;
 	const int CUBE_SIZE_Z = 48;

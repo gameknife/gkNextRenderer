@@ -447,6 +447,7 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     }
     
     probeBaker.Init( CUBE_UNIT, CUBE_OFFSET );
+    cpuPageIndex.Init();
 
     UpdateBVH(scene);
 }
@@ -642,12 +643,13 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
     lastBatchTasks.push_back(taskId);
 }
 
-void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* VoxelGPUMemory)
+void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* VoxelGPUMemory, Vulkan::DeviceMemory* PageIndexMemory)
 {
     if (needFlush)
     {
         // Upload to GPU, now entire range, optimize to partial upload later
         probeBaker.UploadGPU(*GPUMemory, *VoxelGPUMemory);
+        cpuPageIndex.UploadGPU(*PageIndexMemory);
         needFlush = false;
     }
 
@@ -705,6 +707,23 @@ void FCPUProbeBaker::ClearAmbientCubes()
     {
         voxel = {};
     }
+}
+
+void FCPUPageIndex::Init()
+{
+    pageIndex.resize(Assets::PAGE_SIZE * Assets::PAGE_SIZE);
+}
+
+void FCPUPageIndex::UpdateData()
+{
+    
+}
+
+void FCPUPageIndex::UploadGPU(Vulkan::DeviceMemory& GPUMemory)
+{
+    PageIndex* data = reinterpret_cast<PageIndex*>(GPUMemory.Map(0, sizeof(PageIndex) * pageIndex.size()));
+    std::memcpy(data, pageIndex.data(), pageIndex.size() * sizeof(PageIndex));
+    GPUMemory.Unmap();
 }
 
 void FCPUAccelerationStructure::GenShadowMap(Scene& scene)

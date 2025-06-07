@@ -29,8 +29,8 @@ namespace Assets
                                                     ambientCubeBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
                                                     farAmbientCubeBufferMemory_);
-        
-
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags, PAGE_SIZE * PAGE_SIZE * sizeof(Assets::PageIndex), pageIndexBuffer_,
+            pageIndexBufferMemory_);
         cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");
     }
@@ -59,6 +59,9 @@ namespace Assets
 
         farAmbientCubeBuffer_.reset();
         farAmbientCubeBufferMemory_.reset();
+
+        pageIndexBuffer_.reset();
+        pageIndexBufferMemory_.reset();
 
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
@@ -209,7 +212,7 @@ namespace Assets
 
         if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
         {
-            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get() );
+            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get() );
         }
     }
 

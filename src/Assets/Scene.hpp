@@ -145,7 +145,9 @@ namespace Assets
 		
 		std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
-		
+
+		std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
