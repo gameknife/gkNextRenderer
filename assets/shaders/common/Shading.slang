@@ -392,7 +392,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         float3 ray_dir = normalize(dir.xyz);
         outRayDir = ray_dir;
 
-        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 80.0f, outVertex, outNode);
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode);
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
