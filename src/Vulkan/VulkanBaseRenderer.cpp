@@ -35,6 +35,7 @@
 #include "LegacyDeferred/LegacyDeferredRenderer.hpp"
 #include "ModernDeferred/ModernDeferredRenderer.hpp"
 #include "RayQuery/RayQueryRenderer.hpp"
+#include "Runtime/Engine.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
 namespace
@@ -399,6 +400,7 @@ namespace Vulkan
 
         graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), true));
         bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_));
+        softAmbientCubeGenPipeline_.reset(new PipelineCommon::SoftAmbientCubeGenPipeline(*swapChain_, uniformBuffers_, GetScene()));
 
         for (const auto& imageView : swapChain_->ImageViews())
         {
@@ -480,6 +482,7 @@ namespace Vulkan
         swapChainFramebuffers_.clear();
         graphicsPipeline_.reset();
         bufferClearPipeline_.reset();
+        softAmbientCubeGenPipeline_.reset();
         uniformBuffers_.clear();
         inFlightFences_.clear();
         renderFinishedSemaphores_.clear();
@@ -762,8 +765,8 @@ namespace Vulkan
             logicRenderers_[type] = std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this);
             break;
         case ERendererType::ERT_LegacyDeferred:
-            //logicRenderers_[type] = std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this);
-            logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this);
+            //logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
             break;
         default:
             assert(false);
@@ -793,6 +796,55 @@ namespace Vulkan
             }
         }
 
+        // soft ambient cube generation
+        {
+            const int cubesPerGroup = 32;
+            const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            const int group = count / cubesPerGroup;
+            
+            int temporalFrames = 120;
+            switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
+            {
+            case 0:
+                temporalFrames = 30;
+                break;
+            case 1:
+                temporalFrames = 120;
+                break;
+            case 2:
+                temporalFrames = 300;
+                break;
+            default:
+                temporalFrames = 120;
+                break;
+            }
+            
+            int frame = (int)(frameCount_ % temporalFrames);
+            int groupPerFrame = group / temporalFrames;
+            int offset = frame * groupPerFrame;
+            int offsetInCubes = offset * cubesPerGroup;
+                
+            SCOPED_GPU_TIMER("soft ambient");
+            VkDescriptorSet DescriptorSets[] = {softAmbientCubeGenPipeline_->DescriptorSet(0)};
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, softAmbientCubeGenPipeline_->Handle());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    softAmbientCubeGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+
+            // bind the global bindless set
+            static const uint32_t k_bindless_set = 1;
+            VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+            vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, softAmbientCubeGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                     1, GlobalDescriptorSets, 0, nullptr );
+                
+            glm::uvec2 pushConst = { offsetInCubes, 0 };
+
+            vkCmdPushConstants(commandBuffer, softAmbientCubeGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+            
+            vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+        }
+        
+        // global visibility buffer copy
          {
             rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

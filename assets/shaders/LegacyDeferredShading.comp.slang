@@ -44,6 +44,6 @@ void main(uint3 DTid : SV_DispatchThreadID) {
 
     Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
-    float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
+    float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
     OutImage[ipos] = hitMaterial.Diffuse * radiance;
 }

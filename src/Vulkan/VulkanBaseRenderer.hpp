@@ -26,6 +26,7 @@ namespace Vulkan
 	namespace PipelineCommon
 	{
 		class BufferClearPipeline;
+		class SoftAmbientCubeGenPipeline;
 	}
 
 	class RenderImage;
@@ -369,6 +370,8 @@ namespace Vulkan
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
 
+		std::unique_ptr<PipelineCommon::SoftAmbientCubeGenPipeline> softAmbientCubeGenPipeline_;
+		
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;

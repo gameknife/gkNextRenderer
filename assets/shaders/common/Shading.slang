@@ -403,11 +403,16 @@ public struct FVoxelDDARayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
-        return false;
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, rayDir, 200.0f, outVertex, outNode);
     }
     public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
     {
-        return false;
+        float rayLength = length(rayTaget - rayOrigin);
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength, outVertex, outNode);
     }
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
     {
@@ -436,7 +441,7 @@ public struct FVoxelDDARayTracer : IRayTracer
         for (uint i = 0; i < maxSteps; i++)
         {
             // Check current voxel
-            if (inSolid(voxelPos, hitMatId, Voxels))
+            if (inSolid(voxelPos, hitMatId, Voxels) && i > 2)
             {
                 hit = true;
 
@@ -773,7 +778,7 @@ public struct FPathTracingRenderer : IRenderer
                 // 终结路径
                 if (b == maxBounces - 1 || earlyExit)
                 {
-                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes);// * 2.0f;
+                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);// * 2.0f;
                     break;
                 }
             }
@@ -852,7 +857,7 @@ public struct FHybridRenderer : IRenderer
                     {
                         outAlbedo = float4(1, 1, 1, 1);
                     }
-                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
+                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                 }
             }
             else

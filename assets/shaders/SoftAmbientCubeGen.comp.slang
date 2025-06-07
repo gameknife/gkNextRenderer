@@ -43,5 +43,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     float3 origin = float3(x, y, z) * (pushConst.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConst.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
 
-    probeGen.Render(tracer, origin, gIdx, RandomSeed, TextureSamplers);
+    probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed, TextureSamplers);
 }

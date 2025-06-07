@@ -212,33 +212,19 @@ AmbientCube RWFetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
     return Cubes[idx];
 }
 
-public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 normal, in StructuredBuffer<AmbientCube> Cubes)
+public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<VoxelData> Voxels)
 {
-    bool useFar = false;
-
-    float3 nearpos = (pos - CUBE_OFFSET) / CUBE_UNIT;
-    float3 farpos = (pos - CUBE_OFFSET_FAR) / CUBE_UNIT_FAR;
-
-    pos = nearpos;
-
+    float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
+ 
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
         nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
-        useFar = true;
-        pos = farpos;
-
-        if (farpos.x < 0 || farpos.y < 0 || farpos.z < 0 ||
-            farpos.x > CUBE_SIZE_XY - 1 || farpos.y > CUBE_SIZE_Z - 1 || farpos.z > CUBE_SIZE_XY - 1) {
-            return float4(0, 0, 0, 0);
-        }
+        return float4(0, 0, 0, 0);
     }
 
-    // Get the base indices and fractional positions
-    int3 baseIdx = int3(floor(pos));
-    float3 frac = frac(pos);
+    int3 baseIdx = int3(floor(nearpos));
+    float3 frac = frac(nearpos);
 
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
     float totalWeight = 0.0;
     float4 result = float4(0.0, 0.0, 0.0, 0.0);
 
@@ -251,7 +237,8 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
 
         int3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, Cubes);
-        //if (cube.Active == 0) continue;
+        VoxelData voxel = FetchVoxel(probePos, Voxels);
+        if (voxel.matId > 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -269,30 +256,19 @@ public float4 interpolateAmbientCubes<T:IAmbientCubeSampler>(float3 pos, float3 
     return indirectColor;
 }
 
-public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 pos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes)
+public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes)
 {
-    bool useFar = false;
-
-    float3 nearpos = (pos - CUBE_OFFSET) / CUBE_UNIT;
-    float3 farpos = (pos - CUBE_OFFSET_FAR) / CUBE_UNIT_FAR;
-
-    pos = nearpos;
-
+    float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
+  
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
         nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
-        useFar = true;
-        pos = farpos;
-
-        if (farpos.x < 0 || farpos.y < 0 || farpos.z < 0 ||
-            farpos.x > CUBE_SIZE_XY - 1 || farpos.y > CUBE_SIZE_Z - 1 || farpos.z > CUBE_SIZE_XY - 1) {
-            return float4(0, 0, 0, 0);
-        }
+        return float4(0, 0, 0, 0); 
     }
 
     // Get the base indices and fractional positions
-    int3 baseIdx = int3(floor(pos));
-    float3 frac = frac(pos);
+    int3 baseIdx = int3(floor(nearpos));
+    float3 frac = frac(nearpos);
 
     // Trilinear interpolation between 8 nearest probes
     // Try immediate neighbors first
@@ -345,6 +321,7 @@ public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<VoxelData>
 public interface IProbeGenerator
 {
     void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray);
+    void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray);
 }
 
 public struct FGpuProbeGenerator : IProbeGenerator
@@ -455,6 +432,19 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1),    Voxels[CubeIdx].matId);
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1),   Voxels[CubeIdx].matId);
 
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, TextureArray);
+    }
+
+    public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
+    {
+        uint iterate = Voxels[CubeIdx].age;
+        Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
+       
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
         FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);
