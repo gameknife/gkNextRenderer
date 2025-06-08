@@ -4,13 +4,15 @@ implementing Common;
 #define MAX_ILLUMINANCE 512.f
 
 public static const int SHADOWMAP_SIZE = 4096;
+
+public static const int PAGE_COUNT = 64;  // 64x64
+public static const float PAGE_SIZE = 16; // 16m
+public static const float3 PAGE_OFFSET = float3(-512, 0, -512);
+
 public static const int CUBE_SIZE_XY = 192; // 256;
 public static const int CUBE_SIZE_Z = 48;
 public static const float CUBE_UNIT = 0.25f;
 public static const float3 CUBE_OFFSET = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
- 
-public static const float CUBE_UNIT_FAR = 4.0f; // cover 0.8km x 0.8km x 0.16km
-public static const float3 CUBE_OFFSET_FAR = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT_FAR;
 
 public static const float3 cubeVectors[6] = {
     float3(0, 1, 0),
@@ -38,7 +40,8 @@ const static float2 grid5x5[25] = {
     float2(-0.8, 0.8), float2(-0.4, 0.8), float2(0.0, 0.8), float2(0.4, 0.8), float2(0.8, 0.8)
 };
 
-uint packRGB10A2(float4 color) {
+uint packRGB10A2(float4 color)
+{
     float4 clamped = clamp(color / MAX_ILLUMINANCE, float4(0.0f), float4(1.0f));
 
     uint r = uint(clamped.r * 1023.0f);
@@ -49,7 +52,8 @@ uint packRGB10A2(float4 color) {
     return r | (g << 10) | (b << 20) | (a << 30);
 }
 
-float4 unpackRGB10A2(uint packed) {
+float4 unpackRGB10A2(uint packed)
+{
     float r = float((packed) & 0x3FF) / 1023.0f;
     float g = float((packed >> 10) & 0x3FF) / 1023.0f;
     float b = float((packed >> 20) & 0x3FF) / 1023.0f;
@@ -58,15 +62,18 @@ float4 unpackRGB10A2(uint packed) {
     return float4(r, g, b, 0.0) * MAX_ILLUMINANCE;
 }
 
-uint PackColor(float4 source) {
+uint PackColor(float4 source)
+{
     return packRGB10A2(source);
 }
 
-float4 UnpackColor(uint packed) {
+float4 UnpackColor(uint packed)
+{
     return unpackRGB10A2(packed);
 }
 
-uint LerpPackedColor(uint c0, uint c1, float t) {
+uint LerpPackedColor(uint c0, uint c1, float t)
+{
     // Extract RGBA components
     float4 color0 = UnpackColor(c0);
     float4 color1 = UnpackColor(c1);
@@ -74,7 +81,8 @@ uint LerpPackedColor(uint c0, uint c1, float t) {
     return PackColor(lerp(color0, color1, t));
 }
 
-uint LerpPackedColorAlt(uint c0, float4 c1, float t) {
+uint LerpPackedColorAlt(uint c0, float4 c1, float t)
+{
     // Extract RGBA components
     float4 color0 = UnpackColor(c0);
     float4 color1 = c1;
@@ -82,7 +90,8 @@ uint LerpPackedColorAlt(uint c0, float4 c1, float t) {
     return PackColor(lerp(color0, color1, t));
 }
 
-float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal) {
+float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal)
+{
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
     float sum = 0.0;
 
@@ -106,7 +115,8 @@ float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal) {
     return color;
 }
 
-float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
+float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal)
+{
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
     float sum = 0.0;
 
@@ -130,7 +140,8 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal) {
     return color;
 }
 
-float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal) {
+float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
+{
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
     float sum = 0.0;
 
@@ -215,10 +226,11 @@ AmbientCube RWFetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
 public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<VoxelData> Voxels)
 {
     float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
- 
+
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
+        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
+    {
         return float4(0, 0, 0, 0);
     }
 
@@ -228,17 +240,18 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     float totalWeight = 0.0;
     float4 result = float4(0.0, 0.0, 0.0, 0.0);
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
+    {
         int3 offset = int3(
             i & 1,
             (i >> 1) & 1,
-            (i >> 2) & 1
-        );
+            (i >> 2) & 1);
 
         int3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, Cubes);
         VoxelData voxel = FetchVoxel(probePos, Voxels);
-        if (voxel.matId > 0) continue;
+        if (voxel.matId > 0)
+            continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -259,11 +272,12 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
 public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes)
 {
     float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
-  
+
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1) {
-        return float4(0, 0, 0, 0); 
+        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
+    {
+        return float4(0, 0, 0, 0);
     }
 
     // Get the base indices and fractional positions
@@ -275,16 +289,16 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, f
     float totalWeight = 0.0;
     float4 result = float4(0.0, 0.0, 0.0, 0.0);
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
+    {
         int3 offset = int3(
             i & 1,
             (i >> 1) & 1,
-            (i >> 2) & 1
-        );
+            (i >> 2) & 1);
 
         int3 probePos = baseIdx + offset;
         AmbientCube cube = RWFetchCube(probePos, Cubes);
-        //if (cube.Active == 0) continue;
+        // if (cube.Active == 0) continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -303,11 +317,13 @@ public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, f
 }
 
 // Interpolate between 8 probes
-public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<VoxelData> Cubes) {
-    
+public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<VoxelData> Cubes)
+{
+
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
-        pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
+        pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1)
+    {
         return false;
     }
 
@@ -427,10 +443,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId);
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0),    Voxels[CubeIdx].matId);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0),   Voxels[CubeIdx].matId);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1),    Voxels[CubeIdx].matId);
-        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1),   Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(1, 0, 0), Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(-1, 0, 0), Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId);
+        Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId);
 
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
@@ -444,7 +460,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     {
         uint iterate = Voxels[CubeIdx].age;
         Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
-       
+
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
         FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);

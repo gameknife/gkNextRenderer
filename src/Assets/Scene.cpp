@@ -29,7 +29,7 @@ namespace Assets
                                                     ambientCubeBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
                                                     farAmbientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags, PAGE_SIZE * PAGE_SIZE * sizeof(Assets::PageIndex), pageIndexBuffer_,
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags, PAGE_COUNT * PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
             pageIndexBufferMemory_);
         cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");

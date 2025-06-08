@@ -103,6 +103,7 @@ namespace Assets
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
 		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
+		Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
 
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 

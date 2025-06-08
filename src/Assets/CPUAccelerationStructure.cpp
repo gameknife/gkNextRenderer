@@ -712,7 +712,7 @@ void FCPUProbeBaker::ClearAmbientCubes()
 
 void FCPUPageIndex::Init()
 {
-    pageIndex.resize(Assets::PAGE_SIZE * Assets::PAGE_SIZE);
+    pageIndex.resize(Assets::PAGE_COUNT * Assets::PAGE_COUNT);
 }
 
 void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
@@ -720,7 +720,7 @@ void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
     // 粗暴实现，先全部page置空
     for (auto& page : pageIndex)
     {
-        page = Assets::PageIndex();
+        page = {};
     }
 
     // 遍历baker里的数据，根据index，取得worldpos，然后取page出来，给voxel数量提升
@@ -755,11 +755,11 @@ Assets::PageIndex& FCPUPageIndex::GetPage(glm::vec3 worldpos)
     int pageZ = static_cast<int>(relativePos.z / Assets::PAGE_SIZE);
 
     // 限制在有效范围内
-    pageX = glm::clamp(pageX, 0, Assets::PAGE_SIZE - 1);
-    pageZ = glm::clamp(pageZ, 0, Assets::PAGE_SIZE - 1);
+    pageX = glm::clamp(pageX, 0, Assets::PAGE_COUNT - 1);
+    pageZ = glm::clamp(pageZ, 0, Assets::PAGE_COUNT - 1);
 
     // 计算一维索引
-    int index = pageZ * Assets::PAGE_SIZE + pageX;
+    int index = pageZ * Assets::PAGE_COUNT + pageX;
 
     // 返回对应的PageIndex引用
     return pageIndex[index];

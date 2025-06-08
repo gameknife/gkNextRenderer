@@ -660,6 +660,8 @@ namespace Vulkan::PipelineCommon
 
             {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+
+            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
@@ -715,6 +717,10 @@ namespace Vulkan::PipelineCommon
             voxBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
             voxBufferInfo.range = VK_WHOLE_SIZE;
             
+            VkDescriptorBufferInfo pageBufferInfo = {};
+            pageBufferInfo.buffer = scene.PageIndexBuffer().Handle();
+            pageBufferInfo.range = VK_WHOLE_SIZE;
+            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(0, 2, lightBufferInfo),
@@ -731,6 +737,8 @@ namespace Vulkan::PipelineCommon
 
                 descriptorSets.Bind(0, 12, probeBufferInfo),
                 descriptorSets.Bind(0, 13, voxBufferInfo),
+
+                descriptorSets.Bind(0, 14, pageBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

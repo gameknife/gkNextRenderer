@@ -235,6 +235,7 @@ namespace Vulkan::ModernDeferred
 
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                 {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -291,6 +292,10 @@ namespace Vulkan::ModernDeferred
             hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
             hdrshBufferInfo.range = VK_WHOLE_SIZE;
 
+            VkDescriptorBufferInfo pageIndexBufferInfo = {};
+            pageIndexBufferInfo.buffer = scene.PageIndexBuffer().Handle();
+            pageIndexBufferInfo.range = VK_WHOLE_SIZE;
+            
             VkDescriptorImageInfo Info12 = {scene.ShadowMap().Sampler().Handle(), scene.ShadowMap().ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
@@ -313,6 +318,8 @@ namespace Vulkan::ModernDeferred
                 descriptorSets.Bind(i, 13, Info12),
                 descriptorSets.Bind(i, 14, Info13),
                 descriptorSets.Bind(i, 15, Info14),
+
+                descriptorSets.Bind(i, 16, pageIndexBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

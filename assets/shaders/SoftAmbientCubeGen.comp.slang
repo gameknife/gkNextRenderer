@@ -15,6 +15,8 @@ import Common;
 [[vk::binding(12)]] StructuredBuffer<AmbientCube> RoCubes;
 [[vk::binding(13)]] StructuredBuffer<VoxelData> RoVoxels;
 
+[[vk::binding(14)]] StructuredBuffer<PageIndex> Pages;
+
 // 全局纹理数组
 [[vk::binding(0, 1)]] Sampler2D TextureSamplers[];
 
@@ -30,7 +32,7 @@ struct PushConstant
 [numthreads(32, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    FVoxelDDARayTracer tracer = { RoCubes, RoVoxels };
+    FVoxelDDARayTracer tracer = { RoCubes, RoVoxels, Pages };
     FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs, Lights };
 
     uint gIdx = DTid.x + pushConst.globalOffset;

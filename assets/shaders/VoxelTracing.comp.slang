@@ -7,6 +7,7 @@ import Common;
 [[vk::binding(3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(4)]] StructuredBuffer<AmbientCube> Cubes;
 [[vk::binding(5)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(6)]] StructuredBuffer<PageIndex> Pages;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
@@ -15,7 +16,7 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
-    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels };
+    FHiVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
     FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
 
     int2 ipos = int2(DTid.xy);

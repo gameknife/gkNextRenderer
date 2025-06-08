@@ -40,7 +40,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs, Lights };
     
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
-    float3 origin = float3(x, y, z) * (pushConst.cascade == 0 ? CUBE_UNIT : CUBE_UNIT_FAR) + (pushConst.cascade == 0 ? CUBE_OFFSET : CUBE_OFFSET_FAR);
+    float3 origin = float3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
 
     probeGen.Render(tracer, origin, gIdx, RandomSeed, TextureSamplers);
 }

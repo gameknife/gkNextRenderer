@@ -19,6 +19,8 @@ import Common;
 [[vk::binding(14)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(15)]] RWTexture2D<float4> OutNormalBuffer;
 
+[[vk::binding(16)]] StructuredBuffer<PageIndex> Pages;
+
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
 [shader("compute")]
@@ -27,7 +29,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
-    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels };
+    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, NodeProxies, voxelTracer };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
