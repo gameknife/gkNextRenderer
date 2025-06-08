@@ -17,7 +17,38 @@ static const float FAST_MAX_TRACE_DISTANCE = 10.f;
 
 namespace Common
 {
+    float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
+    {
+        // 计算射线与盒子各面的交点参数t
+        float3 t1 = (boxMin - rayOrigin) / rayDir;
+        float3 t2 = (boxMax - rayOrigin) / rayDir;
 
+        // 确保t1是近交点，t2是远交点
+        float3 tMin = min(t1, t2);
+        float3 tMax = max(t1, t2);
+
+        // 找到进入盒子的最远点和离开盒子的最近点
+        float tNear = max(max(tMin.x, tMin.y), tMin.z);
+        float tFar = min(min(tMax.x, tMax.y), tMax.z);
+
+        // 如果射线起点在盒子内，则从起点开始
+        if (all(rayOrigin >= boxMin) && all(rayOrigin <= boxMax))
+        {
+            return rayOrigin;
+        }
+
+        // 如果tNear > tFar或tFar < 0，射线不与盒子相交
+        if (tNear > tFar || tFar < 0.0)
+        {
+            return rayOrigin; // 返回原点，表示无交点
+        }
+
+        // 确保使用正的t值（向前的射线方向）
+        float tEntry = max(tNear, 0.0);
+
+        // 计算入射点
+        return rayOrigin + rayDir * tEntry;
+    }
 
     public float2 CalculateMotionVector(ConstantBuffer<UniformBufferObject> Camera, NodeProxy node, Vertex v )
     {
@@ -396,7 +427,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    FVoxelDDARayTracer DDARayTracer;
+    FHiVoxelDDARayTracer DDARayTracer;
 }
 
 public struct FVoxelDDARayTracer : IRayTracer
@@ -446,7 +477,11 @@ public struct FVoxelDDARayTracer : IRayTracer
                 hit = true;
 
                 outVertex.Normal = normalize(normal);
-                outVertex.Position = CUBE_OFFSET + (lastPos + normal) * CUBE_UNIT;
+                //outVertex.Position = CUBE_OFFSET + (lastPos + normal) * CUBE_UNIT;
+                float3 boxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
+                float3 boxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
+                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, boxMin, boxMax);
+
                 outVertex.MaterialIndex = hitMatId;
                 outVertex.TexCoord = float2(0.5, 0.5);
                 break;
@@ -483,6 +518,167 @@ public struct FVoxelDDARayTracer : IRayTracer
 
     StructuredBuffer<AmbientCube> Cubes;
     StructuredBuffer<VoxelData> Voxels;
+    StructuredBuffer<PageIndex> Pages;
+}
+
+public struct FHiVoxelDDARayTracer : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, rayDir, 200.0f, outVertex, outNode);
+    }
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
+    {
+        float rayLength = length(rayTaget - rayOrigin);
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength, outVertex, outNode);
+    }
+    uint GetPageIndex(float3 pagePos)
+    {
+        // Calculate the page index based on the page position
+        uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
+        return clamp(pageIndex, 0, 4096);
+    }
+
+    public bool LocalTraceRay(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        uint hitMatId = 0;
+        static const uint maxSteps = uint(16 * 4 * 1.8 * 2);
+    
+        // DDA voxel traversal
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
+        float3 tDelta = abs(CUBE_UNIT / rayDir); // Step size along each axis
+        float3 tMax = float3(0, 0, 0);           // Distance to next voxel boundary
+        float3 stepSign = sign(rayDir);          // Direction to step
+    
+        // Calculate initial tMax values
+        if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
+        if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
+        if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+    
+        float3 lastPos = voxelPos;
+        bool hit = false;
+        float3 normal = float3(0, 0, 0);
+    
+        // Traverse the grid
+        for (uint i = 0; i < maxSteps; i++)
+        {
+            // Convert voxel position back to world position for AABB check
+            float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
+
+            // Check if world position is outside the AABB bounds
+            if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
+            {
+                break; // Terminate tracing immediately when outside AABB
+            }
+            
+            // Check current voxel
+            if (inSolid(voxelPos, hitMatId, Voxels))
+            {
+                hit = true;
+    
+                outVertex.Normal = normalize(normal);
+                // outVertex.Position = CUBE_OFFSET + (lastPos + normal) * CUBE_UNIT;
+                float3 boxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
+                float3 boxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
+                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, boxMin, boxMax);
+                outVertex.MaterialIndex = hitMatId;
+                outVertex.TexCoord = float2(0.5, 0.5);
+                break;
+            }
+    
+            // Store last position before stepping
+            lastPos = voxelPos;
+    
+            // Reset normal
+            normal = float3(0, 0, 0);
+    
+            // Find the closest axis to step along
+            if (tMax.x < tMax.y && tMax.x < tMax.z)
+            {
+                voxelPos.x += stepSign.x;
+                tMax.x += tDelta.x;
+                normal.x = -stepSign.x; // Set normal based on the face we're crossing
+            }
+            else if (tMax.y < tMax.z)
+            {
+                voxelPos.y += stepSign.y;
+                tMax.y += tDelta.y;
+                normal.y = -stepSign.y; // Set normal based on the face we're crossing
+            }
+            else
+            {
+                voxelPos.z += stepSign.z;
+                tMax.z += tDelta.z;
+                normal.z = -stepSign.z; // Set normal based on the face we're crossing
+            }
+        }
+        return hit;
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        // DDA voxel traversal
+        bool hit = false;
+        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 3;
+        // Top Level Page Index
+        float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
+        float3 pagetDelta = abs(PAGE_SIZE / rayDir);
+        float3 pageTMax = float3(0, 0, 0);
+
+        float3 stepSign = sign(rayDir);
+        if (rayDir.x != 0) pageTMax.x = (stepSign.x > 0 ? ceil(pagePos.x) - pagePos.x : pagePos.x - floor(pagePos.x)) * pagetDelta.x;
+        if (rayDir.y != 0) pageTMax.y = (stepSign.y > 0 ? ceil(pagePos.y) - pagePos.y : pagePos.y - floor(pagePos.y)) * pagetDelta.y;
+        if (rayDir.z != 0) pageTMax.z = (stepSign.z > 0 ? ceil(pagePos.z) - pagePos.z : pagePos.z - floor(pagePos.z)) * pagetDelta.z;
+        uint maxPageSteps = uint(maxDistance / PAGE_SIZE * 1.7);
+
+        for (uint i = 0; i < maxPageSteps; i++)
+        {
+            float3 boxMin = floor(pagePos) * PAGE_SIZE + PAGE_OFFSET + float3(0.01);
+            float3 boxMax = floor(pagePos) * PAGE_SIZE + PAGE_OFFSET + float3(PAGE_SIZE);
+
+            float3 localStartPos = Common.CalculateRayAABBEntry(rayOrigin, rayDir, boxMin, boxMax);
+
+            // Check if we are in a valid page
+            uint pageIndex = GetPageIndex(pagePos);
+
+            // Check if the current voxel is within the page bounds
+            if (Pages[pageIndex].voxelCount > 0)
+            {
+                // 使用计算出的进入点进行局部追踪
+                if (LocalTraceRay(localStartPos, rayDir, boxMin, boxMax, outVertex, outNode))
+                {
+                    hit = true;
+                    break;
+                }
+            }
+
+            // Step through the page
+            if (pageTMax.x < pageTMax.y && pageTMax.x < pageTMax.z)
+            {
+                pagePos.x += stepSign.x;
+                pageTMax.x += pagetDelta.x;
+            }
+            else if (pageTMax.y < pageTMax.z)
+            {
+                pagePos.y += stepSign.y;
+                pageTMax.y += pagetDelta.y;
+            }
+            else
+            {
+                pagePos.z += stepSign.z;
+                pageTMax.z += pagetDelta.z;
+            }
+        }
+        return hit;
+    }
+
+    StructuredBuffer<AmbientCube> Cubes;
+    StructuredBuffer<VoxelData> Voxels;
+    StructuredBuffer<PageIndex> Pages;
 }
 
 public struct FHardwareRayTracer : IRayTracer
