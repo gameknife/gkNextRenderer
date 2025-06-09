@@ -65,7 +65,7 @@ public struct ALIGN_16 UniformBufferObject
  
     public bool FastInterpole;
     public bool DebugDraw_Lighting;
-    public bool Reserve3;
+    public bool DisableSpatialReuse;
     public bool Reserve4;
 };
 
