@@ -16,168 +16,9 @@ static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
 static std::vector<FCPUTLASInstanceInfo>* GbvhTLASContexts;
 static std::vector<FCPUBLASContext>* GbvhBLASContexts;
 
-thread_local FCpuBakeContext TLSContext;
-thread_local glm::uvec4 RandomSeed(0);
-
 Assets::SphericalHarmonics HDRSHs[100];
 
 using namespace Assets;
-
-#define MAX_ILLUMINANCE 512.f
-static const uint FACE_TRACING = 16;
-static const float PT_MAX_TRACE_DISTANCE = 1000.f;
-static const float FAST_MAX_TRACE_DISTANCE = 10.f;
-
-const vec3 cubeVectors[6] = {
-    vec3(0, 1, 0),
-    vec3(0, -1, 0),
-    vec3(0, 0, 1),
-    vec3(0, 0, -1),
-    vec3(1, 0, 0),
-    vec3(-1, 0, 0),
-    };
-
-const vec2 grid4x4[16] = {
-    vec2(-0.75, -0.75), vec2(-0.25, -0.75), vec2(0.25, -0.75), vec2(0.75, -0.75),
-    vec2(-0.75, -0.25), vec2(-0.25, -0.25), vec2(0.25, -0.25), vec2(0.75, -0.25),
-    vec2(-0.75,  0.25), vec2(-0.25,  0.25), vec2(0.25,  0.25), vec2(0.75,  0.25),
-    vec2(-0.75,  0.75), vec2(-0.25,  0.75), vec2(0.25,  0.75), vec2(0.75,  0.75)
-};
-
-const vec2 grid5x5[25] = {
-    vec2(-0.8, -0.8), vec2(-0.4, -0.8), vec2(0.0, -0.8), vec2(0.4, -0.8), vec2(0.8, -0.8),
-    vec2(-0.8, -0.4), vec2(-0.4, -0.4), vec2(0.0, -0.4), vec2(0.4, -0.4), vec2(0.8, -0.4),
-    vec2(-0.8,  0.0), vec2(-0.4,  0.0), vec2(0.0,  0.0), vec2(0.4,  0.0), vec2(0.8,  0.0),
-    vec2(-0.8,  0.4), vec2(-0.4,  0.4), vec2(0.0,  0.4), vec2(0.4,  0.4), vec2(0.8,  0.4),
-    vec2(-0.8,  0.8), vec2(-0.4,  0.8), vec2(0.0,  0.8), vec2(0.4,  0.8), vec2(0.8,  0.8)
-};
-
-vec3 EvaluateSH(float SHCoefficients[3][9], vec3 normal, float rotate) {
-    // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
-    float angle = rotate * 3.14159265358979323846f;
-    float cosAngle = cos(angle);
-    float sinAngle = sin(angle);
-	
-    // Rotate the normal vector around Y-axis
-    vec3 rotatedNormal = vec3(
-        normal.x * cosAngle + normal.z * sinAngle,
-        normal.y,
-        -normal.x * sinAngle + normal.z * cosAngle
-    );
-	
-    // SH basis function evaluation
-    const float SH_C0 = 0.282095f;
-    const float SH_C1 = 0.488603f;
-    const float SH_C2 = 1.092548f;
-    const float SH_C3 = 0.315392f;
-    const float SH_C4 = 0.546274f;
-	
-    float basis[9];
-    basis[0] = SH_C0;
-    basis[1] = -SH_C1 * rotatedNormal.y;
-    basis[2] = SH_C1 * rotatedNormal.z;
-    basis[3] = -SH_C1 * rotatedNormal.x;
-    basis[4] = SH_C2 * rotatedNormal.x * rotatedNormal.y;
-    basis[5] = -SH_C2 * rotatedNormal.y * rotatedNormal.z;
-    basis[6] = SH_C3 * (3.f * rotatedNormal.y * rotatedNormal.y - 1.0f);
-    basis[7] = -SH_C2 * rotatedNormal.x * rotatedNormal.z;
-    basis[8] = SH_C4 * (rotatedNormal.x * rotatedNormal.x - rotatedNormal.z * rotatedNormal.z);
-	
-    vec3 color = vec3(0.0);
-    for (int i = 0; i < 9; ++i) {
-        color.r += SHCoefficients[0][i] * basis[i];
-        color.g += SHCoefficients[1][i] * basis[i];
-        color.b += SHCoefficients[2][i] * basis[i];
-    }
-	
-    return color;
-}
-
-vec4 SampleIBLRough(uint skyIdx, vec3 direction, float rotate)
-{
-    vec3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0f - rotate);
-    return vec4(rayColor, 1.0);
-}
-
-uint packRGB10A2(vec4 color) {
-    vec4 clamped = clamp( color / MAX_ILLUMINANCE, vec4(0.0f), vec4(1.0f) );
-    uint r = uint(clamped.r * 1023.0f);
-    uint g = uint(clamped.g * 1023.0f);
-    uint b = uint(clamped.b * 1023.0f);
-    uint a = uint(clamped.a * 3.0f);
-    return r | (g << 10) | (b << 20) | (a << 30);
-}
-
-vec4 unpackRGB10A2(uint packed) {
-    float r = float((packed) & 0x3FF) / 1023.0f;
-    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
-    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
-    return vec4(r,g,b,0.0) * MAX_ILLUMINANCE;
-}
-
-uint PackColor(vec4 source) {
-    return packRGB10A2(source);
-}
-
-vec4 UnpackColor(uint packed) {
-    return unpackRGB10A2(packed);
-}
-
-uint LerpPackedColor(uint c0, uint c1, float t) {
-    vec4 color0 = UnpackColor(c0);
-    vec4 color1 = UnpackColor(c1);
-    return PackColor(mix(color0, color1, t));
-}
-
-uint LerpPackedColorAlt(uint c0, vec4 c1, float t) {
-    vec4 color0 = UnpackColor(c0);
-    vec4 color1 = c1;
-    return PackColor(mix(color0, color1, t));
-}
-
-vec4 sampleAmbientCubeHL2_DI(AmbientCube cube, vec3 normal) {
-    vec4 color = vec4(0.0);
-    float sum = 0.0;
-    float wx = max(normal.x, 0.0f);
-    float wnx = max(-normal.x, 0.0f);
-    float wy = max(normal.y, 0.0f);
-    float wny = max(-normal.y, 0.0f);
-    float wz = max(normal.z, 0.0f);
-    float wnz = max(-normal.z, 0.0f);
-    sum = wx + wnx + wy + wny + wz + wnz;
-    color += wx *   UnpackColor(cube.PosX_D);
-    color += wnx *  UnpackColor(cube.NegX_D);
-    color += wy *   UnpackColor(cube.PosY_D);
-    color += wny *  UnpackColor(cube.NegY_D);
-    color += wz *   UnpackColor(cube.PosZ_D);
-    color += wnz *  UnpackColor(cube.NegZ_D);
-    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    //color.w = unpackHalf2x16(cube.Lighting).x;
-    return color;
-}
-
-LightObject FetchLight(uint lightIdx, vec4& lightPower)
-{
-    auto& Lights = NextEngine::GetInstance()->GetScene().Lights();
-    auto& materials = NextEngine::GetInstance()->GetScene().Materials();
-    lightPower = materials[Lights[lightIdx].lightMatIdx].gpuMaterial_.Diffuse;
-    return Lights[lightIdx];
-}
-
-vec3 AlignWithNormal(vec3 ray, vec3 normal)
-{
-    vec3 up = abs(normal.y) < 0.999f ? vec3(0, 1, 0) : vec3(1, 0, 0);
-    vec3 tangent = normalize(cross(up, normal));
-    vec3 bitangent = normalize(cross(normal, tangent));
-    mat3 transform(tangent, bitangent, normal);
-    return transform * ray;
-}
-
-AmbientCube& FetchCube(ivec3 probePos)
-{
-    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
-    return (*TLSContext.Cubes)[idx];
-}
 
 FMaterial& FetchMaterial(uint matId)
 {
@@ -188,53 +29,6 @@ FMaterial& FetchMaterial(uint matId)
 uint FetchMaterialId(uint MaterialIdx, uint InstanceId)
 {
     return (*GbvhTLASContexts)[InstanceId].matIdxs[MaterialIdx];
-}
-
-vec4 FetchDirectLight(vec3 hitPos, vec3 normal)
-{
-    vec3 pos = (hitPos - TLSContext.CUBE_OFFSET) / TLSContext.CUBE_UNIT;
-    if (pos.x < 0 || pos.y < 0 || pos.z < 0 ||
-    pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1) {
-        return vec4(1.0);
-    }
-
-    ivec3 baseIdx = ivec3(floor(pos));
-    vec3 frac = fract(pos);
-
-    float totalWeight = 0.0;
-    vec4 result = vec4(0.0);
-
-    for (int i = 0; i < 8; i++) {
-        ivec3 offset = ivec3(
-        i & 1,
-        (i >> 1) & 1,
-        (i >> 2) & 1
-        );
-
-        ivec3 probePos = baseIdx + offset;
-        AmbientCube cube = FetchCube(probePos);
-        //if (cube.Active != 1) continue;
-
-        float wx = offset.x == 0 ? (1.0f - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0f - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0f - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        vec4 sampleColor = sampleAmbientCubeHL2_DI(cube, normal);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    vec4 indirectColor = totalWeight > 0.0 ? result / totalWeight : vec4(0.05f);
-    return indirectColor;
-}
-
-bool TraceSegment(vec3 origin, vec3 lightPos)
-{
-    vec3 direction = lightPos - origin;
-    float length = glm::length(direction) - 0.02f;
-    tinybvh::Ray shadowRay(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(direction.x, direction.y, direction.z), length);
-    return GCpuBvh.IsOccluded(shadowRay);
 }
 
 bool TraceRay(vec3 origin, vec3 rayDir, float Dist, vec3& OutNormal, uint& OutMaterialId, float& OutRayDist, uint& OutInstanceId )
@@ -254,7 +48,7 @@ bool TraceRay(vec3 origin, vec3 rayDir, float Dist, vec3& OutNormal, uint& OutMa
         OutRayDist = ray.hit.t;
         OutNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
         OutMaterialId =  FetchMaterialId( context.extinfos[primIdx].matIdx, ray.hit.inst );
-        OutInstanceId = ray.hit.inst;
+        OutInstanceId = instContext.nodeId;
         return true;
     }
     
@@ -265,15 +59,15 @@ bool TraceRay(vec3 origin, vec3 rayDir, float Dist, vec3& OutNormal, uint& OutMa
 #define float3 vec3
 #define float4 vec4
 
-bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
+bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
 {
     // 求交测试
     vec3 OutNormal;
-    uint OutInstanceId;
     float OutRayDist;
     uint TempMaterialId;
+    uint TempInstanceId;
 
-    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, TempMaterialId, OutRayDist, OutInstanceId))
+    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
     {
         vec3 hitPos = origin + rayDir * OutRayDist;
         FMaterial hitMaterial = FetchMaterial(TempMaterialId);
@@ -282,118 +76,33 @@ bool InsideGeometry( float3& origin, float3 rayDir, uint& OutMaterialId)
         {
             float hitRayDist = OutRayDist + 0.05f;
             origin += rayDir * hitRayDist;
-            OutMaterialId = TempMaterialId;
+            OutCube.matId = TempMaterialId;
+            OutCube.instanceId = TempInstanceId;
             return true;
         }
         // 命中光源，不论正反，识别为固体
         if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
         {
-            OutMaterialId = TempMaterialId;
+            OutCube.matId = TempMaterialId;
+            OutCube.instanceId = TempInstanceId;
             return true;
         }
     }
-    //OutMaterialId = 0;
     return false;
 }
-
-    bool FaceTask(float3 origin, float3 basis, uint iterate, uint& DirectLight, uint& IndirectLight)
-    {
-        auto& Camera = NextEngine::GetInstance()->GetUniformBufferObject();
-    
-        // 输出结果
-        float4 directColor = float4(0.0);
-        float4 bounceColor = float4(0.0);
-
-        // 抖动
-        const float2 offset = grid5x5[iterate % 25] * 0.25f;
-
-        // 天光直接光照和反弹
-        for (uint i = 0; i < FACE_TRACING; i++)
-        {
-            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
-            float3 rayDir = AlignWithNormal(hemiVec, basis);
-
-            vec3 OutNormal;
-            uint OutInstanceId;
-            uint OutMaterialId;
-            float OutRayDist;
-            if (TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, OutNormal, OutMaterialId, OutRayDist, OutInstanceId))
-            {
-                vec3 hitPos = origin + rayDir * OutRayDist;
-                FMaterial hitMaterial = FetchMaterial(OutMaterialId);
-                float4 outAlbedo = hitMaterial.gpuMaterial_.Diffuse;
-                bounceColor += outAlbedo * FetchDirectLight(hitPos, OutNormal);
-            }
-            else
-            {
-                directColor += SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
-            }
-        }
-        directColor = directColor / float(FACE_TRACING);
-        bounceColor = bounceColor / float(FACE_TRACING);
-
-        // 参数光源，目前只取了一盏光源
-        if (Camera.LightCount > 0)
-        {
-            float4 lightPower = float4(0.0);
-            LightObject light = FetchLight(0, lightPower);
-            float3 lightPos = mix(vec3(light.p1.x, light.p1.y, light.p1.z), vec3(light.p3.x, light.p3.y, light.p3.z), 0.5f);
-            float lightAtten = TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
-            float3 lightDir = normalize(lightPos - origin);
-            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-            float distance = length(lightPos - origin);
-            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-            directColor += lightPower * attenuation * lightAtten;
-        }
-
-        // 太阳光
-        if (Camera.HasSun)
-        {
-            float3 sunDir = float3(Camera.SunDirection.x, Camera.SunDirection.y, Camera.SunDirection.z);
-            float sunAtten = TraceSegment(origin, origin + sunDir * 50.0f) ? 0.0f : 1.0f;
-            float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
-        }
-
-        // 累积，gpu直接只保留4帧
-        DirectLight = LerpPackedColorAlt(DirectLight, directColor, 0.25);
-        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.125);
-        return false;
-    }
 
 void VoxelizeCube(VoxelData& Cube, float3 origin)
 {
     // just write matid and solid status
     Cube.matId = 0;
+    Cube.instanceId = 0;
 
-    InsideGeometry(origin, float3(0, 1, 0), Cube.matId);
-    InsideGeometry(origin, float3(0, -1, 0), Cube.matId);
-    InsideGeometry(origin, float3(1, 0, 0), Cube.matId);
-    InsideGeometry(origin, float3(-1, 0, 0), Cube.matId);
-    InsideGeometry(origin, float3(0, 0, 1), Cube.matId);
-    InsideGeometry(origin, float3(0, 0, -1), Cube.matId);
-}
-void RenderCube(AmbientCube& Cube, float3 origin)
-{
-    // uint iterate = Cube.ExtInfo2;
-    // Cube.ExtInfo2 = Cube.ExtInfo2 + 1;
-    // bool Solid = false;
-    //
-    // Solid = Solid || InsideGeometry(origin, float3(0, 1, 0), Cube.ExtInfo1);
-    // Solid = Solid || InsideGeometry(origin, float3(0, -1, 0), Cube.ExtInfo1);
-    // Solid = Solid || InsideGeometry(origin, float3(1, 0, 0), Cube.ExtInfo1);
-    // Solid = Solid || InsideGeometry(origin, float3(-1, 0, 0), Cube.ExtInfo1);
-    // Solid = Solid || InsideGeometry(origin, float3(0, 0, 1), Cube.ExtInfo1);
-    // Solid = Solid || InsideGeometry(origin, float3(0, 0, -1), Cube.ExtInfo1);
-    //
-    // FaceTask(origin, float3(0, 1, 0), iterate, Cube.PosY_D, Cube.PosY);
-    // FaceTask(origin, float3(0, -1, 0), iterate, Cube.NegY_D, Cube.NegY);
-    // FaceTask(origin, float3(1, 0, 0), iterate, Cube.PosX_D, Cube.PosX);
-    // FaceTask(origin, float3(-1, 0, 0), iterate, Cube.NegX_D, Cube.NegX);
-    // FaceTask(origin, float3(0, 0, 1), iterate, Cube.PosZ_D, Cube.PosZ);
-    // FaceTask(origin, float3(0, 0, -1), iterate, Cube.NegZ_D, Cube.NegZ);
-    //
-    // Cube.Active = Solid ? 0 : 1;
+    InsideGeometry(origin, float3(0, 1, 0), Cube);
+    InsideGeometry(origin, float3(0, -1, 0), Cube);
+    InsideGeometry(origin, float3(1, 0, 0), Cube);
+    InsideGeometry(origin, float3(-1, 0, 0), Cube);
+    InsideGeometry(origin, float3(0, 0, 1), Cube);
+    InsideGeometry(origin, float3(0, 0, -1), Cube);
 }
 
 #undef float2
@@ -404,7 +113,6 @@ void FCPUProbeBaker::Init(float unit_size, vec3 offset)
 {
     UNIT_SIZE = unit_size;
     CUBE_OFFSET = offset;
-    ambientCubes.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
     voxels.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
 }
 
@@ -478,6 +186,7 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
             uint32_t matId = node->Materials()[i];
             FMaterial& mat = scene.Materials()[matId];
             info.matIdxs[i] = matId;
+            info.nodeId = node->GetInstanceId();
         }
         bvhTLASContexts.push_back( info );
     }
@@ -524,20 +233,12 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
     vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
     uint32_t addressIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
-    AmbientCube& cube = ambientCubes[addressIdx];
     VoxelData& voxel = voxels[addressIdx];
-
-    TLSContext.Cubes = &ambientCubes;
-    TLSContext.CUBE_UNIT = UNIT_SIZE;
-    TLSContext.CUBE_OFFSET = CUBE_OFFSET;
-    
+        
     switch (procType)
     {
         case ECubeProcType::ECPT_Clear:
         case ECubeProcType::ECPT_Fence:
-            break;
-        case ECubeProcType::ECPT_Iterate:
-            RenderCube(cube, probePos);
             break;
         case ECubeProcType::ECPT_Voxelize:
             VoxelizeCube(voxel, probePos);
@@ -545,19 +246,10 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     }
 }
 
-void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& GPUMemory, Vulkan::DeviceMemory& VoxelGPUMemory)
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& VoxelGPUMemory)
 {
-    {
-        AmbientCube* data = reinterpret_cast<AmbientCube*>(GPUMemory.Map(0, sizeof(AmbientCube) * ambientCubes.size()));
-        std::memcpy(data, ambientCubes.data(), ambientCubes.size() * sizeof(AmbientCube));
-    }
-
-    {
-        VoxelData* data = reinterpret_cast<VoxelData*>(VoxelGPUMemory.Map(0, sizeof(VoxelData) * voxels.size()));
-        std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
-    }
-
-    GPUMemory.Unmap();
+    VoxelData* data = reinterpret_cast<VoxelData*>(VoxelGPUMemory.Map(0, sizeof(VoxelData) * voxels.size()));
+    std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
     VoxelGPUMemory.Unmap();
 }
 
@@ -649,7 +341,7 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* GPUMemo
     if (needFlush)
     {
         // Upload to GPU, now entire range, optimize to partial upload later
-        probeBaker.UploadGPU(*GPUMemory, *VoxelGPUMemory);
+        probeBaker.UploadGPU(*VoxelGPUMemory);
         cpuPageIndex.UpdateData(probeBaker);
         cpuPageIndex.UploadGPU(*PageIndexMemory);
         needFlush = false;
@@ -693,18 +385,13 @@ void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
     for (int x = min.x; x <= max.x; ++x) {
         for (int z = min.z; x <= max.z; ++z) {
             ivec3 point(x, 1, z);
-            needUpdateGroups.push({point, ECubeProcType::ECPT_Iterate, EBakerType::EBT_Probe});
+            needUpdateGroups.push({point, ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe});
         }
     }
 }
 
 void FCPUProbeBaker::ClearAmbientCubes()
 {
-    for(auto& cube : ambientCubes)
-    {
-        cube = {};
-    }
-
     for(auto& voxel : voxels)
     {
         voxel = {};

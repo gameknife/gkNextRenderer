@@ -799,7 +799,7 @@ namespace Vulkan
         }
 
         // soft ambient cube generation
-        if (true)
+        if (!supportRayTracing_)
         {
             const int cubesPerGroup = 32;
             const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
@@ -848,17 +848,17 @@ namespace Vulkan
         }
         
         // global visibility buffer copy
-         {
+        {
             rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        
+
             VkImageCopy copyRegion;
             copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.srcOffset = {0, 0, 0};
             copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.dstOffset = {0, 0, 0};
             copyRegion.extent = {rtVisibility0->GetImage().Extent().width, rtVisibility0->GetImage().Extent().height, 1};
-        
+
             vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         }
 

@@ -38,7 +38,6 @@ namespace Vulkan
 enum class ECubeProcType : uint8_t
 {
     ECPT_Clear,
-    ECPT_Iterate,
     ECPT_Fence,
     ECPT_Voxelize,
 };
@@ -57,6 +56,7 @@ struct FCPUBLASVertInfo
 struct FCPUTLASInstanceInfo
 {
     std::array<uint32_t, 16> matIdxs;
+    uint32_t nodeId;
 };
 
 struct FCPUBLASContext
@@ -80,12 +80,11 @@ struct FCPUProbeBaker
     float UNIT_SIZE;
     glm::vec3 CUBE_OFFSET;
     
-    std::vector<Assets::AmbientCube> ambientCubes;
     std::vector<Assets::VoxelData> voxels;
 
     void Init( float unit_size, glm::vec3 offset );
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
-    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, Vulkan::DeviceMemory& voxelDeviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
     void ClearAmbientCubes();
 };
 
