@@ -32,7 +32,7 @@ struct PushConstant
 [numthreads(32, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    FVoxelDDARayTracer tracer = { RoCubes, RoVoxels, Pages };
+    FHiVoxelDDARayTracer tracer = { RoCubes, RoVoxels, Pages };
     FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs, Lights };
 
     uint gIdx = DTid.x + pushConst.globalOffset;

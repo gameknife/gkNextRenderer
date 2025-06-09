@@ -29,7 +29,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
-    FVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
+    FHiVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, NodeProxies, voxelTracer };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
