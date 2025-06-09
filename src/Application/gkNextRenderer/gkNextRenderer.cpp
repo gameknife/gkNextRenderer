@@ -194,7 +194,7 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred"};
+			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred", "VoxelTracing"};
 			
 			ImGui::Text("%s", LOCTEXT("Renderer"));
 			

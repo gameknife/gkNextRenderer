@@ -48,6 +48,7 @@ namespace Vulkan
 		ERT_Hybrid,
 		ERT_ModernDeferred,
 		ERT_LegacyDeferred,
+		ERT_VoxelTracing,
 	};
 	
 	class VulkanGpuTimer
