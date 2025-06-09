@@ -122,20 +122,28 @@ namespace Common
         return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 10.0f));
     };
 
-    public float getShadow(float3 worldPos, float3 jit, float3 normal, in UniformBufferObject ubo, in Sampler2D shadowmap)
+    public float getShadow(float3 worldPos, float3 jit, float3 normal, in ConstantBuffer<UniformBufferObject> Camera, in Sampler2D shadowmap, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices)
     {
-        float4 posInLightMap = mul(ubo.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
+        float4 posInLightMap = mul(Camera.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
 
         float3 projCoords = posInLightMap.xyz / posInLightMap.w;
         projCoords = projCoords * 0.5 + 0.5;
         projCoords.y = 1.0 - projCoords.y;
 
         float currentDepth = projCoords.z;
-        float cosTheta = max(dot(normal, normalize(ubo.SunDirection.xyz)), 0.0);
+        float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
         float bias = lerp(0.0001, 0.00005, cosTheta);
 
         float closestDepth = shadowmap.Sample(projCoords.xy).x;
         float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
+
+        if (shadow > 0.01) {
+            float3 outPosition;
+            float3 outNormal;
+            uint outMaterialIdx;
+            float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices) ? 0.0 : 1.0;
+            shadow = min(shadow, contactShadow); // 结合两种阴影结果
+        }
 
         return shadow;
     };
@@ -757,13 +765,17 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
         if (Camera.HasSun)
         {
             float3 jitter = (RandomFloat3(RandomSeed) - float3(0.5f)) * 0.125f;
-            shadow += Common.getShadow(position, jitter, normal, Camera, ShadowMapSampler);
+            shadow += Common.getShadow(position, jitter, normal, Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Vertices);
         }
         directIllumColor = Camera.SunColor * d * shadow;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
     Sampler2D ShadowMapSampler;
+
+    RWTexture2D<uint2> MiniGBuffer;
+    StructuredBuffer<NodeProxy> NodeProxies;
+    StructuredBuffer<float> Vertices;
 }
 
 public struct FPathTracingRenderer : IRenderer
