@@ -32,7 +32,7 @@ struct PushConsts
 ConstantBuffer<PushConsts> pushConsts;
 
 static const int WORK_GROUP_AXIS_SIZE = 8;
-static const int WINDOW_R = 3; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
+static const int WINDOW_R = 5; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
 static const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
 
 // Shared memory arrays
@@ -140,9 +140,9 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         const float CenterLum = dot(DemodulateColor, float3(0.212671f, 0.715160f, 0.072169f));
 
         float Weight = 0;
-        for (int i = -WINDOW_R; i <= WINDOW_R; i += 3)
+        for (int i = -WINDOW_R; i <= WINDOW_R; i += 2)
         {
-            for (int j = -WINDOW_R; j <= WINDOW_R; j += 3)
+            for (int j = -WINDOW_R; j <= WINDOW_R; j += 2)
             {
                 JBF(coord.xy + int2(i, j), int2(i, j), Total, Weight, CenterLum, Normal, current_primitive_index);
             }

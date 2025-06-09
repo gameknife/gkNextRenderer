@@ -497,10 +497,10 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 {
     RayCastResult Result;
 
-    tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z));
+    tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
     GCpuBvh.Intersect(ray);
     
-    if (ray.hit.t < 100000.f)
+    if (ray.hit.t < 2000.f)
     {
         vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
         uint32_t primIdx = ray.hit.prim;
@@ -512,6 +512,7 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
         Result.HitPoint = vec4(hitPos, 0);
         Result.Normal = normalWS;
         Result.Hitted = true;
+        Result.T = ray.hit.t;
         Result.InstanceId = ray.hit.inst;
     }
 
