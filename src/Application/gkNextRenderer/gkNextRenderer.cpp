@@ -52,7 +52,7 @@ bool NextRendererGameInstance::OnRenderUI()
 		ImGuiIO& io = ImGui::GetIO();
         
 		// 渲染器名称数组
-		const char* rendererNames[] = {"AmbientCubes", "SoftTracing", "HybridTracing" , "PathTracing"};
+		const char* rendererNames[] = {"VoxelTracing", "SoftTracing", "HybridTracing" , "PathTracing"};
         
 		// 四个象限的位置
 		ImVec2 positions[] = {

@@ -46,4 +46,5 @@ void main(uint3 DTid : SV_DispatchThreadID) {
 
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
     OutImage[ipos] = hitMaterial.Diffuse * radiance;
+    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

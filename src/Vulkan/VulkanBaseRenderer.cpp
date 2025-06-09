@@ -671,11 +671,11 @@ namespace Vulkan
                 fence->Wait(noTimeout);
             }
 
-            // TODO: 这里可以像uniform buffer一样，和command buffer一样同步进行，但由于有cpu往gpu的同步，因此这里在fence之后，后面根据swapchain来创立多套buffer，就可以同步了
             if (GetScene().UpdateNodes())
             {
                 AfterUpdateScene();
             }
+            
             AfterRenderCmd();
             fence = &(inFlightFences_[currentFrame_]);
 

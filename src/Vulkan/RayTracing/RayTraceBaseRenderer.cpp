@@ -288,8 +288,6 @@ namespace Vulkan::RayTracing
             const int group = count / cubesPerGroup;
 
             // 每32个cube一个group
-
-            
 #if !ANDROID
             int temporalFrames = 120;
             switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
@@ -336,34 +334,8 @@ namespace Vulkan::RayTracing
                 vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
                                    0, sizeof(glm::uvec2), &pushConst);
             
-                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
+                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
             }
-            
-            // {
-            //     int frame = (int)(frameCount_ % 600);
-            //     int groupPerFrame = group / 600;
-            //     int offset = frame * groupPerFrame;
-            //     int offsetInCubes = offset * cubesPerGroup;
-            //     
-            //     SCOPED_GPU_TIMER("ambient far di");
-            //     VkDescriptorSet DescriptorSets[] = {farDirectLightGenPipeline_->DescriptorSet(0)};
-            //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->Handle());
-            //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            //                             farDirectLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            //
-            //     // bind the global bindless set
-            //     static const uint32_t k_bindless_set = 1;
-            //     VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-            //     vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, farDirectLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
-            //                              1, GlobalDescriptorSets, 0, nullptr );
-            //     
-            //     glm::uvec2 pushConst = { offsetInCubes, 1 };
-            //
-            //     vkCmdPushConstants(commandBuffer, farDirectLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-            //                        0, sizeof(glm::uvec2), &pushConst);
-            //
-            //     vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
-            // }
         }
 #endif
     }

@@ -81,4 +81,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     outColor.a = 1.0f;
 
     OutImage[ipos] = outColor;
+
+    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

@@ -72,4 +72,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
     OutImage[ipos] = outColor;
+    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

@@ -659,7 +659,6 @@ public struct FHardwareRayTracer : IRayTracer
             float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
             outNode = NodeProxies[q.CommittedRayInstanceId()];
-            //outNode.instanceId = q.CommittedRayInstanceId(); // TODO: 这里需要整理，visibility buffer里存的是nodeProxy的index，而nodeproxy是create node时的index。前面的index在node树变更时，值会变化。而后者不会。
             const uint2 offsets = Offsets[outNode.modelId];
             const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.y;
