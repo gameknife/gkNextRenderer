@@ -7,11 +7,11 @@ Options::Options(const int argc, const char* argv[])
 {	
 	cxxopts::Options options("options", "");
 	options.add_options()
-		("renderer",  "Renderer Type (0 = RayQuery, 1 = HybridDeferred, 2 = ModernDeferred, 3 = LegacyDeferred, 4 = VulkanBase).", cxxopts::value<uint32_t>(RendererType)->default_value("0"))
-		("samples", "The number of ray samples per pixel.", cxxopts::value<uint32_t>(Samples)->default_value("8"))
+		("renderer",  "Renderer Type (0 = PathTracing, 1 = HybridTracing, 2 = SoftTracing, 3 = PureAmbient, 4 = VoxelTracing).", cxxopts::value<uint32_t>(RendererType)->default_value("0"))
+		("samples", "The number of ray samples per pixel.", cxxopts::value<uint32_t>(Samples)->default_value("4"))
 		("bounces", "The general limit number of bounces per ray.", cxxopts::value<uint32_t>(Bounces)->default_value("4"))
 		("max-bounces", "The maximum bounces per ray.", cxxopts::value<uint32_t>(MaxBounces)->default_value("10"))
-		("temporal", "The number of temporal frames.", cxxopts::value<uint32_t>(Temporal)->default_value("8"))
+		("temporal", "The number of temporal frames.", cxxopts::value<uint32_t>(Temporal)->default_value("16"))
 		("nodenoiser", "Not Use Denoiser.", cxxopts::value<bool>(NoDenoiser)->default_value("true"))
 		("adaptivesample", "use adaptive sample to improve render quality.", cxxopts::value<bool>(AdaptiveSample)->default_value("false"))
 
