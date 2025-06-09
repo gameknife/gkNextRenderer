@@ -674,6 +674,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.FastGather = userSettings_.FastGather;
     ubo.FastInterpole = userSettings_.FastInterpole;
     ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
+    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);

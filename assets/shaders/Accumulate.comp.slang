@@ -43,21 +43,16 @@ static const float2 offsets5x5[25] = {
 float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 Normal, float3 CenterNormal) 
 {
     if (isCenter) {
-        return 0.4; // Center pixel weight
+        return 0.4;
     } else if (!sameObject) {
-        return 0.0; // Different object pixel weight is 0
+        return 0.0;
     } else {
-        // Threshold filtering based on normal similarity
         float normalDot = clamp(dot(Normal, CenterNormal), 0.0f, 1.0f);
-        const float normalThreshold = 0.98f; // Approximately corresponds to 45 degrees
-
+        const float normalThreshold = 0.98f;
         if (normalDot < normalThreshold) {
-            return 0.0; // Normal difference too large, weight is 0
+            return 0.0;
         }
-
-        // Normalize normalDot to [0,1] range for weight calculation
         const float normalWeight = (normalDot - normalThreshold) / (1.0 - normalThreshold);
-        
         return normalWeight * 2.0 / (centerDist * 1.5 + 4.0);
     }
 }
@@ -71,10 +66,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // More flexible sampling algorithm with dynamic weights
     float4 src = float4(0, 0, 0, 0);
-    float temporalWeight = 0.0;
-    float totalWeight = 0.0;
+
         
-    bool isEvenFrameActual = Camera.TotalFrames % 2 == 0 ? true : false;
     bool useHistory = true;
     float2 motion = MotionVectorImage[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
@@ -84,11 +77,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint prev_primitive_index0 = FetchPrimitiveIndex(Visibility1Buffer[previpos]);
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
-    
-    const int SAMPLE_RANGE = 1;
+
+    const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 1;
     
     float3 CenterNormal = InNormal[ipos].rgb;
-    
+
+    float temporalWeight = 0.0;
+    float totalWeight = 0.0;
+
     for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
         for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
             int2 offset = int2(x, y);
@@ -97,7 +93,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             uint primitiveIdx = FetchPrimitiveIndex(VisibilityBuffer[samplePos]);
             float3 worldNormal = InNormal[samplePos].rgb;
 
-            bool isCenter = (x == 0 && y == 0) ? true : false; 
+            bool isCenter = (x == 0 && y == 0) ? true : false;
             bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
             float centerDist = length(float2(x, y));
 
@@ -115,7 +111,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // Normalize
     src /= totalWeight;
-
+    
     float4 final = src;
     
     // fetch visibility to validate the history

@@ -156,14 +156,7 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-#if ANDROID
         cpuAccelerationStructure_.AsyncProcessFull();
-#else
-        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
-        {
-            cpuAccelerationStructure_.AsyncProcessFull();
-        }
-#endif
         cpuAccelerationStructure_.GenShadowMap(*this);
     }
 

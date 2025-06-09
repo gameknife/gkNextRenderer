@@ -4,6 +4,40 @@
 [[vk::binding(3)]] RWTexture2D<uint> InDebugImage3;
 [[vk::binding(4)]] RWTexture2D<uint> InDebugImage4;
 
+float3 UintToStableColor(uint value)
+{
+    // 使用简单的hash函数确保颜色稳定
+    uint hash = value;
+    hash = hash * 1103515245u + 12345u;
+    hash = (hash >> 16) ^ hash;
+    hash = hash * 1103515245u + 12345u;
+
+    // 提取三个分量
+    uint r = (hash) & 0xFFu;
+    uint g = (hash >> 8) & 0xFFu;
+    uint b = (hash >> 16) & 0xFFu;
+
+    // 转换为HSV空间以控制明度和彩度
+    float hue = (r / 255.0) * 6.28318;          // 0-2π
+    float saturation = 0.6 + (g / 255.0) * 0.4; // 0.6-1.0，保证有一定彩度
+    float value = 0.5 + (b / 255.0) * 0.5;      // 0.5-1.0，保证不会太暗
+
+    // HSV转RGB
+    float c = value * saturation;
+    float x = c * (1.0 - abs(fmod(hue / 1.047198, 2.0) - 1.0));
+    float m = value - c;
+
+    float3 rgb;
+    if (hue < 1.047198) rgb = float3(c, x, 0);
+    else if (hue < 2.094395) rgb = float3(x, c, 0);
+    else if (hue < 3.141593) rgb = float3(0, c, x);
+    else if (hue < 4.18879) rgb = float3(0, x, c);
+    else if (hue < 5.235988) rgb = float3(x, 0, c);
+    else rgb = float3(c, 0, x);
+
+    return rgb + m;
+}
+
 #define DRAW(IMAGE, quadx, quady, divider, ipos, isize, multipler) { \
     int2 uv = int2(0, 0); \
     if(DrawQuad(quadx, quady, divider, ipos, isize, uv)){ \
@@ -22,7 +56,8 @@
     int2 uv = int2(0, 0); \
     if(DrawQuad(quadx, quady, divider, ipos, isize, uv)){ \
     uint icol = IMAGE[uv]; \
-    OutImage[ipos] = float4(icol, icol, icol, icol) / 8.0;} \
+    float3 color = UintToStableColor(icol); \
+    OutImage[ipos] = float4(color, 1.0);} \
 }
 
 bool DrawQuad(uint quadx, uint quady, uint divider, int2 ipos, int2 isize, out int2 uv)
