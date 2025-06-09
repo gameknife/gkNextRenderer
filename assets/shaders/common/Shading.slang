@@ -435,30 +435,37 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
         return clamp(pageIndex, 0, 4096);
     }
-
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
-    
+
         float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
         float3 tDelta = abs(CUBE_UNIT / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
-    
+
         if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
         if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
         if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
-    
+
         bool hit = false;
         float3 normal = float3(0, 0, 0);
-    
+
         for (uint i = 0; i < maxSteps; i++)
         {
-            if (inSolid(voxelPos, hitMatId, Voxels))
+            if (useBounds)
+            {
+                float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
+                if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
+                    break;
+            }
+
+            bool shouldCheck = useBounds ? inSolid(voxelPos, hitMatId, Voxels) : (inSolid(voxelPos, hitMatId, Voxels) && i > 2);
+            if (shouldCheck)
             {
                 hit = true;
-                outVertex.Normal = normal;
+                outVertex.Normal = normalize(normal);
                 float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
                 float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
                 outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax);
@@ -466,9 +473,9 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                 outVertex.TexCoord = float2(0.5, 0.5);
                 break;
             }
-    
+
             normal = float3(0, 0, 0);
-    
+
             if (tMax.x < tMax.y && tMax.x < tMax.z)
             {
                 voxelPos.x += stepSign.x;
@@ -487,15 +494,18 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                 tMax.z += tDelta.z;
                 normal.z = -stepSign.z;
             }
-    
-            if (useBounds)
-            {
-                float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
-                if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
-                    break;
-            }
         }
         return hit;
+    }
+
+    public bool LegacyTraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        return TraceRayDDA(rayOrigin, rayDir, maxDistance, float3(0), float3(0), false, outVertex, outNode);
+    }
+
+    public bool LocalTraceRay(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        return TraceRayDDA(rayOrigin, rayDir, 0, boxMin, boxMax, true, outVertex, outNode);
     }
 
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
@@ -504,11 +514,10 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         bool hit = false;
         rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 3;
 
-        if (maxDistance < PAGE_SIZE * 1.7f)
+        if (maxDistance < PAGE_SIZE * 1.7)
         {
-            return TraceRayDDA(rayOrigin, rayDir, maxDistance, float3(0), float3(0), false, outVertex, outNode);
+            return LegacyTraceRay(rayOrigin, rayDir, maxDistance, outVertex, outNode);
         }
-
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
         float3 pagetDelta = abs(PAGE_SIZE / rayDir);
@@ -534,7 +543,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
             if (Pages[pageIndex].voxelCount > 0)
             {
                 // 使用计算出的进入点进行局部追踪
-                if (TraceRayDDA(rayOrigin, rayDir, 0, boxMin, boxMax, true, outVertex, outNode))
+                if (LocalTraceRay(localStartPos, rayDir, boxMin, boxMax, outVertex, outNode))
                 {
                     hit = true;
                     break;
