@@ -147,7 +147,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
-    userSettings.HeatmapScale = 0.5f;
+    userSettings.HeatmapScale = 1.0f;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Temporal;

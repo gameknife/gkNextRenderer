@@ -28,6 +28,8 @@ import Common;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    const uint64_t clock = Camera.ShowHeatmap ? clockARB() : 0;
+
     // compose with renderer and tracer
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
@@ -74,4 +76,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     outColor.a = 1.0f;
 
     AccumulationImage[ipos] = outColor;
+
+    if (Camera.ShowHeatmap)
+    {
+        const uint64_t deltaTime = clockARB() - clock;
+        const float heatmapScale = 1000000.0f * Camera.HeatmapScale * Camera.HeatmapScale;
+        const float deltaTimeScaled = clamp(float(deltaTime) / heatmapScale, 0.0f, 1.0f);
+        const float4 shaderHeatColor = float4(heatmap(deltaTimeScaled), 1.0);
+        ShaderTimerBuffer[ipos] = shaderHeatColor;
+    }
 }
