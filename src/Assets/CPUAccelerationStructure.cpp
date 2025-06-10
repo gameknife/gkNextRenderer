@@ -400,7 +400,7 @@ void FCPUProbeBaker::ClearAmbientCubes()
 
 void FCPUPageIndex::Init()
 {
-    pageIndex.resize(Assets::PAGE_COUNT * Assets::PAGE_COUNT);
+    pageIndex.resize(Assets::ACGI_PAGE_COUNT * Assets::ACGI_PAGE_COUNT);
 }
 
 void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
@@ -435,19 +435,19 @@ void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
 Assets::PageIndex& FCPUPageIndex::GetPage(glm::vec3 worldpos)
 {
     // 假设CUBE_OFFSET定义了世界空间的起始位置
-    glm::vec3 relativePos = worldpos - Assets::PAGE_OFFSET;
+    glm::vec3 relativePos = worldpos - Assets::ACGI_PAGE_OFFSET;
 
     // 计算页面索引，假设每个page对应PAGE_UNIT的世界空间距离
     // 使用xz平面进行映射
-    int pageX = static_cast<int>(relativePos.x / Assets::PAGE_SIZE);
-    int pageZ = static_cast<int>(relativePos.z / Assets::PAGE_SIZE);
+    int pageX = static_cast<int>(relativePos.x / Assets::ACGI_PAGE_SIZE);
+    int pageZ = static_cast<int>(relativePos.z / Assets::ACGI_PAGE_SIZE);
 
     // 限制在有效范围内
-    pageX = glm::clamp(pageX, 0, Assets::PAGE_COUNT - 1);
-    pageZ = glm::clamp(pageZ, 0, Assets::PAGE_COUNT - 1);
+    pageX = glm::clamp(pageX, 0, Assets::ACGI_PAGE_COUNT - 1);
+    pageZ = glm::clamp(pageZ, 0, Assets::ACGI_PAGE_COUNT - 1);
 
     // 计算一维索引
-    int index = pageZ * Assets::PAGE_COUNT + pageX;
+    int index = pageZ * Assets::ACGI_PAGE_COUNT + pageX;
 
     // 返回对应的PageIndex引用
     return pageIndex[index];

@@ -54,13 +54,13 @@ namespace Common
 
         if (inMaterial.DiffuseTextureId >= 0)
         {
-            float4 tex = TextureArray[NonUniformResourceIndex(inMaterial.DiffuseTextureId)].Sample(inVertex.TexCoord);
+            float4 tex = TextureArray[NonUniformResourceIndex(inMaterial.DiffuseTextureId)].SampleLevel(inVertex.TexCoord, 0);
             outAlbedo *= tex;
         }
         float roughness = inMaterial.Fuzziness;
         if (inMaterial.MRATextureId >= 0)
         {
-            float4 mra = TextureArray[NonUniformResourceIndex(inMaterial.MRATextureId)].Sample(inVertex.TexCoord);
+            float4 mra = TextureArray[NonUniformResourceIndex(inMaterial.MRATextureId)].SampleLevel(inVertex.TexCoord, 0);
             roughness = roughness * mra.g;
         }
 
@@ -134,14 +134,14 @@ namespace Common
         float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
         float bias = lerp(0.0001, 0.00005, cosTheta);
 
-        float closestDepth = shadowmap.Sample(projCoords.xy).x;
+        float closestDepth = shadowmap.SampleLevel(projCoords.xy, 0).x;
         float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
         if (shadow > 0.01) {
             float3 outPosition;
             float3 outNormal;
             uint outMaterialIdx;
-            float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices) ? 0.0 : 1.0;
+            float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 1.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices) ? 0.0 : 1.0;
             shadow = min(shadow, contactShadow); // 结合两种阴影结果
         }
 
@@ -815,7 +815,7 @@ public struct FPathTracingRenderer : IRenderer
             float4 outAlbedo = hitMat.Diffuse;
             if (hitMat.DiffuseTextureId >= 0)
             {
-                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].Sample(inVertex.TexCoord);
+                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].SampleLevel(inVertex.TexCoord, 0);
                 outAlbedo *= tex;
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)

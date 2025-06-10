@@ -16,9 +16,9 @@ namespace Assets
 	using namespace glm;
 
 
-	const int PAGE_COUNT = 64; // 64x64
-	const float PAGE_SIZE = 16; // 16m
-	const vec3 PAGE_OFFSET = vec3( -512, 0, -512);
+	const int ACGI_PAGE_COUNT = 64; // 64x64
+	const float ACGI_PAGE_SIZE = 16; // 16m
+	const vec3 ACGI_PAGE_OFFSET = vec3( -512, 0, -512);
 	const int SHADOWMAP_SIZE = 4096;
 	const int CUBE_SIZE_XY = 192;//256;
 	const int CUBE_SIZE_Z = 48;

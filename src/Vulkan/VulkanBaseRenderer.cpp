@@ -799,7 +799,9 @@ namespace Vulkan
         }
 
         // soft ambient cube generation
+#if !ANDROID
         if (!supportRayTracing_)
+#endif
         {
             const int cubesPerGroup = 32;
             const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
