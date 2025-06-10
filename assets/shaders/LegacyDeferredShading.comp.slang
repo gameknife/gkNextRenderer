@@ -11,8 +11,8 @@ import Common;
 [[vk::binding(6)]] StructuredBuffer<uint2> Offsets;
 [[vk::binding(7)]] StructuredBuffer<NodeProxy> NodeProxies;
 
-[[vk::binding(8, 0)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(9, 0)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(8, 0)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(9, 0)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(10, 0)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(11, 0)]] Sampler2D ShadowMapSampler;
 
@@ -21,7 +21,7 @@ import Common;
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID) {
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
@@ -46,5 +46,5 @@ void main(uint3 DTid : SV_DispatchThreadID) {
 
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
     OutImage[ipos] = hitMaterial.Diffuse * radiance;
-    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    //MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

@@ -5,18 +5,18 @@ import Common;
 
 [[vk::binding(2)]] StructuredBuffer<Material> Materials;
 [[vk::binding(3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
-[[vk::binding(4)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(5)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(4)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(5)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(6)]] StructuredBuffer<PageIndex> Pages;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
-    FHiVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
+    FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
     FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
 
     int2 ipos = int2(DTid.xy);

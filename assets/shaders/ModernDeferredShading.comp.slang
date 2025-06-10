@@ -10,8 +10,8 @@ import Common;
 [[vk::binding(7)]] StructuredBuffer<uint2> Offsets;
 [[vk::binding(8)]] StructuredBuffer<NodeProxy> NodeProxies;
 [[vk::binding(9)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(10)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(11)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(10)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(11)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(12)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 
 [[vk::binding(13)]] Sampler2D ShadowMapSampler;
@@ -24,12 +24,12 @@ import Common;
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
-    FHiVoxelDDARayTracer voxelTracer = { Cubes, Voxels, Pages };
+    FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, NodeProxies, voxelTracer };
     FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Vertices };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
@@ -72,5 +72,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
     OutImage[ipos] = outColor;
-    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    //MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

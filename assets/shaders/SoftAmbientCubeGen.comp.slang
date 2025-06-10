@@ -12,9 +12,6 @@ import Common;
 [[vk::binding(10)]] RWStructuredBuffer<AmbientCube> Cubes;
 [[vk::binding(11)]] RWStructuredBuffer<VoxelData> Voxels;
 
-[[vk::binding(12)]] StructuredBuffer<AmbientCube> RoCubes;
-[[vk::binding(13)]] StructuredBuffer<VoxelData> RoVoxels;
-
 [[vk::binding(14)]] StructuredBuffer<PageIndex> Pages;
 
 // 全局纹理数组
@@ -29,10 +26,10 @@ struct PushConstant
 [[vk::push_constant]] ConstantBuffer<PushConstant> pushConst;
 
 [shader("compute")]
-[numthreads(32, 1, 1)]
+[numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    FHiVoxelDDARayTracer tracer = { RoCubes, RoVoxels, Pages };
+    FHiVoxelDDARayTracer tracer = { Voxels, Pages };
     FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs, Lights };
 
     uint gIdx = DTid.x + pushConst.globalOffset;
@@ -44,6 +41,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     float3 origin = float3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
-
     probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed, TextureSamplers);
 }

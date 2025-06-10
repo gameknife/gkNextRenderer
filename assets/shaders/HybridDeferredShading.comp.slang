@@ -16,8 +16,8 @@ import Common;
 [[vk::binding(13)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(14)]] RWTexture2D<float4> OutNormalBuffer;
 
-[[vk::binding(16)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(17)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(16)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(17)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(18)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(19)]] StructuredBuffer<LightObject> Lights;
 
@@ -25,7 +25,7 @@ import Common;
 
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer
@@ -82,5 +82,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     OutImage[ipos] = outColor;
 
-    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    //MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 }

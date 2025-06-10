@@ -409,6 +409,7 @@ void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
     for (auto& page : pageIndex)
     {
         page = {};
+        page.voxelCount = 0;
     }
 
     // 遍历baker里的数据，根据index，取得worldpos，然后取page出来，给voxel数量提升

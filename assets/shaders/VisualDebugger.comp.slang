@@ -75,7 +75,7 @@ bool DrawQuad(uint quadx, uint quady, uint divider, int2 ipos, int2 isize, out i
 }
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);

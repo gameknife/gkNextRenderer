@@ -279,7 +279,7 @@ namespace Vulkan::RayTracing
         if(supportRayCast_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
         {
 #if !ANDROID
-            const int cubesPerGroup = 32;
+            const int cubesPerGroup = 64;
 #else
             const int cubesPerGroup = 1024;
 #endif      
@@ -309,32 +309,33 @@ namespace Vulkan::RayTracing
             int temporalFrames = 625;
 #endif
             // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
-
-
             {
-                int frame = (int)(frameCount_ % temporalFrames);
-                int groupPerFrame = group / temporalFrames;
-                int offset = frame * groupPerFrame;
-                int offsetInCubes = offset * cubesPerGroup;
-                
                 SCOPED_GPU_TIMER("ambient di");
-                VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                        directLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-
-                // bind the global bindless set
-                static const uint32_t k_bindless_set = 1;
-                VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-                vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
-                                         1, GlobalDescriptorSets, 0, nullptr );
+                if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
+                {
+                    int frame = (int)(frameCount_ % temporalFrames);
+                    int groupPerFrame = group / temporalFrames;
+                    int offset = frame * groupPerFrame;
+                    int offsetInCubes = offset * cubesPerGroup;
                 
-                glm::uvec2 pushConst = { offsetInCubes, 0 };
+                    VkDescriptorSet DescriptorSets[] = {directLightGenPipeline_->DescriptorSet(0)};
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->Handle());
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                            directLightGenPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
 
-                vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(glm::uvec2), &pushConst);
+                    // bind the global bindless set
+                    static const uint32_t k_bindless_set = 1;
+                    VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
+                    vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, directLightGenPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                             1, GlobalDescriptorSets, 0, nullptr );
+                
+                    glm::uvec2 pushConst = { offsetInCubes, 0 };
+
+                    vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                       0, sizeof(glm::uvec2), &pushConst);
             
-                vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
+                    vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
+                }
             }
         }
 #endif

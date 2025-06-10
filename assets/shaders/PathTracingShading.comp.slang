@@ -19,13 +19,13 @@ import Common;
 [[vk::binding(15)]] RWTexture2D<float4> OutNormalBuffer;
 
 [[vk::binding(17)]] RWTexture2D<float4> ShaderTimerBuffer;
-[[vk::binding(18)]] StructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(19)]] StructuredBuffer<VoxelData> Voxels;
+[[vk::binding(18)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(19)]] RWStructuredBuffer<VoxelData> Voxels;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     // compose with renderer and tracer

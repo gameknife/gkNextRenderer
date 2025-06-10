@@ -26,7 +26,7 @@ struct PushConstant
 [[vk::push_constant]] ConstantBuffer<PushConstant> pushConst;
 
 [shader("compute")]
-[numthreads(32, 1, 1)]
+[numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint gIdx = DTid.x + pushConst.globalOffset;

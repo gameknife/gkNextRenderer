@@ -657,10 +657,6 @@ namespace Vulkan::PipelineCommon
 
             {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
             {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
@@ -734,10 +730,7 @@ namespace Vulkan::PipelineCommon
 
                 descriptorSets.Bind(0, 10, probeBufferInfo),
                 descriptorSets.Bind(0, 11, voxBufferInfo),
-
-                descriptorSets.Bind(0, 12, probeBufferInfo),
-                descriptorSets.Bind(0, 13, voxBufferInfo),
-
+                
                 descriptorSets.Bind(0, 14, pageBufferInfo),
             };
 

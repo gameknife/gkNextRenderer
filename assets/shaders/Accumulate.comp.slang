@@ -59,7 +59,7 @@ float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 N
 
 // A simple accumulation shader, reproject can be implemented here later.
 [shader("compute")]
-[numthreads(8, 4, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);

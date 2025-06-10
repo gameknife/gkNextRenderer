@@ -25,6 +25,11 @@ public static const float3 cubeVectors[6] = {
 
 public static const uint FACE_TRACING = 16;
 
+const static float2 grid2x2[4] = {
+    float2(-0.5, -0.5), float2(0.5, -0.5),
+    float2(-0.5, 0.5), float2(0.5, 0.5)
+};
+
 const static float2 grid4x4[16] = {
     float2(-0.75, -0.75), float2(-0.25, -0.75), float2(0.25, -0.75), float2(0.75, -0.75),
     float2(-0.75, -0.25), float2(-0.25, -0.25), float2(0.25, -0.25), float2(0.75, -0.25),
@@ -202,14 +207,14 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-AmbientCube FetchCube(int3 probePos, in StructuredBuffer<AmbientCube> Cubes)
+AmbientCube FetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
     return Cubes[idx];
 }
 
-VoxelData FetchVoxel(int3 probePos, in StructuredBuffer<VoxelData> Cubes)
+VoxelData FetchVoxel(int3 probePos, in RWStructuredBuffer<VoxelData> Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
@@ -223,7 +228,7 @@ AmbientCube RWFetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
     return Cubes[idx];
 }
 
-public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in StructuredBuffer<AmbientCube> Cubes, in StructuredBuffer<VoxelData> Voxels)
+public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<VoxelData> Voxels)
 {
     float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
 
@@ -269,55 +274,8 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     return indirectColor;
 }
 
-public float4 RWinterpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes)
-{
-    float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
-
-    // Early out if position is outside the probe grid
-    if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
-    {
-        return float4(0, 0, 0, 0);
-    }
-
-    // Get the base indices and fractional positions
-    int3 baseIdx = int3(floor(nearpos));
-    float3 frac = frac(nearpos);
-
-    // Trilinear interpolation between 8 nearest probes
-    // Try immediate neighbors first
-    float totalWeight = 0.0;
-    float4 result = float4(0.0, 0.0, 0.0, 0.0);
-
-    for (int i = 0; i < 8; i++)
-    {
-        int3 offset = int3(
-            i & 1,
-            (i >> 1) & 1,
-            (i >> 2) & 1);
-
-        int3 probePos = baseIdx + offset;
-        AmbientCube cube = RWFetchCube(probePos, Cubes);
-        // if (cube.Active == 0) continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        float4 sampleColor = T.Sample(cube, normal);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.0, 0.0, 0.0, 0.0);
-    return indirectColor;
-}
-
 // Interpolate between 8 probes
-public bool inSolid(float3 pos, inout uint matId, in StructuredBuffer<VoxelData> Cubes)
+public bool inSolid(float3 pos, inout uint matId, in RWStructuredBuffer<VoxelData> Cubes)
 {
 
     // Early out if position is outside the probe grid
@@ -355,7 +313,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float4 bounceColor = float4(0.0);
 
         // 抖动
-        const float2 offset = grid5x5[iterate % 25] * 0.25f;
+        const float2 offset = grid2x2[iterate % 4] * 0.25f;
 
         // 天光直接光照和反弹
         for (uint i = 0; i < FACE_TRACING; i++)
@@ -369,7 +327,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
-                bounceColor += outAlbedo * RWinterpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes);
+                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
             }
             else
             {

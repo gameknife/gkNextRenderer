@@ -122,7 +122,6 @@ public struct ALIGN_16 PageIndex
     public uint voxelCount;
     public uint voxelDataIdx;
     public uint probeDataIdx;
-    public uint importantLightIdx[16];
 };
 
 public struct ALIGN_16 SphericalHarmonics

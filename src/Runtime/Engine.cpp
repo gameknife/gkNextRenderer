@@ -82,8 +82,9 @@ namespace NextRenderer
                     }
 #if !ANDROID
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
-                    ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
 #endif
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
+
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_VoxelTracing);

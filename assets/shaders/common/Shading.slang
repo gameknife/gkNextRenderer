@@ -17,7 +17,14 @@ static const float FAST_MAX_TRACE_DISTANCE = 10.f;
 
 namespace Common
 {
-       float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
+    public uint GetPageIndex(float3 pagePos)
+    {
+        // Calculate the page index based on the page position
+        uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
+        return clamp(pageIndex, 0, 4096);
+    }
+
+    float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
     {
         float3 t1 = (boxMin - rayOrigin) / rayDir;
         float3 t2 = (boxMax - rayOrigin) / rayDir;
@@ -141,7 +148,7 @@ namespace Common
             float3 outPosition;
             float3 outNormal;
             uint outMaterialIdx;
-            float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 1.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices) ? 0.0 : 1.0;
+            float contactShadow = traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices) ? 0.0 : 1.0;
             shadow = min(shadow, contactShadow); // 结合两种阴影结果
         }
 
@@ -437,12 +444,6 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         NodeProxy outNode;
         return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength, outVertex, outNode);
     }
-    uint GetPageIndex(float3 pagePos)
-    {
-        // Calculate the page index based on the page position
-        uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
-        return clamp(pageIndex, 0, 4096);
-    }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
         uint hitMatId = 0;
@@ -469,8 +470,8 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                     break;
             }
 
-            bool shouldCheck = useBounds ? inSolid(voxelPos, hitMatId, Voxels) : (inSolid(voxelPos, hitMatId, Voxels) && i > 2);
-            if (shouldCheck)
+
+            if (inSolid(voxelPos, hitMatId, Voxels))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
@@ -522,14 +523,16 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         bool hit = false;
         rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 3;
 
-        if (maxDistance < PAGE_SIZE * 1.7)
-        {
-            return LegacyTraceRay(rayOrigin, rayDir, maxDistance, outVertex, outNode);
-        }
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
         float3 pagetDelta = abs(PAGE_SIZE / rayDir);
         float3 pageTMax = float3(0, 0, 0);
+
+        uint pageIndexStartPoint = Common.GetPageIndex(pagePos);
+        if (maxDistance < PAGE_SIZE * 1.7)
+        {
+            return LegacyTraceRay(rayOrigin, rayDir, maxDistance, outVertex, outNode);
+        }
 
         float3 stepSign = sign(rayDir);
         if (rayDir.x != 0) pageTMax.x = (stepSign.x > 0 ? ceil(pagePos.x) - pagePos.x : pagePos.x - floor(pagePos.x)) * pagetDelta.x;
@@ -545,7 +548,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
             float3 localStartPos = Common.CalculateRayAABBEntry(rayOrigin, rayDir, boxMin, boxMax);
 
             // Check if we are in a valid page
-            uint pageIndex = GetPageIndex(pagePos);
+            uint pageIndex = Common.GetPageIndex(pagePos);
 
             // Check if the current voxel is within the page bounds
             if (Pages[pageIndex].voxelCount > 0)
@@ -578,8 +581,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         return hit;
     }
 
-    StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<VoxelData> Voxels;
+    RWStructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<PageIndex> Pages;
 }
 
@@ -901,8 +903,8 @@ public struct FPathTracingRenderer : IRenderer
     StructuredBuffer<uint2> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
-    StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<VoxelData> Voxels;
+    RWStructuredBuffer<AmbientCube> Cubes;
+    RWStructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
 
@@ -981,7 +983,7 @@ public struct FHybridRenderer : IRenderer
     StructuredBuffer<uint2> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
-    StructuredBuffer<AmbientCube> Cubes;
-    StructuredBuffer<VoxelData> Voxels;
+    RWStructuredBuffer<AmbientCube> Cubes;
+    RWStructuredBuffer<VoxelData> Voxels;
     StructuredBuffer<SphericalHarmonics> HDRSHs;
 }
