@@ -1,7 +1,6 @@
 import Common;
 
-[[vk::binding(0)]] RWTexture2D<uint2> MiniGBuffer;
-[[vk::binding(2)]] RWTexture2D<float4> OutImage;
+
 [[vk::binding(3)]] ConstantBuffer<UniformBufferObject> Camera;
 
 [[vk::binding(4)]] StructuredBuffer<float> Vertices;
@@ -10,11 +9,10 @@ import Common;
 [[vk::binding(7)]] StructuredBuffer<uint2> Offsets;
 [[vk::binding(8)]] StructuredBuffer<NodeProxy> NodeProxies;
 
-[[vk::binding(9)]] RWTexture2D<float4> OutMotionVector;
+
 [[vk::binding(10)]] RaytracingAccelerationStructure Scene;
 
-[[vk::binding(13)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(14)]] RWTexture2D<float4> OutNormalBuffer;
+
 
 [[vk::binding(16)]] RWStructuredBuffer<AmbientCube> Cubes;
 [[vk::binding(17)]] RWStructuredBuffer<VoxelData> Voxels;
@@ -23,6 +21,11 @@ import Common;
 
 [[vk::binding(0, 1)]] Sampler2D TextureArray[];
 
+[[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
+[[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(4, 2)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(5, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(6, 2)]] RWTexture2D<float4> OutNormalBuffer;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]

@@ -24,6 +24,8 @@
 #include <array>
 #include <fmt/format.h>
 
+#include "DescriptorSetManager.hpp"
+#include "DescriptorSets.hpp"
 #include "Enumerate.hpp"
 #include "ImageMemoryBarrier.hpp"
 #include "Options.hpp"
@@ -444,7 +446,36 @@ namespace Vulkan
 	
         rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
         rtNormal_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
+
+        rtDescriptorSetManager_.reset(new DescriptorSetManager(*device_, {
+            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+        }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
         
+        auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != swapChain_->Images().size(); ++i)
+        {
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+    {
+                descriptorSets.Bind(i, 0, { NULL, rtOutput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 1, { NULL, rtAccumlation->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 2, { NULL, rtVisibility0->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 3, { NULL, rtVisibility1->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 4, { NULL, rtMotionVector_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 5, { NULL, rtAlbedo_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 6, { NULL, rtNormal_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+               
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
+                
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->CreateSwapChain(swapChain_->RenderExtent());
@@ -489,6 +520,8 @@ namespace Vulkan
         imageAvailableSemaphores_.clear();
         depthBuffer_.reset();
         swapChain_.reset();
+
+        rtDescriptorSetManager_.reset();
         
         fence = nullptr;
     }

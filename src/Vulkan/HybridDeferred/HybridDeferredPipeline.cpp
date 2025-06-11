@@ -13,14 +13,13 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 
 namespace Vulkan::HybridDeferred
 {
     HybridShadingPipeline::HybridShadingPipeline(const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-                                                const ImageView& miniGBuffer0ImageView,
-                                                 const ImageView& finalImageView, const ImageView& motionVectorImageView,
-                                                 const ImageView& albedoImageView, const ImageView& normalImageView,
+                                                const VulkanBaseRenderer& baseRenderer,
                                                  const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
@@ -28,9 +27,6 @@ namespace Vulkan::HybridDeferred
         const std::vector<DescriptorBinding> descriptorBindings =
         {
             // MiniGbuffer and output
-            {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
             // Others like in frag
             {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
@@ -41,11 +37,7 @@ namespace Vulkan::HybridDeferred
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
 
-            {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {10, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
 
             {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -67,12 +59,7 @@ namespace Vulkan::HybridDeferred
             structureInfo.pNext = nullptr;
             structureInfo.accelerationStructureCount = 1;
             structureInfo.pAccelerationStructures = &accelerationStructureHandle;
-
-            VkDescriptorImageInfo Info0 = {NULL, miniGBuffer0ImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info2 = {NULL, finalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info8 = {NULL, motionVectorImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info13 = {NULL, albedoImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info14 = {NULL, normalImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            
 
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
@@ -123,21 +110,15 @@ namespace Vulkan::HybridDeferred
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 0, Info0),
-                descriptorSets.Bind(i, 2, Info2),
                 descriptorSets.Bind(i, 3, uniformBufferInfo),
                 descriptorSets.Bind(i, 4, vertexBufferInfo),
                 descriptorSets.Bind(i, 5, indexBufferInfo),
                 descriptorSets.Bind(i, 6, materialBufferInfo),
                 descriptorSets.Bind(i, 7, offsetsBufferInfo),
                 descriptorSets.Bind(i, 8, nodesBufferInfo),
-                descriptorSets.Bind(i, 9, Info8),
                 descriptorSets.Bind(i, 10, structureInfo),
-                descriptorSets.Bind(i, 13, Info13),
-                descriptorSets.Bind(i, 14, Info14),
                 descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
                 descriptorSets.Bind(i, 17, farAmbientCubeBufferInfo),
-                
                 descriptorSets.Bind(i, 18, hdrshBufferInfo),
                 descriptorSets.Bind(i, 19, lightBufferInfo),
             };
@@ -145,7 +126,7 @@ namespace Vulkan::HybridDeferred
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), baseRenderer.GetRTDescriptorSetManager().DescriptorSetLayout()));
         const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

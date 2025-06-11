@@ -30,6 +30,7 @@ namespace Vulkan
 	}
 
 	class RenderImage;
+	class DescriptorSetManager;
 }
 
 namespace Assets
@@ -309,6 +310,11 @@ namespace Vulkan
 		{
 			return currentLogicRenderer_;
 		}
+
+		DescriptorSetManager& GetRTDescriptorSetManager() const
+		{
+			return *rtDescriptorSetManager_;
+		}
 		
 		// Callbacks
 		std::function<void()> DelegateOnDeviceSet;
@@ -339,7 +345,7 @@ namespace Vulkan
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
-		
+			
 	protected:
 		Assets::UniformBufferObject lastUBO;
 	
@@ -382,6 +388,8 @@ namespace Vulkan
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
 
 		std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool_;
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> rtDescriptorSetManager_;
 
 		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};

@@ -21,6 +21,7 @@ namespace Vulkan
 	class SwapChain;
 	class Buffer;
 	class DescriptorSetManager;
+	class VulkanBaseRenderer;
 
 	namespace RayTracing
 	{
@@ -39,9 +40,7 @@ namespace Vulkan::HybridDeferred
 	
 		HybridShadingPipeline(
 			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& miniGBuffer0ImageView,
-			const ImageView& finalImageView, const ImageView& motionVectorImageView,
-			const ImageView& albedoImageView, const ImageView& normalImageView,
+			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~HybridShadingPipeline();

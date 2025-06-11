@@ -19,6 +19,8 @@
 #include "Utilities/Console.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/DepthBuffer.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
 
@@ -48,12 +50,7 @@ namespace Vulkan::HybridDeferred
         //baseRender_
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
-                                                         baseRender_.rtVisibility0->GetImageView(),
-                                                         baseRender_.rtAccumlation->GetImageView(),
-                                                         baseRender_.rtMotionVector_->GetImageView(),
-                                                         baseRender_.rtAlbedo_->GetImageView(),
-                                                         baseRender_.rtNormal_->GetImageView(),
-                                                         UniformBuffers(), GetScene()));
+                                                         baseRender_,UniformBuffers(), GetScene()));
         
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                          baseRender_.rtAccumlation->GetImageView(),
@@ -147,6 +144,7 @@ namespace Vulkan::HybridDeferred
             // cs shading pass
             VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
+            
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
 
@@ -155,6 +153,10 @@ namespace Vulkan::HybridDeferred
             VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
             vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
                                      1, GlobalDescriptorSets, 0, nullptr );
+
+            VkDescriptorSet RTDescriptorSets[] = {baseRender_.GetRTDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                        deferredShadingPipeline_->PipelineLayout().Handle(), 2, 1, RTDescriptorSets, 0, nullptr);
             
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 8;
