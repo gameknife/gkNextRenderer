@@ -46,8 +46,6 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
         deferredFrameBuffer0_.reset(new FrameBuffer(extent, baseRender_.rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
-
-        //baseRender_
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
                                                          baseRender_,UniformBuffers(), GetScene()));
@@ -79,8 +77,6 @@ namespace Vulkan::HybridDeferred
         visualDebugPipeline_.reset();
         deferredFrameBuffer0_.reset();
         
-        baseRender_.rtOutput.reset();
-        baseRender_.rtAccumlation.reset();
         rtPingPong0.reset();
     }
 
@@ -157,6 +153,11 @@ namespace Vulkan::HybridDeferred
             VkDescriptorSet RTDescriptorSets[] = {baseRender_.GetRTDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                         deferredShadingPipeline_->PipelineLayout().Handle(), 2, 1, RTDescriptorSets, 0, nullptr);
+
+            VkDescriptorSet SceneDescriptorSets[] = {baseRender_.GetScene().GetSceneBufferDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                        deferredShadingPipeline_->PipelineLayout().Handle(), 3, 1, SceneDescriptorSets, 0, nullptr);
+
             
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 8;

@@ -6,16 +6,16 @@
 namespace Vulkan {
 	
 PipelineLayout::PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout0,
-	const DescriptorSetLayout& descriptorSetLayout1, const VkPushConstantRange* pushConstantRanges,
+	const DescriptorSetLayout& descriptorSetLayout1, const DescriptorSetLayout& descriptorSetLayout2, const VkPushConstantRange* pushConstantRanges,
 	uint32_t pushConstantRangeCount) : device_(device)
 {
 	// add the global texture set with set = 1, currently an ugly impl
 	Assets::GlobalTexturePool* GPool = Assets::GlobalTexturePool::GetInstance();
-	VkDescriptorSetLayout descriptorSetLayouts[] = { descriptorSetLayout0.Handle(), GPool->Layout(), descriptorSetLayout1.Handle() };
+	VkDescriptorSetLayout descriptorSetLayouts[] = { descriptorSetLayout0.Handle(), GPool->Layout(), descriptorSetLayout1.Handle(), descriptorSetLayout2.Handle() };
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1 + 2;
+	pipelineLayoutInfo.setLayoutCount = 4;
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
@@ -33,7 +33,7 @@ PipelineLayout::PipelineLayout(const Device & device, const DescriptorSetLayout&
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1 + 1;
+	pipelineLayoutInfo.setLayoutCount = 2;
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;

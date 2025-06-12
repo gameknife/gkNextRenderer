@@ -16,6 +16,7 @@ namespace Vulkan
 	class DeviceMemory;
 	class Image;
 	class RenderImage;
+	class DescriptorSetManager;
 }
 
 namespace Assets
@@ -110,6 +111,11 @@ namespace Assets
 		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
 		FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+
+		Vulkan::DescriptorSetManager& GetSceneBufferDescriptorSetManager() const
+		{
+			return *sceneBufferDescriptorSetManager_;
+		}
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -154,7 +160,9 @@ namespace Assets
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
 		std::unique_ptr<TextureImage> cpuShadowMap_;
-
+		
+		std::unique_ptr<Vulkan::DescriptorSetManager> sceneBufferDescriptorSetManager_;
+		
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};
 		uint32_t verticeCount_ {};

@@ -26,24 +26,8 @@ namespace Vulkan::HybridDeferred
         const auto& device = swapChain.Device();
         const std::vector<DescriptorBinding> descriptorBindings =
         {
-            // MiniGbuffer and output
-            // Others like in frag
-            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            // all buffer here
-            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {10, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {16, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-                {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            
-            {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {19, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -65,68 +49,19 @@ namespace Vulkan::HybridDeferred
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
-            
-            // Vertex buffer
-            VkDescriptorBufferInfo vertexBufferInfo = {};
-            vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
-            vertexBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Index buffer
-            VkDescriptorBufferInfo indexBufferInfo = {};
-            indexBufferInfo.buffer = scene.IndexBuffer().Handle();
-            indexBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Material buffer
-            VkDescriptorBufferInfo materialBufferInfo = {};
-            materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
-            materialBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Offsets buffer
-            VkDescriptorBufferInfo offsetsBufferInfo = {};
-            offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
-            offsetsBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Nodes buffer
-            VkDescriptorBufferInfo nodesBufferInfo = {};
-            nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
-            nodesBufferInfo.range = VK_WHOLE_SIZE;
-            
-            VkDescriptorBufferInfo ambientCubeBufferInfo = {};
-            ambientCubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
-            ambientCubeBufferInfo.range = VK_WHOLE_SIZE;
-
-            VkDescriptorBufferInfo farAmbientCubeBufferInfo = {};
-            farAmbientCubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
-            farAmbientCubeBufferInfo.range = VK_WHOLE_SIZE;
-
-            VkDescriptorBufferInfo hdrshBufferInfo = {};
-            hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
-            hdrshBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Light buffer
-            VkDescriptorBufferInfo lightBufferInfo = {};
-            lightBufferInfo.buffer = scene.LightBuffer().Handle();
-            lightBufferInfo.range = VK_WHOLE_SIZE;
-            
+                        
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 3, uniformBufferInfo),
-                descriptorSets.Bind(i, 4, vertexBufferInfo),
-                descriptorSets.Bind(i, 5, indexBufferInfo),
-                descriptorSets.Bind(i, 6, materialBufferInfo),
-                descriptorSets.Bind(i, 7, offsetsBufferInfo),
-                descriptorSets.Bind(i, 8, nodesBufferInfo),
-                descriptorSets.Bind(i, 10, structureInfo),
-                descriptorSets.Bind(i, 16, ambientCubeBufferInfo),
-                descriptorSets.Bind(i, 17, farAmbientCubeBufferInfo),
-                descriptorSets.Bind(i, 18, hdrshBufferInfo),
-                descriptorSets.Bind(i, 19, lightBufferInfo),
+                descriptorSets.Bind(i, 0, uniformBufferInfo),
+                descriptorSets.Bind(i, 1, structureInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), baseRenderer.GetRTDescriptorSetManager().DescriptorSetLayout()));
+        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
+            baseRenderer.GetRTDescriptorSetManager().DescriptorSetLayout(),
+            scene.GetSceneBufferDescriptorSetManager().DescriptorSetLayout()));
         const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

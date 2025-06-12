@@ -8,6 +8,9 @@
 #include <unordered_set>
 
 #include "Runtime/Engine.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 namespace Assets
 {
@@ -15,9 +18,7 @@ namespace Assets
                  bool supportRayTracing)
     {
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-
-        RebuildMeshBuffer(commandPool, supportRayTracing);
-
+        
         // 动态更新的场景结构，每帧更新
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
@@ -33,10 +34,14 @@ namespace Assets
             pageIndexBufferMemory_);
         cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");
+
+        RebuildMeshBuffer(commandPool, supportRayTracing);
     }
 
     Scene::~Scene()
     {
+        sceneBufferDescriptorSetManager_.reset();
+        
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 
@@ -144,6 +149,42 @@ namespace Assets
         }
 #endif
         cpuAccelerationStructure_.GenShadowMap(*this);
+
+        
+        uint32_t maxSets = 2;//NextEngine::GetInstance()->GetRenderer().SwapChain().ImageViews().size();
+
+        sceneBufferDescriptorSetManager_.reset(new Vulkan::DescriptorSetManager(commandPool.Device(), {
+                // all buffer here
+                {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            }, maxSets));
+        
+        auto& descriptorSets = sceneBufferDescriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != maxSets; ++i)
+        {
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(i, 0, { vertexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 1, { indexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 2, { materialBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 3, { offsetBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 4, { nodeMatrixBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 5, { ambientCubeBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 6, { farAmbientCubeBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 7, { hdrSHBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 8, { lightBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
     }
 
     void Scene::PlayAllTracks()

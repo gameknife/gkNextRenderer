@@ -462,7 +462,7 @@ namespace Vulkan
         for (uint32_t i = 0; i != swapChain_->Images().size(); ++i)
         {
             std::vector<VkWriteDescriptorSet> descriptorWrites =
-    {
+            {
                 descriptorSets.Bind(i, 0, { NULL, rtOutput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 1, { NULL, rtAccumlation->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 2, { NULL, rtVisibility0->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
