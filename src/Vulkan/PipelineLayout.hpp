@@ -16,6 +16,8 @@ namespace Vulkan
 		PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		~PipelineLayout();
+
+		void BindDescriptorSets(VkCommandBuffer commandBuffer) const;
 	private:
 
 		const Device& device_;
@@ -23,6 +25,7 @@ namespace Vulkan
 		VULKAN_HANDLE(VkPipelineLayout, pipelineLayout_)
 
 		std::vector<VkDescriptorSetLayout> cachedDescriptorSetLayouts_;
+		std::vector<VkDescriptorSet> cachedDescriptorSets_;
 	};
 
 }

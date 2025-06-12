@@ -17,6 +17,12 @@ PipelineLayout::PipelineLayout(const Device& device, const std::vector<Descripto
 		cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
 	}
 
+	cachedDescriptorSets_.push_back(GPool->DescriptorSet(0));
+	for ( DescriptorSetManager* manager : managers )
+	{
+		cachedDescriptorSets_.push_back(manager->DescriptorSets().Handle(0));
+	}
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 4;
@@ -55,4 +61,10 @@ PipelineLayout::~PipelineLayout()
 	}
 }
 
+void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer) const
+{
+	vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,Handle(), 0,
+						 static_cast<uint32_t>(cachedDescriptorSets_.size()), cachedDescriptorSets_.data(), 0, nullptr );
+
+}
 }

@@ -301,6 +301,8 @@ namespace Vulkan
 		virtual void OnPreLoadScene() {}
 		virtual void OnPostLoadScene() {}
 
+		void InitializeBarriers(VkCommandBuffer commandBuffer);
+		
 		bool VisualDebug() const {return visualDebug_;}
 
 		virtual void RegisterLogicRenderer(ERendererType type);

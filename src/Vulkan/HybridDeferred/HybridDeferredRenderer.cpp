@@ -127,38 +127,18 @@ namespace Vulkan::HybridDeferred
         }
 
         {
-            baseRender_.rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.InitializeBarriers(commandBuffer);
             rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
             SCOPED_GPU_TIMER("shadingpass");
             // cs shading pass
-            
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
             
             // bind the global bindless set
-            VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-            vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), 0,
-                                     1, GlobalDescriptorSets, 0, nullptr );
-
-            VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    deferredShadingPipeline_->PipelineLayout().Handle(), 1, 1, DescriptorSets, 0, nullptr);
-            
-            VkDescriptorSet RTDescriptorSets[] = {baseRender_.GetRTDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                        deferredShadingPipeline_->PipelineLayout().Handle(), 2, 1, RTDescriptorSets, 0, nullptr);
-
-            VkDescriptorSet SceneDescriptorSets[] = {baseRender_.GetScene().GetSceneBufferDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                        deferredShadingPipeline_->PipelineLayout().Handle(), 3, 1, SceneDescriptorSets, 0, nullptr);
-
-            
+            deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer);
+                       
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 8;
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, workGroupSizeXDivider),
