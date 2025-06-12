@@ -138,18 +138,18 @@ namespace Vulkan::HybridDeferred
         {
             SCOPED_GPU_TIMER("shadingpass");
             // cs shading pass
-            VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
+            
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
             
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-
             // bind the global bindless set
-            static const uint32_t k_bindless_set = 1;
             VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-            vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
+            vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), 0,
                                      1, GlobalDescriptorSets, 0, nullptr );
 
+            VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    deferredShadingPipeline_->PipelineLayout().Handle(), 1, 1, DescriptorSets, 0, nullptr);
+            
             VkDescriptorSet RTDescriptorSets[] = {baseRender_.GetRTDescriptorSetManager().DescriptorSets().Handle(imageIndex)};
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                         deferredShadingPipeline_->PipelineLayout().Handle(), 2, 1, RTDescriptorSets, 0, nullptr);

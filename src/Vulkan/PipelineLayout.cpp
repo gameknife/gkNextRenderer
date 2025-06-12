@@ -5,18 +5,22 @@
 
 namespace Vulkan {
 	
-PipelineLayout::PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout0,
-	const DescriptorSetLayout& descriptorSetLayout1, const DescriptorSetLayout& descriptorSetLayout2, const VkPushConstantRange* pushConstantRanges,
+PipelineLayout::PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, const VkPushConstantRange* pushConstantRanges,
 	uint32_t pushConstantRangeCount) : device_(device)
 {
 	// add the global texture set with set = 1, currently an ugly impl
 	Assets::GlobalTexturePool* GPool = Assets::GlobalTexturePool::GetInstance();
-	VkDescriptorSetLayout descriptorSetLayouts[] = { descriptorSetLayout0.Handle(), GPool->Layout(), descriptorSetLayout1.Handle(), descriptorSetLayout2.Handle() };
+
+	cachedDescriptorSetLayouts_.push_back(GPool->Layout());
+	for ( DescriptorSetManager* manager : managers )
+	{
+		cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
+	}
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 4;
-	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
+	pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.data();
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
 	
@@ -29,12 +33,12 @@ PipelineLayout::PipelineLayout(const Device & device, const DescriptorSetLayout&
 {
 	// add the global texture set with set = 1, currently an ugly impl
 	Assets::GlobalTexturePool* GPool = Assets::GlobalTexturePool::GetInstance();
-	VkDescriptorSetLayout descriptorSetLayouts[] = { descriptorSetLayout.Handle(), GPool->Layout() };
+	cachedDescriptorSetLayouts_ = { descriptorSetLayout.Handle(), GPool->Layout() };
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 2;
-	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts;
+	pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.data();
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
 	

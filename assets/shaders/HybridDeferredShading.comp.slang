@@ -1,9 +1,9 @@
 import Common;
 
-[[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
-[[vk::binding(1, 0)]] RaytracingAccelerationStructure Scene;
+[[vk::binding(0, 0)]] Sampler2D TextureArray[];
 
-[[vk::binding(0, 1)]] Sampler2D TextureArray[];
+[[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(1, 1)]] RaytracingAccelerationStructure Scene;
 
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
 [[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;

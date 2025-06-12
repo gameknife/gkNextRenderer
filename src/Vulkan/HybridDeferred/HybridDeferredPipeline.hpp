@@ -47,6 +47,7 @@ namespace Vulkan::HybridDeferred
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+		void BindDescriptorSets(VkCommandBuffer commandBuffer);
 	private:
 		const SwapChain& swapChain_;
 		

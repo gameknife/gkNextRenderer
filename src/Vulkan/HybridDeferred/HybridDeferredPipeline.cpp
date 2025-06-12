@@ -33,35 +33,26 @@ namespace Vulkan::HybridDeferred
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
 
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
-
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
             // Top level acceleration structure.
             const auto accelerationStructureHandle = accelerationStructure.Handle();
-            VkWriteDescriptorSetAccelerationStructureKHR structureInfo = {};
-            structureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-            structureInfo.pNext = nullptr;
-            structureInfo.accelerationStructureCount = 1;
-            structureInfo.pAccelerationStructures = &accelerationStructureHandle;
-            
-
-            // Uniform buffer
-            VkDescriptorBufferInfo uniformBufferInfo = {};
-            uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
-            uniformBufferInfo.range = VK_WHOLE_SIZE;
-                        
+                                    
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 0, uniformBufferInfo),
-                descriptorSets.Bind(i, 1, structureInfo),
+                descriptorSets.Bind(i, 0, {uniformBuffers[i].Buffer().Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 1, {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR, nullptr, 1, &accelerationStructureHandle}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
-            baseRenderer.GetRTDescriptorSetManager().DescriptorSetLayout(),
-            scene.GetSceneBufferDescriptorSetManager().DescriptorSetLayout()));
+        std::vector<DescriptorSetManager*> managers = {
+            descriptorSetManager_.get(),
+            &baseRenderer.GetRTDescriptorSetManager(),
+            &scene.GetSceneBufferDescriptorSetManager()
+        };
+        pipelineLayout_.reset(new class PipelineLayout(device, managers));
         const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
@@ -90,5 +81,11 @@ namespace Vulkan::HybridDeferred
     VkDescriptorSet HybridShadingPipeline::DescriptorSet(uint32_t index) const
     {
         return descriptorSetManager_->DescriptorSets().Handle(index);
+    }
+
+    void HybridShadingPipeline::BindDescriptorSets(VkCommandBuffer commandBuffer)
+    {
+        // vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, PipelineLayout().Handle(), 0,
+        //                  1, descriptorSetManager_->DescriptorSets()., 0, nullptr );
     }
 }
