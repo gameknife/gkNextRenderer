@@ -53,4 +53,9 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
     FinalImage[ipos] = hitMaterial.Diffuse * radiance;
     ObjectId0[ipos] = hitNode.instanceId;
+
+    if (Camera.DebugDraw_Lighting)
+    {
+        FinalImage[ipos] = radiance;
+    }
 }

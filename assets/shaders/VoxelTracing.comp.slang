@@ -48,6 +48,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
         outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
         //outColor = Materials[hitVertex.MaterialIndex].Diffuse * 50.0f;
+
+        if (Camera.DebugDraw_Lighting)
+        {
+            outColor = radiance;
+        }
     }
     else
     {
@@ -55,4 +60,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     FinalImage[ipos] = outColor;
+
+
 }
