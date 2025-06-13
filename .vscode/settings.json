@@ -1,4 +1,13 @@
 {
+    "VSCodeCounter.exclude": [
+        "**/.gitignore",
+        "**/.vscode/**",
+        "**/node_modules/**",
+        "**/src/ThirdParty/**",
+        "**/android/**",
+        "**/assets/shaders/glsl_legacy/**",
+        "**/.github/**",
+    ],
     "files.associations": {
         "__split_buffer": "cpp",
         "deque": "cpp",

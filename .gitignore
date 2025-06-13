@@ -343,3 +343,5 @@ tools/node/
 tools/typescript/
 cmake-build-*/
 .DS_Store
+
+.VSCodeCounter/
