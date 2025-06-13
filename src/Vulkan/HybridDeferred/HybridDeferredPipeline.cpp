@@ -53,7 +53,7 @@ namespace Vulkan::HybridDeferred
             &baseRenderer.GetRTDescriptorSetManager(),
             &scene.GetSceneBufferDescriptorSetManager()
         };
-        pipelineLayout_.reset(new class PipelineLayout(device, managers, uniformBuffers.size()));
+        pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
         const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

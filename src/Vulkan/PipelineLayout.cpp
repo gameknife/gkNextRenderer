@@ -23,7 +23,7 @@ PipelineLayout::PipelineLayout(const Device& device, const std::vector<Descripto
 	}
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 4;
+	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(cachedDescriptorSetLayouts_.size());
 	pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.data();
 	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
 	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
@@ -62,7 +62,7 @@ PipelineLayout::~PipelineLayout()
 void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const
 {
 	vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,Handle(), 0,
-						 static_cast<uint32_t>(cachedDescriptorSets_.size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
+						 static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
 
 }
 }

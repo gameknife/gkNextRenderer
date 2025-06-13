@@ -22,7 +22,8 @@ namespace Vulkan
 			const DescriptorPool& descriptorPool, 
 			const DescriptorSetLayout& layout,
 		    std::map<uint32_t, VkDescriptorType> bindingTypes, 
-			size_t size);
+			size_t size,
+			bool bindless);
 
 		~DescriptorSets();
 

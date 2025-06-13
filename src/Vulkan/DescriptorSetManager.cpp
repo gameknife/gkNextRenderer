@@ -23,7 +23,7 @@ DescriptorSetManager::DescriptorSetManager(const Device& device, const std::vect
 
 	descriptorPool_.reset(new DescriptorPool(device, descriptorBindings, maxSets, bindless));
 	descriptorSetLayout_.reset(new class DescriptorSetLayout(device, descriptorBindings, bindless));
-	descriptorSets_.reset(new class DescriptorSets(*descriptorPool_, *descriptorSetLayout_, bindingTypes, maxSets));
+	descriptorSets_.reset(new class DescriptorSets(*descriptorPool_, *descriptorSetLayout_, bindingTypes, maxSets, bindless));
 }
 
 DescriptorSetManager::~DescriptorSetManager()

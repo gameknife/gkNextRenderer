@@ -12,7 +12,8 @@ DescriptorSets::DescriptorSets(
 	const DescriptorPool& descriptorPool, 
 	const DescriptorSetLayout& layout,
 	std::map<uint32_t, VkDescriptorType> bindingTypes,
-	const size_t size) :
+	const size_t size,
+	bool bindless) :
 	descriptorPool_(descriptorPool),
 	bindingTypes_(std::move(bindingTypes))
 {
@@ -24,6 +25,15 @@ DescriptorSets::DescriptorSets(
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(size);
 	allocInfo.pSetLayouts = layouts.data();
 
+	// bindless stuff
+	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
+	};
+	uint32_t max_binding = 65535u - 1;
+	count_info.descriptorSetCount = static_cast<uint32_t>(size);
+	count_info.pDescriptorCounts = &max_binding;
+	if (bindless) allocInfo.pNext = &count_info;
+	
 	descriptorSets_.resize(size);
 
 	Check(vkAllocateDescriptorSets(descriptorPool.Device().Handle(), &allocInfo, descriptorSets_.data()),

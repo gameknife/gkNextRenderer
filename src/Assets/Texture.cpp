@@ -191,7 +191,7 @@ namespace Assets
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 0, { NULL, textureImage.ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
+            descriptorSets.Bind(0, 0, { textureImage.Sampler().Handle(), textureImage.ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
