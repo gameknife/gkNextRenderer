@@ -45,13 +45,7 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility0->GetImageView(),
 		visibilityPipeline_->RenderPass()));
 	
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(),
-		baseRender_.rtVisibility0->GetImageView(),
-		baseRender_.rtAccumlation->GetImageView(),
-		baseRender_.rtMotionVector_->GetImageView(),
-		baseRender_.rtAlbedo_->GetImageView(),
-		baseRender_.rtNormal_->GetImageView(),
-		UniformBuffers(), GetScene()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
 
 	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
 																		 baseRender_.rtAccumlation->GetImageView(),
@@ -152,16 +146,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		// cs shading pass
 		VkDescriptorSet DescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-
-		// bind the global bindless set
-		static const uint32_t k_bindless_set = 1;
-		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
-								 1, GlobalDescriptorSets, 0, nullptr );
-		
-
+		deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
 		baseRender_.rtAccumlation->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);

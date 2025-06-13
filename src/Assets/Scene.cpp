@@ -164,6 +164,7 @@ namespace Assets
                 {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             }, maxSets));
         
         auto& descriptorSets = sceneBufferDescriptorSetManager_->DescriptorSets();
@@ -181,6 +182,7 @@ namespace Assets
                 descriptorSets.Bind(i, 6, { farAmbientCubeBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 7, { hdrSHBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 8, { lightBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 9, { pageIndexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

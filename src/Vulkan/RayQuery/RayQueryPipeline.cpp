@@ -16,56 +16,25 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
 
 namespace Vulkan::RayTracing
 {
-    RayQueryPipeline::RayQueryPipeline(const DeviceProcedures& deviceProcedures, const SwapChain& swapChain,
+    RayQueryPipeline::RayQueryPipeline(const SwapChain& swapChain,
         const TopLevelAccelerationStructure& accelerationStructure,
-        const ImageView& accumulationImageView,
-        const ImageView& motionVectorImageView,
-        const ImageView& visibilityBufferImageView,
-        const ImageView& OutAlbedoImageView,
-        const ImageView& OutNormalImageView,
-        const ImageView& OutShaderTimerImageView,
-        
+        const VulkanBaseRenderer& baseRenderer,
         const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
     {
          // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
         const std::vector<DescriptorBinding> descriptorBindings =
         {
-            // Top level acceleration structure.
-            {0, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
-            // Light buffer
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            // Camera information & co
-            {3, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            // Vertex buffer, Index buffer, Material buffer, Offset buffer
-            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {14, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {15, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {17, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-
-            {18, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
-            {19, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            {1, 1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_SHADER_STAGE_COMPUTE_BIT},
         };
-
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
 
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
-
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
              // Top level acceleration structure.
@@ -81,105 +50,28 @@ namespace Vulkan::RayTracing
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
 
-            // Vertex buffer
-            VkDescriptorBufferInfo vertexBufferInfo = {};
-            vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
-            vertexBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Index buffer
-            VkDescriptorBufferInfo indexBufferInfo = {};
-            indexBufferInfo.buffer = scene.IndexBuffer().Handle();
-            indexBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Material buffer
-            VkDescriptorBufferInfo materialBufferInfo = {};
-            materialBufferInfo.buffer = scene.MaterialBuffer().Handle();
-            materialBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Offsets buffer
-            VkDescriptorBufferInfo offsetsBufferInfo = {};
-            offsetsBufferInfo.buffer = scene.OffsetsBuffer().Handle();
-            offsetsBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Nodes buffer
-            VkDescriptorBufferInfo nodesBufferInfo = {};
-            nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
-            nodesBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Light buffer
-            VkDescriptorBufferInfo lightBufferInfo = {};
-            lightBufferInfo.buffer = scene.LightBuffer().Handle();
-            lightBufferInfo.range = VK_WHOLE_SIZE;
-
-            VkDescriptorBufferInfo hdrshBufferInfo = {};
-            hdrshBufferInfo.buffer = scene.HDRSHBuffer().Handle();
-            hdrshBufferInfo.range = VK_WHOLE_SIZE;
-
-            // Accumulation image
-            VkDescriptorImageInfo accumulationImageInfo = {};
-            accumulationImageInfo.imageView = accumulationImageView.Handle();
-            accumulationImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            // Output image
-            VkDescriptorImageInfo motionVectorImageInfo = {};
-            motionVectorImageInfo.imageView = motionVectorImageView.Handle();
-            motionVectorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            
-            VkDescriptorImageInfo visibilityBufferImageInfo = {};
-            visibilityBufferImageInfo.imageView = visibilityBufferImageView.Handle();
-            visibilityBufferImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            
-            VkDescriptorImageInfo outAlbedoImageInfo = {};
-            outAlbedoImageInfo.imageView = OutAlbedoImageView.Handle();
-            outAlbedoImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            VkDescriptorImageInfo outNormalImageInfo = {};
-            outNormalImageInfo.imageView = OutNormalImageView.Handle();
-            outNormalImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            VkDescriptorImageInfo outShaderTimerImageInfo = {};
-            outShaderTimerImageInfo.imageView = OutShaderTimerImageView.Handle();
-            outShaderTimerImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-            VkDescriptorBufferInfo cubeBufferInfo = {};
-            cubeBufferInfo.buffer = scene.AmbientCubeBuffer().Handle();
-            cubeBufferInfo.range = VK_WHOLE_SIZE;
-
-            VkDescriptorBufferInfo farcubeBufferInfo = {};
-            farcubeBufferInfo.buffer = scene.FarAmbientCubeBuffer().Handle();
-            farcubeBufferInfo.range = VK_WHOLE_SIZE;
-            
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 0, structureInfo),
-                descriptorSets.Bind(i, 1, lightBufferInfo),
-                descriptorSets.Bind(i, 3, uniformBufferInfo),
-                descriptorSets.Bind(i, 4, vertexBufferInfo),
-                descriptorSets.Bind(i, 5, indexBufferInfo),
-                descriptorSets.Bind(i, 6, materialBufferInfo),
-                descriptorSets.Bind(i, 7, offsetsBufferInfo),
-                descriptorSets.Bind(i, 8, nodesBufferInfo),
-                descriptorSets.Bind(i, 9, hdrshBufferInfo),
-                descriptorSets.Bind(i, 10, accumulationImageInfo),
-                descriptorSets.Bind(i, 11, motionVectorImageInfo),
-                descriptorSets.Bind(i, 12, visibilityBufferImageInfo),
-                descriptorSets.Bind(i, 14, outAlbedoImageInfo),
-                descriptorSets.Bind(i, 15, outNormalImageInfo),
-                descriptorSets.Bind(i, 17, outShaderTimerImageInfo),
-                descriptorSets.Bind(i, 18, cubeBufferInfo),
-                descriptorSets.Bind(i, 19, farcubeBufferInfo),
+                descriptorSets.Bind(i, 0, uniformBufferInfo),
+                descriptorSets.Bind(i, 1, structureInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
         VkPushConstantRange pushConstantRange{};
-        // Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
         pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
         pushConstantRange.offset = 0;
         pushConstantRange.size = 8;
 
-        PipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(),
+        std::vector<DescriptorSetManager*> managers = {
+            &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
+            descriptorSetManager_.get(),
+            &baseRenderer.GetRTDescriptorSetManager(),
+            &scene.GetSceneBufferDescriptorSetManager()
+        };
+
+        PipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size()),
                                                        &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/PathTracingShading.comp.slang.spv");
         

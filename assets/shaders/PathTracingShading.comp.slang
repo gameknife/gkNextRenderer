@@ -1,28 +1,26 @@
 import Common;
 
-[[vk::binding(0)]] RaytracingAccelerationStructure Scene;
-[[vk::binding(1)]] StructuredBuffer<LightObject> Lights;
-[[vk::binding(3)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(0, 0)]] Sampler2D TextureArray[];
 
-[[vk::binding(4)]] StructuredBuffer<float> Vertices;
-[[vk::binding(5)]] StructuredBuffer<uint> Indices;
-[[vk::binding(6)]] StructuredBuffer<Material> Materials;
-[[vk::binding(7)]] StructuredBuffer<uint2> Offsets;
-[[vk::binding(8)]] StructuredBuffer<NodeProxy> NodeProxies;
-[[vk::binding(9)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
+[[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(1, 1)]] RaytracingAccelerationStructure Scene;
+//[[vk::binding(2, 1)]] RWTexture2D<float4> ShaderTimerBuffer;
 
-[[vk::binding(10)]] RWTexture2D<float4> AccumulationImage;
-[[vk::binding(11)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(12)]] RWTexture2D<uint2> VisibilityBuffer;
+[[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
+[[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(4, 2)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(5, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(6, 2)]] RWTexture2D<float4> OutNormalBuffer;
 
-[[vk::binding(14)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(15)]] RWTexture2D<float4> OutNormalBuffer;
-
-[[vk::binding(17)]] RWTexture2D<float4> ShaderTimerBuffer;
-[[vk::binding(18)]] RWStructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(19)]] RWStructuredBuffer<VoxelData> Voxels;
-
-[[vk::binding(0, 1)]] Sampler2D TextureArray[];
+[[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
+[[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
+[[vk::binding(2, 3)]] StructuredBuffer<Material> Materials;
+[[vk::binding(3, 3)]] StructuredBuffer<uint2> Offsets;
+[[vk::binding(4, 3)]] StructuredBuffer<NodeProxy> NodeProxies;
+[[vk::binding(5, 3)]] RWStructuredBuffer<AmbientCube> Cubes;
+[[vk::binding(6, 3)]] RWStructuredBuffer<VoxelData> Voxels;
+[[vk::binding(7, 3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
+[[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
@@ -38,7 +36,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     int2 ipos = int2(DTid.xy);
     int2 isize;
-    AccumulationImage.GetDimensions(isize.x, isize.y);
+    OutImage.GetDimensions(isize.x, isize.y);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
     // do a primary ray here
@@ -48,11 +46,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
-        AccumulationImage[ipos] = skyColor;
+        OutImage[ipos] = skyColor;
         OutMotionVector[ipos] = float4(0, 0, 0, 0);
         OutAlbedoBuffer[ipos] = skyColor;
         OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
-        VisibilityBuffer[ipos] = uint2(0, 0);
+        MiniGBuffer[ipos] = uint2(0, 0);
         return;
     }
     // MotionVector解析
@@ -66,7 +64,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
-    VisibilityBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
@@ -75,7 +73,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
 
-    AccumulationImage[ipos] = outColor;
+    OutImage[ipos] = outColor;
 
     if (Camera.ShowHeatmap)
     {
@@ -83,6 +81,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         const float heatmapScale = 1000000.0f * Camera.HeatmapScale * Camera.HeatmapScale;
         const float deltaTimeScaled = clamp(float(deltaTime) / heatmapScale, 0.0f, 1.0f);
         const float4 shaderHeatColor = float4(heatmap(deltaTimeScaled), 1.0);
-        ShaderTimerBuffer[ipos] = shaderHeatColor;
+        //ShaderTimerBuffer[ipos] = shaderHeatColor;
     }
 }

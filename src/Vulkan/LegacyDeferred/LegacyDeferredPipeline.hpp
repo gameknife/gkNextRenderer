@@ -18,6 +18,7 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class DescriptorSetManager;
+	class VulkanBaseRenderer;
 }
 
 namespace Vulkan::LegacyDeferred
@@ -29,8 +30,7 @@ namespace Vulkan::LegacyDeferred
 	
 		ShadingPipeline(
 			const SwapChain& swapChain,
-			const ImageView& visibiliyBufferImageView,
-			const ImageView& finalImageView,
+			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~ShadingPipeline();
@@ -57,7 +57,7 @@ namespace Vulkan::VoxelTracing
 	
 		ShadingPipeline(
 			const SwapChain& swapChain, 
-			const ImageView& finalImageView,
+			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~ShadingPipeline();

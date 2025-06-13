@@ -71,10 +71,7 @@ namespace Vulkan::RayTracing
     void RayQueryRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         CreateOutputImage(extent);
-        rayTracingPipeline_.reset(new RayQueryPipeline(Device().GetDeviceProcedures(), SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], baseRender_.rtAccumlation->GetImageView(), baseRender_.rtMotionVector_->GetImageView(),
-                                                         baseRender_.rtVisibility0->GetImageView(),
-                                                         baseRender_.rtAlbedo_->GetImageView(), baseRender_.rtNormal_->GetImageView(),
-                                                         rtShaderTimer_->GetImageView(), UniformBuffers(), GetScene()));
+        rayTracingPipeline_.reset(new RayQueryPipeline(SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], baseRender_, UniformBuffers(), GetScene()));
 
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
                                                                         baseRender_.rtAccumlation->GetImageView(),
@@ -138,14 +135,7 @@ namespace Vulkan::RayTracing
             SCOPED_GPU_TIMER("rt pass");
             VkDescriptorSet DescriptorSets[] = {rayTracingPipeline_->DescriptorSet(imageIndex)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    rayTracingPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            
-            // bind the global bindless set
-            static const uint32_t k_bindless_set = 1;
-            VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-            vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->PipelineLayout().Handle(), k_bindless_set,
-                                     1, GlobalDescriptorSets, 0, nullptr );
+            rayTracingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
             
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 8;

@@ -17,6 +17,7 @@ namespace Vulkan
 	class PipelineLayout;
 	class SwapChain;
 	class DeviceProcedures;
+	class VulkanBaseRenderer;
 }
 
 namespace Vulkan::RayTracing
@@ -31,15 +32,9 @@ namespace Vulkan::RayTracing
 		VULKAN_NON_COPIABLE(RayQueryPipeline)
 
 		RayQueryPipeline(
-			const DeviceProcedures& deviceProcedures,
 			const SwapChain& swapChain,
 			const TopLevelAccelerationStructure& accelerationStructure,
-			const ImageView& accumulationImageView,
-			const ImageView& motionVectorImageView,
-			const ImageView& visibilityBufferImageView,
-			const ImageView& OutAlbedoImageView,
-			const ImageView& OutNormalImageView,
-			const ImageView& OutShaderTimerImageView,
+			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~RayQueryPipeline();

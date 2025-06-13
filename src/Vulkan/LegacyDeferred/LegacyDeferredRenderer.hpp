@@ -65,7 +65,7 @@ namespace Vulkan::VoxelTracing
 	private:
 		// just one computer pass is enough
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
-		std::unique_ptr<RenderImage> rtOutput_;
+		std::unique_ptr<Vulkan::PipelineCommon::SimpleComposePipeline> composePipeline_;
 	};
 
 }

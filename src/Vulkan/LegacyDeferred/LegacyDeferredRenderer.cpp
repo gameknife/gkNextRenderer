@@ -34,7 +34,7 @@ void LegacyDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 
 	visibilityPipeline0_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
 	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_.rtVisibility0->GetImageView(), baseRender_.rtOutput->GetImageView(), UniformBuffers(), GetScene()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
 	composePipeline_.reset(new Vulkan::PipelineCommon::SimpleComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), UniformBuffers()));
 }
 	
@@ -102,14 +102,7 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		// cs shading pass
 		VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-
-		// bind the global bindless set
-		static const uint32_t k_bindless_set = 1;
-		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
-								 1, GlobalDescriptorSets, 0, nullptr );
+		deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 		
 		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);	
 
@@ -150,18 +143,14 @@ Vulkan::VoxelTracing::VoxelTracingRenderer::~VoxelTracingRenderer()
 
 void Vulkan::VoxelTracing::VoxelTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	const auto format = SwapChain().Format();
-	
-	rtOutput_.reset(new RenderImage(Device(), extent, format, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-	
-	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), rtOutput_->GetImageView(), UniformBuffers(), GetScene()));
+	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
+	composePipeline_.reset(new Vulkan::PipelineCommon::SimpleComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), UniformBuffers()));
 }
 
 void Vulkan::VoxelTracing::VoxelTracingRenderer::DeleteSwapChain()
 {
 	deferredShadingPipeline_.reset();
-	rtOutput_.reset();
+	composePipeline_.reset();
 }
 
 void Vulkan::VoxelTracing::VoxelTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -177,43 +166,35 @@ void Vulkan::VoxelTracing::VoxelTracingRenderer::Render(VkCommandBuffer commandB
 		SCOPED_GPU_TIMER("shadingpass");
 		
 		// cs shading pass
-		VkDescriptorSet denoiserDescriptorSets[] = {deferredShadingPipeline_->DescriptorSet(imageIndex)};
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								deferredShadingPipeline_->PipelineLayout().Handle(), 0, 1, denoiserDescriptorSets, 0, nullptr);
-
-		// bind the global bindless set
-		static const uint32_t k_bindless_set = 1;
-		VkDescriptorSet GlobalDescriptorSets[] = { Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0) };
-		vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->PipelineLayout().Handle(), k_bindless_set,
-								 1, GlobalDescriptorSets, 0, nullptr );
-		
-		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 4, 1);	
+		deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);	
 
 		// copy to swap-buffer
-		rtOutput_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+		baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
 								   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 								   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	}
+	
+	{
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+					   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+					   VK_IMAGE_LAYOUT_GENERAL);
+            
+		VkDescriptorSet DescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+								composePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		
+		glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(0, 0  ) : glm::uvec2(0,0);
+		vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(glm::uvec2), &pushConst);
+		
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
-
-	// Copy output image into swap-chain image.
-	VkImageCopy copyRegion;
-	copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-	copyRegion.srcOffset = {0, 0, 0};
-	copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-	copyRegion.dstOffset = {0, 0, 0};
-	copyRegion.extent = {rtOutput_->GetImage().Extent().width, rtOutput_->GetImage().Extent().height, 1};
-
-	vkCmdCopyImage(commandBuffer,
-				   rtOutput_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				   SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				   1, &copyRegion);
-
-	ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
-							   VK_ACCESS_TRANSFER_WRITE_BIT,
-							   0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
 }
