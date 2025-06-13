@@ -48,11 +48,12 @@ namespace Vulkan::HybridDeferred
         }
 
         std::vector<DescriptorSetManager*> managers = {
+            &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
             descriptorSetManager_.get(),
             &baseRenderer.GetRTDescriptorSetManager(),
             &scene.GetSceneBufferDescriptorSetManager()
         };
-        pipelineLayout_.reset(new class PipelineLayout(device, managers));
+        pipelineLayout_.reset(new class PipelineLayout(device, managers, uniformBuffers.size()));
         const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
@@ -81,11 +82,5 @@ namespace Vulkan::HybridDeferred
     VkDescriptorSet HybridShadingPipeline::DescriptorSet(uint32_t index) const
     {
         return descriptorSetManager_->DescriptorSets().Handle(index);
-    }
-
-    void HybridShadingPipeline::BindDescriptorSets(VkCommandBuffer commandBuffer)
-    {
-        // vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, PipelineLayout().Handle(), 0,
-        //                  1, descriptorSetManager_->DescriptorSets()., 0, nullptr );
     }
 }

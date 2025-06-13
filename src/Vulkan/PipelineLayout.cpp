@@ -5,24 +5,22 @@
 
 namespace Vulkan {
 	
-PipelineLayout::PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, const VkPushConstantRange* pushConstantRanges,
+PipelineLayout::PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, uint32_t maxSets, const VkPushConstantRange* pushConstantRanges,
 	uint32_t pushConstantRangeCount) : device_(device)
 {
-	// add the global texture set with set = 1, currently an ugly impl
-	Assets::GlobalTexturePool* GPool = Assets::GlobalTexturePool::GetInstance();
-
-	cachedDescriptorSetLayouts_.push_back(GPool->Layout());
 	for ( DescriptorSetManager* manager : managers )
 	{
 		cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
 	}
 
-	cachedDescriptorSets_.push_back(GPool->DescriptorSet(0));
-	for ( DescriptorSetManager* manager : managers )
+	cachedDescriptorSets_.resize(maxSets);
+	for( uint32_t i = 0; i < maxSets; ++i )
 	{
-		cachedDescriptorSets_.push_back(manager->DescriptorSets().Handle(0));
+		for ( DescriptorSetManager* manager : managers )
+		{
+			cachedDescriptorSets_[i].push_back(manager->DescriptorSets().Handle(i));
+		}
 	}
-
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 4;
@@ -61,10 +59,10 @@ PipelineLayout::~PipelineLayout()
 	}
 }
 
-void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer) const
+void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const
 {
 	vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,Handle(), 0,
-						 static_cast<uint32_t>(cachedDescriptorSets_.size()), cachedDescriptorSets_.data(), 0, nullptr );
+						 static_cast<uint32_t>(cachedDescriptorSets_.size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
 
 }
 }

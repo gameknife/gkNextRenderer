@@ -13,11 +13,11 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(PipelineLayout)
 
-		PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
+		PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, uint32_t maxSets, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		~PipelineLayout();
 
-		void BindDescriptorSets(VkCommandBuffer commandBuffer) const;
+		void BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const;
 	private:
 
 		const Device& device_;
@@ -25,7 +25,7 @@ namespace Vulkan
 		VULKAN_HANDLE(VkPipelineLayout, pipelineLayout_)
 
 		std::vector<VkDescriptorSetLayout> cachedDescriptorSetLayouts_;
-		std::vector<VkDescriptorSet> cachedDescriptorSets_;
+		std::vector< std::vector<VkDescriptorSet> > cachedDescriptorSets_;
 	};
 
 }

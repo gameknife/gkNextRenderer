@@ -65,6 +65,7 @@ namespace Assets
 		std::vector<SphericalHarmonics>& GetHDRSphericalHarmonics() { return hdrSphericalHarmonics_; }
 		Vulkan::CommandPool& GetMainThreadCommandPool() { return mainThreadCommandPool_; }
 
+		Vulkan::DescriptorSetManager& GetDescriptorManager() { return *descriptorSetManager_; }
 	private:
 		static GlobalTexturePool* instance_;
 

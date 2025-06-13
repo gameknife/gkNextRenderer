@@ -3,6 +3,7 @@
 #include "Vulkan.hpp"
 #include <map>
 #include <vector>
+#include <glm/ext/scalar_common.hpp>
 
 namespace Vulkan
 {
@@ -25,7 +26,12 @@ namespace Vulkan
 
 		~DescriptorSets();
 
-		VkDescriptorSet Handle(uint32_t index) const { return descriptorSets_[index]; }
+		VkDescriptorSet Handle(uint32_t index) const
+		{
+			// always return avaliable
+			index = glm::min(index, static_cast<uint32_t>(descriptorSets_.size() - 1));
+			return descriptorSets_[index];
+		}
 
 		VkWriteDescriptorSet Bind(uint32_t index, uint32_t binding, const VkDescriptorBufferInfo& bufferInfo, uint32_t arrayElement = 0,uint32_t count = 1) const;
 		VkWriteDescriptorSet Bind(uint32_t index, uint32_t binding, const VkDescriptorImageInfo& imageInfo, uint32_t arrayElement = 0, uint32_t count = 1) const;

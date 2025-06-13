@@ -137,7 +137,7 @@ namespace Vulkan::HybridDeferred
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
             
             // bind the global bindless set
-            deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer);
+            deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
                        
             uint32_t workGroupSizeXDivider = 8;
             uint32_t workGroupSizeYDivider = 8;
