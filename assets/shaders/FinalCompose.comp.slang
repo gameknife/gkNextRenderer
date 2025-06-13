@@ -69,7 +69,7 @@ void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, fl
     const int N = int(WINDOW_R); // filter size
     
     const float3 FinalCol = FetchColor(coord);
-    const float3 Ci = FinalCol / FetchAlbedo(coord);
+    const float3 Ci = FinalCol;
     const float3 Ni = FetchNormal(coord);
     const uint Pi = FetchVisibility(coord);
     const float lumi = dot(Ci, float3(0.212671f, 0.715160f, 0.072169f));
@@ -132,12 +132,11 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         
         const float3 CenterColor = FetchColor(coord.xy).rgb;
         const float3 CenterAlbedo = FetchAlbedo(coord.xy).rgb;
-        const float3 DemodulateColor = CenterColor / CenterAlbedo;
 
         const float3 Normal = FetchNormal(coord.xy).rgb;
         uint current_primitive_index = FetchVisibility(coord.xy);
 
-        const float CenterLum = dot(DemodulateColor, float3(0.212671f, 0.715160f, 0.072169f));
+        const float CenterLum = dot(CenterColor, float3(0.212671f, 0.715160f, 0.072169f));
 
         float Weight = 0;
         for (int i = -WINDOW_R; i <= WINDOW_R; i += 2)
@@ -152,13 +151,13 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     }
     else
     {
-        Total = InImage[ipos].rgb;
+
+        Total = InImage[ipos].rgb * InAlbedo[ipos].rgb;
     }
 
     if(Camera.DebugDraw_Lighting)
     {
-        float3 albedoValue = InAlbedo[ipos].rgb;
-        Total = Total / (albedoValue + float3(0.001));
+        Total = InImage[ipos].rgb;
     }
     
     if(Camera.HDR)
