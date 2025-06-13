@@ -12,6 +12,9 @@
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/DescriptorBinding.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
 
 #define M_NEXT_PI 3.14159265358979323846f
 
@@ -25,118 +28,6 @@ namespace Assets
         std::array<char, 256> outputInfo;
     };
 
-    void FilterEnvironmentMap(const float* srcPixels, int srcWidth, int srcHeight,
-                         float* dstPixels, int dstWidth, int dstHeight, float roughness) {
-        // Constants for filtering
-        const int sampleCount = 16;  // Number of samples to take for each output pixel
-        const float roughness2 = roughness * roughness;
-        
-        // For each destination pixel
-        for (int y = 0; y < dstHeight; ++y) {
-            for (int x = 0; x < dstWidth; ++x) {
-                // Calculate spherical coordinates for this pixel
-                float u = (x + 0.5f) / dstWidth;
-                float v = (y + 0.5f) / dstHeight;
-                float phi = u * 2.0f * M_NEXT_PI;
-                float theta = v * M_NEXT_PI;
-                
-                // Direction vector
-                float dx = std::sin(theta) * std::cos(phi);
-                float dy = std::cos(theta);
-                float dz = std::sin(theta) * std::sin(phi);
-                
-                // Accumulate filtered color
-                float r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
-                float weight = 0.0f;
-                
-                // Monte Carlo integration with importance sampling
-                for (int i = 0; i < sampleCount; ++i) {
-                    // Generate sample direction with roughness-based lobe
-                    float u1 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-                    float u2 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-                    
-                    // Calculate sample direction with GGX distribution
-                    float phi_sample = 2.0f * M_NEXT_PI * u1;
-                    float cos_theta_sample = std::sqrt((1.0f - u2) / (1.0f + (roughness2 - 1.0f) * u2));
-                    float sin_theta_sample = std::sqrt(1.0f - cos_theta_sample * cos_theta_sample);
-                    
-                    // Convert to Cartesian
-                    float sx = sin_theta_sample * std::cos(phi_sample);
-                    float sy = cos_theta_sample;
-                    float sz = sin_theta_sample * std::sin(phi_sample);
-                    
-                    // Transform sample to world space around our main direction
-                    // (This is a simplified orthonormal basis construction)
-                    float rx, ry, rz;
-                    // ... (rotate sx, sy, sz around dx, dy, dz to get rx, ry, rz)
-                    // Simplified version that doesn't account for proper rotation:
-                    rx = dx + sx * roughness;
-                    ry = dy + sy * roughness;
-                    rz = dz + sz * roughness;
-                    float len = std::sqrt(rx*rx + ry*ry + rz*rz);
-                    rx /= len; ry /= len; rz /= len;
-                    
-                    // Convert to UV coordinates for sampling source
-                    float sample_phi = std::atan2(rz, rx);
-                    if (sample_phi < 0) sample_phi += 2.0f * M_NEXT_PI;
-                    float sample_theta = std::acos(std::clamp(ry, -1.0f, 1.0f));
-                    
-                    float sample_u = sample_phi / (2.0f * M_NEXT_PI);
-                    float sample_v = sample_theta / M_NEXT_PI;
-                    
-                    // Bilinear sampling from source
-                    float src_x = sample_u * srcWidth - 0.5f;
-                    float src_y = sample_v * srcHeight - 0.5f;
-                    int src_x1 = std::clamp(static_cast<int>(std::floor(src_x)), 0, srcWidth - 1);
-                    int src_y1 = std::clamp(static_cast<int>(std::floor(src_y)), 0, srcHeight - 1);
-                    int src_x2 = std::clamp(src_x1 + 1, 0, srcWidth - 1);
-                    int src_y2 = std::clamp(src_y1 + 1, 0, srcHeight - 1);
-                    float wx = src_x - src_x1;
-                    float wy = src_y - src_y1;
-                    
-                    // Sample the four pixels
-                    int idx11 = (src_y1 * srcWidth + src_x1) * 4;
-                    int idx12 = (src_y1 * srcWidth + src_x2) * 4;
-                    int idx21 = (src_y2 * srcWidth + src_x1) * 4;
-                    int idx22 = (src_y2 * srcWidth + src_x2) * 4;
-                    
-                    // Bilinear interpolation
-                    float sr = (1-wx)*(1-wy)*srcPixels[idx11] + wx*(1-wy)*srcPixels[idx12] + 
-                               (1-wx)*wy*srcPixels[idx21] + wx*wy*srcPixels[idx22];
-                    float sg = (1-wx)*(1-wy)*srcPixels[idx11+1] + wx*(1-wy)*srcPixels[idx12+1] + 
-                               (1-wx)*wy*srcPixels[idx21+1] + wx*wy*srcPixels[idx22+1];
-                    float sb = (1-wx)*(1-wy)*srcPixels[idx11+2] + wx*(1-wy)*srcPixels[idx12+2] + 
-                               (1-wx)*wy*srcPixels[idx21+2] + wx*wy*srcPixels[idx22+2];
-                    float sa = (1-wx)*(1-wy)*srcPixels[idx11+3] + wx*(1-wy)*srcPixels[idx12+3] + 
-                               (1-wx)*wy*srcPixels[idx21+3] + wx*wy*srcPixels[idx22+3];
-                    
-                    // Accumulate
-                    float sampleWeight = 1.0f;  // Could be modified for importance sampling
-                    r += sr * sampleWeight;
-                    g += sg * sampleWeight;
-                    b += sb * sampleWeight;
-                    a += sa * sampleWeight;
-                    weight += sampleWeight;
-                }
-                
-                // Normalize
-                if (weight > 0) {
-                    r /= weight;
-                    g /= weight;
-                    b /= weight;
-                    a /= weight;
-                }
-                
-                // Write to destination
-                int dstIdx = (y * dstWidth + x) * 4;
-                dstPixels[dstIdx] = r;
-                dstPixels[dstIdx+1] = g;
-                dstPixels[dstIdx+2] = b;
-                dstPixels[dstIdx+3] = a;
-            }
-        }
-    }
-    
     SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
     {
         SphericalHarmonics result{};
@@ -273,73 +164,12 @@ namespace Assets
         commandPool_(command_pool),
         mainThreadCommandPool_(command_pool_mt)
     {
-        static const uint32_t k_bindless_texture_binding = 0;
-        // The maximum number of bindless resources is limited by the device.
         static const uint32_t k_max_bindless_resources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
-
-        // Create bindless descriptor pool
-        VkDescriptorPoolSize pool_sizes_bindless[] =
+        const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, k_max_bindless_resources}
+            {0, k_max_bindless_resources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
         };
-
-        // Update after bind is needed here, for each binding and in the descriptor set layout creation.
-        VkDescriptorPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = pool_sizes_bindless;
-        poolInfo.maxSets = k_max_bindless_resources * 1;
-
-        Vulkan::Check(vkCreateDescriptorPool(device.Handle(), &poolInfo, nullptr, &descriptorPool_),
-                      "create global descriptor pool");
-
-        // create set layout
-        VkDescriptorBindingFlags bindless_flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
-            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
-
-        VkDescriptorSetLayoutBinding vk_binding;
-        vk_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        vk_binding.descriptorCount = k_max_bindless_resources;
-        vk_binding.binding = k_bindless_texture_binding;
-
-        vk_binding.stageFlags = VK_SHADER_STAGE_ALL;
-        vk_binding.pImmutableSamplers = nullptr;
-
-        VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        layout_info.bindingCount = 1;
-        layout_info.pBindings = &vk_binding;
-        layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT;
-
-        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extended_info{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT, nullptr
-        };
-        extended_info.bindingCount = 1;
-        extended_info.pBindingFlags = &bindless_flags;
-
-        layout_info.pNext = &extended_info;
-
-        Vulkan::Check(vkCreateDescriptorSetLayout(device_.Handle(), &layout_info, nullptr, &layout_),
-                      "create global descriptor set layout");
-
-        VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        alloc_info.descriptorPool = descriptorPool_;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &layout_;
-
-        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
-        };
-        uint32_t max_binding = k_max_bindless_resources - 1;
-        count_info.descriptorSetCount = 1;
-        // This number is the max allocatable count
-        count_info.pDescriptorCounts = &max_binding;
-        alloc_info.pNext = &count_info;
-
-        descriptorSets_.resize(1);
-
-        Vulkan::Check(vkAllocateDescriptorSets(device_.Handle(), &alloc_info, descriptorSets_.data()),
-                      "alloc global descriptor set");
+        descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
 
         // for hdr to bind
         hdrSphericalHarmonics_.resize(100);
@@ -351,43 +181,19 @@ namespace Assets
 
     GlobalTexturePool::~GlobalTexturePool()
     {
-        if (descriptorPool_ != nullptr)
-        {
-            vkDestroyDescriptorPool(device_.Handle(), descriptorPool_, nullptr);
-            descriptorPool_ = nullptr;
-        }
-
-        if (layout_ != nullptr)
-        {
-            vkDestroyDescriptorSetLayout(device_.Handle(), layout_, nullptr);
-            layout_ = nullptr;
-        }
-
         defaultWhiteTexture_.reset();
         textureImages_.clear();
+        descriptorSetManager_.reset();
     }
 
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
     {
-        VkDescriptorImageInfo imageInfo = {};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = textureImage.ImageView().Handle();
-        imageInfo.sampler = textureImage.Sampler().Handle();
-
-
-        VkWriteDescriptorSet descriptorWrite = {};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = descriptorSets_[0];
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = textureIdx;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pImageInfo = &imageInfo;
-
-        vkUpdateDescriptorSets(
-            device_.Handle(),
-            1,
-            &descriptorWrite, 0, nullptr);
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        {
+            descriptorSets.Bind(0, 0, { NULL, textureImage.ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
+        };
+        descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
 
     uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
@@ -474,51 +280,6 @@ namespace Assets
                         // Extract spherical harmonics from the base level
                         SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
                         hdrSphericalHarmonics_[newTextureIdx] = sh;
-
-#if 0
-                        // Calculate mipmap levels based on texture dimensions
-                        int maxDimension = std::max(width, height);
-                        int numMipLevels = static_cast<int>(std::floor(std::log2(maxDimension))) + 1;
-                        miplevel = numMipLevels;
-                        
-                        // Original HDR data will be level 0
-                        std::vector<float*> mipLevels(numMipLevels);
-                        std::vector<int> mipWidths(numMipLevels);
-                        std::vector<int> mipHeights(numMipLevels);
-
-                        // Set base level
-                        mipLevels[0] = reinterpret_cast<float*>(pixels);
-                        mipWidths[0] = width;
-                        mipHeights[0] = height;
-
-                        // Generate roughness-filtered mipmaps
-                        for (int level = 1; level < numMipLevels; ++level) {
-                            // Calculate dimensions for this level
-                            mipWidths[level] = std::max(mipWidths[level-1] / 2, 1);
-                            mipHeights[level] = std::max(mipHeights[level-1] / 2, 1);
-                            
-                            // Allocate memory for this mip level
-                            mipLevels[level] = new float[mipWidths[level] * mipHeights[level] * 4];
-                            
-                            // Calculate roughness for this level (increasing with mip level)
-                            float roughness = static_cast<float>(level) / (numMipLevels - 1);
-                            
-                            // Process this mip level with roughness-based filtering
-                            FilterEnvironmentMap(mipLevels[level-1], mipWidths[level-1], mipHeights[level-1], 
-                                                 mipLevels[level], mipWidths[level], mipHeights[level], roughness);
-                        }
-
-
-
-                        // Create a texture with all mip levels
-                        textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
-                            commandPool_, width, height, numMipLevels, format, pixels, size, mipLevels, mipWidths, mipHeights);
-
-                        // Clean up mip levels (except level 0 which is handled by stbi_image_free)
-                        for (int level = 1; level < numMipLevels; ++level) {
-                            delete[] mipLevels[level];
-                        }
-#endif
                     }
                     else
                     {

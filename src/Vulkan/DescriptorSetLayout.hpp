@@ -13,7 +13,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(DescriptorSetLayout)
 
-		DescriptorSetLayout(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings);
+		DescriptorSetLayout(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, bool bindless = false);
 		~DescriptorSetLayout();
 
 	private:

@@ -17,7 +17,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(DescriptorSetManager)
 
-		explicit DescriptorSetManager(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, size_t maxSets);
+		explicit DescriptorSetManager(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, size_t maxSets, bool bindless = false);
 		~DescriptorSetManager();
 
 		const class DescriptorSetLayout& DescriptorSetLayout() const { return *descriptorSetLayout_; }
