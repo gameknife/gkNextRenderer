@@ -77,19 +77,19 @@ namespace Vulkan::RayTracing
                                                                         baseRender_.rtAccumlation->GetImageView(),
                                                                         rtPingPong0->GetImageView(),
                                                                         baseRender_.rtMotionVector_->GetImageView(),
-                                                                        baseRender_.rtVisibility0->GetImageView(),
-                                                                        baseRender_.rtVisibility1->GetImageView(),
+                                                                        baseRender_.rtObject0->GetImageView(),
+                                                                        baseRender_.rtObject1->GetImageView(),
                                                                         baseRender_.rtOutput->GetImageView(),
                                                                         baseRender_.rtNormal_->GetImageView(),
                                                                         UniformBuffers(), GetScene()));
 
 
-        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), baseRender_.rtAlbedo_->GetImageView(), baseRender_.rtNormal_->GetImageView(), baseRender_.rtVisibility0->GetImageView(), baseRender_.rtVisibility1->GetImageView(), UniformBuffers()));
+        composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), baseRender_.rtAlbedo_->GetImageView(), baseRender_.rtNormal_->GetImageView(), baseRender_.rtObject0->GetImageView(), baseRender_.rtObject1->GetImageView(), UniformBuffers()));
 #if WITH_OIDN
         composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
 #endif
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
-                                                                      baseRender_.rtAlbedo_->GetImageView(), rtShaderTimer_->GetImageView(), baseRender_.rtVisibility0->GetImageView(), baseRender_.rtVisibility1->GetImageView(),
+                                                                      baseRender_.rtAlbedo_->GetImageView(), baseRender_.rtShaderTimer_->GetImageView(), baseRender_.rtObject0->GetImageView(), baseRender_.rtObject1->GetImageView(),
                                                                       UniformBuffers()));
     }
 
@@ -104,10 +104,7 @@ namespace Vulkan::RayTracing
         rtDenoise1_.reset();
 #endif
         visualDebugPipeline_.reset();
-        
         rtPingPong0.reset();
-        
-        rtShaderTimer_.reset();
     }
 
     void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -124,11 +121,11 @@ namespace Vulkan::RayTracing
         baseRender_.rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         baseRender_.rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        baseRender_.rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        baseRender_.rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        baseRender_.rtObject0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        baseRender_.rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         baseRender_.rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         baseRender_.rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        baseRender_.rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Execute ray tracing shaders.
         {
@@ -143,7 +140,7 @@ namespace Vulkan::RayTracing
                           Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, workGroupSizeYDivider), 1);
 
             baseRender_.rtAccumlation->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.rtObject0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             baseRender_.rtMotionVector_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
         
@@ -206,7 +203,7 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
                                        VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                        VK_IMAGE_LAYOUT_GENERAL);
-            ImageMemoryBarrier::Insert(commandBuffer, rtShaderTimer_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
+            ImageMemoryBarrier::Insert(commandBuffer, baseRender_.rtShaderTimer_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                                        VK_IMAGE_LAYOUT_GENERAL);
             ImageMemoryBarrier::Insert(commandBuffer, baseRender_.rtAlbedo_->GetImage().Handle(), subresourceRange, VK_ACCESS_SHADER_WRITE_BIT,
@@ -307,7 +304,6 @@ namespace Vulkan::RayTracing
 #endif
         
         rtPingPong0.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "pingpong0"));
-        rtShaderTimer_.reset(new RenderImage(Device(), extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, false, "shadertimer"));
         
 #if WITH_OIDN   
         rtDenoise0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, externalIfOiDN, "denoise0"));

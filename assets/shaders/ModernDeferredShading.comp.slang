@@ -5,11 +5,14 @@ import Common;
 [[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
 [[vk::binding(1, 1)]] Sampler2D ShadowMapSampler;
 
+[[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
 [[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;
-[[vk::binding(4, 2)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(5, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(6, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(3, 2)]] RWTexture2D<uint> ObjectId0;
+[[vk::binding(4, 2)]] RWTexture2D<uint> ObjectId1;
+[[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -72,5 +75,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outColor = albedo * float4(illuminaceColor.rgb, 1);
     outColor.a = 1.0f;
     OutImage[ipos] = outColor;
-    //MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    ObjectId0[ipos] = hitNode.instanceId;
 }

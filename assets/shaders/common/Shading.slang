@@ -661,6 +661,7 @@ public struct FHardwareRayTracer : IRayTracer
             float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
             outNode = NodeProxies[q.CommittedRayInstanceId()];
+            outNode.instanceId = q.CommittedRayInstanceCustomIndex();
             const uint2 offsets = Offsets[outNode.modelId];
             const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.y;

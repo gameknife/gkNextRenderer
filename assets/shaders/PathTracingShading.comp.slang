@@ -4,13 +4,16 @@ import Common;
 
 [[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
 [[vk::binding(1, 1)]] RaytracingAccelerationStructure Scene;
-//[[vk::binding(2, 1)]] RWTexture2D<float4> ShaderTimerBuffer;
 
+[[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
 [[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;
-[[vk::binding(4, 2)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(5, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(6, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(3, 2)]] RWTexture2D<uint> ObjectId0;
+[[vk::binding(4, 2)]] RWTexture2D<uint> ObjectId1;
+[[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -50,7 +53,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         OutMotionVector[ipos] = float4(0, 0, 0, 0);
         OutAlbedoBuffer[ipos] = skyColor;
         OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
-        MiniGBuffer[ipos] = uint2(0, 0);
+        ObjectId0[ipos] = 0;
         return;
     }
     // MotionVector解析
@@ -64,7 +67,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
-    MiniGBuffer[ipos] = uint2(hitNode.instanceId, 0);
+    ObjectId0[ipos] = hitNode.instanceId;
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
@@ -81,6 +84,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         const float heatmapScale = 1000000.0f * Camera.HeatmapScale * Camera.HeatmapScale;
         const float deltaTimeScaled = clamp(float(deltaTime) / heatmapScale, 0.0f, 1.0f);
         const float4 shaderHeatColor = float4(heatmap(deltaTimeScaled), 1.0);
-        //ShaderTimerBuffer[ipos] = shaderHeatColor;
+        ShaderTimerBuffer[ipos] = shaderHeatColor;
     }
 }

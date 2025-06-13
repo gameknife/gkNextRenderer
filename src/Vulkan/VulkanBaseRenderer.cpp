@@ -429,16 +429,21 @@ namespace Vulkan
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT));
         
-        rtVisibility0.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+        rtVisibility.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                     VK_FORMAT_R32G32_UINT,
                                     VK_IMAGE_TILING_OPTIMAL,
-                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"visibility0"));
+                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"visibility"));
 
-        rtVisibility1.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
-                                            VK_FORMAT_R32G32_UINT,
+        rtObject0.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
-                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"visibility1"));
-
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"object0"));
+        
+        rtObject1.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R32_UINT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"object1"));
+        
         rtMotionVector_.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                          VK_FORMAT_R32G32_SFLOAT,
                                          VK_IMAGE_TILING_OPTIMAL,
@@ -446,6 +451,8 @@ namespace Vulkan
 	
         rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
         rtNormal_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
+
+        rtShaderTimer_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, false, "shadertimer"));
 
         rtDescriptorSetManager_.reset(new DescriptorSetManager(*device_, {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -455,6 +462,8 @@ namespace Vulkan
             {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
         
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
@@ -465,12 +474,13 @@ namespace Vulkan
             {
                 descriptorSets.Bind(i, 0, { NULL, rtOutput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 1, { NULL, rtAccumlation->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 2, { NULL, rtVisibility0->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 3, { NULL, rtVisibility1->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 4, { NULL, rtMotionVector_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 5, { NULL, rtAlbedo_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 6, { NULL, rtNormal_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-               
+                descriptorSets.Bind(i, 2, { NULL, rtVisibility->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 3, { NULL, rtObject0->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 4, { NULL, rtObject1->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 5, { NULL, rtMotionVector_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 6, { NULL, rtAlbedo_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 7, { NULL, rtNormal_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 8, { NULL, rtShaderTimer_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -501,11 +511,13 @@ namespace Vulkan
 
         rtOutput.reset();
         rtAccumlation.reset();
-        rtVisibility0.reset();
-        rtVisibility1.reset();
+        rtVisibility.reset();
+        rtObject0.reset();
+        rtObject1.reset();
         rtNormal_.reset();
         rtAlbedo_.reset();
         rtMotionVector_.reset();
+        rtShaderTimer_.reset();
         
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
@@ -901,17 +913,17 @@ namespace Vulkan
         
         // global visibility buffer copy
         {
-            rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            rtVisibility1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            rtObject0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            rtObject1->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             VkImageCopy copyRegion;
             copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.srcOffset = {0, 0, 0};
             copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             copyRegion.dstOffset = {0, 0, 0};
-            copyRegion.extent = {rtVisibility0->GetImage().Extent().width, rtVisibility0->GetImage().Extent().height, 1};
+            copyRegion.extent = {rtObject0->GetImage().Extent().width, rtObject0->GetImage().Extent().height, 1};
 
-            vkCmdCopyImage(commandBuffer, rtVisibility0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtVisibility1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            vkCmdCopyImage(commandBuffer, rtObject0->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtObject1->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         }
 
         if (showWireframe_)

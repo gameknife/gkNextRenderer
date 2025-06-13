@@ -42,7 +42,7 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 									  VK_IMAGE_TILING_OPTIMAL,
 									  VK_IMAGE_USAGE_STORAGE_BIT));
      
-	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility0->GetImageView(),
+	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(),
 		visibilityPipeline_->RenderPass()));
 	
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
@@ -51,8 +51,8 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 																		 baseRender_.rtAccumlation->GetImageView(),
 																		 rtPingPong0->GetImageView(),
 																		 baseRender_.rtMotionVector_->GetImageView(),
-																		 baseRender_.rtVisibility0->GetImageView(),
-																		 baseRender_.rtVisibility1->GetImageView(),
+																		 baseRender_.rtObject0->GetImageView(),
+																		 baseRender_.rtObject1->GetImageView(),
 																		 baseRender_.rtOutput->GetImageView(),
 																		 baseRender_.rtNormal_->GetImageView(),
 																		 UniformBuffers(), GetScene()));
@@ -61,8 +61,8 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 		baseRender_.rtOutput->GetImageView(),
 		baseRender_.rtAlbedo_->GetImageView(),
 		baseRender_.rtNormal_->GetImageView(),
-		baseRender_.rtVisibility0->GetImageView(),
-		baseRender_.rtVisibility1->GetImageView(),
+		baseRender_.rtObject0->GetImageView(),
+		baseRender_.rtObject1->GetImageView(),
 		UniformBuffers()));
 }
 
@@ -88,7 +88,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	subresourceRange.baseArrayLayer = 0;
 	subresourceRange.layerCount = 1;
 
-	baseRender_.rtVisibility0->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+	baseRender_.rtVisibility->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			   
 	std::array<VkClearValue, 2> clearValues = {};
@@ -134,8 +134,8 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		baseRender_.rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		baseRender_.rtObject0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+		baseRender_.rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

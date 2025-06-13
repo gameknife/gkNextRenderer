@@ -45,7 +45,7 @@ namespace Vulkan::HybridDeferred
                                           VK_IMAGE_TILING_OPTIMAL,
                                           VK_IMAGE_USAGE_STORAGE_BIT));
 
-        deferredFrameBuffer0_.reset(new FrameBuffer(extent, baseRender_.rtVisibility0->GetImageView(), visibilityPipeline0_->RenderPass()));
+        deferredFrameBuffer0_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(), visibilityPipeline0_->RenderPass()));
         
         deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
                                                          baseRender_,UniformBuffers(), GetScene()));
@@ -54,16 +54,16 @@ namespace Vulkan::HybridDeferred
                                                                          baseRender_.rtAccumlation->GetImageView(),
                                                                          rtPingPong0->GetImageView(),
                                                                          baseRender_.rtMotionVector_->GetImageView(),
-                                                                         baseRender_.rtVisibility0->GetImageView(),
-                                                                         baseRender_.rtVisibility1->GetImageView(),
+                                                                         baseRender_.rtObject0->GetImageView(),
+                                                                         baseRender_.rtObject1->GetImageView(),
                                                                          baseRender_.rtOutput->GetImageView(),
                                                                          baseRender_.rtNormal_->GetImageView(),
                                                                          UniformBuffers(), GetScene()));
 
-        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), baseRender_.rtAlbedo_->GetImageView(),  baseRender_.rtNormal_->GetImageView(), baseRender_.rtVisibility0->GetImageView(), baseRender_.rtVisibility1->GetImageView(), UniformBuffers()));
+        composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), baseRender_.rtAlbedo_->GetImageView(),  baseRender_.rtNormal_->GetImageView(), baseRender_.rtObject0->GetImageView(), baseRender_.rtObject1->GetImageView(), UniformBuffers()));
 
         visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
-                                                              baseRender_.rtAccumlation->GetImageView(), baseRender_.rtNormal_->GetImageView(), baseRender_.rtVisibility0->GetImageView(), baseRender_.rtVisibility1->GetImageView(),
+                                                              baseRender_.rtAccumlation->GetImageView(), baseRender_.rtNormal_->GetImageView(), baseRender_.rtObject0->GetImageView(), baseRender_.rtObject1->GetImageView(),
                                                               UniformBuffers()));
     }
 
@@ -122,8 +122,9 @@ namespace Vulkan::HybridDeferred
             vkCmdEndRenderPass(commandBuffer);
 
             // always draw to visibility0, then copy to visibility1 after the shading, v0 is current frame, v1 is last frame
-            baseRender_.rtVisibility0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtVisibility1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.rtObject0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
