@@ -33,6 +33,23 @@ namespace Vulkan
 				VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1,
 				&barrier);
 		}
+
+		static void FullInsert(
+			const VkCommandBuffer commandBuffer, 
+			const VkImage image, 
+			const VkAccessFlags srcAccessMask,
+			const VkAccessFlags dstAccessMask, 
+			const VkImageLayout oldLayout, 
+			const VkImageLayout newLayout)
+		{
+			VkImageSubresourceRange subresourceRange = {};
+			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			subresourceRange.baseMipLevel = 0;
+			subresourceRange.levelCount = 1;
+			subresourceRange.baseArrayLayer = 0;
+			subresourceRange.layerCount = 1;
+			Insert(commandBuffer, image, subresourceRange, srcAccessMask, dstAccessMask, oldLayout, newLayout);
+		}
 	};
 
 }

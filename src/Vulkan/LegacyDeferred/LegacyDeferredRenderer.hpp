@@ -28,7 +28,6 @@ namespace Vulkan::LegacyDeferred
 	class LegacyDeferredRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(LegacyDeferredRenderer)
 		
 		LegacyDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
@@ -52,7 +51,6 @@ namespace Vulkan::VoxelTracing
 	class VoxelTracingRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(VoxelTracingRenderer)
 		
 		VoxelTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);

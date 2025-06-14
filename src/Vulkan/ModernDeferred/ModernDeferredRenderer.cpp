@@ -42,28 +42,10 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 									  VK_IMAGE_TILING_OPTIMAL,
 									  VK_IMAGE_USAGE_STORAGE_BIT));
      
-	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(),
-		visibilityPipeline_->RenderPass()));
-	
+	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(), visibilityPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
-
-	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),
-																		 baseRender_.rtAccumlation->GetImageView(),
-																		 rtPingPong0->GetImageView(),
-																		 baseRender_.rtMotionVector_->GetImageView(),
-																		 baseRender_.rtObject0->GetImageView(),
-																		 baseRender_.rtObject1->GetImageView(),
-																		 baseRender_.rtOutput->GetImageView(),
-																		 baseRender_.rtNormal_->GetImageView(),
-																		 UniformBuffers(), GetScene()));
-
-	composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(),
-		baseRender_.rtOutput->GetImageView(),
-		baseRender_.rtAlbedo_->GetImageView(),
-		baseRender_.rtNormal_->GetImageView(),
-		baseRender_.rtObject0->GetImageView(),
-		baseRender_.rtObject1->GetImageView(),
-		UniformBuffers()));
+	accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), baseRender_, rtPingPong0->GetImageView(), UniformBuffers(), GetScene()));
+	composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_, UniformBuffers()));
 }
 
 void ModernDeferredRenderer::DeleteSwapChain()
@@ -80,14 +62,6 @@ void ModernDeferredRenderer::DeleteSwapChain()
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	
-	VkImageSubresourceRange subresourceRange = {};
-	subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	subresourceRange.baseMipLevel = 0;
-	subresourceRange.levelCount = 1;
-	subresourceRange.baseArrayLayer = 0;
-	subresourceRange.layerCount = 1;
-
 	baseRender_.rtVisibility->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			   
@@ -127,18 +101,13 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		}
 		vkCmdEndRenderPass(commandBuffer);
 
-		// always draw to visibility0, then copy to visibility1 after the shading, v0 is current frame, v1 is last frame
+		baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	{
-		baseRender_.rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 		rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtObject0->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		baseRender_.InitializeBarriers(commandBuffer);
 	}
 	
 	{
@@ -156,8 +125,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		SCOPED_GPU_TIMER("reproject pass");
 		VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								accumulatePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		accumulatePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
 		baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -166,14 +134,14 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	{
 		SCOPED_GPU_TIMER("compose pass");
             
-		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
+		ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
 					   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 					   VK_IMAGE_LAYOUT_GENERAL);
-            
-		VkDescriptorSet DescriptorSets[] = {composePipeline_->DescriptorSet(imageIndex)};
+
+		baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+		
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-								composePipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+		composePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 		
 		glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(SwapChain().Extent().width / 2, 0  ) : glm::uvec2(0,0);
 		vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
@@ -181,7 +149,7 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		
 		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
-		ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 
 	{

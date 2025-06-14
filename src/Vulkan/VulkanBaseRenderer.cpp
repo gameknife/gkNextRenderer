@@ -543,21 +543,9 @@ namespace Vulkan
         SingleTimeCommands::Submit(CommandPool(), [&](VkCommandBuffer commandBuffer)
         {
             const auto& image = swapChain_->Images()[currentImageIndex_];
-
-            VkImageSubresourceRange subresourceRange = {};
-            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            subresourceRange.baseMipLevel = 0;
-            subresourceRange.levelCount = 1;
-            subresourceRange.baseArrayLayer = 0;
-            subresourceRange.layerCount = 1;
-
-            ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
-                                       0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-            ImageMemoryBarrier::Insert(commandBuffer, screenShotImage_->Handle(), subresourceRange, 0,
-                                       VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            
+            ImageMemoryBarrier::FullInsert(commandBuffer, image,0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            ImageMemoryBarrier::FullInsert(commandBuffer, screenShotImage_->Handle(), 0,VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             // Copy output image into swap-chain image.
             VkImageCopy copyRegion;
@@ -572,30 +560,16 @@ namespace Vulkan
                            screenShotImage_->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1, &copyRegion);
 
-            ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[currentImageIndex_], subresourceRange,
-                                       VK_ACCESS_TRANSFER_READ_BIT,
-                                       0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[currentImageIndex_], VK_ACCESS_TRANSFER_READ_BIT,0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         });
     }
 
     void VulkanBaseRenderer::CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         const auto& image = swapChain_->Images()[imageIndex];
-
-        VkImageSubresourceRange subresourceRange = {};
-        subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        subresourceRange.baseMipLevel = 0;
-        subresourceRange.levelCount = 1;
-        subresourceRange.baseArrayLayer = 0;
-        subresourceRange.layerCount = 1;
-
-        ImageMemoryBarrier::Insert(commandBuffer, image, subresourceRange,
-                                   0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-        ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, 0,
-                                   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        
+        ImageMemoryBarrier::FullInsert(commandBuffer, image,0, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        ImageMemoryBarrier::FullInsert(commandBuffer, rtEditorViewport_->GetImage().Handle(), 0,VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         // Copy output image into swap-chain image.
         VkImageCopy copyRegion;
@@ -610,13 +584,8 @@ namespace Vulkan
                        rtEditorViewport_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                        1, &copyRegion);
 
-        ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
-                                   VK_ACCESS_TRANSFER_READ_BIT,
-                                   0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-        ImageMemoryBarrier::Insert(commandBuffer, rtEditorViewport_->GetImage().Handle(), subresourceRange, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                   VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],VK_ACCESS_TRANSFER_READ_BIT,0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        ImageMemoryBarrier::FullInsert(commandBuffer, rtEditorViewport_->GetImage().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
     void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -803,7 +772,8 @@ namespace Vulkan
         rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
+        rtObject0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)

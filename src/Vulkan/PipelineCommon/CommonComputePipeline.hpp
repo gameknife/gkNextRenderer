@@ -21,6 +21,7 @@ namespace Vulkan
 	class DescriptorSetManager;
 	class DeviceProcedures;
 	class Buffer;
+	class VulkanBaseRenderer;
 }
 
 namespace Vulkan::RayTracing
@@ -36,10 +37,8 @@ namespace Vulkan::PipelineCommon
 		VULKAN_NON_COPIABLE(AccumulatePipeline)
 	
 		AccumulatePipeline(
-			const SwapChain& swapChain, 
-			const ImageView& sourceImageView, const ImageView& accumulateImageView, const ImageView& motionVectorImageView,
-			const ImageView& visibilityBufferImageView,const ImageView& prevVisibilityBufferImageView,
-			const ImageView& outputImage1View, const ImageView& normalImage1View,
+			const SwapChain& swapChain, const VulkanBaseRenderer& baseRender,
+			const ImageView& accumulateImageView,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
 		~AccumulatePipeline();
@@ -62,11 +61,7 @@ namespace Vulkan::PipelineCommon
 	
 		FinalComposePipeline(
 			const SwapChain& swapChain, 
-			const ImageView& sourceImageView,
-			const ImageView& albedoBufferImageView,
-			const ImageView& normalBufferImageView,
-			const ImageView& visibility0ImageView,
-			const ImageView& visibility1ImageView,
+			const VulkanBaseRenderer& baseRender,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers);
 		~FinalComposePipeline();
 

@@ -1,30 +1,32 @@
 import Common;
 
 // Texture bindings
-[[vk::binding(0)]] RWTexture2D<float4> NewSourceImage;
-[[vk::binding(1)]] RWTexture2D<float4> AccumulateImage;
-[[vk::binding(3)]] RWTexture2D<float4> MotionVectorImage;
-[[vk::binding(4)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(1, 0)]] RWTexture2D<float4> AccumulateImage;
 
-[[vk::binding(5)]] RWTexture2D<uint2> VisibilityBuffer;
-[[vk::binding(6)]] RWTexture2D<uint2> Visibility1Buffer;
-[[vk::binding(7)]] RWTexture2D<float4> OutImage;
-[[vk::binding(8)]] RWTexture2D<float4> InNormal;
+[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
+[[vk::binding(1, 1)]] RWTexture2D<float4> OutImage;
+[[vk::binding(2, 1)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
+[[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
+[[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
 
 // Helper functions
-uint FetchPrimitiveIndex(uint2 InstanceID)
+uint FetchPrimitiveIndex(uint InstanceID)
 {
-    return InstanceID.x;
+    return InstanceID;
 }
 
 bool EdgeDetect(uint current_primitive_index, int2 ipos)
 {
     uint center = FetchPrimitiveIndex(current_primitive_index);
 
-    uint prev_primitive_index0 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(2, 0)]);
-    uint prev_primitive_index1 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(-2, 0)]);
-    uint prev_primitive_index2 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(0, 2)]);
-    uint prev_primitive_index3 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(0, -2)]);
+    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos + int2(2, 0)]);
+    uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId0[ipos + int2(-2, 0)]);
+    uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, 2)]);
+    uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, -2)]);
 
     bool edge0 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) != uint4(center));
     bool edge1 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == uint4(center));
@@ -67,20 +69,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // More flexible sampling algorithm with dynamic weights
     float4 src = float4(0, 0, 0, 0);
 
-        
     bool useHistory = true;
-    float2 motion = MotionVectorImage[ipos].rg;
+    float2 motion = OutMotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
     const bool inside = all(previpos < int2(Camera.ViewportRect.xy + Camera.ViewportRect.zw)) &&
                         all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
-    uint current_primitive_index0 = FetchPrimitiveIndex(VisibilityBuffer[ipos]);
-    uint prev_primitive_index0 = FetchPrimitiveIndex(Visibility1Buffer[previpos]);
+    uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
+    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId0[previpos]);
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
 
     const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 1;
-    
-    float3 CenterNormal = InNormal[ipos].rgb;
+
+    float3 CenterNormal = OutNormalBuffer[ipos].rgb;
 
     float temporalWeight = 0.0;
     float totalWeight = 0.0;
@@ -89,9 +90,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
         for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
             int2 offset = int2(x, y);
             int2 samplePos = ipos + offset;
-            float4 samplePixel = NewSourceImage[samplePos];
-            uint primitiveIdx = FetchPrimitiveIndex(VisibilityBuffer[samplePos]);
-            float3 worldNormal = InNormal[samplePos].rgb;
+            float4 samplePixel = OutImage[samplePos];
+            uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
+            float3 worldNormal = OutNormalBuffer[samplePos].rgb;
 
             bool isCenter = (x == 0 && y == 0) ? true : false;
             bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
@@ -126,19 +127,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (!Camera.ProgressiveRender)
         {
             // current 4
-            uint current_primitive_index1 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(1, 0)]);
-            uint current_primitive_index2 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(0, 1)]);
-            uint current_primitive_index3 = FetchPrimitiveIndex(VisibilityBuffer[ipos + int2(1, 1)]);
+            uint current_primitive_index1 = FetchPrimitiveIndex(ObjectId0[ipos + int2(1, 0)]);
+            uint current_primitive_index2 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, 1)]);
+            uint current_primitive_index3 = FetchPrimitiveIndex(ObjectId0[ipos + int2(1, 1)]);
 
             // prev 9
-            uint prev_primitive_index1 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, 0)]);
-            uint prev_primitive_index2 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(0, 1)]);
-            uint prev_primitive_index3 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, 1)]);
-            uint prev_primitive_index4 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, 0)]);
-            uint prev_primitive_index5 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(0, -1)]);
-            uint prev_primitive_index6 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, -1)]);
-            uint prev_primitive_index7 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(1, -1)]);
-            uint prev_primitive_index8 = FetchPrimitiveIndex(Visibility1Buffer[previpos + int2(-1, 1)]);
+            uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
+            uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
+            uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
+            uint prev_primitive_index4 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, 0)]);
+            uint prev_primitive_index5 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, -1)]);
+            uint prev_primitive_index6 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, -1)]);
+            uint prev_primitive_index7 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, -1)]);
+            uint prev_primitive_index8 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, 1)]);
 
             bool4 match1 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
                             uint4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0);
@@ -189,7 +190,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             for (int i = 0; i < 25; i++)
             {
-                currentColor[i] = NewSourceImage[ipos + int2(offsets5x5[i])].rgb;
+                currentColor[i] = OutImage[ipos + int2(offsets5x5[i])].rgb;
             }
 
             float2 subpixel = frac(float2(ipos) + motion);
@@ -233,5 +234,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
     }
 
-    OutImage[ipos] = float4(final.rgb, 1.0);
+    FinalImage[ipos] = float4(final.rgb, 1.0);
 }

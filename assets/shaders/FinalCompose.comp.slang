@@ -1,26 +1,15 @@
 import Common;
 
-[[vk::binding(0, 0)]]
-RWTexture2D<float4> InImage;
+[[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
+[[vk::binding(1, 0)]] RWTexture2D<float4> OutImage;
 
-[[vk::binding(1, 0)]]
-RWTexture2D<float4> OutImage;
-
-[[vk::binding(2, 0)]]
-ConstantBuffer<UniformBufferObject> Camera;
-
-// use for jbf
-[[vk::binding(3, 0)]]
-RWTexture2D<float4> InAlbedo;
-
-[[vk::binding(4, 0)]]
-RWTexture2D<float4> InNormal;
-
-[[vk::binding(5, 0)]]
-RWTexture2D<uint> InVisibility0;
-
-[[vk::binding(6, 0)]]
-RWTexture2D<uint> InVisibility1;
+[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
+[[vk::binding(2, 1)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
+[[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
+[[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
 
 struct PushConsts
 {
@@ -106,10 +95,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         int row = int(groupIndex / WINDOW_LEN);
         int col = int(groupIndex % WINDOW_LEN);
         int2 coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
-        window[row][col] = InImage[coord].rgb;
-        albedo[row][col] = InAlbedo[coord].rgb;
-        normal[row][col] = InNormal[coord].rgb;
-        visibility[row][col] = isEvenFrame ? InVisibility1[coord].r : InVisibility0[coord].r;
+        window[row][col] = FinalImage[coord].rgb;
+        albedo[row][col] = OutAlbedoBuffer[coord].rgb;
+        normal[row][col] = OutNormalBuffer[coord].rgb;
+        visibility[row][col] = ObjectId0[coord].r;
         
         int idx = int(groupIndex + WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE);
         while (idx < WINDOW_LEN * WINDOW_LEN)
@@ -117,10 +106,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
             row = idx / WINDOW_LEN;
             col = idx % WINDOW_LEN;
             coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
-            window[row][col] = InImage[coord].rgb;
-            albedo[row][col] = InAlbedo[coord].rgb;
-            normal[row][col] = InNormal[coord].rgb;
-            visibility[row][col] = isEvenFrame ? InVisibility1[coord].r : InVisibility0[coord].r;
+            window[row][col] = FinalImage[coord].rgb;
+            albedo[row][col] = OutAlbedoBuffer[coord].rgb;
+            normal[row][col] = OutNormalBuffer[coord].rgb;
+            visibility[row][col] = ObjectId0[coord].r;
 
             idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
         }
@@ -152,12 +141,12 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     else
     {
 
-        Total = InImage[ipos].rgb * InAlbedo[ipos].rgb;
+        Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb;
     }
 
     if(Camera.DebugDraw_Lighting)
     {
-        Total = InImage[ipos].rgb;
+        Total = FinalImage[ipos].rgb;
     }
     
     if(Camera.HDR)
