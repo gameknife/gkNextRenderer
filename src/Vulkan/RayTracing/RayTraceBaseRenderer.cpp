@@ -73,7 +73,8 @@ namespace Vulkan::RayTracing
                                   {
                                       VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
                                       VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                                      VK_KHR_RAY_QUERY_EXTENSION_NAME
+                                      VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                                      VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
                                   });
 
 #if WITH_OIDN
@@ -95,7 +96,12 @@ namespace Vulkan::RayTracing
         rayQueryFeatures.pNext = &accelerationStructureFeatures;
         rayQueryFeatures.rayQuery = true;
 
-        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayQueryFeatures);
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures = {};
+        rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        rayTracingPipelineFeatures.pNext = &rayQueryFeatures;
+        rayTracingPipelineFeatures.rayTracingPipeline = true;
+        
+        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayTracingPipelineFeatures);
     }
 
     void RayTraceBaseRenderer::OnDeviceSet()

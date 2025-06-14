@@ -675,7 +675,6 @@ public struct FHardwareRayTracer : IRayTracer
             //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
             return true;
         }
-        q.CandidatePrimitiveIndex();
         return false;
     }
 

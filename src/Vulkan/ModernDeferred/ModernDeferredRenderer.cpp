@@ -40,7 +40,7 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 	rtPingPong0.reset(new RenderImage(Device(), extent,
 									  VK_FORMAT_R16G16B16A16_SFLOAT,
 									  VK_IMAGE_TILING_OPTIMAL,
-									  VK_IMAGE_USAGE_STORAGE_BIT));
+									  VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
      
 	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(), visibilityPipeline_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
@@ -62,9 +62,6 @@ void ModernDeferredRenderer::DeleteSwapChain()
 
 void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	baseRender_.rtVisibility->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-			   
 	std::array<VkClearValue, 2> clearValues = {};
 	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
@@ -100,14 +97,12 @@ void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 			vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
 		}
 		vkCmdEndRenderPass(commandBuffer);
-
-		baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	{
-		rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.InitializeBarriers(commandBuffer);
+		rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	}
 	
 	{

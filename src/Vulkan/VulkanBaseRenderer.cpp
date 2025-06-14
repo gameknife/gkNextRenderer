@@ -313,6 +313,7 @@ namespace Vulkan
         deviceFeatures.samplerAnisotropy = true;
         deviceFeatures.shaderStorageImageReadWithoutFormat = true;
         deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
+        deviceFeatures.shaderInt16 = true;
 
         // Required extensions. windows only
 #if WIN32
@@ -356,7 +357,17 @@ namespace Vulkan
         hostQueryResetFeatures.pNext = &bufferDeviceAddressFeatures;
         hostQueryResetFeatures.hostQueryReset = true;
 
-        device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &hostQueryResetFeatures));
+        VkPhysicalDeviceShaderFloat16Int8FeaturesKHR shaderFloat16Int8Features = {};
+        shaderFloat16Int8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR;
+        shaderFloat16Int8Features.pNext = &hostQueryResetFeatures;
+        shaderFloat16Int8Features.shaderFloat16 = true;
+
+        VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures = {};
+        shaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
+        shaderDrawParametersFeatures.pNext = &shaderFloat16Int8Features;
+        shaderDrawParametersFeatures.shaderDrawParameters = true;
+
+        device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &shaderDrawParametersFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
         commandPool2_.reset(new class CommandPool(*device_, device_->TransferFamilyIndex(), 1, true));
         gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
@@ -432,12 +443,12 @@ namespace Vulkan
         rtVisibility.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                     VK_FORMAT_R32G32_UINT,
                                     VK_IMAGE_TILING_OPTIMAL,
-                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"visibility"));
+                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,false,"visibility"));
 
         rtObject0.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                             VK_FORMAT_R32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
-                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"object0"));
+                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,false,"object0"));
         
         rtObject1.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                             VK_FORMAT_R32_UINT,
@@ -774,6 +785,7 @@ namespace Vulkan
         rtNormal_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtObject0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)

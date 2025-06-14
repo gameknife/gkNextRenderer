@@ -43,7 +43,7 @@ namespace Vulkan::HybridDeferred
         rtPingPong0.reset(new RenderImage(Device(), extent,
                                           VK_FORMAT_R16G16B16A16_SFLOAT,
                                           VK_IMAGE_TILING_OPTIMAL,
-                                          VK_IMAGE_USAGE_STORAGE_BIT));
+                                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
 
         deferredFrameBuffer0_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(), visibilityPipeline0_->RenderPass()));
         
@@ -110,12 +110,10 @@ namespace Vulkan::HybridDeferred
                 vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
             }
             vkCmdEndRenderPass(commandBuffer);
-
-            // always draw to visibility0, then copy to visibility1 after the shading, v0 is current frame, v1 is last frame
-            baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {
+            baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
             baseRender_.InitializeBarriers(commandBuffer);
             rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         }
