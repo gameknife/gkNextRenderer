@@ -126,7 +126,7 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 	# if debug
 	# 假设你的目标名称是 MyTarget
-	# target_compile_definitions(${target} PRIVATE JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED)
+	target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
 
 
 	# link engine
