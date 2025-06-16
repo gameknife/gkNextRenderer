@@ -431,6 +431,7 @@ namespace Vulkan
         graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), true));
         bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_));
         softAmbientCubeGenPipeline_.reset(new PipelineCommon::SoftAmbientCubeGenPipeline(*swapChain_, uniformBuffers_, GetScene()));
+        gpuCullPipeline_.reset(new PipelineCommon::GPUCullPipeline(*swapChain_, uniformBuffers_, GetScene()));
 
         for (const auto& imageView : swapChain_->ImageViews())
         {
@@ -562,6 +563,7 @@ namespace Vulkan
         graphicsPipeline_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
+        gpuCullPipeline_.reset();
         simpleComposePipeline_.reset();
         uniformBuffers_.clear();
         inFlightFences_.clear();
@@ -847,6 +849,20 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        if (false)
+        {                
+            SCOPED_GPU_TIMER("gpu cull");
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gpuCullPipeline_->Handle());
+            gpuCullPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            
+            glm::uvec2 pushConst = { 0, 0 };
+            vkCmdPushConstants(commandBuffer, gpuCullPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+
+            uint32_t groupCount = GetScene().GetIndirectDrawBatchCount() / 64;
+            vkCmdDispatch(commandBuffer, groupCount, 1, 1);    
+        }
+        
         if (GOption->ReferenceMode)
         {
             for (auto& logicRenderer : logicRenderers_)

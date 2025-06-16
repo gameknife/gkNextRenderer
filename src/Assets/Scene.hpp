@@ -76,6 +76,9 @@ namespace Assets
 		void UpdateMaterial();
 		bool UpdateNodes();
 
+		bool UpdateNodesLegacy();
+		bool UpdateNodesGpuDriven();
+
 		Node* GetNode(std::string name);
 		Node* GetNodeByInstanceId(uint32_t id);
 		const Model* GetModel(uint32_t id) const;

@@ -269,7 +269,12 @@ namespace Assets
         
     bool Scene::UpdateNodes()
     {
-        // this can move to thread task
+        return UpdateNodesGpuDriven();
+    }
+
+    bool Scene::UpdateNodesLegacy()
+    {
+         // this can move to thread task
         if (nodes_.size() > 0)
         {
             if (sceneDirty_)
@@ -349,6 +354,68 @@ namespace Assets
                 // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,9), 2.0f);
                 // cpuAccelerationStructure_.RequestUpdate(glm::vec3(-9,0,5), 2.0f);
                 //cpuAccelerationStructure_.RequestUpdate(glm::vec3(1,0,1), 2.0f);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool Scene::UpdateNodesGpuDriven()
+    {
+        if (nodes_.size() > 0)
+        {
+            if (sceneDirty_)
+            {
+                sceneDirty_ = false;
+                {
+                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+                    nodeProxys.clear();
+                    indirectDrawBufferInstanced.clear();
+                    
+                    uint32_t nodeOffsetBatched = 0;
+
+                    for (auto& node : nodes_)
+                    {
+                        if (node->IsVisible())
+                        {
+                            auto modelId = node->GetModel();
+                            glm::mat4 combined;
+                            if (node->TickVelocity(combined))
+                            {
+                                MarkDirty();
+                                //cpuAccelerationStructure_.RequestUpdate(combined * glm::vec4(0,0,0,1), 1.0f);
+                            }
+
+                            NodeProxy proxy = node->GetNodeProxy();
+                            proxy.combinedPrevTS = combined;
+                            nodeProxys.push_back(proxy);
+
+                            Model& model = models_[proxy.modelId];
+
+                            VkDrawIndexedIndirectCommand cmd{};
+                            cmd.firstIndex = static_cast<int32_t>( Offsets()[proxy.modelId].x );
+                            cmd.indexCount = model.NumberOfIndices();
+                            cmd.vertexOffset = static_cast<int32_t>( Offsets()[proxy.modelId].y );
+                            cmd.firstInstance = nodeOffsetBatched;
+                            cmd.instanceCount = 1;
+
+                            indirectDrawBufferInstanced.push_back(cmd);
+
+                            nodeOffsetBatched++;
+                        }
+                    }
+                    
+                    NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+                    std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+                    nodeMatrixBufferMemory_->Unmap();
+
+                    VkDrawIndexedIndirectCommand* diic = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectDrawBufferMemory_->Map(
+                        0, sizeof(VkDrawIndexedIndirectCommand) * indirectDrawBufferInstanced.size()));
+                    std::memcpy(diic, indirectDrawBufferInstanced.data(), indirectDrawBufferInstanced.size() * sizeof(VkDrawIndexedIndirectCommand));
+                    indirectDrawBufferMemory_->Unmap();
+
+                    indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
+                }
                 return true;
             }
         }

@@ -28,6 +28,7 @@ namespace Vulkan
 		class BufferClearPipeline;
 		class SoftAmbientCubeGenPipeline;
 		class SimpleComposePipeline;
+		class GPUCullPipeline;
 	}
 
 	class RenderImage;
@@ -385,6 +386,7 @@ namespace Vulkan
 		std::vector<class Fence> inFlightFences_;
 
 		std::unique_ptr<PipelineCommon::SoftAmbientCubeGenPipeline> softAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::GPUCullPipeline> gpuCullPipeline_;
 		
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
