@@ -77,6 +77,16 @@ void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline0_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+			// 这里的indirectdrawbuffers，需要提前丢进cs里计算可见性，然后再调用
+			// PC平台，indirectDrawCmd的数量对性能影响不大
+			// Android上，indirectDrawCmd的数量显著的影响性能，因此gpucull之后可能也希望是能做instanced的绘制
+
+			// 确实整体的组织都可以放在gpu
+			// 针对每一种mesh，也就是每一个dic，都组织一个nodeproxy
+			// 遍历每一个nodeproxy，开始填充对应的dic
+			// 再draw
+			// 然后这里就可用hw rayquery或者voxel rayquery，来做遮挡剔除了，极大限度的减轻vs/ps的负担，gpu driven
 			
 			// indirect draw
 			vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));

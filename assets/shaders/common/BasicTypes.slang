@@ -168,6 +168,15 @@ public struct ALIGN_16 RayCastContext
     public uint Hitted;
 };
 #ifndef __cplusplus
+
+public struct VkDrawIndexedIndirectCommand {
+    public uint indexCount;
+    public uint instanceCount;
+    public uint firstIndex;
+    public int vertexOffset;
+    public uint firstInstance;
+};
+
 public struct ALIGN_16 Material
 {
     public float4 Diffuse;
