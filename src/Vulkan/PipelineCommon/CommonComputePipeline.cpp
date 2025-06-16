@@ -11,6 +11,7 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Vulkan/RenderImage.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
@@ -107,7 +108,7 @@ namespace Vulkan::PipelineCommon
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
             uniformBufferInfo.range = VK_WHOLE_SIZE;
-            VkDescriptorImageInfo Info1 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
+            VkDescriptorImageInfo Info1 = {NULL, baseRender.rtDenoised->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL};
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, uniformBufferInfo),
@@ -198,7 +199,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.offset = 0;
         pushConstantRange.size = 8;
         
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get()}, swapChain.Images().size(), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/SimpleCompose.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

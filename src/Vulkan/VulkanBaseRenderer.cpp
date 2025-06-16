@@ -400,6 +400,23 @@ namespace Vulkan
         {
             swapChain_->UpdateEditorViewport(0,0, swapChain_->Extent().width / 2, swapChain_->Extent().height / 2);
         }
+        else
+        {
+            if ( GOption->SuperResolution == 0 )
+            {
+                swapChain_->UpdateEditorViewport(0,0, swapChain_->Extent().width * 2 / 4, swapChain_->Extent().height * 2 / 4);
+            }
+            else if ( GOption->SuperResolution == 1 )
+            {
+                swapChain_->UpdateEditorViewport(0,0, swapChain_->Extent().width * 2 / 3, swapChain_->Extent().height * 2 / 3);
+            }
+            else
+            {
+                swapChain_->UpdateEditorViewport(0,0, swapChain_->Extent().width, swapChain_->Extent().height);
+            }
+        }
+
+
         
         depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
 
@@ -434,7 +451,10 @@ namespace Vulkan
                                VK_FORMAT_R16G16B16A16_SFLOAT,
                                VK_IMAGE_TILING_OPTIMAL,
                                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-
+        rtDenoised.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R16G16B16A16_SFLOAT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT,false,"denoised"));
         rtAccumlation.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                             VK_FORMAT_R16G16B16A16_SFLOAT,
                                             VK_IMAGE_TILING_OPTIMAL,
@@ -521,6 +541,7 @@ namespace Vulkan
         }
 
         rtOutput.reset();
+        rtDenoised.reset();
         rtAccumlation.reset();
         rtVisibility.reset();
         rtObject0.reset();
@@ -778,6 +799,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::InitializeBarriers(VkCommandBuffer commandBuffer)
     {
+        rtDenoised->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

@@ -27,6 +27,7 @@ public:
 	bool NoDenoiser{};
 	bool ForceSDR{};
 	bool ReferenceMode{};
+	uint32_t SuperResolution{};
 	bool ForceNoRT{};
 	std::string locale{};
 
