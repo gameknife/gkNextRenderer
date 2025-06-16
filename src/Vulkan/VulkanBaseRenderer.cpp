@@ -495,6 +495,7 @@ namespace Vulkan
             {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
         
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
@@ -512,6 +513,7 @@ namespace Vulkan
                 descriptorSets.Bind(i, 6, { NULL, rtAlbedo_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 7, { NULL, rtNormal_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 8, { NULL, rtShaderTimer_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 9, { NULL, rtDenoised->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

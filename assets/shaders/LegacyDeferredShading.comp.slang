@@ -14,6 +14,7 @@ import Common;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(9, 2)]] RWTexture2D<float4> OutDenoisedBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -25,6 +26,18 @@ import Common;
 [[vk::binding(7, 3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
 [[vk::binding(9, 3)]] StructuredBuffer<PageIndex> Pages;
+
+void OutputColor(int2 ipos, float3 Total)
+{
+    if (Camera.HDR)
+    {
+        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
+    }
+    else
+    {
+        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
+    }
+}
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
@@ -44,18 +57,18 @@ void main(uint3 DTid : SV_DispatchThreadID) {
     if (!rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
-        FinalImage[ipos] = skyColor;
+        OutputColor(ipos, skyColor.rgb);
         return;
     }
 
     Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-    FinalImage[ipos] = hitMaterial.Diffuse * radiance;
+    OutputColor(ipos, hitMaterial.Diffuse.rgb * radiance.rgb);
     ObjectId0[ipos] = hitNode.instanceId;
 
     if (Camera.DebugDraw_Lighting)
     {
-        FinalImage[ipos] = radiance;
+        OutputColor(ipos, radiance.rgb);
     }
 }

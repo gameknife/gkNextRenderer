@@ -12,6 +12,7 @@ import Common;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(9, 2)]] RWTexture2D<float4> OutDenoisedBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -24,6 +25,18 @@ import Common;
 [[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
 [[vk::binding(9, 3)]] StructuredBuffer<PageIndex> Pages;
 
+void OutputColor(int2 ipos, float3 Total)
+{
+    if (Camera.HDR)
+    {
+        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
+    }
+    else
+    {
+        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
+    }
+}
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -35,7 +48,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 ipos = int2(DTid.xy);
     int2 size;
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
-    FinalImage.GetDimensions(size.x, size.y);
+    OutDenoisedBuffer.GetDimensions(size.x, size.y);
 
     // 第一次Tracing
     Vertex hitVertex;
@@ -58,7 +71,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         outColor= float4(0,0,0,0);
     }
 
-    FinalImage[ipos] = outColor;
+    OutputColor(ipos, outColor.rgb);
 
 
 }
