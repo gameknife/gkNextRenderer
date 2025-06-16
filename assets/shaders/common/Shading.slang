@@ -662,9 +662,9 @@ public struct FHardwareRayTracer : IRayTracer
 
             outNode = NodeProxies[q.CommittedRayInstanceId()];
             outNode.instanceId = q.CommittedRayInstanceCustomIndex();
-            const uint2 offsets = Offsets[outNode.modelId];
-            const uint indexOffset = offsets.x + q.CommittedPrimitiveIndex() * 3;
-            const uint vertexOffset = offsets.y;
+            const ModelData offsets = Offsets[outNode.modelId];
+            const uint indexOffset = offsets.indexOffset + q.CommittedPrimitiveIndex() * 3;
+            const uint vertexOffset = offsets.vertexOffset;
             const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
             const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
             const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
@@ -681,7 +681,7 @@ public struct FHardwareRayTracer : IRayTracer
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
-    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<ModelData> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
     RaytracingAccelerationStructure Scene;
 }
@@ -900,7 +900,7 @@ public struct FPathTracingRenderer : IRenderer
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
-    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<ModelData> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
     RWStructuredBuffer<AmbientCube> Cubes;
@@ -980,7 +980,7 @@ public struct FHybridRenderer : IRenderer
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
-    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<ModelData> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
     RWStructuredBuffer<AmbientCube> Cubes;

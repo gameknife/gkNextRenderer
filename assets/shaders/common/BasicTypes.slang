@@ -80,6 +80,22 @@ public struct ALIGN_16 NodeProxy
     public uint matId[16];
 };
 
+public struct ALIGN_16 ModelData
+{
+    public uint indexOffset;
+    public uint indexCount;
+    public uint vertexOffset;
+    public uint vertexCount;
+
+    public float4 localAabbMin; // local bounding box min
+    public float4 localAabbMax; // local bounding box max
+
+    public uint modelType;
+    public uint voxelDataIdx;
+    public uint reserved1;
+    public uint reserved2;
+};
+
 // size = 16 x 4 bytes, 64 bytes, maximun compress to 64 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe

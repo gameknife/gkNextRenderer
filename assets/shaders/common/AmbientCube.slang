@@ -431,7 +431,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
-    StructuredBuffer<uint2> Offsets;
+    StructuredBuffer<ModelData> Offsets;
     StructuredBuffer<NodeProxy> NodeProxies;
 
     RWStructuredBuffer<AmbientCube> Cubes;

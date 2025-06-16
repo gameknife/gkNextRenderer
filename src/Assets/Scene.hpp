@@ -52,7 +52,7 @@ namespace Assets
 		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<FMaterial>& Materials() { return materials_; }
-		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
+		const std::vector<ModelData>& Offsets() const { return offsets_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
@@ -127,7 +127,7 @@ namespace Assets
 		std::vector<std::shared_ptr<Node>> nodes_;
 		std::vector<LightObject> lights_;
 		std::vector<AnimationTrack> tracks_;
-		std::vector<uvec2> offsets_;
+		std::vector<ModelData> offsets_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;

@@ -104,7 +104,7 @@ namespace Assets
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
 
-            offsets_.emplace_back(indexOffset, vertexOffset);
+            offsets_.push_back({indexOffset, 0, vertexOffset, 0, vec4(model.GetLocalAABBMin(), 0), vec4(model.GetLocalAABBMax(), 0), 0, 0, 0, 0});
 
             // Copy model data one after the other.
 
@@ -393,9 +393,9 @@ namespace Assets
                             Model& model = models_[proxy.modelId];
 
                             VkDrawIndexedIndirectCommand cmd{};
-                            cmd.firstIndex = static_cast<int32_t>( Offsets()[proxy.modelId].x );
+                            cmd.firstIndex = static_cast<int32_t>( Offsets()[proxy.modelId].indexOffset );
                             cmd.indexCount = model.NumberOfIndices();
-                            cmd.vertexOffset = static_cast<int32_t>( Offsets()[proxy.modelId].y );
+                            cmd.vertexOffset = static_cast<int32_t>( Offsets()[proxy.modelId].vertexOffset );
                             cmd.firstInstance = nodeOffsetBatched;
                             cmd.instanceCount = 1;
 

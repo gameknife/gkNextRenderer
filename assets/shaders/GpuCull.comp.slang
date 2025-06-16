@@ -6,7 +6,7 @@ import Common;
 [[vk::binding(0, 1)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 1)]] StructuredBuffer<uint> Indices;
 [[vk::binding(2, 1)]] StructuredBuffer<Material> Materials;
-[[vk::binding(3, 1)]] StructuredBuffer<uint2> Offsets;
+[[vk::binding(3, 1)]] StructuredBuffer<ModelData> Offsets;
 [[vk::binding(4, 1)]] StructuredBuffer<NodeProxy> NodeProxies;
 [[vk::binding(5, 1)]] RWStructuredBuffer<AmbientCube> Cubes;
 [[vk::binding(6, 1)]] RWStructuredBuffer<VoxelData> Voxels;

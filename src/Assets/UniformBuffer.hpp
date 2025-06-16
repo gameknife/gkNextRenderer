@@ -24,12 +24,14 @@ namespace Assets
 	const int CUBE_SIZE_Z = 48;
 	const float CUBE_UNIT = 0.25f;
 	const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
-	
+
+#define float3 vec3
 #define float4 vec4
 #define float4x4 mat4
 	
 	#include "../assets/shaders/common/BasicTypes.slang"
-	
+
+#undef float3
 #undef float4
 #undef float4x4
 	

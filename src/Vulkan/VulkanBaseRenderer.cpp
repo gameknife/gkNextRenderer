@@ -1022,7 +1022,7 @@ namespace Vulkan
                     vkCmdPushConstants(commandBuffer, graphicsPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_VERTEX_BIT,
                                        0, sizeof(glm::mat4), &worldMatrix);
 
-                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.r, offset.g, 0);
+                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, offset.vertexOffset, 0);
                 }
             }
             vkCmdEndRenderPass(commandBuffer);

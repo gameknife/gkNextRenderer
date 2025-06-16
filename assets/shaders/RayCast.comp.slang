@@ -16,7 +16,7 @@ StructuredBuffer<uint> Indices;
 StructuredBuffer<Material> Materials;
 
 [[vk::binding(7, 0)]]
-StructuredBuffer<uint2> Offsets;
+StructuredBuffer<ModelData> Offsets;
 
 [[vk::binding(8, 0)]]
 StructuredBuffer<NodeProxy> NodeProxies;

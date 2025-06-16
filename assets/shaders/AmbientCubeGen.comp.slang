@@ -7,7 +7,7 @@ import Common;
 [[vk::binding(4)]] StructuredBuffer<float> Vertices;
 [[vk::binding(5)]] StructuredBuffer<uint> Indices;
 [[vk::binding(6)]] StructuredBuffer<Material> Materials;
-[[vk::binding(7)]] StructuredBuffer<uint2> Offsets;
+[[vk::binding(7)]] StructuredBuffer<ModelData> Offsets;
 [[vk::binding(8)]] StructuredBuffer<NodeProxy> NodeProxies;
 [[vk::binding(9)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 
