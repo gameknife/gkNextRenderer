@@ -516,6 +516,8 @@ namespace Vulkan
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
+
+        simpleComposePipeline_.reset(new PipelineCommon::SimpleComposePipeline(SwapChain(), rtDenoised->GetImageView(), UniformBuffers()));
                 
         for (auto& logicRenderer : logicRenderers_)
         {
@@ -558,6 +560,7 @@ namespace Vulkan
         graphicsPipeline_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
+        simpleComposePipeline_.reset();
         uniformBuffers_.clear();
         inFlightFences_.clear();
         renderFinishedSemaphores_.clear();
@@ -913,6 +916,23 @@ namespace Vulkan
             
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
             }
+        }
+
+        if(true)
+        {
+            SCOPED_GPU_TIMER("resolve pass");
+
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
+                           VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_GENERAL);
+
+            rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
+            simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
         
         // global visibility buffer copy

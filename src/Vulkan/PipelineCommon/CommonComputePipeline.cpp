@@ -199,7 +199,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.offset = 0;
         pushConstantRange.size = 8;
         
-        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get()}, swapChain.Images().size(), &pushConstantRange, 1));
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get()}, static_cast<uint32_t>(swapChain.Images().size()), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/SimpleCompose.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

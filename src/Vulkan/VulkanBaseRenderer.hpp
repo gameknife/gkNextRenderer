@@ -27,6 +27,7 @@ namespace Vulkan
 	{
 		class BufferClearPipeline;
 		class SoftAmbientCubeGenPipeline;
+		class SimpleComposePipeline;
 	}
 
 	class RenderImage;
@@ -374,6 +375,7 @@ namespace Vulkan
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
 		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
+		std::unique_ptr<PipelineCommon::SimpleComposePipeline> simpleComposePipeline_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;
