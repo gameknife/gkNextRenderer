@@ -73,7 +73,7 @@ public struct ALIGN_16 NodeProxy
 {
     public uint instanceId;
     public uint modelId;
-    public uint reserved1;
+    public uint visible;
     public uint reserved2;
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
