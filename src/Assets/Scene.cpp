@@ -104,7 +104,7 @@ namespace Assets
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
 
-            offsets_.push_back({indexOffset, 0, vertexOffset, 0, vec4(model.GetLocalAABBMin(), 0), vec4(model.GetLocalAABBMax(), 0), 0, 0, 0, 0});
+            offsets_.push_back({indexOffset, model.NumberOfIndices(), vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, 0, 0});
 
             // Copy model data one after the other.
 
@@ -370,51 +370,34 @@ namespace Assets
                 {
                     PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
                     nodeProxys.clear();
-                    indirectDrawBufferInstanced.clear();
+                    indirectDrawBatchCount_ = 0;
                     
                     uint32_t nodeOffsetBatched = 0;
 
                     for (auto& node : nodes_)
                     {
-                        if (node->IsVisible())
+                        // record all
+                        if (node->IsDrawable())
                         {
                             auto modelId = node->GetModel();
                             glm::mat4 combined;
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
-                                //cpuAccelerationStructure_.RequestUpdate(combined * glm::vec4(0,0,0,1), 1.0f);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();
                             proxy.combinedPrevTS = combined;
                             nodeProxys.push_back(proxy);
 
-                            Model& model = models_[proxy.modelId];
-
-                            VkDrawIndexedIndirectCommand cmd{};
-                            cmd.firstIndex = static_cast<int32_t>( Offsets()[proxy.modelId].indexOffset );
-                            cmd.indexCount = model.NumberOfIndices();
-                            cmd.vertexOffset = static_cast<int32_t>( Offsets()[proxy.modelId].vertexOffset );
-                            cmd.firstInstance = nodeOffsetBatched;
-                            cmd.instanceCount = 1;
-
-                            indirectDrawBufferInstanced.push_back(cmd);
-
                             nodeOffsetBatched++;
+                            indirectDrawBatchCount_++;
                         }
                     }
                     
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     nodeMatrixBufferMemory_->Unmap();
-
-                    VkDrawIndexedIndirectCommand* diic = reinterpret_cast<VkDrawIndexedIndirectCommand*>(indirectDrawBufferMemory_->Map(
-                        0, sizeof(VkDrawIndexedIndirectCommand) * indirectDrawBufferInstanced.size()));
-                    std::memcpy(diic, indirectDrawBufferInstanced.data(), indirectDrawBufferInstanced.size() * sizeof(VkDrawIndexedIndirectCommand));
-                    indirectDrawBufferMemory_->Unmap();
-
-                    indirectDrawBatchCount_ = static_cast<uint32_t>(indirectDrawBufferInstanced.size());
                 }
                 return true;
             }

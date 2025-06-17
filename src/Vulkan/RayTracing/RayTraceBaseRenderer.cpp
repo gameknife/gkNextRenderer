@@ -212,7 +212,7 @@ namespace Vulkan::RayTracing
         {
             auto& Node = nodeTrans[i];
             instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                bottomAs_[Node.modelId], glm::transpose(Node.worldTS), Node.instanceId, true));
+                bottomAs_[Node.modelId], glm::transpose(Node.worldTS), Node.instanceId, Node.visible));
         }
 
         // upload to gpu

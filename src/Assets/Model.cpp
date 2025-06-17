@@ -1257,6 +1257,7 @@ namespace Assets
         proxy.instanceId = instanceId_;
         proxy.modelId = modelId_;
         proxy.worldTS = WorldTransform();
+        proxy.visible = visible_ ? 1 : 0;
         for ( int i = 0; i < materialIdx_.size(); i++ )
         {
             if (i < 16)

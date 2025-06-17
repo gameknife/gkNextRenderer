@@ -115,6 +115,7 @@ namespace Assets
 
         void SetVisible(bool visible) { visible_ = visible; }
         bool IsVisible() const { return visible_; }
+        bool IsDrawable() const { return modelId_ != -1; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
         bool TickVelocity(glm::mat4& combinedTS);

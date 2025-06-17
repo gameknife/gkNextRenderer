@@ -767,8 +767,8 @@ namespace Vulkan::PipelineCommon
             
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(0, 0, drawCmdBufferInfo),
-                descriptorSets.Bind(0, 1, uniformBufferInfo),
+                descriptorSets.Bind(i, 0, drawCmdBufferInfo),
+                descriptorSets.Bind(i, 1, uniformBufferInfo),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
