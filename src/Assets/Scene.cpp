@@ -28,6 +28,8 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
             pageIndexBufferMemory_);
 
+        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "GPUDrivenStats", flags | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat), gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_ );
+
         // gpu local buffers
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                             indirectDrawBufferMemory_); // support 65535 nodes
@@ -167,6 +169,7 @@ namespace Assets
                 {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             }, maxSets));
         
         auto& descriptorSets = sceneBufferDescriptorSetManager_->DescriptorSets();
@@ -185,6 +188,7 @@ namespace Assets
                 descriptorSets.Bind(i, 7, { hdrSHBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 8, { lightBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 9, { pageIndexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 10, { gpuDrivenStatsBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -271,6 +275,15 @@ namespace Assets
         
     bool Scene::UpdateNodes()
     {
+        GPUDrivenStat zero {};
+        // read back gpu driven stats
+        const auto data = gpuDrivenStatsBuffer_Memory_->Map(0, sizeof(Assets::GPUDrivenStat));
+        // download
+        GPUDrivenStat* gpuData = static_cast<GPUDrivenStat*>(data);
+        std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
+        std::memcpy(gpuData, &zero, sizeof(GPUDrivenStat)); // reset to zero
+        gpuDrivenStatsBuffer_Memory_->Unmap();
+        
         return UpdateNodesGpuDriven();
     }
 

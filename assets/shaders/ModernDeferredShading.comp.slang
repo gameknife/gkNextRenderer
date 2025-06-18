@@ -13,6 +13,7 @@ import Common;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -77,4 +78,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     outColor.a = 1.0f;
     OutImage[ipos] = outColor;
     ObjectId0[ipos] = hitNode.instanceId;
+
+    // write to NDC depth
+    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
+    float ndcDepth = clipPos.z / clipPos.w;
+    OutDepthBuffer[ipos] = ndcDepth;
 }

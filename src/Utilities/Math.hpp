@@ -32,7 +32,7 @@ namespace Utilities
 
 		if (value < s_value[s_valueSZ - 1])
 		{
-			return fmt::sprintf(" ");
+			return fmt::sprintf("%.0f", value);
 		}
 
 		if (value < 10001.f)

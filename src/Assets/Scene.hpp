@@ -68,6 +68,8 @@ namespace Assets
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
 		const uint32_t GetVerticeCount() const {return verticeCount_;}
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
+
+		const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
 		
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
@@ -162,6 +164,9 @@ namespace Assets
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> gpuDrivenStatsBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> gpuDrivenStatsBuffer_Memory_;
+
 		std::unique_ptr<TextureImage> cpuShadowMap_;
 		
 		std::unique_ptr<Vulkan::DescriptorSetManager> sceneBufferDescriptorSetManager_;
@@ -185,5 +190,7 @@ namespace Assets
 		Camera renderCamera_;
 
 		FCPUAccelerationStructure cpuAccelerationStructure_;
+
+		Assets::GPUDrivenStat gpuDrivenStat_;
 	};
 }

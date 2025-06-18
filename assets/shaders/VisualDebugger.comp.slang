@@ -96,7 +96,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 isize;
     OutImage.GetDimensions(isize.x, isize.y);
 
-    OutImage[ipos] = OutImage[ipos];
+    //OutImage[ipos] = OutImage[ipos];
 
     DRAW(RenderImage, 0u, 3u, 4u, ipos, isize, 1.0);
     DRAWNORMAL(OutNormalBuffer, 1u, 3u, 4u, ipos, isize);

@@ -12,6 +12,8 @@ import Common;
 [[vk::binding(6, 1)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(7, 1)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(8, 1)]] StructuredBuffer<LightObject> Lights;
+[[vk::binding(10, 1)]] RWStructuredBuffer<GPUDrivenStat> StatInfos;
+
 
 [[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
@@ -49,33 +51,92 @@ bool IsOccluded(float3 min, float3 max, float4x4 wvp)
         
         // 检查是否在视锥体内
         if (any(abs(ndc.xy) > 1.0) || ndc.z < 0.0 || ndc.z > 1.0) {
-            continue; // 在视锥体外的点不参与遮挡判断
+            return false; // 在视锥体外的点不参与遮挡判断
         }
         
         float2 screenUV = ndc.xy * 0.5 + 0.5;
-        screenUV.y = 1.0 - screenUV.y; // 翻转Y轴（如果需要）
+        //screenUV.y = 1.0 - screenUV.y; // 翻转Y轴（如果需要）
         
         int2 pixelCoord = int2(screenUV * float2(screenSize));
         
         // 边界检查
-        if (pixelCoord.x < 0 || pixelCoord.x >= screenSize.x || 
+        if (pixelCoord.x < 0 || pixelCoord.x >= screenSize.x ||
             pixelCoord.y < 0 || pixelCoord.y >= screenSize.y) {
-            continue;
+            return false;
         }
         
         float previousDepth = OutDepthBuffer[pixelCoord];
-        float currentDepth = ndc.z;
+        float currentDepth = ndc.z- 0.00001;
         
         // 如果当前点被遮挡
-        if (previousDepth < currentDepth) {
-            occludedCount++;
+        if (previousDepth > currentDepth) {
+            return false;
         }
     }
-    
-    // 只有当所有在视锥体内的角点都被遮挡时，才认为整个AABB被遮挡
-    // 这里需要至少有一些角点在视锥体内，并且这些角点都被遮挡
-    return occludedCount >= 4; // 可以调整这个阈值
+    return true;
 }
+
+bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
+{
+    const int GRID_SIZE = 6;
+    const float GRID_SIZE_MINUS_ONE = GRID_SIZE - 1;
+
+    uint2 screenSize;
+    OutDepthBuffer.GetDimensions(screenSize.x, screenSize.y);
+
+    // 在AABB内均匀分布4x4x4的检测点
+    for (int x = 0; x < GRID_SIZE; x++)
+    {
+        for (int y = 0; y < GRID_SIZE; y++)
+        {
+            for (int z = 0; z < GRID_SIZE; z++)
+            {
+                // 计算当前网格点的世界坐标
+                float3 gridPoint = min + float3(
+                    (max.x - min.x) * (float(x) / GRID_SIZE_MINUS_ONE),
+                    (max.y - min.y) * (float(y) / GRID_SIZE_MINUS_ONE),
+                    (max.z - min.z) * (float(z) / GRID_SIZE_MINUS_ONE)
+                );
+
+                // 变换到剪裁空间
+                float4 clipPos = mul(wvp, float4(gridPoint, 1.0));
+
+                // 透视除法得到NDC坐标
+                // if (clipPos.w <= 0.0) continue; // 跳过在相机后面的点
+
+                float3 ndc = clipPos.xyz / clipPos.w;
+
+                // 检查是否在视锥体内
+                if (any(abs(ndc.xy) > 1.0) || ndc.z < 0.0 || ndc.z > 1.0) {
+                    return false; // 跳过视锥体外的点
+                }
+
+                // 转换到屏幕坐标
+                float2 screenUV = ndc.xy * 0.5 + 0.5;
+                int2 pixelCoord = int2(screenUV * float2(screenSize));
+
+                // 边界检查
+                if (pixelCoord.x < 0 || pixelCoord.x >= screenSize.x ||
+                    pixelCoord.y < 0 || pixelCoord.y >= screenSize.y) {
+                    return false;
+                }
+
+                // 深度测试
+                float previousDepth = OutDepthBuffer[pixelCoord];
+                float currentDepth = ndc.z - 0.00001; // 添加小的偏移避免Z-fighting
+
+                // 如果当前点被遮挡
+                if (previousDepth > currentDepth) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
 
 bool IsPointInFrustum(float3 pos, float4x4 wvp)
 {
@@ -173,8 +234,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (shouldDraw)
     {
-        if (IsOccluded(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp))
+        InterlockedAdd(StatInfos[0].ProcessedCount, 1);
+        InterlockedAdd(StatInfos[0].TriangleCount, model.indexCount / 3);
+
+        if (IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp))
         {
+            InterlockedAdd(StatInfos[0].CulledCount, 1);
+            InterlockedAdd(StatInfos[0].CulledTriangleCount, model.indexCount / 3);
             shouldDraw = false;
         }
     }

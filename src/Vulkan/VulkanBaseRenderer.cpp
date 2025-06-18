@@ -639,6 +639,60 @@ namespace Vulkan
 
     void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        {                
+            SCOPED_GPU_TIMER("gpu cull");
+
+            VkBufferMemoryBarrier nodeMatrixBarrier = {};
+            nodeMatrixBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            nodeMatrixBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;  // 假设由CPU更新
+            nodeMatrixBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // 计算着色器将读取
+            nodeMatrixBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            nodeMatrixBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            nodeMatrixBarrier.buffer = GetScene().NodeMatrixBuffer().Handle();
+            nodeMatrixBarrier.offset = 0;
+            nodeMatrixBarrier.size = VK_WHOLE_SIZE;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_HOST_BIT,            // 源阶段：CPU写入
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,  // 目标阶段：计算着色器
+                0,
+                0, nullptr,
+                1, &nodeMatrixBarrier,
+                0, nullptr
+            );
+            
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gpuCullPipeline_->Handle());
+            gpuCullPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            
+            glm::uvec2 pushConst = { 0, 0 };
+            vkCmdPushConstants(commandBuffer, gpuCullPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+
+            uint32_t groupCount = GetScene().GetIndirectDrawBatchCount() / 64 + 1;
+            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+
+            VkBufferMemoryBarrier bufferBarrier = {};
+            bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            bufferBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+            bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.buffer = GetScene().IndirectDrawBuffer().Handle();
+            bufferBarrier.offset = 0;
+            bufferBarrier.size = VK_WHOLE_SIZE;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                0,
+                0, nullptr,
+                1, &bufferBarrier,
+                0, nullptr
+            );
+        }
+        
         {
             SCOPED_GPU_TIMER("clear pass");
 
@@ -858,61 +912,6 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if (true)
-        {                
-            SCOPED_GPU_TIMER("gpu cull");
-
-            VkBufferMemoryBarrier nodeMatrixBarrier = {};
-            nodeMatrixBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            nodeMatrixBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;  // 假设由CPU更新
-            nodeMatrixBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // 计算着色器将读取
-            nodeMatrixBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            nodeMatrixBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            nodeMatrixBarrier.buffer = GetScene().NodeMatrixBuffer().Handle();
-            nodeMatrixBarrier.offset = 0;
-            nodeMatrixBarrier.size = VK_WHOLE_SIZE;
-
-            vkCmdPipelineBarrier(
-                commandBuffer,
-                VK_PIPELINE_STAGE_HOST_BIT,            // 源阶段：CPU写入
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,  // 目标阶段：计算着色器
-                0,
-                0, nullptr,
-                1, &nodeMatrixBarrier,
-                0, nullptr
-            );
-            
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gpuCullPipeline_->Handle());
-            gpuCullPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-            
-            glm::uvec2 pushConst = { 0, 0 };
-            vkCmdPushConstants(commandBuffer, gpuCullPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(glm::uvec2), &pushConst);
-
-            uint32_t groupCount = GetScene().GetIndirectDrawBatchCount() / 64 + 1;
-            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-            VkBufferMemoryBarrier bufferBarrier = {};
-            bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            bufferBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            bufferBarrier.buffer = GetScene().IndirectDrawBuffer().Handle();
-            bufferBarrier.offset = 0;
-            bufferBarrier.size = VK_WHOLE_SIZE;
-
-            vkCmdPipelineBarrier(
-                commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                0,
-                0, nullptr,
-                1, &bufferBarrier,
-                0, nullptr
-            );
-        }
-        
         if (GOption->ReferenceMode)
         {
             // 后面渲染器会很多，这里只渲染加入reference的，并从rtDenoised Resolve到FrameBuffer
