@@ -19,19 +19,22 @@ namespace Assets
     {
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         
-        // 动态更新的场景结构，每帧更新
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
-                                                    indirectDrawBufferMemory_); // support 65535 nodes
+        // host buffers
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
 
-
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
-                                                    ambientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
                                                     farAmbientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
             pageIndexBufferMemory_);
+
+        // gpu local buffers
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
+                                            indirectDrawBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
+                                            ambientCubeBufferMemory_);
+
+        // shadow maps
         cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
         cpuShadowMap_->SetDebugName("Shadowmap");
 
@@ -126,7 +129,6 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, indices, indexBuffer_, indexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
 
-        // 材质和灯光也应考虑更新
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
 
         auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
@@ -304,7 +306,6 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
-                                //cpuAccelerationStructure_.RequestUpdate(combined * glm::vec4(0,0,0,1), 1.0f);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();
