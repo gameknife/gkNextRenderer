@@ -7,6 +7,15 @@
 implementing Common;
 #endif
 
+public struct ALIGN_16 GPUDrivenStat
+{
+    public uint ProcessedCount;
+    public uint VisibleCount;
+    public uint CulledCount;
+    public uint TriangleCount;
+    public uint CulledTriangleCount;
+};
+
 public struct ALIGN_16 UniformBufferObject
 {
     public float4x4 ModelView;
