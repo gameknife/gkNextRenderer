@@ -920,6 +920,44 @@ namespace Vulkan
             for (auto& logicRenderer : logicRenderers_)
             {
                 logicRenderer.second->Render(commandBuffer, imageIndex);
+
+                SCOPED_GPU_TIMER("resolve pass");
+
+                ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
+                               VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_GENERAL);
+
+                rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
+                simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+
+                glm::uvec2 pushConst = glm::uvec2(0, 0  );
+                switch ( logicRenderer.first )
+                {
+                    case ERendererType::ERT_PathTracing:
+                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2);
+                        break;
+                    case ERendererType::ERT_Hybrid:
+                        pushConst = glm::uvec2(0, SwapChain().Extent().height / 2);
+                        break;
+                    case ERendererType::ERT_ModernDeferred:
+                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, 0);
+                        break;
+                    case ERendererType::ERT_LegacyDeferred:
+                        pushConst = glm::uvec2(0, 0);
+                        break;
+                    default:
+                        pushConst = glm::uvec2(SwapChain().Extent().width, SwapChain().Extent().height);
+                        break;
+                }
+                
+                vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0, sizeof(glm::uvec2), &pushConst);
+                
+                vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
+
+                ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
             }
         }
         else
@@ -928,6 +966,25 @@ namespace Vulkan
             {
                 logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
             }
+
+            SCOPED_GPU_TIMER("resolve pass");
+
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
+                           VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_GENERAL);
+
+            rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
+            simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+
+            glm::uvec2 pushConst =glm::uvec2(0, 0 );
+            vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                               0, sizeof(glm::uvec2), &pushConst);
+            
+            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
         // soft ambient cube generation
@@ -987,24 +1044,7 @@ namespace Vulkan
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);    
             }
         }
-
-        if(true)
-        {
-            SCOPED_GPU_TIMER("resolve pass");
-
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
-                           VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_GENERAL);
-
-            rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
-
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
-            simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
-
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-        }
-
+        
         if(VisualDebug())
         {
             ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,

@@ -5,6 +5,15 @@ import Common;
 [[vk::binding(1)]] RWTexture2D<float4> DestImage;
 [[vk::binding(2)]] ConstantBuffer<UniformBufferObject> Camera;
 
+struct PushConsts
+{
+    uint offset_x;
+    uint offset_y;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<PushConsts> pushConsts;
+
 /* EASU stage
  *
  * This takes a reduced resolution source, and scales it up while preserving detail.
@@ -271,16 +280,25 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 isize;
     DestImage.GetDimensions(isize.x, isize.y);
     const float2 uv = float2(ipos) / float2(isize);
+
     int2 ssize;
     SourceImage.GetDimensions(ssize.x, ssize.y);
-    float4 outColor = SourceImage[uv * ssize];
 
-    outColor = doUpscale(
-        SourceImage,
-        uv,
-        float2(ssize),
-        float2(isize)
-    );
+    float4 outColor = float4(0, 0, 0, 1);
 
-    DestImage[ipos] = outColor;
+    if (Camera.SuperResolution < 2)
+    {
+        outColor = doUpscale(
+            SourceImage,
+            uv,
+            float2(ssize),
+            float2(isize)
+        );
+    }
+    else
+    {
+        outColor = SourceImage[ipos];
+    }
+
+    DestImage[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;
 }

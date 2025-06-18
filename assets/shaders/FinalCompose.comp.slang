@@ -151,10 +151,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     
     if(Camera.HDR)
     {
-        OutImage[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
+        OutImage[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
     }
     else
     {
-        OutImage[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
+        OutImage[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
     }
 }

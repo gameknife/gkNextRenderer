@@ -166,6 +166,8 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowEdge = false;
 
     userSettings.FastGather = false;
+
+    userSettings.SuperResolution = options.SuperResolution;
     
 #if ANDROID
     userSettings.NumberOfSamples = 1;
@@ -677,6 +679,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.FastInterpole = userSettings_.FastInterpole;
     ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
     ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
+    ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     if (userSettings_.TAA)
     {
         // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
