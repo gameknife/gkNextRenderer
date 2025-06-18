@@ -104,7 +104,7 @@ namespace Vulkan::PipelineCommon
 		VULKAN_NON_COPIABLE(BufferClearPipeline)
 	
 		BufferClearPipeline(
-			const SwapChain& swapChain);
+			const SwapChain& swapChain, const VulkanBaseRenderer& baseRender);
 		~BufferClearPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
@@ -124,11 +124,8 @@ namespace Vulkan::PipelineCommon
 		VULKAN_NON_COPIABLE(VisualDebuggerPipeline)
 	
 		VisualDebuggerPipeline(
-			const SwapChain& swapChain, 
-			const ImageView& debugImage1View,
-			const ImageView& debugImage2View,
-			const ImageView& debugImage3View,
-			const ImageView& debugImage4View,
+			const SwapChain& swapChain,
+			const VulkanBaseRenderer& baseRender,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers);
 		~VisualDebuggerPipeline();
 
@@ -217,7 +214,7 @@ namespace Vulkan::PipelineCommon
 	public:
 		VULKAN_NON_COPIABLE(GPUCullPipeline)
 	
-		GPUCullPipeline(const SwapChain& swapChain, const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene);
+		GPUCullPipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender, const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene);
 		~GPUCullPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;

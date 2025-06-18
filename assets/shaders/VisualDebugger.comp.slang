@@ -1,8 +1,14 @@
 [[vk::binding(0)]] RWTexture2D<float4> OutImage;
-[[vk::binding(1)]] RWTexture2D<float4> InDebugImage1;
-[[vk::binding(2)]] RWTexture2D<float4> InDebugImage2;
-[[vk::binding(3)]] RWTexture2D<uint> InDebugImage3;
-[[vk::binding(4)]] RWTexture2D<uint> InDebugImage4;
+
+[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
+[[vk::binding(1, 1)]] RWTexture2D<float4> RenderImage;
+[[vk::binding(2, 1)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
+[[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
+[[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
+[[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
+[[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(10, 1)]] RWTexture2D<float> OutDepthBuffer;
 
 float3 UintToStableColor(uint value)
 {
@@ -60,6 +66,14 @@ float3 UintToStableColor(uint value)
     OutImage[ipos] = float4(color, 1.0);} \
 }
 
+#define DRAWDEPTH(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
+        int2 uv = int2(0, 0);                                 \
+        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                     \
+            float icol = IMAGE[uv];                            \
+            float3 color = float3(saturate(icol / 1000.0f));           \
+            OutImage[ipos] = float4(color, 1.0);}                                                     \
+    }
+
 bool DrawQuad(uint quadx, uint quady, uint divider, int2 ipos, int2 isize, out int2 uv)
 {
     uint elementx = isize.x / divider;
@@ -84,8 +98,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     OutImage[ipos] = OutImage[ipos];
 
-    DRAW(InDebugImage1, 0u, 3u, 4u, ipos, isize, 1.0);
-    DRAWNORMAL(InDebugImage2, 1u, 3u, 4u, ipos, isize);
-    DRAWINT(InDebugImage4, 2u, 3u, 4u, ipos, isize);
-    DRAWINT(InDebugImage3, 3u, 3u, 4u, ipos, isize);
+    DRAW(RenderImage, 0u, 3u, 4u, ipos, isize, 1.0);
+    DRAWNORMAL(OutNormalBuffer, 1u, 3u, 4u, ipos, isize);
+    DRAWDEPTH(OutDepthBuffer, 2u, 3u, 4u, ipos, isize);
+    DRAWINT(ObjectId0, 3u, 3u, 4u, ipos, isize);
 }

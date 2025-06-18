@@ -445,7 +445,7 @@ glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
     auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    auto vkextent = GetRenderer().SwapChain().Extent(); // TODO: use render extent on editor
     
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
@@ -464,8 +464,9 @@ glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
 {
     // should consider rt offset
+    
     auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    auto vkextent = GetRenderer().SwapChain().Extent(); // TODO: use render extent on editor
     glm::vec2 offset = {vkoffset.x, vkoffset.y};
     glm::vec2 extent = {vkextent.width, vkextent.height};
     glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);

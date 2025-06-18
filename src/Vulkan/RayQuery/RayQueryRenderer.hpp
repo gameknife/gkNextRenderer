@@ -59,7 +59,6 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
-		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebugPipeline_;
 
 #if WITH_OIDN
 		std::unique_ptr<RenderImage> rtDenoise0_;

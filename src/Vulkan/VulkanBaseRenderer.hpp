@@ -29,6 +29,7 @@ namespace Vulkan
 		class SoftAmbientCubeGenPipeline;
 		class SimpleComposePipeline;
 		class GPUCullPipeline;
+		class VisualDebuggerPipeline;
 	}
 
 	class RenderImage;
@@ -348,6 +349,7 @@ namespace Vulkan
 		std::unique_ptr<RenderImage> rtVisibility;
 		std::unique_ptr<RenderImage> rtObject0;
 		std::unique_ptr<RenderImage> rtObject1;
+		std::unique_ptr<RenderImage> rtPrevDepth;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
@@ -377,6 +379,7 @@ namespace Vulkan
 		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
 		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
 		std::unique_ptr<PipelineCommon::SimpleComposePipeline> simpleComposePipeline_;
+		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebuggerPipeline_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

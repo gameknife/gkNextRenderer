@@ -230,7 +230,7 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    BufferClearPipeline::BufferClearPipeline(const SwapChain& swapChain):swapChain_(swapChain)
+    BufferClearPipeline::BufferClearPipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender):swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -246,7 +246,6 @@ namespace Vulkan::PipelineCommon
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
             VkDescriptorImageInfo Info0 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
-
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
@@ -254,7 +253,7 @@ namespace Vulkan::PipelineCommon
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()}, static_cast<uint32_t>(swapChain.Images().size())));
         const ShaderModule denoiseShader(device, "assets/shaders/BufferClear.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
@@ -285,18 +284,13 @@ namespace Vulkan::PipelineCommon
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
 
-    VisualDebuggerPipeline::VisualDebuggerPipeline(const SwapChain& swapChain, const ImageView& debugImage1View, const ImageView& debugImage2View,
-                                                   const ImageView& debugImage3View, const ImageView& debugImage4View, const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
+    VisualDebuggerPipeline::VisualDebuggerPipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender, const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
         const std::vector<DescriptorBinding> descriptorBindings =
         {
             {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
-            {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, swapChain.ImageViews().size()));
@@ -306,24 +300,15 @@ namespace Vulkan::PipelineCommon
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
             VkDescriptorImageInfo Info0 = {NULL, swapChain.ImageViews()[i]->Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info1 = {NULL, debugImage1View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info2 = {NULL, debugImage2View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info3 = {NULL, debugImage3View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            VkDescriptorImageInfo Info4 = {NULL, debugImage4View.Handle(), VK_IMAGE_LAYOUT_GENERAL};
 
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
                 descriptorSets.Bind(i, 0, Info0),
-                descriptorSets.Bind(i, 1, Info1),
-                descriptorSets.Bind(i, 2, Info2),
-                descriptorSets.Bind(i, 3, Info3),
-                descriptorSets.Bind(i, 4, Info4),
             };
-
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()},static_cast<uint32_t>(swapChain.Images().size())));
         const ShaderModule denoiseShader(device, "assets/shaders/VisualDebugger.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
@@ -741,7 +726,7 @@ namespace Vulkan::PipelineCommon
     }
 
     
-    GPUCullPipeline::GPUCullPipeline(const SwapChain& swapChain, const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
+    GPUCullPipeline::GPUCullPipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender, const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
     {
         // Create descriptor pool/sets.
         const auto& device = swapChain.Device();
@@ -780,7 +765,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.offset = 0;
         pushConstantRange.size = 8;
         
-        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &scene.GetSceneBufferDescriptorSetManager()}, static_cast<uint32_t>(uniformBuffers.size()), &pushConstantRange, 1));
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &scene.GetSceneBufferDescriptorSetManager(), &baseRender.GetRTDescriptorSetManager()}, static_cast<uint32_t>(uniformBuffers.size()), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/GpuCull.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

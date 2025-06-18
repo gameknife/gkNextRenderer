@@ -429,9 +429,6 @@ namespace Vulkan
         }
 
         graphicsPipeline_.reset(new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), true));
-        bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_));
-        softAmbientCubeGenPipeline_.reset(new PipelineCommon::SoftAmbientCubeGenPipeline(*swapChain_, uniformBuffers_, GetScene()));
-        gpuCullPipeline_.reset(new PipelineCommon::GPUCullPipeline(*swapChain_, uniformBuffers_, GetScene()));
 
         for (const auto& imageView : swapChain_->ImageViews())
         {
@@ -475,6 +472,11 @@ namespace Vulkan
                                             VK_FORMAT_R32_UINT,
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,false,"object1"));
+
+        rtPrevDepth.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R32_SFLOAT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT,false,"prevDepth"));
         
         rtMotionVector_.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                          VK_FORMAT_R32G32_SFLOAT,
@@ -497,6 +499,7 @@ namespace Vulkan
             {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
             {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+            {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
         
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
@@ -515,13 +518,18 @@ namespace Vulkan
                 descriptorSets.Bind(i, 7, { NULL, rtNormal_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 8, { NULL, rtShaderTimer_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 9, { NULL, rtDenoised->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 10, { NULL, rtPrevDepth->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
         simpleComposePipeline_.reset(new PipelineCommon::SimpleComposePipeline(SwapChain(), rtDenoised->GetImageView(), UniformBuffers()));
-                
+        bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_, *this));
+        softAmbientCubeGenPipeline_.reset(new PipelineCommon::SoftAmbientCubeGenPipeline(*swapChain_, uniformBuffers_, GetScene()));
+        gpuCullPipeline_.reset(new PipelineCommon::GPUCullPipeline(*swapChain_, *this, uniformBuffers_, GetScene()));
+        visualDebuggerPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(*swapChain_, *this, uniformBuffers_));
+        
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->CreateSwapChain(swapChain_->RenderExtent());
@@ -555,6 +563,7 @@ namespace Vulkan
         rtAlbedo_.reset();
         rtMotionVector_.reset();
         rtShaderTimer_.reset();
+        rtPrevDepth.reset();
         
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
@@ -565,6 +574,7 @@ namespace Vulkan
         softAmbientCubeGenPipeline_.reset();
         gpuCullPipeline_.reset();
         simpleComposePipeline_.reset();
+        visualDebuggerPipeline_.reset();
         uniformBuffers_.clear();
         inFlightFences_.clear();
         renderFinishedSemaphores_.clear();
@@ -642,11 +652,9 @@ namespace Vulkan
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange, 0,
                                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_GENERAL);
-
-            VkDescriptorSet DescriptorSets[] = {bufferClearPipeline_->DescriptorSet(imageIndex)};
+            
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bufferClearPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    bufferClearPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
+            bufferClearPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
             vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
 
             ImageMemoryBarrier::Insert(commandBuffer, SwapChain().Images()[imageIndex], subresourceRange,
@@ -815,6 +823,7 @@ namespace Vulkan
         rtObject0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtObject1->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         rtShaderTimer_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        rtPrevDepth->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
@@ -906,6 +915,8 @@ namespace Vulkan
         
         if (GOption->ReferenceMode)
         {
+            // 后面渲染器会很多，这里只渲染加入reference的，并从rtDenoised Resolve到FrameBuffer
+            // 然后就跳过后面的resolve流程了
             for (auto& logicRenderer : logicRenderers_)
             {
                 logicRenderer.second->Render(commandBuffer, imageIndex);
@@ -993,7 +1004,19 @@ namespace Vulkan
 
             ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
-        
+
+        if(VisualDebug())
+        {
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
+                           VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_GENERAL);
+            
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebuggerPipeline_->Handle());
+            visualDebuggerPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+
+            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
         // global visibility buffer copy
         {
             rtObject0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

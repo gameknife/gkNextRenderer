@@ -77,9 +77,6 @@ namespace Vulkan::RayTracing
 #if WITH_OIDN
         composePipelineDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), rtDenoise1_->GetImageView(), rtAlbedo_->GetImageView(), rtNormal_->GetImageView(), rtVisibility0->GetImageView(), rtVisibility1_->GetImageView(), UniformBuffers()));
 #endif
-        visualDebugPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(SwapChain(),
-                                                                      baseRender_.rtAlbedo_->GetImageView(), baseRender_.rtShaderTimer_->GetImageView(), baseRender_.rtObject0->GetImageView(), baseRender_.rtObject1->GetImageView(),
-                                                                      UniformBuffers()));
     }
 
     void RayQueryRenderer::DeleteSwapChain()
@@ -92,7 +89,6 @@ namespace Vulkan::RayTracing
         rtDenoise0_.reset();
         rtDenoise1_.reset();
 #endif
-        visualDebugPipeline_.reset();
         rtPingPong0.reset();
     }
 
@@ -163,24 +159,6 @@ namespace Vulkan::RayTracing
             ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
                            VK_ACCESS_TRANSFER_WRITE_BIT,
                            0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-        }
-
-        if (VisualDebug())
-        {
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT,VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,VK_IMAGE_LAYOUT_GENERAL);
-
-            baseRender_.rtShaderTimer_->InsertBarrier(commandBuffer,VK_ACCESS_SHADER_WRITE_BIT,VK_ACCESS_SHADER_READ_BIT,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtAlbedo_->InsertBarrier(commandBuffer,VK_ACCESS_SHADER_WRITE_BIT,VK_ACCESS_SHADER_READ_BIT,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtNormal_->InsertBarrier(commandBuffer,VK_ACCESS_SHADER_WRITE_BIT,VK_ACCESS_SHADER_READ_BIT,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.rtMotionVector_->InsertBarrier(commandBuffer,VK_ACCESS_SHADER_WRITE_BIT,VK_ACCESS_SHADER_READ_BIT,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_GENERAL);
-            
-            VkDescriptorSet DescriptorSets[] = {visualDebugPipeline_->DescriptorSet(imageIndex)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebugPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    visualDebugPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
-            
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],VK_ACCESS_TRANSFER_WRITE_BIT,0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
         
         {
