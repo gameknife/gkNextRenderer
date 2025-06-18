@@ -50,7 +50,7 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	}
 	else
 	{
-		image_->TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
+		//image_->TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	// cannot done this on non-graphicbit queue

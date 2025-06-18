@@ -639,6 +639,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        InitializeBarriers(commandBuffer);
         {                
             SCOPED_GPU_TIMER("gpu cull");
 
