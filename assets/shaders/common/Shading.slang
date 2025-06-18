@@ -262,7 +262,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
-        public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
         // 第一步：先追踪一次顶点，计算距离
         uint2 vBuffer = VisibilityBuffer[ipos].rg;
