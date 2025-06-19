@@ -101,10 +101,8 @@ namespace Vulkan::RayTracing
         // Execute ray tracing shaders.
         {
             SCOPED_GPU_TIMER("rt pass");
-            VkDescriptorSet DescriptorSets[] = {rayTracingPipeline_->DescriptorSet(imageIndex)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, rayTracingPipeline_->Handle());
             rayTracingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-            
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
                           Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
@@ -116,18 +114,16 @@ namespace Vulkan::RayTracing
          // accumulate with reproject
         {
             SCOPED_GPU_TIMER("reproject pass");
-            VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             accumulatePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), 1);
+
+            baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
         }
 
         {
-            SCOPED_GPU_TIMER("compose");
-            
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
-                                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                 VK_IMAGE_LAYOUT_GENERAL);
+            SCOPED_GPU_TIMER("compose pass");
+            SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
 #if WITH_OIDN
             if (baseRender_.supportDenoiser_)
             {
@@ -143,25 +139,15 @@ namespace Vulkan::RayTracing
             else
 #endif
             {
-                baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
-                
-               
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipelineNonDenoiser_->Handle());
                 composePipelineNonDenoiser_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-
-                glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2) : glm::uvec2(0,0);
-                vkCmdPushConstants(commandBuffer, composePipelineNonDenoiser_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(glm::uvec2), &pushConst);
-
                 vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
             }
-            
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
-                           VK_ACCESS_TRANSFER_WRITE_BIT,
-                           0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
         }
         
         {
+            SCOPED_GPU_TIMER("copy pass");
             baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             rtPingPong0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         

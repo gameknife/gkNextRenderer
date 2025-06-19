@@ -8,7 +8,7 @@ Options::Options(const int argc, const char* argv[])
 	cxxopts::Options options("options", "");
 	options.add_options()
 		("renderer",  "Renderer Type (0 = PathTracing, 1 = HybridTracing, 2 = SoftTracing, 3 = PureAmbient, 4 = VoxelTracing).", cxxopts::value<uint32_t>(RendererType)->default_value("0"))
-		("samples", "The number of ray samples per pixel.", cxxopts::value<uint32_t>(Samples)->default_value("4"))
+		("samples", "The number of ray samples per pixel.", cxxopts::value<uint32_t>(Samples)->default_value("8"))
 		("bounces", "The general limit number of bounces per ray.", cxxopts::value<uint32_t>(Bounces)->default_value("4"))
 		("max-bounces", "The maximum bounces per ray.", cxxopts::value<uint32_t>(MaxBounces)->default_value("10"))
 		("temporal", "The number of temporal frames.", cxxopts::value<uint32_t>(Temporal)->default_value("16"))
@@ -32,6 +32,8 @@ Options::Options(const int argc, const char* argv[])
 		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
 		("forcenort", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
 		("superres", "SuperResolution: 50% / 66% / 100% -> 0 / 1 / 2.", cxxopts::value<uint32_t>(SuperResolution)->default_value("1"))
+		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
+	
 
 
 		("h,help", "Print usage");

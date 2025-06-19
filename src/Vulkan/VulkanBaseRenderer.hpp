@@ -20,7 +20,7 @@
 #define SCOPED_GPU_TIMER_FOLDER(name, folder) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name, folder)
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
-#define BENCH_MARK_CHECK() //if(GOption->ReferenceMode) return
+#define BENCH_MARK_CHECK() if(!GOption->HardwareQuery) return
 
 namespace Vulkan
 {

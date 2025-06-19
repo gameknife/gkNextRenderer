@@ -38,6 +38,7 @@ namespace Assets
 
         // shadow maps
         cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+        cpuShadowMap_->Image().TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
         cpuShadowMap_->SetDebugName("Shadowmap");
 
         RebuildMeshBuffer(commandPool, supportRayTracing);

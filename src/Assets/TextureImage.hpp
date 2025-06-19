@@ -42,6 +42,7 @@ namespace Assets
 		    const std::vector<int>& mipHeights);
 		~TextureImage();
 
+		Vulkan::Image& Image() const { return *image_; }
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }
 		const Vulkan::Sampler& Sampler() const { return *sampler_; }
 		void MainThreadPostLoading(Vulkan::CommandPool& commandPool);

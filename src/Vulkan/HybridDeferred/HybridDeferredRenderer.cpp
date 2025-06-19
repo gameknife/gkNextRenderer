@@ -114,11 +114,9 @@ namespace Vulkan::HybridDeferred
         }
 
         {
-            SCOPED_GPU_TIMER("shadingpass");
-            // cs shading pass
+            SCOPED_GPU_TIMER("shading pass");
+
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, deferredShadingPipeline_->Handle());
-            
-            // bind the global bindless set
             deferredShadingPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
             
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
@@ -129,7 +127,7 @@ namespace Vulkan::HybridDeferred
         
         {
             SCOPED_GPU_TIMER("reproject pass");
-            VkDescriptorSet DescriptorSets[] = {accumulatePipeline_->DescriptorSet(imageIndex)};
+
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             accumulatePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
@@ -139,25 +137,18 @@ namespace Vulkan::HybridDeferred
                 
         {
             SCOPED_GPU_TIMER("compose pass");
-            
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
-                           VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_GENERAL);
 
-            baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+            SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
+            
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, composePipeline_->Handle());
             composePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-
-            glm::uvec2 pushConst = GOption->ReferenceMode ? glm::uvec2(0, SwapChain().Extent().height / 2  ) : glm::uvec2(0,0);
-            vkCmdPushConstants(commandBuffer, composePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(glm::uvec2), &pushConst);
-            
             vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
 
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
         }
 
         {
+            SCOPED_GPU_TIMER("copy pass");
             baseRender_.rtOutput->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             rtPingPong0->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         
