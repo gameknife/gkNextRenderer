@@ -17,10 +17,11 @@
 #include "Options.hpp"
 #include "Assets/Scene.hpp"
 
+#define SCOPED_GPU_TIMER_FOLDER(name, folder) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name, folder)
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
-#define BENCH_MARK_CHECK() if(GOption->ReferenceMode) return
-//#define BENCH_MARK_CHECK() // disable gpu timer since performance hit
+#define BENCH_MARK_CHECK() //if(GOption->ReferenceMode) return
+
 namespace Vulkan
 {
 	namespace PipelineCommon
@@ -69,6 +70,12 @@ namespace Vulkan
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 			started_ = true;
+
+			for(auto& [name, query] : gpu_timer_query_map)
+			{
+				std::get<1>(gpu_timer_query_map[name]) = 0;
+				std::get<0>(gpu_timer_query_map[name]) = 0;
+			}
 		}
 
 		void CpuFrameEnd()
@@ -91,12 +98,6 @@ namespace Vulkan
 			{
 				return;
 			}
-			uint32_t count = static_cast<uint32_t>(time_stamps.size());
-
-			// Fetch the time stamp results written in the command buffer submissions
-			// A note on the flags used:
-			//	VK_QUERY_RESULT_64_BIT: Results will have 64 bits. As time stamp values are on nano-seconds, this flag should always be used to avoid 32 bit overflows
-			//  VK_QUERY_RESULT_WAIT_BIT: Since we want to immediately display the results, we use this flag to have the CPU wait until the results are available
 			vkGetQueryPoolResults(
 				device_,
 				query_pool_timestamps,
@@ -106,25 +107,30 @@ namespace Vulkan
 				time_stamps.data(),
 				sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+
+			for(auto& [name, query] : gpu_timer_query_map)
+			{
+				std::get<2>(gpu_timer_query_map[name]) = (time_stamps[ std::get<1>(gpu_timer_query_map[name]) ] - time_stamps[ std::get<0>(gpu_timer_query_map[name])]);
+			}
 		}
 
 		void Start(VkCommandBuffer commandBuffer, const char* name)
 		{
 			BENCH_MARK_CHECK();
-			if( timer_query_map.find(name) == timer_query_map.end())
+			if( gpu_timer_query_map.find(name) == gpu_timer_query_map.end())
 			{
-				timer_query_map[name] = std::make_tuple(0, 0);
+				gpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
 			}
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
-			std::get<0>(timer_query_map[name]) = queryIdx;
+			std::get<0>(gpu_timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
 		void End(VkCommandBuffer commandBuffer, const char* name)
 		{
 			BENCH_MARK_CHECK();
-			assert( timer_query_map.find(name) != timer_query_map.end() );
+			assert( gpu_timer_query_map.find(name) != gpu_timer_query_map.end() );
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
-			std::get<1>(timer_query_map[name]) = queryIdx;
+			std::get<1>(gpu_timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
 		void StartCpuTimer(const char* name)
@@ -142,13 +148,13 @@ namespace Vulkan
 			assert( cpu_timer_query_map.find(name) != cpu_timer_query_map.end() );
 			std::get<1>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
-		float GetTime(const char* name)
+		float GetGpuTime(const char* name)
 		{
-			if(timer_query_map.find(name) == timer_query_map.end())
+			if(gpu_timer_query_map.find(name) == gpu_timer_query_map.end())
 			{
 				return 0;
 			}
-			return (time_stamps[ std::get<1>(timer_query_map[name]) ] - time_stamps[ std::get<0>(timer_query_map[name])]) * timeStampPeriod_ * 1e-6f;
+			return std::get<2>(gpu_timer_query_map[name]) * timeStampPeriod_ * 1e-6f;
 		}
 		float GetCpuTime(const char* name)
 		{
@@ -158,13 +164,17 @@ namespace Vulkan
 			}
 			return std::get<2>(cpu_timer_query_map[name]) * 1e-6f;
 		}
-		std::vector<std::tuple<std::string, float> > FetchAllTimes()
+		std::vector<std::tuple<std::string, float> > FetchAllTimes( int maxStack )
 		{
 			std::list<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
 			std::vector<std::tuple<std::string, float> > result;
-			for(auto& [name, query] : timer_query_map)
+			for(auto& [name, query] : gpu_timer_query_map)
 			{
-				order_list.insert(order_list.begin(), (std::make_tuple(name, GetTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
+				if ( std::get<2>(gpu_timer_query_map[name]) == 0)
+				{
+					continue;
+				}
+				order_list.insert(order_list.begin(), (std::make_tuple(name, GetGpuTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
 			}
 
 			// sort by tuple 2
@@ -173,24 +183,41 @@ namespace Vulkan
 				return std::get<2>(a) < std::get<2>(b);
 			});
 
-			uint64_t last_order = 99;
+			// 创建一个栈来存储活动的计时区间
+			std::vector<std::tuple<std::string, float, uint64_t, uint64_t>> activeTimers;
 			std::string prefix = "";
+
 			for(auto& [name, time, startIdx, endIdx] : order_list)
 			{
-				if( startIdx < last_order)
-				{
-					prefix += "  ";
-					last_order = endIdx;
-				}
-				result.push_back(std::make_tuple(prefix + name, time));
-			}
+			    // 检查是否有计时区间已结束
+			    while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startIdx) {
+			        activeTimers.pop_back();
+			    }
 
+				// 计算当前计时的嵌套深度
+				size_t stackDepth = activeTimers.size();
+			    
+			    // 添加当前计时到活动计时栈
+			    activeTimers.push_back(std::make_tuple(name, time, startIdx, endIdx));
+				
+			    // 构建缩进前缀
+			    prefix = " ";
+			    for (size_t i = 0; i < stackDepth; i++) {
+			        prefix += "-";
+			    }
+			    
+			    // 添加结果
+				if (maxStack > stackDepth)
+				{
+					result.push_back(std::make_tuple(prefix + name, time));
+				}
+			}
 			return result;
 		}
 		
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
-		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t> > timer_query_map{};
+		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > gpu_timer_query_map{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > cpu_timer_query_map{};
 		VkDevice device_ = VK_NULL_HANDLE;
 		uint32_t queryIdx = 0;
@@ -202,19 +229,42 @@ namespace Vulkan
 	{
 	public:
 		DEFAULT_NON_COPIABLE(ScopedGpuTimer)
-		
-		ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name ):commandBuffer_(commandBuffer),timer_(timer), name_(name)
+
+		ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name, const char* foldername ):commandBuffer_(commandBuffer),timer_(timer), name_(name)
 		{
 			timer_->Start(commandBuffer_, name_.c_str());
+			folderTimer = true;
+			PushFolder(foldername);
+		}
+		ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name ):commandBuffer_(commandBuffer),timer_(timer), name_(name)
+		{
+			timer_->Start(commandBuffer_, (folderName_ + name_).c_str());
 		}
 		virtual ~ScopedGpuTimer()
 		{
-			timer_->End(commandBuffer_, name_.c_str());
+			if (folderTimer)
+			{
+				PopFolder();
+			}
+			timer_->End(commandBuffer_, (folderName_ + name_).c_str());
 		}
 		VkCommandBuffer commandBuffer_;
 		VulkanGpuTimer* timer_;
 		std::string name_;
+		bool folderTimer = false;
+
+		static std::string folderName_;
+		static void PushFolder(const std::string& name)
+		{
+			folderName_ = name;
+		}
+		static void PopFolder()
+		{
+			folderName_ = "";
+		}
 	};
+
+	inline std::string ScopedGpuTimer::folderName_;
 
 	class ScopedCpuTimer
 	{
@@ -223,15 +273,27 @@ namespace Vulkan
 		
 		ScopedCpuTimer(VulkanGpuTimer* timer, const char* name ):timer_(timer), name_(name)
 		{
-			timer_->StartCpuTimer(name_.c_str());
+			timer_->StartCpuTimer((folderName_ + name_).c_str());
 		}
 		virtual ~ScopedCpuTimer()
 		{
-			timer_->EndCpuTimer( name_.c_str());
+			timer_->EndCpuTimer( (folderName_ + name_).c_str());
 		}
 		VulkanGpuTimer* timer_;
 		std::string name_;
+
+		static std::string folderName_;
+		static void PushFolder(const std::string& name)
+		{
+			folderName_ = name;
+		}
+		static void PopFolder(const std::string& name)
+		{
+			folderName_ = "";
+		}
 	};
+
+	inline std::string ScopedCpuTimer::folderName_;
 	
 	class VulkanBaseRenderer
 	{

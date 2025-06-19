@@ -434,7 +434,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
 		// auto fetch timer & display
-		auto times = gpuTimer->FetchAllTimes();
+		auto times = gpuTimer->FetchAllTimes(3);
 		for(auto& time : times)
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));

@@ -370,7 +370,7 @@ namespace Vulkan
         device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures, &shaderDrawParametersFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
         commandPool2_.reset(new class CommandPool(*device_, device_->TransferFamilyIndex(), 1, true));
-        gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 10 * 2, device_->DeviceProperties()));
+        gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 100, device_->DeviceProperties()));
     }
 
     void VulkanBaseRenderer::OnDeviceSet()
@@ -761,18 +761,27 @@ namespace Vulkan
                 PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Render", PERFORMANCEAPI_MAKE_COLOR(200, 200, 255));
                 SCOPED_CPU_TIMER("render");
                 SCOPED_GPU_TIMER("gpu time");
-
-                ClearViewport(commandBuffer, currentImageIndex_);
-                Render(commandBuffer, currentImageIndex_);
-                if (DelegatePostRender)
+                
                 {
-                    DelegatePostRender(commandBuffer, currentImageIndex_);
+                    SCOPED_GPU_TIMER("pre-render");
+                    ClearViewport(commandBuffer, currentImageIndex_);
+                }
+
+                {
+                    SCOPED_GPU_TIMER("render");
+                    Render(commandBuffer, currentImageIndex_);
+                }
+                
+                {
+                    SCOPED_GPU_TIMER("post-render");
+                    if (DelegatePostRender)
+                    {
+                        DelegatePostRender(commandBuffer, currentImageIndex_);
+                    }
                 }
             }
-
             commandBuffers_->End(currentFrame_);
-
-
+            
             {
                 PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::UpdateNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
                 SCOPED_CPU_TIMER("cpugpu-io");
@@ -919,51 +928,83 @@ namespace Vulkan
             // 然后就跳过后面的resolve流程了
             for (auto& logicRenderer : logicRenderers_)
             {
-                logicRenderer.second->Render(commandBuffer, imageIndex);
-
-                SCOPED_GPU_TIMER("resolve pass");
-
-                ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
-                               VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_GENERAL);
-
-                rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
-
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
-                simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-
-                glm::uvec2 pushConst = glm::uvec2(0, 0  );
-                switch ( logicRenderer.first )
+                std::string rendererName = "";
+                std::string folderName = "";
+                switch ( logicRenderer.first)
                 {
                     case ERendererType::ERT_PathTracing:
-                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2);
+                        rendererName = "PathTracing";
+                        folderName = "PT-";
                         break;
                     case ERendererType::ERT_Hybrid:
-                        pushConst = glm::uvec2(0, SwapChain().Extent().height / 2);
+                        rendererName = "HybridDeferred";
+                        folderName = "HT-";
                         break;
                     case ERendererType::ERT_ModernDeferred:
-                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, 0);
+                        rendererName = "ModernDeferred";
+                        folderName = "ST-";
                         break;
                     case ERendererType::ERT_LegacyDeferred:
-                        pushConst = glm::uvec2(0, 0);
+                        rendererName = "LegacyDeferred";
+                        folderName = "LD-";
+                        break;
+                    case ERendererType::ERT_VoxelTracing:
+                        rendererName = "VoxelTracing";
+                        folderName = "VT-";
                         break;
                     default:
-                        pushConst = glm::uvec2(SwapChain().Extent().width, SwapChain().Extent().height);
+                        rendererName = "UnknownRenderer";
+                        folderName = "UK-";
                         break;
                 }
-                
-                vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(glm::uvec2), &pushConst);
-                
-                vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
+                SCOPED_GPU_TIMER_FOLDER(rendererName.c_str(), folderName.c_str());
+                logicRenderer.second->Render(commandBuffer, imageIndex);
+                {
+                    SCOPED_GPU_TIMER("resolve pass");
+                    ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], 0,
+                                   VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_GENERAL);
 
-                ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                    rtDenoised->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
+                    simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+
+                    glm::uvec2 pushConst = glm::uvec2(0, 0  );
+                    switch ( logicRenderer.first )
+                    {
+                        case ERendererType::ERT_PathTracing:
+                            pushConst = glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2);
+                            break;
+                        case ERendererType::ERT_Hybrid:
+                            pushConst = glm::uvec2(0, SwapChain().Extent().height / 2);
+                            break;
+                        case ERendererType::ERT_ModernDeferred:
+                            pushConst = glm::uvec2(SwapChain().Extent().width / 2, 0);
+                            break;
+                        case ERendererType::ERT_LegacyDeferred:
+                            pushConst = glm::uvec2(0, 0);
+                            break;
+                        default:
+                            pushConst = glm::uvec2(SwapChain().Extent().width, SwapChain().Extent().height);
+                            break;
+                    }
+                    
+                    vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                       0, sizeof(glm::uvec2), &pushConst);
+                    
+                    vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
+
+                    ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex], VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+       
+                }
             }
         }
         else
         {
             if (logicRenderers_.find(currentLogicRenderer_) != logicRenderers_.end())
             {
+                SCOPED_GPU_TIMER("logic renderer");
                 logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
             }
 
