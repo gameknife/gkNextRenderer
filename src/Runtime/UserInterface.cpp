@@ -408,45 +408,38 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
 		
-		ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
-		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
 		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
-
+		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
+		ImGui::Text("Texture: %d", statistics.TextureCount);
+		
 		auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
 		uint instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
 		uint triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
 		ImGui::Text("GPU Draw: %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str());
+		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
 		ImGui::Text("GPU Tri: %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str());
-		ImGui::Text("Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
-		ImGui::Text("Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledTriangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
+		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledTriangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
 		
-		ImGui::Text("Texture: %d", statistics.TextureCount);
-
 		uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
-		ImGui::Text("Main Tasks: %d", mainTasks);
 		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
-		ImGui::Text("Low Tasks: %d", lowTasks);
 		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
-		ImGui::Text("Comp Queue: %d", completeTasks);
+		ImGui::Text("Tasks: %d / %d / %d", mainTasks, lowTasks, completeTasks);
 
-
+		ImGui::Separator();
 		
-
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
+		
 		// auto fetch timer & display
-		auto times = gpuTimer->FetchAllTimes(3);
+		auto times = gpuTimer->FetchAllTimes(4);
 		for(auto& time : times)
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
 
 		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
-		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
-		ImGui::Text(" render: %.2fms", gpuTimer->GetCpuTime("render"));
-		ImGui::Text(" uniform: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
-		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
-		ImGui::Text(" submit: %.2fms", gpuTimer->GetCpuTime("submit"));
-		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
+		ImGui::Text("  - hwquery: %.2fms", gpuTimer->GetCpuTime("hwquery"));
+		ImGui::Text("  - fence: %.2fms", gpuTimer->GetCpuTime("fence"));
+		ImGui::Text("  - present: %.2fms", gpuTimer->GetCpuTime("present"));
 		
 		ImGui::Text("Frame: %d", statistics.TotalFrames);
 		

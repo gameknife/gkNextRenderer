@@ -140,29 +140,6 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
 
-	class RayCastPipeline final
-	{
-	public:
-		VULKAN_NON_COPIABLE(RayCastPipeline)
-	
-		RayCastPipeline(
-			const DeviceProcedures& deviceProcedures,
-			const Buffer& ioBuffer,
-			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
-			const Assets::Scene& scene);
-		~RayCastPipeline();
-
-		VkDescriptorSet DescriptorSet(uint32_t index) const;
-		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
-	private:
-		const DeviceProcedures& deviceProcedures_;
-		
-		VULKAN_HANDLE(VkPipeline, pipeline_)
-
-		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
-		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
-	};
-
 	class DirectLightGenPipeline final
 	{
 	public:
@@ -226,6 +203,34 @@ namespace Vulkan::PipelineCommon
 
 		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
+
+	class VisibilityPipeline final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(VisibilityPipeline)
+
+		VisibilityPipeline(
+			const SwapChain& swapChain, 
+			const DepthBuffer& depthBuffer,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
+			const Assets::Scene& scene);
+		~VisibilityPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+		const Vulkan::RenderPass& RenderPass() const { return *renderPass_; }
+
+	private:
+		const SwapChain& swapChain_;
+
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+		std::unique_ptr<Vulkan::RenderPass> renderPass_;
+		std::unique_ptr<Vulkan::RenderPass> swapRenderPass_;
 	};
 
 }

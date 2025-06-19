@@ -20,8 +20,8 @@ Options::Options(const int argc, const char* argv[])
 
 		("gpu", "Explicitly set the usage gpu idx.", cxxopts::value<uint32_t>(GpuIdx)->default_value("0"))
 
-		("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1280"))
-		("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("720"))
+		("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
+		("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
 		("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("3"))
 		("fullscreen", "Toggle fullscreen vs windowed (default: windowed).", cxxopts::value<bool>(Fullscreen)->default_value("false"))
 
@@ -34,8 +34,6 @@ Options::Options(const int argc, const char* argv[])
 		("superres", "SuperResolution: 50% / 66% / 100% -> 0 / 1 / 2.", cxxopts::value<uint32_t>(SuperResolution)->default_value("1"))
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 	
-
-
 		("h,help", "Print usage");
 	try
 	{

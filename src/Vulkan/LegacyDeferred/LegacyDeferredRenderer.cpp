@@ -30,8 +30,6 @@ LegacyDeferredRenderer::~LegacyDeferredRenderer()
 	
 void LegacyDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	visibilityPipeline0_.reset(new Vulkan::ModernDeferred::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-	deferredFrameBuffer_.reset(new FrameBuffer(extent, baseRender_.rtVisibility->GetImageView(), visibilityPipeline0_->RenderPass()));
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
 	composePipeline_.reset(new Vulkan::PipelineCommon::SimpleComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), UniformBuffers()));
 }
@@ -39,53 +37,11 @@ void LegacyDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 void LegacyDeferredRenderer::DeleteSwapChain()
 {
 	composePipeline_.reset();
-	visibilityPipeline0_.reset();
 	deferredShadingPipeline_.reset();
-	deferredFrameBuffer_.reset();
 }
 
 void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	baseRender_.rtVisibility->InsertBarrier(commandBuffer, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-			   
-	std::array<VkClearValue, 2> clearValues = {};
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = visibilityPipeline0_->RenderPass().Handle();
-	renderPassInfo.framebuffer = deferredFrameBuffer_->Handle();
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-	
-	{
-		SCOPED_GPU_TIMER("drawpass");
-		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		{
-			const auto& scene = GetScene();
-
-			VkDescriptorSet descriptorSets[] = { visibilityPipeline0_->DescriptorSet(imageIndex) };
-			VkBuffer vertexBuffers[] = { scene.VertexBuffer().Handle() };
-			const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-			VkDeviceSize offsets[] = { 0 };
-
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline0_->Handle());
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline0_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			
-			// indirect draw
-			vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0, scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
-		}
-		vkCmdEndRenderPass(commandBuffer);
-		
-		baseRender_.rtVisibility->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
-	}
-
 	baseRender_.InitializeBarriers(commandBuffer);
 	
 	{

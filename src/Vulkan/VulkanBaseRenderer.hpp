@@ -26,6 +26,7 @@ namespace Vulkan
 		class SimpleComposePipeline;
 		class GPUCullPipeline;
 		class VisualDebuggerPipeline;
+		class VisibilityPipeline;
 	}
 
 	class RenderImage;
@@ -76,7 +77,7 @@ namespace Vulkan
 		
 		void CaptureScreenShot();
 		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
-		void ClearViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
+		void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
@@ -110,6 +111,7 @@ namespace Vulkan
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		virtual void BeforeNextFrame();
 
@@ -196,6 +198,8 @@ namespace Vulkan
 		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
 		std::unique_ptr<PipelineCommon::SimpleComposePipeline> simpleComposePipeline_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebuggerPipeline_;
+		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
+		std::unique_ptr<class FrameBuffer> visibilityFrameBuffer_;
 		std::vector<class FrameBuffer> swapChainFramebuffers_;
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

@@ -1,8 +1,5 @@
 #pragma once
 
-#include "Vulkan/FrameBuffer.hpp"
-#include "Vulkan/WindowConfig.hpp"
-#include "Vulkan/Image.hpp"
 #include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
 
@@ -42,10 +39,7 @@ namespace Vulkan::ModernDeferred
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
 	private:
-		std::unique_ptr<class VisibilityPipeline> visibilityPipeline_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
-		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
-		
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		

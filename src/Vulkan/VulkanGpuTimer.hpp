@@ -32,6 +32,8 @@ namespace Vulkan
 			queryIdx = 0;
 			started_ = true;
 
+			// fetch here, then returen
+
 			for(auto& [name, query] : gpu_timer_query_map)
 			{
 				std::get<1>(gpu_timer_query_map[name]) = 0;
@@ -96,7 +98,6 @@ namespace Vulkan
 		}
 		void StartCpuTimer(const char* name)
 		{
-			BENCH_MARK_CHECK();
 			if( cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
 			{
 				cpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
@@ -105,7 +106,6 @@ namespace Vulkan
 		}
 		void EndCpuTimer(const char* name)
 		{
-			BENCH_MARK_CHECK();
 			assert( cpu_timer_query_map.find(name) != cpu_timer_query_map.end() );
 			std::get<1>(cpu_timer_query_map[name]) = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 		}
@@ -150,24 +150,25 @@ namespace Vulkan
 
 			for(auto& [name, time, startIdx, endIdx] : order_list)
 			{
-			    // 检查是否有计时区间已结束
 			    while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startIdx) {
 			        activeTimers.pop_back();
 			    }
-
-				// 计算当前计时的嵌套深度
+				
 				size_t stackDepth = activeTimers.size();
-			    
-			    // 添加当前计时到活动计时栈
 			    activeTimers.push_back(std::make_tuple(name, time, startIdx, endIdx));
 				
-			    // 构建缩进前缀
-			    prefix = " ";
+			    prefix = "";
 			    for (size_t i = 0; i < stackDepth; i++) {
-			        prefix += "-";
+			    	if (i == stackDepth - 1)
+			    	{
+			    		prefix += " - ";
+			    	}
+				    else
+				    {
+				    	prefix += "  ";
+				    }
 			    }
-			    
-			    // 添加结果
+				
 				if (maxStack > stackDepth)
 				{
 					result.push_back(std::make_tuple(prefix + name, time));
@@ -206,8 +207,12 @@ namespace Vulkan
 			if (folderTimer)
 			{
 				PopFolder();
+				timer_->End(commandBuffer_, name_.c_str());
 			}
-			timer_->End(commandBuffer_, (folderName_ + name_).c_str());
+			else
+			{
+				timer_->End(commandBuffer_, (folderName_ + name_).c_str());
+			}
 		}
 		VkCommandBuffer commandBuffer_;
 		VulkanGpuTimer* timer_;

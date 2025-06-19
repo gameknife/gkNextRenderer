@@ -245,7 +245,7 @@ namespace Vulkan::RayTracing
             }
 
             {
-                SCOPED_GPU_TIMER("ambient di");
+                SCOPED_GPU_TIMER("hw-lightbake");
                 if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
                 {
                     int frame = (int)(frameCount_ % temporalFrames);

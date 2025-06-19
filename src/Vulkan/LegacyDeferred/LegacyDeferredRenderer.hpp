@@ -38,10 +38,8 @@ namespace Vulkan::LegacyDeferred
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
 	private:
-		std::unique_ptr<Vulkan::ModernDeferred::VisibilityPipeline> visibilityPipeline0_;
 		std::unique_ptr<class ShadingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<Vulkan::PipelineCommon::SimpleComposePipeline> composePipeline_;
-		std::unique_ptr<class FrameBuffer> deferredFrameBuffer_;
 	};
 
 }
