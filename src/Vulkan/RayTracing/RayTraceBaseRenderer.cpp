@@ -150,48 +150,19 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-        
-        rayCastBuffer_.reset(new Assets::RayCastBuffer(CommandPool()));
-#if !ANDROID
-        raycastPipeline_.reset(new PipelineCommon::RayCastPipeline(Device().GetDeviceProcedures(), rayCastBuffer_->Buffer(), topAs_[0], GetScene()));
-#endif
         directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), topAs_[0], UniformBuffers(), GetScene()));
-        //farDirectLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), GetScene().FarAmbientCubeBuffer(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
     {
         Vulkan::VulkanBaseRenderer::DeleteSwapChain();
-
-        rayCastBuffer_.reset();
-        raycastPipeline_.reset();
+        
         directLightGenPipeline_.reset();
-        //farDirectLightGenPipeline_.reset();
     }
 
     void RayTraceBaseRenderer::AfterRenderCmd()
     {
         VulkanBaseRenderer::AfterRenderCmd();
-
-        if(supportRayCast_)
-        {
-            for ( int i = 0; i < rayRequested_.size(); i++)
-            {
-                rayCastBuffer_->rayCastIO[i].Context = rayRequested_[i].context;
-            }
-            
-            rayCastBuffer_->SyncWithGPU(); // readback last frame, request this frame
-
-            for ( int i = 0; i < rayFetched_.size(); i++)
-            {
-                if (rayFetched_[i].callback)
-                {
-                    rayFetched_[i].callback(rayCastBuffer_->rayCastIO[i].Result);
-                }
-            }
-            rayFetched_ = rayRequested_;
-            rayRequested_.clear();
-        }
     }
 
     void RayTraceBaseRenderer::BeforeNextFrame()
@@ -226,15 +197,7 @@ namespace Vulkan::RayTracing
 
         tlasUpdateRequest_ = instanceCount;
     }
-
-    void RayTraceBaseRenderer::SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback)
-    {
-        Assets::RayCastIn context;
-        context.Origin = glm::vec4(org, 1);
-        context.Direction = glm::vec4(dir, 0);
-        rayRequested_.push_back({context, callback});
-    }
-
+    
     void RayTraceBaseRenderer::OnPreLoadScene()
     {
         Vulkan::VulkanBaseRenderer::OnPreLoadScene();
@@ -257,44 +220,13 @@ namespace Vulkan::RayTracing
         VulkanBaseRenderer::Render(commandBuffer, imageIndex);
 
 #if !ANDROID
-        if(supportRayCast_)
+        if(supportRayTracing_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
         {
-            SCOPED_GPU_TIMER("raycast");
-
-            VkMemoryBarrier memoryBarrier = {};
-            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-            memoryBarrier.pNext = nullptr;
-            memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-            memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-
-            vkCmdPipelineBarrier(
-                commandBuffer,
-                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
-            
-            VkDescriptorSet DescriptorSets[] = {raycastPipeline_->DescriptorSet(0)};
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raycastPipeline_->Handle());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    raycastPipeline_->PipelineLayout().Handle(), 0, 1, DescriptorSets, 0, nullptr);
-            vkCmdDispatch(commandBuffer, 1, 1, 1);
-        }
-#endif
-
-#if !ANDROID
-        if(supportRayCast_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
-        {
-#if !ANDROID
             const int cubesPerGroup = 64;
-#else
-            const int cubesPerGroup = 1024;
-#endif      
-            
             const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
             const int group = count / cubesPerGroup;
 
             // 每32个cube一个group
-#if !ANDROID
             int temporalFrames = 120;
             switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
             {
@@ -311,10 +243,7 @@ namespace Vulkan::RayTracing
                 temporalFrames = 120;
                 break;
             }
-#else
-            int temporalFrames = 625;
-#endif
-            // 我们计划在temporalFrames帧内完成, 所以每帧处理1/60个group，并设置offset
+
             {
                 SCOPED_GPU_TIMER("ambient di");
                 if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
@@ -419,22 +348,12 @@ namespace Vulkan::RayTracing
         const auto& debugUtils = Device().DebugUtils();
         const uint32_t kMaxInstanceCount = 65535;
         
-        // Create and copy instances buffer (do it in a separate one-time synchronous command buffer).
-        // BufferUtil::CreateDeviceBuffer(CommandPool(), "TLAS Instances",
-        //                                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-        //                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, instances, instancesBuffer_,
-        //                                instancesBufferMemory_);
-
-        // buffer_.reset(new Vulkan::Buffer(device, bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-        // memory_.reset(new Vulkan::DeviceMemory(buffer_->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        
         instancesBuffer_.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
                                            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
                                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT ));
         instancesBufferMemory_.reset(new DeviceMemory(
             instancesBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
         
-
         // Memory barrier for the bottom level acceleration structure builds.
         AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 

@@ -58,10 +58,7 @@ namespace Vulkan::RayTracing
 		virtual void OnPostLoadScene() override;
 
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		
-		virtual void SetRaycastRay(glm::vec3 org, glm::vec3 dir, std::function<bool(Assets::RayCastResult)> callback) override;
-
-
+	
 	protected:
 		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
 		void CreateTopLevelStructures(VkCommandBuffer commandBuffer);
@@ -81,13 +78,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Buffer> instancesBuffer_;
 		std::unique_ptr<DeviceMemory> instancesBufferMemory_;
 		
-		std::unique_ptr<Assets::RayCastBuffer> rayCastBuffer_;
-		std::unique_ptr<PipelineCommon::RayCastPipeline> raycastPipeline_;
 		std::unique_ptr<PipelineCommon::DirectLightGenPipeline> directLightGenPipeline_;
-		//std::unique_ptr<PipelineCommon::DirectLightGenPipeline> farDirectLightGenPipeline_;
-
-		std::vector<Assets::RayCastRequest> rayRequested_;
-		std::vector<Assets::RayCastRequest> rayFetched_;
 
 		int tlasUpdateRequest_ {};
 	};

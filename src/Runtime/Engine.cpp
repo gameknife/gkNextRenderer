@@ -649,17 +649,9 @@ glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
 void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
-    if( renderer_->supportRayTracing_ )
-    {
-        // set in gpu directly
-        renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
-    }
-    else
-    {
-        // CPU Raycast in scene
-        Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
-        callback(result);
-    }
+    // CPU Raycast in scene
+    Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
+    callback(result);
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
