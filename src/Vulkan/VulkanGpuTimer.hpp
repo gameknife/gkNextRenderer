@@ -31,9 +31,8 @@ namespace Vulkan
 			vkCmdResetQueryPool(commandBuffer, query_pool_timestamps, 0, static_cast<uint32_t>(time_stamps.size()));
 			queryIdx = 0;
 			started_ = true;
-
-			// fetch here, then returen
-
+			
+			CalculatieGpuStats();
 			for(auto& [name, query] : gpu_timer_query_map)
 			{
 				std::get<1>(gpu_timer_query_map[name]) = 0;
@@ -125,10 +124,11 @@ namespace Vulkan
 			}
 			return std::get<2>(cpu_timer_query_map[name]) * 1e-6f;
 		}
-		std::vector<std::tuple<std::string, float> > FetchAllTimes( int maxStack )
+
+		void CalculatieGpuStats()
 		{
+			lastStats.clear();
 			std::list<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
-			std::vector<std::tuple<std::string, float> > result;
 			for(auto& [name, query] : gpu_timer_query_map)
 			{
 				if ( std::get<2>(gpu_timer_query_map[name]) == 0)
@@ -137,38 +137,33 @@ namespace Vulkan
 				}
 				order_list.insert(order_list.begin(), (std::make_tuple(name, GetGpuTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
 			}
-
-			// sort by tuple 2
+			
 			order_list.sort([](const std::tuple<std::string, float, uint64_t, uint64_t>& a, const std::tuple<std::string, float, uint64_t, uint64_t>& b) -> bool
 			{
 				return std::get<2>(a) < std::get<2>(b);
 			});
-
-			// 创建一个栈来存储活动的计时区间
+			
 			std::vector<std::tuple<std::string, float, uint64_t, uint64_t>> activeTimers;
-			std::string prefix = "";
-
 			for(auto& [name, time, startIdx, endIdx] : order_list)
 			{
-			    while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startIdx) {
-			        activeTimers.pop_back();
-			    }
+				while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startIdx) {
+					activeTimers.pop_back();
+				}
 				
-				size_t stackDepth = activeTimers.size();
-			    activeTimers.push_back(std::make_tuple(name, time, startIdx, endIdx));
-				
-			    prefix = "";
+				int stackDepth = static_cast<int>(activeTimers.size());
+				activeTimers.push_back(std::make_tuple(name, time, startIdx, endIdx));
+				lastStats.push_back(std::make_tuple(name, stackDepth, time));
+			}
+		}
+		std::vector<std::tuple<std::string, float> > FetchAllTimes( int maxStack )
+		{
+			std::vector<std::tuple<std::string, float> > result;
+			for(auto& [name, stackDepth, time] : lastStats)
+			{
+				std::string prefix = "";
 			    for (size_t i = 0; i < stackDepth; i++) {
-			    	if (i == stackDepth - 1)
-			    	{
-			    		prefix += " - ";
-			    	}
-				    else
-				    {
-				    	prefix += "  ";
-				    }
+			    	prefix += (i == stackDepth - 1) ? " - " : "   ";
 			    }
-				
 				if (maxStack > stackDepth)
 				{
 					result.push_back(std::make_tuple(prefix + name, time));
@@ -176,7 +171,8 @@ namespace Vulkan
 			}
 			return result;
 		}
-		
+
+		std::vector<std::tuple<std::string, int, float> > lastStats; // name, depth, duration seconds
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > gpu_timer_query_map{};
