@@ -56,7 +56,8 @@ namespace Vulkan::RayTracing
 
 		virtual void OnPreLoadScene() override;
 		virtual void OnPostLoadScene() override;
-		
+
+		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex) override;
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 	protected:

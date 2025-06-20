@@ -210,13 +210,22 @@ namespace Vulkan::RayTracing
         CreateAccelerationStructures();
     }
 
+    void RayTraceBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        {
+            SCOPED_GPU_TIMER("TLAS Update");
+            if (tlasUpdateRequest_ > 0)
+            {
+                topAs_[0].Update(commandBuffer, tlasUpdateRequest_);
+                tlasUpdateRequest_ = 0;
+            }
+        }
+
+        VulkanBaseRenderer::PreRender(commandBuffer, imageIndex);
+    }
+
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (tlasUpdateRequest_ > 0)
-        {
-            topAs_[0].Update(commandBuffer, tlasUpdateRequest_);
-            tlasUpdateRequest_ = 0;
-        }
         VulkanBaseRenderer::Render(commandBuffer, imageIndex);
     }
 
