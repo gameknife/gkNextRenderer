@@ -140,18 +140,18 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
 
-	class DirectLightGenPipeline final
+	class HardwareGPULightBakePipeline final
 	{
 	public:
-		VULKAN_NON_COPIABLE(DirectLightGenPipeline)
+		VULKAN_NON_COPIABLE(HardwareGPULightBakePipeline)
 	
-		DirectLightGenPipeline(
+		HardwareGPULightBakePipeline(
 			const SwapChain& swapChain,
 			const DeviceProcedures& deviceProcedures,
 			const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
-		~DirectLightGenPipeline();
+		~HardwareGPULightBakePipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
@@ -164,16 +164,16 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
 
-	class SoftAmbientCubeGenPipeline final
+	class SoftwareGPULightBakePipeline final
 	{
 	public:
-		VULKAN_NON_COPIABLE(SoftAmbientCubeGenPipeline)
+		VULKAN_NON_COPIABLE(SoftwareGPULightBakePipeline)
 	
-		SoftAmbientCubeGenPipeline(
+		SoftwareGPULightBakePipeline(
 			const SwapChain& swapChain,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
-		~SoftAmbientCubeGenPipeline();
+		~SoftwareGPULightBakePipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
@@ -233,4 +233,34 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::RenderPass> swapRenderPass_;
 	};
 
+	class GraphicsPipeline final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(GraphicsPipeline)
+
+		GraphicsPipeline(
+			const SwapChain& swapChain, 
+			const DepthBuffer& depthBuffer,
+			const std::vector<Assets::UniformBuffer>& uniformBuffers,
+			const Assets::Scene& scene,
+			bool isWireFrame);
+		~GraphicsPipeline();
+
+		VkDescriptorSet DescriptorSet(uint32_t index) const;
+		bool IsWireFrame() const { return isWireFrame_; }
+		const class PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+		const class RenderPass& RenderPass() const { return *renderPass_; }
+
+	private:
+
+		const SwapChain& swapChain_;
+		const bool isWireFrame_;
+
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+
+		std::unique_ptr<class DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<class PipelineLayout> pipelineLayout_;
+		std::unique_ptr<class RenderPass> renderPass_;
+	};
 }

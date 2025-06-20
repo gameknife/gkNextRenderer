@@ -22,11 +22,12 @@ namespace Vulkan
 	namespace PipelineCommon
 	{
 		class BufferClearPipeline;
-		class SoftAmbientCubeGenPipeline;
+		class SoftwareGPULightBakePipeline;
 		class SimpleComposePipeline;
 		class GPUCullPipeline;
 		class VisualDebuggerPipeline;
 		class VisibilityPipeline;
+		class GraphicsPipeline;
 	}
 
 	class RenderImage;
@@ -90,8 +91,6 @@ namespace Vulkan
 		class CommandPool& CommandPool() { return *commandPool_; }
 		const class DepthBuffer& DepthBuffer() const { return *depthBuffer_; }
 		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return uniformBuffers_; }
-		const class GraphicsPipeline& GraphicsPipeline() const { return *graphicsPipeline_; }
-		const class FrameBuffer& SwapChainFrameBuffer(const size_t i) const { return swapChainFramebuffers_[i]; }
 		const bool CheckerboxRendering() {return checkerboxRendering_;}
 		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
 		
@@ -108,6 +107,7 @@ namespace Vulkan
 			void* nextDeviceFeatures);
 		
 		virtual void OnDeviceSet();
+		void CreateRenderImages();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -154,7 +154,6 @@ namespace Vulkan
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
 		bool supportDenoiser_ {};
-		bool supportRayCast_ {};
 		bool showWireframe_ {};
 		int frameCount_{};
 		bool forceSDR_{};
@@ -192,40 +191,43 @@ namespace Vulkan
 		std::unique_ptr<class Surface> surface_;
 		std::unique_ptr<class Device> device_;
 		std::unique_ptr<class SwapChain> swapChain_;
+		
 		std::vector<Assets::UniformBuffer> uniformBuffers_;
-		std::unique_ptr<class DepthBuffer> depthBuffer_;
-		std::unique_ptr<class GraphicsPipeline> graphicsPipeline_;
+		
+		std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
 		std::unique_ptr<PipelineCommon::BufferClearPipeline> bufferClearPipeline_;
 		std::unique_ptr<PipelineCommon::SimpleComposePipeline> simpleComposePipeline_;
 		std::unique_ptr<PipelineCommon::VisualDebuggerPipeline> visualDebuggerPipeline_;
 		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
-		std::unique_ptr<class FrameBuffer> visibilityFrameBuffer_;
-		std::vector<class FrameBuffer> swapChainFramebuffers_;
+		
+		std::unique_ptr<class DepthBuffer> depthBuffer_;
+		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
+		std::vector<FrameBuffer> swapChainFramebuffers_;
+		
+		
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;
 		std::unique_ptr<class CommandBuffers> commandBuffers_;
+		
 		std::vector<class Semaphore> imageAvailableSemaphores_;
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
 
-		std::unique_ptr<PipelineCommon::SoftAmbientCubeGenPipeline> softAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::SoftwareGPULightBakePipeline> softAmbientCubeGenPipeline_;
 		std::unique_ptr<PipelineCommon::GPUCullPipeline> gpuCullPipeline_;
 		
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;
-
 		std::unique_ptr<RenderImage> rtEditorViewport_;
 
 		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
-
 		std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool_;
-
 		std::unique_ptr<Vulkan::DescriptorSetManager> rtDescriptorSetManager_;
 
 		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};
-		Fence* fence;
+		Fence* currentFence;
 
 		uint64_t uptime {};
 	};

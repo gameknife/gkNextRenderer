@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Vulkan.hpp"
+#include <vector>
 
 namespace Vulkan
 {
 	class DescriptorSetLayout;
 	class Device;
+	class DescriptorSetManager;
 
 	class PipelineLayout final
 	{

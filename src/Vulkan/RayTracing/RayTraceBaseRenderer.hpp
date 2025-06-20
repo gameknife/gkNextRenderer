@@ -78,7 +78,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<Buffer> instancesBuffer_;
 		std::unique_ptr<DeviceMemory> instancesBufferMemory_;
 		
-		std::unique_ptr<PipelineCommon::DirectLightGenPipeline> directLightGenPipeline_;
+		std::unique_ptr<PipelineCommon::HardwareGPULightBakePipeline> directLightGenPipeline_;
 
 		int tlasUpdateRequest_ {};
 	};

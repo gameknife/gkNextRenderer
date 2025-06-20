@@ -52,7 +52,7 @@ namespace Vulkan::RayTracing
                                                const bool enableValidationLayers) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
     {
-        supportRayCast_ = true;
+
     }
 
     RayTraceBaseRenderer::~RayTraceBaseRenderer()
@@ -150,7 +150,7 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-        directLightGenPipeline_.reset(new PipelineCommon::DirectLightGenPipeline(SwapChain(), Device().GetDeviceProcedures(), topAs_[0], UniformBuffers(), GetScene()));
+        directLightGenPipeline_.reset(new PipelineCommon::HardwareGPULightBakePipeline(SwapChain(), Device().GetDeviceProcedures(), topAs_[0], UniformBuffers(), GetScene()));
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()

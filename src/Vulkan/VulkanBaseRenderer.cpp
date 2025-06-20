@@ -7,7 +7,6 @@
 #include "Device.hpp"
 #include "Fence.hpp"
 #include "FrameBuffer.hpp"
-#include "GraphicsPipeline.hpp"
 #include "Instance.hpp"
 #include "PipelineLayout.hpp"
 #include "RenderPass.hpp"
@@ -403,61 +402,8 @@ namespace Vulkan
         }
     }
 
-    void VulkanBaseRenderer::CreateSwapChain()
+    void VulkanBaseRenderer::CreateRenderImages()
     {
-        // Wait until the window is visible.
-        while (window_->IsMinimized())
-        {
-            window_->WaitForEvents();
-        }
-
-        swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
-
-        if (GOption->ReferenceMode)
-        {
-            swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width / 2, swapChain_->Extent().height / 2);
-        }
-        else
-        {
-            if (GOption->SuperResolution == 0)
-            {
-                swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width * 2 / 4,
-                                                 swapChain_->Extent().height * 2 / 4);
-            }
-            else if (GOption->SuperResolution == 1)
-            {
-                swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width * 2 / 3,
-                                                 swapChain_->Extent().height * 2 / 3);
-            }
-            else
-            {
-                swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width, swapChain_->Extent().height);
-            }
-        }
-
-
-        depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
-
-        for (size_t i = 0; i != swapChain_->ImageViews().size(); ++i)
-        {
-            imageAvailableSemaphores_.emplace_back(*device_);
-            renderFinishedSemaphores_.emplace_back(*device_);
-            inFlightFences_.emplace_back(*device_, true);
-            uniformBuffers_.emplace_back(*device_);
-        }
-
-        graphicsPipeline_.reset(
-            new class GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), true));
-
-        for (const auto& imageView : swapChain_->ImageViews())
-        {
-            swapChainFramebuffers_.emplace_back(swapChain_->Extent(), *imageView, graphicsPipeline_->SwapRenderPass());
-        }
-
-        commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChainFramebuffers_.size())));
-
-        fence = nullptr;
-
         screenShotImage_.reset(new Image(*device_, swapChain_->Extent(), 1, swapChain_->Format(),
                                          VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         screenShotImageMemory_.reset(new DeviceMemory(
@@ -519,52 +465,18 @@ namespace Vulkan
                                              VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT, false, "shadertimer"));
 
         rtDescriptorSetManager_.reset(new DescriptorSetManager(*device_, {
-                                                                   {
-                                                                       0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                                   {
-                                                                       10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                                                       VK_SHADER_STAGE_COMPUTE_BIT
-                                                                   },
-                                                               }, static_cast<uint32_t>(swapChain_->ImageViews().
-                                                                   size())));
+                                                                   {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                   {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                               }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
 
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
 
@@ -587,24 +499,64 @@ namespace Vulkan
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
+    }
 
-        visibilityPipeline_.reset(
-            new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-        visibilityFrameBuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), rtVisibility->GetImageView(),
-                                                     visibilityPipeline_->RenderPass()));
-        simpleComposePipeline_.reset(
-            new PipelineCommon::SimpleComposePipeline(SwapChain(), rtDenoised->GetImageView(), UniformBuffers()));
-        bufferClearPipeline_.reset(new class PipelineCommon::BufferClearPipeline(*swapChain_, *this));
-        softAmbientCubeGenPipeline_.reset(
-            new PipelineCommon::SoftAmbientCubeGenPipeline(*swapChain_, uniformBuffers_, GetScene()));
+    void VulkanBaseRenderer::CreateSwapChain()
+    {
+        // 窗口等待
+        while (window_->IsMinimized())
+        {
+            window_->WaitForEvents();
+        }
+
+        // SwapChaine
+        int Divider = 4 - ( GOption->ReferenceMode ? 0 : GOption->SuperResolution );
+        swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
+        swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width * 2 / Divider,swapChain_->Extent().height * 2 / Divider);
+
+        // depthBuffer
+        depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
+
+        // 同步对象
+        for (size_t i = 0; i != swapChain_->ImageViews().size(); ++i)
+        {
+            imageAvailableSemaphores_.emplace_back(*device_);
+            renderFinishedSemaphores_.emplace_back(*device_);
+            inFlightFences_.emplace_back(*device_, true);
+            uniformBuffers_.emplace_back(*device_);
+        }
+
+        // 最简单的fallback pipeline, 也用作 wireframe pipeline
+        wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(*swapChain_, *depthBuffer_, uniformBuffers_, GetScene(), true));
+        for (const auto& imageView : swapChain_->ImageViews())
+        {
+            swapChainFramebuffers_.emplace_back(swapChain_->Extent(), *imageView, wireframePipeline_->RenderPass());
+        }
+
+        // commandbuffer
+        commandBuffers_.reset(new CommandBuffers(*commandPool_, static_cast<uint32_t>(swapChain_->ImageViews().size())));
+
+        currentFence = nullptr;
+
+        // 公用RenderImages
+        CreateRenderImages();
+
+        // 公用Pipeline
+        visibilityPipeline_.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+        visibilityFrameBuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), rtVisibility->GetImageView(), visibilityPipeline_->RenderPass()));
+        simpleComposePipeline_.reset( new PipelineCommon::SimpleComposePipeline(SwapChain(), rtDenoised->GetImageView(), UniformBuffers()));
+        bufferClearPipeline_.reset(new PipelineCommon::BufferClearPipeline(*swapChain_, *this));
+        softAmbientCubeGenPipeline_.reset( new PipelineCommon::SoftwareGPULightBakePipeline(*swapChain_, uniformBuffers_, GetScene()));
         gpuCullPipeline_.reset(new PipelineCommon::GPUCullPipeline(*swapChain_, *this, uniformBuffers_, GetScene()));
         visualDebuggerPipeline_.reset(new PipelineCommon::VisualDebuggerPipeline(*swapChain_, *this, uniformBuffers_));
 
+        // 逻辑Renderer
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->CreateSwapChain(swapChain_->RenderExtent());
         }
 
+        // Delegate
         if (DelegateCreateSwapChain)
         {
             DelegateCreateSwapChain();
@@ -641,7 +593,7 @@ namespace Vulkan
         screenShotImage_.reset();
         commandBuffers_.reset();
         swapChainFramebuffers_.clear();
-        graphicsPipeline_.reset();
+        wireframePipeline_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
         gpuCullPipeline_.reset();
@@ -656,7 +608,7 @@ namespace Vulkan
 
         rtDescriptorSetManager_.reset();
 
-        fence = nullptr;
+        currentFence = nullptr;
     }
 
     void VulkanBaseRenderer::CaptureScreenShot()
@@ -916,11 +868,11 @@ namespace Vulkan
             }
 
             // wait the last frame command buffer to complete
-            if (fence)
+            if (currentFence)
             {
                 PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Fence", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
                 SCOPED_CPU_TIMER("fence");
-                fence->Wait(noTimeout);
+                currentFence->Wait(noTimeout);
             }
 
             if (GetScene().UpdateNodes())
@@ -929,7 +881,7 @@ namespace Vulkan
             }
 
             AfterRenderCmd();
-            fence = &(inFlightFences_[currentFrame_]);
+            currentFence = &(inFlightFences_[currentFrame_]);
 
             VkSubmitInfo submitInfo = {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -947,9 +899,9 @@ namespace Vulkan
                 submitInfo.signalSemaphoreCount = 1;
                 submitInfo.pSignalSemaphores = signalSemaphores;
 
-                fence->Reset();
+                currentFence->Reset();
 
-                Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, fence->Handle()),
+                Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, currentFence->Handle()),
                       "submit draw command buffer");
             }
 
@@ -1271,7 +1223,7 @@ namespace Vulkan
 
             VkRenderPassBeginInfo renderPassInfo = {};
             renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = graphicsPipeline_->RenderPass().Handle();
+            renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
             renderPassInfo.framebuffer = swapChainFramebuffers_[imageIndex].Handle();
             renderPassInfo.renderArea.offset = {0, 0};
             renderPassInfo.renderArea.extent = swapChain_->Extent();
@@ -1283,14 +1235,14 @@ namespace Vulkan
             {
                 auto& scene = GetScene();
 
-                VkDescriptorSet descriptorSets[] = {graphicsPipeline_->DescriptorSet(imageIndex)};
+                VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
                 VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
                 const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
                 VkDeviceSize offsets[] = {0};
 
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline_->Handle());
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        graphicsPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+                                        wireframePipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -1298,7 +1250,7 @@ namespace Vulkan
                 static const uint32_t k_bindless_set = 1;
                 VkDescriptorSet GlobalDescriptorSets[] = {Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0)};
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        graphicsPipeline_->PipelineLayout().Handle(), k_bindless_set,
+                                        wireframePipeline_->PipelineLayout().Handle(), k_bindless_set,
                                         1, GlobalDescriptorSets, 0, nullptr);
 
                 // drawcall one by one
@@ -1316,7 +1268,7 @@ namespace Vulkan
                     // use push constants to set world matrix
                     glm::mat4 worldMatrix = node.worldTS;
 
-                    vkCmdPushConstants(commandBuffer, graphicsPipeline_->PipelineLayout().Handle(),
+                    vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0, sizeof(glm::mat4), &worldMatrix);
 

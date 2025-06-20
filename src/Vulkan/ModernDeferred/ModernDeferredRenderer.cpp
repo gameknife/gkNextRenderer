@@ -1,21 +1,12 @@
 #include "ModernDeferredRenderer.hpp"
 #include "ModernDeferredPipeline.hpp"
 
-#include "Vulkan/Buffer.hpp"
-#include "Vulkan/Device.hpp"
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
-#include "Vulkan/ImageMemoryBarrier.hpp"
+
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RenderImage.hpp"
-#include "Assets/Model.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Utilities/Exception.hpp"
-#include <array>
 
 #include "Utilities/Math.hpp"
 

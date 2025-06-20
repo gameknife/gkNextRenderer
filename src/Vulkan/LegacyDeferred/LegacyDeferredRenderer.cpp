@@ -1,20 +1,14 @@
 #include "LegacyDeferredRenderer.hpp"
 #include "LegacyDeferredPipeline.hpp"
 
-#include "Vulkan/Buffer.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
-#include "Vulkan/ImageMemoryBarrier.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
 #include "Utilities/Exception.hpp"
-#include <array>
 
 namespace Vulkan::LegacyDeferred {
 

@@ -3,7 +3,6 @@
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSets.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"

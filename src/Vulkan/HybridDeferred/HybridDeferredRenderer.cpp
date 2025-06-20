@@ -1,28 +1,15 @@
 #include "HybridDeferredRenderer.hpp"
 #include "HybridDeferredPipeline.hpp"
-
-#include "Vulkan/Buffer.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
-#include "Vulkan/ImageMemoryBarrier.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
-#include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
 #include "Utilities/Exception.hpp"
-#include <array>
-
-#include "Utilities/Console.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/DepthBuffer.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorSets.hpp"
 #include "Vulkan/RenderImage.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
+
+#include <array>
 
 namespace Vulkan::HybridDeferred
 {
@@ -36,8 +23,6 @@ namespace Vulkan::HybridDeferred
 
     void HybridDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
-        const auto format = SwapChain().Format();
-        
         rtPingPong0.reset(new RenderImage(Device(), extent,
                                           VK_FORMAT_R16G16B16A16_SFLOAT,
                                           VK_IMAGE_TILING_OPTIMAL,
@@ -47,7 +32,6 @@ namespace Vulkan::HybridDeferred
                                                          baseRender_,UniformBuffers(), GetScene()));
         
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),baseRender_,rtPingPong0->GetImageView(),UniformBuffers(), GetScene()));
-
         composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_, UniformBuffers()));
     }
 
@@ -56,7 +40,6 @@ namespace Vulkan::HybridDeferred
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
         composePipeline_.reset();
-        
         rtPingPong0.reset();
     }
 

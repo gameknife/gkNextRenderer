@@ -1,23 +1,18 @@
 #include "RayQueryRenderer.hpp"
-#include "Vulkan/RayTracing/DeviceProcedures.hpp"
-#include "Assets/Scene.hpp"
-#include "Utilities/Glm.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include <chrono>
-#include <numeric>
-
 #include "Assets/Texture.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/DescriptorSets.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RayQuery/RayQueryPipeline.hpp"
 
+#include <chrono>
+#include <numeric>
 namespace Vulkan::RayTracing
 {
     RayQueryRenderer::RayQueryRenderer(Vulkan::VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender)
