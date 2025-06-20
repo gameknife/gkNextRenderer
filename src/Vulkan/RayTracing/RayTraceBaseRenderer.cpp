@@ -218,6 +218,11 @@ namespace Vulkan::RayTracing
             tlasUpdateRequest_ = 0;
         }
         VulkanBaseRenderer::Render(commandBuffer, imageIndex);
+    }
+
+    void RayTraceBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        VulkanBaseRenderer::PostRender(commandBuffer, imageIndex);
 
 #if !ANDROID
         if(supportRayTracing_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))

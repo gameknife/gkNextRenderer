@@ -78,7 +78,6 @@ namespace Vulkan
 		
 		void CaptureScreenShot();
 		void CaptureEditorViewport(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
-		void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		
 		RenderImage& GetRenderImage() const {return *rtEditorViewport_;}
 
@@ -110,6 +109,7 @@ namespace Vulkan
 		void CreateRenderImages();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
+		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
