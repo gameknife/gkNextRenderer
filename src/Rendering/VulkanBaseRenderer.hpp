@@ -1,21 +1,16 @@
 #pragma once
 
-#include "FrameBuffer.hpp"
-#include "WindowConfig.hpp"
+#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/VulkanGpuTimer.hpp"
+#include "Vulkan/Image.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "VulkanGpuTimer.hpp"
+#include "Assets/Scene.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
 #include <chrono>
 #include <functional>
 #include <map>
-#include <glm/vec2.hpp>
-
-#include "Image.hpp"
-#include "Options.hpp"
-#include "Assets/Scene.hpp"
-
 
 namespace Vulkan
 {

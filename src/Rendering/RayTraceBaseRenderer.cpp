@@ -1,9 +1,8 @@
 #include "RayTraceBaseRenderer.hpp"
-#include "BottomLevelAccelerationStructure.hpp"
-#include "DeviceProcedures.hpp"
-#include "RayTraceBaseRenderer.hpp"
-#include "ShaderBindingTable.hpp"
-#include "TopLevelAccelerationStructure.hpp"
+#include "Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
+#include "Vulkan/RayTracing/DeviceProcedures.hpp"
+#include "Vulkan/RayTracing/ShaderBindingTable.hpp"
+#include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Utilities/Glm.hpp"
@@ -17,15 +16,14 @@
 #include "Vulkan/SwapChain.hpp"
 #include <chrono>
 #include <iomanip>
-#include <fmt/format.h>
 #include <numeric>
 
-#include "Runtime/Engine.hpp"
-#include "Vulkan/HybridDeferred/HardwareTracingPipeline.hpp"
-#include "Vulkan/HybridDeferred/HardwareTracingRenderer.hpp"
-#include "Vulkan/LegacyDeferred/SoftwareModernRenderer.hpp"
-#include "Vulkan/ModernDeferred/SoftwareTracingRenderer.hpp"
-#include "Vulkan/RayQuery/PathTracingRenderer.hpp"
+#include "../Runtime/Engine.hpp"
+#include "Rendering/HybridDeferred/HardwareTracingPipeline.hpp"
+#include "Rendering/HybridDeferred/HardwareTracingRenderer.hpp"
+#include "Rendering/LegacyDeferred/SoftwareModernRenderer.hpp"
+#include "Rendering/ModernDeferred/SoftwareTracingRenderer.hpp"
+#include "Rendering/RayQuery/PathTracingRenderer.hpp"
 
 namespace Vulkan::RayTracing
 {

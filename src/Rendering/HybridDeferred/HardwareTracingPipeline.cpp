@@ -8,7 +8,7 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 
 namespace Vulkan::HybridDeferred

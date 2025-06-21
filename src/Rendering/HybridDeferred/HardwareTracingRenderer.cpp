@@ -3,7 +3,7 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
+#include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Assets/Scene.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/Math.hpp"

@@ -1,6 +1,6 @@
 #include "ScreenShot.hpp"
 #include "Utilities/Console.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 
 #include "curl/curl.h"
 #include "stb_image_write.h"

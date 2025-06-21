@@ -13,7 +13,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 

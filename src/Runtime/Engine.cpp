@@ -5,9 +5,7 @@
 #include "Assets/Scene.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Utilities/Exception.hpp"
 #include "Utilities/Console.hpp"
-#include "Utilities/Glm.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
@@ -22,8 +20,7 @@
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
-#include "Vulkan/HybridDeferred/HardwareTracingRenderer.hpp"
-#include "Platform/PlatformCommon.h"
+#include "Rendering/RayTraceBaseRenderer.hpp"
 
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 

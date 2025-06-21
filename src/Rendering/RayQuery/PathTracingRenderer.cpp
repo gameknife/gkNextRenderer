@@ -8,8 +8,8 @@
 #include "Assets/Texture.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/RenderImage.hpp"
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
-#include "Vulkan/RayQuery/PathTracingPipeline.hpp"
+#include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Rendering/RayQuery/PathTracingPipeline.hpp"
 
 #include <chrono>
 #include <numeric>

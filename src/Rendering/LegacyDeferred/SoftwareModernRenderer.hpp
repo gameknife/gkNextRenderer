@@ -3,13 +3,13 @@
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/WindowConfig.hpp"
 #include "Vulkan/Image.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
-#include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
+#include "Rendering/RayTraceBaseRenderer.hpp"
 
 #include <vector>
 #include <memory>
 
-#include "Vulkan/ModernDeferred/SoftwareTracingPipeline.hpp"
+#include "Rendering/ModernDeferred/SoftwareTracingPipeline.hpp"
 
 namespace Vulkan
 {

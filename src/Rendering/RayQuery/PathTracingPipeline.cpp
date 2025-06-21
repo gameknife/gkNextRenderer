@@ -1,22 +1,17 @@
 #include "PathTracingPipeline.hpp"
 
-#include <Utilities/FileHelper.hpp>
-
-#include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Utilities/Exception.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/DescriptorBinding.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorSets.hpp"
-#include "Vulkan/ImageView.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 
 namespace Vulkan::RayTracing
 {

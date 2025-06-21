@@ -7,7 +7,7 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"

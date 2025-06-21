@@ -1,16 +1,17 @@
 #include "SceneList.hpp"
+#include "Utilities/FileHelper.hpp"
 #include "Assets/Material.hpp"
 #include "Assets/Model.hpp"
-#include "Assets/Texture.hpp"
+
+#include "Engine.hpp"
+#include "NextPhysics.h"
+
 #include <functional>
 #include <random>
 #include <filesystem>
 #include <algorithm>
 
-#include "Engine.hpp"
-#include "NextPhysics.h"
-#include "Utilities/FileHelper.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+
 
 namespace Vulkan
 {

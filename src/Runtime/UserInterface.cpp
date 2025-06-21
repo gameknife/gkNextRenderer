@@ -35,7 +35,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Vulkan/ImageView.hpp"

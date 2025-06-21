@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Vulkan/Image.hpp"
-#include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
+#include "Rendering/RayTraceBaseRenderer.hpp"
 #include <vector>
 #include <memory>
 

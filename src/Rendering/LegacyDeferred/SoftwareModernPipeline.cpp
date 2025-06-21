@@ -13,7 +13,7 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 
 namespace Vulkan::LegacyDeferred {
 

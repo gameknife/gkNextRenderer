@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
-#include "Vulkan/RayTracing/RayTraceBaseRenderer.hpp"
+#include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Rendering/RayTraceBaseRenderer.hpp"
 
 #if WITH_OIDN
 #include <oidn.hpp>

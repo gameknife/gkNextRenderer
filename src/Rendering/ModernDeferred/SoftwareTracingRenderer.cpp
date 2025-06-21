@@ -5,7 +5,7 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SwapChain.hpp"
 
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
+#include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RenderImage.hpp"
 
 #include "Utilities/Math.hpp"

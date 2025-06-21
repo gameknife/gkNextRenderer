@@ -4,6 +4,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
 file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
 file(GLOB_RECURSE src_files_vulkan "Vulkan/*.cpp" "Vulkan/*.hpp")
+file(GLOB_RECURSE src_files_rendering "Rendering/*.cpp" "Rendering/*.hpp")
 file(GLOB_RECURSE src_files_thirdparty 
 	"ThirdParty/json11/*.cpp" 
 	"ThirdParty/json11/*.hpp" 
@@ -46,6 +47,7 @@ add_library(gkNextEngine
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
+	${src_files_rendering}
 	${src_files_thirdparty}
 )
 add_library(gkNextRenderer SHARED
@@ -59,6 +61,7 @@ add_library(gkNextEngine
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
+	${src_files_rendering}
 	${src_files_thirdparty}
 )
 add_executable(gkNextRenderer
@@ -136,7 +139,7 @@ foreach(target IN LISTS AllTargets)
 		# Enable Unity Build for gkNextEngine
 		# Group files for Unity Build optimization
 		if ( NOT ANDROID ) 
-		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD OFF)
 		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")

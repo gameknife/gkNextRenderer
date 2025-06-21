@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
+#include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
-#include "RayTracingProperties.hpp"
-#include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
+#include "Vulkan/RayTracing/RayTracingProperties.hpp"
 
 namespace Vulkan
 {
