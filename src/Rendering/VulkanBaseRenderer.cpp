@@ -34,10 +34,10 @@
 #include <fmt/format.h>
 
 #include "Options.hpp"
-#include "HybridDeferred/HardwareTracingRenderer.hpp"
-#include "LegacyDeferred/SoftwareModernRenderer.hpp"
-#include "ModernDeferred/SoftwareTracingRenderer.hpp"
-#include "RayQuery/PathTracingRenderer.hpp"
+#include "HardwareTracing/HardwareTracingRenderer.hpp"
+#include "SoftwareModern/SoftwareModernRenderer.hpp"
+#include "SoftwareTracing/SoftwareTracingRenderer.hpp"
+#include "PathTracing/PathTracingRenderer.hpp"
 #include "Runtime/Engine.hpp"
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 

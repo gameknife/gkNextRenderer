@@ -9,7 +9,7 @@
 #include "Utilities/Math.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Rendering/RayQuery/PathTracingPipeline.hpp"
+#include "Rendering/PathTracing/PathTracingPipeline.hpp"
 
 #include <chrono>
 #include <numeric>

@@ -9,7 +9,7 @@
 #include <vector>
 #include <memory>
 
-#include "Rendering/ModernDeferred/SoftwareTracingPipeline.hpp"
+#include "Rendering/SoftwareTracing/SoftwareTracingPipeline.hpp"
 
 namespace Vulkan
 {
