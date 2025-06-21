@@ -25,19 +25,19 @@ namespace Vulkan::RayTracing
 	
 	class TopLevelAccelerationStructure;
 	
-	class RayQueryPipeline final
+	class PathTracingPipeline final
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(RayQueryPipeline)
+		VULKAN_NON_COPIABLE(PathTracingPipeline)
 
-		RayQueryPipeline(
+		PathTracingPipeline(
 			const SwapChain& swapChain,
 			const TopLevelAccelerationStructure& accelerationStructure,
 			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
-		~RayQueryPipeline();
+		~PathTracingPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const class PipelineLayout& PipelineLayout() const { return *PipelineLayout_; }

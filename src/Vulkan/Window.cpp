@@ -143,15 +143,6 @@ Window::Window(const WindowConfig& config) :
 		}
 	}
 
-#if !ANDROID
-	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-	if (mode) {
-		int windowPosX = (mode->width - config.Width) / 2;
-		int windowPosY = (mode->height - config.Height) / 2;
-		glfwSetWindowPos(window_, windowPosX, windowPosY); 
-	} 
-#endif
-
 	GLFWimage icon;
 	std::vector<uint8_t> data;
 	Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/textures/Vulkan.png", data);

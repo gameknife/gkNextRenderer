@@ -137,7 +137,7 @@ foreach(target IN LISTS AllTargets)
 		# Group files for Unity Build optimization
 		if ( NOT ANDROID ) 
 		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
-		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 4)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
 		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 

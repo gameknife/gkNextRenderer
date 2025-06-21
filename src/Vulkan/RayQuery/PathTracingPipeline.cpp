@@ -1,4 +1,4 @@
-#include "RayQueryPipeline.hpp"
+#include "PathTracingPipeline.hpp"
 
 #include <Utilities/FileHelper.hpp>
 
@@ -20,7 +20,7 @@
 
 namespace Vulkan::RayTracing
 {
-    RayQueryPipeline::RayQueryPipeline(const SwapChain& swapChain,
+    PathTracingPipeline::PathTracingPipeline(const SwapChain& swapChain,
         const TopLevelAccelerationStructure& accelerationStructure,
         const VulkanBaseRenderer& baseRenderer,
         const std::vector<Assets::UniformBuffer>& uniformBuffers, const Assets::Scene& scene):swapChain_(swapChain)
@@ -87,7 +87,7 @@ namespace Vulkan::RayTracing
               "create compose pipeline");
     }
 
-    RayQueryPipeline::~RayQueryPipeline()
+    PathTracingPipeline::~PathTracingPipeline()
     {
         if (pipeline_ != nullptr)
         {
@@ -99,7 +99,7 @@ namespace Vulkan::RayTracing
         descriptorSetManager_.reset();
     }
 
-    VkDescriptorSet RayQueryPipeline::DescriptorSet(uint32_t index) const
+    VkDescriptorSet PathTracingPipeline::DescriptorSet(uint32_t index) const
     {
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }

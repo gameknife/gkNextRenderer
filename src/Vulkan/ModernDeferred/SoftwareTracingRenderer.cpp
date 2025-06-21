@@ -1,5 +1,5 @@
-#include "ModernDeferredRenderer.hpp"
-#include "ModernDeferredPipeline.hpp"
+#include "SoftwareTracingRenderer.hpp"
+#include "SoftwareTracingPipeline.hpp"
 
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
@@ -12,17 +12,17 @@
 
 namespace Vulkan::ModernDeferred {
 
-ModernDeferredRenderer::ModernDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
+SoftwareTracingRenderer::SoftwareTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }
 
-ModernDeferredRenderer::~ModernDeferredRenderer()
+SoftwareTracingRenderer::~SoftwareTracingRenderer()
 {
-	ModernDeferredRenderer::DeleteSwapChain();
+	SoftwareTracingRenderer::DeleteSwapChain();
 }
 
-void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
+void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
 	rtPingPong0.reset(new RenderImage(Device(), extent,
 									  VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -34,7 +34,7 @@ void ModernDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
 	composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_, UniformBuffers()));
 }
 
-void ModernDeferredRenderer::DeleteSwapChain()
+void SoftwareTracingRenderer::DeleteSwapChain()
 {
 	deferredShadingPipeline_.reset();
 	accumulatePipeline_.reset();
@@ -42,7 +42,7 @@ void ModernDeferredRenderer::DeleteSwapChain()
 	rtPingPong0.reset();	
 }
 
-void ModernDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	baseRender_.InitializeBarriers(commandBuffer);
 	rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

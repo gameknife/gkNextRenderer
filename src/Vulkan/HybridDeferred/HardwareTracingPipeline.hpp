@@ -33,17 +33,17 @@ namespace Vulkan
 
 namespace Vulkan::HybridDeferred
 {
-	class HybridShadingPipeline final
+	class HardwareTracingPipeline final
 	{
 	public:
-		VULKAN_NON_COPIABLE(HybridShadingPipeline)
+		VULKAN_NON_COPIABLE(HardwareTracingPipeline)
 	
-		HybridShadingPipeline(
+		HardwareTracingPipeline(
 			const SwapChain& swapChain, const RayTracing::TopLevelAccelerationStructure& accelerationStructure,
 			const VulkanBaseRenderer& baseRenderer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene);
-		~HybridShadingPipeline();
+		~HardwareTracingPipeline();
 
 		VkDescriptorSet DescriptorSet(uint32_t index) const;
 		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }

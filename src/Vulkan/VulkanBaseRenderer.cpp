@@ -32,10 +32,10 @@
 #include "SingleTimeCommands.hpp"
 #include "Strings.hpp"
 #include "Version.hpp"
-#include "HybridDeferred/HybridDeferredRenderer.hpp"
-#include "LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "ModernDeferred/ModernDeferredRenderer.hpp"
-#include "RayQuery/RayQueryRenderer.hpp"
+#include "HybridDeferred/HardwareTracingRenderer.hpp"
+#include "LegacyDeferred/SoftwareModernRenderer.hpp"
+#include "ModernDeferred/SoftwareTracingRenderer.hpp"
+#include "RayQuery/PathTracingRenderer.hpp"
 #include "Runtime/Engine.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
 
@@ -982,16 +982,16 @@ namespace Vulkan
         switch (type)
         {
         case ERendererType::ERT_PathTracing:
-            logicRenderers_[type] = std::make_unique<RayTracing::RayQueryRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<RayTracing::PathTracingRenderer>(*this);
             break;
         case ERendererType::ERT_Hybrid:
-            logicRenderers_[type] = std::make_unique<HybridDeferred::HybridDeferredRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<HybridDeferred::HardwareTracingRenderer>(*this);
             break;
         case ERendererType::ERT_ModernDeferred:
-            logicRenderers_[type] = std::make_unique<ModernDeferred::ModernDeferredRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<ModernDeferred::SoftwareTracingRenderer>(*this);
             break;
         case ERendererType::ERT_LegacyDeferred:
-            logicRenderers_[type] = std::make_unique<LegacyDeferred::LegacyDeferredRenderer>(*this);
+            logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(*this);
             break;
         case ERendererType::ERT_VoxelTracing:
             logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);

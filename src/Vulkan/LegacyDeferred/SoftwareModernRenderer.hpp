@@ -9,7 +9,7 @@
 #include <vector>
 #include <memory>
 
-#include "Vulkan/ModernDeferred/ModernDeferredPipeline.hpp"
+#include "Vulkan/ModernDeferred/SoftwareTracingPipeline.hpp"
 
 namespace Vulkan
 {
@@ -25,13 +25,13 @@ namespace Assets
 
 namespace Vulkan::LegacyDeferred
 {
-	class LegacyDeferredRenderer final : public Vulkan::LogicRendererBase
+	class SoftwareModernRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
-		VULKAN_NON_COPIABLE(LegacyDeferredRenderer)
+		VULKAN_NON_COPIABLE(SoftwareModernRenderer)
 		
-		LegacyDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
-		~LegacyDeferredRenderer();
+		SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		~SoftwareModernRenderer();
 
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;

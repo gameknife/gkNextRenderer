@@ -1,4 +1,4 @@
-#include "RayQueryRenderer.hpp"
+#include "PathTracingRenderer.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
@@ -9,22 +9,22 @@
 #include "Utilities/Math.hpp"
 #include "Vulkan/RenderImage.hpp"
 #include "Vulkan/PipelineCommon/CommonComputePipeline.hpp"
-#include "Vulkan/RayQuery/RayQueryPipeline.hpp"
+#include "Vulkan/RayQuery/PathTracingPipeline.hpp"
 
 #include <chrono>
 #include <numeric>
 namespace Vulkan::RayTracing
 {
-    RayQueryRenderer::RayQueryRenderer(Vulkan::VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender)
+    PathTracingRenderer::PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender)
     {
     }
 
-    RayQueryRenderer::~RayQueryRenderer()
+    PathTracingRenderer::~PathTracingRenderer()
     {
-        RayQueryRenderer::DeleteSwapChain();
+        PathTracingRenderer::DeleteSwapChain();
     }
 
-    void RayQueryRenderer::SetPhysicalDeviceImpl(
+    void PathTracingRenderer::SetPhysicalDeviceImpl(
         VkPhysicalDevice physicalDevice,
         std::vector<const char*>& requiredExtensions,
         VkPhysicalDeviceFeatures& deviceFeatures,
@@ -43,7 +43,7 @@ namespace Vulkan::RayTracing
 #endif
     }
 
-    void RayQueryRenderer::OnDeviceSet()
+    void PathTracingRenderer::OnDeviceSet()
     {
 #if WITH_OIDN
         // Query the UUID of the Vulkan physical device
@@ -63,10 +63,10 @@ namespace Vulkan::RayTracing
 #endif
     }
 
-    void RayQueryRenderer::CreateSwapChain(const VkExtent2D& extent)
+    void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         CreateOutputImage(extent);
-        rayTracingPipeline_.reset(new RayQueryPipeline(SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], baseRender_, UniformBuffers(), GetScene()));
+        rayTracingPipeline_.reset(new PathTracingPipeline(SwapChain(), GetBaseRender<RayTraceBaseRenderer>().TLAS()[0], baseRender_, UniformBuffers(), GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(), baseRender_, rtPingPong0->GetImageView(), UniformBuffers(), GetScene()));
         composePipelineNonDenoiser_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_, UniformBuffers()));
 #if WITH_OIDN
@@ -74,7 +74,7 @@ namespace Vulkan::RayTracing
 #endif
     }
 
-    void RayQueryRenderer::DeleteSwapChain()
+    void PathTracingRenderer::DeleteSwapChain()
     {
         rayTracingPipeline_.reset();
         accumulatePipeline_.reset();
@@ -87,7 +87,7 @@ namespace Vulkan::RayTracing
         rtPingPong0.reset();
     }
 
-    void RayQueryRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         // Acquire destination images for rendering.
         rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -192,7 +192,7 @@ namespace Vulkan::RayTracing
 #endif
     }
 
-    void RayQueryRenderer::BeforeNextFrame()
+    void PathTracingRenderer::BeforeNextFrame()
     {
         {
             SCOPED_CPU_TIMER("OIDN");
@@ -206,7 +206,7 @@ namespace Vulkan::RayTracing
         }
     }
     
-    void RayQueryRenderer::CreateOutputImage(const VkExtent2D& extent)
+    void PathTracingRenderer::CreateOutputImage(const VkExtent2D& extent)
     {
         const auto format = SwapChain().Format();
         const auto tiling = VK_IMAGE_TILING_OPTIMAL;

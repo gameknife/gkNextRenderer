@@ -21,11 +21,11 @@
 #include <numeric>
 
 #include "Runtime/Engine.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredPipeline.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
-#include "Vulkan/LegacyDeferred/LegacyDeferredRenderer.hpp"
-#include "Vulkan/ModernDeferred/ModernDeferredRenderer.hpp"
-#include "Vulkan/RayQuery/RayQueryRenderer.hpp"
+#include "Vulkan/HybridDeferred/HardwareTracingPipeline.hpp"
+#include "Vulkan/HybridDeferred/HardwareTracingRenderer.hpp"
+#include "Vulkan/LegacyDeferred/SoftwareModernRenderer.hpp"
+#include "Vulkan/ModernDeferred/SoftwareTracingRenderer.hpp"
+#include "Vulkan/RayQuery/PathTracingRenderer.hpp"
 
 namespace Vulkan::RayTracing
 {

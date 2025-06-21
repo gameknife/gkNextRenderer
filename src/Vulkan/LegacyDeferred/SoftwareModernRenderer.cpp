@@ -1,5 +1,5 @@
-#include "LegacyDeferredRenderer.hpp"
-#include "LegacyDeferredPipeline.hpp"
+#include "SoftwareModernRenderer.hpp"
+#include "SoftwareModernPipeline.hpp"
 
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
@@ -12,29 +12,29 @@
 
 namespace Vulkan::LegacyDeferred {
 
-LegacyDeferredRenderer::LegacyDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
+SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
 }
 
-LegacyDeferredRenderer::~LegacyDeferredRenderer()
+SoftwareModernRenderer::~SoftwareModernRenderer()
 {
 	DeleteSwapChain();
 }
 	
-void LegacyDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
+void SoftwareModernRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
 	deferredShadingPipeline_.reset(new ShadingPipeline(SwapChain(), baseRender_, UniformBuffers(), GetScene()));
 	composePipeline_.reset(new Vulkan::PipelineCommon::SimpleComposePipeline(SwapChain(), baseRender_.rtOutput->GetImageView(), UniformBuffers()));
 }
 	
-void LegacyDeferredRenderer::DeleteSwapChain()
+void SoftwareModernRenderer::DeleteSwapChain()
 {
 	composePipeline_.reset();
 	deferredShadingPipeline_.reset();
 }
 
-void LegacyDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	baseRender_.InitializeBarriers(commandBuffer);
 	

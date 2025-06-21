@@ -22,7 +22,7 @@
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
+#include "Vulkan/HybridDeferred/HardwareTracingRenderer.hpp"
 #include "Platform/PlatformCommon.h"
 
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>

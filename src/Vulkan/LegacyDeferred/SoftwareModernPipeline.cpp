@@ -1,4 +1,4 @@
-#include "LegacyDeferredPipeline.hpp"
+#include "SoftwareModernPipeline.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorPool.hpp"

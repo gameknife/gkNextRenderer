@@ -22,7 +22,7 @@ namespace Vulkan
 
 namespace Vulkan::RayTracing
 {
-	class RayQueryPipeline;
+	class PathTracingPipeline;
 	class RayTraceBaseRenderer;
 	class LogicRendererBase;
 	

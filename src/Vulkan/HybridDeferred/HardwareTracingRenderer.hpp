@@ -29,21 +29,21 @@ namespace Assets
 
 namespace Vulkan::HybridDeferred
 {
-	class HybridDeferredRenderer final : public Vulkan::LogicRendererBase
+	class HardwareTracingRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(HybridDeferredRenderer)
+		VULKAN_NON_COPIABLE(HardwareTracingRenderer)
 		
-		HybridDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender);
-		~HybridDeferredRenderer();
+		HardwareTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		~HardwareTracingRenderer();
 		
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
 	private:
-		std::unique_ptr<class HybridShadingPipeline> deferredShadingPipeline_;
+		std::unique_ptr<class HardwareTracingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<RenderImage> rtPingPong0;

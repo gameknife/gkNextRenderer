@@ -1,5 +1,5 @@
-#include "HybridDeferredRenderer.hpp"
-#include "HybridDeferredPipeline.hpp"
+#include "HardwareTracingRenderer.hpp"
+#include "HardwareTracingPipeline.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Window.hpp"
@@ -13,29 +13,29 @@
 
 namespace Vulkan::HybridDeferred
 {
-    HybridDeferredRenderer::HybridDeferredRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
+    HardwareTracingRenderer::HardwareTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
     {
     }
 
-    HybridDeferredRenderer::~HybridDeferredRenderer()
+    HardwareTracingRenderer::~HardwareTracingRenderer()
     {
     }
 
-    void HybridDeferredRenderer::CreateSwapChain(const VkExtent2D& extent)
+    void HardwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         rtPingPong0.reset(new RenderImage(Device(), extent,
                                           VK_FORMAT_R16G16B16A16_SFLOAT,
                                           VK_IMAGE_TILING_OPTIMAL,
                                           VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false,"prevoutput"));
 
-        deferredShadingPipeline_.reset(new HybridShadingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
+        deferredShadingPipeline_.reset(new HardwareTracingPipeline(SwapChain(), GetBaseRender<RayTracing::RayTraceBaseRenderer>().TLAS()[0],
                                                          baseRender_,UniformBuffers(), GetScene()));
         
         accumulatePipeline_.reset(new PipelineCommon::AccumulatePipeline(SwapChain(),baseRender_,rtPingPong0->GetImageView(),UniformBuffers(), GetScene()));
         composePipeline_.reset(new PipelineCommon::FinalComposePipeline(SwapChain(), baseRender_, UniformBuffers()));
     }
 
-    void HybridDeferredRenderer::DeleteSwapChain()
+    void HardwareTracingRenderer::DeleteSwapChain()
     {
         deferredShadingPipeline_.reset();
         accumulatePipeline_.reset();
@@ -43,7 +43,7 @@ namespace Vulkan::HybridDeferred
         rtPingPong0.reset();
     }
 
-    void HybridDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    void HardwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         baseRender_.InitializeBarriers(commandBuffer);
         rtPingPong0->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

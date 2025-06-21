@@ -26,18 +26,18 @@ namespace Vulkan
 
 namespace Vulkan::RayTracing
 {
-	class RayQueryPipeline;
+	class PathTracingPipeline;
 
-	class RayQueryRenderer final : public Vulkan::LogicRendererBase
+	class PathTracingRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
 
-		VULKAN_NON_COPIABLE(RayQueryRenderer);
+		VULKAN_NON_COPIABLE(PathTracingRenderer);
 	
 	public:
 
-		RayQueryRenderer(Vulkan::VulkanBaseRenderer& baseRender);
-		virtual ~RayQueryRenderer();
+		PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		virtual ~PathTracingRenderer();
 
 		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
 			std::vector<const char*>& requiredExtensions,
@@ -56,7 +56,7 @@ namespace Vulkan::RayTracing
 		// individual textures
 		std::unique_ptr<RenderImage> rtPingPong0;
 		
-		std::unique_ptr<RayQueryPipeline> rayTracingPipeline_;
+		std::unique_ptr<PathTracingPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineNonDenoiser_;
 
