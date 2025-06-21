@@ -18,6 +18,7 @@ namespace Vulkan
 	class RenderPass;
 	class SwapChain;
 	class DescriptorSetManager;
+	class VulkanBaseRenderer;
 }
 
 namespace Vulkan::ModernDeferred

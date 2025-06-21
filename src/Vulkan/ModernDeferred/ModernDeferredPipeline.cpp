@@ -3,17 +3,16 @@
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSets.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/RenderPass.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/VulkanBaseRenderer.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/TextureImage.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Assets/Vertex.hpp"
 #include "Utilities/FileHelper.hpp"
+
 
 namespace Vulkan::ModernDeferred
 {
