@@ -76,13 +76,18 @@ foreach(shader ${shader_files})
     set(compiled_shaders ${compiled_shaders} PARENT_SCOPE)
     set_source_files_properties(${shader} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${shader} PROPERTIES VS_TOOL_OVERRIDE "None")
+
+	set(slangc_args "")
+	if(WIN32)
+	set(slangc_args "-DSHADER_CLOCK")
+	endif()
     
     list(APPEND all_shader_outputs ${output_file})
     
     add_custom_command(
         OUTPUT ${output_file}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
-        COMMAND ${Vulkan_SLANGC} -entry main -target spirv ${full_path} -o ${output_file}
+		COMMAND ${Vulkan_SLANGC} -entry main -target spirv ${full_path} ${slangc_args} -o ${output_file}
         DEPENDS ${full_path} ${shader_common_files}
         COMMENT "slangc ${file_name} -> ${file_name}.spv"
         VERBATIM

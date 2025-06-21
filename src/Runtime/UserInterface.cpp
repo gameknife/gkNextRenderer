@@ -413,8 +413,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("Texture: %d", statistics.TextureCount);
 		
 		auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
-		uint instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
-		uint triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
+		uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
+		uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
 		ImGui::Text("GPU Draw: %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str());
 		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
 		ImGui::Text("GPU Tri: %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str());

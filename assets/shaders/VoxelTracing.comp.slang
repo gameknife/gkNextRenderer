@@ -1,4 +1,5 @@
 import Common;
+#include "common/ShaderClock.slang"
 
 [[vk::binding(0, 0)]] Sampler2D TextureArray[];
 
@@ -12,6 +13,7 @@ import Common;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
 [[vk::binding(9, 2)]] RWTexture2D<float4> OutDenoisedBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
@@ -41,6 +43,7 @@ void OutputColor(int2 ipos, float3 Total)
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    START_SHADERCLOCK()
     // compose with renderer and tracer
     FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
     FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
@@ -73,5 +76,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     OutputColor(ipos, outColor.rgb);
 
-
+    END_SHADERCLOCK(ipos)
 }

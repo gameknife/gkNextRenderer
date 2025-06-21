@@ -1,4 +1,5 @@
 import Common;
+#include "common/ShaderClock.slang"
 
 [[vk::binding(0, 0)]] Sampler2D TextureArray[];
 
@@ -13,6 +14,7 @@ import Common;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
 [[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
 
 [[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
@@ -29,6 +31,7 @@ import Common;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    START_SHADERCLOCK()
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
@@ -53,6 +56,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         OutAlbedoBuffer[ipos] = float4(1, 1, 1, 1);
         OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
         ObjectId0[ipos] = 0;
+
+        END_SHADERCLOCK(ipos)
         return;
     }
 
@@ -89,4 +94,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
     OutDepthBuffer[ipos] = ndcDepth;
+
+    END_SHADERCLOCK(ipos)
 }

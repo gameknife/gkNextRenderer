@@ -137,6 +137,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // line 2/3 left
     DRAW(ShaderTime, 0, 1, 4, ipos, isize, 1);
     DRAW(OutMotionVector, 0, 2, 4, ipos, isize, 1);
+
+    // line 2/3 right
+    DRAW(FinalImage, 3, 1, 4, ipos, isize, 0.01);
     
     // center
     DRAW(Denoised, 0.5, 0.5, 2, ipos, isize, 1);
