@@ -68,8 +68,17 @@ void main(uint3 DTid: SV_DispatchThreadID) {
 
     Material hitMaterial = Materials[hitVertex.MaterialIndex];
 
+    float4 albedo = float4(0, 0, 0, 1);
+    float4 illuminaceColor = float4(0, 0, 0, 1);
+    float4 gbuffer = float4(0, 0, 0, 0);
+    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
+
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-    OutputColor(ipos, hitMaterial.Diffuse.rgb * radiance.rgb);
+
+    float3 tracenext = reflect(rayDir, hitVertex.Normal);
+    float4 skyColor = Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray);
+
+    OutputColor(ipos, skyColor.rgb * radiance.rgb);
     ObjectId0[ipos] = hitNode.instanceId;
 
     if (Camera.DebugDraw_Lighting)

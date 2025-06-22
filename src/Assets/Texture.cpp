@@ -27,6 +27,151 @@ namespace Assets
         float elapsed;
         std::array<char, 256> outputInfo;
     };
+    
+    void PrefilterEnvironmentMapLevel(const float* sourcePixels, int sourceWidth, int sourceHeight,
+                                    float* targetPixels, int targetWidth, int targetHeight, 
+                                    float roughness)
+    {
+        const int sampleCount = std::max(1, static_cast<int>(128 * (1.0f - roughness) + 64 * roughness));
+        
+        for (int y = 0; y < targetHeight; ++y)
+        {
+            for (int x = 0; x < targetWidth; ++x)
+            {
+                // Convert target pixel to direction
+                float u = (x + 0.5f) / targetWidth;
+                float v = (y + 0.5f) / targetHeight;
+                
+                float theta = v * M_NEXT_PI;
+                float phi = u * 2.0f * M_NEXT_PI;
+                
+                float sinTheta = std::sin(theta);
+                float cosTheta = std::cos(theta);
+                float sinPhi = std::sin(phi);
+                float cosPhi = std::cos(phi);
+                
+                // Main reflection direction
+                float mainDirX = sinTheta * cosPhi;
+                float mainDirY = cosTheta;
+                float mainDirZ = sinTheta * sinPhi;
+                
+                // Build tangent space around main direction
+                float upX = 0.0f, upY = 1.0f, upZ = 0.0f;
+                if (std::abs(mainDirY) > 0.999f)
+                {
+                    upX = 1.0f; upY = 0.0f; upZ = 0.0f;
+                }
+                
+                // Tangent vectors
+                float tangentX = upY * mainDirZ - upZ * mainDirY;
+                float tangentY = upZ * mainDirX - upX * mainDirZ;
+                float tangentZ = upX * mainDirY - upY * mainDirX;
+                
+                float tangentLen = std::sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+                tangentX /= tangentLen;
+                tangentY /= tangentLen;
+                tangentZ /= tangentLen;
+                
+                float bitangentX = mainDirY * tangentZ - mainDirZ * tangentY;
+                float bitangentY = mainDirZ * tangentX - mainDirX * tangentZ;
+                float bitangentZ = mainDirX * tangentY - mainDirY * tangentX;
+                
+                float colorR = 0.0f, colorG = 0.0f, colorB = 0.0f;
+                float totalWeight = 0.0f;
+                
+                // Monte Carlo sampling
+                for (int i = 0; i < sampleCount; ++i)
+                {
+                    // Generate random numbers (using simple pseudo-random for now)
+                    float xi1 = static_cast<float>(i) / sampleCount;
+                    float xi2 = static_cast<float>((i * 17 + 13) % sampleCount) / sampleCount;
+                    
+                    // Importance sampling for GGX distribution
+                    float alpha = roughness * roughness;
+                    float alpha2 = alpha * alpha;
+                    
+                    float cosTheta = std::sqrt((1.0f - xi1) / (1.0f + (alpha2 - 1.0f) * xi1));
+                    float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
+                    float phi = 2.0f * M_NEXT_PI * xi2;
+                    
+                    // Local sample direction
+                    float localX = sinTheta * std::cos(phi);
+                    float localY = sinTheta * std::sin(phi);
+                    float localZ = cosTheta;
+                    
+                    // Transform to world space
+                    float worldX = localX * tangentX + localY * bitangentX + localZ * mainDirX;
+                    float worldY = localX * tangentY + localY * bitangentY + localZ * mainDirY;
+                    float worldZ = localX * tangentZ + localY * bitangentZ + localZ * mainDirZ;
+                    
+                    // Sample environment map
+                    float sampleTheta = std::acos(std::clamp(worldY, -1.0f, 1.0f));
+                    float samplePhi = std::atan2(worldZ, worldX);
+                    if (samplePhi < 0) samplePhi += 2.0f * M_NEXT_PI;
+                    
+                    float sampleU = samplePhi / (2.0f * M_NEXT_PI);
+                    float sampleV = sampleTheta / M_NEXT_PI;
+                    
+                    int sampleX = static_cast<int>(sampleU * sourceWidth) % sourceWidth;
+                    int sampleY = static_cast<int>(sampleV * sourceHeight) % sourceHeight;
+                    
+                    int sampleIndex = (sampleY * sourceWidth + sampleX) * 4;
+                    
+                    float weight = 1.0f;
+                    colorR += sourcePixels[sampleIndex + 0] * weight;
+                    colorG += sourcePixels[sampleIndex + 1] * weight;
+                    colorB += sourcePixels[sampleIndex + 2] * weight;
+                    totalWeight += weight;
+                }
+                
+                // Normalize and store result
+                if (totalWeight > 0.0f)
+                {
+                    colorR /= totalWeight;
+                    colorG /= totalWeight;
+                    colorB /= totalWeight;
+                }
+                
+                int targetIndex = (y * targetWidth + x) * 4;
+                targetPixels[targetIndex + 0] = colorR;
+                targetPixels[targetIndex + 1] = colorG;
+                targetPixels[targetIndex + 2] = colorB;
+                targetPixels[targetIndex + 3] = 1.0f;
+            }
+        }
+    }
+
+    void PrefilterHDREnvironmentMap(const float* hdrPixels, int width, int height, 
+                             std::vector<std::vector<float>>& mipLevels,
+                             std::vector<std::pair<int, int>>& mipDimensions)
+    {
+        constexpr int MAX_MIP_LEVELS = 8; // Typically 5-8 levels for environment maps
+        mipLevels.clear();
+        mipDimensions.clear();
+        
+        // Calculate mip levels
+        int currentWidth = width;
+        int currentHeight = height;
+        
+        for (int mipLevel = 0; mipLevel < MAX_MIP_LEVELS; ++mipLevel)
+        {
+            if (currentWidth < 4 || currentHeight < 4) break;
+            
+            mipDimensions.push_back({currentWidth, currentHeight});
+            mipLevels.emplace_back(currentWidth * currentHeight * 4); // RGBA
+
+            if (mipLevel > 0)
+            {
+                float roughness = static_cast<float>(mipLevel) / (MAX_MIP_LEVELS - 1);
+                PrefilterEnvironmentMapLevel(hdrPixels, width, height, 
+                                           mipLevels[mipLevel].data(), 
+                                           currentWidth, currentHeight, roughness);
+            }
+            
+            currentWidth = std::max(1, currentWidth / 2);
+            currentHeight = std::max(1, currentHeight / 2);
+        }
+    }
 
     SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
     {
@@ -250,6 +395,7 @@ namespace Assets
 
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
+                // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
                     result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
@@ -270,26 +416,46 @@ namespace Assets
                 }
                 else
                 {
+                    std::filesystem::path cachePath = Utilities::FileHelper::GetPlatformFilePath("cache");
+                    std::filesystem::create_directories(cachePath);
+                    std::hash<std::string> hasher;
+                    std::string hashname = fmt::format("{:x}", hasher(texname));
+                    // load from texture files
                     if (hdr)
                     {
-                        stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
-                        pixels = stbdata;
-                        format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                        size = width * height * 4 * sizeof(float);
+                        std::string cacheFileName = (cachePath / fmt::format("{}.cookhdr", hashname)).string();
+                        if (!std::filesystem::exists(cacheFileName))
+                        {
+                            stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
+                            pixels = stbdata;
+                            format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                            size = width * height * 4 * sizeof(float);
 
-                        // Extract spherical harmonics from the base level
-                        SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
-                        hdrSphericalHarmonics_[newTextureIdx] = sh;
+                            // Extract spherical harmonics from the base level
+                            SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
+                            hdrSphericalHarmonics_[newTextureIdx] = sh;
+
+                            // NEW: Prefilter environment map for different roughness levels
+                            std::vector<std::vector<float>> mipLevels;
+                            std::vector<std::pair<int, int>> mipDimensions;
+                            PrefilterHDREnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
+
+                            miplevel = static_cast<uint32_t>( mipLevels.size() );
+                            // Create texture image with multiple mip levels
+                            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                                commandPool_, width, height, miplevel, format, 
+                                pixels, size, mipLevels, mipDimensions);
+                        }
+                        else
+                        {
+                            // load directly from cooked hdr
+                        }
+                        // can cache to disk, next round will create image directly
                     }
                     else
                     {
                         // ldr texture, try cache fist
-                        std::filesystem::path cachePath = Utilities::FileHelper::GetPlatformFilePath("cache");
-                        std::filesystem::create_directories(cachePath);
-
                         // hash the texname
-                        std::hash<std::string> hasher;
-                        std::string hashname = fmt::format("{:x}", hasher(texname));
                         std::string cacheFileName = (cachePath / fmt::format("{}.ktx", hashname)).string();
                         if (!std::filesystem::exists(cacheFileName))
                         {
@@ -348,6 +514,7 @@ namespace Assets
 
                 // create texture image
                 //if ( !textureImages_[newTextureIdx] )
+                if (!hdr)
                 {
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
                 }
