@@ -126,7 +126,7 @@ namespace Common
     {
         float3 d = normalize(direction);
         float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
-        return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 10.0f));
+        return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 8.0f));
     };
 
     public float getShadow(float3 worldPos, float3 jit, float3 normal, in ConstantBuffer<UniformBufferObject> Camera, in Sampler2D shadowmap, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices)
