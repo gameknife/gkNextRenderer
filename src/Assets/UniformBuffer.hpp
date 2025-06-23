@@ -28,13 +28,14 @@ namespace Assets
 #define float3 vec3
 #define float4 vec4
 #define float4x4 mat4
+#define uint8_t4_packed uint
 	
 	#include "../assets/shaders/common/BasicTypes.slang"
 
 #undef float3
 #undef float4
 #undef float4x4
-	
+#undef uint8_t4_packed
 	class UniformBuffer
 	{
 	public:

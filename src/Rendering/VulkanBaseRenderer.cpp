@@ -348,7 +348,7 @@ namespace Vulkan
 
         deviceFeatures.shaderInt64 = true;
 #endif
-
+        
         // support bindless material
         VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
         indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -378,6 +378,7 @@ namespace Vulkan
         shaderFloat16Int8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR;
         shaderFloat16Int8Features.pNext = &hostQueryResetFeatures;
         shaderFloat16Int8Features.shaderFloat16 = true;
+        shaderFloat16Int8Features.shaderInt8 = true;
 
         VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures = {};
         shaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
