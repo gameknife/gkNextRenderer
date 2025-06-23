@@ -148,6 +148,7 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal)
 float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
 {
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
+    float skyvis = 0.0;
     float sum = 0.0;
 
     float wx = max(normal.x, 0.0);
@@ -158,6 +159,16 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
     float wnz = max(-normal.z, 0.0);
 
     sum = wx + wnx + wy + wny + wz + wnz;
+
+    uint4 unpacked_skyvis0 = unpack_u8u32(cube.skyVisibility_pznzpyny);
+    uint4 unpacked_skyvis1 = unpack_u8u32(cube.skyVisibility_pxnxs0s1);
+
+    skyvis += unpacked_skyvis0.x * wz;
+    skyvis += unpacked_skyvis0.y * wnz;
+    skyvis += unpacked_skyvis0.z * wy;
+    skyvis += unpacked_skyvis0.w * wny;
+    skyvis += unpacked_skyvis1.x * wx;
+    skyvis += unpacked_skyvis1.y * wnx;
 
     color += wx * UnpackColor(cube.PosX_D);
     color += wnx * UnpackColor(cube.NegX_D);
@@ -175,6 +186,8 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
 
     // Normalize
     color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    skyvis *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    color.a = skyvis / 255.0f;
     return color;
 }
 
@@ -236,7 +249,7 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
         nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
     {
-        return float4(0, 0, 0, 0);
+        return float4(100, 100, 100, 1);
     }
 
     int3 baseIdx = int3(floor(nearpos));
@@ -306,11 +319,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, in Sampler2D[] TextureArray)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, in Sampler2D[] TextureArray)
     {
         // 输出结果
         float4 directColor = float4(0.0);
         float4 bounceColor = float4(0.0);
+
+        float skyVisibility = 0.0;
 
         // 抖动
         const float2 offset = grid2x2[iterate % 4] * 0.25f;
@@ -332,8 +347,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
             else
             {
                 directColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+                skyVisibility += 1.0f;
             }
         }
+        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING), 0.125));
         directColor = directColor / float(FACE_TRACING);
         bounceColor = bounceColor / float(FACE_TRACING);
 
@@ -406,12 +423,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId);
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId);
 
-        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
-        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
-        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);
-        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, TextureArray);
+        uint4 skyvis_pznzpynyx = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pznzpyny);
+        uint4 skyvis_pxnxs0s1 = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY,  skyvis_pznzpynyx.z, TextureArray);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, TextureArray);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX,  skyvis_pxnxs0s1.x,  TextureArray);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y,  TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ,  skyvis_pznzpynyx.x, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, TextureArray);
+
+        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_u8(skyvis_pznzpynyx);
+        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_u8(skyvis_pxnxs0s1);
     }
 
     public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
@@ -419,12 +441,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
         uint iterate = Voxels[CubeIdx].age;
         Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
 
-        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, TextureArray);
-        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, TextureArray);
-        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, TextureArray);
-        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, TextureArray);
-        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, TextureArray);
+        uint4 skyvis_pznzpynyx = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pznzpyny);
+        uint4 skyvis_pxnxs0s1 = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
+        FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY,  skyvis_pznzpynyx.z, TextureArray);
+        FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, TextureArray);
+        FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX,  skyvis_pxnxs0s1.x,  TextureArray);
+        FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y,  TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ,  skyvis_pznzpynyx.x, TextureArray);
+        FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, TextureArray);
+
+        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_u8(skyvis_pznzpynyx);
+        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_u8(skyvis_pxnxs0s1);
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
