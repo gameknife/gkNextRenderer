@@ -966,7 +966,15 @@ public struct FHybridRenderer : IRenderer
             else
             {
                 // 这里非常影响噪点，直接使用IBL数据，是最精确的。如果使用预处理数据，由于IBL的明度变化不大，因此噪点会小，但丢失光照细节
-                FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                if (Camera.FastGather)
+                {
+                    float simpleRoughness = chanceGGX ? roughness : 1.0;
+                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                }
+                else
+                {
+                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                }
             }
         }
         FinalColor /= float(jitcount);
