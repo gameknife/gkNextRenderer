@@ -73,17 +73,23 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     float4 gbuffer = float4(0, 0, 0, 0);
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
 
+    const float dotValue = dot(rayDir, hitVertex.Normal);
+    const float3 outwardNormal = dotValue > 0 ? -hitVertex.Normal : hitVertex.Normal;
+    const float cosine = dotValue > 0 ? hitMaterial.RefractionIndex * dotValue : -dotValue;
+    const float reflectProb = Schlick(cosine, hitMaterial.RefractionIndex);
+    const float metalProb = hitMaterial.Metalness;
+
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
 
-    float3 tracenext = reflect(rayDir, hitVertex.Normal);
-    float4 skyColor = Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray);
-
-    OutputColor(ipos, skyColor.rgb * radiance.rgb);
+    float3 tracenext = reflect(rayDir, outwardNormal);
+    float4 specularColor = lerp(albedo, float4(1, 1, 1, 1), reflectProb) * Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity;
+    float4 combined = lerp(albedo * radiance, specularColor, max(reflectProb, metalProb));
+    OutputColor(ipos, combined.rgb);
     ObjectId0[ipos] = hitNode.instanceId;
 
     if (Camera.DebugDraw_Lighting)
     {
-        OutputColor(ipos, radiance.rgb);
+        OutputColor(ipos, lerp(radiance, specularColor, max(reflectProb, metalProb)).rgb);
     }
 
     // write to NDC depth
