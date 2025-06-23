@@ -28,8 +28,10 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
             pageIndexBufferMemory_);
 
-        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "GPUDrivenStats", flags | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat), gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_ );
+        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "GPUDrivenStats", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat), gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_ );
 
+        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(SphericalHarmonics) * 100, hdrSHBuffer_, hdrSHBufferMemory_ );
+        
         // gpu local buffers
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
                                             indirectDrawBufferMemory_); // support 65535 nodes
@@ -131,11 +133,7 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, indices, indexBuffer_, indexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
-
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
-
-        auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
-        Vulkan::BufferUtil::CreateDeviceBuffer( commandPool, "HDRSH", flags, SHData, hdrSHBuffer_, hdrSHBufferMemory_ );
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
@@ -286,6 +284,17 @@ namespace Assets
         gpuDrivenStatsBuffer_Memory_->Unmap();
         
         return UpdateNodesGpuDriven();
+    }
+
+    void Scene::UpdateHDRSH()
+    {
+        auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
+        if (SHData.size() > 0)
+        {
+            SphericalHarmonics* data = reinterpret_cast<SphericalHarmonics*>(hdrSHBufferMemory_->Map(0, sizeof(SphericalHarmonics) * SHData.size()));
+            std::memcpy(data, SHData.data(), SHData.size() * sizeof(SphericalHarmonics));
+            hdrSHBufferMemory_->Unmap();
+        }
     }
 
     bool Scene::UpdateNodesLegacy()

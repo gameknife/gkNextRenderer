@@ -9,6 +9,7 @@
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
+#include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -25,6 +26,7 @@ namespace Assets
         int32_t textureId;
         TextureImage* transferPtr;
         float elapsed;
+        bool needFlushHDRSH;
         std::array<char, 256> outputInfo;
     };
     
@@ -528,6 +530,7 @@ namespace Assets
 
                 // transfer
                 taskContext.textureId = newTextureIdx;
+                taskContext.needFlushHDRSH = hdr;
                 taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                     std::chrono::high_resolution_clock::now() - timer).count();
                 std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, miplevel,
@@ -541,6 +544,11 @@ namespace Assets
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
                 fmt::print("{}\n", taskContext.outputInfo.data());
                 delete[] copyedData;
+
+                if (taskContext.needFlushHDRSH)
+                {
+                    NextEngine::GetInstance()->GetScene().UpdateHDRSH();
+                }
             }, 0);
 
         return newTextureIdx;

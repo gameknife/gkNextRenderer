@@ -77,7 +77,7 @@ namespace Assets
 		void Tick(float DeltaSeconds);
 		void UpdateMaterial();
 		bool UpdateNodes();
-
+		void UpdateHDRSH();
 		bool UpdateNodesLegacy();
 		bool UpdateNodesGpuDriven();
 
