@@ -247,8 +247,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // cull all
     DrawCommands[DTid.x].instanceCount = shouldDraw ? 1 : 0;
-    DrawCommands[DTid.x].firstInstance = DTid.x;
-    DrawCommands[DTid.x].indexCount = model.indexCount;
-    DrawCommands[DTid.x].firstIndex = model.indexOffset;
-    DrawCommands[DTid.x].vertexOffset = model.vertexOffset;
+    DrawCommands[DTid.x].firstInstance = shouldDraw ? DTid.x : 0;
+    DrawCommands[DTid.x].indexCount = shouldDraw ? model.indexCount : 0;
+    DrawCommands[DTid.x].firstIndex = shouldDraw ? model.indexOffset : 0;
+    DrawCommands[DTid.x].vertexOffset = shouldDraw ? model.vertexOffset : 0;
 }

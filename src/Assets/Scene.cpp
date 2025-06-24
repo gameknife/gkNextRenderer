@@ -144,11 +144,11 @@ namespace Assets
         MarkDirty();
 
 #if ANDROID
-        cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
 #else
         if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
         {
-            cpuAccelerationStructure_.AsyncProcessFull();
+            cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
         }
 #endif
         cpuAccelerationStructure_.GenShadowMap(*this);
@@ -204,7 +204,7 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
         cpuAccelerationStructure_.GenShadowMap(*this);
     }
 

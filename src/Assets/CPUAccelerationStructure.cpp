@@ -253,7 +253,7 @@ void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& VoxelGPUMemory)
     VoxelGPUMemory.Unmap();
 }
 
-void FCPUAccelerationStructure::AsyncProcessFull()
+void FCPUAccelerationStructure::AsyncProcessFull(Vulkan::DeviceMemory* VoxelGPUMemory)
 {    
     // clean
     while (!needUpdateGroups.empty())
@@ -261,6 +261,7 @@ void FCPUAccelerationStructure::AsyncProcessFull()
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     probeBaker.ClearAmbientCubes();
+    probeBaker.UploadGPU(*VoxelGPUMemory);
 
     const int groupSize = 16;
     const int lengthX = CUBE_SIZE_XY / groupSize;
