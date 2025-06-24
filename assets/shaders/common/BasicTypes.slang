@@ -124,8 +124,8 @@ public struct ALIGN_16 AmbientCube
     public uint PosX_D;
     public uint NegX_D;
 
-    public uint8_t4_packed skyVisibility_pznzpyny;
-    public uint8_t4_packed skyVisibility_pxnxs0s1;
+    public uint skyVisibility_pznzpyny;
+    public uint skyVisibility_pxnxs0s1;
     public uint reserved0;
     public uint reserved1;
 };
