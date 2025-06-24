@@ -435,7 +435,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     {
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, rayDir, 200.0f, outVertex, outNode);
+        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode);
     }
     public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
     {

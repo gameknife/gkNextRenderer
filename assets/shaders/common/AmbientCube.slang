@@ -347,7 +347,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float skyVisibility = 0.0;
 
         // 抖动
-        const float2 offset = grid2x2[0] * 0.25f;
+        const float2 offset = grid2x2[iterate % 4] * 0.25f;
 
         // 天光直接光照和反弹
         for (uint i = 0; i < FACE_TRACING; i++)
@@ -369,7 +369,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                 skyVisibility += 1.0f;
             }
         }
-        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING), 0.125));
+       
         directColor = directColor / float(FACE_TRACING);
         bounceColor = bounceColor / float(FACE_TRACING);
 
@@ -388,17 +388,19 @@ public struct FGpuProbeGenerator : IProbeGenerator
         // }
 
         // // 太阳光
-        // if (Camera.HasSun)
-        // {
-        //     float3 sunDir = Camera.SunDirection.xyz;
-        //     float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
-        //     float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-        //     directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
-        // }
+        if (Camera.HasSun)
+        {
+            float3 sunDir = Camera.SunDirection.xyz;
+            float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
+            float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+        }
 
         // 累积，gpu直接只保留4帧
-        DirectLight = LerpPackedColorAlt(DirectLight, directColor, 0.25);
-        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, 0.125);
+        float currWeight = 0.25f;
+        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING), currWeight));
+        DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
+        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
         return false;
     }
 
