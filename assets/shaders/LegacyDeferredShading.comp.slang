@@ -81,6 +81,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
 
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
 
+    // 这里可以增加一个屏幕空间的采样，处理细节遮蔽，只在0.25米内生效
     float3 tracenext = reflect(rayDir, outwardNormal);
     float4 specularColor = lerp(albedo, float4(1, 1, 1, 1), reflectProb) * Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a;
     float4 combined = lerp(albedo * radiance, specularColor, max(reflectProb, metalProb));
@@ -90,7 +91,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     if (Camera.DebugDraw_Lighting)
     {
         OutputColor(ipos, lerp(radiance, specularColor, max(reflectProb, metalProb)).rgb);
-        OutputColor(ipos, lerp(float4(0,0,0,0), specularColor, max(reflectProb, metalProb)).rgb);
+        //OutputColor(ipos, lerp(float4(0,0,0,0), specularColor, max(reflectProb, metalProb)).rgb);
     }
 
     // write to NDC depth

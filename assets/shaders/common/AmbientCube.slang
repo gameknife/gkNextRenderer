@@ -62,9 +62,28 @@ float4 unpackRGB10A2(uint packed)
     float r = float((packed) & 0x3FF) / 1023.0f;
     float g = float((packed >> 10) & 0x3FF) / 1023.0f;
     float b = float((packed >> 20) & 0x3FF) / 1023.0f;
-    // float a = packed & 0x3;
 
     return float4(r, g, b, 0.0) * MAX_ILLUMINANCE;
+}
+
+// Software implementation to replace hardware-dependent unpack_u8u32
+uint4 unpack_bytes(uint packed)
+{
+    return uint4(
+        (packed & 0xFF),
+        ((packed >> 8) & 0xFF),
+        ((packed >> 16) & 0xFF),
+        ((packed >> 24) & 0xFF)
+    );
+}
+
+// Software implementation to replace hardware-dependent pack_u8
+uint pack_bytes(uint4 values)
+{
+    return (values.x & 0xFF) |
+           ((values.y & 0xFF) << 8) |
+           ((values.z & 0xFF) << 16) |
+           ((values.w & 0xFF) << 24);
 }
 
 uint PackColor(float4 source)
@@ -160,8 +179,8 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
 
     sum = wx + wnx + wy + wny + wz + wnz;
 
-    uint4 unpacked_skyvis0 = unpack_u8u32(cube.skyVisibility_pznzpyny);
-    uint4 unpacked_skyvis1 = unpack_u8u32(cube.skyVisibility_pxnxs0s1);
+    uint4 unpacked_skyvis0 = unpack_bytes(cube.skyVisibility_pznzpyny);
+    uint4 unpacked_skyvis1 = unpack_bytes(cube.skyVisibility_pxnxs0s1);
 
     skyvis += unpacked_skyvis0.x * wz;
     skyvis += unpacked_skyvis0.y * wnz;
@@ -328,7 +347,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float skyVisibility = 0.0;
 
         // 抖动
-        const float2 offset = grid2x2[iterate % 4] * 0.25f;
+        const float2 offset = grid2x2[0] * 0.25f;
 
         // 天光直接光照和反弹
         for (uint i = 0; i < FACE_TRACING; i++)
@@ -355,27 +374,27 @@ public struct FGpuProbeGenerator : IProbeGenerator
         bounceColor = bounceColor / float(FACE_TRACING);
 
         // 参数光源，目前只取了一盏光源
-        if (Camera.LightCount > 0)
-        {
-            float4 lightPower = float4(0.0);
-            LightObject light = FetchLight(0, lightPower);
-            float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
-            float lightAtten = tracer.TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
-            float3 lightDir = normalize(lightPos - origin);
-            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-            float distance = length(lightPos - origin);
-            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-            directColor += lightPower * attenuation * lightAtten;
-        }
+        // if (Camera.LightCount > 0)
+        // {
+        //     float4 lightPower = float4(0.0);
+        //     LightObject light = FetchLight(0, lightPower);
+        //     float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
+        //     float lightAtten = tracer.TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
+        //     float3 lightDir = normalize(lightPos - origin);
+        //     float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+        //     float distance = length(lightPos - origin);
+        //     float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+        //     directColor += lightPower * attenuation * lightAtten;
+        // }
 
-        // 太阳光
-        if (Camera.HasSun)
-        {
-            float3 sunDir = Camera.SunDirection.xyz;
-            float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
-            float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
-        }
+        // // 太阳光
+        // if (Camera.HasSun)
+        // {
+        //     float3 sunDir = Camera.SunDirection.xyz;
+        //     float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
+        //     float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
+        //     directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+        // }
 
         // 累积，gpu直接只保留4帧
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, 0.25);
@@ -423,8 +442,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId);
         Solid = Solid || InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId);
 
-        uint4 skyvis_pznzpynyx = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pznzpyny);
-        uint4 skyvis_pxnxs0s1 = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
+        uint4 skyvis_pznzpynyx = unpack_bytes(Cubes[CubeIdx].skyVisibility_pznzpyny);
+        uint4 skyvis_pxnxs0s1 = unpack_bytes(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY,  skyvis_pznzpynyx.z, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, TextureArray);
         FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX,  skyvis_pxnxs0s1.x,  TextureArray);
@@ -432,8 +451,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ,  skyvis_pznzpynyx.x, TextureArray);
         FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, TextureArray);
 
-        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_u8(skyvis_pznzpynyx);
-        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_u8(skyvis_pxnxs0s1);
+        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
+        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
     }
 
     public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
@@ -441,8 +460,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         uint iterate = Voxels[CubeIdx].age;
         Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
 
-        uint4 skyvis_pznzpynyx = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pznzpyny);
-        uint4 skyvis_pxnxs0s1 = unpack_u8u32(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
+        uint4 skyvis_pznzpynyx = unpack_bytes(Cubes[CubeIdx].skyVisibility_pznzpyny);
+        uint4 skyvis_pxnxs0s1 = unpack_bytes(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
         FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY,  skyvis_pznzpynyx.z, TextureArray);
         FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, TextureArray);
         FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX,  skyvis_pxnxs0s1.x,  TextureArray);
@@ -450,8 +469,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ,  skyvis_pznzpynyx.x, TextureArray);
         FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, TextureArray);
 
-        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_u8(skyvis_pznzpynyx);
-        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_u8(skyvis_pxnxs0s1);
+        Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
+        Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
     }
 
     ConstantBuffer<UniformBufferObject> Camera;

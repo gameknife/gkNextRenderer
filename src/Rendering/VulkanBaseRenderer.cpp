@@ -1150,10 +1150,6 @@ namespace Vulkan
                 break;
             }
 
-#if ANDROID
-            temporalFrames = count / 64 / 16;
-#endif
-
             if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
             {
                 SCOPED_GPU_TIMER("sw-lightbake");
