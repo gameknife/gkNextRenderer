@@ -28,7 +28,7 @@ import Common;
 [[vk::binding(7, 3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
 [[vk::binding(9, 3)]] StructuredBuffer<PageIndex> Pages;
-
+[[vk::binding(12, 3)]] StructuredBuffer<uint> PrimAddress;
 void OutputColor(int2 ipos, float3 Total)
 {
     if (Camera.HDR)
@@ -46,7 +46,7 @@ void OutputColor(int2 ipos, float3 Total)
 void main(uint3 DTid: SV_DispatchThreadID) {
     START_SHADERCLOCK()
     // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer };
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer, PrimAddress };
  
     int2 ipos = int2(DTid.xy);
     int2 size;

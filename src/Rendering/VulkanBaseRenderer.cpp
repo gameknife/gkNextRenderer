@@ -1236,7 +1236,7 @@ namespace Vulkan
 
                 VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
                 VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
-                const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+                const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
                 VkDeviceSize offsets[] = {0};
 
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
@@ -1271,7 +1271,7 @@ namespace Vulkan
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0, sizeof(glm::mat4), &worldMatrix);
 
-                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, offset.vertexOffset, 0);
+                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, 0, 0);
                 }
             }
             vkCmdEndRenderPass(commandBuffer);

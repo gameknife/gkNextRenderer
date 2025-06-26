@@ -6,6 +6,7 @@
 #include "Assets/TextureImage.hpp"
 #include <chrono>
 #include <unordered_set>
+#include <meshoptimizer.h>
 
 #include "Runtime/Engine.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
@@ -57,6 +58,10 @@ namespace Assets
         indexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         vertexBuffer_.reset();
         vertexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+        reorderBuffer_.reset();
+        reorderBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+        primAddressBuffer_.reset();
+        primAddressBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         lightBuffer_.reset();
         lightBufferMemory_.reset();
 
@@ -104,6 +109,8 @@ namespace Assets
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
+        std::vector<uint32_t> reorders;
+        std::vector<uint32_t> primitiveIndices;
 
         offsets_.clear();
         for (auto& model : models_)
@@ -111,8 +118,8 @@ namespace Assets
             // Remember the index, vertex offsets.
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
-
-            offsets_.push_back({indexOffset, model.NumberOfIndices(), vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, 0, 0});
+            const auto reorderOffset = static_cast<uint32_t>(reorders.size());
+            offsets_.push_back({indexOffset, model.NumberOfIndices(), vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
 
             // Copy model data one after the other.
 
@@ -122,16 +129,42 @@ namespace Assets
                 vertices.push_back(MakeVertex(vertex));
             }
             //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
-            indices.insert(indices.end(), model.CPUIndices().begin(), model.CPUIndices().end());
 
+            const std::vector<Vertex>& localVertices = model.CPUVertices();
+            const std::vector<uint32_t>& localIndices = model.CPUIndices();
+            std::vector<uint32_t> provoke(localIndices.size());
+            std::vector<uint32_t> reorder(localVertices.size() + localIndices.size() / 3);
+            std::vector<uint32_t> primIndices(localIndices.size());
+            
+            if (localIndices.size() > 0)
+            {
+                reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], localIndices.size(), localVertices.size()));
+            }
+
+            for ( size_t i = 0; i < reorder.size(); ++i )
+            {
+                reorder[i] += vertexOffset;
+            }
+
+            for ( size_t i = 0; i < provoke.size(); ++i )
+            {
+                primIndices[i] += reorder[provoke[i]];
+            }
+            
+            indices.insert(indices.end(), provoke.begin(), provoke.end());
+            reorders.insert(reorders.end(), reorder.begin(), reorder.end());
+            primitiveIndices.insert(primitiveIndices.end(), primIndices.begin(), primIndices.end());
+            
             model.FreeMemory();
         }
-
+        
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, indices, indexBuffer_, indexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags, indices, indexBuffer_, indexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_, reorderBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
 
@@ -169,6 +202,8 @@ namespace Assets
                 {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
                 {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             }, maxSets));
         
         auto& descriptorSets = sceneBufferDescriptorSetManager_->DescriptorSets();
@@ -188,6 +223,8 @@ namespace Assets
                 descriptorSets.Bind(i, 8, { lightBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 9, { pageIndexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
                 descriptorSets.Bind(i, 10, { gpuDrivenStatsBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 11, { reorderBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 12, { primAddressBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

@@ -61,6 +61,8 @@ namespace Assets
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+		const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
+		const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
 		const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
 		const bool HasSun() const { return envSettings_.HasSun; }
 
@@ -137,6 +139,12 @@ namespace Assets
 		std::unique_ptr<Vulkan::Buffer> indexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> reorderBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> reorderBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> primAddressBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> primAddressBufferMemory_;
+		
 		std::unique_ptr<Vulkan::Buffer> materialBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> materialBufferMemory_;
 

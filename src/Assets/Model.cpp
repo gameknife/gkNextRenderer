@@ -49,7 +49,8 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/NextPhysics.h"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
+#define PROVOKING_VERTICE 1
 
 using namespace glm;
 
