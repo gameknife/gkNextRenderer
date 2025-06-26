@@ -67,7 +67,7 @@ find_package(tinyobjloader CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Jolt CONFIG REQUIRED)
-
+find_package(meshoptimizer CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 
 

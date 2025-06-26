@@ -101,7 +101,7 @@ public struct ALIGN_16 ModelData
 
     public uint modelType;
     public uint voxelDataIdx;
-    public uint reserved1;
+    public uint reorderOffset;
     public uint reserved2;
 };
 
@@ -234,7 +234,9 @@ public struct ALIGN_16 Vertex
 
 public struct ALIGN_16 GPUVertex
 {
-	public float3 Position;
+    public float PositionX;
+    public float PositionY;
+    public float PositionZ;
 	public uint TexcoordXY;
 	public uint NormalXY;
 	public uint NormalZTangentX;
