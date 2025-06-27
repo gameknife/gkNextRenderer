@@ -778,15 +778,12 @@ namespace Vulkan
                 const auto& scene = GetScene();
 
                 VkDescriptorSet descriptorSets[] = {visibilityPipeline_->DescriptorSet(imageIndex)};
-                VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
                 const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-                VkDeviceSize offsets[] = {0};
 
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                         visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0,
                                         nullptr);
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
                 // indirect draw

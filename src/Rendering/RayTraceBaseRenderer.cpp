@@ -318,7 +318,7 @@ namespace Vulkan::RayTracing
             geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
-            vertexOffset += vertexCount * sizeof(Assets::GPUVertex);
+            vertexOffset += vertexCount * sizeof(glm::vec4);
             indexOffset += indexCount * sizeof(uint32_t);
             aabbOffset += sizeof(VkAabbPositionsKHR);
         }

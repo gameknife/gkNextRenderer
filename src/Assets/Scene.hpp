@@ -55,6 +55,7 @@ namespace Assets
 		const std::vector<ModelData>& Offsets() const { return offsets_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
+		const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
@@ -135,6 +136,9 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> simpleVertexBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> simpleVertexBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> indexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;

@@ -108,6 +108,7 @@ namespace Assets
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
+        std::vector<glm::vec4> simpleVertices;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
@@ -127,9 +128,9 @@ namespace Assets
             for (auto& vertex : model.CPUVertices())
             {
                 vertices.push_back(MakeVertex(vertex));
+                simpleVertices.push_back(glm::vec4(vertex.Position,1));
             }
-            //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
-
+            
             const std::vector<Vertex>& localVertices = model.CPUVertices();
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
             std::vector<uint32_t> provoke(localIndices.size());
@@ -163,6 +164,7 @@ namespace Assets
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SimpleVertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, simpleVertices, simpleVertexBuffer_, simpleVertexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags, indices, indexBuffer_, indexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_, reorderBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);

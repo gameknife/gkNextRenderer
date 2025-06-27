@@ -374,18 +374,18 @@ public struct FGpuProbeGenerator : IProbeGenerator
         bounceColor = bounceColor / float(FACE_TRACING);
 
         // 参数光源，目前只取了一盏光源
-        // if (Camera.LightCount > 0)
-        // {
-        //     float4 lightPower = float4(0.0);
-        //     LightObject light = FetchLight(0, lightPower);
-        //     float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
-        //     float lightAtten = tracer.TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
-        //     float3 lightDir = normalize(lightPos - origin);
-        //     float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-        //     float distance = length(lightPos - origin);
-        //     float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-        //     directColor += lightPower * attenuation * lightAtten;
-        // }
+        if (Camera.LightCount > 0)
+        {
+            float4 lightPower = float4(0.0);
+            LightObject light = FetchLight(0, lightPower);
+            float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
+            float lightAtten = tracer.TraceSegment(origin, lightPos) ? 0.0f : 1.0f;
+            float3 lightDir = normalize(lightPos - origin);
+            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
+            float distance = length(lightPos - origin);
+            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
+            directColor += lightPower * attenuation * lightAtten;
+        }
 
         // // 太阳光
         if (Camera.HasSun)

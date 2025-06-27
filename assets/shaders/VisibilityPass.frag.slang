@@ -2,8 +2,7 @@ import Common;
 
 struct FragmentInput
 {
-    [[vk::location(0)]] nointerpolation uint g_primitive_index : PRIMITIVE_INDEX;
-    [[vk::location(1)]] nointerpolation uint g_instance_index : INSTANCE_INDEX;
+    [[vk::location(0)]] nointerpolation uint2 g_primitive_index : PRIMITIVE_INDEX;
 };
 
 struct FragmentOutput
@@ -15,9 +14,6 @@ struct FragmentOutput
 FragmentOutput main(FragmentInput input)
 {
     FragmentOutput output;
-
-    output.g_out_visibility.x = input.g_instance_index + 1;
-    output.g_out_visibility.y = input.g_primitive_index;
-   
+    output.g_out_visibility = input.g_primitive_index;
     return output;
 }

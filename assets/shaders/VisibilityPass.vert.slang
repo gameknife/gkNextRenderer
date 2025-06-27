@@ -10,13 +10,12 @@ StructuredBuffer<NodeProxy> NodeProxies;
 StructuredBuffer<uint> Reorders;
 
 [[vk::binding(3, 0)]]
-StructuredBuffer<GPUVertex> Vertices;
+StructuredBuffer<float4> Vertices;
 
 struct VertexOutput
 {
     float4 position : SV_Position;
-    [[vk::location(0)]] nointerpolation uint primitive_index : PRIMITIVE_INDEX;
-    [[vk::location(1)]] nointerpolation uint instance_index : INSTANCE_INDEX;
+    [[vk::location(0)]] nointerpolation uint2 primitive_index : PRIMITIVE_INDEX;
 };
 
 [shader("vertex")]
@@ -25,9 +24,8 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     VertexOutput output;
     uint absouluteInstanceIdx = instanceIndex + instanceBase;
     NodeProxy proxy = NodeProxies[absouluteInstanceIdx];
-    GPUVertex vertex = Vertices[Reorders[vertexIndex]];
-    output.position = mul(mul(Camera.ViewProjection, proxy.worldTS), float4(vertex.PositionX, vertex.PositionY, vertex.PositionZ, 1.0));
-    output.primitive_index = vertexIndex - baseVertex;
-    output.instance_index = absouluteInstanceIdx;
+    float4 Position = Vertices[Reorders[vertexIndex]];
+    output.position = mul(mul(Camera.ViewProjection, proxy.worldTS), float4(Position.xyz, 1.0));
+    output.primitive_index = uint2(absouluteInstanceIdx + 1, vertexIndex - baseVertex);
     return output;
 }

@@ -194,9 +194,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
             }
 
             float2 subpixel = frac(float2(ipos) + motion);
-            float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x), 
-                                 lerp(historyColor[2], historyColor[3], subpixel.x), 
-                                 subpixel.y);
+            float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
+                                  lerp(historyColor[2], historyColor[3], subpixel.x),
+                                  subpixel.y);
 
             if (!Camera.ProgressiveRender)
             {
@@ -209,11 +209,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
                     AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
                 }
+                // ...existing code...
                 // History data that needs to be clipped
                 float3 HistoryYCoCg = rgb2ycocg(history);
                 float3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
+                
+                // Check if result is much darker than history
+                float historyLuma = HistoryYCoCg.x;  // Y component is luminance
+                float resultLuma = ResultYCoCg.x;
+                const float darknessThreshold = 0.75; // Adjust this value as needed
+                
+                // If result is much darker, keep the original history
+                if (resultLuma < historyLuma * darknessThreshold) {
+                    ResultYCoCg = HistoryYCoCg;
+                }
+                
                 // Convert back to RGB color space for final result
                 history = ycocg2rgb(ResultYCoCg);
+                // ...existing code...
             }
 
             // Judge current gbuffer / object id with prev frame, to deghosting

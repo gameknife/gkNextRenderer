@@ -815,7 +815,7 @@ namespace Vulkan::PipelineCommon
         	reorderBufferInfo.range = VK_WHOLE_SIZE;
 
         	VkDescriptorBufferInfo vertexBufferInfo = {};
-        	vertexBufferInfo.buffer = scene.VertexBuffer().Handle();
+        	vertexBufferInfo.buffer = scene.SimpleVertexBuffer().Handle();
         	vertexBufferInfo.range = VK_WHOLE_SIZE;
         	
             const std::vector<VkWriteDescriptorSet> descriptorWrites =
