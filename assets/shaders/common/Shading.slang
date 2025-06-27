@@ -130,7 +130,7 @@ namespace Common
     };
 
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices)
+                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices)
     {
         const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
@@ -162,7 +162,7 @@ namespace Common
             float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
             float3 ray_dir = normalize(dir.xyz);
 
-            Vertex sampleVertex = Common.get_material_data(vBufferSample, origin.xyz, ray_dir, NodeProxies, Vertices, Indices);
+            Vertex sampleVertex = Common.get_material_data(vBufferSample, origin.xyz, ray_dir, NodeProxies, Models, Vertices, Indices);
 
             float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
             float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
@@ -249,7 +249,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         float3 ray_dir = normalize(dir.xyz);
 
         // 获取初始顶点数据
-        Vertex initialVertex = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Vertices, PrimAddress);
+        Vertex initialVertex = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
         
         if (vBuffer.x == 0)
         {
@@ -327,7 +327,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         else
         {
             // 使用偏移后的结果
-            Vertex finalVertex = Common.get_material_data(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Vertices, PrimAddress);
+            Vertex finalVertex = Common.get_material_data(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Models, Vertices, PrimAddress);
             
             // 只在焦平面附近才进行深度检查
             float distanceToFocus = abs(vertexDistance - Camera.FocusDistance);
@@ -379,6 +379,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     ConstantBuffer<UniformBufferObject> Camera;
     StructuredBuffer<float> Vertices;
     StructuredBuffer<NodeProxy> NodeProxies;
+    StructuredBuffer<ModelData> Models;
     RWTexture2D<uint2> VisibilityBuffer;
     StructuredBuffer<uint> PrimAddress;
 }
@@ -680,7 +681,7 @@ public struct FSoftwareRayTracer : IRayTracer
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
-        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, Vertices, Indices))
+        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, ModelDatas, Vertices, Indices))
         {
             outVertex.TexCoord = float2(0.5, 0.5);
             return true;
@@ -702,6 +703,7 @@ public struct FSoftwareRayTracer : IRayTracer
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<NodeProxy> NodeProxies;
+    StructuredBuffer<ModelData> ModelDatas;
 
     FHiVoxelDDARayTracer DDARayTracer;
 }
@@ -753,7 +755,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
             float3 outPosition;
             float3 outNormal;
             uint outMaterialIdx;
-            float contactShadow = Common.traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Vertices, Indices) ? 0.0 : 1.0;
+            float contactShadow = Common.traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Models, Vertices, Indices) ? 0.0 : 1.0;
             shadow = min(shadow, contactShadow); // 结合两种阴影结果
         }
 
@@ -779,6 +781,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
 
     RWTexture2D<uint2> MiniGBuffer;
     StructuredBuffer<NodeProxy> NodeProxies;
+    StructuredBuffer<ModelData> Models;
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
 }
