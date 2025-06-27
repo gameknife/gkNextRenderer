@@ -46,7 +46,7 @@ void OutputColor(int2 ipos, float3 Total)
 void main(uint3 DTid: SV_DispatchThreadID) {
     START_SHADERCLOCK()
     // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer, PrimAddress };
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, PrimAddress };
  
     int2 ipos = int2(DTid.xy);
     int2 size;

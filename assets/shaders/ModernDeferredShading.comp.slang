@@ -35,10 +35,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
     // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, MiniGBuffer, Indices };
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, Indices };
     FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
-    FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Indices, NodeProxies, voxelTracer };
-    FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Vertices, Indices };
+    FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Indices, NodeProxies, Offsets, voxelTracer };
+    FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Offsets, Vertices, Indices };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
 
     

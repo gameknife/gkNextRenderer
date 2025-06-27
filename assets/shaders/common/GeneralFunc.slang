@@ -3,20 +3,21 @@ implementing Common;
 
 namespace Common
 {
-public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<float> Vertices, StructuredBuffer<uint> PrimAddress)
+public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in StructuredBuffer<NodeProxy> NodeProxies, StructuredBuffer<ModelData> Models, in StructuredBuffer<float> Vertices, StructuredBuffer<uint> PrimAddress)
    {
        // fetch primitive_index high 14bit as instance index and low 18bit as triangle index
        NodeProxy proxy = NodeProxies[vBuffer.x - 1];
-   
+       ModelData model = Models[proxy.modelId];
+
        Vertex result;
        float3 positions[3], normals[3], tangents[3];
        float2 tex_coords[3];
        uint matid = 0;
 
-       uint primitive_index = vBuffer.y; // primitive_index is 0-based, so we subtract 1
+       uint primitive_index = vBuffer.y; // triangle index in model, so has to add by modelinfo
 
        for (int i = 0; i != 3; ++i) {
-           const Vertex v = UnpackVertex(PrimAddress[primitive_index * 3 + i], Vertices);
+           const Vertex v = UnpackVertex(PrimAddress[model.indexOffset + primitive_index * 3 + i], Vertices);
            positions[i] = mul(proxy.worldTS, float4(v.Position, 1)).xyz;
            normals[i] = mul(proxy.worldTS, float4(v.Normal, 0)).xyz;
            tangents[i] = mul(proxy.worldTS, float4(v.Tangent.xyz, 0)).xyz;

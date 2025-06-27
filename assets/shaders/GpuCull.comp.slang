@@ -250,5 +250,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DrawCommands[DTid.x].firstInstance = shouldDraw ? DTid.x : 0;
     DrawCommands[DTid.x].indexCount = shouldDraw ? model.indexCount : 0;
     DrawCommands[DTid.x].firstIndex = shouldDraw ? model.indexOffset : 0;
-    DrawCommands[DTid.x].vertexOffset = shouldDraw ? model.vertexOffset : 0;
+    DrawCommands[DTid.x].vertexOffset = shouldDraw ? model.reorderOffset : 0;
 }
