@@ -140,23 +140,17 @@ namespace Assets
             {
                 reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], localIndices.size(), localVertices.size()));
             }
-
+            
+            for ( size_t i = 0; i < provoke.size(); ++i )
+            {
+                primIndices[i] += reorder[provoke[i]];
+            }
+            
             // reorder is absolute vertex index
             for ( size_t i = 0; i < reorder.size(); ++i )
             {
                 reorder[i] += vertexOffset;
             }
-
-            for ( size_t i = 0; i < provoke.size(); ++i )
-            {
-                primIndices[i] += reorder[provoke[i]];
-            }
-
-            // make provoke to absolute
-            // for ( size_t i = 0; i < provoke.size(); ++i )
-            // {
-            //     provoke[i] += reorderOffset;
-            // }
             
             indices.insert(indices.end(), provoke.begin(), provoke.end());
             reorders.insert(reorders.end(), reorder.begin(), reorder.end());

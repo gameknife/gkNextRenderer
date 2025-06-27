@@ -641,9 +641,9 @@ public struct FHardwareRayTracer : IRayTracer
             const ModelData offsets = Offsets[outNode.modelId];
             const uint indexOffset = offsets.indexOffset + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.vertexOffset;
-            const Vertex v0 = UnpackVertex(Indices[indexOffset], Vertices);
-            const Vertex v1 = UnpackVertex(Indices[indexOffset + 1], Vertices);
-            const Vertex v2 = UnpackVertex(Indices[indexOffset + 2], Vertices);
+            const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
+            const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
+            const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
             outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);

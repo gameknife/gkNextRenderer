@@ -136,18 +136,25 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
             }
         }
         Total /= Weight;
-        Total = Total * CenterAlbedo;
+
+        if (!Camera.DebugDraw_Lighting)
+        {
+            Total = Total * CenterAlbedo;
+        }
     }
     else
     {
-
-        Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb;
+        if (Camera.DebugDraw_Lighting)
+        {
+            Total = FinalImage[ipos].rgb;
+        }
+        else
+        {
+            Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb;
+        }
     }
 
-    if(Camera.DebugDraw_Lighting)
-    {
-        Total = FinalImage[ipos].rgb;
-    }
+    
     
     if(Camera.HDR)
     {

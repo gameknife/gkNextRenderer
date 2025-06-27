@@ -28,7 +28,7 @@ void BottomLevelGeometry::AddGeometryTriangles(
 	geometry.flags = isOpaque ? VK_GEOMETRY_OPAQUE_BIT_KHR : 0;
 
 	VkAccelerationStructureBuildRangeInfoKHR buildOffsetInfo = {};
-	buildOffsetInfo.firstVertex = 0;//vertexOffset / sizeof(Assets::GPUVertex);
+	buildOffsetInfo.firstVertex = vertexOffset / sizeof(Assets::GPUVertex);
 	buildOffsetInfo.primitiveOffset = indexOffset;
 	buildOffsetInfo.primitiveCount = indexCount / 3;
 	buildOffsetInfo.transformOffset = 0;
