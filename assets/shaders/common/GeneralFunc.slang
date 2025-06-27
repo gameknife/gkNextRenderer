@@ -17,7 +17,7 @@ public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_dir
        uint primitive_index = vBuffer.y; // triangle index in model, so has to add by modelinfo
 
        for (int i = 0; i != 3; ++i) {
-           const Vertex v = UnpackVertex(PrimAddress[model.indexOffset + primitive_index * 3 + i], Vertices);
+           const Vertex v = UnpackVertex(model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i], Vertices);
            positions[i] = mul(proxy.worldTS, float4(v.Position, 1)).xyz;
            normals[i] = mul(proxy.worldTS, float4(v.Normal, 0)).xyz;
            tangents[i] = mul(proxy.worldTS, float4(v.Tangent.xyz, 0)).xyz;
