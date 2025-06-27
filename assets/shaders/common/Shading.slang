@@ -130,7 +130,7 @@ namespace Common
     };
 
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices)
+                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint16_t2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices)
     {
         const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
@@ -380,7 +380,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     StructuredBuffer<float> Vertices;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
-    RWTexture2D<uint2> VisibilityBuffer;
+    RWTexture2D<uint16_t2> VisibilityBuffer;
     StructuredBuffer<uint> PrimAddress;
 }
 
@@ -698,7 +698,7 @@ public struct FSoftwareRayTracer : IRayTracer
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    RWTexture2D<uint2> MiniGBuffer;
+    RWTexture2D<uint16_t2> MiniGBuffer;
 
     StructuredBuffer<float> Vertices;
     StructuredBuffer<uint> Indices;
@@ -779,7 +779,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
     ConstantBuffer<UniformBufferObject> Camera;
     Sampler2D ShadowMapSampler;
 
-    RWTexture2D<uint2> MiniGBuffer;
+    RWTexture2D<uint16_t2> MiniGBuffer;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
     StructuredBuffer<float> Vertices;

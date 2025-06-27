@@ -2,7 +2,7 @@
 
 [[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 1)]] RWTexture2D<float4> RenderImage;
-[[vk::binding(2, 1)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(2, 1)]] RWTexture2D<uint16_t2> MiniGBuffer;
 [[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
 [[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
 [[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;

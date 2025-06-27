@@ -7,7 +7,7 @@ import Common;
 
 [[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
-[[vk::binding(2, 2)]] RWTexture2D<uint2> MiniGBuffer;
+[[vk::binding(2, 2)]] RWTexture2D<uint16_t2> MiniGBuffer;
 [[vk::binding(3, 2)]] RWTexture2D<uint> ObjectId0;
 [[vk::binding(4, 2)]] RWTexture2D<uint> ObjectId1;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;

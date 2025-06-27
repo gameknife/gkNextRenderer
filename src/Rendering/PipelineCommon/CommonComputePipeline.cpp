@@ -831,7 +831,7 @@ namespace Vulkan::PipelineCommon
 
         // Create pipeline layout and render pass.
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout()));
-        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32G32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R16G16_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
         const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.slang.spv");

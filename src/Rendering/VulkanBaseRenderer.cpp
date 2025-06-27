@@ -432,7 +432,7 @@ namespace Vulkan
                                             VK_IMAGE_USAGE_STORAGE_BIT, false, "renderout"));
 
         rtVisibility.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
-                                           VK_FORMAT_R32G32_UINT,
+                                           VK_FORMAT_R16G16_UINT,
                                            VK_IMAGE_TILING_OPTIMAL,
                                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, false,
                                            "visibility"));
