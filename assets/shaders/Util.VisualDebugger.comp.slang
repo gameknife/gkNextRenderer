@@ -111,7 +111,7 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
 
     if(ipos.x >= elementx * quadx && ipos.x < elementx * (quadx + 1) && ipos.y > elementy * quady && ipos.y < elementy * (quady + 1))
     {
-        uv = (ipos - float2(elementx * quadx, elementy * quady)) * float2(divider, divider);
+        uv = uint2((ipos - float2(elementx * quadx, elementy * quady)) * float2(divider, divider));
         return true;
     }
     uv = int2(0, 0);

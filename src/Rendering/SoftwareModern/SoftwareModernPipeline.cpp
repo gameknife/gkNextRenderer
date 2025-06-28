@@ -58,7 +58,7 @@ ShadingPipeline::ShadingPipeline(const SwapChain& swapChain,
 			&scene.GetSceneBufferDescriptorSetManager()
 		};
 	pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
-    const ShaderModule denoiseShader(device, "assets/shaders/LegacyDeferredShading.comp.slang.spv");
+    const ShaderModule denoiseShader(device, "assets/shaders/Core.SwModern.comp.slang.spv");
 
     VkComputePipelineCreateInfo pipelineCreateInfo = {};
     pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -126,7 +126,7 @@ namespace Vulkan::VoxelTracing
 					&scene.GetSceneBufferDescriptorSetManager()
 				};
 			pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
-	        const ShaderModule denoiseShader(device, "assets/shaders/VoxelTracing.comp.slang.spv");
+	        const ShaderModule denoiseShader(device, "assets/shaders/Core.VoxelTracing.comp.slang.spv");
 
 	        VkComputePipelineCreateInfo pipelineCreateInfo = {};
 	        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

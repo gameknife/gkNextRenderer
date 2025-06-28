@@ -59,7 +59,7 @@ namespace Vulkan::PipelineCommon
             &baseRender.GetRTDescriptorSetManager(),
         };
         pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
-        const ShaderModule denoiseShader(device, "assets/shaders/Accumulate.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Process.ReProject.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -130,7 +130,7 @@ namespace Vulkan::PipelineCommon
         
         pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size()), &pushConstantRange, 1));
         
-        const ShaderModule denoiseShader(device, "assets/shaders/FinalCompose.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Process.DenoiseJBF.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -201,7 +201,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get()}, static_cast<uint32_t>(swapChain.Images().size()), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/SimpleCompose.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Process.UpScaleFSR.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -255,7 +255,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()}, static_cast<uint32_t>(swapChain.Images().size())));
-        const ShaderModule denoiseShader(device, "assets/shaders/BufferClear.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Util.BufferClear.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -310,7 +310,7 @@ namespace Vulkan::PipelineCommon
         }
 
         pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()},static_cast<uint32_t>(swapChain.Images().size())));
-        const ShaderModule denoiseShader(device, "assets/shaders/VisualDebugger.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Util.VisualDebugger.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -451,7 +451,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/AmbientCubeGen.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Bake.HwAmbientCube.comp.slang.spv");
  
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -587,7 +587,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/SoftAmbientCubeGen.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv");
  
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -658,7 +658,7 @@ namespace Vulkan::PipelineCommon
         pushConstantRange.size = 8;
         
         pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &scene.GetSceneBufferDescriptorSetManager(), &baseRender.GetRTDescriptorSetManager()}, static_cast<uint32_t>(uniformBuffers.size()), &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/GpuCull.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Task.GpuCull.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -834,8 +834,8 @@ namespace Vulkan::PipelineCommon
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R16G16_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
-        const ShaderModule vertShader(device, "assets/shaders/VisibilityPass.vert.slang.spv");
-        const ShaderModule fragShader(device, "assets/shaders/VisibilityPass.frag.slang.spv");
+        const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPass.vert.slang.spv");
+        const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
 
         VkPipelineShaderStageCreateInfo shaderStages[] =
         {
@@ -894,7 +894,7 @@ namespace Vulkan::PipelineCommon
 	isWireFrame_(isWireFrame)
 	{
 		const auto& device = swapChain.Device();
-		const auto bindingDescription = Assets::GPUVertex::GetBindingDescription();
+		const auto bindingDescription = Assets::GPUVertex::GetFastBindingDescription();
 		const auto attributeDescriptions = Assets::GPUVertex::GetFastAttributeDescriptions();
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
@@ -1027,8 +1027,8 @@ namespace Vulkan::PipelineCommon
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
 		// Load shaders.
-		const ShaderModule vertShader(device, "assets/shaders/Graphics.vert.slang.spv");
-		const ShaderModule fragShader(device, "assets/shaders/Graphics.frag.slang.spv");
+		const ShaderModule vertShader(device, "assets/shaders/Rast.Wireframe.vert.slang.spv");
+		const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
 
 		VkPipelineShaderStageCreateInfo shaderStages[] =
 		{

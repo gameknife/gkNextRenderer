@@ -68,7 +68,7 @@ namespace Vulkan::RayTracing
 
         PipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size()),
                                                        &pushConstantRange, 1));
-        const ShaderModule denoiseShader(device, "assets/shaders/PathTracingShading.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Core.PathTracing.comp.slang.spv");
         
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

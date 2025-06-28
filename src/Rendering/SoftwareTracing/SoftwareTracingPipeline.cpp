@@ -57,7 +57,7 @@ namespace Vulkan::ModernDeferred
             &scene.GetSceneBufferDescriptorSetManager()
         };
         pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
-        const ShaderModule denoiseShader(device, "assets/shaders/ModernDeferredShading.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Core.SwTracing.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

@@ -47,7 +47,7 @@ namespace Vulkan::HybridDeferred
         };
         pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
         
-        const ShaderModule denoiseShader(device, "assets/shaders/HybridDeferredShading.comp.slang.spv");
+        const ShaderModule denoiseShader(device, "assets/shaders/Core.HwTracing.comp.slang.spv");
         VkComputePipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);

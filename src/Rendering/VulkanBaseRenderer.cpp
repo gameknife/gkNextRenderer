@@ -1237,7 +1237,7 @@ namespace Vulkan
                 auto& scene = GetScene();
 
                 VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
-                VkBuffer vertexBuffers[] = {scene.VertexBuffer().Handle()};
+                VkBuffer vertexBuffers[] = {scene.SimpleVertexBuffer().Handle()};
                 const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
                 VkDeviceSize offsets[] = {0};
 
@@ -1273,7 +1273,7 @@ namespace Vulkan
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0, sizeof(glm::mat4), &worldMatrix);
 
-                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, 0, 0);
+                    vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, static_cast<int>(offset.vertexOffset), 0);
                 }
             }
             vkCmdEndRenderPass(commandBuffer);

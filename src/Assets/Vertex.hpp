@@ -54,6 +54,15 @@ namespace Assets
 			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 			return bindingDescription;
 		}
+
+		static VkVertexInputBindingDescription GetFastBindingDescription()
+		{
+			VkVertexInputBindingDescription bindingDescription = {};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = sizeof(short) * 4;
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return bindingDescription;
+		}
 		
 		static std::array<VkVertexInputAttributeDescription, 1> GetFastAttributeDescriptions()
 		{

@@ -33,7 +33,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     RayCastContext context = RayIO[dispatchThreadId.x];
 
-    // main函数体由您自行转换
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
 
     Vertex hitVertex;

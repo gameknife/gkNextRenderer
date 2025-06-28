@@ -16,7 +16,7 @@ ConstantBuffer<PushConsts> pushConsts;
 
 struct VertexInput
 {
-    [[vk::location(0)]] float3 InPosition : POSITION;
+    [[vk::location(0)]] half3 InPosition : POSITION;
 };
 
 struct VertexOutput
