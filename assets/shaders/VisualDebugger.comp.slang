@@ -61,7 +61,7 @@ float3 UintToStableColor(uint value)
             int2 ssize;                                       \
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
             float4 col = IMAGE[uv * ssize / isize]; \
-    OutImage[ipos] = col * 0.5 + 0.5;} \
+    OutImage[ipos] = col.rbga * 0.5 + 0.5;} \
 }
 
 #define DRAWINT(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -134,8 +134,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAWDEPTH(OutDepthBuffer, 2, 0, 4, ipos, isize, 1.0f);
     DRAWINT(ObjectId0, 3, 0, 4, ipos, isize);
 
-    // line 2/3 left
+// line 2/3 left
+#ifdef SHADER_CLOCK
     DRAW(ShaderTime, 0, 1, 4, ipos, isize, 1);
+#endif
     DRAW(OutMotionVector, 0, 2, 4, ipos, isize, 1);
 
     // line 2/3 right
