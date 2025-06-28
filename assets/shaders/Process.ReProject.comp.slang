@@ -66,53 +66,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);
 
-    // More flexible sampling algorithm with dynamic weights
     float4 src = OutImage[ipos];
-    float4 spatialSample = float4(0,0,0,0);
-
+    
     bool useHistory = true;
     float2 motion = OutMotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
     const bool inside = all(previpos < int2(Camera.ViewportRect.xy + Camera.ViewportRect.zw)) &&
                         all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
-    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId0[previpos]);
+    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
-
-    const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 2;
-
-    float3 CenterNormal = OutNormalBuffer[ipos].rgb;
-
-    float temporalWeight = 0.0;
-    float totalWeight = 0.0;
-
-    for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
-        for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
-            int2 offset = int2(x, y);
-            int2 samplePos = ipos + offset;
-            float4 samplePixel = OutImage[samplePos];
-            uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
-            float3 worldNormal = OutNormalBuffer[samplePos].rgb;
-
-            bool isCenter = (x == 0 && y == 0) ? true : false;
-            bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
-            float centerDist = length(float2(x, y));
-
-            // Calculate the weight for this sample
-            float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
-
-            if (isCenter) {
-                temporalWeight = samplePixel.w;
-            }
-
-            spatialSample += samplePixel * weight;
-            totalWeight += weight;
-        }
-    }
-
-    // Normalize
-    spatialSample /= totalWeight;
     
     float4 final = src;
     
@@ -125,6 +89,41 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (useHistory)
     {
+        const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 2;
+
+        float3 CenterNormal = OutNormalBuffer[ipos].rgb;
+
+        float4 spatialSample = float4(0, 0, 0, 0);
+        float temporalWeight = 0.0;
+        float totalWeight = 0.0;
+
+        for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
+            for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
+                int2 offset = int2(x, y);
+                int2 samplePos = ipos + offset;
+                float4 samplePixel = OutImage[samplePos];
+                uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
+                float3 worldNormal = OutNormalBuffer[samplePos].rgb;
+
+                bool isCenter = (x == 0 && y == 0) ? true : false;
+                bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
+                float centerDist = length(float2(x, y));
+
+                // Calculate the weight for this sample
+                float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
+
+                if (isCenter) {
+                    temporalWeight = samplePixel.w;
+                }
+
+                spatialSample += samplePixel * weight;
+                totalWeight += weight;
+            }
+        }
+
+        // Normalize
+        spatialSample /= totalWeight;
+
         // prev 9
         uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
         uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
@@ -140,6 +139,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
                                 lerp(historyColor[2], historyColor[3], subpixel.x),
                                 subpixel.y);
+
+        history = clamp(history, 0.0, 1600.0); // kill the negative valuse
 
         // Judge current gbuffer / object id with prev frame, to deghosting
         float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
