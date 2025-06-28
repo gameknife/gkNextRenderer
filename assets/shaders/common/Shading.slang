@@ -130,7 +130,7 @@ namespace Common
     };
 
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint16_t2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<float> Vertices, in StructuredBuffer<uint> Indices)
+                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint16_t2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
     {
         const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
@@ -377,7 +377,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
     RWTexture2D<uint16_t2> VisibilityBuffer;
@@ -654,7 +654,7 @@ public struct FHardwareRayTracer : IRayTracer
         return false;
     }
 
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
     StructuredBuffer<ModelData> Offsets;
@@ -700,7 +700,7 @@ public struct FSoftwareRayTracer : IRayTracer
     ConstantBuffer<UniformBufferObject> Camera;
     RWTexture2D<uint16_t2> MiniGBuffer;
 
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> ModelDatas;
@@ -782,7 +782,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
     RWTexture2D<uint16_t2> MiniGBuffer;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
 }
 
@@ -904,7 +904,7 @@ public struct FPathTracingRenderer : IRenderer
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
     StructuredBuffer<ModelData> Offsets;
@@ -992,7 +992,7 @@ public struct FHybridRenderer : IRenderer
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
     StructuredBuffer<ModelData> Offsets;
