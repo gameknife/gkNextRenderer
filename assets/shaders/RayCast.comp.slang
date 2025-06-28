@@ -7,7 +7,7 @@ RaytracingAccelerationStructure Scene;
 RWStructuredBuffer<RayCastContext> RayIO;
 
 [[vk::binding(4, 0)]]
-StructuredBuffer<float> Vertices;
+StructuredBuffer<GPUVertex> Vertices;
 
 [[vk::binding(5, 0)]]
 StructuredBuffer<uint> Indices;

@@ -21,7 +21,7 @@ struct UserSettings final
 	bool FastGather = false;
 	bool FastInterpole = false;
 	bool DebugDraw_Lighting = false;
-	bool DisableSpatialReuse = true;
+	bool DisableSpatialReuse = false;
 	int SuperResolution = 1;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 

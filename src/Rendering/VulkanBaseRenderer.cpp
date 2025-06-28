@@ -385,8 +385,13 @@ namespace Vulkan
         shaderDrawParametersFeatures.pNext = &shaderFloat16Int8Features;
         shaderDrawParametersFeatures.shaderDrawParameters = true;
 
+        VkPhysicalDevice16BitStorageFeatures storage16BitFeatures = {};
+        storage16BitFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+        storage16BitFeatures.pNext = &shaderDrawParametersFeatures;
+        storage16BitFeatures.storageBuffer16BitAccess = true;
+
         device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures,
-                                       &shaderDrawParametersFeatures));
+                                       &storage16BitFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
         commandPool2_.reset(new class CommandPool(*device_, device_->TransferFamilyIndex(), 1, true));
         gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 200, device_->DeviceProperties()));

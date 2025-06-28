@@ -281,47 +281,18 @@ public float3 ggxSampling(inout uint4 RandomSeed, float roughness, float3 normal
     return to_world(wm_, tangent, bitangent, normal);
 }
 
-public Vertex UncompressVertex(in float3 Position, in uint TexcoordXY, in uint NormalXY, in uint NormalZTangentX, in uint TangentYZ, in uint TangentWMatIdx)
+public Vertex UnpackVertex(uint index, in StructuredBuffer<GPUVertex> Vertices)
 {
     Vertex v;
-    
-    v.Position = Position;
-    v.Normal = float3(
-        f16tof32(NormalXY & 0xFFFF),
-        f16tof32(NormalXY >> 16),
-        f16tof32(NormalZTangentX & 0xFFFF)
-    );
-    v.Tangent = float4(
-        f16tof32(NormalZTangentX >> 16),
-        f16tof32(TangentYZ & 0xFFFF),
-        f16tof32(TangentYZ >> 16),
-        float((TangentWMatIdx >> 16) & 0xFFFF) - 1.0f
-    );
-    v.TexCoord = float2(
-        f16tof32(TexcoordXY & 0xFFFF),
-        f16tof32(TexcoordXY >> 16)
-    );
-    v.MaterialIndex = TangentWMatIdx & 0xFFFF;
+    v.Position = Vertices[index].Position_Tx.xyz;
+    v.Normal = Vertices[index].Normal_Ty.xyz;
+    v.Tangent = Vertices[index].Tangent;
+    v.TexCoord = float2(Vertices[index].Position_Tx.w, Vertices[index].Normal_Ty.w);
+    uint16_t TangentWMatIdx = asuint16(Vertices[index].Tangent.w);
+    v.Tangent.w = (TangentWMatIdx >> 8) & 0xFF;
+    v.MaterialIndex = TangentWMatIdx & 0xFF;
 
     return v;
-}
-
-public Vertex UnpackVertex(uint index, in StructuredBuffer<float> Vertices)
-{
-    const uint vertexSize = 8;
-    const uint offset = index * vertexSize;
-
-    float3 Position = float3(Vertices[offset + 0], Vertices[offset + 1], Vertices[offset + 2]);
-    uint TexcoordXY = asuint(Vertices[offset + 3]);
-    uint NormalXY = asuint(Vertices[offset + 4]);
-    uint NormalZTangentX = asuint(Vertices[offset + 5]);
-    uint TangentYZ = asuint(Vertices[offset + 6]);
-    uint TangentWMatIdx = asuint(Vertices[offset + 7]);
-
-    uint TangentW = (TangentWMatIdx >> 16) & 0xFFFF;
-    uint matIdx = TangentWMatIdx & 0xFFFF;
-    
-    return UncompressVertex(Position, TexcoordXY, NormalXY, NormalZTangentX, TangentYZ, TangentWMatIdx);
 }
 
 public uint FetchMaterialId(in NodeProxy node, uint offset)

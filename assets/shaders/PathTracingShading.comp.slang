@@ -16,7 +16,7 @@ import Common;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
 [[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
 
-[[vk::binding(0, 3)]] StructuredBuffer<float> Vertices;
+[[vk::binding(0, 3)]] StructuredBuffer<GPUVertex> Vertices;
 [[vk::binding(12, 3)]] StructuredBuffer<uint> Indices;
 [[vk::binding(2, 3)]] StructuredBuffer<Material> Materials;
 [[vk::binding(3, 3)]] StructuredBuffer<ModelData> Offsets;

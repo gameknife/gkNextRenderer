@@ -10,7 +10,7 @@ StructuredBuffer<NodeProxy> NodeProxies;
 StructuredBuffer<uint> Reorders;
 
 [[vk::binding(3, 0)]]
-StructuredBuffer<float4> Vertices;
+StructuredBuffer<half4> Vertices;
 
 struct VertexOutput
 {
@@ -24,7 +24,7 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     VertexOutput output;
     uint absouluteInstanceIdx = instanceIndex + instanceBase;
     NodeProxy proxy = NodeProxies[absouluteInstanceIdx];
-    float4 Position = Vertices[Reorders[vertexIndex]];
+    half4 Position = Vertices[Reorders[vertexIndex]];
     output.position = mul(mul(Camera.ViewProjection, proxy.worldTS), float4(Position.xyz, 1.0));
     output.primitive_index = uint2(absouluteInstanceIdx + 1, vertexIndex - baseVertex);
     return output;

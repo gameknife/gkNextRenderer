@@ -3,7 +3,7 @@ import Common;
 [[vk::binding(0, 0)]] RWStructuredBuffer<VkDrawIndexedIndirectCommand> DrawCommands;
 [[vk::binding(1, 0)]] ConstantBuffer<UniformBufferObject> Camera;
 
-[[vk::binding(0, 1)]] StructuredBuffer<float> Vertices;
+[[vk::binding(0, 1)]] StructuredBuffer<GPUVertex> Vertices;
 [[vk::binding(1, 1)]] StructuredBuffer<uint> Indices;
 [[vk::binding(2, 1)]] StructuredBuffer<Material> Materials;
 [[vk::binding(3, 1)]] StructuredBuffer<ModelData> Offsets;

@@ -67,7 +67,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);
 
     // More flexible sampling algorithm with dynamic weights
-    float4 src = float4(0, 0, 0, 0);
+    float4 src = OutImage[ipos];
+    float4 spatialSample = float4(0,0,0,0);
 
     bool useHistory = true;
     float2 motion = OutMotionVector[ipos].rg;
@@ -79,7 +80,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
     const bool check = (length(motion) > 0.01) ? true : false;
 
-    const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 1;
+    const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 2;
 
     float3 CenterNormal = OutNormalBuffer[ipos].rgb;
 
@@ -105,13 +106,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 temporalWeight = samplePixel.w;
             }
 
-            src += samplePixel * weight;
+            spatialSample += samplePixel * weight;
             totalWeight += weight;
         }
     }
 
     // Normalize
-    src /= totalWeight;
+    spatialSample /= totalWeight;
     
     float4 final = src;
     
@@ -124,115 +125,25 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (useHistory)
     {
-        if (!Camera.ProgressiveRender)
-        {
-            // current 4
-            uint current_primitive_index1 = FetchPrimitiveIndex(ObjectId0[ipos + int2(1, 0)]);
-            uint current_primitive_index2 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, 1)]);
-            uint current_primitive_index3 = FetchPrimitiveIndex(ObjectId0[ipos + int2(1, 1)]);
+        // prev 9
+        uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
+        uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
+        uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
 
-            // prev 9
-            uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
-            uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
-            uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
-            uint prev_primitive_index4 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, 0)]);
-            uint prev_primitive_index5 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, -1)]);
-            uint prev_primitive_index6 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, -1)]);
-            uint prev_primitive_index7 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, -1)]);
-            uint prev_primitive_index8 = FetchPrimitiveIndex(ObjectId1[previpos + int2(-1, 1)]);
+        float3 historyColor[4];
+        historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? AccumulateImage[previpos].rgb : spatialSample.rgb;
+        historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? AccumulateImage[previpos + int2(1, 0)].rgb : spatialSample.rgb;
+        historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? AccumulateImage[previpos + int2(0, 1)].rgb : spatialSample.rgb;
+        historyColor[3] = current_primitive_index0 == prev_primitive_index3 ? AccumulateImage[previpos + int2(1, 1)].rgb : spatialSample.rgb;
 
-            bool4 match1 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
-                            uint4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0);
-            bool4 match2 = uint4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7) == 
-                            uint4(current_primitive_index0, current_primitive_index0, current_primitive_index0, current_primitive_index0);
-            bool4 match3 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
-                            uint4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1);
-            bool4 match4 = uint4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7) == 
-                            uint4(current_primitive_index1, current_primitive_index1, current_primitive_index1, current_primitive_index1);
-            bool4 match5 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
-                            uint4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2);
-            bool4 match6 = uint4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7) == 
-                            uint4(current_primitive_index2, current_primitive_index2, current_primitive_index2, current_primitive_index2);
-            bool4 match7 = uint4(prev_primitive_index8, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == 
-                            uint4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3);
-            bool4 match8 = uint4(prev_primitive_index4, prev_primitive_index5, prev_primitive_index6, prev_primitive_index7) == 
-                            uint4(current_primitive_index3, current_primitive_index3, current_primitive_index3, current_primitive_index3);
-            bool4 match9 = uint4(prev_primitive_index0, prev_primitive_index0, prev_primitive_index0, prev_primitive_index0) == 
-                            uint4(current_primitive_index0, current_primitive_index1, current_primitive_index2, current_primitive_index3);
+        float2 subpixel = frac(float2(ipos) + motion);
+        float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
+                                lerp(historyColor[2], historyColor[3], subpixel.x),
+                                subpixel.y);
 
-            // 在点积计算中，bool 会自动转换为 0 或 1
-            float sum = dot(float4(match1), float4(1, 1, 1, 1));
-            sum += dot(float4(match2), float4(1, 1, 1, 1));
-            sum += dot(float4(match3), float4(1, 1, 1, 1));
-            sum += dot(float4(match4), float4(1, 1, 1, 1));
-            sum += dot(float4(match5), float4(1, 1, 1, 1));
-            sum += dot(float4(match6), float4(1, 1, 1, 1));
-            sum += dot(float4(match7), float4(1, 1, 1, 1));
-            sum += dot(float4(match8), float4(1, 1, 1, 1));
-            sum += dot(float4(match9), float4(1, 1, 1, 1));
-
-            bool miss = sum < 4 ? true : false;
-            if (miss)
-            {
-                useHistory = false;
-            }
-        }
-
-        if (useHistory)
-        {
-            float3 historyColor[4];
-            historyColor[0] = AccumulateImage[previpos].rgb;
-            historyColor[1] = AccumulateImage[previpos + int2(1, 0)].rgb;
-            historyColor[2] = AccumulateImage[previpos + int2(0, 1)].rgb;
-            historyColor[3] = AccumulateImage[previpos + int2(1, 1)].rgb;
-
-            float3 currentColor[25];
-
-            for (int i = 0; i < 25; i++)
-            {
-                currentColor[i] = OutImage[ipos + int2(offsets5x5[i])].rgb;
-            }
-
-            float2 subpixel = frac(float2(ipos) + motion);
-            float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
-                                  lerp(historyColor[2], historyColor[3], subpixel.x),
-                                  subpixel.y);
-
-            if (!Camera.ProgressiveRender)
-            {
-                float3 AABBMin, AABBMax;
-                AABBMax = rgb2ycocg(src.rgb);
-                AABBMin = AABBMax;
-                // Get the clip range in YCoCg color space
-                for (int k = 0; k < 25; k++)
-                {
-                    AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
-                    AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
-                }
-                // ...existing code...
-                // History data that needs to be clipped
-                float3 HistoryYCoCg = rgb2ycocg(history);
-                float3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
-                
-                // Check if result is much darker than history
-                float historyLuma = HistoryYCoCg.x;  // Y component is luminance
-                float resultLuma = ResultYCoCg.x;
-                const float darknessThreshold = 0.75; // Adjust this value as needed
-                
-                // If result is much darker, keep the original history
-                if (resultLuma < historyLuma * darknessThreshold) {
-                    ResultYCoCg = HistoryYCoCg;
-                }
-                
-                // Convert back to RGB color space for final result
-                history = ycocg2rgb(ResultYCoCg);
-                // ...existing code...
-            }
-
-            // Judge current gbuffer / object id with prev frame, to deghosting
-            float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
-            final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
-        }
+        // Judge current gbuffer / object id with prev frame, to deghosting
+        float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
+        final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
     }
     
     if (Camera.ShowEdge)

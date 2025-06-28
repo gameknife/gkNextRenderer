@@ -234,14 +234,9 @@ public struct ALIGN_16 Vertex
 
 public struct ALIGN_16 GPUVertex
 {
-    public float PositionX;
-    public float PositionY;
-    public float PositionZ;
-	public uint TexcoordXY;
-	public uint NormalXY;
-	public uint NormalZTangentX;
-	public uint TangentYZ;
-	public uint TangentWMatIdx;
+    public half4 Position_Tx;
+    public half4 Normal_Ty;
+    public half4 Tangent;
 };
 #endif
 

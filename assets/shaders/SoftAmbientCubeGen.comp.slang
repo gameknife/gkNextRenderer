@@ -2,7 +2,7 @@ import Common;
 
 [[vk::binding(2)]] StructuredBuffer<LightObject> Lights;
 [[vk::binding(3)]] ConstantBuffer<UniformBufferObject> Camera;
-[[vk::binding(4)]] StructuredBuffer<float> Vertices;
+[[vk::binding(4)]] StructuredBuffer<GPUVertex> Vertices;
 [[vk::binding(5)]] StructuredBuffer<uint> Indices;
 [[vk::binding(6)]] StructuredBuffer<Material> Materials;
 [[vk::binding(7)]] StructuredBuffer<ModelData> Offsets;

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <unordered_set>
 #include <meshoptimizer.h>
+#include <glm/detail/type_half.hpp>
 
 #include "Runtime/Engine.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
@@ -108,7 +109,7 @@ namespace Assets
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
-        std::vector<glm::vec4> simpleVertices;
+        std::vector<glm::detail::hdata> simpleVertices;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
@@ -128,7 +129,10 @@ namespace Assets
             for (auto& vertex : model.CPUVertices())
             {
                 vertices.push_back(MakeVertex(vertex));
-                simpleVertices.push_back(glm::vec4(vertex.Position,1));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.y));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
             }
             
             const std::vector<Vertex>& localVertices = model.CPUVertices();

@@ -476,7 +476,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<float> Vertices;
+    StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
     StructuredBuffer<Material> Materials;
     StructuredBuffer<ModelData> Offsets;
