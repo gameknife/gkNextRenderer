@@ -53,7 +53,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         OutMotionVector[ipos] = float4(0, 0, 0, 0);
         OutAlbedoBuffer[ipos] = float4(1, 1, 1, 1);
         OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
-        ObjectId0[ipos] = 0;
+        ObjectId0[ipos] = 65535;
 
         END_SHADERCLOCK(ipos)
         return;

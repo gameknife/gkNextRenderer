@@ -24,10 +24,18 @@ public static const float3 cubeVectors[6] = {
 };
 
 public static const uint FACE_TRACING = 16;
+public static const uint FACE_TRACING_FAST = 9;
+public static const uint FACE_TRACING_SUPER = 4;
 
 const static float2 grid2x2[4] = {
     float2(-0.5, -0.5), float2(0.5, -0.5),
     float2(-0.5, 0.5), float2(0.5, 0.5)
+};
+
+const static float2 grid3x3[9] = {
+    float2(-0.667, -0.667), float2(0.0, -0.667), float2(0.667, -0.667),
+    float2(-0.667, 0.0), float2(0.0, 0.0), float2(0.667, 0.0),
+    float2(-0.667, 0.667), float2(0.0, 0.667), float2(0.667, 0.667)
 };
 
 const static float2 grid4x4[16] = {
@@ -349,10 +357,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
         // 抖动
         const float2 offset = grid2x2[iterate % 4] * 0.25f;
 
-        // 天光直接光照和反弹
-        for (uint i = 0; i < FACE_TRACING; i++)
+        // 这个采样还是有点过重，可以考虑用probe间的光能传递来完成，而非直接tracing
+        for (uint i = 0; i < FACE_TRACING_SUPER; i++)
         {
-            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
+            float3 hemiVec = normalize(float3(grid2x2[i] + offset, 1.0));
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
             Vertex hitVertex;
@@ -369,9 +377,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
                 skyVisibility += 1.0f;
             }
         }
-       
-        directColor = directColor / float(FACE_TRACING);
-        bounceColor = bounceColor / float(FACE_TRACING);
+
+        directColor = directColor / float(FACE_TRACING_SUPER);
+        bounceColor = bounceColor / float(FACE_TRACING_SUPER);
 
         // 参数光源，目前只取了一盏光源
         if (Camera.LightCount > 0)
@@ -398,7 +406,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         // 累积，gpu直接只保留4帧
         float currWeight = 0.25f;
-        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING), currWeight));
+        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING_SUPER), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
         return false;

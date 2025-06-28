@@ -141,13 +141,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(OutMotionVector, 0, 2, 4, ipos, isize, 1);
 
     // line 2/3 right
-    DRAW(FinalImage, 3, 1, 4, ipos, isize, 0.01);
+    DRAW(FinalImage, 3, 1, 4, ipos, isize, 0.005);
     
     // center
     DRAW(Denoised, 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(RenderImage, 0, 3, 4, ipos, isize, 0.01);
+    DRAW(RenderImage, 0, 3, 4, ipos, isize, 0.005);
     DRAWINTX(MiniGBuffer, 1, 3, 4, ipos, isize);
     DRAWINTY(MiniGBuffer, 2, 3, 4, ipos, isize);
 }
