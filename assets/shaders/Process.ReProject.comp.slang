@@ -6,7 +6,7 @@ import Common;
 
 [[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 1)]] RWTexture2D<float4> OutImage;
-[[vk::binding(2, 1)]] RWTexture2D<uint16_t2> MiniGBuffer;
+[[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
 [[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
 [[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
 [[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
@@ -79,6 +79,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool check = (length(motion) > 0.01) ? true : false;
     
     float4 final = src;
+
+    if (Camera.ProgressiveRender)
+    {
+        float4 history = AccumulateImage[ipos];
+        final = lerp(history, src, clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
+        FinalImage[ipos] = float4(final.rgb, 1.0);
+        return;
+    }
     
     // fetch visibility to validate the history
     const bool miss = current_primitive_index0 == 65535 ? true : false;

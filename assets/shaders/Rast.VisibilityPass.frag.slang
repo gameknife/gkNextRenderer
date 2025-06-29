@@ -2,12 +2,12 @@ import Common;
 
 struct FragmentInput
 {
-    [[vk::location(0)]] nointerpolation uint2 g_primitive_index : PRIMITIVE_INDEX;
+    [[vk::location(0)]] nointerpolation uint g_primitive_index : PRIMITIVE_INDEX;
 };
 
 struct FragmentOutput
 {
-    [[vk::location(0)]] uint2 g_out_visibility : SV_Target0;
+    [[vk::location(0)]] uint g_out_visibility : SV_Target0;
 };
 
 [shader("fragment")]

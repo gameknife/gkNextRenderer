@@ -55,7 +55,7 @@ namespace Common
         return prevfpos - currfpos;
     }
 
-    public void FetchGBuffer(in Vertex inVertex, in Material inMaterial, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
+    public void FetchGBuffer(in Vertex inVertex, in Material inMaterial, float3 rayDir, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
     {
         outAlbedo = inMaterial.Diffuse;
 
@@ -72,6 +72,14 @@ namespace Common
         }
 
         outNormal = float4(inVertex.Normal.rgb, roughness);
+
+        const float dotValue = dot(rayDir, outNormal.rgb);
+        const float cosine = dotValue > 0 ? inMaterial.RefractionIndex * dotValue : -dotValue;
+        float reflectProb = Schlick(cosine, inMaterial.RefractionIndex);
+
+        reflectProb *= (1.0 - roughness * 0.5);
+
+        outAlbedo = lerp(outAlbedo, float4(1, 1, 1, 1), pow(reflectProb, 1.5));
     }
 
     public float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
@@ -130,7 +138,7 @@ namespace Common
     };
 
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint16_t2> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
+                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
     {
         const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
@@ -153,7 +161,8 @@ namespace Common
             MiniGBuffer.GetDimensions(size.x, size.y);
 
             int2 sampleCoord = int2(currentUV * float2(size));
-            uint2 vBufferSample = MiniGBuffer.Load(sampleCoord).rg;
+            uint packedValue = MiniGBuffer.Load(sampleCoord).r;
+            uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
             if (vBufferSample.r == 0)
                 continue;
 
@@ -239,7 +248,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
     {
         // 第一步：先追踪一次顶点，计算距离
-        uint2 vBuffer = VisibilityBuffer[ipos].rg;
+        uint packedValue = VisibilityBuffer[ipos];
+        uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF); 
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
         // 构造初始光线
@@ -302,9 +312,10 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         
         // 确保偏移后的位置在屏幕范围内
         offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
-        
-        // 第六步：使用偏移后的位置重新追踪
-        uint2 finalVBuffer = VisibilityBuffer[offsetPos].rg;
+
+        uint offsetedPackValue = VisibilityBuffer[offsetPos];
+        uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
+
         float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
         
         // 构造最终光线
@@ -380,7 +391,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
-    RWTexture2D<uint16_t2> VisibilityBuffer;
+    RWTexture2D<uint> VisibilityBuffer;
     StructuredBuffer<uint> PrimAddress;
 }
 
@@ -718,7 +729,7 @@ public struct FSoftwareRayTracer : IRayTracer
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    RWTexture2D<uint16_t2> MiniGBuffer;
+    RWTexture2D<uint> MiniGBuffer;
 
     StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
@@ -825,7 +836,7 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     ConstantBuffer<UniformBufferObject> Camera;
     Sampler2D ShadowMapSampler;
 
-    RWTexture2D<uint16_t2> MiniGBuffer;
+    RWTexture2D<uint> MiniGBuffer;
     StructuredBuffer<NodeProxy> NodeProxies;
     StructuredBuffer<ModelData> Models;
     StructuredBuffer<GPUVertex> Vertices;

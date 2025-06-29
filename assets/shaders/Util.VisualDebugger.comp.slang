@@ -2,7 +2,7 @@
 
 [[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 1)]] RWTexture2D<float4> RenderImage;
-[[vk::binding(2, 1)]] RWTexture2D<uint16_t2> MiniGBuffer;
+[[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
 [[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
 [[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
 [[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
@@ -79,17 +79,17 @@ float3 UintToStableColor(uint value)
         if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                     \
             int2 ssize;                                       \
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
-            uint icol = IMAGE[uv * ssize / isize].x;            \
+            uint icol = (IMAGE[uv * ssize / isize]  >> 17) & 0x7FFF;            \
             float3 color = UintToStableColor(icol);           \
             OutImage[ipos] = float4(color, 1.0);}                                                     \
     }
 
-#define DRAWINTY(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
-        int2 uv = int2(0, 0);                                 \
-        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                     \
-            int2 ssize;                                       \
-            IMAGE.GetDimensions(ssize.x, ssize.y);            \
-            uint icol = IMAGE[uv * ssize / isize].y;          \
+#define DRAWINTY(IMAGE, quadx, quady, divider, ipos, isize) {                                                          \
+        int2 uv = int2(0, 0);                                  \
+        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                      \
+            int2 ssize;                                        \
+            IMAGE.GetDimensions(ssize.x, ssize.y);             \
+            uint icol = (IMAGE[uv * ssize / isize] & 0x1FFFF);        \
             float3 color = UintToStableColor(icol);           \
             OutImage[ipos] = float4(color, 1.0);}                                                     \
     }
