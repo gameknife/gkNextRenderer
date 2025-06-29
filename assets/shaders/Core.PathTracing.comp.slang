@@ -8,7 +8,7 @@ import Common;
 
 [[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
-[[vk::binding(2, 2)]] RWTexture2D<uint16_t2> MiniGBuffer;
+[[vk::binding(2, 2)]] RWTexture2D<uint> MiniGBuffer;
 [[vk::binding(3, 2)]] RWTexture2D<uint> ObjectId0;
 [[vk::binding(4, 2)]] RWTexture2D<uint> ObjectId1;
 [[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
@@ -66,7 +66,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], TextureArray, albedo, gbuffer);
+    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], rayDir, TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
     ObjectId0[ipos] = hitNode.instanceId;

@@ -651,6 +651,12 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     callback(result);
 }
 
+void NextEngine::SetProgressiveRendering(bool enable)
+{
+    progressiveRendering_ = enable;
+    userSettings_.TAA = true;
+}
+
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     Assets::UniformBufferObject ubo = {};

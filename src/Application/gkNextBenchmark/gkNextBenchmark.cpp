@@ -16,7 +16,7 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Optio
     options.NoDenoiser = true;
     options.Width = 1280;
     options.Height = 720;
-    
+    options.SuperResolution = 2;
 }
 
 void BenchmarkGameInstance::OnInit()
