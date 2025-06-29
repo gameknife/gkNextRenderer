@@ -33,11 +33,11 @@ void OutputColor(int2 ipos, float3 Total)
 {
     if (Camera.HDR)
     {
-        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
+        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 0.0);
     }
     else
     {
-        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
+        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
     }
 }
 
@@ -57,7 +57,8 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     Vertex hitVertex;
     NodeProxy hitNode;
     float3 rayDir;
-    if (!rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir))
+    float2 pixelOffset = float2(0, 0);
+    if (!rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, pixelOffset))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
         OutputColor(ipos, skyColor.rgb);

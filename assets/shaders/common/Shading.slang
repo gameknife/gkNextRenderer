@@ -192,7 +192,7 @@ namespace Common
 // emit primary ray, return hit-info
 public interface IPrimaryRayCaster
 {
-    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir);
+    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset);
 }
 
 // ray tracer for rendering
@@ -217,7 +217,7 @@ public interface IRenderer
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
     {
         float2 uvOffset = float2(0);
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
@@ -236,6 +236,30 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         Material hitMaterial;
         float t = 0;
         bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode);
+        if (hitted)
+        {
+            // 计算命中点到相机的距离
+            float4 cameraPos = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+            float hitDistance = length(outVertex.Position - cameraPos.xyz);
+
+            // 计算与焦平面的距离差，差距为0说明在焦平面上，差距越大越模糊
+            float focusDistanceDiff = abs(hitDistance - Camera.FocusDistance);
+
+            // 根据焦距差计算散焦圆半径
+            float cocRadius = 0.0f;
+            if (focusDistanceDiff > 0.001f)
+            {
+                // CoC = (光圈大小 * 焦距差) / 命中距离
+                cocRadius = (Camera.Aperture * focusDistanceDiff) / hitDistance;
+            }
+
+            // 将散焦圆半径转换为像素空间偏移
+            outPixelOffset = offset * cocRadius * float2(isize) * 0.5f;
+        }
+        else
+        {
+            outPixelOffset = float2(0, 0);
+        }
         return hitted;
     }
 
@@ -245,7 +269,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
     {
         // 第一步：先追踪一次顶点，计算距离
         uint packedValue = VisibilityBuffer[ipos];
@@ -306,7 +330,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             // 转换为像素偏移
             pixelOffset = diskSample * screenSpaceRadius * float2(isize) * 0.5f;
         }
-        
+
+        outPixelOffset = pixelOffset;
         // 第五步：计算偏移后的像素位置
         int2 offsetPos = ipos + int2(pixelOffset);
         
@@ -397,7 +422,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
     {
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
