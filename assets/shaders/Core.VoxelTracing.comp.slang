@@ -31,11 +31,11 @@ void OutputColor(int2 ipos, float3 Total)
 {
     if (Camera.HDR)
     {
-        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 1.0);
+        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 0.0);
     }
     else
     {
-        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 1.0);
+        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
     }
 }
 
@@ -59,7 +59,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float4 outColor = float4(0, 0, 0, 1);
     float3 rayDir;
-    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir))
+    float2 pixelOffset = float2(0, 0);
+    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, pixelOffset))
     {
         float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
         outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;

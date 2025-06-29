@@ -75,9 +75,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                         all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
     uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
-    const bool changed = current_primitive_index0 != prev_primitive_index0 ? true : false;
-    const bool check = (length(motion) > 0.01) ? true : false;
-    
+
     float4 final = src;
 
     if (Camera.ProgressiveRender)
@@ -102,7 +100,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float3 CenterNormal = OutNormalBuffer[ipos].rgb;
 
         float4 spatialSample = float4(0, 0, 0, 0);
-        float temporalWeight = 0.0;
         float totalWeight = 0.0;
 
         for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
@@ -120,10 +117,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 // Calculate the weight for this sample
                 float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
 
-                if (isCenter) {
-                    temporalWeight = samplePixel.w;
-                }
-
                 spatialSample += samplePixel * weight;
                 totalWeight += weight;
             }
@@ -138,6 +131,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
         uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
 
         float3 historyColor[4];
+
+        if (src.a > 1.0)
+        {
+            prev_primitive_index0 = current_primitive_index0;
+            prev_primitive_index1 = current_primitive_index0;
+            prev_primitive_index2 = current_primitive_index0;
+            prev_primitive_index3 = current_primitive_index0;
+        }
+
         historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? AccumulateImage[previpos].rgb : spatialSample.rgb;
         historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? AccumulateImage[previpos + int2(1, 0)].rgb : spatialSample.rgb;
         historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? AccumulateImage[previpos + int2(0, 1)].rgb : spatialSample.rgb;
@@ -151,7 +153,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         history = clamp(history, 0.0, 1600.0); // kill the negative valuse
 
         // Judge current gbuffer / object id with prev frame, to deghosting
-        float currKeep = temporalWeight / max(1, Camera.TemporalFrames);
+        float currKeep = 1.0f / max(1, Camera.TemporalFrames);
         final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
     }
     

@@ -46,7 +46,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Vertex hitVertex;
     NodeProxy hitNode;
     float3 rayDir;
-    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir))
+    float2 pixelOffset = float2(0, 0);
+    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir, pixelOffset))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
         OutImage[ipos] = skyColor;
@@ -76,7 +77,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);
-    outColor.a = 1.0f;
+    outColor.a = length(pixelOffset);
 
     OutImage[ipos] = outColor;
     
