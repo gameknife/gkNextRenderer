@@ -38,7 +38,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, Indices };
     FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
     FSoftwareRayTracer tracer = { Camera, MiniGBuffer, Vertices, Indices, NodeProxies, Offsets, voxelTracer };
-    FSoftwareDirectIlluminator dIlluminator = { Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Offsets, Vertices, Indices };
+    // FShadowMapDirectIlluminator dIlluminator = { Camera, ShadowMapSampler, MiniGBuffer, NodeProxies, Offsets, Vertices, Indices };
+    FSoftwareDirectIlluminator dIlluminator = { Camera, tracer  };
     FHybridRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs };
 
     

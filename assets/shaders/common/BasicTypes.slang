@@ -1,9 +1,11 @@
 #ifdef __cplusplus
 #define public
 #define bool uint32_t
-#define ALIGN_16 alignas(16)
+#define ALIGN_16 alignas(16) 
+#define ALIGN_8 alignas(8)
 #else
-#define ALIGN_16 
+#define ALIGN_16
+#define ALIGN_8
 implementing Common;
 #endif
 
@@ -105,29 +107,31 @@ public struct ALIGN_16 ModelData
     public uint reserved2;
 };
 
-// size = 16 x 4 bytes, 64 bytes, maximun compress to 64 bytes
+// size = 14 x 4 bytes, 56 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
-public struct ALIGN_16 AmbientCube
+public struct ALIGN_8 AmbientCube
 {
     public uint PosZ;
     public uint NegZ;
+
     public uint PosY;
     public uint NegY;
+
     public uint PosX;
     public uint NegX;
  
     public uint PosZ_D;
     public uint NegZ_D;
+
     public uint PosY_D;
     public uint NegY_D;
+
     public uint PosX_D;
     public uint NegX_D;
 
     public uint skyVisibility_pznzpyny;
     public uint skyVisibility_pxnxs0s1;
-    public uint reserved0;
-    public uint reserved1;
 };
 
 // 16 bytes per voxel
@@ -139,7 +143,7 @@ public struct ALIGN_16 VoxelData
 {
     public uint matId; // 0 is void, that is clean default value
     public uint age;
-    public uint instanceId;
+    public uint distanceToSolid;
     public float sky_sun_visibility; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
 };
 

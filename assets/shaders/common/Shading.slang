@@ -191,7 +191,7 @@ public interface IRayTracer
 {
     bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
-    bool TraceSegment(float3 rayOrigin, float3 rayTarget);
+    bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
 }
 
 // direct illum 
@@ -413,12 +413,12 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         NodeProxy outNode;
         return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode);
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
     {
         float rayLength = length(rayTaget - rayOrigin);
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength, outVertex, outNode);
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode);
     }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
@@ -585,14 +585,14 @@ public struct FHardwareRayTracer : IRayTracer
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
 
-    public bool TraceSegment(float3 rayOrigin, float3 rayTarget)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
     {
         float3 dir = rayTarget - rayOrigin;
         float len = length(dir);
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = EPS;
-        ray.TMax = len - EPS2;
+        ray.TMin = epsilon;
+        ray.TMax = len - epsilon;
         ray.Direction = dir / len;
         
         RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
@@ -666,9 +666,29 @@ public struct FSoftwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
+        float3 offsetPos = rayOrigin;
+
+        // Near field tracing parameters
+        const float longDistanceInit = 0.75; // Far field starting distance (to avoid self-intersection)
+        const float depthToleration = 0.2;   // Near field depth toleration
+
+        // screenspace tracing is heavy, skip
+        float3 outPosition;
+        float3 outNormal;
+        uint outMaterialIdx;
+        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, ModelDatas, Vertices, Indices))
+        {
+            return true;
+        }
+
+        if (DDARayTracer.TraceOcclusion(offsetPos, rayDir))
+        {
+            return true;
+        }
+
         return false;
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
     {
         return false;
     }
@@ -735,6 +755,32 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
 }
 
 public struct FSoftwareDirectIlluminator : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+
+        float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            const float3 lightVector = Camera.SunDirection.xyz;
+            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+            shadow = 1;
+            if (HWTracer.TraceOcclusion(position, lightVectorCone))
+            {
+                shadow = 0;
+            }
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    // all stuffs like pointers
+    ConstantBuffer<UniformBufferObject> Camera;
+    FSoftwareRayTracer HWTracer;
+}
+
+public struct FShadowMapDirectIlluminator : IDirectIlluminator
 {
     public float getShadow(float3 worldPos, float3 jit, float3 normal )
     {
