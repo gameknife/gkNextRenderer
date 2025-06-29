@@ -67,25 +67,29 @@ bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
     uint TempMaterialId;
     uint TempInstanceId;
 
-    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
+    if (TraceRay(origin, rayDir, CUBE_UNIT * 2.0, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
     {
-        vec3 hitPos = origin + rayDir * OutRayDist;
-        FMaterial hitMaterial = FetchMaterial(TempMaterialId);
-        // 命中反面，识别为固体，并将lightprobe推出体外
-        if (dot(OutNormal, rayDir) > 0.0)
+        OutCube.distanceToSolid = 2;
+        if (OutRayDist < CUBE_UNIT)
         {
-            float hitRayDist = OutRayDist + 0.05f;
-            origin += rayDir * hitRayDist;
-            OutCube.matId = TempMaterialId;
-            OutCube.instanceId = TempInstanceId;
-            return true;
-        }
-        // 命中光源，不论正反，识别为固体
-        if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
-        {
-            OutCube.matId = TempMaterialId;
-            OutCube.instanceId = TempInstanceId;
-            return true;
+            vec3 hitPos = origin + rayDir * OutRayDist;
+            FMaterial hitMaterial = FetchMaterial(TempMaterialId);
+            // 命中反面，识别为固体，并将lightprobe推出体外
+            if (dot(OutNormal, rayDir) > 0.0)
+            {
+                float hitRayDist = OutRayDist + 0.05f;
+                origin += rayDir * hitRayDist;
+                OutCube.matId = TempMaterialId;
+                OutCube.distanceToSolid = 0;
+                return true;
+            }
+            OutCube.distanceToSolid = 1;
+            // 命中光源，不论正反，识别为固体
+            if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
+            {
+                OutCube.matId = TempMaterialId;
+                return true;
+            }
         }
     }
     return false;
@@ -95,7 +99,7 @@ void VoxelizeCube(VoxelData& Cube, float3 origin)
 {
     // just write matid and solid status
     Cube.matId = 0;
-    Cube.instanceId = 0;
+    Cube.distanceToSolid = 255;
 
     InsideGeometry(origin, float3(0, 1, 0), Cube);
     InsideGeometry(origin, float3(0, -1, 0), Cube);
@@ -162,8 +166,8 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
 
 void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 {
-    bvhInstanceList.clear();
-    bvhTLASContexts.clear();
+    std::vector<tinybvh::BLASInstance> tmpbvhInstanceList;
+    std::vector<FCPUTLASInstanceInfo> tmpbvhTLASContexts;
 
     for (auto& node : scene.Nodes())
     {
@@ -179,7 +183,7 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         instance.blasIdx = modelId;
         std::memcpy( (float*)instance.transform, &(worldTS[0]), sizeof(float) * 16);
 
-        bvhInstanceList.push_back(instance);
+        tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
         for ( int i = 0; i < node->Materials().size(); ++i )
         {
@@ -188,14 +192,19 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
             info.matIdxs[i] = matId;
             info.nodeId = node->GetInstanceId();
         }
-        bvhTLASContexts.push_back( info );
+        tmpbvhTLASContexts.push_back( info );
     }
 
-    if (bvhInstanceList.size() > 0)
+    if (tmpbvhInstanceList.size() > 0)
     {
-        GCpuBvh.Build( bvhInstanceList.data(), static_cast<int>(bvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
+        GCpuBvh.Build( tmpbvhInstanceList.data(), static_cast<int>(tmpbvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
     }
 
+    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+
+    bvhInstanceList.swap(tmpbvhInstanceList);
+    bvhTLASContexts.swap(tmpbvhTLASContexts);
+    
     // rebind with new address
     GbvhInstanceList = &bvhInstanceList;
     GbvhTLASContexts = &bvhTLASContexts;
@@ -253,16 +262,24 @@ void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& VoxelGPUMemory)
     VoxelGPUMemory.Unmap();
 }
 
-void FCPUAccelerationStructure::AsyncProcessFull(Vulkan::DeviceMemory* VoxelGPUMemory)
+void FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental)
 {    
     // clean
     while (!needUpdateGroups.empty())
         needUpdateGroups.pop();
     lastBatchTasks.clear();
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    probeBaker.ClearAmbientCubes();
-    probeBaker.UploadGPU(*VoxelGPUMemory);
-
+    
+    if (!Incremental)
+    {
+        probeBaker.ClearAmbientCubes();
+        probeBaker.UploadGPU(*VoxelGPUMemory);
+    }
+    else
+    {
+        UpdateBVH(scene);
+    }
+    
     const int groupSize = 16;
     const int lengthX = CUBE_SIZE_XY / groupSize;
     const int lengthZ = CUBE_SIZE_XY / groupSize;

@@ -184,15 +184,15 @@ namespace Assets
         MarkDirty();
 
 #if ANDROID
-        cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
+        cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
 #else
         if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
         {
-            cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
+            cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
         }
 #endif
-        cpuAccelerationStructure_.GenShadowMap(*this);
-
+        // no need for shadow map
+        //cpuAccelerationStructure_.GenShadowMap(*this);
         
         uint32_t maxSets = 2;//NextEngine::GetInstance()->GetRenderer().SwapChain().ImageViews().size();
 
@@ -248,8 +248,8 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        cpuAccelerationStructure_.AsyncProcessFull(farAmbientCubeBufferMemory_.get());
-        cpuAccelerationStructure_.GenShadowMap(*this);
+        cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
+        //cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::Tick(float DeltaSeconds)

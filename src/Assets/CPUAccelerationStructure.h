@@ -66,13 +66,6 @@ struct FCPUBLASContext
     std::vector<FCPUBLASVertInfo> extinfos;
 };
 
-struct FCpuBakeContext
-{
-    std::vector<Assets::AmbientCube>* Cubes;
-    float CUBE_UNIT;
-    glm::vec3 CUBE_OFFSET;
-};
-
 // 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
 // 由CpuAS来控制
 struct FCPUProbeBaker
@@ -106,9 +99,8 @@ public:
     void UpdateBVH(Assets::Scene& scene);
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
-
-   
-    void AsyncProcessFull(Vulkan::DeviceMemory* VoxelGPUMemory);
+    
+    void AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
