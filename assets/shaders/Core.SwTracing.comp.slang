@@ -72,12 +72,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // GBuffer解析
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
+    float4 reflectColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], rayDir, TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
 
-    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor);
+    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);

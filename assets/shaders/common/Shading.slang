@@ -212,7 +212,7 @@ public interface IDirectIlluminator
 // renderer
 public interface IRenderer
 {
-    void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor);
+    void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection);
 }
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
@@ -933,7 +933,7 @@ public struct FPathTracingRenderer : IRenderer
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
     {
         FinalColor = float4(0, 0, 0, 0);
         Material mat = Materials[inVertex.MaterialIndex];
@@ -999,7 +999,7 @@ public struct FPathTracingRenderer : IRenderer
 
 public struct FHybridRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalLambertation, inout float4 FinalReflection)
     {
         // construct ray
         float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
@@ -1008,7 +1008,8 @@ public struct FHybridRenderer : IRenderer
         Material mat = Materials[inVertex.MaterialIndex];
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
-            FinalColor = mat.Diffuse;
+            FinalLambertation = mat.Diffuse;
+            FinalReflection = float4(0, 0, 0, 0);
             return;
         }
         float roughness = inGBuffer.a;
@@ -1020,7 +1021,8 @@ public struct FHybridRenderer : IRenderer
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);
         const float metalProb = mat.Metalness;
 
-        FinalColor = float4(0, 0, 0, 0);
+        FinalLambertation = float4(0, 0, 0, 0);
+        FinalReflection = float4(0, 0, 0, 0);
 
         //const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
         const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
@@ -1041,36 +1043,54 @@ public struct FHybridRenderer : IRenderer
                 float4 outAlbedo = hitMat.Diffuse;
                 if (hitMat.MaterialModel == MaterialDiffuseLight)
                 {
-                    FinalColor += outAlbedo;
+                    FinalLambertation += outAlbedo;
                 }
                 else
                 {
-                    if (chanceReflect && !chanceMetal)
+                    if (chanceGGX)
                     {
-                        outAlbedo = float4(1, 1, 1, 1);
+                        if (chanceReflect && !chanceMetal)
+                        {
+                            outAlbedo = float4(1, 1, 1, 1);
+                        }
+                        FinalReflection += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                     }
-                    FinalColor += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                    else
+                    {
+                        FinalLambertation += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                    }
                 }
             }
             else
             {
+                float4 skyAffect = float4(0, 0, 0, 0);
                 // 这里非常影响噪点，直接使用IBL数据，是最精确的。如果使用预处理数据，由于IBL的明度变化不大，因此噪点会小，但丢失光照细节
                 if (Camera.FastGather)
                 {
                     float simpleRoughness = chanceGGX ? roughness : 1.0;
-                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                    skyAffect = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
                 }
                 else
                 {
-                    FinalColor += Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                    skyAffect = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                }
+
+                if (chanceGGX)
+                {
+                    FinalReflection += skyAffect;
+                }
+                else
+                {
+                    FinalLambertation += skyAffect;
                 }
             }
         }
-        FinalColor /= float(jitcount);
+        FinalReflection /= float(jitcount);
+        FinalLambertation /= float(jitcount);
 
         float4 directColor = float4(0, 0, 0, 0);
         directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
-        FinalColor += directColor;
+        FinalLambertation += directColor;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
