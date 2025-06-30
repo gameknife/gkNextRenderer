@@ -156,8 +156,8 @@ namespace Vulkan
 
 		// this texture could pass to global scope, it may contained by base renderer
 		std::unique_ptr<RenderImage> rtDenoised;
-		std::unique_ptr<RenderImage> rtOutput;
-		std::unique_ptr<RenderImage> rtAccumlation;
+		std::unique_ptr<RenderImage> rtAccumlatedDiffuse;
+		std::unique_ptr<RenderImage> rtOutputDiffuse;
 		std::unique_ptr<RenderImage> rtVisibility;
 		std::unique_ptr<RenderImage> rtObject0;
 		std::unique_ptr<RenderImage> rtObject1;
@@ -166,6 +166,8 @@ namespace Vulkan
 		std::unique_ptr<RenderImage> rtAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
 		std::unique_ptr<RenderImage> rtShaderTimer_;
+		std::unique_ptr<RenderImage> rtAccumlatedSpecular;
+		std::unique_ptr<RenderImage> rtOutputSpecular;
 			
 	protected:
 		Assets::UniformBufferObject lastUBO;

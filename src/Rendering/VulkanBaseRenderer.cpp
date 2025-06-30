@@ -423,19 +423,28 @@ namespace Vulkan
                                                 "editor"));
 
 
-        rtOutput.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+        rtAccumlatedDiffuse.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                        VK_FORMAT_R16G16B16A16_SFLOAT,
                                        VK_IMAGE_TILING_OPTIMAL,
                                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false, "output"));
+
+        rtAccumlatedSpecular.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                       VK_FORMAT_R16G16B16A16_SFLOAT,
+                                       VK_IMAGE_TILING_OPTIMAL,
+                                       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false, "outputSpecular"));
+        
         rtDenoised.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                          VK_FORMAT_R16G16B16A16_SFLOAT,
                                          VK_IMAGE_TILING_OPTIMAL,
                                          VK_IMAGE_USAGE_STORAGE_BIT, false, "denoised"));
-        rtAccumlation.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+        rtOutputDiffuse.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                             VK_FORMAT_R16G16B16A16_SFLOAT,
                                             VK_IMAGE_TILING_OPTIMAL,
                                             VK_IMAGE_USAGE_STORAGE_BIT, false, "renderout"));
-
+        rtOutputSpecular.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
+                                            VK_FORMAT_R16G16B16A16_SFLOAT,
+                                            VK_IMAGE_TILING_OPTIMAL,
+                                            VK_IMAGE_USAGE_STORAGE_BIT, false, "renderoutSpecular"));
         rtVisibility.reset(new RenderImage(Device(), swapChain_->RenderExtent(),
                                            VK_FORMAT_R32_UINT,
                                            VK_IMAGE_TILING_OPTIMAL,
@@ -484,6 +493,8 @@ namespace Vulkan
                                                                    {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                    {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                    {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                    {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                    {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
 
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
@@ -492,8 +503,8 @@ namespace Vulkan
         {
             std::vector<VkWriteDescriptorSet> descriptorWrites =
             {
-                descriptorSets.Bind(i, 0, {NULL, rtOutput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                descriptorSets.Bind(i, 1, {NULL, rtAccumlation->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 0, {NULL, rtAccumlatedDiffuse->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 1, {NULL, rtOutputDiffuse->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 2, {NULL, rtVisibility->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 3, {NULL, rtObject0->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 4, {NULL, rtObject1->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
@@ -503,6 +514,9 @@ namespace Vulkan
                 descriptorSets.Bind(i, 8, {NULL, rtShaderTimer_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 9, {NULL, rtDenoised->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 10, {NULL, rtPrevDepth->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 11, {NULL, rtAccumlatedSpecular->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                descriptorSets.Bind(i, 12, {NULL, rtOutputSpecular->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
+                
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -585,9 +599,11 @@ namespace Vulkan
 
         visibilityPipeline_.reset();
         visibilityFrameBuffer_.reset();
-        rtOutput.reset();
+        rtAccumlatedDiffuse.reset();
+        rtAccumlatedSpecular.reset();
         rtDenoised.reset();
-        rtAccumlation.reset();
+        rtOutputSpecular.reset();
+        rtOutputDiffuse.reset();
         rtVisibility.reset();
         rtObject0.reset();
         rtObject1.reset();
@@ -962,11 +978,13 @@ namespace Vulkan
     {
         rtDenoised->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                   VK_IMAGE_LAYOUT_GENERAL);
-        rtOutput->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        rtAccumlatedDiffuse->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_GENERAL);
+        rtAccumlatedSpecular->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_GENERAL);
         rtMotionVector_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_GENERAL);
-        rtAccumlation->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        rtOutputDiffuse->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                      VK_IMAGE_LAYOUT_GENERAL);
         rtAlbedo_->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                  VK_IMAGE_LAYOUT_GENERAL);

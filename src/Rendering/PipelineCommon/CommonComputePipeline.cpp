@@ -20,7 +20,7 @@
 namespace Vulkan::PipelineCommon
 {
     AccumulatePipeline::AccumulatePipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender, 
-                                           const ImageView& accumulateImageView,
+                                           const ImageView& sourceImageView, const ImageView& prevImageView, const ImageView& targetImageView,
                                            const std::vector<Assets::UniformBuffer>& uniformBuffers,
                                            const Assets::Scene& scene): swapChain_(swapChain)
     {
@@ -30,6 +30,8 @@ namespace Vulkan::PipelineCommon
         {
             {0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
             {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{2, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+			{3, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
         };
 
         descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
@@ -38,8 +40,10 @@ namespace Vulkan::PipelineCommon
 
         for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
         {
-            VkDescriptorImageInfo Info1 = {NULL, accumulateImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
-            
+            VkDescriptorImageInfo Info1 = {NULL, sourceImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info2 = {NULL, prevImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	VkDescriptorImageInfo Info3 = {NULL, targetImageView.Handle(), VK_IMAGE_LAYOUT_GENERAL};
+        	
             // Uniform buffer
             VkDescriptorBufferInfo uniformBufferInfo = {};
             uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
@@ -49,6 +53,8 @@ namespace Vulkan::PipelineCommon
             {
                 descriptorSets.Bind(i, 0, uniformBufferInfo),
                 descriptorSets.Bind(i, 1, Info1),
+            	descriptorSets.Bind(i, 2, Info2),
+            	descriptorSets.Bind(i, 3, Info3),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);

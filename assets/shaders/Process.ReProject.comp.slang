@@ -2,9 +2,10 @@ import Common;
 
 // Texture bindings
 [[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
-[[vk::binding(1, 0)]] RWTexture2D<float4> AccumulateImage;
+[[vk::binding(1, 0)]] RWTexture2D<float4> SourceImage;
+[[vk::binding(2, 0)]] RWTexture2D<float4> AccumulateImage;
+[[vk::binding(3, 0)]] RWTexture2D<float4> FinalImage;
 
-[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
 [[vk::binding(1, 1)]] RWTexture2D<float4> OutImage;
 [[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
 [[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
@@ -66,7 +67,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);
 
-    float4 src = OutImage[ipos];
+    float4 src = SourceImage[ipos];
     
     bool useHistory = true;
     float2 motion = OutMotionVector[ipos].rg;
@@ -106,7 +107,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
                 int2 offset = int2(x, y);
                 int2 samplePos = ipos + offset;
-                float4 samplePixel = OutImage[samplePos];
+                float4 samplePixel = SourceImage[samplePos];
                 uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
                 float3 worldNormal = OutNormalBuffer[samplePos].rgb;
 

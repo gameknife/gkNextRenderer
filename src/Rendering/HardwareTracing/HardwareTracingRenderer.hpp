@@ -45,8 +45,10 @@ namespace Vulkan::HybridDeferred
 	private:
 		std::unique_ptr<class HardwareTracingPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::AccumulatePipeline> accumulatePipelineSpec_;
 		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipeline_;
 		std::unique_ptr<RenderImage> rtPingPong0;
+		std::unique_ptr<RenderImage> rtPingPong1;
 	};
 
 }
