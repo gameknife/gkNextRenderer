@@ -96,6 +96,23 @@ Window::Window(const WindowConfig& config) :
 	config_(config)
 {
 #if !ANDROID
+
+
+
+	if ( !glfwJoystickIsGamepad(0) ) {
+		std::ifstream file(Utilities::FileHelper::GetNormalizedFilePath("assets/locale/gamecontrollerdb.txt"));
+		if(file.is_open())
+		{
+			std::string mappings((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+			glfwUpdateGamepadMappings(mappings.c_str());
+			file.close();
+		}
+		fmt::print("Joystick: {}", glfwGetJoystickName(0));
+		if (glfwJoystickIsGamepad(0)) {
+			fmt::print("Gamepad: {}", glfwGetGamepadName(0));
+		}
+	}
+
 	// hide title bar, handle in ImGUI Later
 
 	if (config.HideTitleBar)
@@ -168,6 +185,7 @@ Window::Window(const WindowConfig& config) :
 	glfwSetDropCallback(window_, GlfwSetDropCallback);
 	glfwSetWindowFocusCallback(window_, GlfwOnFocusCallback);
 	glfwSetJoystickCallback(GlfwJoystickCallback);
+	
 #else
 	window_ = static_cast<GLFWwindow*>(config.AndroidNativeWindow);
 #endif
@@ -343,9 +361,12 @@ void Window::PollGamepadInput()
 	{
 		if (glfwJoystickPresent(jid) && glfwJoystickIsGamepad(jid))
 		{
+			fmt::print("present stick");
 			GLFWgamepadstate state;
 			if (glfwGetGamepadState(jid, &state))
 			{
+
+
 				// 获取左摇杆输入
 				float leftStickX = state.axes[GLFW_GAMEPAD_AXIS_LEFT_X];
 				float leftStickY = state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y];
