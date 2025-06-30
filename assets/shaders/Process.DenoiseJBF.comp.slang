@@ -10,6 +10,8 @@ import Common;
 [[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
 [[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
+[[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
+
 
 struct PushConsts
 {
@@ -146,11 +148,11 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     {
         if (Camera.DebugDraw_Lighting)
         {
-            Total = FinalImage[ipos].rgb * float3(0.5, 0.5, 0.5);;
+            Total = FinalImage[ipos].rgb * float3(0.5, 0.5, 0.5) + FinalImageSpec[ipos].rgb;
         }
         else
         {
-            Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb;
+            Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb + FinalImageSpec[ipos].rgb;
         }
     }
 

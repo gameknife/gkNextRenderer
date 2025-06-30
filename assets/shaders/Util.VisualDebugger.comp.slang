@@ -11,7 +11,7 @@
 [[vk::binding(8, 1)]] RWTexture2D<float4> ShaderTime;
 [[vk::binding(9, 1)]] RWTexture2D<float4> Denoised;
 [[vk::binding(10, 1)]] RWTexture2D<float> OutDepthBuffer;
-
+[[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
 float3 UintToStableColor(uint value)
 {
     // 使用简单的hash函数确保颜色稳定
@@ -142,6 +142,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // line 2/3 right
     DRAW(FinalImage, 3, 1, 4, ipos, isize, 0.005);
+    DRAW(FinalImageSpec, 3, 2, 4, ipos, isize, 0.005);
     
     // center
     DRAW(Denoised, 0.5, 0.5, 2, ipos, isize, 1);

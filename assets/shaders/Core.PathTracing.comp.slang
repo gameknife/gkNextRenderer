@@ -15,6 +15,7 @@ import Common;
 [[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
 [[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
+[[vk::binding(12, 2)]] RWTexture2D<float4> OutImageSpec;
 
 [[vk::binding(0, 3)]] StructuredBuffer<GPUVertex> Vertices;
 [[vk::binding(12, 3)]] StructuredBuffer<uint> Indices;
@@ -74,13 +75,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     ObjectId0[ipos] = hitNode.instanceId;
 
     // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
+    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);
     outColor.a = length(pixelOffset);
-
     OutImage[ipos] = outColor;
+
+    float4 outSpec = float4(reflectColor.rgb, 1);
+    outSpec.a = length(pixelOffset);
+    OutImageSpec[ipos] = outSpec;
     
     END_SHADERCLOCK(ipos)
 }
