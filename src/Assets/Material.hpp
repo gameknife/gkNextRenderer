@@ -9,7 +9,7 @@ namespace Assets
     {
         static Material Lambertian(const glm::vec3& diffuse, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, 1.0f, 1.45f, Enum::Lambertian, 0};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, 1.0f, 1.f, Enum::Lambertian, 0};
         }
 
         static Material Metallic(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)

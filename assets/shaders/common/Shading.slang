@@ -72,14 +72,6 @@ namespace Common
         }
 
         outNormal = float4(inVertex.Normal.rgb, roughness);
-
-        const float dotValue = dot(rayDir, outNormal.rgb);
-        const float cosine = dotValue > 0 ? inMaterial.RefractionIndex * dotValue : -dotValue;
-        float reflectProb = Schlick(cosine, inMaterial.RefractionIndex);
-
-        reflectProb *= (1.0 - roughness * 0.5);
-
-        outAlbedo = lerp(outAlbedo, float4(1, 1, 1, 1), pow(reflectProb, 1.5));
     }
 
     public float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
@@ -212,7 +204,7 @@ public interface IDirectIlluminator
 // renderer
 public interface IRenderer
 {
-    void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection);
+    void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection);
 }
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
@@ -870,7 +862,7 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
 
 public struct FPathTracingRenderer : IRenderer
 {
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, in Sampler2D[] TextureArray)
     {
         Material mat = Materials[inVertex.MaterialIndex];
         float roughness = mat.Fuzziness;
@@ -887,7 +879,9 @@ public struct FPathTracingRenderer : IRenderer
         bool chanceGGX = chanceReflect || chanceMetal;
         const float3 trace_next = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
         float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
-        
+
+        hitReflect = chanceGGX;
+        hitMetal = chanceMetal;
 
         if (mat.MaterialModel == MaterialDielectric)
         {
@@ -933,9 +927,11 @@ public struct FPathTracingRenderer : IRenderer
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
     {
         FinalColor = float4(0, 0, 0, 0);
+        FinalReflection = float4(0, 0, 0, 0);
+
         Material mat = Materials[inVertex.MaterialIndex];
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
@@ -956,29 +952,50 @@ public struct FPathTracingRenderer : IRenderer
 
             uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
 
-            // Path tracing 本质上是一个递归的过程，所以这里要再抽象一个private函数
-            for (uint b = 0; b < maxBounces; ++b)
+            bool hitReflect = false;
+            bool hitMetal = false;
+            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal, TextureArray);
+            if (!exitFirst)
             {
-                if ( GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, TextureArray) )
+                for (uint b = 1; b < maxBounces; ++b)
                 {
-                    break;
-                }
+                    bool hitReflectDontCare = false;
+                    bool hitMetalDontCare = false;
+                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare, TextureArray))
+                    {
+                        break;
+                    }
 
-                // 提前退出
-                const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+                    // 提前退出
+                    const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
 
-                // 终结路径
-                if (b == maxBounces - 1 || earlyExit)
-                {
-                    RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);// * 2.0f;
-                    break;
+                    // 终结路径
+                    if (b == maxBounces - 1 || earlyExit)
+                    {
+                        RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels); // * 2.0f;
+                        break;
+                    }
                 }
             }
 
-            FinalColor += RayColor;
+            if (hitMetal)
+            {
+                RayColor *= inAlbedo;
+            }
+
+            if (hitReflect)
+            {
+                FinalReflection += RayColor;
+            }
+            else
+            {
+                FinalColor += RayColor;
+            }
+            
         }
 
         FinalColor /= float(sample);
+        FinalReflection /= float(sample);
 
         float4 directColor = float4(0, 0, 0, 0);
         directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
@@ -999,7 +1016,7 @@ public struct FPathTracingRenderer : IRenderer
 
 public struct FHybridRenderer : IRenderer
 {
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalLambertation, inout float4 FinalReflection)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalLambertation, inout float4 FinalReflection)
     {
         // construct ray
         float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
@@ -1028,6 +1045,7 @@ public struct FHybridRenderer : IRenderer
         const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
         for (int i = 0; i < jitcount; i++)
         {
+            float4 rayColor = float4(0, 0, 0, 1);
             bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
             bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);
             bool chanceGGX = chanceReflect || chanceMetal;
@@ -1043,22 +1061,15 @@ public struct FHybridRenderer : IRenderer
                 float4 outAlbedo = hitMat.Diffuse;
                 if (hitMat.MaterialModel == MaterialDiffuseLight)
                 {
-                    FinalLambertation += outAlbedo;
+                    rayColor = outAlbedo;
                 }
                 else
                 {
-                    if (chanceGGX)
+                    if (chanceReflect && !chanceMetal)
                     {
-                        if (chanceReflect && !chanceMetal)
-                        {
-                            outAlbedo = float4(1, 1, 1, 1);
-                        }
-                        FinalReflection += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                        outAlbedo = float4(1, 1, 1, 1);
                     }
-                    else
-                    {
-                        FinalLambertation += outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-                    }
+                    rayColor = outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                 }
             }
             else
@@ -1068,21 +1079,26 @@ public struct FHybridRenderer : IRenderer
                 if (Camera.FastGather)
                 {
                     float simpleRoughness = chanceGGX ? roughness : 1.0;
-                    skyAffect = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                    rayColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
                 }
                 else
                 {
-                    skyAffect = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                    rayColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
                 }
+            }
 
-                if (chanceGGX)
-                {
-                    FinalReflection += skyAffect;
-                }
-                else
-                {
-                    FinalLambertation += skyAffect;
-                }
+            if (chanceMetal)
+            {
+                rayColor *= inAlbedo;
+            }
+
+            if (chanceGGX)
+            {
+                FinalReflection += rayColor;
+            }
+            else
+            {
+                FinalLambertation += rayColor;
             }
         }
         FinalReflection /= float(jitcount);
