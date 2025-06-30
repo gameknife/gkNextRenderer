@@ -21,7 +21,7 @@ void BottomLevelGeometry::AddGeometryTriangles(
 	geometry.geometry.triangles.vertexData.deviceAddress = scene.SimpleVertexBuffer().GetDeviceAddress();
 	geometry.geometry.triangles.vertexStride = sizeof(short) * 4;
 	geometry.geometry.triangles.maxVertex = vertexCount;
-	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R16G16B16_SFLOAT;
+	geometry.geometry.triangles.vertexFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	geometry.geometry.triangles.indexData.deviceAddress = scene.PrimAddressBuffer().GetDeviceAddress();
 	geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
 	geometry.geometry.triangles.transformData = {};
