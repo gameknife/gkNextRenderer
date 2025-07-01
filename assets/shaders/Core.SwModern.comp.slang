@@ -37,7 +37,7 @@ void OutputColor(int2 ipos, float3 Total)
     }
     else
     {
-        OutDenoisedBuffer[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
+        OutDenoisedBuffer[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 30000.0), 0.0);
     }
 }
 
@@ -80,18 +80,22 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     const float reflectProb = Schlick(cosine, hitMaterial.RefractionIndex);
     const float metalProb = hitMaterial.Metalness;
 
+    float3 tracenext = reflect(rayDir, outwardNormal);
+
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+    float4 diffuse = albedo * radiance;
+    float4 specular = Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a;
+
+    float4 specColor = lerp(float4(1,1,1,1), albedo, metalProb);
 
     // 这里可以增加一个屏幕空间的采样，处理细节遮蔽，只在0.25米内生效
-    float3 tracenext = reflect(rayDir, outwardNormal);
-    float4 specularColor = lerp(albedo, float4(1, 1, 1, 1), reflectProb) * Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a;
-    float4 combined = lerp(albedo * radiance, specularColor, max(reflectProb, metalProb));
+    float4 combined = diffuse + specColor * specular * max(metalProb, reflectProb);
     OutputColor(ipos, combined.rgb);
     ObjectId0[ipos] = hitNode.instanceId;
 
     if (Camera.DebugDraw_Lighting)
     {
-        OutputColor(ipos, lerp(radiance, specularColor, max(reflectProb, metalProb)).rgb);
+        OutputColor(ipos, radiance.rgb);
         //OutputColor(ipos, lerp(float4(0,0,0,0), specularColor, max(reflectProb, metalProb)).rgb);
     }
 

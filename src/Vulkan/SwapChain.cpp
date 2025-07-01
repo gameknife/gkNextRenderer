@@ -140,7 +140,7 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 		for (const auto& format : formats)
 		{
 		
-			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || format.colorSpace == VK_COLOR_SPACE_HDR10_HLG_EXT)
+			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT)// && format.format > VK_FORMAT_A8B8G8R8_SRGB_PACK32)
 			{
 				hdr_ = true;
 				return format;
