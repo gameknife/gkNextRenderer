@@ -164,6 +164,6 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     }
     else
     {
-        OutImage[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 35000.0), 1.0);
+        OutImage[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 30000.0), 1.0);
     }
 }
