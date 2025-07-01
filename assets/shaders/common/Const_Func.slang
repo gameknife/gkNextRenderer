@@ -99,9 +99,9 @@ float H_f(float x, float e0, float e1) {
 
 float GranTurismoTonemapper(float x) {
     float P = 1;  // max output
-    float a = 0.6;  // contrast, default 1.0
-    float m = 0.1; // linear section start, 0.22
-    float l = 0.2; // linear section length, 0.4
+    float a = 0.7;  // contrast, default 1.0
+    float m = 0.22; // linear section start, 0.22
+    float l = 0.4; // linear section length, 0.4
     float c = 1.33;
     float b = 0;
     float l0 = (P - m) * l / a;

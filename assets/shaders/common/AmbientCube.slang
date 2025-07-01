@@ -277,7 +277,7 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
         nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
     {
-        return float4(10, 10, 10, 1);
+        return float4(0, 0, 0, 1);
     }
 
     int3 baseIdx = int3(floor(nearpos));
@@ -371,7 +371,12 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMaterial.Diffuse;
-                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                if (hitMaterial.DiffuseTextureId >= 0)
+                {
+                    float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].SampleLevel(hitVertex.TexCoord, 0);
+                    outAlbedo *= tex;
+                }
+                bounceColor += outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
             }
             else
             {
@@ -465,7 +470,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
         InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
 
-        if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
+        //if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint4 skyvis_pznzpynyx = unpack_bytes(Cubes[CubeIdx].skyVisibility_pznzpyny);
             uint4 skyvis_pxnxs0s1 = unpack_bytes(Cubes[CubeIdx].skyVisibility_pxnxs0s1);

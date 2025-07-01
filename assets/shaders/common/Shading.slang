@@ -14,6 +14,7 @@ static const float2 haltonSeq[8] = {
 
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 10.f;
+static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
 
 namespace Common
 {
@@ -1055,7 +1056,7 @@ public struct FHybridRenderer : IRenderer
             float4 reflectionColor;
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position, trace_dir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+            if (tracer.TraceRay(inVertex.Position, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
@@ -1065,10 +1066,10 @@ public struct FHybridRenderer : IRenderer
                 }
                 else
                 {
-                    if (chanceReflect && !chanceMetal)
-                    {
-                        outAlbedo = float4(1, 1, 1, 1);
-                    }
+                    // if (chanceReflect && !chanceMetal)
+                    // {
+                    //     outAlbedo = float4(1, 1, 1, 1);
+                    // }
                     rayColor = outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                 }
             }
