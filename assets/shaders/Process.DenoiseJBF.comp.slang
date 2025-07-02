@@ -148,7 +148,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     {
         if (Camera.DebugDraw_Lighting)
         {
-            Total = FinalImage[ipos].rgb * float3(0.5, 0.5, 0.5) + FinalImageSpec[ipos].rgb;
+            Total = FinalImage[ipos].rgb * float3(0.5, 0.5, 0.5);// + FinalImageSpec[ipos].rgb;
+            //Total = FinalImageSpec[ipos].rgb;
         }
         else
         {

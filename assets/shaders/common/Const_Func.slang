@@ -10,7 +10,7 @@ public float Schlick(const float cosine, const float refractionIndex)
     float r0 = (1 - refractionIndex) / (1 + refractionIndex);
     r0 *= r0;
     // taken from https://www.photometric.io/blog/improving-schlicks-approximation/
-    return r0 + (1 - cosine - r0) * pow4(1 - cosine);
+    return r0 + (1 - r0) * pow5(1 - cosine);
 }
 
 //onb revisited by Disney
