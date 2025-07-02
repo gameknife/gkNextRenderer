@@ -33,9 +33,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
     // compose with renderer and tracer
+    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, Indices };
     FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
-    FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
+    //FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
     FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};
 
     int2 ipos = int2(DTid.xy);

@@ -376,7 +376,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                     float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].SampleLevel(hitVertex.TexCoord, 0);
                     outAlbedo *= tex;
                 }
-                bounceColor += outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
             }
             else
             {

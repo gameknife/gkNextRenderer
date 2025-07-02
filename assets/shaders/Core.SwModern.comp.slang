@@ -33,11 +33,15 @@ void OutputColor(int2 ipos, float3 Total)
 {
     if (Camera.HDR)
     {
-        OutDenoisedBuffer[ipos] = float4(LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0), 0.0);
+        Total = Total / 2000;
+        Total = GT_Tonemapping(Total);
+        Total = Total * 2000;
+        float3 st2084 = LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0);
+        OutDenoisedBuffer[ipos] = float4(st2084, 1.0);
     }
     else
     {
-        OutDenoisedBuffer[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 30000.0), 0.0);
+        OutDenoisedBuffer[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 40000.0), 0.0);
     }
 }
 
