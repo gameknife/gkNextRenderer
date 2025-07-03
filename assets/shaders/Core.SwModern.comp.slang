@@ -87,7 +87,19 @@ void main(uint3 DTid: SV_DispatchThreadID) {
 
     float3 tracenext = reflect(rayDir, outwardNormal);
 
-    float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+    float4 radiance = float4(0, 0, 0, 1);
+    const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
+
+    float3 binormal = normalize(cross(outwardNormal, hitVertex.Tangent.xyz));
+
+    for (int i = 0; i < jitcount; i++)
+    {
+        float2 offset2d = RandomFloat2(RandomSeed) * 2.0 - 1.0;
+        float3 jitoffset = hitVertex.Tangent.xyz * offset2d.x + binormal * offset2d.y;
+        radiance += interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position + jitoffset * CUBE_UNIT, hitVertex.Normal, Cubes, Voxels);
+    }
+    radiance /= float(jitcount);
+
     float4 diffuse = albedo * radiance;
     float4 specular = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a : float4(0, 0, 0, 0);
 
@@ -102,7 +114,6 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     if (Camera.DebugDraw_Lighting)
     {
         OutputColor(ipos, radiance.rgb);
-        //OutputColor(ipos, lerp(float4(0,0,0,0), specularColor, max(reflectProb, metalProb)).rgb);
     }
 
     // write to NDC depth

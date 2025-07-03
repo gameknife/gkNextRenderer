@@ -13,7 +13,7 @@ static const float2 haltonSeq[8] = {
 };
 
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
-static const float FAST_MAX_TRACE_DISTANCE = 10.f;
+static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
 
 namespace Common
@@ -969,13 +969,24 @@ public struct FPathTracingRenderer : IRenderer
                         break;
                     }
 
+                    if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
+                    {
+                        const float3 lightVector = Camera.SunDirection.xyz;
+                        const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+                        if (!tracer.TraceOcclusion(vertexStart.Position, lightVectorCone))
+                        {
+                            RayColor *= Camera.SunColor;
+                            break;
+                        }
+                    }
+
                     // 提前退出
                     const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
 
                     // 终结路径
                     if (b == maxBounces - 1 || earlyExit)
                     {
-                        RayColor *= interpolateAmbientCubes<LightCacheAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels); // * 2.0f;
+                        RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels); // * 2.0f;
                         break;
                     }
                 }
