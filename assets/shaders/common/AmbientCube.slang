@@ -435,7 +435,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             {
                 Material hitMaterial = Materials[hitVertex.MaterialIndex];
                 // 命中反面，识别为固体，并将lightprobe推出体外
-                if (dot(hitVertex.Normal, rayDir) > 0.0)
+                if (dot(hitVertex.Normal, rayDir) > 0.0)// || hitDist < 0.125f) voxel inclusive
                 {
                     float hitRayDist = length(hitVertex.Position - origin) + 0.05f;
                     origin += rayDir * hitRayDist;
