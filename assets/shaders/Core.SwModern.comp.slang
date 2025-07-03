@@ -17,6 +17,7 @@ import Common;
 [[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
 [[vk::binding(9, 2)]] RWTexture2D<float4> OutDenoisedBuffer;
 [[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
+[[vk::binding(12, 2)]] RWTexture2D<float4> OutImageSpec;
 
 [[vk::binding(0, 3)]] StructuredBuffer<GPUVertex> Vertices;
 [[vk::binding(1, 3)]] StructuredBuffer<uint> Indices;
@@ -81,19 +82,20 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     const float dotValue = dot(rayDir, hitVertex.Normal);
     const float3 outwardNormal = dotValue > 0 ? -hitVertex.Normal : hitVertex.Normal;
     const float cosine = dotValue > 0 ? hitMaterial.RefractionIndex * dotValue : -dotValue;
-    const float reflectProb = Schlick(cosine, hitMaterial.RefractionIndex);
+    const float reflectProb = Schlick(cosine, hitMaterial.RefractionIndex) * pow((1.0 - gbuffer.a), 4.0);
     const float metalProb = hitMaterial.Metalness;
 
     float3 tracenext = reflect(rayDir, outwardNormal);
 
     float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
     float4 diffuse = albedo * radiance;
-    float4 specular = Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a;
+    float4 specular = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, tracenext, Camera.SkyRotation, gbuffer.a, HDRSHs, TextureArray) * Camera.SkyIntensity * radiance.a : float4(0, 0, 0, 0);
 
     float4 specColor = lerp(float4(1,1,1,1), albedo, metalProb);
 
-    // 这里可以增加一个屏幕空间的采样，处理细节遮蔽，只在0.25米内生效
-    float4 combined = diffuse + specColor * specular * max(metalProb, reflectProb);
+    float reflectFactor = max(metalProb, reflectProb);
+    
+    float4 combined = diffuse * (1.0 - reflectFactor) + specColor * specular * reflectFactor;
     OutputColor(ipos, combined.rgb);
     ObjectId0[ipos] = hitNode.instanceId;
 
