@@ -133,13 +133,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float3 historyColor[4];
 
-        if (src.a > 1.0)
-        {
-            prev_primitive_index0 = current_primitive_index0;
-            prev_primitive_index1 = current_primitive_index0;
-            prev_primitive_index2 = current_primitive_index0;
-            prev_primitive_index3 = current_primitive_index0;
-        }
+        // todo: off focus dont judge, need fix later
+        // if (src.a > 1.0)
+        // {
+        //     prev_primitive_index0 = current_primitive_index0;
+        //     prev_primitive_index1 = current_primitive_index0;
+        //     prev_primitive_index2 = current_primitive_index0;
+        //     prev_primitive_index3 = current_primitive_index0;
+        // }
 
         historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? AccumulateImage[previpos].rgb : spatialSample.rgb;
         historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? AccumulateImage[previpos + int2(1, 0)].rgb : spatialSample.rgb;

@@ -133,7 +133,7 @@ namespace Common
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
                             in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
     {
-        const int maxSteps = 5;
+        const int maxSteps = 10;
         float stepSize = maxDistance / float(maxSteps);
         float3 rayStart = position + rayDir * 0.1;
 
@@ -169,7 +169,7 @@ namespace Common
             float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
             float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
 
-            if (viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance)
+            if (viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - (depthTolerance))
             {
                 outPosition = sampleVertex.Position;
                 outNormal = normalize(sampleVertex.Normal.rgb);
@@ -402,6 +402,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             }
         }
         
+        outVertex.Position = outVertex.Position - outRayDir * 0.05; // 防止Z-fighting
+
         return true;
     }
 
@@ -698,7 +700,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 0.75; // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 1.5; // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;   // Near field depth toleration
 
         // screenspace tracing is heavy, skip
@@ -726,7 +728,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 0.75;         // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 1.5;         // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
