@@ -73,9 +73,9 @@ void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, fl
     const float Ai = exp(-normaldist * normaldist / (2.0 * sigmaN * sigmaN));
     const float Li = exp(-dlum * dlum / (2.0 * sigmaL * sigmaL));
     const float Oi = float(CenterVisibility == Pi);
-    
-    Total += Ci * Fi * Li * Ai * Oi;
-    Weight += Fi * Li * Ai * Oi;
+
+    Total += Ci * Fi * Li; // * Ai; // * Oi;
+    Weight += Fi * Li;// * Ai;// * Oi;
 }
 
 [shader("compute")]
@@ -98,7 +98,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         int col = int(groupIndex % WINDOW_LEN);
         int2 coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
         diffuse[row][col] = FinalImage[coord].rgb;
-        albedo[row][col] = AccmulateAlbedoBuffer[coord].rgb;
+        spec[row][col] = FinalImageSpec[coord].rgb;
         normal[row][col] = OutNormalBuffer[coord].rgb;
         visibility[row][col] = ObjectId0[coord].r;
         
@@ -108,8 +108,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
             row = idx / WINDOW_LEN;
             col = idx % WINDOW_LEN;
             coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
-            window[row][col] = FinalImage[coord].rgb;
-            albedo[row][col] = AccmulateAlbedoBuffer[coord].rgb;
+            diffuse[row][col] = FinalImage[coord].rgb;
+            spec[row][col] = FinalImageSpec[coord].rgb;
             normal[row][col] = OutNormalBuffer[coord].rgb;
             visibility[row][col] = ObjectId0[coord].r;
 
@@ -120,10 +120,9 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         // free to access
 
         coord = int2(groupThreadId.yx) + WINDOW_R;
-        
-        const float3 CenterColor = FetchColor(coord.xy).rgb;
-        const float3 CenterAlbedo = FetchAlbedo(coord.xy).rgb;
 
+        const float3 CenterColor = FetchDiffuse(coord.xy).rgb;
+        const float3 CenterSpec = FetchSpec(coord.xy).rgb;
         const float3 Normal = FetchNormal(coord.xy).rgb;
         uint current_primitive_index = FetchVisibility(coord.xy);
 
@@ -141,7 +140,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 
         if (!Camera.DebugDraw_Lighting)
         {
-            Total = Total * CenterAlbedo;
+            Total = Total * AccmulateAlbedoBuffer[ipos].rgb + CenterSpec;
         }
     }
     else

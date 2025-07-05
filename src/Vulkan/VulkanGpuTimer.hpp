@@ -7,8 +7,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <chrono>
-#include <functional>
-#include <map>
+#include "Device.hpp"
 
 #define SCOPED_GPU_TIMER_FOLDER(name, folder) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name, folder)
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
@@ -22,7 +21,7 @@ namespace Vulkan
 	public:
 		DEFAULT_NON_COPIABLE(VulkanGpuTimer)
 		
-		VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop);
+		VulkanGpuTimer(const Device& device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop);
 		virtual ~VulkanGpuTimer();
 
 		void Reset(VkCommandBuffer commandBuffer)
@@ -61,7 +60,7 @@ namespace Vulkan
 				return;
 			}
 			vkGetQueryPoolResults(
-				device_,
+				device_.Handle(),
 				query_pool_timestamps,
 				0,
 				queryIdx,
@@ -84,6 +83,7 @@ namespace Vulkan
 				gpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
 			}
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
+			device_.DebugUtils().BeginMarker(commandBuffer, name);
 			std::get<0>(gpu_timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
@@ -92,6 +92,7 @@ namespace Vulkan
 			BENCH_MARK_CHECK();
 			assert( gpu_timer_query_map.find(name) != gpu_timer_query_map.end() );
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
+			device_.DebugUtils().EndMarker(commandBuffer);
 			std::get<1>(gpu_timer_query_map[name]) = queryIdx;
 			queryIdx++;
 		}
@@ -177,7 +178,7 @@ namespace Vulkan
 		std::vector<uint64_t> time_stamps{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > gpu_timer_query_map{};
 		std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > cpu_timer_query_map{};
-		VkDevice device_ = VK_NULL_HANDLE;
+		const Device& device_;
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
 		bool started_ = false;

@@ -21,11 +21,10 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	// Check the validation layers and add them to the list of required extensions.
 	CheckVulkanValidationLayerSupport(validationLayers);
 
-	if (!validationLayers.empty())
-	{
-		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	}
-
+#if !ANDROID
+	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
+	
 	extensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
 #if WIN32
 	extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);

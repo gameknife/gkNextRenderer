@@ -34,7 +34,7 @@ void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 									  VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false,"prevoutputspec"));
 
 	rtPingPong3.reset(new RenderImage(Device(), extent,
-									  VK_FORMAT_R8G8B8A8_UNORM,
+									  VK_FORMAT_R16G16B16A16_SFLOAT,
 									  VK_IMAGE_TILING_OPTIMAL,
 									  VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false,"prevoutputalbedo"));
 
@@ -92,8 +92,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipelineAlbedo_->Handle());
 		accumulatePipelineAlbedo_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
-	}
 
+		baseRender_.rtAccumlatedAlbedo_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);	}
 	{
 		SCOPED_GPU_TIMER("compose pass");
 		

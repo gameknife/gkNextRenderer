@@ -190,9 +190,8 @@ namespace Vulkan
         supportRayTracing_ = !GOption->ForceNoRT && SupportRayQuery(*this);
     }
 
-    VulkanGpuTimer::VulkanGpuTimer(VkDevice device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop)
+    VulkanGpuTimer::VulkanGpuTimer(const Device& device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop):device_(device)
     {
-        device_ = device;
         time_stamps.resize(totalCount);
         timeStampPeriod_ = prop.limits.timestampPeriod;
         // Create the query pool object used to get the GPU time tamps
@@ -202,12 +201,12 @@ namespace Vulkan
         query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
         // Set the no. of queries in this pool
         query_pool_info.queryCount = static_cast<uint32_t>(time_stamps.size());
-        Check(vkCreateQueryPool(device, &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
+        Check(vkCreateQueryPool(device_.Handle(), &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
     }
 
     VulkanGpuTimer::~VulkanGpuTimer()
     {
-        vkDestroyQueryPool(device_, query_pool_timestamps, nullptr);
+        vkDestroyQueryPool(device_.Handle(), query_pool_timestamps, nullptr);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -394,7 +393,7 @@ namespace Vulkan
                                        &storage16BitFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
         commandPool2_.reset(new class CommandPool(*device_, device_->TransferFamilyIndex(), 1, true));
-        gpuTimer_.reset(new VulkanGpuTimer(device_->Handle(), 200, device_->DeviceProperties()));
+        gpuTimer_.reset(new VulkanGpuTimer(*device_, 200, device_->DeviceProperties()));
     }
 
     void VulkanBaseRenderer::OnDeviceSet()
@@ -473,9 +472,9 @@ namespace Vulkan
                                               VK_IMAGE_TILING_OPTIMAL,
                                               VK_IMAGE_USAGE_STORAGE_BIT, false, "motionvector"));
 
-        rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R8G8B8A8_UNORM,
+        rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
                                         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
-        rtAccumlatedAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R8G8B8A8_UNORM,
+        rtAccumlatedAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
                                         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "accumlatedAlbedo"));
         rtNormal_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
                                         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
