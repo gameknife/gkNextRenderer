@@ -26,6 +26,8 @@ public struct ALIGN_16 UniformBufferObject
     public float4x4 ProjectionInverse;
     public float4x4 ViewProjection;
     public float4x4 PrevViewProjection;
+    public float4x4 ViewProjectionUnJit;
+    public float4x4 PrevViewProjectionUnJit;
 
     public float4 ViewportRect;
     public float4 SunDirection;
