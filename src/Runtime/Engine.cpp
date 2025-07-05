@@ -675,18 +675,17 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
     ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
+    ubo.Projection[1][1] *= -1;
+
+    glm::mat4x4 ProjectionUnJit = ubo.Projection;
     if (userSettings_.TAA)
     {
-        // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        // glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
-        // glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
-        // //ubo.Projection = jitterMatrix * ubo.Projection;
-        //
-        // ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
-        // ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        
+        ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
     }
-    
-    ubo.Projection[1][1] *= -1;
     
     // handle android vulkan pre rotation
 #if ANDROID
@@ -704,9 +703,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
+    ubo.ViewProjectionUnJit = ProjectionUnJit * ubo.ModelView;
     
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
-
+    ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;
+    
     ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
 
     ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();

@@ -49,9 +49,9 @@ namespace Common
     public float2 CalculateMotionVector(ConstantBuffer<UniformBufferObject> Camera, NodeProxy node, Vertex v )
     {
         // motion info
-        float4 currFrameHPos = mul(Camera.ViewProjection, float4(v.Position, 1));
+        float4 currFrameHPos = mul(Camera.ViewProjectionUnJit, float4(v.Position, 1));
         float2 currfpos = currFrameHPos.xy / currFrameHPos.w * 0.5;
-        float4 prevFrameHPos = mul(mul(Camera.PrevViewProjection, node.combinedPrevTS), float4(v.Position, 1));
+        float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
         float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
         return prevfpos - currfpos;
     }
