@@ -164,6 +164,7 @@ namespace Vulkan
 		std::unique_ptr<RenderImage> rtPrevDepth;
 		std::unique_ptr<RenderImage> rtMotionVector_;
 		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtAccumlatedAlbedo_;
 		std::unique_ptr<RenderImage> rtNormal_;
 		std::unique_ptr<RenderImage> rtShaderTimer_;
 		std::unique_ptr<RenderImage> rtAccumlatedSpecular;

@@ -473,8 +473,10 @@ namespace Vulkan
                                               VK_IMAGE_TILING_OPTIMAL,
                                               VK_IMAGE_USAGE_STORAGE_BIT, false, "motionvector"));
 
-        rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+        rtAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R8G8B8A8_UNORM,
                                         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "albedo"));
+        rtAccumlatedAlbedo_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R8G8B8A8_UNORM,
+                                        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "accumlatedAlbedo"));
         rtNormal_.reset(new RenderImage(Device(), swapChain_->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
                                         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "normal"));
 
@@ -495,6 +497,7 @@ namespace Vulkan
                                                                    {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                     {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                     {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
+                                                                     {13, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT},
                                                                }, static_cast<uint32_t>(swapChain_->ImageViews().size())));
 
         auto& descriptorSets = rtDescriptorSetManager_->DescriptorSets();
@@ -516,7 +519,7 @@ namespace Vulkan
                 descriptorSets.Bind(i, 10, {NULL, rtPrevDepth->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 11, {NULL, rtAccumlatedSpecular->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
                 descriptorSets.Bind(i, 12, {NULL, rtOutputSpecular->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
-                
+                descriptorSets.Bind(i, 13, {NULL, rtAccumlatedAlbedo_->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}),
             };
 
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
@@ -609,6 +612,7 @@ namespace Vulkan
         rtObject1.reset();
         rtNormal_.reset();
         rtAlbedo_.reset();
+        rtAccumlatedAlbedo_.reset();
         rtMotionVector_.reset();
         rtShaderTimer_.reset();
         rtPrevDepth.reset();

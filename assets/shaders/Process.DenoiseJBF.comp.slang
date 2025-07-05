@@ -11,7 +11,7 @@ import Common;
 [[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
 [[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
-
+[[vk::binding(13, 1)]] RWTexture2D<float4> AccmulateAlbedoBuffer;
 
 struct PushConsts
 {
@@ -27,19 +27,19 @@ static const int WINDOW_R = 5; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
 static const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
 
 // Shared memory arrays
-groupshared float3 window[WINDOW_LEN][WINDOW_LEN];
-groupshared float3 albedo[WINDOW_LEN][WINDOW_LEN];
+groupshared float3 diffuse[WINDOW_LEN][WINDOW_LEN];
+groupshared float3 spec[WINDOW_LEN][WINDOW_LEN];
 groupshared float3 normal[WINDOW_LEN][WINDOW_LEN];
 groupshared uint visibility[WINDOW_LEN][WINDOW_LEN];
 
-float3 FetchColor(int2 ipos)
+float3 FetchDiffuse(int2 ipos)
 {
-    return window[ipos.x][ipos.y] + float3(0.001, 0.001, 0.001);
+    return diffuse[ipos.x][ipos.y] + float3(0.001, 0.001, 0.001);
 }
 
-float3 FetchAlbedo(int2 ipos)
+float3 FetchSpec(int2 ipos)
 {
-    return albedo[ipos.x][ipos.y] + float3(0.001, 0.001, 0.001);
+    return spec[ipos.x][ipos.y] + float3(0.001, 0.001, 0.001);
 }
 
 float3 FetchNormal(int2 ipos)
@@ -59,7 +59,7 @@ void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, fl
     const float sigmaN = Camera.BFSigmaNormal;
     const int N = int(WINDOW_R); // filter size
     
-    const float3 FinalCol = FetchColor(coord);
+    const float3 FinalCol = FetchDiffuse(coord);
     const float3 Ci = FinalCol;
     const float3 Ni = FetchNormal(coord);
     const uint Pi = FetchVisibility(coord);
@@ -97,8 +97,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         int row = int(groupIndex / WINDOW_LEN);
         int col = int(groupIndex % WINDOW_LEN);
         int2 coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
-        window[row][col] = FinalImage[coord].rgb;
-        albedo[row][col] = OutAlbedoBuffer[coord].rgb;
+        diffuse[row][col] = FinalImage[coord].rgb;
+        albedo[row][col] = AccmulateAlbedoBuffer[coord].rgb;
         normal[row][col] = OutNormalBuffer[coord].rgb;
         visibility[row][col] = ObjectId0[coord].r;
         
@@ -109,7 +109,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
             col = idx % WINDOW_LEN;
             coord = int2(groupId.xy) * WORK_GROUP_AXIS_SIZE + int2(col - WINDOW_R, row - WINDOW_R) + globalOffset;
             window[row][col] = FinalImage[coord].rgb;
-            albedo[row][col] = OutAlbedoBuffer[coord].rgb;
+            albedo[row][col] = AccmulateAlbedoBuffer[coord].rgb;
             normal[row][col] = OutNormalBuffer[coord].rgb;
             visibility[row][col] = ObjectId0[coord].r;
 
@@ -149,11 +149,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         if (Camera.DebugDraw_Lighting)
         {
             Total = FinalImage[ipos].rgb * float3(0.5, 0.5, 0.5) + FinalImageSpec[ipos].rgb;
-            //Total = FinalImageSpec[ipos].rgb;
         }
         else
         {
-            Total = FinalImage[ipos].rgb * OutAlbedoBuffer[ipos].rgb + FinalImageSpec[ipos].rgb;
+            Total = FinalImage[ipos].rgb * AccmulateAlbedoBuffer[ipos].rgb + FinalImageSpec[ipos].rgb;
         }
     }
 
