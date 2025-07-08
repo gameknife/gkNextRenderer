@@ -9,12 +9,10 @@ DebugUtils::DebugUtils(VkInstance instance)
 	, vkCmdEndDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT")))
 {
 #if !ANDROID
-#ifndef NDEBUG
 	if (vkSetDebugUtilsObjectNameEXT_ == nullptr)
 	{
 		Throw(std::runtime_error("failed to get address of 'vkSetDebugUtilsObjectNameEXT'"));
 	}
-#endif
 	if (vkCmdBeginDebugUtilsLabelEXT_ == nullptr)
 	{
 		Throw(std::runtime_error("failed to get address of 'vkCmdBeginDebugUtilsLabelEXT'"));
@@ -23,7 +21,6 @@ DebugUtils::DebugUtils(VkInstance instance)
 	{
 		Throw(std::runtime_error("failed to get address of 'vkCmdEndDebugUtilsLabelEXT'"));
 	}
-
 #endif
 }
 

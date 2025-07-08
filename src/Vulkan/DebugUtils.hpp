@@ -60,7 +60,6 @@ namespace Vulkan
 		void SetObjectName(const T& object, const char* name, VkObjectType type) const
 		{
 #if !ANDROID
-#ifndef NDEBUG
 			VkDebugUtilsObjectNameInfoEXT info = {};
 			info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
 			info.pNext = nullptr;
@@ -69,7 +68,6 @@ namespace Vulkan
 			info.pObjectName = name;
 			
 			Check(vkSetDebugUtilsObjectNameEXT_(device_, &info), "set object name");
-#endif
 #endif
 		}
 
