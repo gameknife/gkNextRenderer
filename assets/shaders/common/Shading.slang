@@ -1083,7 +1083,7 @@ public struct FHybridRenderer : IRenderer
                     // {
                     //     outAlbedo = float4(1, 1, 1, 1);
                     // }
-                    rayColor = outAlbedo * interpolateAmbientCubes<LightCacheAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                    rayColor = outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                 }
             }
             else

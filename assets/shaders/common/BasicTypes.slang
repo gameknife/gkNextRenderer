@@ -145,8 +145,8 @@ public struct ALIGN_16 VoxelData
 {
     public uint matId; // 0 is void, that is clean default value
     public uint age;
-    public uint distanceToSolid;
-    public float sky_sun_visibility; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
+    public uint distanceToSolid_gg_z01;
+    public uint distanceToSolid_x01_y01; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
 };
 
 // PageIndexer is align with world, 16x16 meter per page
