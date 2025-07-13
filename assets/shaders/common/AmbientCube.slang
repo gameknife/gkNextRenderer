@@ -53,6 +53,9 @@ const static float2 grid5x5[25] = {
     float2(-0.8, 0.8), float2(-0.4, 0.8), float2(0.0, 0.8), float2(0.4, 0.8), float2(0.8, 0.8)
 };
 
+#define FACE_TRACING_COUNT FACE_TRACING
+#define FACE_TRACING_SOURCE grid4x4
+
 uint packRGB10A2(float4 color)
 {
     float4 clamped = clamp(color / MAX_ILLUMINANCE, float4(0.0f), float4(1.0f));
@@ -296,8 +299,53 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
         int3 probePos = baseIdx + offset;
         AmbientCube cube = FetchCube(probePos, Cubes);
         VoxelData voxel = FetchVoxel(probePos, Voxels);
-        if (voxel.matId > 0)
+
+        uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
+        uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
+
+        float4 distance00z01 = unpacked0 / 255.0f;
+        float4 distancex01y01 = unpacked1 / 255.0f;
+
+        if (distance00z01.y < 0.01f)
             continue;
+
+        float3 localPos = frac;
+        float3 probeRealPos = offset;
+        float3 probeToLocal = localPos - probeRealPos;
+
+        // 计算查询点到probe的实际距离
+        float distanceToProbe = length(probeToLocal);
+        
+        // 归一化方向向量
+        float3 dir = normalize(probeToLocal);
+        
+        // 从voxel数据中获取各个方向的距离信息
+        float distPZ = distance00z01.z;
+        float distNZ = distance00z01.w;
+        float distPX = distancex01y01.x;
+        float distNX = distancex01y01.y;
+        float distPY = distancex01y01.z;
+        float distNY = distancex01y01.w;
+        
+        // 根据方向权重混合距离
+        float wx_pos = sqrt(max(dir.x, 0.0));
+        float wx_neg = sqrt(max(-dir.x, 0.0));
+        float wy_pos = sqrt(max(dir.y, 0.0));
+        float wy_neg = sqrt(max(-dir.y, 0.0));
+        float wz_pos = sqrt(max(dir.z, 0.0));
+        float wz_neg = sqrt(max(-dir.z, 0.0));
+        
+        float hitLength = wx_pos * distPX + wx_neg * distNX +
+                            wy_pos * distPY + wy_neg * distNY +
+                            wz_pos * distPZ + wz_neg * distNZ;
+
+        // 如果查询点到probe的距离大于插值后的hitLength，说明被遮挡，跳过
+        if (distanceToProbe > hitLength + 0.1f)// - 0.125f) 
+            continue;
+
+        // voxel here, matId will store at edge, we should discard it by the distance
+        // if (voxel.matId > 0)
+        //     continue;
 
         float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
         float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
@@ -360,9 +408,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         const float2 offset = grid3x3[iterate % 9] * 0.25f;
 
         // 这个采样还是有点过重，可以考虑用probe间的光能传递来完成，而非直接tracing
-        for (uint i = 0; i < FACE_TRACING_SUPER; i++)
+        for (uint i = 0; i < FACE_TRACING_COUNT; i++)
         {
-            float3 hemiVec = normalize(float3(grid2x2[i] + offset, 1.0));
+            float3 hemiVec = normalize(float3(FACE_TRACING_SOURCE[i] + offset, 1.0));
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
             Vertex hitVertex;
@@ -376,7 +424,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                     float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].SampleLevel(hitVertex.TexCoord, 0);
                     outAlbedo *= tex;
                 }
-                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels) * 2.0f; // magic bounce twice
             }
             else
             {
@@ -385,8 +433,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
         }
 
-        directColor = directColor / float(FACE_TRACING_SUPER);
-        bounceColor = bounceColor / float(FACE_TRACING_SUPER);
+        directColor = directColor / float(FACE_TRACING_COUNT);
+        bounceColor = bounceColor / float(FACE_TRACING_COUNT);
 
         // 参数光源，目前只取了一盏光源
         if (Camera.LightCount > 0)
@@ -414,13 +462,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         // 累积，gpu直接只保留4帧
         float currWeight = 0.125f;
-        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING_SUPER), currWeight));
+        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
         return false;
     }
 
-    bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, out uint OutDistanceToSolid)
+    bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, out float OutDistanceToSolid)
     {
         // 求交测试
         Vertex hitVertex;
@@ -429,28 +477,34 @@ public struct FGpuProbeGenerator : IProbeGenerator
         if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 2, hitVertex, hitNode))
         {
             float hitDist = length(hitVertex.Position - origin);
-            OutDistanceToSolid = 2;
+            OutDistanceToSolid = hitDist;
 
-            if (hitDist < CUBE_UNIT)
+            Material hitMaterial = Materials[hitVertex.MaterialIndex];
+            OutMaterialId = hitVertex.MaterialIndex;
+
+            if (dot(hitVertex.Normal, rayDir) > 0.0) //voxel inclusive
             {
-                Material hitMaterial = Materials[hitVertex.MaterialIndex];
-                // 命中反面，识别为固体，并将lightprobe推出体外
-                if (dot(hitVertex.Normal, rayDir) > 0.0)// || hitDist < 0.125f) voxel inclusive
-                {
-                    float hitRayDist = length(hitVertex.Position - origin) + 0.05f;
-                    origin += rayDir * hitRayDist;
-                    OutDistanceToSolid = 0;
-                    OutMaterialId = hitVertex.MaterialIndex;
-                    return true;
-                }
-
-                // 命中光源，不论正反，识别为固体
-                if (hitMaterial.MaterialModel == MaterialDiffuseLight)
-                {
-                    OutMaterialId = hitVertex.MaterialIndex;
-                    return true;
-                }
+                OutDistanceToSolid = 0;
+                return true;
             }
+            // if (hitDist <= CUBE_UNIT)
+            // {
+            //     Material hitMaterial = Materials[hitVertex.MaterialIndex];
+            //     // 命中反面，识别为固体，并将lightprobe推出体外
+            //     if (dot(hitVertex.Normal, rayDir) > 0.0) //voxel inclusive
+            //     {
+            //         OutDistanceToSolid = 0;
+            //         OutMaterialId = hitVertex.MaterialIndex;
+            //         return true;
+            //     }
+
+            //     // 命中光源，不论正反，识别为固体
+            //     if (hitMaterial.MaterialModel == MaterialDiffuseLight)
+            //     {
+            //         OutMaterialId = hitVertex.MaterialIndex;
+            //         return true;
+            //     }
+            // }
         }
         return false;
     }
@@ -459,16 +513,34 @@ public struct FGpuProbeGenerator : IProbeGenerator
     {
         uint iterate = Voxels[CubeIdx].age;
         Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
-
-        Voxels[CubeIdx].distanceToSolid = 255;
         Voxels[CubeIdx].matId = 0;
 
-        InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
-        InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
-        InsideGeometry(tracer, origin, float3(1, 0, 0), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
-        InsideGeometry(tracer, origin, float3(-1, 0, 0), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
-        InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
-        InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, Voxels[CubeIdx].distanceToSolid);
+        float distPY = 255.0f;
+        float distNY = 255.0f;
+        float distPX = 255.0f;
+        float distNX = 255.0f;
+        float distPZ = 255.0f;
+        float distNZ = 255.0f;
+
+        InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId, distPY);
+        InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId, distNY);
+        InsideGeometry(tracer, origin, float3(1, 0, 0), Voxels[CubeIdx].matId, distPX);
+        InsideGeometry(tracer, origin, float3(-1, 0, 0), Voxels[CubeIdx].matId, distNX);
+        InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, distPZ);
+        InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, distNZ);
+
+        distPY = saturate(distPY * 4.0);
+        distNY = saturate(distNY * 4.0);
+        distPX = saturate(distPX * 4.0);
+        distNX = saturate(distNX * 4.0);
+        distPZ = saturate(distPZ * 4.0);
+        distNZ = saturate(distNZ * 4.0);
+
+        float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
+
+        // store the dist, the dist is abs meters, can store 4 unit_size max
+        Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(0, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
+        Voxels[CubeIdx].distanceToSolid_x01_y01 = pack_bytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 
         //if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
         {
@@ -491,7 +563,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
+        //if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;

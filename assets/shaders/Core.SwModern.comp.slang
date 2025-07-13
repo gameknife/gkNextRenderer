@@ -89,6 +89,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
 
     float4 radiance = float4(0, 0, 0, 1);
     const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
+    const float jitScale = Camera.FastGather ? 0 : 1;
 
     float3 binormal = normalize(cross(outwardNormal, hitVertex.Tangent.xyz));
 
@@ -96,7 +97,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     {
         float2 offset2d = RandomFloat2(RandomSeed) * 2.0 - 1.0;
         float3 jitoffset = hitVertex.Tangent.xyz * offset2d.x + binormal * offset2d.y;
-        radiance += interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position + jitoffset * CUBE_UNIT, hitVertex.Normal, Cubes, Voxels);
+        radiance += interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal, Cubes, Voxels);
     }
     radiance /= float(jitcount);
 
@@ -106,7 +107,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     float4 specColor = lerp(float4(1,1,1,1), albedo, metalProb);
 
     float reflectFactor = max(metalProb, reflectProb);
-    
+
     float4 combined = diffuse * (1.0 - reflectFactor) + specColor * specular * reflectFactor;
     OutputColor(ipos, combined.rgb);
     ObjectId0[ipos] = hitNode.instanceId;

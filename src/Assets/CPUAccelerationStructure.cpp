@@ -69,7 +69,7 @@ bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
 
     if (TraceRay(origin, rayDir, CUBE_UNIT * 2.0, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
     {
-        OutCube.distanceToSolid = 2;
+        
         if (OutRayDist < CUBE_UNIT)
         {
             vec3 hitPos = origin + rayDir * OutRayDist;
@@ -80,10 +80,10 @@ bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
                 float hitRayDist = OutRayDist + 0.05f;
                 origin += rayDir * hitRayDist;
                 OutCube.matId = TempMaterialId;
-                OutCube.distanceToSolid = 0;
+                OutCube.distanceToSolid_gg_z01 = 0;
                 return true;
             }
-            OutCube.distanceToSolid = 1;
+            OutCube.distanceToSolid_gg_z01 = 1;
             // 命中光源，不论正反，识别为固体
             if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
             {
@@ -99,7 +99,6 @@ void VoxelizeCube(VoxelData& Cube, float3 origin)
 {
     // just write matid and solid status
     Cube.matId = 0;
-    Cube.distanceToSolid = 255;
 
     InsideGeometry(origin, float3(0, 1, 0), Cube);
     InsideGeometry(origin, float3(0, -1, 0), Cube);
