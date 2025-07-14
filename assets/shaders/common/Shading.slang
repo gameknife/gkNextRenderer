@@ -477,14 +477,14 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                     break;
             }
 
-
-            if (inSolid(voxelPos, hitMatId, Voxels))
+            float offsetDist = 0;
+            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, Voxels))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
                 float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
                 float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
-                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax);
+                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
                 outVertex.MaterialIndex = hitMatId;
                 outVertex.TexCoord = float2(0.5, 0.5);
                 break;
