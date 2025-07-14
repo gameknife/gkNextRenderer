@@ -97,7 +97,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     {
         float2 offset2d = RandomFloat2(RandomSeed) * 2.0 - 1.0;
         float3 jitoffset = hitVertex.Tangent.xyz * offset2d.x + binormal * offset2d.y;
-        radiance += interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal, Cubes, Voxels);
+        radiance += interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position + hitVertex.Normal * 0.05f + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal, Cubes, Voxels);
     }
     radiance /= float(jitcount);
 

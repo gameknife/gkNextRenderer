@@ -340,7 +340,7 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
                             wz_pos * distPZ + wz_neg * distNZ;
 
         // 如果查询点到probe的距离大于插值后的hitLength，说明被遮挡，跳过
-        if (distanceToProbe > hitLength + 0.1f)// - 0.125f) 
+        if (distanceToProbe > hitLength + 0.05f)// - 0.125f) 
             continue;
 
         // voxel here, matId will store at edge, we should discard it by the distance
@@ -398,12 +398,12 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
         float distPY = unpack1.z / 255.0f;
         float distNY = unpack1.w / 255.0f;
 
-        float wx_pos = sqrt(max(dir.x, 0.0));
-        float wx_neg = sqrt(max(-dir.x, 0.0));
-        float wy_pos = sqrt(max(dir.y, 0.0));
-        float wy_neg = sqrt(max(-dir.y, 0.0));
-        float wz_pos = sqrt(max(dir.z, 0.0));
-        float wz_neg = sqrt(max(-dir.z, 0.0));
+        float wx_pos = (max(dir.x, 0.0));
+        float wx_neg = (max(-dir.x, 0.0));
+        float wy_pos = (max(dir.y, 0.0));
+        float wy_neg = (max(-dir.y, 0.0));
+        float wz_pos = (max(dir.z, 0.0));
+        float wz_neg = (max(-dir.z, 0.0));
         float hitLength = wx_pos * distPX + wx_neg * distNX +
                           wy_pos * distPY + wy_neg * distNY +
                           wz_pos * distPZ + wz_neg * distNZ;
@@ -515,7 +515,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Vertex hitVertex;
         NodeProxy hitNode;
 
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 2, hitVertex, hitNode))
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT, hitVertex, hitNode))
         {
             float hitDist = length(hitVertex.Position - origin);
             OutDistanceToSolid = hitDist;
@@ -523,7 +523,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             Material hitMaterial = Materials[hitVertex.MaterialIndex];
             OutMaterialId = hitVertex.MaterialIndex;
 
-            if (dot(hitVertex.Normal, rayDir) > 0.0) //voxel inclusive
+            if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight) && hitDist < 0.02f)) //voxel inclusive
             {
                 OutDistanceToSolid = 0;
                 return true;
