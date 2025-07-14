@@ -402,7 +402,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             }
         }
         
-        outVertex.Position = outVertex.Position - outRayDir * 0.05; // 防止Z-fighting
+        // this will make refrect failed, offset later
+        //outVertex.Position = outVertex.Position - outRayDir * 0.05; // 防止Z-fighting
 
         return true;
     }
