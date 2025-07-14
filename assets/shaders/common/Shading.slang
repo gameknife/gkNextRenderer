@@ -456,7 +456,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
 
-        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET + float3(0.5f) * CUBE_UNIT) / CUBE_UNIT;
         float3 tDelta = abs(CUBE_UNIT / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
