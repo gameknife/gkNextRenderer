@@ -20,6 +20,14 @@ Assets::SphericalHarmonics HDRSHs[100];
 
 using namespace Assets;
 
+uint pack_bytes(glm::u32vec4 values)
+{
+    return (values.x & 0xFF) |
+           ((values.y & 0xFF) << 8) |
+           ((values.z & 0xFF) << 16) |
+           ((values.w & 0xFF) << 24);
+}
+
 FMaterial& FetchMaterial(uint matId)
 {
     auto& materials = NextEngine::GetInstance()->GetScene().Materials();
@@ -59,7 +67,7 @@ bool TraceRay(vec3 origin, vec3 rayDir, float Dist, vec3& OutNormal, uint& OutMa
 #define float3 vec3
 #define float4 vec4
 
-bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
+bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube, float& distance)
 {
     // 求交测试
     vec3 OutNormal;
@@ -67,29 +75,17 @@ bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
     uint TempMaterialId;
     uint TempInstanceId;
 
-    if (TraceRay(origin, rayDir, CUBE_UNIT * 2.0, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
+    if (TraceRay(origin, rayDir, CUBE_UNIT, OutNormal, TempMaterialId, OutRayDist, TempInstanceId))
     {
+        distance = OutRayDist;
+        FMaterial hitMaterial = FetchMaterial(TempMaterialId);
+        OutCube.matId = TempMaterialId;
         
-        if (OutRayDist < CUBE_UNIT)
+        // 命中反面，识别为固体，并将lightprobe推出体外
+        if (dot(OutNormal, rayDir) > 0.0 || ((hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight) && OutRayDist < 0.02f))
         {
-            vec3 hitPos = origin + rayDir * OutRayDist;
-            FMaterial hitMaterial = FetchMaterial(TempMaterialId);
-            // 命中反面，识别为固体，并将lightprobe推出体外
-            if (dot(OutNormal, rayDir) > 0.0)
-            {
-                float hitRayDist = OutRayDist + 0.05f;
-                origin += rayDir * hitRayDist;
-                OutCube.matId = TempMaterialId;
-                OutCube.distanceToSolid_gg_z01 = 0;
-                return true;
-            }
-            OutCube.distanceToSolid_gg_z01 = 1;
-            // 命中光源，不论正反，识别为固体
-            if (hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)
-            {
-                OutCube.matId = TempMaterialId;
-                return true;
-            }
+            distance = 0;
+            return true;
         }
     }
     return false;
@@ -98,14 +94,34 @@ bool InsideGeometry( float3& origin, float3 rayDir, VoxelData& OutCube)
 void VoxelizeCube(VoxelData& Cube, float3 origin)
 {
     // just write matid and solid status
+    Cube.age = 0;
     Cube.matId = 0;
 
-    InsideGeometry(origin, float3(0, 1, 0), Cube);
-    InsideGeometry(origin, float3(0, -1, 0), Cube);
-    InsideGeometry(origin, float3(1, 0, 0), Cube);
-    InsideGeometry(origin, float3(-1, 0, 0), Cube);
-    InsideGeometry(origin, float3(0, 0, 1), Cube);
-    InsideGeometry(origin, float3(0, 0, -1), Cube);
+    float distPY = 255.0f;
+    float distNY = 255.0f;
+    float distPX = 255.0f;
+    float distNX = 255.0f;
+    float distPZ = 255.0f;
+    float distNZ = 255.0f;
+    
+    InsideGeometry(origin, float3(0, 1, 0), Cube, distPY);
+    InsideGeometry(origin, float3(0, -1, 0), Cube, distNY);
+    InsideGeometry(origin, float3(1, 0, 0), Cube, distPX);
+    InsideGeometry(origin, float3(-1, 0, 0), Cube, distNX);
+    InsideGeometry(origin, float3(0, 0, 1), Cube, distPZ);
+    InsideGeometry(origin, float3(0, 0, -1), Cube, distNZ);
+    
+    distPY = glm::fclamp(distPY * 4.0f, 0.0f, 1.0f);
+    distNY = glm::fclamp(distNY * 4.0f, 0.0f, 1.0f);
+    distPX = glm::fclamp(distPX * 4.0f, 0.0f, 1.0f);
+    distNX = glm::fclamp(distNX * 4.0f, 0.0f, 1.0f);
+    distPZ = glm::fclamp(distPZ * 4.0f, 0.0f, 1.0f);
+    distNZ = glm::fclamp(distNZ * 4.0f, 0.0f, 1.0f);
+
+    float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
+
+    Cube.distanceToSolid_gg_z01 = pack_bytes(glm::u32vec4(0, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
+    Cube.distanceToSolid_x01_y01 = pack_bytes(glm::u32vec4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 }
 
 #undef float2
