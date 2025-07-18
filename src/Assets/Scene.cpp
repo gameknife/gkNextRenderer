@@ -248,7 +248,7 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
+        //cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
         //cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
