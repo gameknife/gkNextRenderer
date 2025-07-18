@@ -364,13 +364,30 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
 }
 
 // Interpolate between 8 probes
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, in RWStructuredBuffer<VoxelData> Cubes)
+public float FetchSDF(float3 pos, in RWStructuredBuffer<VoxelData> Cubes)
 {
-
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1)
     {
+        return 255.0f;
+    }
+
+    int3 baseIdx = int3(floor(pos));
+    VoxelData cube = FetchVoxel(baseIdx, Cubes);
+    uint4 unpack0 = unpack_bytes(cube.distanceToSolid_gg_z01);
+    return unpack0.x;
+}
+
+// Interpolate between 8 probes
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp, in RWStructuredBuffer<VoxelData> Cubes)
+{
+    skipSetp = 1;
+    // Early out if position is outside the probe grid
+    if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
+        pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1)
+    {
+        skipSetp = 16;
         return false;
     }
 
@@ -419,6 +436,9 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
         }
     }
 
+    uint4 step = unpack_bytes(cube.distanceToSolid_gg_z01);
+    skipSetp = max(1, step.x * 0.7f);
+    //skipSetp = 1;
     return false;
 }
 
@@ -604,7 +624,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        //if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
+        uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
+        if (upacked.x < 3) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
