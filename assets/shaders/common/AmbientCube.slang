@@ -387,7 +387,7 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1)
     {
-        skipSetp = 16;
+        skipSetp = 1;
         return false;
     }
 
@@ -436,9 +436,11 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
         }
     }
 
-    uint4 step = unpack_bytes(cube.distanceToSolid_gg_z01);
-    skipSetp = max(1, step.x * 0.7f);
-    //skipSetp = 1;
+    if (unpack0.x > 8)
+    {
+        skipSetp = max(1, unpack0.x);
+    }
+    
     return false;
 }
 

@@ -456,20 +456,20 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     {
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
-
+    
         float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET + float3(0.5f) * CUBE_UNIT) / CUBE_UNIT;
         float3 tDelta = abs(CUBE_UNIT / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
-
+    
         if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
         if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
         if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
-
+    
         bool hit = false;
         float3 normal = float3(0, 0, 0);
-
-        for (uint i = 0; i < maxSteps; )
+    
+        for (uint i = 0; i < maxSteps; ++i)
         {
             if (useBounds)
             {
@@ -477,10 +477,10 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                 if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
                     break;
             }
-
+    
             float offsetDist = 0;
-            float skipStep = 1;
-            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, skipStep, Voxels))
+            float skipLength = 1;
+            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
@@ -492,28 +492,63 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                 break;
             }
 
-            normal = float3(0, 0, 0);
+            if (skipLength > 1.0f)
+            {
+                int primaryAxis = 0;
+                if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
+                else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
+                
+                float voxelSkipLength = skipLength * CUBE_UNIT;
+                float stepsToSkip = 0; 
+                stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
+                
+                if (stepsToSkip >= 1.0f)
+                {
+                    voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
+                    tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
+                    
+                    float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
+                    
+                    for (int axis = 0; axis < 3; ++axis)
+                    {
+                        if (axis != primaryAxis && rayDir[axis] != 0)
+                        {
+                            float stepsOther = timeAdvanced / tDelta[axis];
+                            voxelPos[axis] += stepSign[axis] * floor(stepsOther);
+                            tMax[axis] -= tDelta[axis] * floor(stepsOther);
+                        }
+                    }
+                    
+                    i += uint(stepsToSkip - 1);
 
+                    normal = float3(0, 0, 0);
+                    normal[primaryAxis] = -stepSign[primaryAxis];
+                    
+                    continue;
+                }
+            }
+   
+            // 原始DDA单步进
+            normal = float3(0, 0, 0);
+        
             if (tMax.x < tMax.y && tMax.x < tMax.z)
             {
-                voxelPos.x += stepSign.x * skipStep;
+                voxelPos.x += stepSign.x;
                 tMax.x += tDelta.x;
                 normal.x = -stepSign.x;
             }
             else if (tMax.y < tMax.z)
             {
-                voxelPos.y += stepSign.y * skipStep;
+                voxelPos.y += stepSign.y;
                 tMax.y += tDelta.y;
                 normal.y = -stepSign.y;
             }
             else
             {
-                voxelPos.z += stepSign.z * skipStep;
+                voxelPos.z += stepSign.z;
                 tMax.z += tDelta.z;
                 normal.z = -stepSign.z;
             }
-
-            i += skipStep;
         }
         return hit;
     }
@@ -732,7 +767,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
@@ -802,7 +837,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
             const float3 lightVector = Camera.SunDirection.xyz;
             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
             shadow = 1;
-            if (HWTracer.TraceOcclusion(position, lightVectorCone))
+            if (HWTracer.TraceOcclusion(position + normal * 0.25f, lightVectorCone))
             {
                 shadow = 0;
             }
@@ -1073,7 +1108,7 @@ public struct FHybridRenderer : IRenderer
             float4 reflectionColor;
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+            if (tracer.TraceRay(inVertex.Position + inVertex.Normal * 0.1f, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
@@ -1083,10 +1118,10 @@ public struct FHybridRenderer : IRenderer
                 }
                 else
                 {
-                    // if (chanceReflect && !chanceMetal)
-                    // {
-                    //     outAlbedo = float4(1, 1, 1, 1);
-                    // }
+                    if (chanceReflect && !chanceMetal)
+                    {
+                        outAlbedo = float4(1, 1, 1, 1);
+                    }
                     rayColor = outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
                 }
             }
