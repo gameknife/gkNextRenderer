@@ -133,7 +133,7 @@ namespace Common
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
                             in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
     {
-        const int maxSteps = 10;
+        const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
         float3 rayStart = position + rayDir * 0.1;
 
@@ -469,7 +469,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         bool hit = false;
         float3 normal = float3(0, 0, 0);
 
-        for (uint i = 0; i < maxSteps; i++)
+        for (uint i = 0; i < maxSteps; )
         {
             if (useBounds)
             {
@@ -479,13 +479,14 @@ public struct FHiVoxelDDARayTracer : IRayTracer
             }
 
             float offsetDist = 0;
-            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, Voxels))
+            float skipStep = 1;
+            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, skipStep, Voxels))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
                 float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
                 float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
-                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax);// + rayDir * offsetDist;
+                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
                 outVertex.MaterialIndex = hitMatId;
                 outVertex.TexCoord = float2(0.5, 0.5);
                 break;
@@ -495,22 +496,24 @@ public struct FHiVoxelDDARayTracer : IRayTracer
 
             if (tMax.x < tMax.y && tMax.x < tMax.z)
             {
-                voxelPos.x += stepSign.x;
+                voxelPos.x += stepSign.x * skipStep;
                 tMax.x += tDelta.x;
                 normal.x = -stepSign.x;
             }
             else if (tMax.y < tMax.z)
             {
-                voxelPos.y += stepSign.y;
+                voxelPos.y += stepSign.y * skipStep;
                 tMax.y += tDelta.y;
                 normal.y = -stepSign.y;
             }
             else
             {
-                voxelPos.z += stepSign.z;
+                voxelPos.z += stepSign.z * skipStep;
                 tMax.z += tDelta.z;
                 normal.z = -stepSign.z;
             }
+
+            i += skipStep;
         }
         return hit;
     }
@@ -529,7 +532,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     {
         // DDA voxel traversal
         bool hit = false;
-        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 3;
+        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 2;
 
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
@@ -701,7 +704,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 1.5; // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;   // Near field depth toleration
 
         // screenspace tracing is heavy, skip
@@ -729,7 +732,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 offsetPos = rayOrigin;
 
         // Near field tracing parameters
-        const float longDistanceInit = 1.5;         // Far field starting distance (to avoid self-intersection)
+        const float longDistanceInit = 0.5;         // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
