@@ -910,7 +910,7 @@ public struct FPathTracingRenderer : IRenderer
         const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
         const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
-        const float reflectProb = Schlick(cosine, mat.RefractionIndex) * pow((1.0 - roughness), 4.0);
+        const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
         const float metalProb = mat.Metalness;
 
         bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
@@ -1085,7 +1085,7 @@ public struct FHybridRenderer : IRenderer
         const float dotValue = dot(ray_dir, inVertex.Normal);
         const float3 outwardNormal = dotValue > 0 ? -inVertex.Normal : inVertex.Normal;
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
-        const float reflectProb = Schlick(cosine, mat.RefractionIndex) * pow((1.0 - roughness), 4.0);
+        const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
         const float metalProb = mat.Metalness;
 
         FinalLambertation = float4(0, 0, 0, 0);
