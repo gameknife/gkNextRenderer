@@ -83,6 +83,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else
     {
+        hitVertex.Position = hitVertex.Position - rayDir * 0.05;
         renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
     }
 

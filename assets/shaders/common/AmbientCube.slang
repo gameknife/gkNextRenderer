@@ -440,7 +440,7 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
     {
         skipSetp = max(1, unpack0.x);
     }
-    
+
     return false;
 }
 
@@ -531,51 +531,47 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return false;
     }
 
+    float DetectDistance(IRayTracer tracer, float3 origin, float3 rayDir)
+    {
+        Vertex hitVertex;
+        NodeProxy hitNode;
+
+        uint TempInstanceId;
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode))
+        {
+            return length(hitVertex.Position - origin);
+        }
+        return 255;
+    }
+
     bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, out float OutDistanceToSolid)
     {
         // 求交测试
         Vertex hitVertex;
         NodeProxy hitNode;
 
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT, hitVertex, hitNode))
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode))
         {
             float hitDist = length(hitVertex.Position - origin);
             OutDistanceToSolid = hitDist;
 
-            Material hitMaterial = Materials[hitVertex.MaterialIndex];
-            OutMaterialId = hitVertex.MaterialIndex;
-
-            if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight) && hitDist < 0.02f)) //voxel inclusive
+            if (OutDistanceToSolid <= CUBE_UNIT)
             {
-                OutDistanceToSolid = 0;
-                return true;
-            }
-            // if (hitDist <= CUBE_UNIT)
-            // {
-            //     Material hitMaterial = Materials[hitVertex.MaterialIndex];
-            //     // 命中反面，识别为固体，并将lightprobe推出体外
-            //     if (dot(hitVertex.Normal, rayDir) > 0.0) //voxel inclusive
-            //     {
-            //         OutDistanceToSolid = 0;
-            //         OutMaterialId = hitVertex.MaterialIndex;
-            //         return true;
-            //     }
+                Material hitMaterial = Materials[hitVertex.MaterialIndex];
+                OutMaterialId = hitVertex.MaterialIndex;
 
-            //     // 命中光源，不论正反，识别为固体
-            //     if (hitMaterial.MaterialModel == MaterialDiffuseLight)
-            //     {
-            //         OutMaterialId = hitVertex.MaterialIndex;
-            //         return true;
-            //     }
-            // }
+                if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight) && hitDist < 0.02f)) //voxel inclusive
+                {
+                    OutDistanceToSolid = 0;
+                    return true;
+                }
+            }
         }
         return false;
     }
 
     public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
-        uint iterate = Voxels[CubeIdx].age;
-        Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
         Voxels[CubeIdx].matId = 0;
 
         float distPY = 255.0f;
@@ -592,6 +588,19 @@ public struct FGpuProbeGenerator : IProbeGenerator
         InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, distPZ);
         InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, distNZ);
 
+        float minDist = min(min(min(distPY, distNY), min(distPX, distNX)), min(distPZ, distNZ));
+        if (minDist > 254.0f)
+        {
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(1, 1, 1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, 1, 1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, -1, 1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, 1, 1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(1, 1, -1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, 1, -1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, -1, -1)) );
+            minDist = min( minDist, DetectDistance(tracer, origin, float3(-1, 1, -1)) );
+        }
+
         distPY = saturate(distPY * 4.0);
         distNY = saturate(distNY * 4.0);
         distPX = saturate(distPX * 4.0);
@@ -602,11 +611,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
         // store the dist, the dist is abs meters, can store 4 unit_size max
-        Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(0, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
+        Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(uint(minDist / CUBE_UNIT), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
         Voxels[CubeIdx].distanceToSolid_x01_y01 = pack_bytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 
-        //if (Voxels[CubeIdx].distanceToSolid < 3) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (minDist < 4) // 只处理表面，增值算法的时候可以具体的把他做好
         {
+            uint iterate = Voxels[CubeIdx].age;
+            Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
+            
             uint4 skyvis_pznzpynyx = unpack_bytes(Cubes[CubeIdx].skyVisibility_pznzpyny);
             uint4 skyvis_pxnxs0s1 = unpack_bytes(Cubes[CubeIdx].skyVisibility_pxnxs0s1);
 
@@ -627,7 +639,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
     {
         uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 3) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (upacked.x < 4) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
