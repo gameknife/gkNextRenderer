@@ -70,10 +70,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 reflectColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
+    Material material = Materials[hitVertex.MaterialIndex];
     Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], rayDir, TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
     ObjectId0[ipos] = hitNode.instanceId;
+
+    if (material.MaterialModel != MaterialDielectric)
+    {
+        hitVertex.Position = hitVertex.Position - rayDir * 0.05;
+    }  
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);

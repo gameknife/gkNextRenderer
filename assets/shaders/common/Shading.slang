@@ -402,9 +402,6 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             }
         }
         
-        // this will make refrect failed, offset later
-        //outVertex.Position = outVertex.Position - outRayDir * 0.05; // 防止Z-fighting
-
         return true;
     }
 
@@ -1108,7 +1105,7 @@ public struct FHybridRenderer : IRenderer
             float4 reflectionColor;
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position + inVertex.Normal * 0.1f, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+            if (tracer.TraceRay(inVertex.Position, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
