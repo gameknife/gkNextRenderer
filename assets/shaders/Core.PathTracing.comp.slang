@@ -76,10 +76,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     OutNormalBuffer[ipos] = gbuffer;
     ObjectId0[ipos] = hitNode.instanceId;
 
-    if (material.MaterialModel != MaterialDielectric)
-    {
-        hitVertex.Position = hitVertex.Position - rayDir * 0.05;
-    }  
+    // if (material.MaterialModel != MaterialDielectric)
+    // {
+    //     hitVertex.Position = hitVertex.Position - rayDir * 0.05;
+    // }  
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
