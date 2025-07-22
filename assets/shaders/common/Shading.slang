@@ -15,6 +15,7 @@ static const float2 haltonSeq[8] = {
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
+static const float TRACE_CORRECTION_OFFSET = 0.01f;
 
 namespace Common
 {
@@ -904,6 +905,7 @@ public struct FPathTracingRenderer : IRenderer
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, in Sampler2D[] TextureArray)
     {
         Material mat = Materials[inVertex.MaterialIndex];
+        const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
         const float dotValue = dot(rayDir, inVertex.Normal);
         const bool BackFace = dotValue > 0;
@@ -933,7 +935,7 @@ public struct FPathTracingRenderer : IRenderer
         rayDir = trace_dir;
 
         NodeProxy hitNode;
-        if (tracer.TraceRay(inVertex.Position, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
+        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
         {
             Material hitMat = Materials[inVertex.MaterialIndex];
             float4 outAlbedo = hitMat.Diffuse;
@@ -1009,7 +1011,7 @@ public struct FPathTracingRenderer : IRenderer
                     {
                         const float3 lightVector = Camera.SunDirection.xyz;
                         const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-                        if (!tracer.TraceOcclusion(vertexStart.Position, lightVectorCone))
+                        if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
                         {
                             RayColor *= Camera.SunColor;
                             break;
@@ -1105,7 +1107,7 @@ public struct FHybridRenderer : IRenderer
             float4 reflectionColor;
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+            if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
                 Material hitMat = Materials[hitVertex.MaterialIndex];
                 float4 outAlbedo = hitMat.Diffuse;
