@@ -1156,6 +1156,32 @@ namespace Assets
         {
             GenerateMikkTSpace(this);
         }
+
+        // 简单的将indice拆分为最大 65535 * 3 一组
+        
+
+        // build model section
+        
+        // const size_t max_vertices = 64;
+        // const size_t max_triangles = 124;
+        // const float cone_weight = 0.0f;
+        //         
+        // // make it cluster
+        // size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
+        // std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+        // std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+        // std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+        //
+        // size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
+        //     indices.size(), &vertices[0].Position.x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
+        //
+        // // save memory
+        // const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
+        //         
+        // meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+        // meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+        // meshlets.resize(meshlet_count);
+
     }
 
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)

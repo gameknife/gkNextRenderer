@@ -121,10 +121,7 @@ namespace Assets
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
             const auto reorderOffset = static_cast<uint32_t>(reorders.size());
-            offsets_.push_back({indexOffset, model.NumberOfIndices(), vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
-
-            // Copy model data one after the other.
-
+            
             // cpu vertex to gpu vertex
             for (auto& vertex : model.CPUVertices())
             {
@@ -137,30 +134,64 @@ namespace Assets
             
             const std::vector<Vertex>& localVertices = model.CPUVertices();
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
-            std::vector<uint32_t> provoke(localIndices.size());
-            std::vector<uint32_t> reorder(localVertices.size() + localIndices.size() / 3);
-            std::vector<uint32_t> primIndices(localIndices.size());
             
-            if (localIndices.size() > 0)
-            {
-                reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], localIndices.size(), localVertices.size()));
+            std::vector<std::vector<uint32_t>> slicedIndices;
+            const uint32_t maxIndicesPerSlice = 65535 * 3;
+            
+            // 将localIndices分片，每片最多65535*3个索引
+            for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice) {
+                size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
+                slicedIndices.emplace_back(localIndices.begin() + i, localIndices.begin() + endIndex);
             }
-            
-            for ( size_t i = 0; i < provoke.size(); ++i )
+
+            int emptySection = 10 - int(slicedIndices.size());
+            int processSection = std::min( int(slicedIndices.size()), 10);
+
+            for ( int slice = 0; slice < processSection; ++slice )
             {
-                primIndices[i] += reorder[provoke[i]];
-            }
+                const auto indexOffset = static_cast<uint32_t>(indices.size());
+                const auto reorderOffset = static_cast<uint32_t>(reorders.size());
+                
+                const auto& localIndices = slicedIndices[slice];
+                uint32_t realSize = uint32_t(localIndices.size());
+                offsets_.push_back({indexOffset, realSize, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+
+                std::vector<uint32_t> provoke(localIndices.size());
+                std::vector<uint32_t> reorder(localVertices.size() + localIndices.size() / 3);
+                std::vector<uint32_t> primIndices(localIndices.size());
             
-            // reorder is absolute vertex index
-            for ( size_t i = 0; i < reorder.size(); ++i )
+                if (localIndices.size() > 0)
+                {
+                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], realSize, localVertices.size()));
+                }
+            
+                for ( size_t i = 0; i < provoke.size(); ++i )
+                {
+                    primIndices[i] += reorder[provoke[i]];
+                }
+            
+                // reorder is absolute vertex index
+                for ( size_t i = 0; i < reorder.size(); ++i )
+                {
+                    reorder[i] += vertexOffset;
+                }
+            
+                indices.insert(indices.end(), provoke.begin(), provoke.end());
+                reorders.insert(reorders.end(), reorder.begin(), reorder.end());
+                primitiveIndices.insert(primitiveIndices.end(), primIndices.begin(), primIndices.end());
+            }
+
+            if (emptySection < 0)
             {
-                reorder[i] += vertexOffset;
+                fmt::print("more than 4 sections in model. \n");
             }
-            
-            indices.insert(indices.end(), provoke.begin(), provoke.end());
-            reorders.insert(reorders.end(), reorder.begin(), reorder.end());
-            primitiveIndices.insert(primitiveIndices.end(), primIndices.begin(), primIndices.end());
-            
+            for ( int slice = 0; slice < emptySection; ++slice )
+            {
+                offsets_.push_back({indexOffset, 0, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+            }
+
+            model.SetSectionCount(processSection);
+
             model.FreeMemory();
         }
         
@@ -440,26 +471,35 @@ namespace Assets
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
                     
-                    uint32_t nodeOffsetBatched = 0;
-
                     for (auto& node : nodes_)
                     {
                         // record all
                         if (node->IsDrawable())
                         {
-                            auto modelId = node->GetModel();
                             glm::mat4 combined;
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
                             }
 
-                            NodeProxy proxy = node->GetNodeProxy();
-                            proxy.combinedPrevTS = combined;
-                            nodeProxys.push_back(proxy);
-
-                            nodeOffsetBatched++;
-                            indirectDrawBatchCount_++;
+                            auto model = GetModel(node->GetModel());
+                            if (model)
+                            {
+                                if (model->SectionCount() > 1)
+                                {
+                                    fmt::print("multi part models");
+                                }
+                                for ( uint32_t section = 0; section < model->SectionCount(); ++section)
+                                {
+                                    NodeProxy proxy = node->GetNodeProxy();
+                                    proxy.combinedPrevTS = combined;
+                                    proxy.modelId = node->GetModel() * 10 + section;
+                                    proxy.nort = section == 0 ? 0 : 1;
+                                    nodeProxys.push_back(proxy);
+                            
+                                    indirectDrawBatchCount_++;
+                                }        
+                            }
                         }
                     }
                     
