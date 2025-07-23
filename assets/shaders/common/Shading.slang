@@ -15,7 +15,7 @@ static const float2 haltonSeq[8] = {
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
-static const float TRACE_CORRECTION_OFFSET = 0.01f;
+static const float TRACE_CORRECTION_OFFSET = 0.001f;
 
 namespace Common
 {
@@ -1024,7 +1024,7 @@ public struct FPathTracingRenderer : IRenderer
                     // 终结路径
                     if (b == maxBounces - 1 || earlyExit)
                     {
-                        RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels); // * 2.0f;
+                        RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
                         break;
                     }
                 }
