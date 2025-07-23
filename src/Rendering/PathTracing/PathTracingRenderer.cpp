@@ -118,17 +118,26 @@ namespace Vulkan::RayTracing
             SCOPED_GPU_TIMER("reproject pass");
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipeline_->Handle());
             accumulatePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            {
+                glm::uvec2 pushConst = { 0, 1 }; vkCmdPushConstants(commandBuffer, accumulatePipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,0, sizeof(glm::uvec2), &pushConst);
+            }
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
             baseRender_.rtAccumlatedDiffuse->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
             
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipelineSpec_->Handle());
             accumulatePipelineSpec_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            {
+                glm::uvec2 pushConst = { 0, 1 }; vkCmdPushConstants(commandBuffer, accumulatePipelineSpec_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,0, sizeof(glm::uvec2), &pushConst);
+            }
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
             baseRender_.rtAccumlatedSpecular->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, accumulatePipelineAlbedo_->Handle());
             accumulatePipelineAlbedo_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+            {
+                glm::uvec2 pushConst = { 1, 0 }; vkCmdPushConstants(commandBuffer, accumulatePipelineAlbedo_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,0, sizeof(glm::uvec2), &pushConst);
+            }
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
             baseRender_.rtAccumlatedAlbedo_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);

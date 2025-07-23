@@ -185,11 +185,8 @@ namespace Vulkan::RayTracing
         for ( size_t i = 0; i < nodeTrans.size(); i++)
         {
             auto& Node = nodeTrans[i];
-            // TODO, section count multiple times, blas should divided to sections here
-            {
-                instances.push_back(TopLevelAccelerationStructure::CreateInstance(
-                    bottomAs_[Node.modelId / 10], glm::transpose(Node.worldTS), Node.instanceId, Node.visible));
-            }
+            instances.push_back(TopLevelAccelerationStructure::CreateInstance(
+                bottomAs_[Node.modelId / 10], glm::transpose(Node.worldTS), Node.instanceId, Node.visible && !Node.nort));
         }
 
         // upload to gpu

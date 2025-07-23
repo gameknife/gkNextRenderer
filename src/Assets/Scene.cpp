@@ -183,7 +183,7 @@ namespace Assets
 
             if (emptySection < 0)
             {
-                fmt::print("more than 4 sections in model. \n");
+                fmt::print("more than 10 sections in model. \n");
             }
             for ( int slice = 0; slice < emptySection; ++slice )
             {
@@ -485,10 +485,6 @@ namespace Assets
                             auto model = GetModel(node->GetModel());
                             if (model)
                             {
-                                if (model->SectionCount() > 1)
-                                {
-                                    fmt::print("multi part models");
-                                }
                                 for ( uint32_t section = 0; section < model->SectionCount(); ++section)
                                 {
                                     NodeProxy proxy = node->GetNodeProxy();
@@ -496,7 +492,6 @@ namespace Assets
                                     proxy.modelId = node->GetModel() * 10 + section;
                                     proxy.nort = section == 0 ? 0 : 1;
                                     nodeProxys.push_back(proxy);
-                            
                                     indirectDrawBatchCount_++;
                                 }        
                             }

@@ -64,7 +64,13 @@ namespace Vulkan::PipelineCommon
             descriptorSetManager_.get(),
             &baseRender.GetRTDescriptorSetManager(),
         };
-        pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size())));
+
+    	VkPushConstantRange pushConstantRange{};
+    	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    	pushConstantRange.offset = 0;
+    	pushConstantRange.size = 8;
+    	
+        pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(uniformBuffers.size()), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/Process.ReProject.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

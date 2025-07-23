@@ -774,12 +774,15 @@ void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+    
     
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+    
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
 
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");

@@ -14,6 +14,15 @@ import Common;
 [[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
 [[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
 
+struct PushConsts
+{
+    bool needClamp;
+    bool needSpatio;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<PushConsts> pushConsts;
+
 // Helper functions
 uint FetchPrimitiveIndex(uint InstanceID)
 {
@@ -155,7 +164,31 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         history = clamp(history, 0.0, 1600.0); // kill the negative valuse
 
-        // Judge current gbuffer / object id with prev frame, to deghosting
+        float3 currentColor[25];
+
+        for (int i = 0; i < 25; i++)
+        {
+            currentColor[i] = SourceImage[ipos + int2(offsets5x5[i])].rgb;
+        }
+
+        if (!Camera.ProgressiveRender && pushConsts.needClamp)
+        {
+            float3 AABBMax = rgb2ycocg(src.rgb);
+            float3 AABBMin = AABBMax;
+  
+            for (int k = 0; k < 25; k++)
+            {
+                AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
+                AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
+            }
+
+            float3 HistoryYCoCg = rgb2ycocg(history);
+
+            float3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
+
+            history = ycocg2rgb(ResultYCoCg);
+        }
+
         float currKeep = 1.0f / max(1, Camera.TemporalFrames);
         final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
     }
