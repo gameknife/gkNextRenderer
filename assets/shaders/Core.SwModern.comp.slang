@@ -77,7 +77,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], rayDir, TextureArray, albedo, gbuffer);
+    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], hitNode, rayDir, TextureArray, albedo, gbuffer);
 
     const float dotValue = dot(rayDir, hitVertex.Normal);
     const float3 outwardNormal = dotValue > 0 ? -hitVertex.Normal : hitVertex.Normal;

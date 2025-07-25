@@ -236,6 +236,8 @@ public struct ALIGN_16 Vertex
   public float4 Tangent;
   public float2 TexCoord;
   public uint MaterialIndex;
+  public float3 LocalNormal;
+  public float4 LocalTangent;
 };
 
 public struct ALIGN_16 GPUVertex

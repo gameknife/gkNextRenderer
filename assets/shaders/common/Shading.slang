@@ -57,7 +57,15 @@ namespace Common
         return prevfpos - currfpos;
     }
 
-    public void FetchGBuffer(in Vertex inVertex, in Material inMaterial, float3 rayDir, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
+    float3 mikkTSpace(float3 vNt, float3 normal, float4 tangent)
+    {
+        vNt = vNt * 2.0 - 1.0;
+        float3 vB = tangent.w * cross(normal, tangent.xyz);
+        normal = normalize(vNt.x * tangent.xyz + vNt.y * vB + vNt.z * normal);
+        return normal;
+    }
+
+    public void FetchGBuffer(inout Vertex inVertex, in Material inMaterial, in NodeProxy proxy, float3 rayDir, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
     {
         outAlbedo = inMaterial.Diffuse;
 
@@ -73,7 +81,20 @@ namespace Common
             roughness = roughness * mra.g;
         }
 
-        outNormal = float4(inVertex.Normal.rgb, roughness);
+        // Normal map handling
+        if (inMaterial.NormalTextureId >= 0)
+        {
+            // normal mapping use interpolated normal
+            float3 vNt = TextureArray[NonUniformResourceIndex(inMaterial.NormalTextureId)].SampleLevel(inVertex.TexCoord, 0).rgb;
+            // here we need local space normal and tangent
+            outNormal.rgb = normalize( mul(proxy.worldTS, float4(mikkTSpace(vNt, inVertex.LocalNormal, inVertex.LocalTangent), 0.0)).xyz );
+            outNormal.a = roughness;
+            inVertex.Normal.rgb = outNormal.rgb; // Update vertex normal for further calculations
+        }
+        else
+        {
+            outNormal = float4(inVertex.Normal.rgb, roughness);
+        }
     }
 
     public float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
@@ -352,6 +373,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
             outVertex.TexCoord = initialVertex.TexCoord;
             outVertex.Tangent = initialVertex.Tangent;
+            outVertex.LocalNormal = initialVertex.LocalNormal;
+            outVertex.LocalTangent = initialVertex.LocalTangent;
             outRayDir = ray_dir;
         }
         else
@@ -387,6 +410,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
                 outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
                 outVertex.TexCoord = initialVertex.TexCoord;
                 outVertex.Tangent = initialVertex.Tangent;
+                outVertex.LocalNormal = initialVertex.LocalNormal;
+                outVertex.LocalTangent = initialVertex.LocalTangent;
                 outRayDir = ray_dir;
             }
             else
@@ -399,6 +424,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
                 outVertex.MaterialIndex = FetchMaterialId(outNode, finalVertex.MaterialIndex);
                 outVertex.TexCoord = finalVertex.TexCoord;
                 outVertex.Tangent = finalVertex.Tangent;
+                outVertex.LocalNormal = finalVertex.LocalNormal;
+                outVertex.LocalTangent = finalVertex.LocalTangent;
                 outRayDir = final_ray_dir;
             }
         }
