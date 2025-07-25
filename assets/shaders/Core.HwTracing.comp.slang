@@ -73,7 +73,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 reflectColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
     Material material = Materials[hitVertex.MaterialIndex];
-    Common.FetchGBuffer(hitVertex, material, rayDir, TextureArray, albedo, gbuffer);
+    Common.FetchGBuffer(hitVertex, material, hitNode, rayDir, TextureArray, albedo, gbuffer);
     OutAlbedoBuffer[ipos] = albedo;
     OutNormalBuffer[ipos] = gbuffer;
 
