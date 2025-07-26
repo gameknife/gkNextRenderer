@@ -12,6 +12,12 @@
 #include <functional>
 #include <map>
 
+namespace StreamlineWrapper
+{
+	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily);
+	void Shutdown();
+}
+
 namespace Vulkan
 {
 	namespace PipelineCommon

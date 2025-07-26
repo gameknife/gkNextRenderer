@@ -41,6 +41,69 @@
 #include "Runtime/Engine.hpp"
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
+#if WITH_STREAMLINE
+#include "ThirdParty/streamline/include/sl.h"
+#include "ThirdParty/streamline/include/sl_consts.h"
+#include "ThirdParty/streamline/include/sl_dlss.h"
+#include "ThirdParty/streamline/include/sl_helpers_vk.h"
+#endif
+
+namespace StreamlineWrapper
+{
+   void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily)
+   {
+#if WITH_STREAMLINE
+       sl::Preferences pref{};
+       pref.showConsole = false; // for debugging, set to false in production
+       pref.logLevel = sl::LogLevel::eOff;
+       pref.pathsToPlugins = {}; // change this if Streamline plugins are not located next to the executable
+       pref.numPathsToPlugins = 0; // change this if Streamline plugins are not located next to the executable
+       pref.pathToLogsAndData = {}; // change this to enable logging to a file
+       //pref.logMessageCallback = myLogMessageCallback; // highly recommended to track warning/error messages in your callback
+       //pref.applicationId = myId; // Provided by NVDA, required if using NGX components (DLSS 2/3)
+       //pref.engineType = myEngine; // If using UE or Unity
+       //pref.engineVersion = myEngineVersion; // Optional version
+       //pref.projectId = myProjectId; // Optional project id
+       if(SL_FAILED(res, slInit(pref)))
+       {
+           // Handle error, check the logs
+           if(res == sl::Result::eErrorDriverOutOfDate) { /* inform user */}
+           // and so on ...
+       }
+
+       sl::VulkanInfo slVulkanInfo{};
+       slVulkanInfo.device = device;
+       slVulkanInfo.instance = instance;
+       slVulkanInfo.physicalDevice = physicalDevice;
+       slVulkanInfo.computeQueueIndex = computeQueueIdx;
+       slVulkanInfo.computeQueueFamily = computeQueueFamily;
+       slVulkanInfo.graphicsQueueIndex = graphicsQueueIdx;
+       slVulkanInfo.graphicsQueueFamily = graphicsQueueFamily;
+       // slVulkanInfo.opticalFlowQueueIndex = vulkanInfo.opticalFlowQueueIndex;
+       // slVulkanInfo.opticalFlowQueueFamily = vulkanInfo.opticalFlowQueueFamily;
+       // slVulkanInfo.useNativeOpticalFlowMode = vulkanInfo.useNativeOpticalFlowMode;
+       // slVulkanInfo.computeQueueCreateFlags = vulkanInfo.computeQueueCreateFlags;
+       // slVulkanInfo.graphicsQueueCreateFlags = vulkanInfo.graphicsQueueCreateFlags;
+       // slVulkanInfo.opticalFlowQueueCreateFlags = vulkanInfo.opticalFlowQueueCreateFlags;
+
+       if(SL_FAILED(res, slSetVulkanInfo(slVulkanInfo)))
+       {
+           // Handle error, check the logs
+       }
+#endif
+   }
+
+    void Shutdown()
+   {
+#if WITH_STREAMLINE
+       if(SL_FAILED(res, slShutdown()))
+       {
+           // Handle error, check the logs
+       }
+#endif
+   }
+}
+
 namespace
 {
     void PrintVulkanSdkInformation()
