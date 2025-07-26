@@ -138,7 +138,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
-    userSettings.TAA = false;
+    userSettings.TAA = true;
 
     userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
