@@ -13,6 +13,7 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/miniaudio/*.h"
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
+	"ThirdParty/streamline/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
@@ -151,12 +152,16 @@ foreach(target IN LISTS AllTargets)
 
 		target_link_libraries(${target} PRIVATE meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE glfw)
-		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
+		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
+		if ( WITH_STREAMLINE ) 
+		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+		target_link_libraries(${target} PRIVATE sl.interposer)
+		endif()
+		
 	endif()
 
 	# for android
