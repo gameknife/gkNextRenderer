@@ -9,6 +9,8 @@ struct PushConsts
 {
     uint offset_x;
     uint offset_y;
+    uint output_w;
+    uint output_h;
 };
 
 [[vk::push_constant]]
@@ -279,8 +281,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const int2 ipos = int2(DTid.xy);
     int2 isize;
     DestImage.GetDimensions(isize.x, isize.y);
-    const float2 uv = float2(ipos) / float2(isize);
-
     int2 ssize;
     SourceImage.GetDimensions(ssize.x, ssize.y);
 
@@ -288,6 +288,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (Camera.SuperResolution < 2)
     {
+        const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
             SourceImage,
             uv,
@@ -297,7 +298,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else
     {
-        outColor = SourceImage[ipos];
+        const int2 iposOffset = int2(ipos * float2(isize) / float2(pushConsts.output_w, pushConsts.output_h));
+        outColor = SourceImage[iposOffset];
     }
 
     DestImage[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;
