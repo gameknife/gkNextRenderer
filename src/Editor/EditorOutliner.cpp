@@ -9,12 +9,16 @@ void DrawNode(Assets::Scene* scene, Assets::Node* node)
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
 
+    bool selected = scene->GetSelectedId() == node->GetInstanceId();
     ImGuiTreeNodeFlags flag = 0 |
-        (scene->GetSelectedId() == node->GetInstanceId() ? ImGuiTreeNodeFlags_Selected : 0) |
+        (selected ? ImGuiTreeNodeFlags_Selected : 0) |
         (node->Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
 
      
-
+    if (selected)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(64, 128, 255, 255));
+    }
     if (ImGui::TreeNodeEx(((node->GetModel() == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node->GetName()).c_str(), flag))
     {
         if (ImGui::IsItemClicked())
@@ -27,6 +31,10 @@ void DrawNode(Assets::Scene* scene, Assets::Node* node)
             DrawNode(scene, child.get());
         }
         ImGui::TreePop();
+    }
+    if (selected)
+    {
+        ImGui::PopStyleColor();
     }
 }
 
