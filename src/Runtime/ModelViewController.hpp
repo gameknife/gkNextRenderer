@@ -73,4 +73,6 @@ private:
 	double mouseSensitive_ {};
 
 	float fieldOfView_ {};
+
+	bool movedByEvent_ {};
 };

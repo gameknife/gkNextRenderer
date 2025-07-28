@@ -599,7 +599,8 @@ namespace Vulkan
         // SwapChaine
         int Divider = 4 - ( GOption->ReferenceMode ? 0 : GOption->SuperResolution );
         swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
-        swapChain_->UpdateEditorViewport(0, 0, swapChain_->Extent().width * 2 / Divider,swapChain_->Extent().height * 2 / Divider);
+        swapChain_->UpdateRenderViewport(0, 0, swapChain_->Extent().width * 2 / Divider,swapChain_->Extent().height * 2 / Divider);
+        swapChain_->UpdateOutputViewport( 0, 0, swapChain_->Extent().width, swapChain_->Extent().height);
 
         // depthBuffer
         depthBuffer_.reset(new class DepthBuffer(*commandPool_, swapChain_->Extent()));
@@ -859,6 +860,7 @@ namespace Vulkan
             renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
             renderPassInfo.pClearValues = clearValues.data();
 
+
             // make it to generate gbuffer
             vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
             {
@@ -872,7 +874,7 @@ namespace Vulkan
                                         visibilityPipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0,
                                         nullptr);
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
+                
                 // indirect draw
                 vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
                                          scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
@@ -1098,6 +1100,8 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        glm::uvec4 pushConst = glm::uvec4(SwapChain().OutputOffset().x, SwapChain().OutputOffset().y, SwapChain().OutputExtent().width, SwapChain().OutputExtent().height);
+        
         if (GOption->ReferenceMode)
         {
             // 后面渲染器会很多，这里只渲染加入reference的，并从rtDenoised Resolve到FrameBuffer
@@ -1149,29 +1153,28 @@ namespace Vulkan
                     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
                     simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 
-                    glm::uvec2 pushConst = glm::uvec2(0, 0);
                     switch (logicRenderer.first)
                     {
                     case ERendererType::ERT_PathTracing:
-                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2);
+                        pushConst = glm::uvec4(SwapChain().Extent().width / 2, SwapChain().Extent().height / 2, SwapChain().Extent().width, SwapChain().Extent().height);
                         break;
                     case ERendererType::ERT_Hybrid:
-                        pushConst = glm::uvec2(0, SwapChain().Extent().height / 2);
+                        pushConst = glm::uvec4(0, SwapChain().Extent().height / 2, SwapChain().Extent().width, SwapChain().Extent().height);
                         break;
                     case ERendererType::ERT_ModernDeferred:
-                        pushConst = glm::uvec2(SwapChain().Extent().width / 2, 0);
+                        pushConst = glm::uvec4(SwapChain().Extent().width / 2, 0, SwapChain().Extent().width, SwapChain().Extent().height);
                         break;
                     case ERendererType::ERT_LegacyDeferred:
-                        pushConst = glm::uvec2(0, 0);
+                        pushConst = glm::uvec4(0, 0, SwapChain().Extent().width, SwapChain().Extent().height);
                         break;
                     default:
-                        pushConst = glm::uvec2(SwapChain().Extent().width, SwapChain().Extent().height);
+                        pushConst = glm::uvec4(SwapChain().Extent().width ,SwapChain().Extent().height, SwapChain().Extent().width / 2, SwapChain().Extent().height / 2);
                         break;
                     }
 
                     vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(),
                                        VK_SHADER_STAGE_COMPUTE_BIT,
-                                       0, sizeof(glm::uvec2), &pushConst);
+                                       0, sizeof(glm::uvec4), &pushConst);
                     vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8,
                                   SwapChain().RenderExtent().height / 8, 1);
                     SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
@@ -1195,11 +1198,10 @@ namespace Vulkan
 
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, simpleComposePipeline_->Handle());
                 simpleComposePipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
-
-                glm::uvec2 pushConst = glm::uvec2(0, 0);
+                
                 vkCmdPushConstants(commandBuffer, simpleComposePipeline_->PipelineLayout().Handle(),
                                    VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(glm::uvec2), &pushConst);
+                                   0, sizeof(glm::uvec4), &pushConst);
 
                 vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
 
@@ -1367,7 +1369,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
-        lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->RenderExtent());
+        lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->OutputExtent());
         uniformBuffers_[imageIndex].SetValue(lastUBO);
     }
 

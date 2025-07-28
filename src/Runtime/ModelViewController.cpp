@@ -207,6 +207,7 @@ void ModelViewController::OnScroll(double xoffset, double yoffset)
 {
     fieldOfView_ -= static_cast<float>(yoffset);
     fieldOfView_ = glm::clamp(fieldOfView_, 1.0f, 90.0f);
+    movedByEvent_ = true;
 }
 
 bool ModelViewController::UpdateCamera(const double speed, const double timeDelta)
@@ -236,11 +237,12 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
         cameraRotY_ != 0.0 ||
         cameraRotX_ != 0.0 ||
         glm::abs(rawModelRotX_ - modelRotX_) > 0.01 ||
-        glm::abs(rawModelRotY_ - modelRotY_) > 0.01;
+        glm::abs(rawModelRotY_ - modelRotY_) > 0.01 || movedByEvent_;;
 
     cameraRotY_ = 0;
     cameraRotX_ = 0;
-
+    movedByEvent_ = false;
+    
     return updated;
 }
 

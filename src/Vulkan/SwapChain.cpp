@@ -109,10 +109,16 @@ SwapChain::~SwapChain()
 	}
 }
 
-void SwapChain::UpdateEditorViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+void SwapChain::UpdateRenderViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
 {
 	renderExtent_ = { width, height };
 	renderOffset_ = { x, y };
+}
+
+void SwapChain::UpdateOutputViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+{
+	outputExtent_ = { width, height };
+	outputOffset_ = { x, y };
 }
 
 SwapChain::SupportDetails SwapChain::QuerySwapChainSupport(VkPhysicalDevice physicalDevice, const VkSurfaceKHR surface)

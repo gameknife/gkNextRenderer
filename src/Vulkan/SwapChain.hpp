@@ -27,11 +27,15 @@ namespace Vulkan
 		const VkExtent2D& Extent() const { return extent_; }
 		const VkExtent2D& RenderExtent() const { return renderExtent_; }
 		const VkOffset2D& RenderOffset() const { return renderOffset_; }
+		const VkExtent2D& OutputExtent() const { return outputExtent_; }
+		const VkOffset2D& OutputOffset() const { return outputOffset_; }
+		
 		VkFormat Format() const { return format_; }
 		VkPresentModeKHR PresentMode() const { return presentMode_; }
 		bool IsHDR() const { return hdr_;}
 
-		void UpdateEditorViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
+		void UpdateRenderViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
+		void UpdateOutputViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 		
 		void InsertBarrierToWrite(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
 		void InsertBarrierToPresent(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
@@ -62,6 +66,10 @@ namespace Vulkan
 		VkExtent2D extent_{};
 		mutable VkExtent2D renderExtent_{};
 		mutable VkOffset2D renderOffset_{};
+
+		mutable VkExtent2D outputExtent_{};
+		mutable VkOffset2D outputOffset_{};
+		
 		std::vector<VkImage> images_;
 		std::vector<std::unique_ptr<ImageView>> imageViews_;
 		bool hdr_{};

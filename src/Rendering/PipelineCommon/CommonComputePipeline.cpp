@@ -210,7 +210,7 @@ namespace Vulkan::PipelineCommon
         VkPushConstantRange pushConstantRange{};
         pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
         pushConstantRange.offset = 0;
-        pushConstantRange.size = 8;
+        pushConstantRange.size = 16;
         
         pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get()}, static_cast<uint32_t>(swapChain.Images().size()), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/Process.UpScaleFSR.comp.slang.spv");

@@ -932,7 +932,7 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
     GetEngine().GetUserSettings().TemporalFrames = 8;
     GetEngine().GetUserSettings().NumberOfSamples = 256;
     GetEngine().GetUserSettings().Denoiser = false;
-    GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(1920 / 2 - THUMB_SIZE / 2, 960 / 2 - THUMB_SIZE / 2, THUMB_SIZE, THUMB_SIZE);
+    GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(1920 / 2 - THUMB_SIZE / 2, 960 / 2 - THUMB_SIZE / 2, THUMB_SIZE, THUMB_SIZE);
     PlaceDynamicBlock({{0, 0, 0}, EOrientation::EO_North, 0, BasicNodes[0].brushId_, 0, 0});
 
     int totalTask = static_cast<int>(BasicNodes.size());
@@ -962,7 +962,7 @@ void MagicaLegoGameInstance::GeneratingThmubnail()
             cameraArm_ = 5.0f;
             cameraCenter_ = glm::vec3(0, 0.0f, 0);
             realCameraCenter_ = cameraCenter_;
-            GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(0, 0, 1920, 960);
+            GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(0, 0, 1920, 960);
             return true;
         }
 

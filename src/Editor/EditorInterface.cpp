@@ -226,7 +226,8 @@ void EditorInterface::Render()
 	
 	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	editor_->GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	//editor_->GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(0, 0, Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 
 	firstRun = false;
 	GUserInterface = nullptr;

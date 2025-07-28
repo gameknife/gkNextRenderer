@@ -443,8 +443,8 @@ glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 
 glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
-    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().Extent(); // TODO: use render extent on editor
+    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
+    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
     
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
@@ -464,8 +464,8 @@ void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::
 {
     // should consider rt offset
     
-    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().Extent(); // TODO: use render extent on editor
+    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
+    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
     glm::vec2 offset = {vkoffset.x, vkoffset.y};
     glm::vec2 extent = {vkextent.width, vkextent.height};
     glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
@@ -708,7 +708,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
     ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;
     
-    ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+    ubo.ViewportRect = glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y, renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
 
     ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
 
