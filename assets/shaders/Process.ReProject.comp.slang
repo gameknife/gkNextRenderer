@@ -192,18 +192,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float currKeep = 1.0f / max(1, Camera.TemporalFrames);
         final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
     }
-    
-    if (Camera.ShowEdge)
-    {
-        uint realInstanceId = FetchPrimitiveIndex(current_primitive_index0);
-        if (realInstanceId == Camera.SelectedId)
-        {
-            if (EdgeDetect(current_primitive_index0, ipos))
-            {
-                final.rgb = float3(1, 1, 0.05) * Camera.PaperWhiteNit;
-            }
-        }
-    }
 
     FinalImage[ipos] = float4(final.rgb, 1.0);
 }
