@@ -25,7 +25,9 @@ void Editor::GUI::ShowMaterialBrowser()
                 ImGui::BeginGroup();
                 ImGui::PushFont(bigIcon_); // use the font awesome font
                 ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(32, 32, 32, 255));
+                ImGui::PushID(name.c_str());
                 ImGui::Button(icon, ImVec2(ICON_SIZE, ICON_SIZE));
+                ImGui::PopID();
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
                 

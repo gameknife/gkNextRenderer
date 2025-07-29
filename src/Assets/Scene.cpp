@@ -345,6 +345,8 @@ namespace Assets
         Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
+
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
         
     bool Scene::UpdateNodes()
@@ -548,6 +550,12 @@ namespace Assets
             return &materials_[id];
         }
         return nullptr;
+    }
+
+    void Scene::MarkDirty()
+    {
+        sceneDirty_ = true;
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::OverrideModelView(glm::mat4& OutMatrix)

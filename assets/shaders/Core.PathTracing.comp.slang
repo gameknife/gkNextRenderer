@@ -26,6 +26,7 @@ import Common;
 [[vk::binding(6, 3)]] RWStructuredBuffer<VoxelData> Voxels;
 [[vk::binding(7, 3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
 [[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
+[[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
@@ -92,6 +93,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outSpec = float4(reflectColor.rgb, 1);
     outSpec.a = length(pixelOffset);
     OutImageSpec[ipos] = outSpec;
+
+    // write to NDC depth
+    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
+    float ndcDepth = clipPos.z / clipPos.w;
+    OutDepthBuffer[ipos] = ndcDepth;
     
     END_SHADERCLOCK(ipos)
 }

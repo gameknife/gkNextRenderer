@@ -90,8 +90,10 @@ void Editor::GUI::ShowMaterialEditor()
         ImGui::SetNextWindowClass(&window_class1);
         init_nodes = false;
     }
-    
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8,16));
     ImGui::Begin("Material Editor", &ed_material, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse);
+    ImGui::PopStyleVar();
     
     myNode->rightClickPopUpContent([](ImFlow::BaseNode *node)
                                       {
@@ -124,14 +126,12 @@ void Editor::GUI::ShowMaterialEditor()
 
     std::vector<std::weak_ptr<ImFlow::Link>> myLinks = myNode->getLinks();
 
-    ImGui::Text("Links: %lu", myLinks.size());
-    ImGui::SameLine();
-    ImGui::Text("Nodes: %u", myNode->getNodesCount());
-    ImGui::SameLine();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8,8));
     if ( ImGui::Button("Apply Material") )
     {
         ApplyMaterial();
     }
+    ImGui::PopStyleVar();
 
     for (auto wp : myLinks)
     {

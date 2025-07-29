@@ -35,7 +35,7 @@ void Editor::GUI::ShowProperties()
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
             ImGui::Button("L"); ImGui::SameLine();
             ImGui::PopStyleColor();
-            if ( ImGui::DragFloat3("##Location", &selected_obj->Translation().x) )
+            if ( ImGui::DragFloat3("##Location", &selected_obj->Translation().x, 0.1f) )
             {
                 selected_obj->RecalcTransform(true);
                 current_scene->MarkDirty();
@@ -47,7 +47,7 @@ void Editor::GUI::ShowProperties()
             ImGui::Button("R"); ImGui::SameLine();
             ImGui::PopStyleColor();
             static glm::vec3 eular = glm::eulerAngles(selected_obj->Rotation());
-            if ( ImGui::DragFloat3("##Rotation", &eular.x) )
+            if ( ImGui::DragFloat3("##Rotation", &eular.x, 0.1f) )
             {
                 selected_obj->SetRotation( glm::quat(eular));
                 selected_obj->RecalcTransform(true);
@@ -59,7 +59,7 @@ void Editor::GUI::ShowProperties()
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.8f, 1.0f));
             ImGui::Button("S"); ImGui::SameLine();
             ImGui::PopStyleColor();
-            if ( ImGui::DragFloat3("##Scale", &selected_obj->Scale().x) )
+            if ( ImGui::DragFloat3("##Scale", &selected_obj->Scale().x, 0.1f) )
             {
                 selected_obj->RecalcTransform(true);
                 current_scene->MarkDirty();
@@ -83,10 +83,16 @@ void Editor::GUI::ShowProperties()
                 for ( auto& mat : mats)
                 {
                     int matIdx = mat;
+                    if (matIdx == 0) continue;
                     auto& refMat = current_scene->Materials()[matIdx];
-                    
+
+                    ImGui::PushID(matIdx);
                     ImGui::InputText("##MatName", &refMat.name_, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::PopID();
+                    
                     ImGui::SameLine();
+                    
+                    
                     if( ImGui::Button(ICON_FA_CIRCLE_LEFT) )
                     {
                         if (selectedMaterialId != -1)
@@ -94,6 +100,8 @@ void Editor::GUI::ShowProperties()
                             mat = selectedMaterialId;
                         }
                     }
+                    
+                    
                     ImGui::SameLine();
                     if( ImGui::Button(ICON_FA_PEN_TO_SQUARE) )
                     {

@@ -89,7 +89,7 @@ namespace Assets
 		const Model* GetModel(uint32_t id) const;
 		const FMaterial* GetMaterial(uint32_t id) const;
 
-		void MarkDirty() {sceneDirty_ = true;}
+		void MarkDirty();
 		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 
