@@ -52,6 +52,21 @@ uint FetchVisibility(int2 ipos)
     return visibility[ipos.x][ipos.y];
 }
 
+bool EdgeDetect(uint current_primitive_index, RWTexture2D<uint> ObjectImage, int2 ipos)
+{
+    uint center = current_primitive_index;
+
+    uint prev_primitive_index0 = (ObjectImage[ipos + int2(1, 1)]);
+    uint prev_primitive_index1 = (ObjectImage[ipos + int2(-1, -1)]);
+    uint prev_primitive_index2 = (ObjectImage[ipos + int2(-1, 1)]);
+    uint prev_primitive_index3 = (ObjectImage[ipos + int2(1, -1)]);
+
+    bool edge0 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) != uint4(center));
+    bool edge1 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == uint4(center));
+
+    return edge0 && edge1;
+}
+
 void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, float CenterLum, float3 CenterNormal, uint CenterVisibility)
 {
     const float sigma = Camera.BFSigma; // spatial sigma
@@ -155,7 +170,13 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         }
     }
 
-    
+    float edgeThis = EdgeDetect(Camera.SelectedId, ObjectId0, ipos) ? 0.5 : 0.0;
+    float edgePrev = EdgeDetect(Camera.SelectedId, ObjectId1, ipos) ? 0.5 : 0.0;
+    // selected edge
+    if (edgeThis + edgeThis > 0)
+    {
+        Total = lerp(Total, float3(150, 100, 0), edgeThis + edgePrev);
+    }
     
     if(Camera.HDR)
     {
@@ -169,4 +190,6 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     {
         OutImage[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 40000.0), 1.0);
     }
+
+
 }

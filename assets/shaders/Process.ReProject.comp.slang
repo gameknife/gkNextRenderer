@@ -29,21 +29,6 @@ uint FetchPrimitiveIndex(uint InstanceID)
     return InstanceID;
 }
 
-bool EdgeDetect(uint current_primitive_index, int2 ipos)
-{
-    uint center = FetchPrimitiveIndex(current_primitive_index);
-
-    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos + int2(2, 0)]);
-    uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId0[ipos + int2(-2, 0)]);
-    uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, 2)]);
-    uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId0[ipos + int2(0, -2)]);
-
-    bool edge0 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) != uint4(center));
-    bool edge1 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == uint4(center));
-
-    return edge0 && edge1;
-}
-
 static const float2 offsets5x5[25] = {
     float2(-2.0, -2.0), float2(-1.0, -2.0), float2(0.0, -2.0), float2(1.0, -2.0), float2(2.0, -2.0),
     float2(-2.0, -1.0), float2(-1.0, -1.0), float2(0.0, -1.0), float2(1.0, -1.0), float2(2.0, -1.0),
@@ -142,7 +127,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float3 historyColor[4];
 
-        bool edge = EdgeDetect(current_primitive_index0, ipos);
         // todo: off focus dont judge, need fix later
         if (length(motion) < 0.02)
         {
