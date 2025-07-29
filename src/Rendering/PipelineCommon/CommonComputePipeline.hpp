@@ -53,7 +53,7 @@ namespace Vulkan::PipelineCommon
 		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
 	};
-
+	
 	class FinalComposePipeline final
 	{
 	public:

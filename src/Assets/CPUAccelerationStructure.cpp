@@ -278,7 +278,7 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
         Result.Normal = normalWS;
         Result.Hitted = true;
         Result.T = ray.hit.t;
-        Result.InstanceId = ray.hit.inst;
+        Result.InstanceId = instContext.nodeId;
     }
 
     return Result;

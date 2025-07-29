@@ -100,7 +100,7 @@ namespace Vulkan::PipelineCommon
     {
         return descriptorSetManager_->DescriptorSets().Handle(index);
     }
-
+	
     FinalComposePipeline::FinalComposePipeline(const SwapChain& swapChain, const VulkanBaseRenderer& baseRender,
         const std::vector<Assets::UniformBuffer>& uniformBuffers): swapChain_(swapChain)
     {
