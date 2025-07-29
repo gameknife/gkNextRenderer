@@ -28,6 +28,7 @@ void BenchmarkGameInstance::OnInit()
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
 {
+    GetEngine().SetProgressiveRendering(true);
     if( benchMarker_ && benchMarker_->OnTick( GetEngine().GetWindow().GetTime(), &(GetEngine().GetRenderer()) ))
      {
          // Benchmark is done, report the results.
