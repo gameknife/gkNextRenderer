@@ -138,6 +138,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
+
     userSettings.TAA = true;
 
     userSettings.ShowSettings = true;
@@ -654,7 +655,6 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
 void NextEngine::SetProgressiveRendering(bool enable)
 {
     progressiveRendering_ = enable;
-    userSettings_.TAA = true;
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -677,16 +677,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
-    glm::mat4x4 ProjectionUnJit = ubo.Projection;
-    if (userSettings_.TAA)
-    {
-        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
-        
-        ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
-        ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
-    }
-    
+    glm::mat4x4 ProjectionUnJit = ubo.Projection;    
     // handle android vulkan pre rotation
 #if ANDROID
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
@@ -697,7 +688,18 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
     ubo.Projection = pre_rotate_mat * ubo.Projection;
+
+    ProjectionUnJit = ubo.Projection;
 #endif
+
+    if (userSettings_.TAA)
+    {
+        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        
+        ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+    }
     
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
