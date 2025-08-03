@@ -95,9 +95,9 @@ void Editor::GUI::ShowProperties()
                     
                     if( ImGui::Button(ICON_FA_CIRCLE_LEFT) )
                     {
-                        if (selectedMaterialId != -1)
+                        if (selectedItemId != -1)
                         {
-                            mat = selectedMaterialId;
+                            mat = selectedItemId;
                         }
                     }
                     

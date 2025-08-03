@@ -26,9 +26,9 @@ namespace Utilities
         static std::string GetPlatformFilePath( const char* srcPath )
         {
 #if ANDROID
-            return std::string("/sdcard/Android/data/com.gknextrenderer/files/") + srcPath;
+            return std::filesystem::path("/sdcard/Android/data/com.gknextrenderer/files").append(srcPath).string();
 #else
-            return std::string("../") + srcPath;
+            return std::filesystem::path("..").append(srcPath).string();
 #endif
         }
 

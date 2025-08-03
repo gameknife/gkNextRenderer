@@ -100,10 +100,17 @@ Window::Window(const WindowConfig& config) :
 		std::ifstream file(Utilities::FileHelper::GetNormalizedFilePath("assets/locale/gamecontrollerdb.txt"));
 		if(file.is_open())
 		{
-			std::string mappings((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-			glfwUpdateGamepadMappings(mappings.c_str());
-			file.close();
+		    file.seekg(0, std::ios::end);
+		    size_t fileSize = file.tellg();
+		    file.seekg(0, std::ios::beg);
+
+		    std::string mappings(fileSize, '\0');
+		    file.read(mappings.data(), fileSize);
+		    file.close();
+
+		    glfwUpdateGamepadMappings(mappings.c_str());
 		}
+		
 		if (glfwJoystickIsGamepad(0)) {
 			fmt::print("Gamepad: {}", glfwGetGamepadName(0));
 		}

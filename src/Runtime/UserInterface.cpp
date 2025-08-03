@@ -204,20 +204,15 @@ void UserInterface::OnDestroySurface()
 
 VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
 {
+	auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
+	if (texture == nullptr) return VK_NULL_HANDLE;
+	
 	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
 	{
-		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
-		if(texture)
-		{
-			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			return imTextureIdMap_[globalTextureId];
-		}
+		imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
-	else
-	{
-		return imTextureIdMap_[globalTextureId];
-	}
-	return VK_NULL_HANDLE;
+
+	return imTextureIdMap_[globalTextureId];
 }
 
 VkDescriptorSet UserInterface::RequestImTextureByName(const std::string& name)

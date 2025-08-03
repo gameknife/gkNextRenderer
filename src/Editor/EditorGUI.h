@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 #include <cstdint>
 #include "imgui.h"
 #include "imgui_stdlib.h"
@@ -61,6 +62,8 @@ namespace Editor
         bool                    textureBrowser             = true;                // Workspace "Output"
         void                    ShowTextureBrowser();
 
+        void                    DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclick_action);
+
         bool                    ed_material                = false;                // Material Editor
         Assets::FMaterial*       selected_material          = nullptr;              // Material Selected
         void                    ShowMaterialEditor();
@@ -78,9 +81,8 @@ namespace Editor
         
         ImFont*                 fontIcon_                  = nullptr;
         ImFont*                 bigIcon_                   = nullptr;
-
-        uint32_t                selectedMaterialId          = -1;
-        uint32_t                selectedTextureId           = -1;   
+        
+        uint32_t                selectedItemId              = -1; // Selected Item in Content Browser
     };
 
 }
