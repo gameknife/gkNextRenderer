@@ -44,7 +44,7 @@ void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, c
     }
 
     
-    auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4);
+    auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4 + ImGui::GetScrollY());
     bool selected = selectedItemId == globalId;
     ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? IM_COL32(64, 128, 255, 255) : IM_COL32(64, 64, 64, 255), 4);
     ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ICON_SIZE, 0), color, 2);
@@ -62,7 +62,7 @@ void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, c
 
 void Editor::GUI::ShowMaterialBrowser()
 {
-    ImGui::Begin("Material Browser", NULL, ImGuiWindowFlags_NoScrollbar);
+    ImGui::Begin("Material Browser", NULL);
     {
         if (current_scene)
         {
@@ -97,7 +97,7 @@ void Editor::GUI::ShowMaterialBrowser()
 
 void Editor::GUI::ShowTextureBrowser()
 {
-    ImGui::Begin("Texture Browser", NULL, ImGuiWindowFlags_NoScrollbar );
+    ImGui::Begin("Texture Browser", NULL );
     {
         if (current_scene)
         {
@@ -110,7 +110,7 @@ void Editor::GUI::ShowTextureBrowser()
             int itemIndex = 0;
             for ( auto& textureGroup : totalTextureMap )
             {
-                DrawGeneralContentBrowser(false, textureGroup.second.GlobalIdx_, textureGroup.first, ICON_FA_FILE_IMAGE, IM_COL32(255, 72, 72, 255), [this]()
+                DrawGeneralContentBrowser(false, textureGroup.second.GlobalIdx_, textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255), [this]()
                 {
                     
                 });
@@ -129,7 +129,7 @@ void Editor::GUI::ShowTextureBrowser()
 
 void Editor::GUI::ShowContentBrowser()
 {
-    ImGui::Begin("Content Browser", NULL, ImGuiWindowFlags_NoScrollbar);
+    ImGui::Begin("Content Browser", NULL);
     {
         static auto modelpath = Utilities::FileHelper::GetPlatformFilePath("assets");
         std::filesystem::path path = modelpath;
@@ -171,12 +171,13 @@ void Editor::GUI::ShowContentBrowser()
         }
         ImGui::PopStyleVar();
         ImGui::PopFont();
-
+        
         auto CursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y + 2);
         ImGui::NewLine();
         ImGui::GetWindowDrawList()->AddLine(CursorPos + ImVec2(0,1), CursorPos + ImVec2(ImGui::GetWindowSize().x,1), IM_COL32(20,20,20,128), 1);
         ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x,0), IM_COL32(20,20,20,255), 1);
 
+        ImGui::BeginChild("Content Items");
         // content view
         static std::string contextMenuFile;
         // if (ImGui::BeginPopupContextItem(path.c_str()))
@@ -246,6 +247,8 @@ void Editor::GUI::ShowContentBrowser()
 
             elementIdx++;
         }
+
+        ImGui::EndChild();
     }
     ImGui::End();
 }
