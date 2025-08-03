@@ -31,4 +31,5 @@ fi
 	meshoptimizer:x64-mingw-static \
 	ktx:x64-mingw-static \
 	joltphysics:x64-mingw-static \
+	xxhash:x64-mingw-static \
 	cpp-base64:x64-mingw-static

@@ -236,6 +236,9 @@ namespace Assets
     private:
         Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
+        void SaveTangentCache(const std::string& cacheFileName);
+        void LoadTangentCache(const std::string& cacheFileName);
+        
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
         

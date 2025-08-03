@@ -32,6 +32,7 @@ copy /Y %PROJROOT%\android\custom-triplets\arm64-android.cmake %CD%\triplets\arm
 	meshoptimizer:arm64-android ^
 	ktx:arm64-android ^
 	joltphysics:arm64-android ^
+	xxhash:arm64-android ^
 	cpp-base64:arm64-android || goto :error
 
 cd ..

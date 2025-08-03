@@ -29,4 +29,5 @@ fi
 	meshoptimizer:arm64-osx \
 	ktx:arm64-osx \
 	joltphysics:arm64-osx \
+	xxhash:arm64-osx \
 	cpp-base64:arm64-osx

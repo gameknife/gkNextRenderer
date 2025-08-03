@@ -73,6 +73,21 @@ namespace Utilities
         }
     }
 
+    namespace CookHelper
+    {
+        static std::string GetCookedFileName(const std::string& filehash, const std::string& cooktype)
+        {
+            std::string normlizedPath {};
+            #if ANDROID
+                        normlizedPath = std::string("/sdcard/Android/data/com.gknextrenderer/files/");
+            #else
+                        normlizedPath = std::string("../");
+            #endif
+            std::filesystem::create_directories(std::filesystem::path(normlizedPath + "/cooked/"));
+            return normlizedPath + "/cooked/" + cooktype + filehash + ".gncook";
+        }
+    }
+    
     namespace Package
     {
         enum EPackageRunMode

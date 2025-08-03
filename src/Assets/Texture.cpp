@@ -419,14 +419,11 @@ namespace Assets
                 }
                 else
                 {
-                    std::filesystem::path cachePath = Utilities::FileHelper::GetPlatformFilePath("cache");
-                    std::filesystem::create_directories(cachePath);
                     std::hash<std::string> hasher;
-                    std::string hashname = fmt::format("{:x}", hasher(texname));
                     // load from texture files
                     if (hdr)
                     {
-                        std::string cacheFileName = (cachePath / fmt::format("{}.cookhdr", hashname)).string();
+                        std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texhdr");
                        // 在hdr加载的else分支中添加保存逻辑
                         if (!std::filesystem::exists(cacheFileName))
                         {
@@ -592,7 +589,7 @@ namespace Assets
                     {
                         // ldr texture, try cache fist
                         // hash the texname
-                        std::string cacheFileName = (cachePath / fmt::format("{}.ktx", hashname)).string();
+                        std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
                         if (!std::filesystem::exists(cacheFileName))
                         {
                             // load from stbi and compress to ktx and cache
@@ -623,7 +620,7 @@ namespace Assets
                             result = ktxTexture2_CompressBasisEx(kTexture, &params);
                             if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to compress ktx2 image "));
                             // save to cache
-                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), (cachePath / fmt::format("{}.ktx", hashname)).string().c_str());
+                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
                         }
                         else
                         {

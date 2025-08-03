@@ -4,6 +4,7 @@
 #include "Scene.hpp"
 #include <chrono>
 #include <fstream>
+#include <xxhash.h>
 
 #define TINYBVH_IMPLEMENTATION
 #include "TextureImage.hpp"
@@ -201,7 +202,28 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
             // Store additional triangle information
             bvhBLASContexts[m].extinfos.push_back({normal, v0.MaterialIndex});
         }
-        bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+
+        // here we can cache the blas to disk if its big enough
+        if (bvhBLASContexts[m].triangles.size() > 16384 * 3)
+        {
+            XXH64_hash_t vhash = XXH64(bvhBLASContexts[m].triangles.data(), bvhBLASContexts[m].triangles.size() * sizeof(tinybvh::bvhvec4), 0);
+            std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", vhash), "cpubvh");
+
+            if (!std::filesystem::exists(cacheFileName))
+            {
+                bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+                bvhBLASContexts[m].bvh.Save(cacheFileName.c_str());
+            }
+            else
+            {
+                bvhBLASContexts[m].bvh.Load(cacheFileName.c_str(), bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+            }
+        }
+        else
+        {
+            bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+        }
+
         bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
     }
     

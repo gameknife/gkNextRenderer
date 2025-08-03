@@ -1,11 +1,6 @@
 #include "Model.hpp"
 #include "CornellBox.hpp"
-#include "Procedural.hpp"
-#include "Sphere.hpp"
-#include "Utilities/Exception.hpp"
-#include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "Utilities/Math.hpp"
 #include "ThirdParty/mikktspace/mikktspace.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -43,6 +38,7 @@
 #include <tiny_gltf.h>
 #include <fmt/format.h>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <xxhash.h>
 
 #include "Options.hpp"
 #include "Texture.hpp"
@@ -1142,7 +1138,6 @@ namespace Assets
         verticeCount = vertices_.size();
         indiceCount = indices_.size();
         
-        // calculate local aabb
         local_aabb_min = glm::vec3(999999, 999999, 999999);
         local_aabb_max = glm::vec3(-999999, -999999, -999999);
 
@@ -1151,37 +1146,87 @@ namespace Assets
             local_aabb_min = glm::min(local_aabb_min, vertex.Position);
             local_aabb_max = glm::max(local_aabb_max, vertex.Position);
         }
-
+        
         if(needGenTSpace)
         {
-            GenerateMikkTSpace(this);
+            // mesh processing is expensive, so we cache the result
+            XXH64_hash_t verticesHash = XXH64(vertices_.data(), vertices_.size() * sizeof(Vertex), 0);
+            XXH64_hash_t indicesHash = XXH64(indices_.data(), indices_.size() * sizeof(uint32_t), 0);
+            XXH64_hash_t combinedHash = XXH64(&verticesHash, sizeof(verticesHash), indicesHash);
+            
+            std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", combinedHash), "tangent");
+            if (!std::filesystem::exists(cacheFileName))
+            {
+                GenerateMikkTSpace(this);
+                SaveTangentCache(cacheFileName);
+            }
+            else
+            {
+                LoadTangentCache(cacheFileName);
+            }
         }
+    }
 
-        // 简单的将indice拆分为最大 65535 * 3 一组
+    void Model::SaveTangentCache(const std::string& cacheFileName)
+    {
+        std::vector<uint8_t> uncompressedData;
+        size_t tangentDataSize = vertices_.size() * sizeof(glm::vec4);
+        uncompressedData.resize(tangentDataSize);
+        for (size_t i = 0; i < vertices_.size(); ++i)
+        {
+            std::memcpy(uncompressedData.data() + i * sizeof(glm::vec4), 
+                       &vertices_[i].Tangent, sizeof(glm::vec4));
+        }
         
-
-        // build model section
+        size_t compressedSize = lzav_compress_bound_hi(uncompressedData.size());
+        std::vector<uint8_t> compressedData(compressedSize);
+        size_t actualCompressedSize = lzav_compress_hi(
+            uncompressedData.data(), compressedData.data(),
+            uncompressedData.size(), compressedSize);
         
-        // const size_t max_vertices = 64;
-        // const size_t max_triangles = 124;
-        // const float cone_weight = 0.0f;
-        //         
-        // // make it cluster
-        // size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
-        // std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-        // std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-        // std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
-        //
-        // size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
-        //     indices.size(), &vertices[0].Position.x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
-        //
-        // // save memory
-        // const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
-        //         
-        // meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
-        // meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
-        // meshlets.resize(meshlet_count);
+        if (actualCompressedSize > 0)
+        {
+            std::ofstream cacheFile(cacheFileName, std::ios::binary);
+            if (cacheFile.is_open())
+            {
+                size_t originalSize = uncompressedData.size();
+                cacheFile.write(reinterpret_cast<const char*>(&originalSize), sizeof(size_t));
+                cacheFile.write(reinterpret_cast<const char*>(&actualCompressedSize), sizeof(size_t));
+                cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                cacheFile.close();
+            }
+        }
+    }
 
+    void Model::LoadTangentCache(const std::string& cacheFileName)
+    {
+        std::ifstream cacheFile(cacheFileName, std::ios::binary);
+        if (cacheFile.is_open())
+        {
+            size_t originalSize, compressedSize;
+            cacheFile.read(reinterpret_cast<char*>(&originalSize), sizeof(size_t));
+            cacheFile.read(reinterpret_cast<char*>(&compressedSize), sizeof(size_t));
+            
+            std::vector<uint8_t> compressedData(compressedSize);
+            cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+            
+            std::vector<uint8_t> uncompressedData(originalSize);
+            size_t decompressedSize = lzav_decompress(
+                compressedData.data(), uncompressedData.data(),
+                compressedSize, originalSize);
+            
+            if (decompressedSize == originalSize)
+            {
+                for (size_t i = 0; i < vertices_.size(); ++i)
+                {
+                    std::memcpy(&vertices_[i].Tangent,
+                               uncompressedData.data() + i * sizeof(glm::vec4),
+                               sizeof(glm::vec4));
+                }
+            }
+            
+            cacheFile.close();
+        }
     }
 
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace)
