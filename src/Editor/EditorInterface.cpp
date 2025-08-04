@@ -32,7 +32,7 @@
 #include "Utilities/Math.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderImage.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
@@ -226,7 +226,8 @@ void EditorInterface::Render()
 	
 	ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id);
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	editor_->GetEngine().GetRenderer().SwapChain().UpdateEditorViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+	//editor_->GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(0, 0, Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 
 	firstRun = false;
 	GUserInterface = nullptr;

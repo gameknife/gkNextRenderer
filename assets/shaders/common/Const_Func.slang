@@ -10,7 +10,7 @@ public float Schlick(const float cosine, const float refractionIndex)
     float r0 = (1 - refractionIndex) / (1 + refractionIndex);
     r0 *= r0;
     // taken from https://www.photometric.io/blog/improving-schlicks-approximation/
-    return r0 + (1 - cosine - r0) * pow4(1 - cosine);
+    return r0 + (1 - r0) * pow5(1 - cosine);
 }
 
 //onb revisited by Disney
@@ -67,6 +67,64 @@ public float3 LinearToST2084UE(float3 lin)
     return P;
 }
 
+public float3 CODTonemapping(float3 color)
+{
+    float a = 0.22;
+    float b = 0.30;
+    float c = 0.10;
+    float d = 0.20;
+    float e = 0.01;
+    float f = 0.30;
+    float3 mapped = ((color * (a * color + c * b) + d * e) / (color * (a * color + b) + d * f)) - e / f;
+    return saturate(mapped);
+}
+
+static const float e = 2.71828;
+
+float W_f(float x, float e0, float e1) {
+    if (x <= e0)
+        return 0;
+    if (x >= e1)
+        return 1;
+    float a = (x - e0) / (e1 - e0);
+    return a * a * (3 - 2 * a);
+}
+float H_f(float x, float e0, float e1) {
+    if (x <= e0)
+        return 0;
+    if (x >= e1)
+        return 1;
+    return (x - e0) / (e1 - e0);
+}
+
+float GranTurismoTonemapper(float x) {
+    float P = 1;  // max output
+    float a = 0.7;  // contrast, default 1.0
+    float m = 0.22; // linear section start, 0.22
+    float l = 0.4; // linear section length, 0.4
+    float c = 1.33;
+    float b = 0;
+    float l0 = (P - m) * l / a;
+    float L0 = m - m / a;
+    float L1 = m + (1 - m) / a;
+    float L_x = m + a * (x - m);
+    float T_x = m * pow(x / m, c) + b;
+    float S0 = m + l0;
+    float S1 = m + a * l0;
+    float C2 = a * P / (P - S1);
+    float S_x = P - (P - S1) * pow(e, -(C2 * (x - S0) / P));
+    float w0_x = 1 - W_f(x, 0, m);
+    float w2_x = H_f(x, m + l0, m + l0);
+    float w1_x = 1 - w0_x - w2_x;
+    float f_x = T_x * w0_x + L_x * w1_x + S_x * w2_x;
+    return f_x;
+}
+
+public float3 GT_Tonemapping(float3 x)
+{
+    return float3(GranTurismoTonemapper(x.r), GranTurismoTonemapper(x.g), GranTurismoTonemapper(x.b));
+}
+    
 public float3 ACES_Tonemapping(float3 color){
     float3x3 m1 = float3x3(
         0.59719, 0.07600, 0.02840,
@@ -281,47 +339,18 @@ public float3 ggxSampling(inout uint4 RandomSeed, float roughness, float3 normal
     return to_world(wm_, tangent, bitangent, normal);
 }
 
-public Vertex UncompressVertex(in float3 Position, in uint TexcoordXY, in uint NormalXY, in uint NormalZTangentX, in uint TangentYZ, in uint TangentWMatIdx)
+public Vertex UnpackVertex(uint index, in StructuredBuffer<GPUVertex> Vertices)
 {
     Vertex v;
-    
-    v.Position = Position;
-    v.Normal = float3(
-        f16tof32(NormalXY & 0xFFFF),
-        f16tof32(NormalXY >> 16),
-        f16tof32(NormalZTangentX & 0xFFFF)
-    );
-    v.Tangent = float4(
-        f16tof32(NormalZTangentX >> 16),
-        f16tof32(TangentYZ & 0xFFFF),
-        f16tof32(TangentYZ >> 16),
-        float((TangentWMatIdx >> 16) & 0xFFFF) - 1.0f
-    );
-    v.TexCoord = float2(
-        f16tof32(TexcoordXY & 0xFFFF),
-        f16tof32(TexcoordXY >> 16)
-    );
-    v.MaterialIndex = TangentWMatIdx & 0xFFFF;
+    v.Position = Vertices[index].Position_Tx.xyz;
+    v.Normal = Vertices[index].Normal_Ty.xyz;
+    v.Tangent = Vertices[index].Tangent;
+    v.TexCoord = float2(Vertices[index].Position_Tx.w, Vertices[index].Normal_Ty.w);
+    uint16_t TangentWMatIdx = asuint16(Vertices[index].Tangent.w);
+    v.Tangent.w = (TangentWMatIdx >> 8) & 0xFF;
+    v.MaterialIndex = TangentWMatIdx & 0xFF;
 
     return v;
-}
-
-public Vertex UnpackVertex(uint index, in StructuredBuffer<float> Vertices)
-{
-    const uint vertexSize = 8;
-    const uint offset = index * vertexSize;
-
-    float3 Position = float3(Vertices[offset + 0], Vertices[offset + 1], Vertices[offset + 2]);
-    uint TexcoordXY = asuint(Vertices[offset + 3]);
-    uint NormalXY = asuint(Vertices[offset + 4]);
-    uint NormalZTangentX = asuint(Vertices[offset + 5]);
-    uint TangentYZ = asuint(Vertices[offset + 6]);
-    uint TangentWMatIdx = asuint(Vertices[offset + 7]);
-
-    uint TangentW = (TangentWMatIdx >> 16) & 0xFFFF;
-    uint matIdx = TangentWMatIdx & 0xFFFF;
-    
-    return UncompressVertex(Position, TexcoordXY, NormalXY, NormalZTangentX, TangentYZ, TangentWMatIdx);
 }
 
 public uint FetchMaterialId(in NodeProxy node, uint offset)
@@ -378,4 +407,35 @@ public uint FetchMaterialId(in NodeProxy node, uint offset)
         break;
     }
     return materialIndex;
+}
+
+public float3 heatmap(float t)
+{
+    const float3 c[10] = {
+        float3(0.0f / 255.0f, 2.0f / 255.0f, 91.0f / 255.0f),
+        float3(0.0f / 255.0f, 108.0f / 255.0f, 251.0f / 255.0f),
+        float3(0.0f / 255.0f, 221.0f / 255.0f, 221.0f / 255.0f),
+        float3(51.0f / 255.0f, 221.0f / 255.0f, 0.0f / 255.0f),
+        float3(255.0f / 255.0f, 252.0f / 255.0f, 0.0f / 255.0f),
+        float3(255.0f / 255.0f, 180.0f / 255.0f, 0.0f / 255.0f),
+        float3(255.0f / 255.0f, 104.0f / 255.0f, 0.0f / 255.0f),
+        float3(226.0f / 255.0f, 22.0f / 255.0f, 0.0f / 255.0f),
+        float3(191.0f / 255.0f, 0.0f / 255.0f, 83.0f / 255.0f),
+        float3(145.0f / 255.0f, 0.0f / 255.0f, 65.0f / 255.0f)
+    };
+
+    const float s = t * 10.0f;
+
+    const int cur = int(s) <= 9 ? int(s) : 9;
+    const int prv = cur >= 1 ? cur - 1 : 0;
+    const int nxt = cur < 9 ? cur + 1 : 9;
+
+    const float blur = 0.8f;
+
+    const float wc = smoothstep(float(cur) - blur, float(cur) + blur, s) * (1.0f - smoothstep(float(cur + 1) - blur, float(cur + 1) + blur, s));
+    const float wp = 1.0f - smoothstep(float(cur) - blur, float(cur) + blur, s);
+    const float wn = smoothstep(float(cur + 1) - blur, float(cur + 1) + blur, s);
+
+    const float3 r = wc * c[cur] + wp * c[prv] + wn * c[nxt];
+    return float3(clamp(r.x, 0.0f, 1.0f), clamp(r.y, 0.0f, 1.0f), clamp(r.z, 0.0f, 1.0f));
 }

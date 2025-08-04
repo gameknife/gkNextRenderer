@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "ImageMemoryBarrier.hpp"
+
 #if ANDROID
 #include <android/log.h>
 #endif
@@ -107,10 +109,16 @@ SwapChain::~SwapChain()
 	}
 }
 
-void SwapChain::UpdateEditorViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+void SwapChain::UpdateRenderViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
 {
 	renderExtent_ = { width, height };
 	renderOffset_ = { x, y };
+}
+
+void SwapChain::UpdateOutputViewport(int32_t x, int32_t y, uint32_t width, uint32_t height) const
+{
+	outputExtent_ = { width, height };
+	outputOffset_ = { x, y };
 }
 
 SwapChain::SupportDetails SwapChain::QuerySwapChainSupport(VkPhysicalDevice physicalDevice, const VkSurfaceKHR surface)
@@ -138,7 +146,7 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 		for (const auto& format : formats)
 		{
 		
-			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || format.colorSpace == VK_COLOR_SPACE_HDR10_HLG_EXT)
+			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT)// && format.format > VK_FORMAT_A8B8G8R8_SRGB_PACK32)
 			{
 				hdr_ = true;
 				return format;
@@ -261,4 +269,15 @@ uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilitie
 	return imageCount;
 }
 
+void SwapChain::InsertBarrierToWrite(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
+{
+	ImageMemoryBarrier::FullInsert(commandBuffer, Images()[imageIndex], 0,
+	VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+}
+void SwapChain::InsertBarrierToPresent(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
+{
+	ImageMemoryBarrier::FullInsert(commandBuffer, Images()[imageIndex],
+	VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+}
+	
 }

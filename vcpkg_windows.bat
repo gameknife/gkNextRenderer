@@ -34,6 +34,7 @@ vcpkg.exe install --recurse ^
 	meshoptimizer:x64-windows-static ^
 	ktx:x64-windows-static ^
 	joltphysics:x64-windows-static ^
+	xxhash:x64-windows-static ^
 	cpp-base64:x64-windows-static || goto :error
 
 IF "%1" == "avif" (

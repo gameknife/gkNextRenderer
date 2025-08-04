@@ -4,25 +4,29 @@
 
 namespace Assets
 {
-	struct Camera;
+ struct Camera;
 }
 
 class ModelViewController final
 {
 public:
 
-	void Reset(const Assets::Camera& RenderCamera);
+	 void Reset(const Assets::Camera& RenderCamera);
 
-	glm::mat4 ModelView() const;
-	float FieldOfView() const { return fieldOfView_; }
-	glm::vec4 Position() const { return position_; }
+	 glm::mat4 ModelView() const;
+	 float FieldOfView() const { return fieldOfView_; }
+	 glm::vec4 Position() const { return position_; }
 
-	bool OnKey(int key, int scancode, int action, int mods);
-	bool OnCursorPosition(double xpos, double ypos);
-	bool OnMouseButton(int button, int action, int mods);
-	bool OnTouch(bool down, double xpos, double ypos);
-	void OnScroll(double xoffset, double yoffset);
-	bool UpdateCamera(double speed, double timeDelta);
+	 bool OnKey(int key, int scancode, int action, int mods);
+	 bool OnCursorPosition(double xpos, double ypos);
+	 bool OnMouseButton(int button, int action, int mods);
+	 bool OnTouch(bool down, double xpos, double ypos);
+	 void OnScroll(double xoffset, double yoffset);
+
+	 bool OnGamepadInput(float leftStickX, float leftStickY, 
+	                    float rightStickX, float rightStickY,
+	                    float leftTrigger, float rightTrigger);
+	 bool UpdateCamera(double speed, double timeDelta);
 
 private:
 
@@ -69,4 +73,6 @@ private:
 	double mouseSensitive_ {};
 
 	float fieldOfView_ {};
+
+	bool movedByEvent_ {};
 };

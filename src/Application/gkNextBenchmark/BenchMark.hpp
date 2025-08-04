@@ -1,7 +1,7 @@
 #pragma once
 
 #include <fstream>
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 
 class BenchMarker final
 {

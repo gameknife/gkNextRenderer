@@ -38,7 +38,6 @@ namespace Vulkan
 enum class ECubeProcType : uint8_t
 {
     ECPT_Clear,
-    ECPT_Iterate,
     ECPT_Fence,
     ECPT_Voxelize,
 };
@@ -46,7 +45,6 @@ enum class ECubeProcType : uint8_t
 enum class EBakerType : uint8_t
 {
     EBT_Probe,
-    EBT_FarProbe,
 };
 
 struct FCPUBLASVertInfo
@@ -58,6 +56,7 @@ struct FCPUBLASVertInfo
 struct FCPUTLASInstanceInfo
 {
     std::array<uint32_t, 16> matIdxs;
+    uint32_t nodeId;
 };
 
 struct FCPUBLASContext
@@ -67,13 +66,6 @@ struct FCPUBLASContext
     std::vector<FCPUBLASVertInfo> extinfos;
 };
 
-struct FCpuBakeContext
-{
-    std::vector<Assets::AmbientCube>* Cubes;
-    float CUBE_UNIT;
-    glm::vec3 CUBE_OFFSET;
-};
-
 // 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
 // 由CpuAS来控制
 struct FCPUProbeBaker
@@ -81,12 +73,22 @@ struct FCPUProbeBaker
     float UNIT_SIZE;
     glm::vec3 CUBE_OFFSET;
     
-    std::vector<Assets::AmbientCube> ambientCubes;
+    std::vector<Assets::VoxelData> voxels;
 
     void Init( float unit_size, glm::vec3 offset );
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
-    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
     void ClearAmbientCubes();
+};
+
+struct FCPUPageIndex
+{
+    std::vector<Assets::PageIndex> pageIndex;
+
+    void Init();
+    void UpdateData(FCPUProbeBaker& baker);
+    Assets::PageIndex& GetPage(glm::vec3 worldpos);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
 };
 
 class FCPUAccelerationStructure
@@ -97,12 +99,11 @@ public:
     void UpdateBVH(Assets::Scene& scene);
 
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
-
-   
-    void AsyncProcessFull();
+    
+    void AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
     
-    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory);
+    void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
 
@@ -122,5 +123,5 @@ private:
     bool needFlush = false;
 
     FCPUProbeBaker probeBaker;
-    FCPUProbeBaker farProbeBaker;
+    FCPUPageIndex cpuPageIndex;
 };

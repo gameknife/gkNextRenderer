@@ -52,7 +52,7 @@ bool NextRendererGameInstance::OnRenderUI()
 		ImGuiIO& io = ImGui::GetIO();
         
 		// 渲染器名称数组
-		const char* rendererNames[] = {"AmbientCubes", "SoftTracing", "HybridTracing" , "PathTracing"};
+		const char* rendererNames[] = {"VoxelTracing", "SoftTracing", "HybridTracing" , "PathTracing"};
         
 		// 四个象限的位置
 		ImVec2 positions[] = {
@@ -147,6 +147,12 @@ bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 	return true;
 }
 
+bool NextRendererGameInstance::OnGamepadInput(float leftStickX, float leftStickY, float rightStickX, float rightStickY,
+	float leftTrigger, float rightTrigger)
+{
+	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+}
+
 
 void NextRendererGameInstance::DrawSettings()
 {
@@ -188,7 +194,7 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred"};
+			std::vector<const char*> renderers {"PathTracing", "Hybrid", "ModernDeferred", "LegacyDeferred", "VoxelTracing"};
 			
 			ImGui::Text("%s", LOCTEXT("Renderer"));
 			
@@ -302,6 +308,8 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &UserSetting.ShowVisualDebug);
 			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &UserSetting.DebugDraw_Lighting);
+			ImGui::Checkbox(LOCTEXT("DisableSpatialReuse"), &UserSetting.DisableSpatialReuse);
+			
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &UserSetting.HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 			ImGui::NewLine();
 

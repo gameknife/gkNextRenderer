@@ -16,6 +16,7 @@ namespace Vulkan
 	class DeviceMemory;
 	class Image;
 	class RenderImage;
+	class DescriptorSetManager;
 }
 
 namespace Assets
@@ -51,15 +52,18 @@ namespace Assets
 		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<FMaterial>& Materials() { return materials_; }
-		const std::vector<glm::uvec2>& Offsets() const { return offsets_; }
+		const std::vector<ModelData>& Offsets() const { return offsets_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
+		const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
 		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
 		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
 		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
 		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
 		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
 		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+		const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
+		const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
 		const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
 		const bool HasSun() const { return envSettings_.HasSun; }
 
@@ -67,6 +71,8 @@ namespace Assets
 		const uint32_t GetIndicesCount() const {return indicesCount_;}
 		const uint32_t GetVerticeCount() const {return verticeCount_;}
 		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
+
+		const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
 		
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
@@ -74,13 +80,16 @@ namespace Assets
 		void Tick(float DeltaSeconds);
 		void UpdateMaterial();
 		bool UpdateNodes();
+		void UpdateHDRSH();
+		bool UpdateNodesLegacy();
+		bool UpdateNodesGpuDriven();
 
 		Node* GetNode(std::string name);
 		Node* GetNodeByInstanceId(uint32_t id);
 		const Model* GetModel(uint32_t id) const;
 		const FMaterial* GetMaterial(uint32_t id) const;
 
-		void MarkDirty() {sceneDirty_ = true;}
+		void MarkDirty();
 		
 		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 
@@ -103,12 +112,18 @@ namespace Assets
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
 		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
+		Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
 
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 
 		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
 		FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+
+		Vulkan::DescriptorSetManager& GetSceneBufferDescriptorSetManager() const
+		{
+			return *sceneBufferDescriptorSetManager_;
+		}
 		
 	private:
 		std::vector<FMaterial> materials_;
@@ -117,14 +132,23 @@ namespace Assets
 		std::vector<std::shared_ptr<Node>> nodes_;
 		std::vector<LightObject> lights_;
 		std::vector<AnimationTrack> tracks_;
-		std::vector<uvec2> offsets_;
+		std::vector<ModelData> offsets_;
 
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> simpleVertexBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> simpleVertexBufferMemory_;
+
 		std::unique_ptr<Vulkan::Buffer> indexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> reorderBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> reorderBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> primAddressBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> primAddressBufferMemory_;
+		
 		std::unique_ptr<Vulkan::Buffer> materialBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> materialBufferMemory_;
 
@@ -145,13 +169,20 @@ namespace Assets
 		
 		std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
-		
+
+		std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
-		std::unique_ptr<TextureImage> cpuShadowMap_;
+		std::unique_ptr<Vulkan::Buffer> gpuDrivenStatsBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> gpuDrivenStatsBuffer_Memory_;
 
+		std::unique_ptr<TextureImage> cpuShadowMap_;
+		
+		std::unique_ptr<Vulkan::DescriptorSetManager> sceneBufferDescriptorSetManager_;
+		
 		uint32_t lightCount_ {};
 		uint32_t indicesCount_ {};
 		uint32_t verticeCount_ {};
@@ -171,5 +202,7 @@ namespace Assets
 		Camera renderCamera_;
 
 		FCPUAccelerationStructure cpuAccelerationStructure_;
+
+		Assets::GPUDrivenStat gpuDrivenStat_;
 	};
 }

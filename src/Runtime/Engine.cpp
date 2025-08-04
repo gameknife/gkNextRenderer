@@ -5,9 +5,7 @@
 #include "Assets/Scene.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Utilities/Exception.hpp"
 #include "Utilities/Console.hpp"
-#include "Utilities/Glm.hpp"
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
@@ -22,8 +20,7 @@
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
-#include "Vulkan/HybridDeferred/HybridDeferredRenderer.hpp"
-#include "Platform/PlatformCommon.h"
+#include "Rendering/RayTraceBaseRenderer.hpp"
 
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 
@@ -84,8 +81,10 @@ namespace NextRenderer
                     ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
 #endif
                     ptr->RegisterLogicRenderer(Vulkan::ERT_Hybrid);
+
                     ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
                     ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+                    ptr->RegisterLogicRenderer(Vulkan::ERT_VoxelTracing);
                     ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
                     return ptr;    
                 }
@@ -95,6 +94,7 @@ namespace NextRenderer
         auto fallbackptr =  new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
         fallbackptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
         fallbackptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
+        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_VoxelTracing);
         if( rendererType != Vulkan::ERT_ModernDeferred && rendererType != Vulkan::ERT_LegacyDeferred )
         {
             rendererType = Vulkan::ERT_ModernDeferred;
@@ -138,13 +138,14 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AdaptiveSample = options.AdaptiveSample;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
+
     userSettings.TAA = true;
 
     userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
 
     userSettings.ShowVisualDebug = false;
-    userSettings.HeatmapScale = 0.5f;
+    userSettings.HeatmapScale = 1.0f;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Temporal;
@@ -155,14 +156,16 @@ UserSettings CreateUserSettings(const Options& options)
     
     userSettings.RequestRayCast = false;
 
-    userSettings.DenoiseSigma = 0.5f;
-    userSettings.DenoiseSigmaLum = 25.0f;
+    userSettings.DenoiseSigma = 2.0f;
+    userSettings.DenoiseSigmaLum = 3.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
 
     userSettings.ShowEdge = false;
 
     userSettings.FastGather = false;
+
+    userSettings.SuperResolution = options.SuperResolution;
     
 #if ANDROID
     userSettings.NumberOfSamples = 1;
@@ -218,7 +221,11 @@ NextEngine::NextEngine(Options& options, void* userdata)
     window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
     window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
     window_->OnDropFile = [this](int path_count, const char* paths[]) { OnDropFile(path_count, paths); };
-
+    window_->OnGamepadInput = [this](float leftStickX, float leftStickY,float rightStickX, float rightStickY,float leftTrigger, float rightTrigger) {
+        if (gameInstance_) return gameInstance_->OnGamepadInput(leftStickX, leftStickY,rightStickX, rightStickY,leftTrigger, rightTrigger);
+        return false;
+    };
+    
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 
@@ -296,6 +303,7 @@ bool NextEngine::Tick()
     // Renderer Tick
 #if !ANDROID
     glfwPollEvents();
+    window_->PollGamepadInput();
 #endif
     // tick
     if (status_ == NextRenderer::EApplicationStatus::Running)
@@ -436,8 +444,8 @@ glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
 
 glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 {
-    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
+    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
     
     glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
     transformed = transformed / transformed.w;
@@ -456,8 +464,9 @@ glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
 void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
 {
     // should consider rt offset
-    auto vkoffset = GetRenderer().SwapChain().RenderOffset();
-    auto vkextent = GetRenderer().SwapChain().RenderExtent();
+    
+    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
+    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
     glm::vec2 offset = {vkoffset.x, vkoffset.y};
     glm::vec2 extent = {vkextent.width, vkextent.height};
     glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
@@ -638,17 +647,14 @@ glm::ivec2 NextEngine::GetMonitorSize(int monitorIndex) const
 void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
-    if( renderer_->supportRayTracing_ )
-    {
-        // set in gpu directly
-        renderer_->SetRaycastRay(rayOrigin, rayDir, callback);
-    }
-    else
-    {
-        // CPU Raycast in scene
-        Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
-        callback(result);
-    }
+    // CPU Raycast in scene
+    Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
+    callback(result);
+}
+
+void NextEngine::SetProgressiveRendering(bool enable)
+{
+    progressiveRendering_ = enable;
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -667,19 +673,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.FastGather = userSettings_.FastGather;
     ubo.FastInterpole = userSettings_.FastInterpole;
     ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
-    if (userSettings_.TAA)
-    {
-        // std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        // glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
-        // glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x / static_cast<float>(extent.width), jitter.y / static_cast<float>(extent.height));
-        // //ubo.Projection = jitterMatrix * ubo.Projection;
-        //
-        // ubo.Projection[0][2] = jitter.x / static_cast<float>(extent.width) * 2.0f;
-        // ubo.Projection[1][2] = jitter.y / static_cast<float>(extent.height) * 2.0f;
-    }
-    
+    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
+    ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
-    
+
+    glm::mat4x4 ProjectionUnJit = ubo.Projection;    
     // handle android vulkan pre rotation
 #if ANDROID
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
@@ -690,16 +688,29 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
     ubo.Projection = pre_rotate_mat * ubo.Projection;
+
+    ProjectionUnJit = ubo.Projection;
 #endif
+
+    if (userSettings_.TAA)
+    {
+        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
+        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
+        
+        ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
+        ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+    }
     
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
+    ubo.ViewProjectionUnJit = ProjectionUnJit * ubo.ModelView;
     
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
-
-    ubo.ViewportRect = glm::vec4(offset.x, offset.y, extent.width, extent.height);
+    ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;
+    
+    ubo.ViewportRect = glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y, renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
 
     ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
 
@@ -765,12 +776,15 @@ void NextEngine::OnRendererDeviceSet()
 {
     // global textures
     // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+    
     
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+
+    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+    
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
 
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");

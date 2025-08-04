@@ -3,8 +3,14 @@
 #include <cxxopts.hpp>
 #include "../Utilities/FileHelper.hpp"
 #include "../Utilities/Console.hpp"
+#include "Runtime/Engine.hpp"
 
 //using namespace boost::program_options;
+
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+{
+    return std::make_unique<NextGameInstanceVoid>(config, options, engine);
+}
 
 int main(int argc, const char* argv[]) noexcept
 {

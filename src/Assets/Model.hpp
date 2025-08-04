@@ -115,6 +115,7 @@ namespace Assets
 
         void SetVisible(bool visible) { visible_ = visible; }
         bool IsVisible() const { return visible_; }
+        bool IsDrawable() const { return modelId_ != -1; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
         bool TickVelocity(glm::mat4& combinedTS);
@@ -227,12 +228,17 @@ namespace Assets
 
         uint32_t NumberOfVertices() const { return verticeCount; }
         uint32_t NumberOfIndices() const { return indiceCount; }
+        uint32_t SectionCount() const { return sectionCount; }
+        void SetSectionCount(uint32_t count) { sectionCount = count; }
 
         void FreeMemory();
 
     private:
         Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
+        void SaveTangentCache(const std::string& cacheFileName);
+        void LoadTangentCache(const std::string& cacheFileName);
+        
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
         
@@ -243,5 +249,7 @@ namespace Assets
 
         uint32_t verticeCount;
         uint32_t indiceCount;
+
+        uint32_t sectionCount;
     };
 }

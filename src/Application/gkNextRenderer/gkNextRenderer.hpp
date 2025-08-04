@@ -25,6 +25,9 @@ public:
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(int button, int action, int mods) override;
     bool OnScroll(double xoffset, double yoffset) override;
+    bool OnGamepadInput(float leftStickX, float leftStickY,
+                    float rightStickX, float rightStickY,
+                    float leftTrigger, float rightTrigger) override;
     
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }

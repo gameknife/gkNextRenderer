@@ -239,7 +239,8 @@ public:
     {
         complete_->wait();
         terminate_->set();
-        thread_->join();
+        thread_->detach();
+        //thread_->join();
     }
 
     bool IsIdle()

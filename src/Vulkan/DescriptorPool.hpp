@@ -13,7 +13,7 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(DescriptorPool)
 
-		DescriptorPool(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, size_t maxSets);
+		DescriptorPool(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, size_t maxSets, bool bindless = false);
 		~DescriptorPool();
 
 		const class Device& Device() const { return device_; }

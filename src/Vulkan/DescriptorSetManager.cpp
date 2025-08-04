@@ -8,7 +8,7 @@
 
 namespace Vulkan {
 
-DescriptorSetManager::DescriptorSetManager(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, const size_t maxSets)
+DescriptorSetManager::DescriptorSetManager(const Device& device, const std::vector<DescriptorBinding>& descriptorBindings, const size_t maxSets, bool bindless)
 {
 	// Sanity check to avoid binding different resources to the same binding point.
 	std::map<uint32_t, VkDescriptorType> bindingTypes;
@@ -21,9 +21,9 @@ DescriptorSetManager::DescriptorSetManager(const Device& device, const std::vect
 		}
 	}
 
-	descriptorPool_.reset(new DescriptorPool(device, descriptorBindings, maxSets));
-	descriptorSetLayout_.reset(new class DescriptorSetLayout(device, descriptorBindings));
-	descriptorSets_.reset(new class DescriptorSets(*descriptorPool_, *descriptorSetLayout_, bindingTypes, maxSets));
+	descriptorPool_.reset(new DescriptorPool(device, descriptorBindings, maxSets, bindless));
+	descriptorSetLayout_.reset(new class DescriptorSetLayout(device, descriptorBindings, bindless));
+	descriptorSets_.reset(new class DescriptorSets(*descriptorPool_, *descriptorSetLayout_, bindingTypes, maxSets, bindless));
 }
 
 DescriptorSetManager::~DescriptorSetManager()

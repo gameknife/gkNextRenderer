@@ -81,8 +81,65 @@ bool ModelViewController::OnKey(const int key, const int scancode, const int act
     default: return false;
     }
 #else
-	return false;
+    return false;
 #endif
+}
+
+// 新增手柄输入处理函数
+bool ModelViewController::OnGamepadInput(const float leftStickX, const float leftStickY, 
+                                        const float rightStickX, const float rightStickY,
+                                        const float leftTrigger, const float rightTrigger)
+{
+    const float rightStickSensitivity = 5.0f;
+    const float deadZone = 0.5f; // 摇杆死区
+    bool inputDetected = false;
+    
+    // 左摇杆控制前后左右移动
+    if (std::abs(leftStickX) > deadZone) {
+        cameraMovingRight_ = leftStickX > 0;
+        cameraMovingLeft_ = leftStickX < 0;
+        inputDetected = true;
+    }
+    else {
+        cameraMovingRight_ = false;
+        cameraMovingLeft_ = false;
+    }
+    
+    if (std::abs(leftStickY) > deadZone) {
+        cameraMovingForward_ = leftStickY < 0;
+        cameraMovingBackward_ = leftStickY > 0;
+        inputDetected = true;
+    }
+    else {
+        cameraMovingForward_ = false;
+        cameraMovingBackward_ = false;
+    }
+    
+    // 扳机键控制上下移动
+    if (leftTrigger > deadZone) {
+        cameraMovingDown_ = true;
+        inputDetected = true;
+    }
+    else {
+        cameraMovingDown_ = false;
+    }
+    
+    if (rightTrigger > deadZone) {
+        cameraMovingUp_ = true;
+        inputDetected = true;
+    }
+    else {
+        cameraMovingUp_ = false;
+    }
+    
+    // 右摇杆可以用于视角旋转
+    if (std::abs(rightStickX) > deadZone || std::abs(rightStickY) > deadZone) {
+        cameraRotX_ = rightStickX * rightStickSensitivity;  // 根据需要调整灵敏度
+        cameraRotY_ = rightStickY * rightStickSensitivity;
+        inputDetected = true;
+    }
+    
+    return inputDetected;
 }
 
 bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
@@ -150,6 +207,7 @@ void ModelViewController::OnScroll(double xoffset, double yoffset)
 {
     fieldOfView_ -= static_cast<float>(yoffset);
     fieldOfView_ = glm::clamp(fieldOfView_, 1.0f, 90.0f);
+    movedByEvent_ = true;
 }
 
 bool ModelViewController::UpdateCamera(const double speed, const double timeDelta)
@@ -179,11 +237,12 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
         cameraRotY_ != 0.0 ||
         cameraRotX_ != 0.0 ||
         glm::abs(rawModelRotX_ - modelRotX_) > 0.01 ||
-        glm::abs(rawModelRotY_ - modelRotY_) > 0.01;
+        glm::abs(rawModelRotY_ - modelRotY_) > 0.01 || movedByEvent_;;
 
     cameraRotY_ = 0;
     cameraRotX_ = 0;
-
+    movedByEvent_ = false;
+    
     return updated;
 }
 

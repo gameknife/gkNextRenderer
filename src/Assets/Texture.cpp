@@ -9,9 +9,14 @@
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
+#include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/DescriptorBinding.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
+#include "ThirdParty/lzav/lzav.h"
 
 #define M_NEXT_PI 3.14159265358979323846f
 
@@ -22,121 +27,155 @@ namespace Assets
         int32_t textureId;
         TextureImage* transferPtr;
         float elapsed;
+        bool needFlushHDRSH;
         std::array<char, 256> outputInfo;
     };
-
-    void FilterEnvironmentMap(const float* srcPixels, int srcWidth, int srcHeight,
-                         float* dstPixels, int dstWidth, int dstHeight, float roughness) {
-        // Constants for filtering
-        const int sampleCount = 16;  // Number of samples to take for each output pixel
-        const float roughness2 = roughness * roughness;
+    
+    void PrefilterEnvironmentMapLevel(const float* sourcePixels, int sourceWidth, int sourceHeight,
+                                    float* targetPixels, int targetWidth, int targetHeight, 
+                                    float roughness)
+    {
+        const int sampleCount = std::max(1, static_cast<int>(128 * (1.0f - roughness) + 64 * roughness));
         
-        // For each destination pixel
-        for (int y = 0; y < dstHeight; ++y) {
-            for (int x = 0; x < dstWidth; ++x) {
-                // Calculate spherical coordinates for this pixel
-                float u = (x + 0.5f) / dstWidth;
-                float v = (y + 0.5f) / dstHeight;
-                float phi = u * 2.0f * M_NEXT_PI;
+        for (int y = 0; y < targetHeight; ++y)
+        {
+            for (int x = 0; x < targetWidth; ++x)
+            {
+                // Convert target pixel to direction
+                float u = (x + 0.5f) / targetWidth;
+                float v = (y + 0.5f) / targetHeight;
+                
                 float theta = v * M_NEXT_PI;
+                float phi = u * 2.0f * M_NEXT_PI;
                 
-                // Direction vector
-                float dx = std::sin(theta) * std::cos(phi);
-                float dy = std::cos(theta);
-                float dz = std::sin(theta) * std::sin(phi);
+                float sinTheta = std::sin(theta);
+                float cosTheta = std::cos(theta);
+                float sinPhi = std::sin(phi);
+                float cosPhi = std::cos(phi);
                 
-                // Accumulate filtered color
-                float r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
-                float weight = 0.0f;
+                // Main reflection direction
+                float mainDirX = sinTheta * cosPhi;
+                float mainDirY = cosTheta;
+                float mainDirZ = sinTheta * sinPhi;
                 
-                // Monte Carlo integration with importance sampling
-                for (int i = 0; i < sampleCount; ++i) {
-                    // Generate sample direction with roughness-based lobe
-                    float u1 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-                    float u2 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-                    
-                    // Calculate sample direction with GGX distribution
-                    float phi_sample = 2.0f * M_NEXT_PI * u1;
-                    float cos_theta_sample = std::sqrt((1.0f - u2) / (1.0f + (roughness2 - 1.0f) * u2));
-                    float sin_theta_sample = std::sqrt(1.0f - cos_theta_sample * cos_theta_sample);
-                    
-                    // Convert to Cartesian
-                    float sx = sin_theta_sample * std::cos(phi_sample);
-                    float sy = cos_theta_sample;
-                    float sz = sin_theta_sample * std::sin(phi_sample);
-                    
-                    // Transform sample to world space around our main direction
-                    // (This is a simplified orthonormal basis construction)
-                    float rx, ry, rz;
-                    // ... (rotate sx, sy, sz around dx, dy, dz to get rx, ry, rz)
-                    // Simplified version that doesn't account for proper rotation:
-                    rx = dx + sx * roughness;
-                    ry = dy + sy * roughness;
-                    rz = dz + sz * roughness;
-                    float len = std::sqrt(rx*rx + ry*ry + rz*rz);
-                    rx /= len; ry /= len; rz /= len;
-                    
-                    // Convert to UV coordinates for sampling source
-                    float sample_phi = std::atan2(rz, rx);
-                    if (sample_phi < 0) sample_phi += 2.0f * M_NEXT_PI;
-                    float sample_theta = std::acos(std::clamp(ry, -1.0f, 1.0f));
-                    
-                    float sample_u = sample_phi / (2.0f * M_NEXT_PI);
-                    float sample_v = sample_theta / M_NEXT_PI;
-                    
-                    // Bilinear sampling from source
-                    float src_x = sample_u * srcWidth - 0.5f;
-                    float src_y = sample_v * srcHeight - 0.5f;
-                    int src_x1 = std::clamp(static_cast<int>(std::floor(src_x)), 0, srcWidth - 1);
-                    int src_y1 = std::clamp(static_cast<int>(std::floor(src_y)), 0, srcHeight - 1);
-                    int src_x2 = std::clamp(src_x1 + 1, 0, srcWidth - 1);
-                    int src_y2 = std::clamp(src_y1 + 1, 0, srcHeight - 1);
-                    float wx = src_x - src_x1;
-                    float wy = src_y - src_y1;
-                    
-                    // Sample the four pixels
-                    int idx11 = (src_y1 * srcWidth + src_x1) * 4;
-                    int idx12 = (src_y1 * srcWidth + src_x2) * 4;
-                    int idx21 = (src_y2 * srcWidth + src_x1) * 4;
-                    int idx22 = (src_y2 * srcWidth + src_x2) * 4;
-                    
-                    // Bilinear interpolation
-                    float sr = (1-wx)*(1-wy)*srcPixels[idx11] + wx*(1-wy)*srcPixels[idx12] + 
-                               (1-wx)*wy*srcPixels[idx21] + wx*wy*srcPixels[idx22];
-                    float sg = (1-wx)*(1-wy)*srcPixels[idx11+1] + wx*(1-wy)*srcPixels[idx12+1] + 
-                               (1-wx)*wy*srcPixels[idx21+1] + wx*wy*srcPixels[idx22+1];
-                    float sb = (1-wx)*(1-wy)*srcPixels[idx11+2] + wx*(1-wy)*srcPixels[idx12+2] + 
-                               (1-wx)*wy*srcPixels[idx21+2] + wx*wy*srcPixels[idx22+2];
-                    float sa = (1-wx)*(1-wy)*srcPixels[idx11+3] + wx*(1-wy)*srcPixels[idx12+3] + 
-                               (1-wx)*wy*srcPixels[idx21+3] + wx*wy*srcPixels[idx22+3];
-                    
-                    // Accumulate
-                    float sampleWeight = 1.0f;  // Could be modified for importance sampling
-                    r += sr * sampleWeight;
-                    g += sg * sampleWeight;
-                    b += sb * sampleWeight;
-                    a += sa * sampleWeight;
-                    weight += sampleWeight;
+                // Build tangent space around main direction
+                float upX = 0.0f, upY = 1.0f, upZ = 0.0f;
+                if (std::abs(mainDirY) > 0.999f)
+                {
+                    upX = 1.0f; upY = 0.0f; upZ = 0.0f;
                 }
                 
-                // Normalize
-                if (weight > 0) {
-                    r /= weight;
-                    g /= weight;
-                    b /= weight;
-                    a /= weight;
+                // Tangent vectors
+                float tangentX = upY * mainDirZ - upZ * mainDirY;
+                float tangentY = upZ * mainDirX - upX * mainDirZ;
+                float tangentZ = upX * mainDirY - upY * mainDirX;
+                
+                float tangentLen = std::sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+                tangentX /= tangentLen;
+                tangentY /= tangentLen;
+                tangentZ /= tangentLen;
+                
+                float bitangentX = mainDirY * tangentZ - mainDirZ * tangentY;
+                float bitangentY = mainDirZ * tangentX - mainDirX * tangentZ;
+                float bitangentZ = mainDirX * tangentY - mainDirY * tangentX;
+                
+                float colorR = 0.0f, colorG = 0.0f, colorB = 0.0f;
+                float totalWeight = 0.0f;
+                
+                // Monte Carlo sampling
+                for (int i = 0; i < sampleCount; ++i)
+                {
+                    // Generate random numbers (using simple pseudo-random for now)
+                    float xi1 = static_cast<float>(i) / sampleCount;
+                    float xi2 = static_cast<float>((i * 17 + 13) % sampleCount) / sampleCount;
+                    
+                    // Importance sampling for GGX distribution
+                    float alpha = roughness * roughness;
+                    float alpha2 = alpha * alpha;
+                    
+                    float cosTheta = std::sqrt((1.0f - xi1) / (1.0f + (alpha2 - 1.0f) * xi1));
+                    float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
+                    float phi = 2.0f * M_NEXT_PI * xi2;
+                    
+                    // Local sample direction
+                    float localX = sinTheta * std::cos(phi);
+                    float localY = sinTheta * std::sin(phi);
+                    float localZ = cosTheta;
+                    
+                    // Transform to world space
+                    float worldX = localX * tangentX + localY * bitangentX + localZ * mainDirX;
+                    float worldY = localX * tangentY + localY * bitangentY + localZ * mainDirY;
+                    float worldZ = localX * tangentZ + localY * bitangentZ + localZ * mainDirZ;
+                    
+                    // Sample environment map
+                    float sampleTheta = std::acos(std::clamp(worldY, -1.0f, 1.0f));
+                    float samplePhi = std::atan2(worldZ, worldX);
+                    if (samplePhi < 0) samplePhi += 2.0f * M_NEXT_PI;
+                    
+                    float sampleU = samplePhi / (2.0f * M_NEXT_PI);
+                    float sampleV = sampleTheta / M_NEXT_PI;
+                    
+                    int sampleX = static_cast<int>(sampleU * sourceWidth) % sourceWidth;
+                    int sampleY = static_cast<int>(sampleV * sourceHeight) % sourceHeight;
+                    
+                    int sampleIndex = (sampleY * sourceWidth + sampleX) * 4;
+                    
+                    float weight = 1.0f;
+                    colorR += sourcePixels[sampleIndex + 0] * weight;
+                    colorG += sourcePixels[sampleIndex + 1] * weight;
+                    colorB += sourcePixels[sampleIndex + 2] * weight;
+                    totalWeight += weight;
                 }
                 
-                // Write to destination
-                int dstIdx = (y * dstWidth + x) * 4;
-                dstPixels[dstIdx] = r;
-                dstPixels[dstIdx+1] = g;
-                dstPixels[dstIdx+2] = b;
-                dstPixels[dstIdx+3] = a;
+                // Normalize and store result
+                if (totalWeight > 0.0f)
+                {
+                    colorR /= totalWeight;
+                    colorG /= totalWeight;
+                    colorB /= totalWeight;
+                }
+                
+                int targetIndex = (y * targetWidth + x) * 4;
+                targetPixels[targetIndex + 0] = colorR;
+                targetPixels[targetIndex + 1] = colorG;
+                targetPixels[targetIndex + 2] = colorB;
+                targetPixels[targetIndex + 3] = 1.0f;
             }
         }
     }
-    
+
+    void PrefilterHDREnvironmentMap(const float* hdrPixels, int width, int height, 
+                             std::vector<std::vector<float>>& mipLevels,
+                             std::vector<std::pair<int, int>>& mipDimensions)
+    {
+        constexpr int MAX_MIP_LEVELS = 8; // Typically 5-8 levels for environment maps
+        mipLevels.clear();
+        mipDimensions.clear();
+        
+        // Calculate mip levels
+        int currentWidth = width;
+        int currentHeight = height;
+        
+        for (int mipLevel = 0; mipLevel < MAX_MIP_LEVELS; ++mipLevel)
+        {
+            if (currentWidth < 4 || currentHeight < 4) break;
+            
+            mipDimensions.push_back({currentWidth, currentHeight});
+            mipLevels.emplace_back(currentWidth * currentHeight * 4); // RGBA
+
+            if (mipLevel > 0)
+            {
+                float roughness = static_cast<float>(mipLevel) / (MAX_MIP_LEVELS - 1);
+                PrefilterEnvironmentMapLevel(hdrPixels, width, height, 
+                                           mipLevels[mipLevel].data(), 
+                                           currentWidth, currentHeight, roughness);
+            }
+            
+            currentWidth = std::max(1, currentWidth / 2);
+            currentHeight = std::max(1, currentHeight / 2);
+        }
+    }
+
     SphericalHarmonics ProjectHDRToSH(const float* hdrPixels, int width, int height)
     {
         SphericalHarmonics result{};
@@ -273,73 +312,12 @@ namespace Assets
         commandPool_(command_pool),
         mainThreadCommandPool_(command_pool_mt)
     {
-        static const uint32_t k_bindless_texture_binding = 0;
-        // The maximum number of bindless resources is limited by the device.
         static const uint32_t k_max_bindless_resources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
-
-        // Create bindless descriptor pool
-        VkDescriptorPoolSize pool_sizes_bindless[] =
+        const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, k_max_bindless_resources}
+            {0, k_max_bindless_resources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
         };
-
-        // Update after bind is needed here, for each binding and in the descriptor set layout creation.
-        VkDescriptorPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = pool_sizes_bindless;
-        poolInfo.maxSets = k_max_bindless_resources * 1;
-
-        Vulkan::Check(vkCreateDescriptorPool(device.Handle(), &poolInfo, nullptr, &descriptorPool_),
-                      "create global descriptor pool");
-
-        // create set layout
-        VkDescriptorBindingFlags bindless_flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
-            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT;
-
-        VkDescriptorSetLayoutBinding vk_binding;
-        vk_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        vk_binding.descriptorCount = k_max_bindless_resources;
-        vk_binding.binding = k_bindless_texture_binding;
-
-        vk_binding.stageFlags = VK_SHADER_STAGE_ALL;
-        vk_binding.pImmutableSamplers = nullptr;
-
-        VkDescriptorSetLayoutCreateInfo layout_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        layout_info.bindingCount = 1;
-        layout_info.pBindings = &vk_binding;
-        layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT;
-
-        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extended_info{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT, nullptr
-        };
-        extended_info.bindingCount = 1;
-        extended_info.pBindingFlags = &bindless_flags;
-
-        layout_info.pNext = &extended_info;
-
-        Vulkan::Check(vkCreateDescriptorSetLayout(device_.Handle(), &layout_info, nullptr, &layout_),
-                      "create global descriptor set layout");
-
-        VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        alloc_info.descriptorPool = descriptorPool_;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &layout_;
-
-        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
-        };
-        uint32_t max_binding = k_max_bindless_resources - 1;
-        count_info.descriptorSetCount = 1;
-        // This number is the max allocatable count
-        count_info.pDescriptorCounts = &max_binding;
-        alloc_info.pNext = &count_info;
-
-        descriptorSets_.resize(1);
-
-        Vulkan::Check(vkAllocateDescriptorSets(device_.Handle(), &alloc_info, descriptorSets_.data()),
-                      "alloc global descriptor set");
+        descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
 
         // for hdr to bind
         hdrSphericalHarmonics_.resize(100);
@@ -351,43 +329,19 @@ namespace Assets
 
     GlobalTexturePool::~GlobalTexturePool()
     {
-        if (descriptorPool_ != nullptr)
-        {
-            vkDestroyDescriptorPool(device_.Handle(), descriptorPool_, nullptr);
-            descriptorPool_ = nullptr;
-        }
-
-        if (layout_ != nullptr)
-        {
-            vkDestroyDescriptorSetLayout(device_.Handle(), layout_, nullptr);
-            layout_ = nullptr;
-        }
-
         defaultWhiteTexture_.reset();
         textureImages_.clear();
+        descriptorSetManager_.reset();
     }
 
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
     {
-        VkDescriptorImageInfo imageInfo = {};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = textureImage.ImageView().Handle();
-        imageInfo.sampler = textureImage.Sampler().Handle();
-
-
-        VkWriteDescriptorSet descriptorWrite = {};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = descriptorSets_[0];
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = textureIdx;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pImageInfo = &imageInfo;
-
-        vkUpdateDescriptorSets(
-            device_.Handle(),
-            1,
-            &descriptorWrite, 0, nullptr);
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        {
+            descriptorSets.Bind(0, 0, { textureImage.Sampler().Handle(), textureImage.ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
+        };
+        descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
 
     uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
@@ -444,6 +398,7 @@ namespace Assets
 
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
+                // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
                     result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
@@ -464,72 +419,177 @@ namespace Assets
                 }
                 else
                 {
+                    std::hash<std::string> hasher;
+                    // load from texture files
                     if (hdr)
                     {
-                        stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
-                        pixels = stbdata;
-                        format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                        size = width * height * 4 * sizeof(float);
-
-                        // Extract spherical harmonics from the base level
-                        SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
-                        hdrSphericalHarmonics_[newTextureIdx] = sh;
-
-#if 0
-                        // Calculate mipmap levels based on texture dimensions
-                        int maxDimension = std::max(width, height);
-                        int numMipLevels = static_cast<int>(std::floor(std::log2(maxDimension))) + 1;
-                        miplevel = numMipLevels;
+                        std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texhdr");
+                       // 在hdr加载的else分支中添加保存逻辑
+                        if (!std::filesystem::exists(cacheFileName))
+                        {
+                            stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
+                            pixels = stbdata;
+                            format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                            size = width * height * 4 * sizeof(float);
                         
-                        // Original HDR data will be level 0
-                        std::vector<float*> mipLevels(numMipLevels);
-                        std::vector<int> mipWidths(numMipLevels);
-                        std::vector<int> mipHeights(numMipLevels);
-
-                        // Set base level
-                        mipLevels[0] = reinterpret_cast<float*>(pixels);
-                        mipWidths[0] = width;
-                        mipHeights[0] = height;
-
-                        // Generate roughness-filtered mipmaps
-                        for (int level = 1; level < numMipLevels; ++level) {
-                            // Calculate dimensions for this level
-                            mipWidths[level] = std::max(mipWidths[level-1] / 2, 1);
-                            mipHeights[level] = std::max(mipHeights[level-1] / 2, 1);
+                            // Extract spherical harmonics from the base level
+                            SphericalHarmonics sh = ProjectHDRToSH((float*)pixels, width, height);
+                            hdrSphericalHarmonics_[newTextureIdx] = sh;
+                        
+                            // Prefilter environment map for different roughness levels
+                            std::vector<std::vector<float>> mipLevels;
+                            std::vector<std::pair<int, int>> mipDimensions;
+                            PrefilterHDREnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
+                        
+                            miplevel = static_cast<uint32_t>(mipLevels.size());
                             
-                            // Allocate memory for this mip level
-                            mipLevels[level] = new float[mipWidths[level] * mipHeights[level] * 4];
-                            
-                            // Calculate roughness for this level (increasing with mip level)
-                            float roughness = static_cast<float>(level) / (numMipLevels - 1);
-                            
-                            // Process this mip level with roughness-based filtering
-                            FilterEnvironmentMap(mipLevels[level-1], mipWidths[level-1], mipHeights[level-1], 
-                                                 mipLevels[level], mipWidths[level], mipHeights[level], roughness);
+                            // 保存到缓存文件
+                            std::ofstream cacheFile(cacheFileName, std::ios::binary);
+                            if (cacheFile.is_open())
+                            {
+                                // 先将所有数据写入内存缓冲区
+                                std::vector<uint8_t> uncompressedData;
+                                
+                                // 写入头部信息
+                                auto writeToBuffer = [&](const void* data, size_t size) {
+                                    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+                                    uncompressedData.insert(uncompressedData.end(), bytes, bytes + size);
+                                };
+                                
+                                writeToBuffer(&width, sizeof(int));
+                                writeToBuffer(&height, sizeof(int));
+                                writeToBuffer(&miplevel, sizeof(uint32_t));
+                                
+                                // 写入球谐系数
+                                writeToBuffer(&sh, sizeof(SphericalHarmonics));
+                                
+                                // 写入mip尺寸信息
+                                size_t mipCount = mipDimensions.size();
+                                writeToBuffer(&mipCount, sizeof(size_t));
+                                for (const auto& dim : mipDimensions)
+                                {
+                                    writeToBuffer(&dim.first, sizeof(int));
+                                    writeToBuffer(&dim.second, sizeof(int));
+                                }
+                                
+                                // 写入原始像素数据
+                                writeToBuffer(pixels, size);
+                                
+                                // 写入mip级别数据
+                                for (const auto& mipData : mipLevels)
+                                {
+                                    size_t mipSize = mipData.size();
+                                    writeToBuffer(&mipSize, sizeof(size_t));
+                                    writeToBuffer(mipData.data(), mipSize * sizeof(float));
+                                }
+                                
+                                // 压缩数据
+                                size_t compressedSize = lzav_compress_bound_hi(int(uncompressedData.size()));
+                                std::vector<uint8_t> compressedData(compressedSize);
+                                
+                                size_t actualCompressedSize = lzav_compress_hi(
+                                    uncompressedData.data(), compressedData.data(), 
+                                    int(uncompressedData.size()), int(compressedSize));
+                                
+                                if (actualCompressedSize > 0)
+                                {
+                                    // 写入原始大小和压缩后的数据
+                                    size_t originalSize = uncompressedData.size();
+                                    cacheFile.write(reinterpret_cast<const char*>(&originalSize), sizeof(size_t));
+                                    cacheFile.write(reinterpret_cast<const char*>(&actualCompressedSize), sizeof(size_t));
+                                    cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                                }
+                                
+                                cacheFile.close();
+                            }
+                        
+                            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                                commandPool_, width, height, miplevel, format,
+                                pixels, size, mipLevels, mipDimensions);
                         }
-
-
-
-                        // Create a texture with all mip levels
-                        textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
-                            commandPool_, width, height, numMipLevels, format, pixels, size, mipLevels, mipWidths, mipHeights);
-
-                        // Clean up mip levels (except level 0 which is handled by stbi_image_free)
-                        for (int level = 1; level < numMipLevels; ++level) {
-                            delete[] mipLevels[level];
+                        else
+                        {
+                            // 从缓存文件读取
+                            std::ifstream cacheFile(cacheFileName, std::ios::binary);
+                            if (cacheFile.is_open())
+                            {
+                                // 读取原始大小和压缩大小
+                                size_t originalSize, compressedSize;
+                                cacheFile.read(reinterpret_cast<char*>(&originalSize), sizeof(size_t));
+                                cacheFile.read(reinterpret_cast<char*>(&compressedSize), sizeof(size_t));
+                                
+                                // 读取压缩数据
+                                std::vector<uint8_t> compressedData(compressedSize);
+                                cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+                                
+                                // 解压缩数据
+                                std::vector<uint8_t> uncompressedData(originalSize);
+                                size_t decompressedSize = lzav_decompress(
+                                    compressedData.data(), uncompressedData.data(),
+                                    int(compressedSize), int(originalSize));
+                                
+                                if (decompressedSize == originalSize)
+                                {
+                                    // 从解压缩的数据中读取各个字段
+                                    size_t offset = 0;
+                                    auto readFromBuffer = [&](void* data, size_t size) {
+                                        std::memcpy(data, uncompressedData.data() + offset, size);
+                                        offset += size;
+                                    };
+                                    
+                                    // 读取头部信息
+                                    readFromBuffer(&width, sizeof(int));
+                                    readFromBuffer(&height, sizeof(int));
+                                    readFromBuffer(&miplevel, sizeof(uint32_t));
+                                    
+                                    // 读取球谐系数
+                                    SphericalHarmonics sh;
+                                    readFromBuffer(&sh, sizeof(SphericalHarmonics));
+                                    hdrSphericalHarmonics_[newTextureIdx] = sh;
+                                    
+                                    // 读取mip尺寸信息
+                                    std::vector<std::pair<int, int>> mipDimensions;
+                                    size_t mipCount;
+                                    readFromBuffer(&mipCount, sizeof(size_t));
+                                    mipDimensions.resize(mipCount);
+                                    for (auto& dim : mipDimensions)
+                                    {
+                                        readFromBuffer(&dim.first, sizeof(int));
+                                        readFromBuffer(&dim.second, sizeof(int));
+                                    }
+                                    
+                                    // 读取原始像素数据
+                                    format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                                    size = width * height * 4 * sizeof(float);
+                                    stbdata = reinterpret_cast<uint8_t*>(malloc(size));
+                                    pixels = stbdata;
+                                    readFromBuffer(pixels, size);
+                                    
+                                    // 读取mip级别数据
+                                    std::vector<std::vector<float>> mipLevels(mipCount);
+                                    for (auto& mipData : mipLevels)
+                                    {
+                                        size_t mipSize;
+                                        readFromBuffer(&mipSize, sizeof(size_t));
+                                        mipData.resize(mipSize);
+                                        readFromBuffer(mipData.data(), mipSize * sizeof(float));
+                                    }
+                                    
+                                    textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                                        commandPool_, width, height, miplevel, format,
+                                        pixels, size, mipLevels, mipDimensions);
+                                }
+                                
+                                cacheFile.close();
+                            }
                         }
-#endif
+                        // can cache to disk, next round will create image directly
                     }
                     else
                     {
                         // ldr texture, try cache fist
-                        std::filesystem::path cachePath = Utilities::FileHelper::GetPlatformFilePath("cache");
-                        std::filesystem::create_directories(cachePath);
-
                         // hash the texname
-                        std::hash<std::string> hasher;
-                        std::string hashname = fmt::format("{:x}", hasher(texname));
-                        std::string cacheFileName = (cachePath / fmt::format("{}.ktx", hashname)).string();
+                        std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
                         if (!std::filesystem::exists(cacheFileName))
                         {
                             // load from stbi and compress to ktx and cache
@@ -560,7 +620,7 @@ namespace Assets
                             result = ktxTexture2_CompressBasisEx(kTexture, &params);
                             if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to compress ktx2 image "));
                             // save to cache
-                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), (cachePath / fmt::format("{}.ktx", hashname)).string().c_str());
+                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
                         }
                         else
                         {
@@ -587,6 +647,7 @@ namespace Assets
 
                 // create texture image
                 //if ( !textureImages_[newTextureIdx] )
+                if (!hdr)
                 {
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
                 }
@@ -600,6 +661,7 @@ namespace Assets
 
                 // transfer
                 taskContext.textureId = newTextureIdx;
+                taskContext.needFlushHDRSH = hdr;
                 taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                     std::chrono::high_resolution_clock::now() - timer).count();
                 std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, miplevel,
@@ -613,6 +675,11 @@ namespace Assets
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
                 fmt::print("{}\n", taskContext.outputInfo.data());
                 delete[] copyedData;
+
+                if (taskContext.needFlushHDRSH)
+                {
+                    NextEngine::GetInstance()->GetScene().UpdateHDRSH();
+                }
             }, 0);
 
         return newTextureIdx;

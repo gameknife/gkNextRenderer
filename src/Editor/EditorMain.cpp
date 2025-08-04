@@ -29,9 +29,10 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     config.HideTitleBar = true;
 
     options.Samples = 8;
-    options.Temporal = 8;
+    options.Temporal = 16;
     options.ForceSDR = true;
     options.NoDenoiser = true;
+    options.SuperResolution = 0;
 }
 
 void EditorGameInstance::OnInit()

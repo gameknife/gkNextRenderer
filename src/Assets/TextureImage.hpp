@@ -37,11 +37,11 @@ namespace Assets
 		    VkFormat format, 
 		    const unsigned char* baseData, 
 		    uint32_t baseSize,
-		    const std::vector<float*>& mipLevelData, 
-		    const std::vector<int>& mipWidths, 
-		    const std::vector<int>& mipHeights);
+		    const std::vector<std::vector<float>>& mipLevelData, 
+		    const std::vector<std::pair<int, int>>& mipDimensions);
 		~TextureImage();
 
+		Vulkan::Image& Image() const { return *image_; }
 		const Vulkan::ImageView& ImageView() const { return *imageView_; }
 		const Vulkan::Sampler& Sampler() const { return *sampler_; }
 		void MainThreadPostLoading(Vulkan::CommandPool& commandPool);

@@ -39,6 +39,15 @@ namespace Vulkan
 		std::function<void(int path_count, const char* paths[])> OnDropFile;
 		std::function<void(GLFWwindow* window, int focused)> OnFocus;
 
+		// 添加手柄相关回调
+		std::function<void(int jid, int event)> OnJoystickConnection;
+		std::function<void(float leftStickX, float leftStickY,
+						  float rightStickX, float rightStickY,
+						  float leftTrigger, float rightTrigger)> OnGamepadInput;
+  
+		// 添加轮询手柄输入的方法
+		void PollGamepadInput();
+		
 		// Methods
 		void Close();
 		bool IsMinimized() const;

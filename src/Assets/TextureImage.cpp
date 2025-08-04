@@ -50,7 +50,7 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	}
 	else
 	{
-		image_->TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
+		//image_->TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	// cannot done this on non-graphicbit queue
@@ -65,9 +65,8 @@ TextureImage::TextureImage(
     VkFormat format, 
     const unsigned char* baseData, 
     uint32_t baseSize,
-    const std::vector<float*>& mipLevelData, 
-    const std::vector<int>& mipWidths, 
-    const std::vector<int>& mipHeights)
+    const std::vector<std::vector<float>>& mipLevelData, 
+    const std::vector<std::pair<int, int>>& mipDimensions)
 {
     const auto& device = commandPool.Device();
     
@@ -101,10 +100,10 @@ TextureImage::TextureImage(
             mipHeight = static_cast<uint32_t>(height);
         } else {
             // Pre-calculated mip levels
-            mipWidth = static_cast<uint32_t>(mipWidths[mipLevel]);
-            mipHeight = static_cast<uint32_t>(mipHeights[mipLevel]);
+            mipWidth = static_cast<uint32_t>(mipDimensions[mipLevel].first);
+            mipHeight = static_cast<uint32_t>(mipDimensions[mipLevel].second);
             mipSize = mipWidth * mipHeight * 4 * sizeof(float);
-            mipData = mipLevelData[mipLevel];
+            mipData = mipLevelData[mipLevel].data();
         }
         
         // Create staging buffer for this mip level

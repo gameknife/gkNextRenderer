@@ -30,5 +30,6 @@ fi
 	meshoptimizer:x64-linux \
 	ktx:x64-linux \
 	joltphysics:x64-linux \
+	xxhash:x64-linux \
 	cpp-base64:x64-linux
 

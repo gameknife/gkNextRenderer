@@ -35,7 +35,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Editor/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -204,20 +204,15 @@ void UserInterface::OnDestroySurface()
 
 VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
 {
+	auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
+	if (texture == nullptr) return VK_NULL_HANDLE;
+	
 	if( imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end() )
 	{
-		auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
-		if(texture)
-		{
-			imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			return imTextureIdMap_[globalTextureId];
-		}
+		imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
-	else
-	{
-		return imTextureIdMap_[globalTextureId];
-	}
-	return VK_NULL_HANDLE;
+
+	return imTextureIdMap_[globalTextureId];
 }
 
 VkDescriptorSet UserInterface::RequestImTextureByName(const std::string& name)
@@ -407,80 +402,45 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
-		//ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
 		
-		ImGui::Text("Tris: %s", Utilities::metricFormatter(static_cast<double>(statistics.TriCount), "").c_str());
-
-		
-		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
 		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
-		
+		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
 		ImGui::Text("Texture: %d", statistics.TextureCount);
-
-		uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
-		ImGui::Text("Main Tasks: %d", mainTasks);
-		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
-		ImGui::Text("Low Tasks: %d", lowTasks);
-		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
-		ImGui::Text("Comp Queue: %d", completeTasks);
-
-
 		
+		auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
+		uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
+		uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
+		ImGui::Text("GPU Draw: %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str());
+		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
+		ImGui::Text("GPU Tri: %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str());
+		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledTriangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
+		
+		uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
+		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
+		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+		ImGui::Text("Tasks: %d / %d / %d", mainTasks, lowTasks, completeTasks);
 
+		ImGui::Separator();
+		
 		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
+		
 		// auto fetch timer & display
-		auto times = gpuTimer->FetchAllTimes();
+		auto times = gpuTimer->FetchAllTimes(4);
 		for(auto& time : times)
 		{
 			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
 		}
 
 		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
-		ImGui::Text(" query: %.2fms", gpuTimer->GetCpuTime("query-wait"));
-		ImGui::Text(" render: %.2fms", gpuTimer->GetCpuTime("render"));
-		ImGui::Text(" uniform: %.2fms", gpuTimer->GetCpuTime("cpugpu-io"));
-		ImGui::Text(" fence: %.2fms", gpuTimer->GetCpuTime("sync-wait"));
-		ImGui::Text(" submit: %.2fms", gpuTimer->GetCpuTime("submit"));
-		ImGui::Text(" present: %.2fms", gpuTimer->GetCpuTime("present"));
+		ImGui::Text("  - hwquery: %.2fms", gpuTimer->GetCpuTime("hwquery"));
+		ImGui::Text("  - fence: %.2fms", gpuTimer->GetCpuTime("fence"));
+		ImGui::Text("  - present: %.2fms", gpuTimer->GetCpuTime("present"));
 		
 		ImGui::Text("Frame: %d", statistics.TotalFrames);
 		
 		ImGui::Text("Time: %s", fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 	}
 	ImGui::End();
-
-	// if( Settings().AutoFocus )
-	// {
-	// 	// draw a center dot with imgui
-	// 	auto io = ImGui::GetIO();
-	// 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	// 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	// 	ImGui::SetNextWindowSize(ImVec2(8, 8));
-	//
-	// 	// set border color
-	// 	ImGui::PushStyleColor(ImGuiCol_Border, !Settings().AutoFocus ? ImVec4(1,1,1,1) : Settings().HitResult.Hitted ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f): ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-	// 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1,1));
-	// 	ImGui::Begin("CenterDot", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	// 	//ImGui::Text(" ");
-	// 	ImGui::End();
-	// 	ImGui::PopStyleColor();
-	// 	ImGui::PopStyleVar();
-	//
-	// 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	// 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	// 	ImGui::SetNextWindowSize(ImVec2(1, 1));
-	//
-	// 	// set border color
-	// 	ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f + 10.0f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0, 0.5f));
-	// 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-	// 	ImGui::SetNextWindowSize(ImVec2(0, 0));
-	// 	ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0,0,0,0));
-	// 	ImGui::Begin("HitInfo", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	// 	ImGui::Text("%.1fm\nInst: %d\nMat: %d", Settings().HitResult.T, Settings().HitResult.InstanceId, Settings().HitResult.MaterialId);
-	// 	ImGui::End();
-	// 	ImGui::PopStyleColor();
-	// 	
-	// }
 }
 
 void UserInterface::DrawIndicator(uint32_t frameCount)

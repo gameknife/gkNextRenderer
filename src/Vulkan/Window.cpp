@@ -79,6 +79,16 @@ namespace
 			this_->OnFocus(window, focus);
 		}
 	}
+	// 添加手柄输入回调函数
+	void GlfwJoystickCallback(int jid, int event)
+	{
+		// 当手柄连接或断开时触发
+		auto* const this_ = static_cast<Window*>(glfwGetWindowUserPointer(glfwGetCurrentContext()));
+		if (this_->OnJoystickConnection)
+		{
+			this_->OnJoystickConnection(jid, event);
+		}
+	}
 #endif
 }
 
@@ -86,8 +96,27 @@ Window::Window(const WindowConfig& config) :
 	config_(config)
 {
 #if !ANDROID
-	// hide title bar, handle in ImGUI Later
+	if ( !glfwJoystickIsGamepad(0) ) {
+		std::ifstream file(Utilities::FileHelper::GetNormalizedFilePath("assets/locale/gamecontrollerdb.txt"));
+		if(file.is_open())
+		{
+		    file.seekg(0, std::ios::end);
+		    size_t fileSize = file.tellg();
+		    file.seekg(0, std::ios::beg);
 
+		    std::string mappings(fileSize, '\0');
+		    file.read(mappings.data(), fileSize);
+		    file.close();
+
+		    glfwUpdateGamepadMappings(mappings.c_str());
+		}
+		
+		if (glfwJoystickIsGamepad(0)) {
+			fmt::print("Gamepad: {}", glfwGetGamepadName(0));
+		}
+	}
+
+	// hide title bar, handle in ImGUI Later
 	if (config.HideTitleBar)
 	{
 		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
@@ -133,15 +162,6 @@ Window::Window(const WindowConfig& config) :
 		}
 	}
 
-#if !ANDROID
-	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-	if (mode) {
-		int windowPosX = (mode->width - config.Width) / 2;
-		int windowPosY = (mode->height - config.Height) / 2;
-		glfwSetWindowPos(window_, windowPosX, windowPosY); 
-	} 
-#endif
-
 	GLFWimage icon;
 	std::vector<uint8_t> data;
 	Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/textures/Vulkan.png", data);
@@ -166,6 +186,8 @@ Window::Window(const WindowConfig& config) :
 	glfwSetScrollCallback(window_, GlfwScrollCallback);
 	glfwSetDropCallback(window_, GlfwSetDropCallback);
 	glfwSetWindowFocusCallback(window_, GlfwOnFocusCallback);
+	glfwSetJoystickCallback(GlfwJoystickCallback);
+	
 #else
 	window_ = static_cast<GLFWwindow*>(config.AndroidNativeWindow);
 #endif
@@ -332,6 +354,44 @@ void Window::attemptDragWindow() {
 #endif
 }
 
+// 添加一个轮询手柄输入的方法
+void Window::PollGamepadInput()
+{
+#if !ANDROID
+	// 检查手柄是否连接并可用(GLFW支持最多16个手柄，GLFW_JOYSTICK_1到GLFW_JOYSTICK_16)
+	for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; jid++)
+	{
+		if (glfwJoystickPresent(jid) && glfwJoystickIsGamepad(jid))
+		{
+			GLFWgamepadstate state;
+			if (glfwGetGamepadState(jid, &state))
+			{
+				// 获取左摇杆输入
+				float leftStickX = state.axes[GLFW_GAMEPAD_AXIS_LEFT_X];
+				float leftStickY = state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y];
+        
+				// 获取右摇杆输入
+				float rightStickX = state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X];
+				float rightStickY = state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y];
+        
+				// 获取扳机键输入
+				float leftTrigger = state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER];
+				float rightTrigger = state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER];
+        
+				// 触发手柄输入回调
+				if (this->OnGamepadInput)
+				{
+					this->OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+				}
+        
+				// 一旦找到一个可用的手柄就退出循环(或者你可以处理多个手柄)
+				break;
+			}
+		}
+	}
+#endif
+}
+	
 void Window::InitGLFW()
 {
 #if !ANDROID

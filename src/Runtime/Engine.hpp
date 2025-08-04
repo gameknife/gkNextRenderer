@@ -7,7 +7,7 @@
 #include "Assets/Model.hpp"
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/Window.hpp"
-#include "Vulkan/VulkanBaseRenderer.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 #include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
@@ -47,6 +47,9 @@ public:
 	virtual bool OnCursorPosition(double xpos, double ypos) =0;
 	virtual bool OnMouseButton(int button, int action, int mods) =0;
 	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
+	virtual bool OnGamepadInput(float leftStickX, float leftStickY,
+						float rightStickX, float rightStickY,
+						float leftTrigger, float rightTrigger) {return false;}
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase
@@ -188,7 +191,7 @@ public:
 	// gpu raycast
 	void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir, std::function<bool (Assets::RayCastResult rayResult)> callback );
 
-	void SetProgressiveRendering(bool enable) { progressiveRendering_ = enable; }
+	void SetProgressiveRendering(bool enable);
 	bool IsProgressiveRendering() const { return progressiveRendering_; }
 
 	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }

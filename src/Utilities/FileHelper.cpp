@@ -22,15 +22,21 @@ namespace Utilities
                 {
                     absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
                 }
-                // read from os file
+
                 std::ifstream reader(absEntry, std::ios::binary);
                 if (!reader.is_open()) {
                     fmt::print("LoadFile: Failed to open file: {}\n", entry);
                     return false;
                 }
-
-                outData = std::vector<uint8_t>(std::istreambuf_iterator<char>(reader), {});
+                
+                reader.seekg(0, std::ios::end);
+                size_t fileSize = reader.tellg();
+                reader.seekg(0, std::ios::beg);
+                
+                outData.resize(fileSize);
+                reader.read(reinterpret_cast<char*>(outData.data()), fileSize);
                 reader.close();
+                
                 return true;
             }
 
@@ -115,9 +121,15 @@ namespace Utilities
                     fmt::print("PakAll: Failed to open file: {}\n", absRootPath + value.name);
                     continue;
                 }
-
-                std::vector<uint8_t> buffer(std::istreambuf_iterator<char>(reader), {});
                 
+                reader.seekg(0, std::ios::end);
+                size_t fileSize = reader.tellg();
+                reader.seekg(0, std::ios::beg);
+
+                std::vector<uint8_t> buffer(fileSize);
+                reader.read(reinterpret_cast<char*>(buffer.data()), fileSize);
+                reader.close();
+                                
                 int max_len = lzav_compress_bound_hi( static_cast<int>(buffer.size()) );
                 void* comp_buf = malloc( max_len );
                 int comp_len = lzav_compress_hi( buffer.data(), comp_buf, static_cast<int>(buffer.size()), max_len );

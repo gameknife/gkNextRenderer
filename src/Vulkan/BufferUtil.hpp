@@ -42,7 +42,8 @@ namespace Vulkan
 		static void CreateDeviceBufferLocal(
 			CommandPool& commandPool,
 			const char* const name,
-			const VkBufferUsageFlags usage, 
+			const VkBufferUsageFlags usage,
+			const VkMemoryPropertyFlags memProp,
 			const size_t size,
 			std::unique_ptr<Buffer>& buffer,
 			std::unique_ptr<DeviceMemory>& memory);
@@ -145,7 +146,8 @@ namespace Vulkan
 	inline void BufferUtil::CreateDeviceBufferLocal(
 	CommandPool& commandPool,
 	const char* const name,
-	const VkBufferUsageFlags usage, 
+	const VkBufferUsageFlags usage,
+	const VkMemoryPropertyFlags memProp,
 	const size_t size,
 	std::unique_ptr<Buffer>& buffer,
 	std::unique_ptr<DeviceMemory>& memory)
@@ -158,7 +160,7 @@ namespace Vulkan
 			: 0;
 		
 		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, memProp)));
 
 		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
 		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());

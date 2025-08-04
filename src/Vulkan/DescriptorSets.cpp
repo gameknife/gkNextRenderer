@@ -12,7 +12,8 @@ DescriptorSets::DescriptorSets(
 	const DescriptorPool& descriptorPool, 
 	const DescriptorSetLayout& layout,
 	std::map<uint32_t, VkDescriptorType> bindingTypes,
-	const size_t size) :
+	const size_t size,
+	bool bindless) :
 	descriptorPool_(descriptorPool),
 	bindingTypes_(std::move(bindingTypes))
 {
@@ -24,6 +25,15 @@ DescriptorSets::DescriptorSets(
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(size);
 	allocInfo.pSetLayouts = layouts.data();
 
+	// bindless stuff
+	VkDescriptorSetVariableDescriptorCountAllocateInfoEXT count_info{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
+	};
+	uint32_t max_binding = 65535u - 1;
+	count_info.descriptorSetCount = static_cast<uint32_t>(size);
+	count_info.pDescriptorCounts = &max_binding;
+	if (bindless) allocInfo.pNext = &count_info;
+	
 	descriptorSets_.resize(size);
 
 	Check(vkAllocateDescriptorSets(descriptorPool.Device().Handle(), &allocInfo, descriptorSets_.data()),
@@ -44,13 +54,13 @@ DescriptorSets::~DescriptorSets()
 	//}
 }
 
-VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t binding, const VkDescriptorBufferInfo& bufferInfo, const uint32_t count) const
+VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t binding, const VkDescriptorBufferInfo& bufferInfo, uint32_t arrayElement, const uint32_t count) const
 {
 	VkWriteDescriptorSet descriptorWrite = {};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptorWrite.dstSet = descriptorSets_[index];
 	descriptorWrite.dstBinding = binding;
-	descriptorWrite.dstArrayElement = 0;
+	descriptorWrite.dstArrayElement = arrayElement;
 	descriptorWrite.descriptorType = GetBindingType(binding);
 	descriptorWrite.descriptorCount = count;
 	descriptorWrite.pBufferInfo = &bufferInfo;
@@ -58,13 +68,13 @@ VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t b
 	return descriptorWrite;
 }
 
-VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t binding, const VkDescriptorImageInfo& imageInfo, const uint32_t count) const
+VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t binding, const VkDescriptorImageInfo& imageInfo, uint32_t arrayElement, const uint32_t count) const
 {
 	VkWriteDescriptorSet descriptorWrite = {};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptorWrite.dstSet = descriptorSets_[index];
 	descriptorWrite.dstBinding = binding;
-	descriptorWrite.dstArrayElement = 0;
+	descriptorWrite.dstArrayElement = arrayElement;
 	descriptorWrite.descriptorType = GetBindingType(binding);
 	descriptorWrite.descriptorCount = count;
 	descriptorWrite.pImageInfo = &imageInfo;
@@ -72,13 +82,13 @@ VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t b
 	return descriptorWrite;
 }
 
-VkWriteDescriptorSet DescriptorSets::Bind(uint32_t index, uint32_t binding, const VkWriteDescriptorSetAccelerationStructureKHR& structureInfo, const uint32_t count) const
+VkWriteDescriptorSet DescriptorSets::Bind(uint32_t index, uint32_t binding, const VkWriteDescriptorSetAccelerationStructureKHR& structureInfo, uint32_t arrayElement, const uint32_t count) const
 {
 	VkWriteDescriptorSet descriptorWrite = {};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptorWrite.dstSet = descriptorSets_[index];
 	descriptorWrite.dstBinding = binding;
-	descriptorWrite.dstArrayElement = 0;
+	descriptorWrite.dstArrayElement = arrayElement;
 	descriptorWrite.descriptorType = GetBindingType(binding);
 	descriptorWrite.descriptorCount = count;
 	descriptorWrite.pNext = &structureInfo;

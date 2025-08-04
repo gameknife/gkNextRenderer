@@ -6,8 +6,13 @@
 #include "Assets/TextureImage.hpp"
 #include <chrono>
 #include <unordered_set>
+#include <meshoptimizer.h>
+#include <glm/detail/type_half.hpp>
 
 #include "Runtime/Engine.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 namespace Assets
 {
@@ -15,28 +20,38 @@ namespace Assets
                  bool supportRayTracing)
     {
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        
+        // host buffers
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
+
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
+                                                    farAmbientCubeBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
+            pageIndexBufferMemory_);
+
+        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "GPUDrivenStats", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat), gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_ );
+
+        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(SphericalHarmonics) * 100, hdrSHBuffer_, hdrSHBufferMemory_ );
+        
+        // gpu local buffers
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
+                                            indirectDrawBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
+                                            ambientCubeBufferMemory_);
+
+        // shadow maps
+        cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+        cpuShadowMap_->Image().TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
+        cpuShadowMap_->SetDebugName("Shadowmap");
 
         RebuildMeshBuffer(commandPool, supportRayTracing);
-
-        // 动态更新的场景结构，每帧更新
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, sizeof(NodeProxy) * 65535, nodeMatrixBuffer_, nodeMatrixBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
-                                                    indirectDrawBufferMemory_); // support 65535 nodes
-
-
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, sizeof(Material) * 4096, materialBuffer_, materialBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
-                                                    ambientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "FarAmbientCubes", flags, Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), farAmbientCubeBuffer_,
-                                                    farAmbientCubeBufferMemory_);
-        
-
-        cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
-        cpuShadowMap_->SetDebugName("Shadowmap");
     }
 
     Scene::~Scene()
     {
+        sceneBufferDescriptorSetManager_.reset();
+        
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 
@@ -44,6 +59,10 @@ namespace Assets
         indexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         vertexBuffer_.reset();
         vertexBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+        reorderBuffer_.reset();
+        reorderBufferMemory_.reset(); // release memory after bound buffer has been destroyed
+        primAddressBuffer_.reset();
+        primAddressBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         lightBuffer_.reset();
         lightBufferMemory_.reset();
 
@@ -59,6 +78,9 @@ namespace Assets
 
         farAmbientCubeBuffer_.reset();
         farAmbientCubeBufferMemory_.reset();
+
+        pageIndexBuffer_.reset();
+        pageIndexBufferMemory_.reset();
 
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
@@ -87,7 +109,10 @@ namespace Assets
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
+        std::vector<glm::detail::hdata> simpleVertices;
         std::vector<uint32_t> indices;
+        std::vector<uint32_t> reorders;
+        std::vector<uint32_t> primitiveIndices;
 
         offsets_.clear();
         for (auto& model : models_)
@@ -95,34 +120,91 @@ namespace Assets
             // Remember the index, vertex offsets.
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
-
-            offsets_.emplace_back(indexOffset, vertexOffset);
-
-            // Copy model data one after the other.
-
+            const auto reorderOffset = static_cast<uint32_t>(reorders.size());
+            
             // cpu vertex to gpu vertex
             for (auto& vertex : model.CPUVertices())
             {
                 vertices.push_back(MakeVertex(vertex));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.y));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
+                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
             }
-            //vertices.insert(vertices.end(), model.Vertices().begin(), model.Vertices().end());
-            indices.insert(indices.end(), model.CPUIndices().begin(), model.CPUIndices().end());
+            
+            const std::vector<Vertex>& localVertices = model.CPUVertices();
+            const std::vector<uint32_t>& localIndices = model.CPUIndices();
+            
+            std::vector<std::vector<uint32_t>> slicedIndices;
+            const uint32_t maxIndicesPerSlice = 65535 * 3;
+            
+            // 将localIndices分片，每片最多65535*3个索引
+            for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice) {
+                size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
+                slicedIndices.emplace_back(localIndices.begin() + i, localIndices.begin() + endIndex);
+            }
+
+            int emptySection = 10 - int(slicedIndices.size());
+            int processSection = std::min( int(slicedIndices.size()), 10);
+
+            for ( int slice = 0; slice < processSection; ++slice )
+            {
+                const auto indexOffset = static_cast<uint32_t>(indices.size());
+                const auto reorderOffset = static_cast<uint32_t>(reorders.size());
+                
+                const auto& localIndices = slicedIndices[slice];
+                uint32_t realSize = uint32_t(localIndices.size());
+                offsets_.push_back({indexOffset, realSize, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+
+                std::vector<uint32_t> provoke(localIndices.size());
+                std::vector<uint32_t> reorder(localVertices.size() + localIndices.size() / 3);
+                std::vector<uint32_t> primIndices(localIndices.size());
+            
+                if (localIndices.size() > 0)
+                {
+                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], realSize, localVertices.size()));
+                }
+            
+                for ( size_t i = 0; i < provoke.size(); ++i )
+                {
+                    primIndices[i] += reorder[provoke[i]];
+                }
+            
+                // reorder is absolute vertex index
+                for ( size_t i = 0; i < reorder.size(); ++i )
+                {
+                    reorder[i] += vertexOffset;
+                }
+            
+                indices.insert(indices.end(), provoke.begin(), provoke.end());
+                reorders.insert(reorders.end(), reorder.begin(), reorder.end());
+                primitiveIndices.insert(primitiveIndices.end(), primIndices.begin(), primIndices.end());
+            }
+
+            if (emptySection < 0)
+            {
+                fmt::print("more than 10 sections in model. \n");
+            }
+            for ( int slice = 0; slice < emptySection; ++slice )
+            {
+                offsets_.push_back({indexOffset, 0, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+            }
+
+            model.SetSectionCount(processSection);
 
             model.FreeMemory();
         }
-
+        
         int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, indices, indexBuffer_, indexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SimpleVertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, simpleVertices, simpleVertexBuffer_, simpleVertexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags, indices, indexBuffer_, indexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_, reorderBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
-
-        // 材质和灯光也应考虑更新
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
-
-        auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
-        Vulkan::BufferUtil::CreateDeviceBuffer( commandPool, "HDRSH", flags, SHData, hdrSHBuffer_, hdrSHBufferMemory_ );
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
@@ -133,14 +215,58 @@ namespace Assets
         MarkDirty();
 
 #if ANDROID
-        cpuAccelerationStructure_.AsyncProcessFull();
+        cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
 #else
         if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
         {
-            cpuAccelerationStructure_.AsyncProcessFull();
+            cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
         }
 #endif
-        cpuAccelerationStructure_.GenShadowMap(*this);
+        // no need for shadow map
+        //cpuAccelerationStructure_.GenShadowMap(*this);
+        
+        uint32_t maxSets = 2;//NextEngine::GetInstance()->GetRenderer().SwapChain().ImageViews().size();
+
+        sceneBufferDescriptorSetManager_.reset(new Vulkan::DescriptorSetManager(commandPool.Device(), {
+                // all buffer here
+                {0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {2, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {3, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {4, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {5, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {6, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {7, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {8, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {9, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {10, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {11, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+                {12, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT},
+            }, maxSets));
+        
+        auto& descriptorSets = sceneBufferDescriptorSetManager_->DescriptorSets();
+
+        for (uint32_t i = 0; i != maxSets; ++i)
+        {
+            std::vector<VkWriteDescriptorSet> descriptorWrites =
+            {
+                descriptorSets.Bind(i, 0, { vertexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 1, { indexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 2, { materialBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 3, { offsetBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 4, { nodeMatrixBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 5, { ambientCubeBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 6, { farAmbientCubeBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 7, { hdrSHBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 8, { lightBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 9, { pageIndexBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 10, { gpuDrivenStatsBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 11, { reorderBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+                descriptorSets.Bind(i, 12, { primAddressBuffer_->Handle(), 0, VK_WHOLE_SIZE}),
+            };
+
+            descriptorSets.UpdateDescriptors(i, descriptorWrites);
+        }
     }
 
     void Scene::PlayAllTracks()
@@ -153,15 +279,8 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-#if ANDROID
-        cpuAccelerationStructure_.AsyncProcessFull();
-#else
-        if ( !NextEngine::GetInstance()->GetRenderer().supportRayTracing_ )
-        {
-            cpuAccelerationStructure_.AsyncProcessFull();
-        }
-#endif
-        cpuAccelerationStructure_.GenShadowMap(*this);
+        //cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
+        //cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::Tick(float DeltaSeconds)
@@ -209,7 +328,7 @@ namespace Assets
 
         if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
         {
-            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get() );
+            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get() );
         }
     }
 
@@ -226,11 +345,38 @@ namespace Assets
         Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
+
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
         
     bool Scene::UpdateNodes()
     {
-        // this can move to thread task
+        GPUDrivenStat zero {};
+        // read back gpu driven stats
+        const auto data = gpuDrivenStatsBuffer_Memory_->Map(0, sizeof(Assets::GPUDrivenStat));
+        // download
+        GPUDrivenStat* gpuData = static_cast<GPUDrivenStat*>(data);
+        std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
+        std::memcpy(gpuData, &zero, sizeof(GPUDrivenStat)); // reset to zero
+        gpuDrivenStatsBuffer_Memory_->Unmap();
+        
+        return UpdateNodesGpuDriven();
+    }
+
+    void Scene::UpdateHDRSH()
+    {
+        auto& SHData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
+        if (SHData.size() > 0)
+        {
+            SphericalHarmonics* data = reinterpret_cast<SphericalHarmonics*>(hdrSHBufferMemory_->Map(0, sizeof(SphericalHarmonics) * SHData.size()));
+            std::memcpy(data, SHData.data(), SHData.size() * sizeof(SphericalHarmonics));
+            hdrSHBufferMemory_->Unmap();
+        }
+    }
+
+    bool Scene::UpdateNodesLegacy()
+    {
+         // this can move to thread task
         if (nodes_.size() > 0)
         {
             if (sceneDirty_)
@@ -260,7 +406,6 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 MarkDirty();
-                                //cpuAccelerationStructure_.RequestUpdate(combined * glm::vec4(0,0,0,1), 1.0f);
                             }
 
                             NodeProxy proxy = node->GetNodeProxy();
@@ -316,6 +461,55 @@ namespace Assets
         return false;
     }
 
+    bool Scene::UpdateNodesGpuDriven()
+    {
+        if (nodes_.size() > 0)
+        {
+            if (sceneDirty_)
+            {
+                sceneDirty_ = false;
+                {
+                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+                    nodeProxys.clear();
+                    indirectDrawBatchCount_ = 0;
+                    
+                    for (auto& node : nodes_)
+                    {
+                        // record all
+                        if (node->IsDrawable())
+                        {
+                            glm::mat4 combined;
+                            if (node->TickVelocity(combined))
+                            {
+                                MarkDirty();
+                            }
+
+                            auto model = GetModel(node->GetModel());
+                            if (model)
+                            {
+                                for ( uint32_t section = 0; section < model->SectionCount(); ++section)
+                                {
+                                    NodeProxy proxy = node->GetNodeProxy();
+                                    proxy.combinedPrevTS = combined;
+                                    proxy.modelId = node->GetModel() * 10 + section;
+                                    proxy.nort = section == 0 ? 0 : 1;
+                                    nodeProxys.push_back(proxy);
+                                    indirectDrawBatchCount_++;
+                                }        
+                            }
+                        }
+                    }
+                    
+                    NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+                    std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+                    nodeMatrixBufferMemory_->Unmap();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     Node* Scene::GetNode(std::string name)
     {
         for (auto& node : nodes_)
@@ -356,6 +550,12 @@ namespace Assets
             return &materials_[id];
         }
         return nullptr;
+    }
+
+    void Scene::MarkDirty()
+    {
+        sceneDirty_ = true;
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::OverrideModelView(glm::mat4& OutMatrix)

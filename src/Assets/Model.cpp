@@ -1,11 +1,6 @@
 #include "Model.hpp"
 #include "CornellBox.hpp"
-#include "Procedural.hpp"
-#include "Sphere.hpp"
-#include "Utilities/Exception.hpp"
-#include "Utilities/Console.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "Utilities/Math.hpp"
 #include "ThirdParty/mikktspace/mikktspace.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -43,13 +38,15 @@
 #include <tiny_gltf.h>
 #include <fmt/format.h>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <xxhash.h>
 
 #include "Options.hpp"
 #include "Texture.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/NextPhysics.h"
 
-#define FLATTEN_VERTICE 1
+#define FLATTEN_VERTICE 0
+#define PROVOKING_VERTICE 1
 
 using namespace glm;
 
@@ -158,7 +155,7 @@ namespace Assets
     }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& out_nodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& out_camera, std::vector<Assets::LightObject>& out_lights,
-        tinygltf::Model& model, int node_idx, int modelIdx)
+        tinygltf::Model& model, int node_idx, int modelIdx, int materialOffset)
     {
         tinygltf::Node& node = model.nodes[node_idx];
         
@@ -207,8 +204,8 @@ namespace Assets
             {
                 assert( i < 16 );
                 auto& primitive = model.meshes[node.mesh].primitives[i];
-                materialIdx[i] = (max(0, primitive.material));
-                primaryMatIdx = primitive.material;
+                materialIdx[i] = (max(0, primitive.material + materialOffset));
+                primaryMatIdx = primitive.material + materialOffset;
             }
             sceneNode->SetMaterial(materialIdx);
         }
@@ -241,7 +238,7 @@ namespace Assets
         // for each child node
         for (int child : node.children)
         {
-            ParseGltfNode(out_nodes, nodeMap, out_camera, out_lights, model, child, modelIdx);
+            ParseGltfNode(out_nodes, nodeMap, out_camera, out_lights, model, child, modelIdx, materialOffset);
             nodeMap[child]->SetParent(sceneNode);
         }
     }
@@ -260,7 +257,7 @@ namespace Assets
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
     {
-        int32_t matieralIdx = static_cast<int32_t>(materials.size());
+        int32_t materialOffset = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
         
         tinygltf::Model model;
@@ -612,7 +609,7 @@ namespace Assets
         std::map<int, std::shared_ptr<Node> > nodeMap;
         for (int nodeIdx : model.scenes[0].nodes)
         {
-            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx);
+            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx, materialOffset);
             // if (nodeMap.find(nodeIdx) != nodeMap.end())
             // {
             //     nodeMap[nodeIdx]->SetParent(sceneNode);
@@ -1141,7 +1138,6 @@ namespace Assets
         verticeCount = vertices_.size();
         indiceCount = indices_.size();
         
-        // calculate local aabb
         local_aabb_min = glm::vec3(999999, 999999, 999999);
         local_aabb_max = glm::vec3(-999999, -999999, -999999);
 
@@ -1150,10 +1146,86 @@ namespace Assets
             local_aabb_min = glm::min(local_aabb_min, vertex.Position);
             local_aabb_max = glm::max(local_aabb_max, vertex.Position);
         }
-
+        
         if(needGenTSpace)
         {
-            GenerateMikkTSpace(this);
+            // mesh processing is expensive, so we cache the result
+            XXH64_hash_t verticesHash = XXH64(vertices_.data(), vertices_.size() * sizeof(Vertex), 0);
+            XXH64_hash_t indicesHash = XXH64(indices_.data(), indices_.size() * sizeof(uint32_t), 0);
+            XXH64_hash_t combinedHash = XXH64(&verticesHash, sizeof(verticesHash), indicesHash);
+            
+            std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", combinedHash), "tangent");
+            if (!std::filesystem::exists(cacheFileName))
+            {
+                GenerateMikkTSpace(this);
+                SaveTangentCache(cacheFileName);
+            }
+            else
+            {
+                LoadTangentCache(cacheFileName);
+            }
+        }
+    }
+
+    void Model::SaveTangentCache(const std::string& cacheFileName)
+    {
+        std::vector<uint8_t> uncompressedData;
+        size_t tangentDataSize = vertices_.size() * sizeof(glm::vec4);
+        uncompressedData.resize(tangentDataSize);
+        for (size_t i = 0; i < vertices_.size(); ++i)
+        {
+            std::memcpy(uncompressedData.data() + i * sizeof(glm::vec4), 
+                       &vertices_[i].Tangent, sizeof(glm::vec4));
+        }
+        
+        size_t compressedSize = lzav_compress_bound_hi(uncompressedData.size());
+        std::vector<uint8_t> compressedData(compressedSize);
+        size_t actualCompressedSize = lzav_compress_hi(
+            uncompressedData.data(), compressedData.data(),
+            uncompressedData.size(), compressedSize);
+        
+        if (actualCompressedSize > 0)
+        {
+            std::ofstream cacheFile(cacheFileName, std::ios::binary);
+            if (cacheFile.is_open())
+            {
+                size_t originalSize = uncompressedData.size();
+                cacheFile.write(reinterpret_cast<const char*>(&originalSize), sizeof(size_t));
+                cacheFile.write(reinterpret_cast<const char*>(&actualCompressedSize), sizeof(size_t));
+                cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                cacheFile.close();
+            }
+        }
+    }
+
+    void Model::LoadTangentCache(const std::string& cacheFileName)
+    {
+        std::ifstream cacheFile(cacheFileName, std::ios::binary);
+        if (cacheFile.is_open())
+        {
+            size_t originalSize, compressedSize;
+            cacheFile.read(reinterpret_cast<char*>(&originalSize), sizeof(size_t));
+            cacheFile.read(reinterpret_cast<char*>(&compressedSize), sizeof(size_t));
+            
+            std::vector<uint8_t> compressedData(compressedSize);
+            cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+            
+            std::vector<uint8_t> uncompressedData(originalSize);
+            size_t decompressedSize = lzav_decompress(
+                compressedData.data(), uncompressedData.data(),
+                compressedSize, originalSize);
+            
+            if (decompressedSize == originalSize)
+            {
+                for (size_t i = 0; i < vertices_.size(); ++i)
+                {
+                    std::memcpy(&vertices_[i].Tangent,
+                               uncompressedData.data() + i * sizeof(glm::vec4),
+                               sizeof(glm::vec4));
+                }
+            }
+            
+            cacheFile.close();
         }
     }
 
@@ -1257,6 +1329,7 @@ namespace Assets
         proxy.instanceId = instanceId_;
         proxy.modelId = modelId_;
         proxy.worldTS = WorldTransform();
+        proxy.visible = visible_ ? 1 : 0;
         for ( int i = 0; i < materialIdx_.size(); i++ )
         {
             if (i < 16)

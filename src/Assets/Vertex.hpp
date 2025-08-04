@@ -25,30 +25,27 @@ namespace Assets
 		}
 	};
 	
-	inline uint32_t packUint16(uint16_t a, uint16_t b) {
-		return (static_cast<uint32_t>(a) << 16) | static_cast<uint32_t>(b);
+	inline uint16_t packUint8(uint16_t a, uint16_t b) {
+		return a << 8 | b;
 	}
 	
 	struct GPUVertex final
 	{
-		glm::vec3 Position;
-		glm::uint TexcoordXY;
-		glm::uint NormalXY;
-		glm::uint NormalZTangentX;
-		glm::uint TangentYZ;
-		glm::uint TangentWMatIdx;
-
-		bool operator==(const GPUVertex& other) const
-		{
-			return 
-				Position == other.Position &&
-				TexcoordXY == other.TexcoordXY &&
-				NormalXY == other.NormalXY &&
-				NormalZTangentX == other.NormalZTangentX &&
-				TangentYZ == other.TangentYZ &&
-				TangentWMatIdx == other.TangentWMatIdx;
-		}
-
+		glm::detail::hdata posx;
+		glm::detail::hdata posy;
+		glm::detail::hdata posz;
+		glm::detail::hdata texcoordx;
+		
+		glm::detail::hdata normalx;
+		glm::detail::hdata normaly;
+		glm::detail::hdata normalz;
+		glm::detail::hdata texcoordy;
+		
+		glm::detail::hdata tangentx;
+		glm::detail::hdata tangenty;
+		glm::detail::hdata tangentz;
+		uint16_t tangentw;
+		
 		static VkVertexInputBindingDescription GetBindingDescription()
 		{
 			VkVertexInputBindingDescription bindingDescription = {};
@@ -58,51 +55,23 @@ namespace Assets
 			return bindingDescription;
 		}
 
-		static std::array<VkVertexInputAttributeDescription, 6> GetAttributeDescriptions()
+		static VkVertexInputBindingDescription GetFastBindingDescription()
 		{
-			std::array<VkVertexInputAttributeDescription, 6> attributeDescriptions = {};
-
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[0].offset = offsetof(GPUVertex, Position);
-
-			attributeDescriptions[1].binding = 0;
-			attributeDescriptions[1].location = 1;
-			attributeDescriptions[1].format = VK_FORMAT_R32_UINT;
-			attributeDescriptions[1].offset = offsetof(GPUVertex, TexcoordXY);
-
-			attributeDescriptions[2].binding = 0;
-			attributeDescriptions[2].location = 2;
-			attributeDescriptions[2].format = VK_FORMAT_R32_UINT;
-			attributeDescriptions[2].offset = offsetof(GPUVertex, NormalXY);
-
-			attributeDescriptions[3].binding = 0;
-			attributeDescriptions[3].location = 3;
-			attributeDescriptions[3].format = VK_FORMAT_R32_UINT;
-			attributeDescriptions[3].offset = offsetof(GPUVertex, NormalZTangentX);
-
-			attributeDescriptions[4].binding = 0;
-			attributeDescriptions[4].location = 4;
-			attributeDescriptions[4].format = VK_FORMAT_R32_UINT;
-			attributeDescriptions[4].offset = offsetof(GPUVertex, TangentYZ);
-
-			attributeDescriptions[5].binding = 0;
-			attributeDescriptions[5].location = 5;
-			attributeDescriptions[5].format = VK_FORMAT_R32_UINT;
-			attributeDescriptions[5].offset = offsetof(GPUVertex, TangentWMatIdx);
-			
-			return attributeDescriptions;
+			VkVertexInputBindingDescription bindingDescription = {};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = sizeof(short) * 4;
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			return bindingDescription;
 		}
-
+		
 		static std::array<VkVertexInputAttributeDescription, 1> GetFastAttributeDescriptions()
 		{
 			std::array<VkVertexInputAttributeDescription, 1> attributeDescriptions = {};
 
 			attributeDescriptions[0].binding = 0;
 			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[0].offset = offsetof(GPUVertex, Position);
+			attributeDescriptions[0].format = VK_FORMAT_R16G16B16_SFLOAT;
+			attributeDescriptions[0].offset = 0;
 			
 			return attributeDescriptions;
 		}
@@ -111,12 +80,21 @@ namespace Assets
 	inline GPUVertex MakeVertex(Vertex& cpuVertex)
 	{
 		GPUVertex vertex;
-		vertex.Position = cpuVertex.Position;
-		vertex.TexcoordXY = glm::packHalf2x16(cpuVertex.TexCoord);
-		vertex.NormalXY = glm::packHalf2x16(glm::vec2(cpuVertex.Normal));
-		vertex.NormalZTangentX = glm::packHalf2x16(glm::vec2(cpuVertex.Normal.z, cpuVertex.Tangent.x));
-		vertex.TangentYZ = glm::packHalf2x16(glm::vec2(cpuVertex.Tangent.y, cpuVertex.Tangent.z));
-		vertex.TangentWMatIdx = packUint16(cpuVertex.Tangent.w > 0 ? 2 : 0, static_cast<uint16_t>(cpuVertex.MaterialIndex));
+		vertex.posx = glm::detail::toFloat16(cpuVertex.Position.x);
+		vertex.posy = glm::detail::toFloat16(cpuVertex.Position.y);
+		vertex.posz = glm::detail::toFloat16(cpuVertex.Position.z);
+		vertex.texcoordx = glm::detail::toFloat16(cpuVertex.TexCoord.x);
+		
+		vertex.normalx = glm::detail::toFloat16(cpuVertex.Normal.x);
+		vertex.normaly = glm::detail::toFloat16(cpuVertex.Normal.y);
+		vertex.normalz = glm::detail::toFloat16(cpuVertex.Normal.z);
+		vertex.texcoordy = glm::detail::toFloat16(cpuVertex.TexCoord.y);
+
+		vertex.tangentx = glm::detail::toFloat16(cpuVertex.Tangent.x);
+		vertex.tangenty = glm::detail::toFloat16(cpuVertex.Tangent.y);
+		vertex.tangentz = glm::detail::toFloat16(cpuVertex.Tangent.z);
+
+		vertex.tangentw = packUint8(cpuVertex.Tangent.w > 0 ? 2 : 0, static_cast<uint16_t>(cpuVertex.MaterialIndex));
 		return vertex;
 	}
 

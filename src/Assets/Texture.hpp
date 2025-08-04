@@ -8,9 +8,13 @@
 #include <unordered_map>
 #include <vector>
 #include "UniformBuffer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/DescriptorSetManager.hpp"
+#include "Vulkan/DescriptorSets.hpp"
 
 namespace Vulkan {
 	class CommandPool;
+	class DescriptorSetManager;
 }
 
 namespace Assets
@@ -35,8 +39,8 @@ namespace Assets
 		GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt);
 		~GlobalTexturePool();
 
-		VkDescriptorSetLayout Layout() const { return layout_; }
-		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSets_[index]; }
+		VkDescriptorSetLayout Layout() const { return descriptorSetManager_->DescriptorSetLayout().Handle(); }
+		VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSetManager_->DescriptorSets().Handle(0); }
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;
@@ -61,6 +65,7 @@ namespace Assets
 		std::vector<SphericalHarmonics>& GetHDRSphericalHarmonics() { return hdrSphericalHarmonics_; }
 		Vulkan::CommandPool& GetMainThreadCommandPool() { return mainThreadCommandPool_; }
 
+		Vulkan::DescriptorSetManager& GetDescriptorManager() { return *descriptorSetManager_; }
 	private:
 		static GlobalTexturePool* instance_;
 
@@ -68,9 +73,9 @@ namespace Assets
 		Vulkan::CommandPool& commandPool_;
 		Vulkan::CommandPool& mainThreadCommandPool_;
 		
-		VkDescriptorPool descriptorPool_{};
-		VkDescriptorSetLayout layout_{};
-		std::vector<VkDescriptorSet> descriptorSets_;
+		//VkDescriptorPool descriptorPool_{};
+		//VkDescriptorSetLayout layout_{};
+		//std::vector<VkDescriptorSet> descriptorSets_;
 
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 		std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;
@@ -78,6 +83,8 @@ namespace Assets
 		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
 
 		std::unique_ptr<TextureImage> defaultWhiteTexture_;
+
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
 	};
 
 }

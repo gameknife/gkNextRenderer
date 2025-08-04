@@ -36,6 +36,23 @@ namespace Vulkan
 		void SetObjectName(const VkSwapchainKHR& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_SWAPCHAIN_KHR); }
 		void SetObjectName(const VkPipelineLayout& object, const char* name) const { SetObjectName(object, name, VK_OBJECT_TYPE_PIPELINE_LAYOUT); }
 		
+		void BeginMarker(VkCommandBuffer commandBuffer, const char* name) const
+		{
+#if !ANDROID
+			VkDebugUtilsLabelEXT label = {};
+			label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+			label.pLabelName = name;
+			
+			vkCmdBeginDebugUtilsLabelEXT_(commandBuffer, &label);
+#endif
+		}
+
+		void EndMarker(VkCommandBuffer commandBuffer) const
+		{
+#if !ANDROID
+			vkCmdEndDebugUtilsLabelEXT_(commandBuffer);
+#endif	
+		}
 		
 	private:
 
@@ -43,7 +60,6 @@ namespace Vulkan
 		void SetObjectName(const T& object, const char* name, VkObjectType type) const
 		{
 #if !ANDROID
-#ifndef NDEBUG
 			VkDebugUtilsObjectNameInfoEXT info = {};
 			info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
 			info.pNext = nullptr;
@@ -53,10 +69,13 @@ namespace Vulkan
 			
 			Check(vkSetDebugUtilsObjectNameEXT_(device_, &info), "set object name");
 #endif
-#endif
 		}
 
+
+
 		const PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT_;
+		const PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT_;
+		const PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT_;
 
 		VkDevice device_{};
 	};
