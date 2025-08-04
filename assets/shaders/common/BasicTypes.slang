@@ -1,11 +1,22 @@
 #ifdef __cplusplus
 #define public
 #define bool uint32_t
-#define ALIGN_16 alignas(16)
+#define ALIGN_16 alignas(16) 
+#define ALIGN_8 alignas(8)
 #else
-#define ALIGN_16 
+#define ALIGN_16
+#define ALIGN_8
 implementing Common;
 #endif
+
+public struct ALIGN_16 GPUDrivenStat
+{
+    public uint ProcessedCount;
+    public uint VisibleCount;
+    public uint CulledCount;
+    public uint TriangleCount;
+    public uint CulledTriangleCount;
+};
 
 public struct ALIGN_16 UniformBufferObject
 {
@@ -15,6 +26,8 @@ public struct ALIGN_16 UniformBufferObject
     public float4x4 ProjectionInverse;
     public float4x4 ViewProjection;
     public float4x4 PrevViewProjection;
+    public float4x4 ViewProjectionUnJit;
+    public float4x4 PrevViewProjectionUnJit;
 
     public float4 ViewportRect;
     public float4 SunDirection;
@@ -65,44 +78,86 @@ public struct ALIGN_16 UniformBufferObject
  
     public bool FastInterpole;
     public bool DebugDraw_Lighting;
-    public bool Reserve3;
-    public bool Reserve4;
+    public bool DisableSpatialReuse;
+    public uint SuperResolution;
 };
 
 public struct ALIGN_16 NodeProxy
 {
     public uint instanceId;
     public uint modelId;
-    public uint reserved1;
-    public uint reserved2;
+    public uint visible;
+    public uint nort;
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
     public uint matId[16];
 };
 
-// size = 16 x 4 bytes, 64 bytes, maximun compress to 64 bytes
+public struct ALIGN_16 ModelData
+{
+    public uint indexOffset;
+    public uint indexCount;
+    public uint vertexOffset;
+    public uint vertexCount;
+
+    public float4 localAabbMin; // local bounding box min
+    public float4 localAabbMax; // local bounding box max
+
+    public uint modelType;
+    public uint voxelDataIdx;
+    public uint reorderOffset;
+    public uint reserved2;
+};
+
+// size = 14 x 4 bytes, 56 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
-public struct ALIGN_16 AmbientCube
+public struct ALIGN_8 AmbientCube
 {
     public uint PosZ;
     public uint NegZ;
+
     public uint PosY;
     public uint NegY;
+
     public uint PosX;
     public uint NegX;
  
     public uint PosZ_D;
     public uint NegZ_D;
+
     public uint PosY_D;
     public uint NegY_D;
+
     public uint PosX_D;
     public uint NegX_D;
- 
-    public uint Active;
-    public uint Lighting;
-    public uint ExtInfo1;
-    public uint ExtInfo2;
+
+    public uint skyVisibility_pznzpyny;
+    public uint skyVisibility_pxnxs0s1;
+};
+
+// 16 bytes per voxel
+// simplfy scene reprent, matId like Minecraft blockId, skyVisibility and sunVisibility represent a simple gi
+// skyVisibility could use to occlution the skylight
+// sunVisibility could use to occlution the sun, instead of realtime shadowmap, and could use to render volume effects
+// airMatId could use to represent cloud/smoke etc.
+public struct ALIGN_16 VoxelData
+{
+    public uint matId; // 0 is void, that is clean default value
+    public uint age;
+    public uint distanceToSolid_gg_z01;
+    public uint distanceToSolid_x01_y01; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
+};
+
+// PageIndexer is align with world, 16x16 meter per page
+// a 1km map is 64x64 pages, 4096 pages in total
+// now is used to boost the dda tracing performance
+public struct ALIGN_16 PageIndex
+{
+    public uint pageId;
+    public uint voxelCount;
+    public uint voxelDataIdx;
+    public uint probeDataIdx;
 };
 
 public struct ALIGN_16 SphericalHarmonics
@@ -149,6 +204,15 @@ public struct ALIGN_16 RayCastContext
     public uint Hitted;
 };
 #ifndef __cplusplus
+
+public struct VkDrawIndexedIndirectCommand {
+    public uint indexCount;
+    public uint instanceCount;
+    public uint firstIndex;
+    public int vertexOffset;
+    public uint firstInstance;
+};
+
 public struct ALIGN_16 Material
 {
     public float4 Diffuse;
@@ -172,16 +236,15 @@ public struct ALIGN_16 Vertex
   public float4 Tangent;
   public float2 TexCoord;
   public uint MaterialIndex;
+  public float3 LocalNormal;
+  public float4 LocalTangent;
 };
 
 public struct ALIGN_16 GPUVertex
 {
-	public float3 Position;
-	public uint TexcoordXY;
-	public uint NormalXY;
-	public uint NormalZTangentX;
-	public uint TangentYZ;
-	public uint TangentWMatIdx;
+    public half4 Position_Tx;
+    public half4 Normal_Ty;
+    public half4 Tangent;
 };
 #endif
 

@@ -4,6 +4,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
 file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
 file(GLOB_RECURSE src_files_vulkan "Vulkan/*.cpp" "Vulkan/*.hpp")
+file(GLOB_RECURSE src_files_rendering "Rendering/*.cpp" "Rendering/*.hpp")
 file(GLOB_RECURSE src_files_thirdparty 
 	"ThirdParty/json11/*.cpp" 
 	"ThirdParty/json11/*.hpp" 
@@ -12,6 +13,7 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/miniaudio/*.h"
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
+	"ThirdParty/streamline/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
@@ -46,6 +48,7 @@ add_library(gkNextEngine
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
+	${src_files_rendering}
 	${src_files_thirdparty}
 )
 add_library(gkNextRenderer SHARED
@@ -59,6 +62,7 @@ add_library(gkNextEngine
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
+	${src_files_rendering}
 	${src_files_thirdparty}
 )
 add_executable(gkNextRenderer
@@ -126,19 +130,38 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 	# if debug
 	# 假设你的目标名称是 MyTarget
-	# target_compile_definitions(${target} PRIVATE JPH_DEBUG_RENDERER JPH_PROFILE_ENABLED)
+	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
+
 
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
-		target_link_libraries(${target} PRIVATE Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		
+		# Enable Unity Build for gkNextEngine
+		# Group files for Unity Build optimization
 		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE glfw)
-		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD OFF)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
+
+		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
+		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
+		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
+		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+		endif()
+
+		target_link_libraries(${target} PRIVATE xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		if ( NOT ANDROID ) 
+		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
+		if ( WITH_STREAMLINE ) 
+		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+		target_link_libraries(${target} PRIVATE sl.interposer)
+		endif()
+		
 	endif()
 
 	# for android
