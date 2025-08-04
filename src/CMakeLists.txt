@@ -14,6 +14,7 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
 	"ThirdParty/streamline/*.h"
+	"ThirdParty/ozz/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
@@ -93,6 +94,7 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 # editor stuff
+add_subdirectory(ThirdParty/ozz)
 add_subdirectory(ThirdParty/ImNodeFlow)
 add_subdirectory(ThirdParty/quickjs-ng)
 # postprocess: target setup
@@ -124,7 +126,8 @@ foreach(target IN LISTS AllTargets)
 	target_include_directories(${target} PRIVATE ${Vulkan_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
-	
+	target_include_directories(${target} PRIVATE ThirdParty/ozz/include)
+
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
@@ -150,7 +153,7 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
 
-		target_link_libraries(${target} PRIVATE xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
 		endif()
@@ -161,7 +164,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
 		target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
-		
 	endif()
 
 	# for android

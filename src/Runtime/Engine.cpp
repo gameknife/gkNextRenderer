@@ -33,6 +33,9 @@
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
 #include "NextPhysics.h"
+#include "Assets/Animation.hpp"
+#include "ozz/animation/runtime/animation.h"
+#include "ozz/animation/runtime/skeleton.h"
 
 #if ANDROID
 
@@ -264,6 +267,13 @@ void NextEngine::Start()
     
     // init js engine
     InitJSEngine();
+
+    // test ozz animation
+    ozz::animation::Skeleton skeleton_;
+    ozz::animation::Animation animation_;
+    
+    Assets::LoadSkeleton(Utilities::FileHelper::GetPlatformFilePath("assets/anims/skeleton.ozz").c_str(), &skeleton_ );
+    Assets::LoadAnimation(Utilities::FileHelper::GetPlatformFilePath("assets/anims/animation.ozz").c_str(), &animation_ );
 }
 
 bool NextEngine::Tick()

@@ -7,6 +7,7 @@ file(GLOB model_files models/*.glb models/*.obj models/*.mtl)
 file(GLOB shader_files shaders/*.comp.slang shaders/*.vert.slang shaders/*.frag.slang)
 file(GLOB shader_common_files shaders/common/*.h shaders/common/*.slang)
 file(GLOB texture_files textures/*.jpg textures/*.png textures/*.txt textures/*.hdr)
+file(GLOB anim_files anims/*.ozz)
 
 file(GLOB pak_files paks/*.pak)
 set_source_files_properties(${shader_extra_files} PROPERTIES HEADER_FILE_ONLY TRUE)
@@ -50,6 +51,7 @@ copy_assets(sfx_files sfx copied_sfx)
 copy_assets(model_files models copied_models)
 copy_assets(texture_files textures copied_textures)
 copy_assets(pak_files paks copied_paks)
+copy_assets(anim_files anims copied_anims)
 
 source_group("Locales" FILES ${locale_files})
 source_group("Fonts" FILES ${font_files})
@@ -58,11 +60,12 @@ source_group("Shaders.Slang" FILES ${shader_files})
 source_group("Shaders.Common" FILES ${shader_common_files})
 source_group("Textures" FILES ${texture_files})
 source_group("Paks" FILES ${pak_files})
+source_group("Anims" FILES ${anim_files})
 
 add_custom_target(
 	Assets 
-	DEPENDS ${copied_paks} ${copied_fonts} ${copied_legos} ${copied_sfx} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} 
-	SOURCES ${pak_files} ${font_files} ${lego_files} ${sfx_files} ${locale_files} ${model_files} ${texture_files})
+	DEPENDS ${copied_paks} ${copied_fonts} ${copied_legos} ${copied_sfx} ${copied_locale} ${copied_models} ${compiled_shaders} ${copied_textures} ${copied_anims}
+	SOURCES ${pak_files} ${font_files} ${lego_files} ${sfx_files} ${locale_files} ${model_files} ${texture_files} ${anim_files})
 
 # Setup shader compilation with a single target but parallel execution
 set(all_shader_outputs "")
