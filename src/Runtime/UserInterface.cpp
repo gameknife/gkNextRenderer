@@ -200,6 +200,11 @@ void UserInterface::OnDestroySurface()
 {
 	renderPass_.reset();
 	uiFrameBuffers_.clear();
+	for ( auto image : imTextureIdMap_)
+	{
+		ImGui_ImplVulkan_RemoveTexture(image.second);
+	}
+	imTextureIdMap_.clear();
 }
 
 VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
