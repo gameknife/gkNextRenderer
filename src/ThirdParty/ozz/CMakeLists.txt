@@ -8,8 +8,6 @@ project(ozz)
 # Platform-specific SIMD definitions
 if(APPLE OR ANDROID)
     add_compile_definitions(OZZ_SIMD_ARM_NEON)
-else()
-    add_compile_definitions(OZZ_SIMD_SSE4_2)
 endif()
 
 # SET SOURCE FILES FOR PROJECT
@@ -20,3 +18,7 @@ file(GLOB_RECURSE _SRCS "src/*.cpp" "src/*.cc" "src/*.c")
 add_library(ozz ${_SRCS} ${_HDRS})
 
 target_include_directories(ozz PUBLIC include include/ozz src)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(ozz PRIVATE -Wno-ignored-attributes)
+endif()
