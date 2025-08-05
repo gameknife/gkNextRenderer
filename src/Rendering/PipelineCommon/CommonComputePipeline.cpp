@@ -321,7 +321,12 @@ namespace Vulkan::PipelineCommon
             descriptorSets.UpdateDescriptors(i, descriptorWrites);
         }
 
-        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()},static_cast<uint32_t>(swapChain.Images().size())));
+    	VkPushConstantRange pushConstantRange{};
+    	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    	pushConstantRange.offset = 0;
+    	pushConstantRange.size = 16;
+
+        pipelineLayout_.reset(new class PipelineLayout(device, {descriptorSetManager_.get(), &baseRender.GetRTDescriptorSetManager()},static_cast<uint32_t>(swapChain.Images().size()), &pushConstantRange, 1));
         const ShaderModule denoiseShader(device, "assets/shaders/Util.VisualDebugger.comp.slang.spv");
 
         VkComputePipelineCreateInfo pipelineCreateInfo = {};

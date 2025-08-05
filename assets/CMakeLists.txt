@@ -30,8 +30,7 @@ macro(copy_assets asset_files dir_name copied_files)
 		if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
 			add_custom_command(
 				OUTPUT ${output_file}
-				#COMMAND mklink \"${output_file}\" \"${full_path}\"
-				COMMAND xcopy \"${full_path}\" \"${output_file}*\" /Y /Q /F
+				COMMAND xcopy /Y /Q /F \"${full_path}\" \"${output_file}*\"
 				DEPENDS ${full_path}
 			)
 		else()

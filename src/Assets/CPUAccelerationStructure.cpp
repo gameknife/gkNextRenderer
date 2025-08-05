@@ -284,23 +284,26 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 {
     RayCastResult Result;
 
-    tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
-    GCpuBvh.Intersect(ray);
-    
-    if (ray.hit.t < 2000.f)
+    if (GCpuBvh.blasCount > 0)
     {
-        vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
-        uint32_t primIdx = ray.hit.prim;
-        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
-        FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
-        FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
-        mat4* worldTS = (mat4*)instance.transform;
-        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-        Result.HitPoint = vec4(hitPos, 0);
-        Result.Normal = normalWS;
-        Result.Hitted = true;
-        Result.T = ray.hit.t;
-        Result.InstanceId = instContext.nodeId;
+        tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
+        GCpuBvh.Intersect(ray);
+    
+        if (ray.hit.t < 2000.f)
+        {
+            vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+            uint32_t primIdx = ray.hit.prim;
+            tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
+            FCPUTLASInstanceInfo& instContext = (*GbvhTLASContexts)[ray.hit.inst];
+            FCPUBLASContext& context = (*GbvhBLASContexts)[instance.blasIdx];
+            mat4* worldTS = (mat4*)instance.transform;
+            vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+            Result.HitPoint = vec4(hitPos, 0);
+            Result.Normal = normalWS;
+            Result.Hitted = true;
+            Result.T = ray.hit.t;
+            Result.InstanceId = instContext.nodeId;
+        }
     }
 
     return Result;

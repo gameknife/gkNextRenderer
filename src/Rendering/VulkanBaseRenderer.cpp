@@ -1212,7 +1212,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
+        //if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
         // soft ambient cube generation
 #if !ANDROID
         if (!supportRayTracing_)
@@ -1277,8 +1277,15 @@ namespace Vulkan
             SCOPED_GPU_TIMER("visual debugger");
             SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
 
+            glm::uvec4 pushConst = glm::uvec4(SwapChain().OutputOffset().x, SwapChain().OutputOffset().y, SwapChain().OutputExtent().width, SwapChain().OutputExtent().height);
+
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, visualDebuggerPipeline_->Handle());
             visualDebuggerPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+
+            vkCmdPushConstants(commandBuffer, visualDebuggerPipeline_->PipelineLayout().Handle(),
+                                 VK_SHADER_STAGE_COMPUTE_BIT,
+                                 0, sizeof(glm::uvec4), &pushConst);
+            
             vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
 
             SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);

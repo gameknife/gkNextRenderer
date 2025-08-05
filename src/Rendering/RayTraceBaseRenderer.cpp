@@ -236,7 +236,7 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::PostRender(commandBuffer, imageIndex);
 
-        if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
+        //if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
 
 #if !ANDROID
         if(supportRayTracing_)// all gpu renderer use this cache && (CurrentLogicRendererType() != ERT_PathTracing || GOption->ReferenceMode))
