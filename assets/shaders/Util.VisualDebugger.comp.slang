@@ -12,6 +12,18 @@
 [[vk::binding(9, 1)]] RWTexture2D<float4> Denoised;
 [[vk::binding(10, 1)]] RWTexture2D<float> OutDepthBuffer;
 [[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
+
+struct PushConsts
+{
+    uint offset_x;
+    uint offset_y;
+    uint output_w;
+    uint output_h;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<PushConsts> pushConsts;
+
 float3 UintToStableColor(uint value)
 {
     // 使用简单的hash函数确保颜色稳定
@@ -52,7 +64,7 @@ float3 UintToStableColor(uint value)
             int2 ssize;                                            \
             IMAGE.GetDimensions(ssize.x, ssize.y);                 \
             float4 col = IMAGE[uv * ssize / isize]; \
-    OutImage[ipos] = col * multipler;} \
+            OutImage[ipos] = col * multipler;} \
 }
 
 #define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -61,7 +73,7 @@ float3 UintToStableColor(uint value)
             int2 ssize;                                       \
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
             float4 col = IMAGE[uv * ssize / isize]; \
-    OutImage[ipos] = col.rbga * 0.5 + 0.5;} \
+            OutImage[ipos] = col.rbga * 0.5 + 0.5;} \
 }
 
 #define DRAWINT(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -109,9 +121,9 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
     float elementx = isize.x / divider;
     float elementy = isize.y / divider;
 
-    if(ipos.x >= elementx * quadx && ipos.x < elementx * (quadx + 1) && ipos.y > elementy * quady && ipos.y < elementy * (quady + 1))
+    if(ipos.x >= elementx * quadx + pushConsts.offset_x && ipos.x < elementx * (quadx + 1) + pushConsts.offset_x && ipos.y > elementy * quady + pushConsts.offset_y && ipos.y < elementy * (quady + 1) + pushConsts.offset_y)
     {
-        uv = uint2((ipos - float2(elementx * quadx, elementy * quady)) * float2(divider, divider));
+        uv = uint2((ipos - float2(elementx * quadx + pushConsts.offset_x, elementy * quady + pushConsts.offset_y)) * float2(divider, divider));
         return true;
     }
     uv = int2(0, 0);
@@ -128,6 +140,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     OutImage[ipos] = float4(0, 0, 0, 1); // Clear the output image
 
+    //ipos = int2(ipos.x, ipos.y);
+    isize = int2(pushConsts.output_w, pushConsts.output_h);
     // line 1
     DRAW(OutAlbedoBuffer, 0, 0, 4, ipos, isize, 1);
     DRAWNORMAL(OutNormalBuffer, 1, 0, 4, ipos, isize);
