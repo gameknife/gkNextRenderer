@@ -369,6 +369,17 @@ bool NextEngine::Tick()
         renderer_->DrawFrame();
     }
     totalFrames_ = renderer_->FrameCount();
+
+
+    if (progressivePreFrames_ > 0)
+    {
+        progressivePreFrames_--;
+        if (progressivePreFrames_ == 0)
+        {
+            progressiveRendering_ = true;
+        }
+    }
+
 #if ANDROID
     return false;
 #else
@@ -664,7 +675,18 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
 
 void NextEngine::SetProgressiveRendering(bool enable)
 {
-    progressiveRendering_ = enable;
+    if (enable)
+    {
+        if (progressivePreFrames_ == 0)
+        {
+            progressivePreFrames_ = userSettings_.TemporalFrames;
+        }
+    }
+    else
+    {
+        progressivePreFrames_ = 0;
+        progressiveRendering_ = false;
+    }
 }
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
@@ -757,7 +779,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
-    ubo.TemporalFrames = progressiveRendering_ ? (1024 / userSettings_.TemporalFrames) : userSettings_.TemporalFrames;
+    ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
     
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;

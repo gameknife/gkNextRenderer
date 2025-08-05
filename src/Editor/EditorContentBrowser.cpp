@@ -138,7 +138,7 @@ void Editor::GUI::ShowContentBrowser()
         // split path
         std::vector<std::string> paths;
         std::string pathstr = path.string();
-        std::string delimiter = "\\";
+        std::string delimiter = std::string(1, std::filesystem::path::preferred_separator);
         size_t pos = 0;
         std::string token;
         while ((pos = pathstr.find(delimiter)) != std::string::npos) {

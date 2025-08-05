@@ -244,6 +244,7 @@ private:
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
 	bool progressiveRendering_{};
+	int progressivePreFrames_{};
 
 	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
