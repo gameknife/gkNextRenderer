@@ -206,7 +206,7 @@ namespace Vulkan
 		
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
-		std::vector<FrameBuffer> swapChainFramebuffers_;
+		std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
 		
 		
 		std::unique_ptr<class CommandPool> commandPool_;

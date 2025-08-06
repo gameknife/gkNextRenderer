@@ -28,8 +28,7 @@ struct VertexOutput
 VertexOutput main(VertexInput input)
 {
     VertexOutput output;
-    
-    output.position = mul(Camera.Projection, mul(Camera.ModelView, mul(pushConsts.worldMatrix, float4(input.InPosition, 1.0))));
-    
+    output.position = mul(mul(Camera.ViewProjection, pushConsts.worldMatrix), float4(input.InPosition, 1.0));
+    output.position.z -= 0.000001f * output.position.w;
     return output;
 }

@@ -929,14 +929,14 @@ namespace Vulkan::PipelineCommon
 		VkViewport viewport = {};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(swapChain.Extent().width);
-		viewport.height = static_cast<float>(swapChain.Extent().height);
+		viewport.width = static_cast<float>(swapChain.RenderExtent().width);
+		viewport.height = static_cast<float>(swapChain.RenderExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 
 		VkRect2D scissor = {};
 		scissor.offset = { 0, 0 };
-		scissor.extent = swapChain.Extent();
+		scissor.extent = swapChain.RenderExtent();
 
 		VkPipelineViewportStateCreateInfo viewportState = {};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -970,8 +970,8 @@ namespace Vulkan::PipelineCommon
 		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencil.depthWriteEnable = VK_FALSE;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 		depthStencil.depthBoundsTestEnable = VK_FALSE;
 		depthStencil.minDepthBounds = 0.0f; // Optional
 		depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -1040,7 +1040,7 @@ namespace Vulkan::PipelineCommon
 		
 		// Create pipeline layout and render pass.
 		pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-		renderPass_.reset(new class RenderPass(swapChain, swapChain.Format(), depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR));
+		renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R16G16B16A16_SFLOAT, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
 		// Load shaders.
