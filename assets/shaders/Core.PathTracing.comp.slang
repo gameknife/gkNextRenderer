@@ -49,8 +49,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Vertex hitVertex;
     NodeProxy hitNode;
     float3 rayDir;
+    float rayLength = 0.0;
     float2 pixelOffset = float2(0, 0);
-    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir, pixelOffset))
+    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
         OutImage[ipos] = skyColor;
@@ -77,10 +78,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     OutNormalBuffer[ipos] = gbuffer;
     ObjectId0[ipos] = hitNode.instanceId;
 
-    // if (material.MaterialModel != MaterialDielectric)
-    // {
-    //     hitVertex.Position = hitVertex.Position - rayDir * 0.05;
-    // }  
+
+    // write to NDC depth
+    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
+    float ndcDepth = clipPos.z / clipPos.w;
+    OutDepthBuffer[ipos] = ndcDepth;
+
+    if (material.MaterialModel != MaterialDielectric)
+    {
+        hitVertex.Position = hitVertex.Position - rayDir * rayLength * 0.0005;
+    }  
 
     // 着色
     renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
@@ -93,11 +100,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 outSpec = float4(reflectColor.rgb, 1);
     outSpec.a = length(pixelOffset);
     OutImageSpec[ipos] = outSpec;
-
-    // write to NDC depth
-    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
-    float ndcDepth = clipPos.z / clipPos.w;
-    OutDepthBuffer[ipos] = ndcDepth;
     
     END_SHADERCLOCK(ipos)
 }
