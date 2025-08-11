@@ -32,10 +32,8 @@
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "build.version"
+#include "NextAnimation.h"
 #include "NextPhysics.h"
-#include "Assets/Animation.hpp"
-#include "ozz/animation/runtime/animation.h"
-#include "ozz/animation/runtime/skeleton.h"
 
 #if ANDROID
 
@@ -264,16 +262,12 @@ void NextEngine::Start()
     physicsEngine_->Start();
     
     gameInstance_->OnInit();
+
+    animationEngine_ = std::make_unique<NextAnimation>();
+    animationEngine_->Start();
     
     // init js engine
     InitJSEngine();
-
-    // test ozz animation
-    ozz::animation::Skeleton skeleton_;
-    ozz::animation::Animation animation_;
-    
-    Assets::LoadSkeleton(Utilities::FileHelper::GetPlatformFilePath("assets/anims/skeleton.ozz").c_str(), &skeleton_ );
-    Assets::LoadAnimation(Utilities::FileHelper::GetPlatformFilePath("assets/anims/animation.ozz").c_str(), &animation_ );
 }
 
 bool NextEngine::Tick()
@@ -304,6 +298,7 @@ bool NextEngine::Tick()
     }
 
     physicsEngine_->Tick(deltaSeconds_);
+    animationEngine_->Tick(deltaSeconds_);
 
     if (JSTickCallback_)
     {
@@ -394,6 +389,7 @@ void NextEngine::End()
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
     physicsEngine_->Stop();
+    animationEngine_->Stop();
     ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();

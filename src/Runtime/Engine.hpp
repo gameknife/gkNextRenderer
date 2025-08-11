@@ -21,6 +21,7 @@ namespace qjs
 }
 
 class NextEngine;
+class NextAnimation;
 
 class NextGameInstanceBase
 {
@@ -259,6 +260,9 @@ private:
 
 	// physics
 	std::unique_ptr<NextPhysics> physicsEngine_;
+
+	// animation
+	std::unique_ptr<NextAnimation> animationEngine_;
 
 	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
