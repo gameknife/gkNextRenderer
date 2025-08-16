@@ -23,12 +23,11 @@ void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
     GetEngine().RequestLoadScene(SceneList::AllScenes[0]);
-    GetEngine().SetProgressiveRendering(true);
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
 {
-    GetEngine().SetProgressiveRendering(true);
+    GetEngine().SetProgressiveRendering(true, true);
     if( benchMarker_ && benchMarker_->OnTick( GetEngine().GetWindow().GetTime(), &(GetEngine().GetRenderer()) ))
      {
          // Benchmark is done, report the results.

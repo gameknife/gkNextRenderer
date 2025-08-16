@@ -34,21 +34,10 @@ if (MSVC)
 endif()
 
 if (UNIX AND !ANDROID)
-	
 	add_definitions(-DUNIX)
 	add_compile_options("-Wall")
 	add_compile_options("-fvisibility=hidden")
-	
-	#find_package(Backtrace REQUIRED)
-
-	#string(COMPARE EQUAL ${Backtrace_HEADER} "backtrace.h" BacktraceRequired)
-
-	#if (BacktraceRequired)
-	#	add_compile_definitions(BOOST_STACKTRACE_USE_BACKTRACE)
-	#endif (BacktraceRequired)
 endif ()
-
-#find_package(Boost REQUIRED COMPONENTS exception program_options)
 
 if (ANDROID)
 find_package(game-activity REQUIRED CONFIG)

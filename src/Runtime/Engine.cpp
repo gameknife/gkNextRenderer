@@ -298,7 +298,7 @@ bool NextEngine::Tick()
     }
 
     physicsEngine_->Tick(deltaSeconds_);
-    animationEngine_->Tick(deltaSeconds_);
+    // animationEngine_->Tick(deltaSeconds_); pause dev, wait next
 
     if (JSTickCallback_)
     {
@@ -669,13 +669,19 @@ void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
     callback(result);
 }
 
-void NextEngine::SetProgressiveRendering(bool enable)
+void NextEngine::SetProgressiveRendering(bool enable, bool directly)
 {
+    if (directly)
+    {
+        progressiveRendering_ = enable;
+        return;
+    }
+    
     if (enable)
     {
         if (progressivePreFrames_ == 0)
         {
-            progressivePreFrames_ = userSettings_.TemporalFrames;
+            progressivePreFrames_ = userSettings_.TemporalFrames * 2;
         }
     }
     else

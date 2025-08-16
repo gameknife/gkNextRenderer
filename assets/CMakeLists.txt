@@ -28,15 +28,11 @@ macro(copy_assets asset_files dir_name copied_files)
 		set(${copied_files} ${${copied_files}} PARENT_SCOPE)
 		set_source_files_properties(${asset} PROPERTIES HEADER_FILE_ONLY TRUE)
 		if (CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-			add_custom_command(
-				OUTPUT ${output_file}
-				COMMAND xcopy /Y /Q /F \"${full_path}\" \"${output_file}*\"
-				DEPENDS ${full_path}
-			)
+			file(COPY ${full_path} DESTINATION ${output_dir})
 		else()
 			add_custom_command(
 				OUTPUT ${output_file}
-				COMMAND mkdir -p ${output_dir} && cp -f -L \"${full_path}\" \"${output_file}\"
+				COMMAND mkdir -p ${output_dir} && cp -f -L "${full_path}" "${output_file}"
 				DEPENDS ${full_path}
 			)
 		endif()

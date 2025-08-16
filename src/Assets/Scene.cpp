@@ -346,7 +346,7 @@ namespace Assets
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
 
-        NextEngine::GetInstance()->SetProgressiveRendering(false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
         
     bool Scene::UpdateNodes()
@@ -555,7 +555,7 @@ namespace Assets
     void Scene::MarkDirty()
     {
         sceneDirty_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
 
     void Scene::OverrideModelView(glm::mat4& OutMatrix)

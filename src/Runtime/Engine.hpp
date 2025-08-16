@@ -192,7 +192,7 @@ public:
 	// gpu raycast
 	void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir, std::function<bool (Assets::RayCastResult rayResult)> callback );
 
-	void SetProgressiveRendering(bool enable);
+	void SetProgressiveRendering(bool enable, bool directly);
 	bool IsProgressiveRendering() const { return progressiveRendering_; }
 
 	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
