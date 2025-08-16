@@ -70,7 +70,11 @@ add_executable(gkNextRenderer
 	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
-add_executable(gkNextBenchmark
+add_executable(gkNextStillBenchmark
+	${src_files_gkbenchmark}
+	DesktopMain.cpp
+)
+add_executable(gkNextMotionBenchmark
 	${src_files_gkbenchmark}
 	DesktopMain.cpp
 )
@@ -88,8 +92,6 @@ add_executable(Packager
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
-	# GCC8 needs an extra lib for <filesystem>.
-	# This is not needed with GCC9 or higher.
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
@@ -107,7 +109,8 @@ else()
 set(AllTargets 
 gkNextEngine
 gkNextRenderer
-gkNextBenchmark
+gkNextStillBenchmark
+gkNextMotionBenchmark
 gkNextEditor
 Packager
 MagicaLego 
@@ -131,10 +134,9 @@ foreach(target IN LISTS AllTargets)
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
-	# if debug
-	# 假设你的目标名称是 MyTarget
-	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
 
+	# if debug
+	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
 
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
@@ -218,17 +220,12 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	if (MSVC)
-	add_custom_command(
-			TARGET ${target} POST_BUILD
-			COMMAND echo \"copy ffmpeg exe...\"
-			COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-		)
+	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
-	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 	# third-party warning fix
 	if (MSVC)
 
@@ -239,6 +236,8 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
+set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
