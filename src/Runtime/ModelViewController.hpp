@@ -28,6 +28,12 @@ public:
 	                    float leftTrigger, float rightTrigger);
 	 bool UpdateCamera(double speed, double timeDelta);
 
+	void SetModelRotation(double x, double y)
+	{
+		modelRotX_ = x;
+		modelRotY_ = y;
+	}
+
 private:
 
 	void MoveForward(float d);

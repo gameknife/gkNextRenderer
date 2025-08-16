@@ -10,17 +10,15 @@ void DrawNode(Assets::Scene* scene, Assets::Node* node)
     ImGui::TableSetColumnIndex(0);
 
     bool selected = scene->GetSelectedId() == node->GetInstanceId();
-    ImGuiTreeNodeFlags flag = 0 |
+    ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
         (selected ? ImGuiTreeNodeFlags_Selected : 0) |
         (node->Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
 
-     
-    if (selected)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(64, 128, 255, 255));
-    }
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, selected ? Editor::ActiveColor : ImGui::GetColorU32(ImGuiCol_Text));
     if (ImGui::TreeNodeEx(((node->GetModel() == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node->GetName()).c_str(), flag))
     {
+        ImGui::PopStyleColor();
         if (ImGui::IsItemClicked())
         {
             scene->SetSelectedId(node->GetInstanceId());
@@ -32,7 +30,7 @@ void DrawNode(Assets::Scene* scene, Assets::Node* node)
         }
         ImGui::TreePop();
     }
-    if (selected)
+    else
     {
         ImGui::PopStyleColor();
     }
@@ -51,13 +49,12 @@ void Editor::GUI::ShowSidebar(Assets::Scene* scene)
             "limited to 1000 nodes\n"
             "select and view node properties\n");
         ImGui::Separator();
-
-        //ANCHOR SIDEBAR.DATAINPUTS
+        
         ImGui::Text("Nodes");
         ImGui::Separator();
 
         ImGui::BeginChild("ListBox", ImVec2(0, -50));
-
+        
         if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
         {
             ImGui::TableSetupColumn("NodeName");

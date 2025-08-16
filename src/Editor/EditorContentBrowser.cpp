@@ -42,11 +42,10 @@ void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, c
             selectedItemId = globalId;
         }
     }
-
     
     auto CursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4 + ImGui::GetScrollY());
     bool selected = selectedItemId == globalId;
-    ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? IM_COL32(64, 128, 255, 255) : IM_COL32(64, 64, 64, 255), 4);
+    ImGui::GetWindowDrawList()->AddRectFilled(CursorPos, CursorPos + ImVec2(ICON_SIZE, ICON_SIZE / 5 * 3),selected ? Editor::ActiveColor : IM_COL32(64, 64, 64, 255), 4);
     ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ICON_SIZE, 0), color, 2);
 
     ImGui::PushItemWidth(ICON_SIZE);
@@ -60,6 +59,33 @@ void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, c
     ImGui::EndGroup();
 }
 
+void Editor::GUI::ShowMeshBrowser()
+{
+    ImGui::Begin("Mesh Browser", NULL);
+    {
+        if (current_scene)
+        {
+            auto& AllModels = current_scene->Models();
+            
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+            int itemsPerRow = std::max(1, (int)(windowWidth / (ICON_SIZE + ImGui::GetStyle().ItemSpacing.x)));
+
+            for ( uint32_t i = 0; i < AllModels.size(); ++i)
+            {
+                auto& model = AllModels[i];
+                std::string name = fmt::format("{}_#{}", model.Name(), i);
+                DrawGeneralContentBrowser(true, i, name, ICON_FA_BOXES_PACKING, IM_COL32(132, 182, 255, 255), [this, i]()
+                {
+
+                });
+                
+                if ((i + 1) % itemsPerRow != 0)  ImGui::SameLine();
+            }
+        }
+    }
+    ImGui::End();
+}
+
 void Editor::GUI::ShowMaterialBrowser()
 {
     ImGui::Begin("Material Browser", NULL);
@@ -68,7 +94,6 @@ void Editor::GUI::ShowMaterialBrowser()
         {
             auto& AllMaterials = current_scene->Materials();
             
-            // 计算每行能容纳的元素数量
             float windowWidth = ImGui::GetContentRegionAvail().x;
             int itemsPerRow = std::max(1, (int)(windowWidth / (ICON_SIZE + ImGui::GetStyle().ItemSpacing.x)));
 
@@ -81,12 +106,8 @@ void Editor::GUI::ShowMaterialBrowser()
                     ed_material = true;
                     OpenMaterialEditor();
                 });
-
-                // 根据位置决定是否换行
-                if ((i + 1) % itemsPerRow != 0)
-                {
-                    ImGui::SameLine();
-                }
+                
+                if ((i + 1) % itemsPerRow != 0)  ImGui::SameLine();
             }
         }
 
@@ -103,7 +124,6 @@ void Editor::GUI::ShowTextureBrowser()
         {
             auto& totalTextureMap = Assets::GlobalTexturePool::GetInstance()->TotalTextureMap();
             
-            // 计算每行能容纳的元素数量
             float windowWidth = ImGui::GetContentRegionAvail().x;
             int itemsPerRow = std::max(1, (int)(windowWidth / (ICON_SIZE + ImGui::GetStyle().ItemSpacing.x)));
             
@@ -114,13 +134,8 @@ void Editor::GUI::ShowTextureBrowser()
                 {
                     
                 });
-            
-                // 根据位置决定是否换行
-                if ((itemIndex + 1) % itemsPerRow != 0)
-                {
-                    ImGui::SameLine();
-                }
-                itemIndex++;
+                
+                if ((itemIndex++ + 1) % itemsPerRow != 0) ImGui::SameLine();
             }
         }
     }
@@ -133,9 +148,7 @@ void Editor::GUI::ShowContentBrowser()
     {
         static auto modelpath = Utilities::FileHelper::GetPlatformFilePath("assets");
         std::filesystem::path path = modelpath;
-    
-        // head path router
-        // split path
+        
         std::vector<std::string> paths;
         std::string pathstr = path.string();
         std::string delimiter = std::string(1, std::filesystem::path::preferred_separator);
@@ -147,9 +160,8 @@ void Editor::GUI::ShowContentBrowser()
             pathstr.erase(0, pos + delimiter.length());
         }
         paths.push_back(pathstr);
-
-        // show path
-        ImGui::PushFont(fontIcon_); // use the font awesome font
+        
+        ImGui::PushFont(fontIcon_);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8,4));
         if (ImGui::Button(ICON_FA_HOUSE)) modelpath = Utilities::FileHelper::GetPlatformFilePath("assets");
         for (int i = 1; i < paths.size(); i++)
@@ -178,7 +190,7 @@ void Editor::GUI::ShowContentBrowser()
         ImGui::GetWindowDrawList()->AddLine(CursorPos, CursorPos + ImVec2(ImGui::GetWindowSize().x,0), IM_COL32(20,20,20,255), 1);
 
         ImGui::BeginChild("Content Items");
-        // content view
+
         static std::string contextMenuFile;
         // if (ImGui::BeginPopupContextItem(path.c_str()))
         // {
@@ -189,7 +201,6 @@ void Editor::GUI::ShowContentBrowser()
         // ImGui::OpenPopupOnItemClick(path.c_str(), ImGuiPopupFlags_MouseButtonRight);
         
         std::filesystem::directory_iterator it(path);
-        
         float windowWidth = ImGui::GetContentRegionAvail().x;
         int itemsPerRow = std::max(1, (int)(windowWidth / (ICON_SIZE + ImGui::GetStyle().ItemSpacing.x)));
         
@@ -244,10 +255,8 @@ void Editor::GUI::ShowContentBrowser()
             {
                 ImGui::SameLine();
             }
-
             elementIdx++;
         }
-
         ImGui::EndChild();
     }
     ImGui::End();

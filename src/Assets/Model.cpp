@@ -558,7 +558,7 @@ namespace Assets
             #endif
 
             
-            models.push_back(Assets::Model(std::move(vertices), std::move(indices), !hasTangent));
+            models.push_back(Assets::Model(mesh.name, std::move(vertices), std::move(indices), !hasTangent));
         }
 
         // default auto camera
@@ -937,7 +937,7 @@ namespace Assets
 #if FLATTEN_VERTICE
         FlattenVertices(vertices, indices);
 #endif
-        models.push_back(Model(
+        models.push_back(Model("cornell_box",
             std::move(vertices),
             std::move(indices),
             true
@@ -995,7 +995,7 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model( std::move(vertices),std::move(indices), true);
+        return Model("pbox", std::move(vertices),std::move(indices), true);
     }
 
     Model Model::CreateSphere(const vec3& center, float radius)
@@ -1076,7 +1076,7 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
 
-        return Model(std::move(vertices), std::move(indices));
+        return Model("sphere", std::move(vertices), std::move(indices));
     }
     
     uint32_t Model::CreateLightQuad(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3,
@@ -1118,7 +1118,7 @@ namespace Assets
         FlattenVertices(vertices, indices);
 #endif
         
-        models.push_back( Model(
+        models.push_back( Model("plight",
             std::move(vertices),
             std::move(indices)));
 
@@ -1131,7 +1131,8 @@ namespace Assets
         indices_ = std::vector<uint32_t>();
     }
 
-    Model::Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace) :
+    Model::Model(const std::string& name, std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace) :
+        name_(name),
         vertices_(std::move(vertices)),
         indices_(std::move(indices))
     {

@@ -92,7 +92,6 @@ void Editor::GUI::ShowProperties()
                     
                     ImGui::SameLine();
                     
-                    
                     if( ImGui::Button(ICON_FA_CIRCLE_LEFT) )
                     {
                         if (selectedItemId != -1)
@@ -100,7 +99,6 @@ void Editor::GUI::ShowProperties()
                             mat = selectedItemId;
                         }
                     }
-                    
                     
                     ImGui::SameLine();
                     if( ImGui::Button(ICON_FA_PEN_TO_SQUARE) )

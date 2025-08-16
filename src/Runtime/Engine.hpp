@@ -44,9 +44,9 @@ public:
 	virtual void OnSceneUnloaded() {}
 
 	// input
-	virtual bool OnKey(int key, int scancode, int action, int mods) =0;
-	virtual bool OnCursorPosition(double xpos, double ypos) =0;
-	virtual bool OnMouseButton(int button, int action, int mods) =0;
+	virtual bool OnKey(int key, int scancode, int action, int mods) {return false;}
+	virtual bool OnCursorPosition(double xpos, double ypos) {return false;}
+	virtual bool OnMouseButton(int button, int action, int mods) {return false;}
 	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
 	virtual bool OnGamepadInput(float leftStickX, float leftStickY,
 						float rightStickX, float rightStickY,
@@ -63,11 +63,6 @@ public:
 	void OnTick(double deltaSeconds) override {}
 	void OnDestroy() override {}
 	bool OnRenderUI() override {return false;}
-	void OnRayHitResponse(Assets::RayCastResult& result) override {}
-	
-	bool OnKey(int key, int scancode, int action, int mods) override {return false;}
-	bool OnCursorPosition(double xpos, double ypos) override {return false;}
-	bool OnMouseButton(int button, int action, int mods) override {return false;}
 };
 
 extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);

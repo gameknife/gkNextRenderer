@@ -33,7 +33,8 @@ namespace Assets
 
 namespace Editor
 {
-
+    inline uint32_t ActiveColor = IM_COL32(64, 128, 255, 255);
+    
     struct GUI
     {
         bool                    state                      = true;                 // Alive
@@ -62,6 +63,9 @@ namespace Editor
         bool                    textureBrowser             = true;                // Workspace "Output"
         void                    ShowTextureBrowser();
 
+        bool                    meshBrowser                = true;
+        void                    ShowMeshBrowser();
+        
         void                    DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclick_action);
 
         bool                    ed_material                = false;                // Material Editor

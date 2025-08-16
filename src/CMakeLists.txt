@@ -40,7 +40,9 @@ file(GLOB_RECURSE src_files_engine
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
-file(GLOB_RECURSE src_files_gkbenchmark "Application/gkNextBenchmark/*")
+file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
+file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
+file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
 
 # libray and app
 if ( ANDROID )
@@ -71,11 +73,13 @@ add_executable(gkNextRenderer
 	DesktopMain.cpp
 )
 add_executable(gkNextStillBenchmark
-	${src_files_gkbenchmark}
+	${src_files_benchmarkcommon}
+	${src_files_gkstillbenchmark}
 	DesktopMain.cpp
 )
 add_executable(gkNextMotionBenchmark
-	${src_files_gkbenchmark}
+	${src_files_benchmarkcommon}
+	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor

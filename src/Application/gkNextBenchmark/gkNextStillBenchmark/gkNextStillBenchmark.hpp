@@ -1,9 +1,8 @@
 #pragma once
-// ReSharper disable once CppUnusedIncludeDirective
-#include "BenchMark.hpp"
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
 
+class BenchMarker;
 
 class BenchmarkGameInstance : public NextGameInstanceBase
 {
@@ -18,10 +17,6 @@ public:
     void OnSceneLoaded() override;
     
     bool OnRenderUI() override;
-
-    bool OnKey(int key, int scancode, int action, int mods) override;
-    bool OnCursorPosition(double xpos, double ypos) override;
-    bool OnMouseButton(int button, int action, int mods) override;
     
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }

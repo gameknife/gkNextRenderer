@@ -219,6 +219,7 @@ namespace Assets
         Model(Model&&) = default;
         ~Model() = default;
 
+        const std::string& Name() const { return name_; }
         const std::vector<Vertex>& CPUVertices() const { return vertices_; }
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
@@ -234,10 +235,12 @@ namespace Assets
         void FreeMemory();
 
     private:
-        Model(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
+        Model(const std::string& name, std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
         void SaveTangentCache(const std::string& cacheFileName);
         void LoadTangentCache(const std::string& cacheFileName);
+
+        std::string name_;
         
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;

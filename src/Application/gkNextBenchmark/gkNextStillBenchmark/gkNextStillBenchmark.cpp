@@ -1,4 +1,5 @@
-#include "gkNextBenchmark.hpp"
+#include "gkNextStillBenchmark.hpp"
+#include "../Common/BenchMark.hpp"
 #include "Runtime/Engine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
@@ -8,7 +9,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
 {
-    config.Title = "gkNextBenchmark";
+    config.Title = "gkNextStillBenchmark";
     options.Samples = 1;
     options.Temporal = 2;
     options.Bounces = 4;
@@ -52,21 +53,6 @@ void BenchmarkGameInstance::OnSceneLoaded()
 }
 
 bool BenchmarkGameInstance::OnRenderUI()
-{
-    return true;
-}
-
-bool BenchmarkGameInstance::OnKey(int key, int scancode, int action, int mods)
-{
-    return true;
-}
-
-bool BenchmarkGameInstance::OnCursorPosition(double xpos, double ypos)
-{
-    return true;
-}
-
-bool BenchmarkGameInstance::OnMouseButton(int button, int action, int mods)
 {
     return true;
 }

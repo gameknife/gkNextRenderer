@@ -3,6 +3,8 @@
 #include "Runtime/UserInterface.hpp"
 #include "Assets/Model.hpp"
 #include "Runtime/Engine.hpp"
+#include "Utilities/ImGui.hpp"
+#include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
 
 const float toolIconWidth = 32.0f;
@@ -33,14 +35,12 @@ void Editor::GUI::ShowViewport(ImGuiID id)
     ImGui::Text("Reatime Statstics: ");
     ImGui::Text("Frame rate: %.0f fps", 1.0f / engine->GetSmoothDeltaSeconds());
     ImGui::Text("Progressive: %d", engine->IsProgressiveRendering());
-    // ImGui::Text("Campos:  %.2f %.2f %.2f", statistics.CamPosX, statistics.CamPosY, statistics.CamPosZ);
-    //
+
     auto& gpuDrivenStat = current_scene->GetGpuDrivenStat();
     uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
     uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
     ImGui::Text("Tris: %s/%s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
     ImGui::Text("Draw: %s/%s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
-    // ImGui::Text("Texture: %d", statistics.TextureCount);
 
     ImGui::End();
         
@@ -48,8 +48,6 @@ void Editor::GUI::ShowViewport(ImGuiID id)
     ImGui::SetNextWindowSize(ImVec2(node->Size.x - 170, toolIconWidth + 8));
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowBgAlpha(0);
-
-
     
     ImGui::Begin("ViewportTool", nullptr, window_flags);
 
@@ -61,14 +59,17 @@ void Editor::GUI::ShowViewport(ImGuiID id)
     {
         engine->GetUserSettings().DebugDraw_Lighting = !engine->GetUserSettings().DebugDraw_Lighting;
     }
+    BUTTON_TOOLTIP(LOCTEXT("Toggle Lighting"))
     ImGui::SameLine(); if ( ImGui::Button(ICON_FA_SOAP, ImVec2(toolIconWidth, toolIconWidth)))
     {
         engine->GetUserSettings().ShowVisualDebug = !engine->GetUserSettings().ShowVisualDebug;
     }
+    BUTTON_TOOLTIP(LOCTEXT("Toggle VisualDebug"))
     ImGui::SameLine(); if ( ImGui::Button(ICON_FA_DRAW_POLYGON, ImVec2(toolIconWidth, toolIconWidth)))
     {
         engine->GetRenderer().showWireframe_ = !engine->GetRenderer().showWireframe_;
     }
+    BUTTON_TOOLTIP(LOCTEXT("Toggle Wireframe"))
        
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
@@ -77,8 +78,4 @@ void Editor::GUI::ShowViewport(ImGuiID id)
     ImGui::PopStyleVar();
     
     ImGui::End();
-
-
-
-
 }
