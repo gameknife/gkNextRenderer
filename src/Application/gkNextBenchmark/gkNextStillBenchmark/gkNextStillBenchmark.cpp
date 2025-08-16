@@ -1,5 +1,5 @@
 #include "gkNextStillBenchmark.hpp"
-#include "../Common/BenchMark.hpp"
+#include "Application/gkNextBenchmark/Common/BenchMark.hpp"
 #include "Runtime/Engine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
