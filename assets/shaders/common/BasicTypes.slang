@@ -203,6 +203,12 @@ public struct ALIGN_16 RayCastContext
     public uint MaterialId;
     public uint Hitted;
 };
+
+public struct ALIGN_16 GPUScene
+{
+    public NodeProxy* Nodes;
+};
+
 #ifndef __cplusplus
 
 public struct VkDrawIndexedIndirectCommand {

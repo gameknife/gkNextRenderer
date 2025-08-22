@@ -28,6 +28,9 @@ import Common;
 [[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
 [[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
 
+[[vk::push_constant]]
+ConstantBuffer<GPUScene> gpuScene;
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -35,7 +38,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     START_SHADERCLOCK()
     // compose with renderer and tracer
     FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, Indices };
-    FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
+    FHardwareRayTracerV2 tracer = { Vertices, Indices, Materials, Offsets, gpuScene.Nodes, Scene };
     FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
     //FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
     FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};

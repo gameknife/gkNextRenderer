@@ -658,6 +658,107 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     StructuredBuffer<PageIndex> Pages;
 }
 
+public struct FHardwareRayTracerV2 : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = EPS;
+        ray.Direction = rayDir;
+        ray.TMax = PT_MAX_TRACE_DISTANCE;
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                 RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+        let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+
+        q.TraceRayInline(
+            Scene,
+            rayFlags,
+            0xff,
+            ray);
+
+        q.Proceed();
+        return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    }
+
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        float3 dir = rayTarget - rayOrigin;
+        float len = length(dir);
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = epsilon;
+        ray.TMax = len - epsilon;
+        ray.Direction = dir / len;
+        
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                 RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+        let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+
+        q.TraceRayInline(
+            Scene,
+            rayFlags,
+            0xff,
+            ray);
+
+        q.Proceed();
+        return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = EPS;
+        ray.Direction = rayDir;
+        ray.TMax = maxDistance;
+        RayQuery<RAY_FLAG_NONE> q;
+        let rayFlags = RAY_FLAG_NONE;
+
+        q.TraceRayInline(
+            Scene,
+            rayFlags,
+            0xff,
+            ray);
+
+        q.Proceed();
+        if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+        {
+            float t = q.CommittedRayT();
+
+            float2 TwoBaryCoords = q.CommittedRayBarycentrics();
+            float3 BaryCoords = float3(1.0 - TwoBaryCoords.x - TwoBaryCoords.y, TwoBaryCoords.x, TwoBaryCoords.y);
+
+            float4x3 WorldToObject = q.CommittedRayWorldToObject();
+
+            outNode = NodeProxies[q.CommittedRayInstanceId()];
+            outNode.instanceId = q.CommittedRayInstanceCustomIndex();
+            const ModelData offsets = Offsets[outNode.modelId];
+            const uint indexOffset = offsets.indexOffset + q.CommittedPrimitiveIndex() * 3;
+            const uint vertexOffset = offsets.vertexOffset;
+            const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
+            const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
+            const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
+            outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
+            outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
+            outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
+            outVertex.Position = rayOrigin + rayDir * t;// * (t - EPS2);
+            //outVertex.Tangent = normalize(mul(WorldToObject, Mix(v0.Tangent, v1.Tangent, v2.Tangent, BaryCoords)).xyz);
+            return true;
+        }
+        return false;
+    }
+
+    StructuredBuffer<GPUVertex> Vertices;
+    StructuredBuffer<uint> Indices;
+    StructuredBuffer<Material> Materials;
+    StructuredBuffer<ModelData> Offsets;
+    NodeProxy* NodeProxies;
+    RaytracingAccelerationStructure Scene;
+}
+
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
