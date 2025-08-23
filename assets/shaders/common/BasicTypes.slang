@@ -204,11 +204,6 @@ public struct ALIGN_16 RayCastContext
     public uint Hitted;
 };
 
-public struct ALIGN_16 GPUScene
-{
-    public NodeProxy* Nodes;
-};
-
 #ifndef __cplusplus
 
 public struct VkDrawIndexedIndirectCommand {
@@ -252,6 +247,59 @@ public struct ALIGN_16 GPUVertex
     public half4 Normal_Ty;
     public half4 Tangent;
 };
+#endif
+
+
+#ifdef __cplusplus
+public struct ALIGN_16 GPUScene
+{
+    public uint64_t Camera;
+    /* Scene Node Tree */
+    public uint64_t Nodes;
+
+    /* Global Vertice Buffer */
+    public uint64_t Reorders;
+    public uint64_t VerticesSimple;
+    public uint64_t Vertices;
+    public uint64_t Indices;
+
+    /* Resources */
+    public uint64_t Materials;
+    public uint64_t Offsets;
+
+    /* Others */
+    public uint64_t Cubes;
+    public uint64_t Voxels;
+    public uint64_t HDRSHs;
+    public uint64_t Lights;
+};
+
+#else
+public struct ALIGN_16 GPUScene
+{
+    /* Scene Info */
+    public UniformBufferObject* Camera;
+
+    /* Scene Node Tree */
+    public NodeProxy* Nodes;
+
+    /* Global Vertice Buffer */
+    public uint* Reorders;
+    public half4* VerticesSimple;
+    public GPUVertex* Vertices;
+    public uint* Indices;
+
+    /* Resources */
+    public Material* Materials;
+    public ModelData* Offsets;
+
+    /* Others */
+    public AmbientCube* Cubes;
+    public VoxelData* Voxels;
+    public SphericalHarmonics* HDRSHs;
+    public LightObject* Lights;
+};
+
 #endif
 
 #ifdef __cplusplus
