@@ -149,7 +149,7 @@ foreach(target IN LISTS AllTargets)
 		# Enable Unity Build for gkNextEngine
 		# Group files for Unity Build optimization
 		if ( NOT ANDROID ) 
-		set_target_properties(${target} PROPERTIES UNITY_BUILD OFF)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
 		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
