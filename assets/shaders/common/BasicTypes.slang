@@ -272,6 +272,9 @@ public struct ALIGN_16 GPUScene
     public uint64_t Voxels;
     public uint64_t HDRSHs;
     public uint64_t Lights;
+
+    public uint64_t IndirectDrawCommands;
+    public uint64_t GPUDrivenStats;
 };
 
 #else
@@ -298,6 +301,10 @@ public struct ALIGN_16 GPUScene
     public VoxelData* Voxels;
     public SphericalHarmonics* HDRSHs;
     public LightObject* Lights;
+
+    /* IndirectDraw */
+    public VkDrawIndexedIndirectCommand* IndirectDrawCommands;
+    public GPUDrivenStat* GPUDrivenStats;
 };
 
 #endif
