@@ -273,7 +273,8 @@ public struct ALIGN_16 GPUScene
 
     public uint64_t IndirectDrawCommands;
     public uint64_t GPUDrivenStats;
-    
+
+    public uint64_t TLAS;
 };
 
 #else
@@ -304,6 +305,15 @@ public struct ALIGN_16 GPUScene
     /* IndirectDraw */
     public VkDrawIndexedIndirectCommand* IndirectDrawCommands;
     public GPUDrivenStat* GPUDrivenStats;
+    
+    public uint64_t TLAS; 
+    public RaytracingAccelerationStructure GetTLAS() {
+		return spirv_asm {
+			OpExtension "SPV_KHR_ray_tracing";
+			OpCapability RayTracingKHR;
+			result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $TLAS;
+		};
+	}
    
 };
 
