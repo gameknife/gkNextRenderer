@@ -1,6 +1,4 @@
 #ifdef __cplusplus
-#define public
-#define bool uint32_t
 #define ALIGN_16 alignas(16) 
 #define ALIGN_8 alignas(8)
 #else
@@ -275,6 +273,7 @@ public struct ALIGN_16 GPUScene
 
     public uint64_t IndirectDrawCommands;
     public uint64_t GPUDrivenStats;
+    
 };
 
 #else
@@ -305,14 +304,14 @@ public struct ALIGN_16 GPUScene
     /* IndirectDraw */
     public VkDrawIndexedIndirectCommand* IndirectDrawCommands;
     public GPUDrivenStat* GPUDrivenStats;
+   
 };
 
 #endif
 
 #ifdef __cplusplus
-#undef public
-#undef bool
 #undef ALIGN_16
+#undef ALIGN_8
 #else
 
 #endif

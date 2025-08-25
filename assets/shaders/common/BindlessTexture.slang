@@ -30,14 +30,34 @@
 
 #ifndef __cplusplus
 implementing Common;
-[[vk::binding(0, 0)]] RWTexture2D<float> StorageTextureArray[];
+#endif
 namespace Bindless
 {
     public static const int RT_ACCUMLATE_DIFFUSE = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_MINIGBUFFER = 2;
-    public static const int RT_PREV_DEPTHBUFFER = 10;
+    public static const int RT_OBJEDCTID_0 = 3;
+    public static const int RT_OBJEDCTID_1 = 4;
+    public static const int RT_MOTIONVECTOR = 5;
+    public static const int RT_ALBEDO = 6;
+    public static const int RT_NORMAL = 7;
+    public static const int RT_SHADER_TIMER = 8;
 
+    public static const int RT_DENOISED = 9;
+    
+    public static const int RT_PREV_DEPTHBUFFER = 10;
+    public static const int RT_ACCUMLATE_SPECULAR = 11;
+    public static const int RT_SINGLE_SPECULAR = 12;
+
+    public static const int RT_ACCUMLATE_ALBEDO = 13;
+}
+
+#ifndef __cplusplus
+[[vk::binding(0, 0)]] RWTexture2D<float> StorageTextureArray[];
+[[vk::binding(0, 0)]] RWTexture2D<float4> StorageTextureArray_float4[];
+[[vk::binding(0, 0)]] RWTexture2D<uint> StorageTextureArray_uint[];
+namespace Bindless
+{
     public float GetStorageTexture(int index, int2 coords )
     {
         return StorageTextureArray[index][coords];
@@ -49,7 +69,20 @@ namespace Bindless
         StorageTextureArray[index].GetDimensions(dim.x, dim.y);
         return dim;
     }
-}
 
+    public void SetStorageTexture(int index, int2 coords, float value)
+    {
+        StorageTextureArray[index][coords] = value;
+    }
+
+    public void SetStorageTexture(int index, int2 coords, uint value)
+    {
+        StorageTextureArray_uint[index][coords] = value;
+    }
+
+    public void SetStorageTexture(int index, int2 coords, float4 value )
+    {
+        StorageTextureArray_float4[index][coords] = value;
+    }
+}
 #endif
-#include "PreProcessor.slang"
