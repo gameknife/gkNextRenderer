@@ -24,4 +24,3 @@
 #define luminance(rgb) (dot((rgb), float3(0.212671F, 0.715160F, 0.072169F)))
 
 #define saturate(x) (clamp((x), 0.0F, 1.0F))
-

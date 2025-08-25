@@ -13,14 +13,8 @@ import Common;
 [[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
 [[vk::binding(13, 1)]] RWTexture2D<float4> AccmulateAlbedoBuffer;
 
-struct PushConsts
-{
-    uint offset_x;
-    uint offset_y;
-};
-
 [[vk::push_constant]]
-ConstantBuffer<PushConsts> pushConsts;
+ConstantBuffer<GPUScene> gpuScene;
 
 static const int WORK_GROUP_AXIS_SIZE = 8;
 static const int WINDOW_R = 5; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
