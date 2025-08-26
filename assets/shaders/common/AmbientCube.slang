@@ -251,6 +251,20 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
+AmbientCube FetchCubeV2(int3 probePos, in AmbientCube* Cubes)
+{
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+              probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
+}
+
+VoxelData FetchVoxelV2(int3 probePos, in VoxelData* Cubes)
+{
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
+              probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
+}
+
 AmbientCube FetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
@@ -270,6 +284,98 @@ AmbientCube RWFetchCube(int3 probePos, in RWStructuredBuffer<AmbientCube> Cubes)
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
               probePos.z * CUBE_SIZE_XY + probePos.x;
     return Cubes[idx];
+}
+
+
+public float4 interpolateAmbientCubesV2<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in AmbientCube* Cubes, in VoxelData* Voxels)
+{
+    float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
+
+    // Early out if position is outside the probe grid
+    if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
+        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
+    {
+        return float4(0, 0, 0, 1);
+    }
+
+    int3 baseIdx = int3(floor(nearpos));
+    float3 frac = frac(nearpos);
+
+    float totalWeight = 0.0;
+    float4 result = float4(0.0, 0.0, 0.0, 0.0);
+
+    for (int i = 0; i < 8; i++)
+    {
+        int3 offset = int3(
+            i & 1,
+            (i >> 1) & 1,
+            (i >> 2) & 1);
+
+        int3 probePos = baseIdx + offset;
+        AmbientCube cube = FetchCubeV2(probePos, Cubes);
+        VoxelData voxel = FetchVoxelV2(probePos, Voxels);
+
+        uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
+        uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
+
+        float4 distance00z01 = unpacked0 / 255.0f;
+        float4 distancex01y01 = unpacked1 / 255.0f;
+
+        if (distance00z01.y < 0.01f)
+            continue;
+
+        float3 localPos = frac;
+        float3 probeRealPos = offset;
+        float3 probeToLocal = localPos - probeRealPos;
+
+        // 计算查询点到probe的实际距离
+        float distanceToProbe = length(probeToLocal);
+        
+        // 归一化方向向量
+        float3 dir = normalize(probeToLocal);
+        
+        // 从voxel数据中获取各个方向的距离信息
+        float distPZ = distance00z01.z;
+        float distNZ = distance00z01.w;
+        float distPX = distancex01y01.x;
+        float distNX = distancex01y01.y;
+        float distPY = distancex01y01.z;
+        float distNY = distancex01y01.w;
+        
+        // 根据方向权重混合距离
+        float wx_pos = sqrt(max(dir.x, 0.0));
+        float wx_neg = sqrt(max(-dir.x, 0.0));
+        float wy_pos = sqrt(max(dir.y, 0.0));
+        float wy_neg = sqrt(max(-dir.y, 0.0));
+        float wz_pos = sqrt(max(dir.z, 0.0));
+        float wz_neg = sqrt(max(-dir.z, 0.0));
+        
+        float hitLength = wx_pos * distPX + wx_neg * distNX +
+                            wy_pos * distPY + wy_neg * distNY +
+                            wz_pos * distPZ + wz_neg * distNZ;
+
+        // 如果查询点到probe的距离大于插值后的hitLength，说明被遮挡，跳过
+        if (distanceToProbe > hitLength + 0.05f)// - 0.125f) 
+            continue;
+
+        // voxel here, matId will store at edge, we should discard it by the distance
+        // if (voxel.matId > 0)
+        //     continue;
+
+        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+        float weight = wx * wy * wz;
+
+        float occlusion;
+        float4 sampleColor = T.Sample(cube, normal);
+        result += sampleColor * weight;
+        totalWeight += weight;
+    }
+
+    // Normalize result by total weight
+    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.0, 0.0, 0.0, 0.0);
+    return indirectColor;
 }
 
 public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, in RWStructuredBuffer<AmbientCube> Cubes, in RWStructuredBuffer<VoxelData> Voxels)

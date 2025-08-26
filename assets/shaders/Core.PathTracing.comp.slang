@@ -18,12 +18,12 @@ import Common;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    UniformBufferObject CameraDirect = Bindless.GetGpuscene().Camera[0];
     //START_SHADERCLOCK()
     // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER), Indices };
-    FHardwareRayTracerV2 tracer = { Vertices, Indices, Materials, Offsets, Bindless.GetGpuscene().Nodes, Bindless.GetGpuscene().GetTLAS() };
-    FHardwareDirectIlluminator dIlluminator = { Camera, Bindless.GetGpuscene().GetTLAS() };
-    //FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
+    FVisibilityBufferRayCasterV2 rayCaster = {};
+    FHardwareRayTracerV2 tracer = {};
+    FHardwareDirectIlluminatorV2 dIlluminator = {tracer};
     FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};
 
     int2 ipos = int2(DTid.xy);
@@ -38,7 +38,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 pixelOffset = float2(0, 0);
     if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
-        float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
+        float4 skyColor = CameraDirect.HasSky ? Common.SampleIBLV2(CameraDirect.SkyIdx, rayDir, CameraDirect.SkyRotation, 0) * CameraDirect.SkyIntensity : float4(0, 0, 0, 0);
         
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[ipos] = skyColor;
         Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR)[ipos] = float4(0, 0, 0, 0);
@@ -50,7 +50,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
     // MotionVector解析
-    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
+    float2 motion = Common.CalculateMotionVectorV2(CameraDirect, hitNode, hitVertex);
     Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR)[ipos] = float4(motion * isize, 0, 0);
 
     // GBuffer解析
@@ -59,14 +59,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 reflectColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
     Material material = Materials[hitVertex.MaterialIndex];
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], hitNode, rayDir, TextureArray, albedo, gbuffer);
+    Common.FetchGBufferV2(hitVertex, Materials[hitVertex.MaterialIndex], hitNode, rayDir, albedo, gbuffer);
     Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO)[ipos] = albedo;
     Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[ipos] = gbuffer;
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0)[ipos] = hitNode.instanceId;
 
 
     // write to NDC depth
-    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
+    float4 clipPos = mul(CameraDirect.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[ipos] = ndcDepth;
 

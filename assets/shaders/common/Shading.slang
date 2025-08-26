@@ -47,6 +47,16 @@ namespace Common
         return rayOrigin + rayDir * tEntry;
     }
 
+    public float2 CalculateMotionVectorV2(in UniformBufferObject Camera, NodeProxy node, Vertex v )
+    {
+        // motion info
+        float4 currFrameHPos = mul(Camera.ViewProjectionUnJit, float4(v.Position, 1));
+        float2 currfpos = currFrameHPos.xy / currFrameHPos.w * 0.5;
+        float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
+        float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
+        return prevfpos - currfpos;
+    }
+
     public float2 CalculateMotionVector(ConstantBuffer<UniformBufferObject> Camera, NodeProxy node, Vertex v )
     {
         // motion info
@@ -63,6 +73,38 @@ namespace Common
         float3 vB = tangent.w * cross(normal, tangent.xyz);
         normal = normalize(vNt.x * tangent.xyz + vNt.y * vB + vNt.z * normal);
         return normal;
+    }
+
+    public void FetchGBufferV2(inout Vertex inVertex, in Material inMaterial, in NodeProxy proxy, float3 rayDir, out float4 outAlbedo, out float4 outNormal)
+    {
+        outAlbedo = inMaterial.Diffuse;
+
+        if (inMaterial.DiffuseTextureId >= 0)
+        {
+            float4 tex = Bindless.GetSampleTexture(inMaterial.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
+            outAlbedo *= tex;
+        }
+        float roughness = inMaterial.Fuzziness;
+        if (inMaterial.MRATextureId >= 0)
+        {
+            float4 mra = Bindless.GetSampleTexture(inMaterial.MRATextureId).SampleLevel(inVertex.TexCoord, 0);
+            roughness = roughness * mra.g;
+        }
+
+        // Normal map handling
+        if (inMaterial.NormalTextureId >= 0)
+        {
+            // normal mapping use interpolated normal
+            float3 vNt = Bindless.GetSampleTexture(inMaterial.NormalTextureId).SampleLevel(inVertex.TexCoord, 0).rgb;
+            // here we need local space normal and tangent
+            outNormal.rgb = normalize( mul(proxy.worldTS, float4(mikkTSpace(vNt, inVertex.LocalNormal, inVertex.LocalTangent), 0.0)).xyz );
+            outNormal.a = roughness;
+            inVertex.Normal.rgb = outNormal.rgb; // Update vertex normal for further calculations
+        }
+        else
+        {
+            outNormal = float4(inVertex.Normal.rgb, roughness);
+        }
     }
 
     public void FetchGBuffer(inout Vertex inVertex, in Material inMaterial, in NodeProxy proxy, float3 rayDir, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
@@ -143,6 +185,13 @@ namespace Common
     {
         float3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
         return float4(rayColor * 1.0f, 1.0);
+    };
+
+    public float4 SampleIBLV2(uint skyIdx, float3 direction, float rotate, float roughness)
+    {
+        float3 d = normalize(direction);
+        float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
+        return min(float4(10, 10, 10, 1), Bindless.GetSampleTexture(skyIdx).SampleLevel(t, roughness * 8.0f));
     };
 
     public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness, in StructuredBuffer<SphericalHarmonics> HDRSHs, in Sampler2D[] TextureSamplers)
@@ -280,6 +329,167 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
     ConstantBuffer<UniformBufferObject> Camera;
     FHardwareRayTracer HWTracer;
+}
+
+public struct FVisibilityBufferRayCasterV2 : IPrimaryRayCaster
+{
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    {
+        
+        UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
+        GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
+        ModelData* Models = Bindless.GetGpuscene().Offsets;
+        uint* PrimAddress = Bindless.GetGpuscene().Indices;
+
+        // 第一步：先追踪一次顶点，计算距离
+        uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
+        uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF); 
+        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
+        
+        // 构造初始光线
+        float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+        float3 ray_dir = normalize(dir.xyz);
+
+        // 获取初始顶点数据
+        Vertex initialVertex = Common.get_material_dataV2(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
+        
+        if (vBuffer.x == 0)
+        {
+            // 没有几何体，直接返回
+            outRayDir = ray_dir;
+            return false;
+        }
+        
+        // 第二步：计算顶点到相机的距离
+        float vertexDistance = length(initialVertex.Position - origin.xyz);
+        
+        // 第三步：根据距离和焦距计算散焦圆半径
+        float cocRadius = 0.0f;
+        if (abs(vertexDistance - Camera.FocusDistance) > 0.001f) // 避免除零
+        {
+            // 计算散焦圆半径：CoC = (光圈大小 * |物距 - 焦距|) / 物距
+            cocRadius = (Camera.Aperture * abs(vertexDistance - Camera.FocusDistance)) / vertexDistance;
+        }
+        
+        // 第四步：根据散焦圆半径计算像素偏移
+        float2 pixelOffset = float2(0, 0);
+        if (cocRadius > 0.001f)
+        {
+            // 在散焦圆内随机采样
+            float2 diskSample = RandomInUnitDisk(RandomSeed);
+            
+            // 计算垂直于视线方向的两个点，用于确定散焦圆在屏幕空间的大小
+            float3 right = normalize(cross(ray_dir, float3(0, 1, 0)));
+            float3 up = normalize(cross(right, ray_dir));
+            
+            // 散焦圆边缘的世界坐标点
+            float3 circleEdge = initialVertex.Position + right * cocRadius;
+            
+            // 投影到屏幕空间
+            float4 centerProj = mul(Camera.ViewProjection, float4(initialVertex.Position, 1.0));
+            float4 edgeProj = mul(Camera.ViewProjection, float4(circleEdge, 1.0));
+            
+            centerProj.xyz /= centerProj.w;
+            edgeProj.xyz /= edgeProj.w;
+            
+            // 计算屏幕空间中的散焦圆半径（以NDC单位）
+            float screenSpaceRadius = length(edgeProj.xy - centerProj.xy);
+            
+            // 转换为像素偏移
+            pixelOffset = diskSample * screenSpaceRadius * float2(isize) * 0.5f;
+        }
+
+        outPixelOffset = pixelOffset;
+        // 第五步：计算偏移后的像素位置
+        int2 offsetPos = ipos + int2(pixelOffset);
+        
+        // 确保偏移后的位置在屏幕范围内
+        offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
+
+        uint offsetedPackValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
+        uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
+
+        float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
+        
+        // 构造最终光线
+        float4 finalTarget = mul(Camera.ProjectionInverse, float4(finalUV.x, finalUV.y, 1, 1));
+        float4 finalDir = mul(Camera.ModelViewInverse, float4(normalize(finalTarget.xyz), 0));
+        float3 final_ray_dir = normalize(finalDir.xyz);
+        
+        // 获取最终顶点数据
+        if (finalVBuffer.x == 0)
+        {
+            // 偏移后的位置没有几何体，使用原始结果
+            outVertex.Position = initialVertex.Position;
+            outVertex.Normal = normalize(initialVertex.Normal.rgb);
+            outNode = NodeProxies[vBuffer.x - 1];
+            outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
+            outVertex.TexCoord = initialVertex.TexCoord;
+            outVertex.Tangent = initialVertex.Tangent;
+            outVertex.LocalNormal = initialVertex.LocalNormal;
+            outVertex.LocalTangent = initialVertex.LocalTangent;
+            outRayDir = ray_dir;
+        }
+        else
+        {
+            // 使用偏移后的结果
+            Vertex finalVertex = Common.get_material_dataV2(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Models, Vertices, PrimAddress);
+            
+            // 只在焦平面附近才进行深度检查
+            float distanceToFocus = abs(vertexDistance - Camera.FocusDistance);
+            float focusThreshold = Camera.FocusDistance * 0.1f; // 焦距的10%作为阈值
+            
+            bool shouldCancelOffset = false;
+            if (distanceToFocus < focusThreshold)
+            {
+                // 检查重新采样的顶点是否比原始顶点更靠近相机
+                float finalVertexDistance = length(finalVertex.Position - origin.xyz);
+                float depthDifference = vertexDistance - finalVertexDistance;
+                float depthThreshold = Camera.FocusDistance * 0.05f; // 深度差异阈值
+                
+                // 只有当深度差异超过阈值时才取消偏移
+                if (depthDifference > depthThreshold)
+                {
+                    shouldCancelOffset = true;
+                }
+            }
+            
+            if (shouldCancelOffset)
+            {
+                // 取消偏移，使用原始结果
+                outVertex.Position = initialVertex.Position;
+                outVertex.Normal = normalize(initialVertex.Normal.rgb);
+                outNode = NodeProxies[vBuffer.x - 1];
+                outVertex.MaterialIndex = FetchMaterialId(outNode, initialVertex.MaterialIndex);
+                outVertex.TexCoord = initialVertex.TexCoord;
+                outVertex.Tangent = initialVertex.Tangent;
+                outVertex.LocalNormal = initialVertex.LocalNormal;
+                outVertex.LocalTangent = initialVertex.LocalTangent;
+                outRayDir = ray_dir;
+            }
+            else
+            {
+                // 使用偏移后的结果
+                outNode = NodeProxies[finalVBuffer.x - 1];
+                
+                outVertex.Position = finalVertex.Position;
+                outVertex.Normal = normalize(finalVertex.Normal.rgb);
+                outVertex.MaterialIndex = FetchMaterialId(outNode, finalVertex.MaterialIndex);
+                outVertex.TexCoord = finalVertex.TexCoord;
+                outVertex.Tangent = finalVertex.Tangent;
+                outVertex.LocalNormal = finalVertex.LocalNormal;
+                outVertex.LocalTangent = finalVertex.LocalTangent;
+                outRayDir = final_ray_dir;
+            }
+        }
+
+        outRayLength = length(outVertex.Position - origin.xyz);
+        
+        return true;
+    }
 }
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
@@ -673,7 +883,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
                        RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -698,7 +908,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
                        RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -718,7 +928,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
         let rayFlags = RAY_FLAG_NONE;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -733,14 +943,14 @@ public struct FHardwareRayTracerV2 : IRayTracer
 
             float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
-            outNode = NodeProxies[q.CommittedRayInstanceId()];
+            outNode = Bindless.GetGpuscene().Nodes[q.CommittedRayInstanceId()];
             outNode.instanceId = q.CommittedRayInstanceCustomIndex();
-            const ModelData offsets = Offsets[outNode.modelId];
+            const ModelData offsets = Bindless.GetGpuscene().Offsets[outNode.modelId];
             const uint indexOffset = offsets.indexOffset + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.vertexOffset;
-            const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
-            const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
-            const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
+            const Vertex v0 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset]]);
+            const Vertex v1 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset + 1]]);
+            const Vertex v2 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset + 2]]);
             outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
@@ -750,13 +960,6 @@ public struct FHardwareRayTracerV2 : IRayTracer
         }
         return false;
     }
-
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<Material> Materials;
-    StructuredBuffer<ModelData> Offsets;
-    NodeProxy* NodeProxies;
-    RaytracingAccelerationStructure Scene;
 }
 
 public struct FHardwareRayTracer : IRayTracer
@@ -926,6 +1129,30 @@ public struct FSoftwareRayTracer : IRayTracer
     FHiVoxelDDARayTracer DDARayTracer;
 }
 
+public struct FHardwareDirectIlluminatorV2 : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
+        float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            const float3 lightVector = Camera.SunDirection.xyz;
+            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+            shadow = 1;
+            if (HWTracer.TraceOcclusion(position, lightVectorCone))
+            {
+                shadow = 0;
+            }
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    FHardwareRayTracerV2 HWTracer;
+}
+
 public struct FHardwareDirectIlluminator : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
@@ -1028,6 +1255,169 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     StructuredBuffer<ModelData> Models;
     StructuredBuffer<GPUVertex> Vertices;
     StructuredBuffer<uint> Indices;
+}
+
+public struct FPathTracingRendererV2 : IRenderer
+{
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, in Sampler2D[] TextureArray)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        Material* Materials = Bindless.GetGpuscene().Materials;
+
+        Material mat = Materials[inVertex.MaterialIndex];
+        const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
+        float roughness = mat.Fuzziness;
+        const float dotValue = dot(rayDir, inVertex.Normal);
+        const bool BackFace = dotValue > 0;
+        const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
+        const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
+        const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
+        const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
+        const float metalProb = mat.Metalness;
+
+        bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
+        bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);
+        bool chanceGGX = chanceReflect || chanceMetal;
+        const float3 trace_next = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
+        float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
+
+        hitReflect = chanceGGX;
+        hitMetal = chanceMetal;
+
+        if (mat.MaterialModel == MaterialDielectric)
+        {
+            if (!chanceReflect)
+            {
+                trace_dir = refract(rayDir, outwardNormal, niOverNt);
+            }
+        }
+
+        rayDir = trace_dir;
+
+        NodeProxy hitNode;
+        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
+        {
+            Material hitMat = Materials[inVertex.MaterialIndex];
+            float4 outAlbedo = hitMat.Diffuse;
+            if (hitMat.DiffuseTextureId >= 0)
+            {
+                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].SampleLevel(inVertex.TexCoord, 0);
+                outAlbedo *= tex;
+            }
+            if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
+            {
+                rayColor *= outAlbedo;
+            }
+            if (BackFace && mat.MaterialModel != MaterialDielectric)
+            {
+                rayColor = 0.0f;
+                return true;
+            }
+            if (hitMat.MaterialModel == MaterialDiffuseLight)
+            {
+                return true;
+            }
+            return false;
+        }
+        else
+        {
+            float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            // miss, FinalColor to SkyIBL
+            rayColor *= skyColor;
+            return true;
+        }
+    }
+
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        Material* Materials = Bindless.GetGpuscene().Materials;
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+        FinalColor = float4(0, 0, 0, 0);
+        FinalReflection = float4(0, 0, 0, 0);
+
+        Material mat = Materials[inVertex.MaterialIndex];
+        if (mat.MaterialModel == MaterialDiffuseLight)
+        {
+            FinalColor = mat.Diffuse;
+            return;
+        }
+
+        const uint sample = Camera.FastGather ? 1 : Camera.NumberOfSamples;
+        for (int i = 0; i < sample; i++)
+        {
+            float4 RayColor = float4(1, 1, 1, 1);
+
+            float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+            float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+
+            float3 direction = ray_dir;
+            Vertex vertexStart = inVertex;
+
+            uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
+
+            bool hitReflect = false;
+            bool hitMetal = false;
+            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal, TextureArray);
+            if (!exitFirst)
+            {
+                for (uint b = 1; b < maxBounces; ++b)
+                {
+                    bool hitReflectDontCare = false;
+                    bool hitMetalDontCare = false;
+                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare, TextureArray))
+                    {
+                        break;
+                    }
+
+                    if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
+                    {
+                        const float3 lightVector = Camera.SunDirection.xyz;
+                        const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+                        if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                        {
+                            RayColor *= Camera.SunColor;
+                            break;
+                        }
+                    }
+
+                    // 提前退出
+                    const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+
+                    // 终结路径
+                    if (b == maxBounces - 1 || earlyExit)
+                    {
+                        RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
+                        break;
+                    }
+                }
+            }
+
+            if (hitMetal)
+            {
+                RayColor *= inAlbedo;
+            }
+
+            if (hitReflect)
+            {
+                FinalReflection += RayColor;
+            }
+            else
+            {
+                FinalColor += RayColor;
+            }
+            
+        }
+
+        FinalColor /= float(sample);
+        FinalReflection /= float(sample);
+
+        float4 directColor = float4(0, 0, 0, 0);
+        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
+        FinalColor += directColor;
+    }
 }
 
 public struct FPathTracingRenderer : IRenderer

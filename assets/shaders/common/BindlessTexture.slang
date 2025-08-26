@@ -37,12 +37,12 @@ namespace Bindless
 
     public Sampler2D GetSampleTexture(int index )
     {
-        return SampleTextureArray[index].as<Sampler2D>();
+        return SampleTextureArray[NonUniformResourceIndex(index)].as<Sampler2D>();
     }
 
     public RWTexture2D<T> GetStorageTexture<T : ITexelElement>(int index )
     {
-        return StorageTextureArray[index].as<RWTexture2D<T>>();
+        return StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>();
     }
 
     public uint2 GetStorageTextureDimensions(int index)
