@@ -63,13 +63,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 pixelOffset = float2(0, 0);
     if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
-        float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-        outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
-        //outColor = Materials[hitVertex.MaterialIndex].Diffuse * 50.0f;
-        if (Camera.DebugDraw_Lighting)
-        {
-            outColor = radiance;
-        }
+        // float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
+        // outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
+        // //outColor = Materials[hitVertex.MaterialIndex].Diffuse * 50.0f;
+        // if (Camera.DebugDraw_Lighting)
+        // {
+        //     outColor = radiance;
+        // }
+
+        outColor= float4(50,50,50,1);
     }
     else
     {
