@@ -1133,7 +1133,7 @@ public struct FHardwareDirectIlluminatorV2 : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
-        UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float shadow = 0.0f;
         const float3 lightVector = Camera.SunDirection.xyz;
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
@@ -1257,14 +1257,13 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     StructuredBuffer<uint> Indices;
 }
 
-public struct FPathTracingRendererV2 : IRenderer
+public struct FPathTracingRendererV2
 {
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, in Sampler2D[] TextureArray)
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        Material* Materials = Bindless.GetGpuscene().Materials;
 
-        Material mat = Materials[inVertex.MaterialIndex];
+        Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
         const float dotValue = dot(rayDir, inVertex.Normal);
@@ -1297,11 +1296,11 @@ public struct FPathTracingRendererV2 : IRenderer
         NodeProxy hitNode;
         if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
         {
-            Material hitMat = Materials[inVertex.MaterialIndex];
+            Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
             float4 outAlbedo = hitMat.Diffuse;
             if (hitMat.DiffuseTextureId >= 0)
             {
-                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].SampleLevel(inVertex.TexCoord, 0);
+                float4 tex = Bindless.GetSampleTexture(hitMat.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
                 outAlbedo *= tex;
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
@@ -1328,17 +1327,16 @@ public struct FPathTracingRendererV2 : IRenderer
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        Material* Materials = Bindless.GetGpuscene().Materials;
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
         FinalColor = float4(0, 0, 0, 0);
         FinalReflection = float4(0, 0, 0, 0);
 
-        Material mat = Materials[inVertex.MaterialIndex];
+        Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
             FinalColor = mat.Diffuse;
@@ -1360,14 +1358,14 @@ public struct FPathTracingRendererV2 : IRenderer
 
             bool hitReflect = false;
             bool hitMetal = false;
-            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal, TextureArray);
+            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal);
             if (!exitFirst)
             {
                 for (uint b = 1; b < maxBounces; ++b)
                 {
                     bool hitReflectDontCare = false;
                     bool hitMetalDontCare = false;
-                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare, TextureArray))
+                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare))
                     {
                         break;
                     }

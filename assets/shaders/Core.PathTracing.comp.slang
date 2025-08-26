@@ -1,19 +1,6 @@
 import Common;
 #include "common/ShaderClock.slang"
 
-[[vk::binding(0, 0)]] Sampler2D TextureArray[];
-[[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
-
-[[vk::binding(0, 2)]] StructuredBuffer<GPUVertex> Vertices;
-[[vk::binding(12, 2)]] StructuredBuffer<uint> Indices;
-[[vk::binding(2, 2)]] StructuredBuffer<Material> Materials;
-[[vk::binding(3, 2)]] StructuredBuffer<ModelData> Offsets;
-[[vk::binding(4, 2)]] StructuredBuffer<NodeProxy> NodeProxies;
-[[vk::binding(5, 2)]] RWStructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(6, 2)]] RWStructuredBuffer<VoxelData> Voxels;
-[[vk::binding(7, 2)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
-[[vk::binding(8, 2)]] StructuredBuffer<LightObject> Lights;
-
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -24,11 +11,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVisibilityBufferRayCasterV2 rayCaster = {};
     FHardwareRayTracerV2 tracer = {};
     FHardwareDirectIlluminatorV2 dIlluminator = {tracer};
-    FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};
+    FPathTracingRendererV2 renderer = {};
 
     int2 ipos = int2(DTid.xy);
     uint2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
-    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
+    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, CameraDirect.TotalFrames);
 
     // do a primary ray here
     Vertex hitVertex;
@@ -58,12 +45,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 reflectColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
-    Material material = Materials[hitVertex.MaterialIndex];
-    Common.FetchGBufferV2(hitVertex, Materials[hitVertex.MaterialIndex], hitNode, rayDir, albedo, gbuffer);
+    Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
+    Common.FetchGBufferV2(hitVertex, material, hitNode, rayDir, albedo, gbuffer);
     Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO)[ipos] = albedo;
     Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[ipos] = gbuffer;
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0)[ipos] = hitNode.instanceId;
-
 
     // write to NDC depth
     float4 clipPos = mul(CameraDirect.ViewProjection, float4(hitVertex.Position, 1.0));
@@ -76,7 +62,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }  
 
     // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
+    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, RandomSeed, illuminaceColor, reflectColor);
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);

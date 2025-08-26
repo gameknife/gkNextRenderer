@@ -215,17 +215,21 @@ public struct VkDrawIndexedIndirectCommand {
 public struct ALIGN_16 Material
 {
     public float4 Diffuse;
+
     public int DiffuseTextureId;
     public int MRATextureId;
     public int NormalTextureId;
     public float Fuzziness;
+
     public float RefractionIndex;
     public uint MaterialModel;
     public float Metalness;
-
     public float RefractionIndex2;
+    
     public float NormalTextureScale;
     public float Reserverd2;
+    public float Reserverd3;
+    public float Reserverd4;
 };
 
 public struct ALIGN_16 Vertex
@@ -294,6 +298,10 @@ public struct ALIGN_16 GPUScene
 
     /* Resources */
     public Material* Materials;
+    public Material GetMaterial(int idx)
+    {
+        return Materials[min(4095, max(0, idx))];
+    }
     public ModelData* Offsets;
 
     /* Others */
