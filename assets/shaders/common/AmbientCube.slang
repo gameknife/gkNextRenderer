@@ -485,6 +485,69 @@ public float FetchSDF(float3 pos, in RWStructuredBuffer<VoxelData> Cubes)
     return unpack0.x;
 }
 
+public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp, in VoxelData* Cubes)
+{
+    skipSetp = 1;
+    // Early out if position is outside the probe grid
+    if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
+        pos.x > CUBE_SIZE_XY - 1 || pos.y > CUBE_SIZE_Z - 1 || pos.z > CUBE_SIZE_XY - 1)
+    {
+        skipSetp = 1;
+        return false;
+    }
+
+    int3 baseIdx = int3(floor(pos));
+
+    VoxelData cube = FetchVoxelV2(baseIdx, Cubes);
+    matId = cube.matId;
+
+    uint4 unpack0 =unpack_bytes(cube.distanceToSolid_gg_z01);
+    uint4 unpack1 = unpack_bytes(cube.distanceToSolid_x01_y01);
+    if (cube.matId > 0)
+    {
+        if (unpack0.y == 0)
+        {
+            offsetDist = 0;
+            return true;
+        }
+
+        float3 dir = normalize(-rayDir);
+
+        float distPZ = unpack0.z / 255.0f;
+        float distNZ = unpack0.w / 255.0f;
+        float distPX = unpack1.x / 255.0f;
+        float distNX = unpack1.y / 255.0f;
+        float distPY = unpack1.z / 255.0f;
+        float distNY = unpack1.w / 255.0f;
+
+        float wx_pos = (max(dir.x, 0.0));
+        float wx_neg = (max(-dir.x, 0.0));
+        float wy_pos = (max(dir.y, 0.0));
+        float wy_neg = (max(-dir.y, 0.0));
+        float wz_pos = (max(dir.z, 0.0));
+        float wz_neg = (max(-dir.z, 0.0));
+        float hitLength = wx_pos * distPX + wx_neg * distNX +
+                          wy_pos * distPY + wy_neg * distNY +
+                          wz_pos * distPZ + wz_neg * distNZ;
+
+        float hitLengthRef = wx_pos + wx_neg +
+                          wy_pos + wy_neg +
+                          wz_pos + wz_neg;
+
+        if (hitLength < hitLengthRef)
+        {
+            offsetDist = hitLength * CUBE_UNIT;
+            return true;
+        }
+    }
+
+    if (unpack0.x > 8)
+    {
+        skipSetp = max(1, unpack0.x);
+    }
+
+    return false;
+}
 // Interpolate between 8 probes
 public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp, in RWStructuredBuffer<VoxelData> Cubes)
 {

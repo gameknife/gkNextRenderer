@@ -201,6 +201,61 @@ namespace Common
         return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 8.0f));
     };
 
+    bool traceInScreenSpaceV2(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
+        ModelData* Models = Bindless.GetGpuscene().Offsets;
+        uint* PrimAddress = Bindless.GetGpuscene().Indices;
+
+        const int maxSteps = 5;
+        float stepSize = maxDistance / float(maxSteps);
+        float3 rayStart = position + rayDir * 0.1;
+
+        outPosition = float3(0, 0, 0);
+        outNormal = float3(0, 0, 1);
+        outMaterialIdx = 0;
+
+        for (int i = 0; i < maxSteps; i++)
+        {
+            float3 currentPos = rayStart + rayDir * (i * stepSize);
+            float4 currentPosProj = mul(Camera.ViewProjection, float4(currentPos, 1.0));
+            currentPosProj.xyz /= currentPosProj.w;
+            float2 currentUV = currentPosProj.xy * 0.5 + 0.5;
+            if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
+                continue;
+
+            int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_MINIGBUFFER);
+
+            int2 sampleCoord = int2(currentUV * float2(size));
+            uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
+            uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
+            if (vBufferSample.r == 0)
+                continue;
+
+            float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+            float4 target = mul(Camera.ProjectionInverse, float4(currentPosProj.x, currentPosProj.y, 1, 1));
+            float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+            float3 ray_dir = normalize(dir.xyz);
+
+            Vertex sampleVertex = Common.get_material_dataV2(vBufferSample, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
+
+            float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
+            float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
+
+            if (viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - (depthTolerance))
+            {
+                outPosition = sampleVertex.Position;
+                outNormal = normalize(sampleVertex.Normal.rgb);
+                NodeProxy hitNode = NodeProxies[vBufferSample.x - 1];
+                outMaterialIdx = hitNode.matId[sampleVertex.MaterialIndex];
+                return true;
+            }
+        }
+        return false;
+    };
+
     bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
                             in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
     {
@@ -674,6 +729,201 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
     FHiVoxelDDARayTracer DDARayTracer;
 }
 
+public struct FHiVoxelDDARayTracerV2 : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode);
+    }
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    {
+        float rayLength = length(rayTaget - rayOrigin);
+        Vertex outVertex;
+        NodeProxy outNode;
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode);
+    }
+    public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+
+        uint hitMatId = 0;
+        uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
+    
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET + float3(0.5f) * CUBE_UNIT) / CUBE_UNIT;
+        float3 tDelta = abs(CUBE_UNIT / rayDir);
+        float3 tMax = float3(0, 0, 0);
+        float3 stepSign = sign(rayDir);
+    
+        if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
+        if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
+        if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+    
+        bool hit = false;
+        float3 normal = float3(0, 0, 0);
+    
+        for (uint i = 0; i < maxSteps; ++i)
+        {
+            if (useBounds)
+            {
+                float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
+                if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
+                    break;
+            }
+    
+            float offsetDist = 0;
+            float skipLength = 1;
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
+            {
+                hit = true;
+                outVertex.Normal = normalize(normal);
+                float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
+                float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
+                outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
+                outVertex.MaterialIndex = hitMatId;
+                outVertex.TexCoord = float2(0.5, 0.5);
+                break;
+            }
+
+            if (skipLength > 1.0f)
+            {
+                int primaryAxis = 0;
+                if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
+                else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
+                
+                float voxelSkipLength = skipLength * CUBE_UNIT;
+                float stepsToSkip = 0; 
+                stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
+                
+                if (stepsToSkip >= 1.0f)
+                {
+                    voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
+                    tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
+                    
+                    float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
+                    
+                    for (int axis = 0; axis < 3; ++axis)
+                    {
+                        if (axis != primaryAxis && rayDir[axis] != 0)
+                        {
+                            float stepsOther = timeAdvanced / tDelta[axis];
+                            voxelPos[axis] += stepSign[axis] * floor(stepsOther);
+                            tMax[axis] -= tDelta[axis] * floor(stepsOther);
+                        }
+                    }
+                    
+                    i += uint(stepsToSkip - 1);
+
+                    normal = float3(0, 0, 0);
+                    normal[primaryAxis] = -stepSign[primaryAxis];
+                    
+                    continue;
+                }
+            }
+   
+            // 原始DDA单步进
+            normal = float3(0, 0, 0);
+        
+            if (tMax.x < tMax.y && tMax.x < tMax.z)
+            {
+                voxelPos.x += stepSign.x;
+                tMax.x += tDelta.x;
+                normal.x = -stepSign.x;
+            }
+            else if (tMax.y < tMax.z)
+            {
+                voxelPos.y += stepSign.y;
+                tMax.y += tDelta.y;
+                normal.y = -stepSign.y;
+            }
+            else
+            {
+                voxelPos.z += stepSign.z;
+                tMax.z += tDelta.z;
+                normal.z = -stepSign.z;
+            }
+        }
+        return hit;
+    }
+
+    public bool LegacyTraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        return TraceRayDDA(rayOrigin, rayDir, maxDistance, float3(0), float3(0), false, outVertex, outNode);
+    }
+
+    public bool LocalTraceRay(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        return TraceRayDDA(rayOrigin, rayDir, 0, boxMin, boxMax, true, outVertex, outNode);
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        PageIndex* Pages = Bindless.GetGpuscene().Pages;
+        // DDA voxel traversal
+        bool hit = false;
+        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 2;
+
+        // Top Level Page Index
+        float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
+        float3 pagetDelta = abs(PAGE_SIZE / rayDir);
+        float3 pageTMax = float3(0, 0, 0);
+
+        uint pageIndexStartPoint = Common.GetPageIndex(pagePos);
+        if (maxDistance < PAGE_SIZE * 1.7)
+        {
+            return LegacyTraceRay(rayOrigin, rayDir, maxDistance, outVertex, outNode);
+        }
+
+        float3 stepSign = sign(rayDir);
+        if (rayDir.x != 0) pageTMax.x = (stepSign.x > 0 ? ceil(pagePos.x) - pagePos.x : pagePos.x - floor(pagePos.x)) * pagetDelta.x;
+        if (rayDir.y != 0) pageTMax.y = (stepSign.y > 0 ? ceil(pagePos.y) - pagePos.y : pagePos.y - floor(pagePos.y)) * pagetDelta.y;
+        if (rayDir.z != 0) pageTMax.z = (stepSign.z > 0 ? ceil(pagePos.z) - pagePos.z : pagePos.z - floor(pagePos.z)) * pagetDelta.z;
+        uint maxPageSteps = uint(maxDistance / PAGE_SIZE * 1.7);
+
+        for (uint i = 0; i < maxPageSteps; i++)
+        {
+            float3 boxMin = floor(pagePos) * PAGE_SIZE + PAGE_OFFSET + float3(0.01);
+            float3 boxMax = floor(pagePos) * PAGE_SIZE + PAGE_OFFSET + float3(PAGE_SIZE);
+
+            float3 localStartPos = Common.CalculateRayAABBEntry(rayOrigin, rayDir, boxMin, boxMax);
+
+            // Check if we are in a valid page
+            uint pageIndex = Common.GetPageIndex(pagePos);
+
+            // Check if the current voxel is within the page bounds
+            if (Pages[pageIndex].voxelCount > 0)
+            {
+                // 使用计算出的进入点进行局部追踪
+                if (LocalTraceRay(localStartPos, rayDir, boxMin, boxMax, outVertex, outNode))
+                {
+                    hit = true;
+                    break;
+                }
+            }
+
+            // Step through the page
+            if (pageTMax.x < pageTMax.y && pageTMax.x < pageTMax.z)
+            {
+                pagePos.x += stepSign.x;
+                pageTMax.x += pagetDelta.x;
+            }
+            else if (pageTMax.y < pageTMax.z)
+            {
+                pagePos.y += stepSign.y;
+                pageTMax.y += pagetDelta.y;
+            }
+            else
+            {
+                pagePos.z += stepSign.z;
+                pageTMax.z += pagetDelta.z;
+            }
+        }
+        return hit;
+    }
+}
+
 public struct FHiVoxelDDARayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -1063,6 +1313,64 @@ public struct FHardwareRayTracer : IRayTracer
     RaytracingAccelerationStructure Scene;
 }
 
+public struct FSoftwareRayTracerV2 : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        float3 offsetPos = rayOrigin;
+
+        // Near field tracing parameters
+        const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
+        const float depthToleration = 0.2;   // Near field depth toleration
+
+        // screenspace tracing is heavy, skip
+        float3 outPosition;
+        float3 outNormal;
+        uint outMaterialIdx;
+        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outPosition, outNormal, outMaterialIdx))
+        {
+            return true;
+        }
+
+        if (DDARayTracer.TraceOcclusion(offsetPos, rayDir))
+        {
+            return true;
+        }
+
+        return false;
+    }
+    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    {
+        return false;
+    }
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        float3 offsetPos = rayOrigin;
+
+        // Near field tracing parameters
+        const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
+        const float depthToleration = 0.2;         // Near field depth toleration
+
+        // screenspace tracing is heavy, skip
+        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
+        {
+            outVertex.TexCoord = float2(0.5, 0.5);
+            return true;
+        }
+
+        // use dda directly
+        // offsetPos = offsetPos + rayDir * longDistanceInit; no need to offset, dda tracing will handle it
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode))
+        {
+            return true;
+        }
+ 
+        return false;
+    }
+
+    FHiVoxelDDARayTracerV2 DDARayTracer;
+}
+
 public struct FSoftwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -1177,6 +1485,31 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
     // all stuffs like pointers
     ConstantBuffer<UniformBufferObject> Camera;
     FHardwareRayTracer HWTracer;
+}
+
+public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            const float3 lightVector = Camera.SunDirection.xyz;
+            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+            shadow = 1;
+            if (HWTracer.TraceOcclusion(position + normal * 0.25f, lightVectorCone))
+            {
+                shadow = 0;
+            }
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    // all stuffs like pointers
+    FSoftwareRayTracerV2 HWTracer;
 }
 
 public struct FSoftwareDirectIlluminator : IDirectIlluminator

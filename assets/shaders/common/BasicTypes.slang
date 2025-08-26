@@ -272,6 +272,7 @@ public struct ALIGN_16 GPUScene
     /* Others */
     public uint64_t Cubes;
     public uint64_t Voxels;
+    public uint64_t Pages;
     public uint64_t HDRSHs;
     public uint64_t Lights;
 
@@ -307,6 +308,7 @@ public struct ALIGN_16 GPUScene
     /* Others */
     public AmbientCube* Cubes;
     public VoxelData* Voxels;
+    public PageIndex* Pages;
     public SphericalHarmonics* HDRSHs;
     public LightObject* Lights;
 
