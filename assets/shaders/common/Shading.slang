@@ -1259,6 +1259,9 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
 
 public struct FPathTracingRendererV2
 {
+    public float ExitProbability = 0.5;
+    public bool ExitAfterFirst = false;
+
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
@@ -1361,34 +1364,41 @@ public struct FPathTracingRendererV2
             bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal);
             if (!exitFirst)
             {
-                for (uint b = 1; b < maxBounces; ++b)
+                if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
                 {
-                    bool hitReflectDontCare = false;
-                    bool hitMetalDontCare = false;
-                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare))
+                    RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
+                }
+                else
+                {
+                    for (uint b = 1; b < maxBounces; ++b)
                     {
-                        break;
-                    }
-
-                    if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
-                    {
-                        const float3 lightVector = Camera.SunDirection.xyz;
-                        const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-                        if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                        bool hitReflectDontCare = false;
+                        bool hitMetalDontCare = false;
+                        if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare))
                         {
-                            RayColor *= Camera.SunColor;
                             break;
                         }
-                    }
 
-                    // 提前退出
-                    const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+                        if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
+                        {
+                            const float3 lightVector = Camera.SunDirection.xyz;
+                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                            {
+                                RayColor *= Camera.SunColor;
+                                break;
+                            }
+                        }
 
-                    // 终结路径
-                    if (b == maxBounces - 1 || earlyExit)
-                    {
-                        RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
-                        break;
+                        // 提前退出
+                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < ExitProbability);
+
+                        // 终结路径
+                        if (b == maxBounces - 1 || earlyExit)
+                        {
+                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
+                            break;
+                        }
                     }
                 }
             }
