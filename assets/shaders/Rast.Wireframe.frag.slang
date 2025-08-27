@@ -1,5 +1,3 @@
-import Common;
-
 struct FragmentOutput
 {
     [[vk::location(0)]] float4 OutColor : SV_Target0;

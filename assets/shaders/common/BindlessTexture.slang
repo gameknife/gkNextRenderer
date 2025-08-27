@@ -1,7 +1,7 @@
 // General Bindless Texture
 
 #ifndef __cplusplus
-implementing Common;
+implementing Bindless;
 #endif
 namespace Bindless
 {
@@ -22,19 +22,19 @@ namespace Bindless
     public static const int RT_SINGLE_SPECULAR = 12;
 
     public static const int RT_ACCUMLATE_ALBEDO = 13;
+    
+    
+    public static const int RT_SWAPCHAIN0 = 14;
+    public static const int RT_SWAPCHAIN1 = 15;
+    public static const int RT_SWAPCHAIN2 = 16;
 }
 
 #ifndef __cplusplus
 [[vk::binding(0, 0)]] __DynamicResource SampleTextureArray[];
 [[vk::binding(1, 0)]] __DynamicResource StorageTextureArray[];
-[[vk::push_constant]] ConstantBuffer<GPUScene> gpuScene;
+
 namespace Bindless
 {
-    public GPUScene GetGpuscene()
-    {
-        return gpuScene;
-    }
-
     public Sampler2D GetSampleTexture(int index )
     {
         return SampleTextureArray[NonUniformResourceIndex(index)].as<Sampler2D>();

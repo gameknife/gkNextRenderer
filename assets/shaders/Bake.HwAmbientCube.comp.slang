@@ -4,16 +4,15 @@ import Common;
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    FHardwareRayTracerV2 tracer;
+    FGpuProbeGenerator probeGen;
+
     uint gIdx = DTid.x + Bindless.GetGpuscene().custom_data_0;
     
-    // convert to local position
     uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
     uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
     uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
-    FHardwareRayTracerV2 tracer;
-    FGpuProbeGenerator probeGen;
-    
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Bindless.GetGpuscene().Camera->TotalFrames);
     float3 origin = float3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
 

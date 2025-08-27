@@ -281,6 +281,7 @@ public struct ALIGN_16 GPUScene
 
     public uint64_t TLAS;
 
+    public uint SwapChainIndex;
     public uint custom_data_0;
     public uint custom_data_1;
 };
@@ -328,6 +329,7 @@ public struct ALIGN_16 GPUScene
 		};
 	}
 
+    public uint SwapChainIndex;
     public uint custom_data_0;
     public uint custom_data_1;
    

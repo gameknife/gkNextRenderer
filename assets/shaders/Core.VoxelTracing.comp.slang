@@ -1,4 +1,5 @@
 import Common;
+import Bindless;
 #include "common/ShaderClock.slang"
 
 void OutputColor(int2 ipos, float3 Total)

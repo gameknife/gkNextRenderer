@@ -1,4 +1,5 @@
 import Common;
+import Bindless;
 #include "common/ShaderClock.slang"
 
 [shader("compute")]
