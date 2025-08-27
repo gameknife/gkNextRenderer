@@ -280,6 +280,9 @@ public struct ALIGN_16 GPUScene
     public uint64_t GPUDrivenStats;
 
     public uint64_t TLAS;
+
+    public uint custom_data_0;
+    public uint custom_data_1;
 };
 
 #else
@@ -324,6 +327,9 @@ public struct ALIGN_16 GPUScene
 			result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $TLAS;
 		};
 	}
+
+    public uint custom_data_0;
+    public uint custom_data_1;
    
 };
 

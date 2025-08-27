@@ -615,20 +615,25 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
 
 public interface IProbeGenerator
 {
-    void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray);
-    void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray);
+    void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed);
+    void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed);
 }
 
 public struct FGpuProbeGenerator : IProbeGenerator
 {
     LightObject FetchLight(uint lightIdx, inout float4 lightPower)
     {
-        lightPower = Materials[Lights[lightIdx].lightMatIdx].Diffuse;
+        LightObject* Lights = Bindless.GetGpuscene().Lights;
+        lightPower = Bindless.GetGpuscene().GetMaterial(Lights[lightIdx].lightMatIdx).Diffuse;
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut, in Sampler2D[] TextureArray)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
     {
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+
         origin = origin + basis * CUBE_UNIT * 0.25f;
         // 输出结果
         float4 directColor = float4(0.0);
@@ -649,18 +654,18 @@ public struct FGpuProbeGenerator : IProbeGenerator
             NodeProxy hitNode;
             if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
             {
-                Material hitMaterial = Materials[hitVertex.MaterialIndex];
+                Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 float4 outAlbedo = hitMaterial.Diffuse;
                 if (hitMaterial.DiffuseTextureId >= 0)
                 {
-                    float4 tex = TextureArray[NonUniformResourceIndex(hitMaterial.DiffuseTextureId)].SampleLevel(hitVertex.TexCoord, 0);
+                    float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
                     outAlbedo *= tex;
                 }
-                bounceColor += outAlbedo * interpolateAmbientCubes<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels) * 1.25f; // magic bounce twice
+                bounceColor += outAlbedo * interpolateAmbientCubesV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels) * 1.25f; // magic bounce twice
             }
             else
             {
-                directColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation, HDRSHs) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+                directColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
                 skyVisibility += 1.0f;
             }
         }
@@ -726,7 +731,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             if (OutDistanceToSolid <= CUBE_UNIT)
             {
-                Material hitMaterial = Materials[hitVertex.MaterialIndex];
+                Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 OutMaterialId = hitVertex.MaterialIndex;
 
                 if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight) && hitDist < 0.02f)) //voxel inclusive
@@ -739,8 +744,11 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return false;
     }
 
-    public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
+    public void Render(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed)
     {
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
         Voxels[CubeIdx].matId = 0;
 
         float distPY = 255.0f;
@@ -793,20 +801,23 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             uint sunvis = 0;
 
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z, TextureArray);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis, TextureArray);
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
         }
     }
 
-    public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed, in Sampler2D[] TextureArray)
+    public void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed)
     {
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
         uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
         if (upacked.x < 4) // 只处理表面，增值算法的时候可以具体的把他做好
         {
@@ -818,27 +829,15 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             uint sunvis = 0;
 
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z, TextureArray);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis, TextureArray);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis, TextureArray);
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
         }
     }
-
-    ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<Material> Materials;
-    StructuredBuffer<ModelData> Offsets;
-    StructuredBuffer<NodeProxy> NodeProxies;
-
-    RWStructuredBuffer<AmbientCube> Cubes;
-    RWStructuredBuffer<VoxelData> Voxels;
-    StructuredBuffer<SphericalHarmonics> HDRSHs;
-    StructuredBuffer<LightObject> Lights;
 }

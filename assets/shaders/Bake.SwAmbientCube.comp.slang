@@ -14,25 +14,14 @@ import Common;
 
 [[vk::binding(14)]] StructuredBuffer<PageIndex> Pages;
 
-// 全局纹理数组
-[[vk::binding(0, 1)]] Sampler2D TextureSamplers[];
-
-struct PushConstant
-{
-    uint globalOffset;
-    uint cascade;
-};
-
-[[vk::push_constant]] ConstantBuffer<PushConstant> pushConst;
-
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    FHiVoxelDDARayTracer tracer = { Voxels, Pages };
-    FGpuProbeGenerator probeGen = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs, Lights };
+    FHiVoxelDDARayTracerV2 tracer;
+    FGpuProbeGenerator probeGen;
 
-    uint gIdx = DTid.x + pushConst.globalOffset;
+    uint gIdx = DTid.x + Bindless.GetGpuscene().custom_data_0;
     
     // convert to local position
     uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
@@ -41,5 +30,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, Camera.TotalFrames);
     float3 origin = float3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
-    probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed, TextureSamplers);
+    probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed);
 }

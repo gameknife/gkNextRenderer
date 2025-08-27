@@ -181,9 +181,9 @@ namespace Common
         return color;
     };
 
-    public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate, in StructuredBuffer<SphericalHarmonics> HDRSHs)
+    public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate)
     {
-        float3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
+        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
         return float4(rayColor * 1.0f, 1.0);
     };
 
