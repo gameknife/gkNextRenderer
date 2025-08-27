@@ -408,15 +408,15 @@ public struct FVisibilityBufferRayCasterV2 : IPrimaryRayCaster
         float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
         float3 ray_dir = normalize(dir.xyz);
 
-        // 获取初始顶点数据
-        Vertex initialVertex = Common.get_material_dataV2(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
-        
         if (vBuffer.x == 0)
         {
             // 没有几何体，直接返回
             outRayDir = ray_dir;
             return false;
         }
+
+        // 获取初始顶点数据
+        Vertex initialVertex = Common.get_material_dataV2(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
         
         // 第二步：计算顶点到相机的距离
         float vertexDistance = length(initialVertex.Position - origin.xyz);
