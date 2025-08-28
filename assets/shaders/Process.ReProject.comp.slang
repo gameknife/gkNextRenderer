@@ -96,6 +96,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         float4 spatialSample = float4(0, 0, 0, 0);
         float totalWeight = 0.0;
+        float motionInRange = 0; // 
 
         for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
             for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
@@ -114,6 +115,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
                 spatialSample += samplePixel * weight;
                 totalWeight += weight;
+
+                motionInRange += length(OutMotionVector[ipos + offset * 2].rg);
             }
         }
 
@@ -128,7 +131,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float3 historyColor[4];
 
         // todo: off focus dont judge, need fix later
-        if (length(motion) < 0.02)
+        // motion value should write to a buffer that cool down by time
+        if (length(motionInRange) < 0.1)
         {
             prev_primitive_index0 = current_primitive_index0;
             prev_primitive_index1 = current_primitive_index0;
@@ -156,6 +160,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
 
         if (!Camera.ProgressiveRender && pushConsts.needClamp)
+        //if (!Camera.ProgressiveRender)
         {
             float3 AABBMax = rgb2ycocg(src.rgb);
             float3 AABBMin = AABBMax;
