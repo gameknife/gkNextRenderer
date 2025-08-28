@@ -55,6 +55,27 @@ float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 N
     }
 }
 
+float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel, int2 previpos,
+                          uint current_primitive_index0,
+                          uint prev_primitive_index0,
+                          uint prev_primitive_index1,
+                          uint prev_primitive_index2,
+                          uint prev_primitive_index3,
+                          float4 currFrameSample)
+{
+    float3 historyColor[4];
+    historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? prevFrameTexture[previpos].rgb : currFrameSample.rgb;
+    historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? prevFrameTexture[previpos + int2(1, 0)].rgb : currFrameSample.rgb;
+    historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? prevFrameTexture[previpos + int2(0, 1)].rgb : currFrameSample.rgb;
+    historyColor[3] = current_primitive_index0 == prev_primitive_index3 ? prevFrameTexture[previpos + int2(1, 1)].rgb : currFrameSample.rgb;
+
+    float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
+                            lerp(historyColor[2], historyColor[3], subpixel.x),
+                            subpixel.y);
+    history = clamp(history, 0.0, 1600.0); // kill the negative valuse
+    return history;
+}
+
 // A simple accumulation shader, reproject can be implemented here later.
 [shader("compute")]
 [numthreads(8, 8, 1)]
@@ -81,9 +102,18 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
     let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
 
+    if (Camera.ProgressiveRender)
+    {
+        AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
+        AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
+        AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
+        return;
+    }
 
-    float4 src = SourceDiffuse[ipos];
-    
+    float4 currDiffuseSample = SourceDiffuse[ipos];
+    float4 currSpecularSample = SourceSpecular[ipos];
+    float4 currAlbedoSample = SourceAlbedo[ipos];
+
     bool useHistory = true;
     float2 motion = MotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
@@ -91,19 +121,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
                         all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
     uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
-
-    float4 final = src;
-
-    if (Camera.ProgressiveRender)
-    {
-        float4 history = PrevDiffuse[ipos];
-        final = lerp(history, src, clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
-        AccumlateDiffuse[ipos] = float4(final.rgb, 1.0);
-        return;
-    }
+    const bool miss = current_primitive_index0 == 65535;
     
-    // fetch visibility to validate the history
-    const bool miss = current_primitive_index0 == 65535 ? true : false;
     if (miss || Camera.TotalFrames == 0 || !inside)
     {
         useHistory = false;
@@ -112,47 +131,40 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (useHistory)
     {
         const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 2;
+        const float3 CenterNormal = NormalBuffer[ipos].rgb;
 
-        float3 CenterNormal = NormalBuffer[ipos].rgb;
+        float4 spatialDiffuseSample = float4(0, 0, 0, 0);
+        float4 spatialSpecularSample = float4(0, 0, 0, 0);
 
-        float4 spatialSample = float4(0, 0, 0, 0);
         float totalWeight = 0.0;
-        float motionInRange = 0; // 
+        float motionInRange = 0;
 
         for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
             for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
-                int2 offset = int2(x, y);
-                int2 samplePos = ipos + offset;
-                float4 samplePixel = SourceDiffuse[samplePos];
-                uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
-                float3 worldNormal = NormalBuffer[samplePos].rgb;
+                const int2 offset = int2(x, y);
+                const int2 samplePos = ipos + offset;
+                const uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
+                const float3 worldNormal = NormalBuffer[samplePos].rgb;
 
-                bool isCenter = (x == 0 && y == 0) ? true : false;
-                bool sameObject = (primitiveIdx == current_primitive_index0) ? true : false;
-                float centerDist = length(float2(x, y));
+                const bool isCenter = (x == 0 && y == 0);
+                const bool sameObject = (primitiveIdx == current_primitive_index0);
+                const float centerDist = length(float2(x, y));
+                const float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
 
-                // Calculate the weight for this sample
-                float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
-
-                spatialSample += samplePixel * weight;
+                spatialDiffuseSample += SourceDiffuse[samplePos] * weight;
+                spatialSpecularSample += SourceSpecular[samplePos] * weight;
                 totalWeight += weight;
 
                 motionInRange += length(MotionVector[ipos + offset * 2].rg);
             }
         }
+        spatialDiffuseSample /= totalWeight;
+        spatialSpecularSample /= totalWeight;
 
-        // Normalize
-        spatialSample /= totalWeight;
-
-        // prev 9
         uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
         uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
         uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
 
-        float3 historyColor[4];
-
-        // todo: off focus dont judge, need fix later
-        // motion value should write to a buffer that cool down by time
         if (length(motionInRange) < 0.1)
         {
             prev_primitive_index0 = current_primitive_index0;
@@ -161,48 +173,59 @@ void main(uint3 DTid : SV_DispatchThreadID)
             prev_primitive_index3 = current_primitive_index0;
         }
 
-        historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? PrevDiffuse[previpos].rgb : spatialSample.rgb;
-        historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? PrevDiffuse[previpos + int2(1, 0)].rgb : spatialSample.rgb;
-        historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? PrevDiffuse[previpos + int2(0, 1)].rgb : spatialSample.rgb;
-        historyColor[3] = current_primitive_index0 == prev_primitive_index3 ? PrevDiffuse[previpos + int2(1, 1)].rgb : spatialSample.rgb;
-
         float2 subpixel = frac(float2(ipos) + motion);
-        float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
-                                lerp(historyColor[2], historyColor[3], subpixel.x),
-                                subpixel.y);
+        float3 historyDiffuse = FilterHistoryColor( PrevDiffuse, subpixel, previpos,
+                          current_primitive_index0,
+                          prev_primitive_index0,
+                          prev_primitive_index1,
+                          prev_primitive_index2,
+                          prev_primitive_index3,
+                          spatialDiffuseSample);
 
-        history = clamp(history, 0.0, 1600.0); // kill the negative valuse
+        float3 historySpecular = FilterHistoryColor( PrevSpecular, subpixel, previpos,
+                          current_primitive_index0,
+                          prev_primitive_index0,
+                          prev_primitive_index1,
+                          prev_primitive_index2,
+                          prev_primitive_index3,
+                          spatialSpecularSample);
 
-        if (!Camera.ProgressiveRender && false)
-        {
-            float3 currentColor[25];
+        float3 historyAlbedo = FilterHistoryColor( PrevAlbedo, subpixel, previpos,
+                          current_primitive_index0,
+                          prev_primitive_index0,
+                          prev_primitive_index1,
+                          prev_primitive_index2,
+                          prev_primitive_index3,
+                          currAlbedoSample);
 
-            for (int i = 0; i < 25; i++)
-            {
-                currentColor[i] = SourceDiffuse[ipos + int2(offsets5x5[i])].rgb;
-            }
-
-            float3 AABBMax = rgb2ycocg(src.rgb);
-            float3 AABBMin = AABBMax;
-  
-            for (int k = 0; k < 25; k++)
-            {
-                AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
-                AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
-            }
-
-            float3 HistoryYCoCg = rgb2ycocg(history);
-
-            float3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
-
-            history = ycocg2rgb(ResultYCoCg);
-        }
+        // if (!Camera.ProgressiveRender && false)
+        // {
+        //     float3 currentColor[25];
+        //     for (int i = 0; i < 25; i++)
+        //     {
+        //         currentColor[i] = SourceDiffuse[ipos + int2(offsets5x5[i])].rgb;
+        //     }
+        //     float3 AABBMax = rgb2ycocg(src.rgb);
+        //     float3 AABBMin = AABBMax;
+        //     for (int k = 0; k < 25; k++)
+        //     {
+        //         AABBMin = min(AABBMin, rgb2ycocg(currentColor[k]));
+        //         AABBMax = max(AABBMax, rgb2ycocg(currentColor[k]));
+        //     }
+        //     float3 HistoryYCoCg = rgb2ycocg(history);
+        //     float3 ResultYCoCg = clamp(HistoryYCoCg, AABBMin, AABBMax);
+        //     history = ycocg2rgb(ResultYCoCg);
+        // }
 
         float currKeep = 1.0f / max(1, Camera.TemporalFrames);
-        final.rgb = lerp(history, src.rgb, clamp(currKeep, 0.0, 1.0));
+        AccumlateDiffuse[ipos].rgb = lerp(historyDiffuse, currDiffuseSample.rgb, clamp(currKeep, 0.0, 1.0));
+        AccumlateSpecular[ipos].rgb = lerp(historySpecular, currSpecularSample.rgb, clamp(currKeep, 0.0, 1.0));
+        AccumlateAlbedo[ipos].rgb = lerp(historyAlbedo, currAlbedoSample.rgb, clamp(currKeep, 0.0, 1.0));
     }
-
-    AccumlateDiffuse[ipos] = float4(final.rgb, 1.0);
-    AccumlateSpecular[ipos] = SourceSpecular[ipos];
-    AccumlateAlbedo[ipos] = SourceAlbedo[ipos];
+    else
+    {
+        AccumlateDiffuse[ipos] = currDiffuseSample;
+        AccumlateSpecular[ipos] = currSpecularSample;
+        AccumlateAlbedo[ipos] = currAlbedoSample;
+    }
 }
