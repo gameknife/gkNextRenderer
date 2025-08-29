@@ -1,12 +1,8 @@
-import Common;
-
-// Texture bindings
-[[vk::binding(0)]] RWTexture2D<float4> SourceImage;
-[[vk::binding(1)]] RWTexture2D<float4> DestImage;
-[[vk::binding(2)]] ConstantBuffer<UniformBufferObject> Camera;
+import Bindless;
 
 struct PushConsts
 {
+    uint SwapChainIdx;
     uint offset_x;
     uint offset_y;
     uint output_w;
@@ -279,18 +275,16 @@ float4 doUpscale(RWTexture2D<float4> tex,
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const int2 ipos = int2(DTid.xy);
-    int2 isize;
-    DestImage.GetDimensions(isize.x, isize.y);
-    int2 ssize;
-    SourceImage.GetDimensions(ssize.x, ssize.y);
+    int2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
+    int2 ssize = Bindless.GetStorageTextureDimensions(Bindless.RT_DENOISED);
 
     float4 outColor = float4(0, 0, 0, 1);
 
-    if (Camera.SuperResolution < 2)
+    if (isize.x != ssize.x || isize.y != ssize.y)
     {
         const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
-            SourceImage,
+            Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED),
             uv,
             float2(ssize),
             float2(isize)
@@ -299,8 +293,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         const int2 iposOffset = int2(ipos * float2(isize) / float2(pushConsts.output_w, pushConsts.output_h));
-        outColor = SourceImage[iposOffset];
+        outColor = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[iposOffset];
     }
 
-    DestImage[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;
+    Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;
 }
