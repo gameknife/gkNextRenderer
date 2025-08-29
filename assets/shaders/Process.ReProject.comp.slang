@@ -1,20 +1,6 @@
 import Common;
 import Bindless;
 
-// Texture bindings
-// [[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
-// [[vk::binding(1, 0)]] RWTexture2D<float4> SourceImage;
-// [[vk::binding(2, 0)]] RWTexture2D<float4> AccumulateImage;
-// [[vk::binding(3, 0)]] RWTexture2D<float4> FinalImage;
-
-// [[vk::binding(1, 1)]] RWTexture2D<float4> OutImage;
-// [[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
-// [[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
-// [[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
-// [[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
-// [[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
-// [[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
-
 // struct PushConsts
 // {
 //     bool needClamp;

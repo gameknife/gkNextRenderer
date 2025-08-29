@@ -26,10 +26,14 @@ namespace Bindless
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
     public static const int RT_SINGLE_PREV_ALBEDO = 22;
+
+    public static const int RT_TEMP_USAGE0 = 50;
     
     public static const int RT_SWAPCHAIN0 = 100;
     public static const int RT_SWAPCHAIN1 = 101;
     public static const int RT_SWAPCHAIN2 = 102;
+
+    public static const int RT_COUNT = 128;
 }
 
 #ifndef __cplusplus
