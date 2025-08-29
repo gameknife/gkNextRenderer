@@ -1,20 +1,5 @@
 import Common;
-
-[[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> Camera;
-[[vk::binding(1, 0)]] RWTexture2D<float4> OutImage;
-
-[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
-[[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
-[[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
-[[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
-[[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
-[[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
-[[vk::binding(13, 1)]] RWTexture2D<float4> AccmulateAlbedoBuffer;
-
-[[vk::push_constant]]
-ConstantBuffer<GPUScene> gpuScene;
+import Bindless;
 
 static const int WORK_GROUP_AXIS_SIZE = 8;
 static const int WINDOW_R = 5; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
@@ -63,9 +48,9 @@ bool EdgeDetect(uint current_primitive_index, RWTexture2D<uint> ObjectImage, int
 
 void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, float CenterLum, float3 CenterNormal, uint CenterVisibility)
 {
-    const float sigma = Camera.BFSigma; // spatial sigma
-    const float sigmaL = Camera.BFSigmaLum * 100.0; // 
-    const float sigmaN = Camera.BFSigmaNormal;
+    const float sigma = Bindless.GetGpuscene().Camera->BFSigma; // spatial sigma
+    const float sigmaL = Bindless.GetGpuscene().Camera->BFSigmaLum * 100.0; // 
+    const float sigmaN = Bindless.GetGpuscene().Camera->BFSigmaNormal;
     const int N = int(WINDOW_R); // filter size
     
     const float3 FinalCol = FetchDiffuse(coord);
@@ -94,6 +79,16 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
                  uint3 groupId: SV_GroupID,
                  uint groupIndex: SV_GroupIndex)
 {
+    UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+
+    let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
+    let FinalImage = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
+    let FinalImageSpec = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_SPECULAR);
+    let AccumlateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
+    let OutNormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
+    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
+
     const int2 globalOffset = int2(Camera.ViewportRect.xy);
     const int2 ipos = int2(dispatchThreadId.xy) + globalOffset;
     bool isEvenFrame = false; // Camera.TotalFrames % 2 == 0 ? true : false;
@@ -149,7 +144,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 
         if (!Camera.DebugDraw_Lighting)
         {
-            Total = Total * AccmulateAlbedoBuffer[ipos].rgb + CenterSpec;
+            Total = Total * AccumlateAlbedo[ipos].rgb + CenterSpec;
         }
     }
     else
@@ -160,7 +155,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         }
         else
         {
-            Total = FinalImage[ipos].rgb * AccmulateAlbedoBuffer[ipos].rgb + FinalImageSpec[ipos].rgb;
+            Total = FinalImage[ipos].rgb * AccumlateAlbedo[ipos].rgb + FinalImageSpec[ipos].rgb;
         }
     }
 
