@@ -1,14 +1,17 @@
-import Common;
 import Bindless;
 
-// struct PushConsts
-// {
-//     bool needClamp;
-//     bool needSpatio;
-// };
+struct PushConsts
+{
+    bool ProgressiveRender;
+    int TemporalFrames;
+    
+    uint PrevDiffuseBindlessIdx;
+    uint PrevSpecularBindlessIdx;
+    uint PrevAlbedoBindlessIdx;
+};
 
-// [[vk::push_constant]]
-// ConstantBuffer<PushConsts> pushConsts;
+[[vk::push_constant]]
+ConstantBuffer<PushConsts> pushConsts;
 
 // Helper functions
 uint FetchPrimitiveIndex(uint InstanceID)
@@ -67,17 +70,16 @@ float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-
-    int2 ipos = int2(DTid.xy) + int2(Camera.ViewportRect.xy);
+    int2 ipos = int2(DTid.xy);
+    uint2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
 
     let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
     let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
     let SourceAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
 
-    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_PREV_DIFFUSE);
-    let PrevSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_PREV_SPECULAR);
-    let PrevAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_PREV_ALBEDO);
+    let PrevDiffuse = Bindless.GetStorageTexture<float4>(pushConsts.PrevDiffuseBindlessIdx);
+    let PrevSpecular = Bindless.GetStorageTexture<float4>(pushConsts.PrevSpecularBindlessIdx);
+    let PrevAlbedo = Bindless.GetStorageTexture<float4>(pushConsts.PrevAlbedoBindlessIdx);
 
     let AccumlateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
     let AccumlateSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_SPECULAR);
@@ -88,11 +90,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
     let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
 
-    if (Camera.ProgressiveRender)
+    if (pushConsts.ProgressiveRender)
     {
-        AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
-        AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
-        AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / Camera.TemporalFrames, 0.0, 1.0));
+        AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+        AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+        AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
         return;
     }
 
@@ -103,20 +105,20 @@ void main(uint3 DTid : SV_DispatchThreadID)
     bool useHistory = true;
     float2 motion = MotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
-    const bool inside = all(previpos < int2(Camera.ViewportRect.xy + Camera.ViewportRect.zw)) &&
-                        all(previpos >= int2(Camera.ViewportRect.xy) + int2(-1, -1));
+    const bool inside = all(previpos < isize) &&
+                        all(previpos >= int2(-1, -1));
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
     uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
     const bool miss = current_primitive_index0 == 65535;
     
-    if (miss || Camera.TotalFrames == 0 || !inside)
+    if (miss || !inside)
     {
         useHistory = false;
     }
 
     if (useHistory)
     {
-        const int SAMPLE_RANGE = Camera.DisableSpatialReuse ? 0 : 2;
+        const int SAMPLE_RANGE = false ? 0 : 2;
         const float3 CenterNormal = NormalBuffer[ipos].rgb;
 
         float4 spatialDiffuseSample = float4(0, 0, 0, 0);
@@ -203,7 +205,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         //     history = ycocg2rgb(ResultYCoCg);
         // }
 
-        float currKeep = 1.0f / max(1, Camera.TemporalFrames);
+        float currKeep = 1.0f / max(1, pushConsts.TemporalFrames);
         AccumlateDiffuse[ipos].rgb = lerp(historyDiffuse, currDiffuseSample.rgb, clamp(currKeep, 0.0, 1.0));
         AccumlateSpecular[ipos].rgb = lerp(historySpecular, currSpecularSample.rgb, clamp(currKeep, 0.0, 1.0));
         AccumlateAlbedo[ipos].rgb = lerp(historyAlbedo, currAlbedoSample.rgb, clamp(currKeep, 0.0, 1.0));
