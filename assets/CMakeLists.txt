@@ -85,7 +85,7 @@ foreach(shader ${shader_files})
     add_custom_command(
         OUTPUT ${output_file}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
-		COMMAND ${Vulkan_SLANGC} -entry main -target spirv ${full_path} ${slangc_args} -o ${output_file}
+		COMMAND ${Vulkan_SLANGC} ${full_path} -o ${output_file} -entry main -target spirv ${slangc_args}
         DEPENDS ${full_path} ${shader_common_files}
         COMMENT "slangc ${file_name} -> ${file_name}.spv"
         VERBATIM

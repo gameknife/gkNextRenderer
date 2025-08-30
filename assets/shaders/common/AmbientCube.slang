@@ -293,7 +293,7 @@ public float4 interpolateAmbientCubesV2<T : IAmbientCubeSampler>(float3 inPos, f
 
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 1 || nearpos.y > CUBE_SIZE_Z - 1 || nearpos.z > CUBE_SIZE_XY - 1)
+        nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 || nearpos.z > CUBE_SIZE_XY - 2)
     {
         return float4(0, 0, 0, 1);
     }
