@@ -7,6 +7,9 @@
 implementing Common;
 #endif
 
+public static const int MAX_NODES = 65535; // 256;
+public static const int MAX_MATERIALS = 8192;
+
 public struct ALIGN_16 GPUDrivenStat
 {
     public uint ProcessedCount;
@@ -305,7 +308,7 @@ public struct ALIGN_16 GPUScene
     public Material* Materials;
     public Material GetMaterial(int idx)
     {
-        return Materials[min(4095, max(0, idx))];
+        return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
     }
     public ModelData* Offsets;
 
