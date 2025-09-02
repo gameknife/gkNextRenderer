@@ -47,13 +47,27 @@ namespace Common
         return rayOrigin + rayDir * tEntry;
     }
 
-    public float2 CalculateMotionVectorV2(in UniformBufferObject Camera, NodeProxy node, Vertex v )
+    public float2 CalculateMotionVectorV2(in UniformBufferObject Camera, NodeProxy node, Vertex v, int2 ipos )
     {
         // motion info
         float4 currFrameHPos = mul(Camera.ViewProjectionUnJit, float4(v.Position, 1));
         float2 currfpos = currFrameHPos.xy / currFrameHPos.w * 0.5;
         float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
         float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
+
+        let MotionMoment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
+        
+
+        float4 prevPos = mul(node.combinedPrevTS, float4(v.Position, 1));
+        if( distance(v.Position.xyz, prevPos.xyz) > 0.02)
+        {
+            MotionMoment[ipos] = Bindless.GetGpuscene().Camera[0].TemporalFrames;
+        }
+        else
+        {
+            MotionMoment[ipos] = MotionMoment[ipos] > 0 ? MotionMoment[ipos] - 1 : 0;
+        }
+
         return prevfpos - currfpos;
     }
 
@@ -1017,7 +1031,7 @@ public struct FPathTracingRendererV2
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, int sampleMultiplier, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
@@ -1033,7 +1047,8 @@ public struct FPathTracingRendererV2
             return;
         }
 
-        const uint sample = Camera.FastGather ? 1 : Camera.NumberOfSamples;
+        const int sample = Camera.FastGather ? 1 : Camera.NumberOfSamples * sampleMultiplier;
+        
         for (int i = 0; i < sample; i++)
         {
             float4 RayColor = float4(1, 1, 1, 1);

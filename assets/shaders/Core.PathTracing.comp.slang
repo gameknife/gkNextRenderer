@@ -6,7 +6,7 @@ import Bindless;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    //START_SHADERCLOCK()
+    START_SHADERCLOCK()
 
     // compose with renderer and tracer
     UniformBufferObject CameraDirect = Bindless.GetGpuscene().Camera[0];
@@ -37,13 +37,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, float4(0, 1, 0, 1));
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(ipos, 65535);
 
-        //END_SHADERCLOCK(ipos)
+        END_SHADERCLOCK(ipos)
         return;
     }
 
     float4 clipPos = mul(CameraDirect.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
-    float2 motion = Common.CalculateMotionVectorV2(CameraDirect, hitNode, hitVertex);
+    float2 motion = Common.CalculateMotionVectorV2(CameraDirect, hitNode, hitVertex, ipos);
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 reflectColor = float4(0, 0, 0, 1);
@@ -63,7 +63,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }  
 
     // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, RandomSeed, illuminaceColor, reflectColor);
+    int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[ipos] > 0 ? 4 : 1;
+    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, sampleMultiplier, RandomSeed, illuminaceColor, reflectColor);
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);
@@ -74,5 +75,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     outSpec.a = length(pixelOffset);
     Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(ipos, outSpec);
 
-    //END_SHADERCLOCK(ipos)
+    END_SHADERCLOCK(ipos)
 }

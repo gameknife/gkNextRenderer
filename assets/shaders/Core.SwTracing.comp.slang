@@ -40,7 +40,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
     // MotionVector解析
-    float2 motion = Common.CalculateMotionVectorV2(Camera, hitNode, hitVertex);
+    float2 motion = Common.CalculateMotionVectorV2(Camera, hitNode, hitVertex, ipos);
     Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(ipos, float4(motion * size, 0, 0));
 
     // GBuffer解析
@@ -52,7 +52,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(ipos, albedo);
     Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, gbuffer);
 
-    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, RandomSeed, illuminaceColor, reflectColor);
+    int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[ipos] > 0 ? 2 : 1;
+    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, sampleMultiplier, RandomSeed, illuminaceColor, reflectColor);
 
     // 合成
     float4 outColor = float4(illuminaceColor.rgb, 1);

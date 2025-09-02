@@ -111,7 +111,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
     const bool miss = current_primitive_index0 == 65535;
     
-    if (miss || !inside)
+    uint moment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[ipos];
+
+    if (miss || !inside || moment > 0)
     {
         useHistory = false;
     }

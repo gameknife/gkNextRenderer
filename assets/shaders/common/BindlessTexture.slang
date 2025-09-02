@@ -23,6 +23,8 @@ namespace Bindless
 
     public static const int RT_ACCUMLATE_ALBEDO = 13;
 
+    public static const int RT_MOTIONMOMENT = 14;
+
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
     public static const int RT_SINGLE_PREV_ALBEDO = 22;

@@ -134,7 +134,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
 // line 2/3 left
 #ifdef SHADER_CLOCK
-    //DRAW(ShaderTime, 0, 1, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_SHADER_TIMER), 0, 1, 4, ipos, isize, 1);
 #endif
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR), 0, 2, 4, ipos, isize, 1);
 
