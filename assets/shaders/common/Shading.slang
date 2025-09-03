@@ -15,7 +15,7 @@ static const float2 haltonSeq[8] = {
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
-static const float TRACE_CORRECTION_OFFSET = 0.001f;
+static const float TRACE_CORRECTION_OFFSET = 0.0f;
 
 namespace Common
 {
@@ -760,7 +760,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = EPS;
+        ray.TMin = EPS10;
         ray.Direction = rayDir;
         ray.TMax = maxDistance;
         RayQuery<RAY_FLAG_NONE> q;
@@ -1013,7 +1013,7 @@ public struct FPathTracingRendererV2
             }
             if (BackFace && mat.MaterialModel != MaterialDielectric)
             {
-                rayColor = 0.0f;
+                rayColor = float4(0.5f,0.5f,0.5f,0);
                 return true;
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight)

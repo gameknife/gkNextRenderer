@@ -12,6 +12,7 @@
 #define INF 1e32f
 #define EPS 1e-3f
 #define EPS2 2e-3f
+#define EPS10 1e-2f
 
 #define NEARzero 1e-35f
 #define isZERO(x) ((x) > -NEARzero && (x) < NEARzero)

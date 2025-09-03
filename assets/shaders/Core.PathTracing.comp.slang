@@ -59,7 +59,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (material.MaterialModel != MaterialDielectric)
     {
-        hitVertex.Position = hitVertex.Position - rayDir * rayLength * 0.0005;
+        hitVertex.Position = hitVertex.Position - rayDir * 0.03f;// - rayDir * rayLength * 0.005;
     }  
 
     // 着色
