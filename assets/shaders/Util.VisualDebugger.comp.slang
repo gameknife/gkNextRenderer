@@ -149,4 +149,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE), 0, 3, 4, ipos, isize, 0.005);
     DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER), 1, 3, 4, ipos, isize);
     DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER), 2, 3, 4, ipos, isize);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT), 3, 3, 4, ipos, isize);
 }

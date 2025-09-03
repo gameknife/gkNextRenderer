@@ -1047,7 +1047,7 @@ public struct FPathTracingRendererV2
             return;
         }
 
-        const int sample = Camera.FastGather ? 1 : Camera.NumberOfSamples * sampleMultiplier;
+        const int sample = Camera.NumberOfSamples * sampleMultiplier;
         
         for (int i = 0; i < sample; i++)
         {

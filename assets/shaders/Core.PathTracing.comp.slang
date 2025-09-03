@@ -15,7 +15,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHardwareDirectIlluminatorV2 dIlluminator;
     FPathTracingRendererV2 renderer;
     renderer.ExitProbability = 0.5f;
-    renderer.ExitAfterFirst = false; // set true is hybrid tracing, delete it will be
+    renderer.ExitAfterFirst = CameraDirect.FastGather; // set true is hybrid tracing, delete it will be
 
     int2 ipos = int2(DTid.xy);
     uint2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
