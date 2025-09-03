@@ -44,14 +44,19 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     if (!rayCaster.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
         float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0, 0, 0, 0);
-        OutputColor(ipos, skyColor.rgb);
+        
+        Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(ipos, skyColor);
+        Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(ipos, float4(0, 0, 0, 0));
+        Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(ipos, float4(1, 1, 1, 1));
+        Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, float4(0, 1, 0, 1));
+        Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(ipos, 65535);
 
         //END_SHADERCLOCK(ipos)
         return;
     }
 
     Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
-
+    float2 motion = Common.CalculateMotionVectorV2(Camera, hitNode, hitVertex, ipos);
     float4 albedo = float4(0, 0, 0, 1);
     float4 illuminaceColor = float4(0, 0, 0, 1);
     float4 gbuffer = float4(0, 0, 0, 0);
@@ -77,7 +82,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
         float3 jitoffset = hitVertex.Tangent.xyz * offset2d.x + binormal * offset2d.y;
         float4 indirect = interpolateAmbientCubesV2<FullAmbientCubeSampler>(hitVertex.Position + hitVertex.Normal * 0.05f + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal, Cubes, Voxels);
         float lum = luminance(indirect.rgb);
-        radiance += lum < 0.1 ? float4(50,50,50,1) : indirect;
+        radiance += lum < 0.1 ? float4(5,5,5,1) : indirect;
     }
     radiance /= float(jitcount);
 
@@ -89,18 +94,19 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     float reflectFactor = max(metalProb, reflectProb);
 
     float4 combined = diffuse * (1.0 - reflectFactor) + specColor * specular * reflectFactor;
-    OutputColor(ipos, combined.rgb);
+    //OutputColor(ipos, combined.rgb);
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(ipos, hitNode.instanceId);
-
-    if (Camera.DebugDraw_Lighting)
-    {
-        OutputColor(ipos, radiance.rgb);
-    }
 
     // write to NDC depth
     float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(ipos, ndcDepth);
+
+    Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(ipos, float4(motion * size, 0, 0));
+    Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(ipos, radiance * (1.0 - reflectFactor));
+    Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(ipos, albedo);
+    Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, gbuffer);
+    Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(ipos, specColor * specular * reflectFactor);
 
     //END_SHADERCLOCK(ipos)
 }
