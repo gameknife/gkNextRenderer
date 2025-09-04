@@ -69,7 +69,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     float3 tracenext = reflect(rayDir, outwardNormal);
 
     float4 radiance = float4(0, 0, 0, 1);
-    const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
+    const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 2);
     const float jitScale = Camera.FastGather ? 0 : 1;
 
     float3 binormal = normalize(cross(outwardNormal, hitVertex.Tangent.xyz));

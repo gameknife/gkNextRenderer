@@ -964,6 +964,7 @@ public struct FPathTracingRendererV2
     public float ExitProbability = 0.5;
     public bool ExitAfterFirst = false;
     public float HitNormalOffset = 0.0f;
+    public int SampleDownscale = 1;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
@@ -1047,7 +1048,7 @@ public struct FPathTracingRendererV2
             return;
         }
 
-        const int sample = Camera.NumberOfSamples * sampleMultiplier;
+        const int sample = max(1, Camera.NumberOfSamples / SampleDownscale * sampleMultiplier);
         
         for (int i = 0; i < sample; i++)
         {

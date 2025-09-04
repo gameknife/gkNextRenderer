@@ -17,6 +17,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.ExitProbability = 0.5f;
     renderer.ExitAfterFirst = CameraDirect.FastGather; // set true is hybrid tracing, delete it will be
     renderer.HitNormalOffset = 0.001f;
+    renderer.SampleDownscale = 1;
 
     int2 ipos = int2(DTid.xy);
     uint2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);

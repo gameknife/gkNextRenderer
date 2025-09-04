@@ -15,8 +15,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FSoftwareRayTracerV2 tracer;
     FSoftwareDirectIlluminatorV2 dIlluminator;
     FPathTracingRendererV2 renderer;
+    renderer.ExitProbability = 0.5f;
     renderer.ExitAfterFirst = true;
     renderer.HitNormalOffset = 0.1f;
+    renderer.SampleDownscale = 2;
     
     int2 ipos = int2(DTid.xy);
     int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_MINIGBUFFER);
