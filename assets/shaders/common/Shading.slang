@@ -23,7 +23,7 @@ namespace Common
     {
         // Calculate the page index based on the page position
         uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
-        return clamp(pageIndex, 0, 4096);
+        return clamp(pageIndex, 0, 4095);
     }
 
     float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
@@ -496,6 +496,8 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 {
     public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
         // construct ray
@@ -509,7 +511,6 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode);
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
     FHiVoxelDDARayTracerV2 DDARayTracer;
 }
 
@@ -536,7 +537,7 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
     
-        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET + float3(0.5f) * CUBE_UNIT) / CUBE_UNIT;
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
         float3 tDelta = abs(CUBE_UNIT / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
@@ -571,41 +572,41 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
                 break;
             }
 
-            if (skipLength > 1.0f)
-            {
-                int primaryAxis = 0;
-                if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
-                else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
+            // if (skipLength > 1.0f)
+            // {
+            //     int primaryAxis = 0;
+            //     if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
+            //     else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
                 
-                float voxelSkipLength = skipLength * CUBE_UNIT;
-                float stepsToSkip = 0; 
-                stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
+            //     float voxelSkipLength = skipLength * CUBE_UNIT;
+            //     float stepsToSkip = 0; 
+            //     stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
                 
-                if (stepsToSkip >= 1.0f)
-                {
-                    voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
-                    tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
+            //     if (stepsToSkip >= 1.0f)
+            //     {
+            //         voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
+            //         tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
                     
-                    float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
+            //         float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
                     
-                    for (int axis = 0; axis < 3; ++axis)
-                    {
-                        if (axis != primaryAxis && rayDir[axis] != 0)
-                        {
-                            float stepsOther = timeAdvanced / tDelta[axis];
-                            voxelPos[axis] += stepSign[axis] * floor(stepsOther);
-                            tMax[axis] -= tDelta[axis] * floor(stepsOther);
-                        }
-                    }
+            //         for (int axis = 0; axis < 3; ++axis)
+            //         {
+            //             if (axis != primaryAxis && rayDir[axis] != 0)
+            //             {
+            //                 float stepsOther = timeAdvanced / tDelta[axis];
+            //                 voxelPos[axis] += stepSign[axis] * floor(stepsOther);
+            //                 tMax[axis] -= tDelta[axis] * floor(stepsOther);
+            //             }
+            //         }
                     
-                    i += uint(stepsToSkip - 1);
+            //         i += uint(stepsToSkip - 1);
 
-                    normal = float3(0, 0, 0);
-                    normal[primaryAxis] = -stepSign[primaryAxis];
+            //         normal = float3(0, 0, 0);
+            //         normal[primaryAxis] = -stepSign[primaryAxis];
                     
-                    continue;
-                }
-            }
+            //         continue;
+            //     }
+            // }
    
             // 原始DDA单步进
             normal = float3(0, 0, 0);
@@ -962,6 +963,7 @@ public struct FPathTracingRendererV2
 {
     public float ExitProbability = 0.5;
     public bool ExitAfterFirst = false;
+    public float HitNormalOffset = 0.0f;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
@@ -998,7 +1000,7 @@ public struct FPathTracingRendererV2
         rayDir = trace_dir;
 
         NodeProxy hitNode;
-        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
+        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
         {
             Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
             float4 outAlbedo = hitMat.Diffuse;
@@ -1034,8 +1036,6 @@ public struct FPathTracingRendererV2
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, int sampleMultiplier, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
-        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
         FinalColor = float4(0, 0, 0, 0);
         FinalReflection = float4(0, 0, 0, 0);
@@ -1068,7 +1068,7 @@ public struct FPathTracingRendererV2
             {
                 if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
                 {
-                    RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
+                    RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
                 }
                 else
                 {
@@ -1098,7 +1098,7 @@ public struct FPathTracingRendererV2
                         // 终结路径
                         if (b == maxBounces - 1 || earlyExit)
                         {
-                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
+                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
                             break;
                         }
                     }

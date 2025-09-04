@@ -16,6 +16,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FSoftwareDirectIlluminatorV2 dIlluminator;
     FPathTracingRendererV2 renderer;
     renderer.ExitAfterFirst = true;
+    renderer.HitNormalOffset = 0.1f;
     
     int2 ipos = int2(DTid.xy);
     int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_MINIGBUFFER);

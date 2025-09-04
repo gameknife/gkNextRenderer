@@ -18,42 +18,44 @@ void OutputColor(int2 ipos, float3 Total)
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    // START_SHADERCLOCK()
-    // // compose with renderer and tracer
-    // FHiVoxelDDARayTracer voxelTracer = { Voxels, Pages };
-    // FVoxelRayCaster rayCasterVoxel = { Camera, voxelTracer };
+    START_SHADERCLOCK()
 
-    // int2 ipos = int2(DTid.xy);
-    // int2 size;
-    // uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
-    // OutDenoisedBuffer.GetDimensions(size.x, size.y);
+    let Camera = Bindless.GetGpuscene().Camera[0];
 
-    // // 第一次Tracing
-    // Vertex hitVertex;
-    // NodeProxy hitNode;
+    // compose with renderer and tracer
+    FHiVoxelDDARayTracerV2 voxelTracer;
+    FVoxelRayCaster rayCasterVoxel;
 
-    // float4 outColor = float4(0, 0, 0, 1);
-    // float3 rayDir;
-    // float rayLength = 0.0;
-    // float2 pixelOffset = float2(0, 0);
-    // if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
-    // {
-    //     // float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-    //     // outColor = Materials[hitVertex.MaterialIndex].Diffuse * radiance;
-    //     // //outColor = Materials[hitVertex.MaterialIndex].Diffuse * 50.0f;
-    //     // if (Camera.DebugDraw_Lighting)
-    //     // {
-    //     //     outColor = radiance;
-    //     // }
+    int2 ipos = int2(DTid.xy);
+    int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_DENOISED);
+    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
-    //     outColor= float4(50,50,50,1);
-    // }
-    // else
-    // {
-    //     outColor= float4(0,0,0,0);
-    // }
+    // 第一次Tracing
+    Vertex hitVertex;
+    NodeProxy hitNode;
 
-    // OutputColor(ipos, outColor.rgb);
+    float4 outColor = float4(0, 0, 0, 1);
+    float3 rayDir;
+    float rayLength = 0.0;
+    float2 pixelOffset = float2(0, 0);
+    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
+    {
+        float4 radiance = interpolateAmbientCubesV2<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal);
+        outColor = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex).Diffuse * radiance;
+        if (Camera.DebugDraw_Lighting)
+        {
+            outColor = radiance;
+        }
 
-    // END_SHADERCLOCK(ipos)
+        //outColor= float4(50,50,50,1);
+        //Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, float4(hitVertex.Normal, 0));
+    }
+    else
+    {
+        outColor= float4(10,10,10,0);
+    }
+
+    OutputColor(ipos, outColor.rgb);
+
+    END_SHADERCLOCK(ipos)
 }

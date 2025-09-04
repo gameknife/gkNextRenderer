@@ -26,8 +26,6 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     //START_SHADERCLOCK()
     // compose with renderer and tracer
     UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-    AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
-    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
     FVisibilityBufferRayCasterV2 rayCaster = {};
  
@@ -80,7 +78,7 @@ void main(uint3 DTid: SV_DispatchThreadID) {
     {
         float2 offset2d = RandomFloat2(RandomSeed) * 2.0 - 1.0;
         float3 jitoffset = hitVertex.Tangent.xyz * offset2d.x + binormal * offset2d.y;
-        float4 indirect = interpolateAmbientCubesV2<FullAmbientCubeSampler>(hitVertex.Position + hitVertex.Normal * 0.05f + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal, Cubes, Voxels);
+        float4 indirect = interpolateAmbientCubesV2<FullAmbientCubeSampler>(hitVertex.Position + hitVertex.Normal * 0.05f + jitoffset * CUBE_UNIT * jitScale, hitVertex.Normal);
         float lum = luminance(indirect.rgb);
         radiance += lum < 0.1 ? float4(5,5,5,1) : indirect;
     }
