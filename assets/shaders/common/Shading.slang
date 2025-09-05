@@ -761,7 +761,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
-        ray.TMin = EPS10;
+        ray.TMin = EPS;
         ray.Direction = rayDir;
         ray.TMax = maxDistance;
         RayQuery<RAY_FLAG_NONE> q;
@@ -1034,14 +1034,15 @@ public struct FPathTracingRendererV2
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, int sampleMultiplier, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    [mutating]
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, int sampleMultiplier)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
-        FinalColor = float4(0, 0, 0, 0);
-        FinalReflection = float4(0, 0, 0, 0);
+        float4 FinalColor = float4(0, 0, 0, 0);
+        float4 FinalReflection = float4(0, 0, 0, 0);
 
-        Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
+        Material mat = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
             FinalColor = mat.Diffuse;
@@ -1055,16 +1056,16 @@ public struct FPathTracingRendererV2
             float4 RayColor = float4(1, 1, 1, 1);
 
             float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-            float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+            float3 ray_dir = normalize(hitPrimaryVertex_.Position - eye.xyz);
 
             float3 direction = ray_dir;
-            Vertex vertexStart = inVertex;
+            Vertex vertexStart = hitPrimaryVertex_;
 
             uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
 
             bool hitReflect = false;
             bool hitMetal = false;
-            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal);
+            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal);
             if (!exitFirst)
             {
                 if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
@@ -1077,15 +1078,15 @@ public struct FPathTracingRendererV2
                     {
                         bool hitReflectDontCare = false;
                         bool hitMetalDontCare = false;
-                        if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare))
+                        if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitMetalDontCare, hitMetalDontCare))
                         {
                             break;
                         }
 
-                        if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
+                        if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
-                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
                             if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
                             {
                                 RayColor *= Camera.SunColor;
@@ -1094,7 +1095,7 @@ public struct FPathTracingRendererV2
                         }
 
                         // 提前退出
-                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < ExitProbability);
+                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
 
                         // 终结路径
                         if (b == maxBounces - 1 || earlyExit)
@@ -1108,7 +1109,7 @@ public struct FPathTracingRendererV2
 
             if (hitMetal)
             {
-                RayColor *= inAlbedo;
+                RayColor *= primaryAlbedo_;
             }
 
             if (hitReflect)
@@ -1126,7 +1127,86 @@ public struct FPathTracingRendererV2
         FinalReflection /= float(sample);
 
         float4 directColor = float4(0, 0, 0, 0);
-        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
+        directIllum.DirectIlluminate(RandomSeed_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
         FinalColor += directColor;
+
+        OutSingleDiffuse.Store(pixel_, FinalColor);
+        OutSingleSpecular.Store(pixel_, FinalReflection);
     }
+
+    [mutating]
+    public bool PrimaryHit(IPrimaryRayCaster primaryRayCaster)
+    {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+
+        if (!primaryRayCaster.TracePrimaryRay(pixel_, size_, RandomSeed_, hitPrimaryVertex_, hitPrimaryNode_, primaryRayDir_, primaryRayLength_, primaryPixelOffset_))
+        {
+            float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, primaryRayDir_, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0, 0, 0, 0);
+
+            OutSingleDiffuse.Store(pixel_, skyColor);
+            OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
+            OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
+            OutNormal.Store(pixel_, float4(0, 1, 0, 1));
+            OutObjectID.Store(pixel_, 65535);
+
+            return false;
+        }
+
+        float4 clipPos = mul(Camera.ViewProjection, float4(hitPrimaryVertex_.Position, 1.0));
+        float ndcDepth = clipPos.z / clipPos.w;
+        float2 motion = Common.CalculateMotionVectorV2(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
+        float4 gbuffer = float4(0, 0, 0, 0);
+        Material material = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
+        Common.FetchGBufferV2(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
+
+        OutAlbedo.Store(pixel_, primaryAlbedo_);
+        OutNormal.Store(pixel_, gbuffer);
+        OutObjectID.Store(pixel_, hitPrimaryNode_.instanceId);
+        OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
+        OutPrevDepth.Store(pixel_, ndcDepth);
+
+        if (material.MaterialModel != MaterialDielectric)
+        {
+            hitPrimaryVertex_.Position = hitPrimaryVertex_.Position - primaryRayDir_ * 0.03f;// - rayDir * rayLength * 0.005;
+        }  
+
+        return true;
+    }
+
+    [mutating]
+    public void Init(uint2 ipos)
+    {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+
+        pixel_ = ipos;
+        size_ = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
+        RandomSeed_ = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
+
+        OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
+        OutNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
+        OutObjectID = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+        OutMotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
+        OutPrevDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
+        OutSingleDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
+    }
+
+    int2 pixel_;
+    uint2 size_;
+    uint4 RandomSeed_;
+
+    Vertex hitPrimaryVertex_; 
+    NodeProxy hitPrimaryNode_;
+    float3 primaryRayDir_;
+    float primaryRayLength_;
+    float2 primaryPixelOffset_;
+    float4 primaryAlbedo_;
+
+    RWTexture2D<float4> OutAlbedo;
+    RWTexture2D<float4> OutNormal;
+    RWTexture2D<uint> OutObjectID;
+    RWTexture2D<float4> OutMotionVector;
+    RWTexture2D<float> OutPrevDepth;
+    RWTexture2D<float4> OutSingleDiffuse;
+    RWTexture2D<float4> OutSingleSpecular;
 }
