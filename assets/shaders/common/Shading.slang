@@ -1046,6 +1046,8 @@ public struct FPathTracingRendererV2
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
             FinalColor = mat.Diffuse;
+            OutSingleDiffuse.Store(pixel_, FinalColor);
+            OutSingleSpecular.Store(pixel_, FinalReflection);
             return;
         }
 
