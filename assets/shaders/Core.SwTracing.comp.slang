@@ -14,8 +14,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     FPathTracingRendererV2 renderer;
     renderer.ExitProbability = 0.5f;
-    renderer.ExitAfterFirst = true;
-    renderer.HitNormalOffset = 0.1f;
+    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->FastGather;
+    renderer.HitNormalOffset = CUBE_UNIT;
     renderer.SampleDownscale = 2;
     renderer.Init(DTid.xy);
 

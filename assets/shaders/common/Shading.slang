@@ -708,6 +708,25 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         return hit;
     }
 }
+
+public struct FAmbientCubeRayTracerV2 : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        return false;
+    }
+
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return false;
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    {
+        float4 probeData = interpolateAmbientCubesV2<FullAmbientCubeSampler>(rayOrigin, rayDir);
+        return probeData.a < 0.4;
+    }
+}
 public struct FHardwareRayTracerV2 : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -882,6 +901,15 @@ public struct FHardwareDirectIlluminatorV2 : IDirectIlluminator
 
     FHardwareRayTracerV2 HWTracer;
 }
+
+public struct FAmbientCubeIlluminatorV2 : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        directIllumColor = float4(0, 0, 0, 0);
+    }
+}
+
 public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)

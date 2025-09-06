@@ -580,7 +580,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                 Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 OutMaterialId = hitVertex.MaterialIndex;
 
-                if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight) && hitDist < 0.02f)) //voxel inclusive
+                if (dot(hitVertex.Normal, rayDir) > 0.0 || ((hitMaterial.MaterialModel == MaterialDiffuseLight)))// && hitDist < 0.02f)) //voxel inclusive
                 {
                     OutDistanceToSolid = 0;
                     return true;
@@ -637,7 +637,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(uint(minDist / CUBE_UNIT), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
         Voxels[CubeIdx].distanceToSolid_x01_y01 = pack_bytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 
-        if (minDist < 4) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (minDist < 16) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
@@ -665,7 +665,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
         uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 4) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (upacked.x < 16) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
