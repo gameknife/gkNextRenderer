@@ -30,7 +30,7 @@ void handle_cmd(android_app* app, int32_t cmd) {
             MakeExternalDirectory(app, "assets/textures");
             MakeExternalDirectory(app, "assets/locale");
             
-            const char* argv[] = { "gkNextRenderer", "--renderer=3" };
+            const char* argv[] = { "gkNextRenderer", "--renderer=2" };
             GOption = new Options(2, argv);
             GApplication.reset(new NextEngine(*GOption, app->window));
             GApplication->Start();
