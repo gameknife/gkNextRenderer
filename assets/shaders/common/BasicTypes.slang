@@ -256,7 +256,7 @@ public struct ALIGN_16 GPUVertex
 
 
 #ifdef __cplusplus
-public struct ALIGN_16 GPUScene
+public struct ALIGN_8 GPUScene
 {
     public uint64_t Camera;
     /* Scene Node Tree */
@@ -287,41 +287,112 @@ public struct ALIGN_16 GPUScene
     public uint SwapChainIndex;
     public uint custom_data_0;
     public uint custom_data_1;
+    public uint custom_data_2;
 };
 
 #else
-public struct ALIGN_16 GPUScene
+public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
-    public UniformBufferObject* Camera;
+    uint64_t CameraAddress;
+    public property UniformBufferObject* Camera
+    {
+        get { return (UniformBufferObject*)CameraAddress; }
+    }
 
     /* Scene Node Tree */
-    public NodeProxy* Nodes;
+    uint64_t NodesAddress;
+    public property NodeProxy* Nodes
+    {
+        get { return (NodeProxy*)NodesAddress; }
+    }
 
     /* Global Vertice Buffer */
-    public uint* Reorders;
-    public half4* VerticesSimple;
-    public GPUVertex* Vertices;
-    public uint* Indices;
+    uint64_t ReordersAddress;
+    public property uint* Reorders
+    {
+        get { return (uint*)ReordersAddress; }
+    }
+    
+    uint64_t VerticesSimpleAddress;
+    public property half4* VerticesSimple
+    {
+        get { return (half4*)VerticesSimpleAddress; }
+    }
+    
+    uint64_t VerticesAddress;
+    public property GPUVertex* Vertices
+    {
+        get { return (GPUVertex*)VerticesAddress; }
+    }
+    
+    uint64_t IndicesAddress;
+    public property uint* Indices
+    {
+        get { return (uint*)IndicesAddress; }
+    }
 
     /* Resources */
-    public Material* Materials;
+    uint64_t MaterialsAddress;
+    public property Material* Materials
+    {
+        get { return (Material*)MaterialsAddress; }
+    }
+    
     public Material GetMaterial(int idx)
     {
         return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
     }
-    public ModelData* Offsets;
+    
+    uint64_t OffsetsAddress;
+    public property ModelData* Offsets
+    {
+        get { return (ModelData*)OffsetsAddress; }
+    }
 
     /* Others */
-    public AmbientCube* Cubes;
-    public VoxelData* Voxels;
-    public PageIndex* Pages;
-    public SphericalHarmonics* HDRSHs;
-    public LightObject* Lights;
+    uint64_t CubesAddress;
+    public property AmbientCube* Cubes
+    {
+        get { return (AmbientCube*)CubesAddress; }
+    }
+    
+    uint64_t VoxelsAddress;
+    public property VoxelData* Voxels
+    {
+        get { return (VoxelData*)VoxelsAddress; }
+    }
+    
+    uint64_t PagesAddress;
+    public property PageIndex* Pages
+    {
+        get { return (PageIndex*)PagesAddress; }
+    }
+    
+    uint64_t HDRSHsAddress;
+    public property SphericalHarmonics* HDRSHs
+    {
+        get { return (SphericalHarmonics*)HDRSHsAddress; }
+    }
+    
+    uint64_t LightsAddress;
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)LightsAddress; }
+    }
 
     /* IndirectDraw */
-    public VkDrawIndexedIndirectCommand* IndirectDrawCommands;
-    public GPUDrivenStat* GPUDrivenStats;
+    uint64_t IndirectDrawCommandsAddress;
+    public property VkDrawIndexedIndirectCommand* IndirectDrawCommands
+    {
+        get { return (VkDrawIndexedIndirectCommand*)IndirectDrawCommandsAddress; }
+    }
+    
+    uint64_t GPUDrivenStatsAddress;
+    public property GPUDrivenStat* GPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)GPUDrivenStatsAddress; }
+    }
     
     public uint64_t TLAS; 
     public RaytracingAccelerationStructure GetTLAS() {
@@ -335,7 +406,8 @@ public struct ALIGN_16 GPUScene
     public uint SwapChainIndex;
     public uint custom_data_0;
     public uint custom_data_1;
-   
+    public uint custom_data_2;
+
 };
 
 #endif

@@ -1,6 +1,6 @@
 implementing Common;
 
-[[vk::push_constant]] ConstantBuffer<GPUScene> gpuScene;
+[[vk::push_constant]] GPUScene gpuScene;
 namespace Bindless
 {
     public GPUScene GetGpuscene()

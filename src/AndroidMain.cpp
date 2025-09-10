@@ -45,6 +45,8 @@ void handle_cmd(android_app* app, int32_t cmd) {
     }
 }
 
+#define SCREEN_SCALE 0.333333f
+
 static int32_t engine_handle_input(struct android_app* app) {
     ImGuiIO& io = ImGui::GetIO();
     //auto* engine = (struct engine*)app->userData;
@@ -63,14 +65,14 @@ static int32_t engine_handle_input(struct android_app* app) {
             case AMOTION_EVENT_ACTION_UP:
                 io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
                 io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5, GameActivityPointerAxes_getAxisValue(
-            &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5);
+                &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE, GameActivityPointerAxes_getAxisValue(
+            &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE);
                 io.AddMouseButtonEvent(0, event->action == AMOTION_EVENT_ACTION_DOWN);
 
                 GApplication->OnTouch(event->action == AMOTION_EVENT_ACTION_DOWN, GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE);
 
                 break;
             case AMOTION_EVENT_ACTION_MOVE:
@@ -82,14 +84,14 @@ static int32_t engine_handle_input(struct android_app* app) {
                 //...
                     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
                     io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE);
 
                 GApplication->OnTouchMove(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * 0.5,
+                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE,
                         GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * 0.5);
+                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE);
                break;
             }
         }
