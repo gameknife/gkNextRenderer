@@ -258,36 +258,49 @@ public struct ALIGN_16 GPUVertex
 #ifdef __cplusplus
 public struct ALIGN_8 GPUScene
 {
-    public uint64_t Camera;
-    /* Scene Node Tree */
-    public uint64_t Nodes;
+    uint64_t Camera;
+    uint64_t dummy1;
 
-    /* Global Vertice Buffer */
-    public uint64_t Reorders;
-    public uint64_t VerticesSimple;
-    public uint64_t Vertices;
-    public uint64_t Indices;
+    uint64_t Nodes;
+    uint64_t dummy2;
 
-    /* Resources */
-    public uint64_t Materials;
-    public uint64_t Offsets;
+    uint64_t Reorders;
+    uint64_t dummy3;
+    uint64_t VerticesSimple;
+    uint64_t dummy4;
+    uint64_t Vertices;
+    uint64_t dummy5;
+    uint64_t Indices;
+    uint64_t dummy6;
 
-    /* Others */
-    public uint64_t Cubes;
-    public uint64_t Voxels;
-    public uint64_t Pages;
-    public uint64_t HDRSHs;
-    public uint64_t Lights;
+    uint64_t Materials;
+    uint64_t dummy7;
+    uint64_t Offsets;
+    uint64_t dummy8;
 
-    public uint64_t IndirectDrawCommands;
-    public uint64_t GPUDrivenStats;
+    uint64_t Cubes;
+    uint64_t dummy9;
+    uint64_t Voxels;
+    uint64_t dummy10;
+    uint64_t Pages;
+    uint64_t dummy11;
+    uint64_t HDRSHs;
+    uint64_t dummy12;
+    uint64_t Lights;
+    uint64_t dummy13;
 
-    public uint64_t TLAS;
+    uint64_t IndirectDrawCommands;
+    uint64_t dummy14;
+    // uint64_t GPUDrivenStats;
+    // uint64_t dummy15;
 
-    public uint SwapChainIndex;
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
+    uint64_t TLAS;
+    uint64_t dummy16;
+
+    uint SwapChainIndex;
+    uint custom_data_0;
+    uint custom_data_1;
+    uint custom_data_2;
 };
 
 #else
@@ -295,6 +308,7 @@ public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
     uint64_t CameraAddress;
+    uint64_t dummy1;
     public property UniformBufferObject* Camera
     {
         get { return (UniformBufferObject*)CameraAddress; }
@@ -302,6 +316,7 @@ public struct ALIGN_8 GPUScene
 
     /* Scene Node Tree */
     uint64_t NodesAddress;
+    uint64_t dummy2;
     public property NodeProxy* Nodes
     {
         get { return (NodeProxy*)NodesAddress; }
@@ -309,24 +324,28 @@ public struct ALIGN_8 GPUScene
 
     /* Global Vertice Buffer */
     uint64_t ReordersAddress;
+    uint64_t dummy3;
     public property uint* Reorders
     {
         get { return (uint*)ReordersAddress; }
     }
     
     uint64_t VerticesSimpleAddress;
+    uint64_t dummy4;
     public property half4* VerticesSimple
     {
         get { return (half4*)VerticesSimpleAddress; }
     }
     
     uint64_t VerticesAddress;
+    uint64_t dummy5;
     public property GPUVertex* Vertices
     {
         get { return (GPUVertex*)VerticesAddress; }
     }
     
     uint64_t IndicesAddress;
+    uint64_t dummy6;
     public property uint* Indices
     {
         get { return (uint*)IndicesAddress; }
@@ -334,6 +353,7 @@ public struct ALIGN_8 GPUScene
 
     /* Resources */
     uint64_t MaterialsAddress;
+    uint64_t dummy7;
     public property Material* Materials
     {
         get { return (Material*)MaterialsAddress; }
@@ -345,6 +365,7 @@ public struct ALIGN_8 GPUScene
     }
     
     uint64_t OffsetsAddress;
+    uint64_t dummy8;
     public property ModelData* Offsets
     {
         get { return (ModelData*)OffsetsAddress; }
@@ -352,30 +373,35 @@ public struct ALIGN_8 GPUScene
 
     /* Others */
     uint64_t CubesAddress;
+    uint64_t dummy9;
     public property AmbientCube* Cubes
     {
         get { return (AmbientCube*)CubesAddress; }
     }
     
     uint64_t VoxelsAddress;
+    uint64_t dummy10;
     public property VoxelData* Voxels
     {
         get { return (VoxelData*)VoxelsAddress; }
     }
     
     uint64_t PagesAddress;
+    uint64_t dummy11;
     public property PageIndex* Pages
     {
         get { return (PageIndex*)PagesAddress; }
     }
     
     uint64_t HDRSHsAddress;
+    uint64_t dummy12;
     public property SphericalHarmonics* HDRSHs
     {
         get { return (SphericalHarmonics*)HDRSHsAddress; }
     }
     
     uint64_t LightsAddress;
+    uint64_t dummy13;
     public property LightObject* Lights
     {
         get { return (LightObject*)LightsAddress; }
@@ -383,18 +409,21 @@ public struct ALIGN_8 GPUScene
 
     /* IndirectDraw */
     uint64_t IndirectDrawCommandsAddress;
+    uint64_t dummy14;
     public property VkDrawIndexedIndirectCommand* IndirectDrawCommands
     {
         get { return (VkDrawIndexedIndirectCommand*)IndirectDrawCommandsAddress; }
     }
     
-    uint64_t GPUDrivenStatsAddress;
-    public property GPUDrivenStat* GPUDrivenStats
-    {
-        get { return (GPUDrivenStat*)GPUDrivenStatsAddress; }
-    }
+    // uint64_t GPUDrivenStatsAddress;
+    // uint64_t dummy15;
+    // public property GPUDrivenStat* GPUDrivenStats
+    // {
+    //     get { return (GPUDrivenStat*)GPUDrivenStatsAddress; }
+    // }
     
     public uint64_t TLAS; 
+    uint64_t dummy16;
     public RaytracingAccelerationStructure GetTLAS() {
 		return spirv_asm {
 			OpExtension "SPV_KHR_ray_tracing";
@@ -407,7 +436,6 @@ public struct ALIGN_8 GPUScene
     public uint custom_data_0;
     public uint custom_data_1;
     public uint custom_data_2;
-
 };
 
 #endif
