@@ -159,13 +159,13 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         }
     }
 
-    float edgeThis = EdgeDetect(Camera.SelectedId, ObjectId0, ipos) ? 0.5 : 0.0;
-    float edgePrev = EdgeDetect(Camera.SelectedId, ObjectId1, ipos) ? 0.5 : 0.0;
-    // selected edge
-    if (edgeThis + edgeThis > 0)
-    {
-        Total = lerp(Total, float3(150, 100, 0), edgeThis + edgePrev);
-    }
+    // float edgeThis = EdgeDetect(Camera.SelectedId, ObjectId0, ipos) ? 0.5 : 0.0;
+    // float edgePrev = EdgeDetect(Camera.SelectedId, ObjectId1, ipos) ? 0.5 : 0.0;
+    // // selected edge
+    // if (edgeThis + edgeThis > 0)
+    // {
+    //     Total = lerp(Total, float3(150, 100, 0), edgeThis + edgePrev);
+    // }
     
     if(Camera.HDR)
     {

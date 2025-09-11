@@ -263,7 +263,7 @@ public interface IPrimaryRayCaster
 // ray tracer for rendering
 public interface IRayTracer
 {
-    bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode);
+    bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
     bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
 }
@@ -300,7 +300,8 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
         Material hitMaterial;
         float t = 0;
-        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode);
+        float4 tempColor;
+        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode, tempColor);
         if (hitted)
         {
             // 计算命中点到相机的距离
@@ -508,7 +509,8 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         float3 ray_dir = normalize(dir.xyz);
         outRayDir = ray_dir;
 
-        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode);
+        float4 tempColor;
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode, tempColor);
     }
 
     FHiVoxelDDARayTracerV2 DDARayTracer;
@@ -520,14 +522,16 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     {
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode);
+        float4 tempColor;
+        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode, tempColor);
     }
     public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
     {
         float rayLength = length(rayTaget - rayOrigin);
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode);
+        float4 tempColor;
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor);
     }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
@@ -643,7 +647,7 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         return TraceRayDDA(rayOrigin, rayDir, 0, boxMin, boxMax, true, outVertex, outNode);
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         PageIndex* Pages = Bindless.GetGpuscene().Pages;
         // DDA voxel traversal
@@ -721,10 +725,11 @@ public struct FAmbientCubeRayTracerV2 : IRayTracer
         return false;
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         float4 probeData = interpolateAmbientCubesV2<FullAmbientCubeSampler>(rayOrigin, rayDir);
-        return probeData.a < 0.4;
+        inoutRayColor.rgb = probeData.rgb;
+        return probeData.a < 0.6;
     }
 }
 public struct FHardwareRayTracerV2 : IRayTracer
@@ -776,7 +781,7 @@ public struct FHardwareRayTracerV2 : IRayTracer
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
@@ -850,7 +855,7 @@ public struct FSoftwareRayTracerV2 : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         float3 offsetPos = rayOrigin;
 
@@ -867,7 +872,7 @@ public struct FSoftwareRayTracerV2 : IRayTracer
 
         // use dda directly
         // offsetPos = offsetPos + rayDir * longDistanceInit; no need to offset, dda tracing will handle it
-        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode))
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode, inoutRayColor))
         {
             return true;
         }
@@ -993,6 +998,7 @@ public struct FPathTracingRendererV2
     public bool ExitAfterFirst = false;
     public float HitNormalOffset = 0.0f;
     public int SampleDownscale = 1;
+    public bool FuzzyTracing = false;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
@@ -1029,8 +1035,14 @@ public struct FPathTracingRendererV2
         rayDir = trace_dir;
 
         NodeProxy hitNode;
-        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
+        float4 tempColor = float4(0, 0, 0, 1);
+        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor))
         {
+            if(FuzzyTracing)
+            {
+                rayColor *= tempColor;
+                return false;
+            }
             Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
             float4 outAlbedo = hitMat.Diffuse;
             if (hitMat.DiffuseTextureId >= 0)
@@ -1055,9 +1067,16 @@ public struct FPathTracingRendererV2
         }
         else
         {
-            float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-            // miss, FinalColor to SkyIBL
-            rayColor *= skyColor;
+            // if(FuzzyTracing)
+            // {
+            //     float4 skyColor = Camera.HasSky ? Common.SampleIBLRough(Camera.SkyIdx, trace_dir, Camera.SkyRotation) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            //     rayColor *= skyColor;
+            // }
+            // else
+            {
+                float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                rayColor *= skyColor;
+            }
             return true;
         }
     }
@@ -1100,7 +1119,7 @@ public struct FPathTracingRendererV2
             {
                 if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
                 {
-                    RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                    if(!FuzzyTracing) RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
                 }
                 else
                 {

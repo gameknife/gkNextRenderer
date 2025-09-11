@@ -498,7 +498,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             Vertex hitVertex;
             NodeProxy hitNode;
-            if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode))
+            float4 tempColor = float4(0.0);
+            if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode, tempColor))
             {
                 Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 float4 outAlbedo = hitMaterial.Diffuse;
@@ -545,7 +546,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         // 累积，gpu直接只保留4帧
         float currWeight = 0.125f;
-        SkyVisOut = uint(lerp(SkyVisOut, 255 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
+        SkyVisOut = uint(lerp(float(SkyVisOut), 255.0 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
         return false;
@@ -555,9 +556,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
     {
         Vertex hitVertex;
         NodeProxy hitNode;
-
+        float4 tempColor = float4(0.0);
         uint TempInstanceId;
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode))
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor))
         {
             return length(hitVertex.Position - origin);
         }
@@ -569,8 +570,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         // 求交测试
         Vertex hitVertex;
         NodeProxy hitNode;
-
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode))
+        float4 tempColor = float4(0.0);
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor))
         {
             float hitDist = length(hitVertex.Position - origin);
             OutDistanceToSolid = hitDist;
@@ -665,7 +666,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
         uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 16) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (upacked.x < 8) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;

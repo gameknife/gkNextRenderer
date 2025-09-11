@@ -8,6 +8,8 @@ struct PushConsts
     uint PrevDiffuseBindlessIdx;
     uint PrevSpecularBindlessIdx;
     uint PrevAlbedoBindlessIdx;
+
+    bool FastReproject;
 };
 
 [[vk::push_constant]]
@@ -120,7 +122,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (useHistory)
     {
-        const int SAMPLE_RANGE = false ? 0 : 2;
+        const int SAMPLE_RANGE = pushConsts.FastReproject ? 0 : 2;
         const float3 CenterNormal = NormalBuffer[ipos].rgb;
 
         float4 spatialDiffuseSample = float4(0, 0, 0, 0);
