@@ -256,46 +256,33 @@ public struct ALIGN_16 GPUVertex
 
 
 #ifdef __cplusplus
+// still 144bytes, need to shrink into 128 bytes to make full compatible with vulkan
+// some static address can be pack together
 public struct ALIGN_8 GPUScene
 {
     uint64_t Camera;
-    uint64_t dummy1;
-
     uint64_t Nodes;
-    uint64_t dummy2;
 
     uint64_t Reorders;
-    uint64_t dummy3;
     uint64_t VerticesSimple;
-    uint64_t dummy4;
+
     uint64_t Vertices;
-    uint64_t dummy5;
     uint64_t Indices;
-    uint64_t dummy6;
 
     uint64_t Materials;
-    uint64_t dummy7;
     uint64_t Offsets;
-    uint64_t dummy8;
 
     uint64_t Cubes;
-    uint64_t dummy9;
     uint64_t Voxels;
-    uint64_t dummy10;
+    
     uint64_t Pages;
-    uint64_t dummy11;
     uint64_t HDRSHs;
-    uint64_t dummy12;
+
     uint64_t Lights;
-    uint64_t dummy13;
-
     uint64_t IndirectDrawCommands;
-    uint64_t dummy14;
-    // uint64_t GPUDrivenStats;
-    // uint64_t dummy15;
 
+    uint64_t GPUDrivenStats;
     uint64_t TLAS;
-    uint64_t dummy16;
 
     uint SwapChainIndex;
     uint custom_data_0;
@@ -307,128 +294,95 @@ public struct ALIGN_8 GPUScene
 public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
-    uint64_t CameraAddress;
-    uint64_t dummy1;
+    uint64_t2 Camera_Node_Address;
     public property UniformBufferObject* Camera
     {
-        get { return (UniformBufferObject*)CameraAddress; }
+        get { return (UniformBufferObject*)Camera_Node_Address.x; }
     }
 
     /* Scene Node Tree */
-    uint64_t NodesAddress;
-    uint64_t dummy2;
     public property NodeProxy* Nodes
     {
-        get { return (NodeProxy*)NodesAddress; }
+        get { return (NodeProxy*)Camera_Node_Address.y; }
     }
 
     /* Global Vertice Buffer */
-    uint64_t ReordersAddress;
-    uint64_t dummy3;
+    uint64_t2 Reorders_VerticesSimple_Address;
     public property uint* Reorders
     {
-        get { return (uint*)ReordersAddress; }
+        get { return (uint*)Reorders_VerticesSimple_Address.x; }
     }
-    
-    uint64_t VerticesSimpleAddress;
-    uint64_t dummy4;
     public property half4* VerticesSimple
     {
-        get { return (half4*)VerticesSimpleAddress; }
+        get { return (half4*)Reorders_VerticesSimple_Address.y; }
     }
     
-    uint64_t VerticesAddress;
-    uint64_t dummy5;
+    uint64_t2 Vertices_Indices_Address;
     public property GPUVertex* Vertices
     {
-        get { return (GPUVertex*)VerticesAddress; }
+        get { return (GPUVertex*)Vertices_Indices_Address.x; }
     }
-    
-    uint64_t IndicesAddress;
-    uint64_t dummy6;
     public property uint* Indices
     {
-        get { return (uint*)IndicesAddress; }
+        get { return (uint*)Vertices_Indices_Address.y; }
     }
 
     /* Resources */
-    uint64_t MaterialsAddress;
-    uint64_t dummy7;
+    uint64_t2 Materials_OffsetsAddress;
     public property Material* Materials
     {
-        get { return (Material*)MaterialsAddress; }
+        get { return (Material*)Materials_OffsetsAddress.x; }
     }
-    
     public Material GetMaterial(int idx)
     {
         return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
     }
-    
-    uint64_t OffsetsAddress;
-    uint64_t dummy8;
     public property ModelData* Offsets
     {
-        get { return (ModelData*)OffsetsAddress; }
+        get { return (ModelData*)Materials_OffsetsAddress.y; }
     }
 
     /* Others */
-    uint64_t CubesAddress;
-    uint64_t dummy9;
+    uint64_t2 Cubes_Voxels_Address;
     public property AmbientCube* Cubes
     {
-        get { return (AmbientCube*)CubesAddress; }
+        get { return (AmbientCube*)Cubes_Voxels_Address.x; }
     }
-    
-    uint64_t VoxelsAddress;
-    uint64_t dummy10;
     public property VoxelData* Voxels
     {
-        get { return (VoxelData*)VoxelsAddress; }
+        get { return (VoxelData*)Cubes_Voxels_Address.y; }
     }
     
-    uint64_t PagesAddress;
-    uint64_t dummy11;
+    uint64_t2 Pages_HDRSHs_Address;
     public property PageIndex* Pages
     {
-        get { return (PageIndex*)PagesAddress; }
+        get { return (PageIndex*)Pages_HDRSHs_Address.x; }
     }
-    
-    uint64_t HDRSHsAddress;
-    uint64_t dummy12;
     public property SphericalHarmonics* HDRSHs
     {
-        get { return (SphericalHarmonics*)HDRSHsAddress; }
-    }
-    
-    uint64_t LightsAddress;
-    uint64_t dummy13;
-    public property LightObject* Lights
-    {
-        get { return (LightObject*)LightsAddress; }
+        get { return (SphericalHarmonics*)Pages_HDRSHs_Address.y; }
     }
 
-    /* IndirectDraw */
-    uint64_t IndirectDrawCommandsAddress;
-    uint64_t dummy14;
+    uint64_t2 Lights_IndirectDrawCommands_Address;
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)Lights_IndirectDrawCommands_Address.x; }
+    }
     public property VkDrawIndexedIndirectCommand* IndirectDrawCommands
     {
-        get { return (VkDrawIndexedIndirectCommand*)IndirectDrawCommandsAddress; }
+        get { return (VkDrawIndexedIndirectCommand*)Lights_IndirectDrawCommands_Address.y; }
     }
     
-    // uint64_t GPUDrivenStatsAddress;
-    // uint64_t dummy15;
-    // public property GPUDrivenStat* GPUDrivenStats
-    // {
-    //     get { return (GPUDrivenStat*)GPUDrivenStatsAddress; }
-    // }
-    
-    public uint64_t TLAS; 
-    uint64_t dummy16;
+    uint64_t2 GPUDrivenStats_TLAS_Address;
+    public property GPUDrivenStat* GPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
+    }
     public RaytracingAccelerationStructure GetTLAS() {
 		return spirv_asm {
 			OpExtension "SPV_KHR_ray_tracing";
 			OpCapability RayTracingKHR;
-			result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $TLAS;
+			result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $GPUDrivenStats_TLAS_Address.y;
 		};
 	}
 
