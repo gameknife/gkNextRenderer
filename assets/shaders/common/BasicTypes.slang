@@ -291,6 +291,50 @@ public struct ALIGN_8 GPUScene
 };
 
 #else
+
+#ifdef PLATFORM_APPLE
+public struct ALIGN_8 GPUScene
+{
+    /* Scene Info */
+    public UniformBufferObject *Camera; 
+
+    /* Scene Node Tree */
+    public NodeProxy *Nodes;
+
+    public uint *Reorders;
+    public half4 *VerticesSimple;
+    public GPUVertex *Vertices;
+    public uint *Indices;
+    public Material *Materials;
+    public Material GetMaterial(int idx)
+    {
+        return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
+    }
+    public ModelData *Offsets;
+    public AmbientCube *Cubes;
+    public VoxelData *Voxels;
+    public PageIndex *Pages;
+    public SphericalHarmonics *HDRSHs;
+
+    public LightObject *Lights;
+    public VkDrawIndexedIndirectCommand *IndirectDrawCommands;
+   
+    public GPUDrivenStat *GPUDrivenStats;
+    public uint64_t TLAS;
+    public RaytracingAccelerationStructure GetTLAS() {
+        return spirv_asm {
+            OpExtension "SPV_KHR_ray_tracing";
+            OpCapability RayTracingKHR;
+            result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $TLAS;
+        };
+    }
+
+    public uint SwapChainIndex;
+    public uint custom_data_0;
+    public uint custom_data_1;
+    public uint custom_data_2;
+};
+#else
 public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
@@ -391,6 +435,7 @@ public struct ALIGN_8 GPUScene
     public uint custom_data_1;
     public uint custom_data_2;
 };
+#endif // PLATFORM_APPLE
 
 #endif
 

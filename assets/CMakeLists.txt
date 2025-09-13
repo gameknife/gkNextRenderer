@@ -79,6 +79,10 @@ foreach(shader ${shader_files})
 	if(WIN32)
 	set(slangc_args "-DSHADER_CLOCK")
 	endif()
+
+	if(APPLE)
+	set(slangc_args "-DPLATFORM_APPLE")
+	endif()
     
     list(APPEND all_shader_outputs ${output_file})
     
