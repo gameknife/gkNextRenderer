@@ -30,8 +30,8 @@ void handle_cmd(android_app* app, int32_t cmd) {
             MakeExternalDirectory(app, "assets/textures");
             MakeExternalDirectory(app, "assets/locale");
             
-            const char* argv[] = { "gkNextRenderer", "--renderer=2", "--load-scene=assets/models/playground.glb" };
-            GOption = new Options(3, argv);
+            const char* argv[] = { "gkNextRenderer", "--renderer=2", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
+            GOption = new Options(4, argv);
             GApplication.reset(new NextEngine(*GOption, app->window));
             GApplication->Start();
         }
