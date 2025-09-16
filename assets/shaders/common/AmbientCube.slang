@@ -565,12 +565,12 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return 255;
     }
 
-    bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, out float OutDistanceToSolid)
+    bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, inout float OutDistanceToSolid)
     {
         // 求交测试
         Vertex hitVertex;
         NodeProxy hitNode;
-        float4 tempColor = float4(0.0);
+        float4 tempColor;
         if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor))
         {
             float hitDist = length(hitVertex.Position - origin);
@@ -596,7 +596,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
-        Voxels[CubeIdx].matId = 0;
+       
 
         float distPY = 255.0f;
         float distNY = 255.0f;
@@ -605,12 +605,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float distPZ = 255.0f;
         float distNZ = 255.0f;
 
-        InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId, distPY);
-        InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId, distNY);
-        InsideGeometry(tracer, origin, float3(1, 0, 0), Voxels[CubeIdx].matId, distPX);
-        InsideGeometry(tracer, origin, float3(-1, 0, 0), Voxels[CubeIdx].matId, distNX);
-        InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, distPZ);
-        InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, distNZ);
+        // this will be filled by cpu, may trigger crash on amd gpu, 
+        // Voxels[CubeIdx].matId = 0;
+        // InsideGeometry(tracer, origin, float3(0, 1, 0), Voxels[CubeIdx].matId, distPY);
+        // InsideGeometry(tracer, origin, float3(0, -1, 0), Voxels[CubeIdx].matId, distNY);
+        // InsideGeometry(tracer, origin, float3(1, 0, 0), Voxels[CubeIdx].matId, distPX);
+        // InsideGeometry(tracer, origin, float3(-1, 0, 0), Voxels[CubeIdx].matId, distNX);
+        // InsideGeometry(tracer, origin, float3(0, 0, 1), Voxels[CubeIdx].matId, distPZ);
+        // InsideGeometry(tracer, origin, float3(0, 0, -1), Voxels[CubeIdx].matId, distNZ);
 
         float minDist = min(min(min(distPY, distNY), min(distPX, distNX)), min(distPZ, distNZ));
         if (minDist > 254.0f)
@@ -638,7 +640,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(uint(minDist / CUBE_UNIT), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
         Voxels[CubeIdx].distanceToSolid_x01_y01 = pack_bytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 
-        if (minDist < 16) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (minDist < 8) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;

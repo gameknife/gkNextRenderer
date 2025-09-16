@@ -322,12 +322,8 @@ public struct ALIGN_8 GPUScene
     public GPUDrivenStat *GPUDrivenStats;
     public uint64_t TLAS;
     public RaytracingAccelerationStructure GetTLAS() {
-        return spirv_asm {
-            OpExtension "SPV_KHR_ray_tracing";
-            OpCapability RayTracingKHR;
-            result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $TLAS;
-        };
-    }
+		return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
+	}
 
     public uint SwapChainIndex;
     public uint custom_data_0;
@@ -423,11 +419,7 @@ public struct ALIGN_8 GPUScene
         get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
     }
     public RaytracingAccelerationStructure GetTLAS() {
-		return spirv_asm {
-			OpExtension "SPV_KHR_ray_tracing";
-			OpCapability RayTracingKHR;
-			result: $$RaytracingAccelerationStructure = OpConvertUToAccelerationStructureKHR $GPUDrivenStats_TLAS_Address.y;
-		};
+		return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
 	}
 
     public uint SwapChainIndex;

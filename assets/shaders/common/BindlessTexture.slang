@@ -29,6 +29,8 @@ namespace Bindless
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
     public static const int RT_SINGLE_PREV_ALBEDO = 22;
 
+    public static const int RT_MINIGBUFFER_DRAW = 23;
+
     public static const int RT_TEMP_USAGE0 = 50;
     
     public static const int RT_SWAPCHAIN0 = 100;
