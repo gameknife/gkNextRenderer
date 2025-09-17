@@ -84,6 +84,10 @@ foreach(shader ${shader_files})
 	set(slangc_args "-DPLATFORM_APPLE")
 	endif()
     
+	if(ANDROID)
+	set(slangc_args "-DPLATFORM_ANDROID")
+	endif()
+
     list(APPEND all_shader_outputs ${output_file})
     
     add_custom_command(

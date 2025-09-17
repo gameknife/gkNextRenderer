@@ -418,8 +418,13 @@ public struct ALIGN_8 GPUScene
     {
         get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
     }
+
     public RaytracingAccelerationStructure GetTLAS() {
-		return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
+#ifdef PLATFORM_ANDROID
+        return BindedTLAS;
+#else
+        return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
+#endif
 	}
 
     public uint SwapChainIndex;
@@ -427,6 +432,9 @@ public struct ALIGN_8 GPUScene
     public uint custom_data_1;
     public uint custom_data_2;
 };
+#ifdef PLATFORM_ANDROID
+[[vk::binding(0, 1)]] RaytracingAccelerationStructure BindedTLAS;
+#endif
 #endif // PLATFORM_APPLE
 
 #endif
