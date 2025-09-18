@@ -38,7 +38,7 @@ jobs:
         key: ${{ runner.os }}-primes
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg_android.sh
+      run: ./vcpkg.sh android
       
     - name: Save Primes
       id: cache-primes-save
@@ -55,4 +55,4 @@ jobs:
         sudo apt-get update
         sudo apt-get install vulkan-sdk
     - name: Compile gkNextRenderer
-      run: ./build_android.sh
+      run: ./build.sh android

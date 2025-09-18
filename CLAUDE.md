@@ -5,9 +5,32 @@ gkNextRenderer 是一个基于 Vulkan 的跨平台渲染器，支持路径追踪
 
 ## 构建和测试
 
-### macOS 构建
+### 统一构建系统
+
+项目现在使用统一的构建脚本，支持自动平台检测和手动指定平台：
+
+#### 依赖安装
 ```bash
-./build_macos.sh
+./vcpkg.sh              # 自动检测当前平台并安装依赖
+./vcpkg.sh macos        # 指定macOS平台
+./vcpkg.sh linux        # 指定Linux平台
+./vcpkg.sh android      # 指定Android平台
+./vcpkg.sh mingw        # 指定MinGW平台
+```
+
+#### 项目构建
+```bash
+./build.sh              # 自动检测当前平台并构建
+./build.sh macos        # 指定macOS平台
+./build.sh linux        # 指定Linux平台
+./build.sh android      # 指定Android平台
+./build.sh mingw        # 指定MinGW平台
+```
+
+#### 环境准备
+```bash
+./prepare.sh setup      # 自动检测平台并准备开发环境
+./prepare.sh slangc     # 安装slangc编译器
 ```
 
 ### 快速测试
@@ -59,7 +82,7 @@ cd build/macos/bin && ./gkNextRenderer
 - 优先考虑代码的一致性和可维护性
 
 ### 3. 验证和测试
-- 每次修改后运行 `./build_macos.sh` 确保编译成功
+- 每次修改后运行 `./build.sh` 确保编译成功
 - 运行应用程序验证基本功能正常
 
 ## 常见任务
@@ -81,6 +104,13 @@ cd build/macos/bin && ./gkNextRenderer
 - 使用 CMake + Ninja
 - 依赖 vcpkg 进行包管理
 - 支持多平台构建（macOS, Linux, Windows, Android）
+- **统一脚本架构**: 使用 `vcpkg.sh`、`build.sh`、`prepare.sh` 和 `package.bat` 统一管理所有平台的构建和打包
+
+### 脚本统一
+- **vcpkg.sh/vcpkg.bat**: 统一的依赖管理脚本，支持自动平台检测
+- **build.sh/build.bat**: 统一的构建脚本，替代所有平台特定的构建脚本
+- **prepare.sh**: 统一的环境准备脚本，整合了引导和工具安装
+- **package.bat**: 统一的打包脚本，支持不同的打包模式
 
 ### 渲染器特性
 - 支持路径追踪、延迟渲染、体素追踪等多种渲染模式
@@ -107,6 +137,19 @@ cd build/macos/bin && ./gkNextRenderer
 - 遵循项目既有的设计模式和约定
 
 ## 记录的重要经验
+
+### 2025-09-18 构建脚本统一重构
+- **问题**: 项目中存在大量分散的平台特定构建脚本（vcpkg_xxx、build_xxx、package_xxx等）
+- **解决方案**: 将所有构建脚本整合为统一的脚本架构
+  - `vcpkg.sh/vcpkg.bat`: 统一依赖管理，支持自动平台检测
+  - `build.sh/build.bat`: 统一构建脚本，替代所有平台特定构建脚本
+  - `prepare.sh`: 统一环境准备，整合引导脚本
+  - `package.bat`: 统一打包脚本，支持不同打包模式
+- **关键学习**:
+  - 统一脚本架构大幅简化维护工作
+  - 自动平台检测提高用户体验
+  - 保持向后兼容性很重要
+- **验证方法**: 编译测试 + GitHub Actions CI 验证
 
 ### 2025-09-18 Android GLFW 定义重构
 - **问题**: Android 特定的 GLFW 定义分散在多个 Runtime 文件中
