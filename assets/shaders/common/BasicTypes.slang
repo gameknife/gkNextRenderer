@@ -322,7 +322,7 @@ public struct ALIGN_8 GPUScene
     public GPUDrivenStat *GPUDrivenStats;
     public uint64_t TLAS;
     public RaytracingAccelerationStructure GetTLAS() {
-		return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
+		return RaytracingAccelerationStructure(TLAS);
 	}
 
     public uint SwapChainIndex;
