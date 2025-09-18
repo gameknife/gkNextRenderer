@@ -26,7 +26,7 @@ jobs:
     needs: make-release
     runs-on: windows-2022
     env:
-      SDK_VERSION: 1.4.309.0
+      SDK_VERSION: 1.4.313.1
     steps:
     - uses: actions/checkout@v4
     - name: Install zip

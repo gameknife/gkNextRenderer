@@ -12,6 +12,7 @@
 #define INF 1e32f
 #define EPS 1e-3f
 #define EPS2 2e-3f
+#define EPS10 1e-2f
 
 #define NEARzero 1e-35f
 #define isZERO(x) ((x) > -NEARzero && (x) < NEARzero)
@@ -24,4 +25,3 @@
 #define luminance(rgb) (dot((rgb), float3(0.212671F, 0.715160F, 0.072169F)))
 
 #define saturate(x) (clamp((x), 0.0F, 1.0F))
-

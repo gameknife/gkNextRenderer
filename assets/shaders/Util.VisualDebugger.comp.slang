@@ -1,17 +1,15 @@
-[[vk::binding(0)]] RWTexture2D<float4> OutImage;
+import Bindless;
+struct PushConsts
+{
+    uint SwapChainIdx;
+    uint offset_x;
+    uint offset_y;
+    uint output_w;
+    uint output_h;
+};
 
-[[vk::binding(0, 1)]] RWTexture2D<float4> FinalImage;
-[[vk::binding(1, 1)]] RWTexture2D<float4> RenderImage;
-[[vk::binding(2, 1)]] RWTexture2D<uint> MiniGBuffer;
-[[vk::binding(3, 1)]] RWTexture2D<uint> ObjectId0;
-[[vk::binding(4, 1)]] RWTexture2D<uint> ObjectId1;
-[[vk::binding(5, 1)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(6, 1)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(7, 1)]] RWTexture2D<float4> OutNormalBuffer;
-[[vk::binding(8, 1)]] RWTexture2D<float4> ShaderTime;
-[[vk::binding(9, 1)]] RWTexture2D<float4> Denoised;
-[[vk::binding(10, 1)]] RWTexture2D<float> OutDepthBuffer;
-[[vk::binding(11, 1)]] RWTexture2D<float4> FinalImageSpec;
+[[vk::push_constant]] ConstantBuffer<PushConsts> pushConsts;
+
 float3 UintToStableColor(uint value)
 {
     // 使用简单的hash函数确保颜色稳定
@@ -52,7 +50,7 @@ float3 UintToStableColor(uint value)
             int2 ssize;                                            \
             IMAGE.GetDimensions(ssize.x, ssize.y);                 \
             float4 col = IMAGE[uv * ssize / isize]; \
-    OutImage[ipos] = col * multipler;} \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col * multipler;} \
 }
 
 #define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -61,7 +59,7 @@ float3 UintToStableColor(uint value)
             int2 ssize;                                       \
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
             float4 col = IMAGE[uv * ssize / isize]; \
-    OutImage[ipos] = col.rbga * 0.5 + 0.5;} \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col.rbga * 0.5 + 0.5;} \
 }
 
 #define DRAWINT(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -71,7 +69,7 @@ float3 UintToStableColor(uint value)
             IMAGE.GetDimensions(ssize.x, ssize.y); \
     uint icol = IMAGE[uv * ssize / isize]; \
     float3 color = UintToStableColor(icol); \
-    OutImage[ipos] = float4(color, 1.0);} \
+    Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);} \
 }
 
 #define DRAWINTX(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -81,7 +79,7 @@ float3 UintToStableColor(uint value)
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
             uint icol = (IMAGE[uv * ssize / isize]  >> 17) & 0x7FFF;            \
             float3 color = UintToStableColor(icol);           \
-            OutImage[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
     }
 
 #define DRAWINTY(IMAGE, quadx, quady, divider, ipos, isize) {                                                          \
@@ -91,7 +89,7 @@ float3 UintToStableColor(uint value)
             IMAGE.GetDimensions(ssize.x, ssize.y);             \
             uint icol = (IMAGE[uv * ssize / isize] & 0x1FFFF);        \
             float3 color = UintToStableColor(icol);           \
-            OutImage[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
     }
 
 #define DRAWDEPTH(IMAGE, quadx, quady, divider, ipos, isize, depth) {                                                               \
@@ -101,7 +99,7 @@ float3 UintToStableColor(uint value)
             IMAGE.GetDimensions(ssize.x, ssize.y);                  \
             float icol = IMAGE[uv * ssize / isize];                 \
             float3 color = float3(pow(saturate(icol / depth), 100));           \
-            OutImage[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
     }
 
 bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, out int2 uv)
@@ -109,9 +107,9 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
     float elementx = isize.x / divider;
     float elementy = isize.y / divider;
 
-    if(ipos.x >= elementx * quadx && ipos.x < elementx * (quadx + 1) && ipos.y > elementy * quady && ipos.y < elementy * (quady + 1))
+    if(ipos.x >= elementx * quadx + pushConsts.offset_x && ipos.x < elementx * (quadx + 1) + pushConsts.offset_x && ipos.y > elementy * quady + pushConsts.offset_y && ipos.y < elementy * (quady + 1) + pushConsts.offset_y)
     {
-        uv = uint2((ipos - float2(elementx * quadx, elementy * quady)) * float2(divider, divider));
+        uv = uint2((ipos - float2(elementx * quadx + pushConsts.offset_x, elementy * quady + pushConsts.offset_y)) * float2(divider, divider));
         return true;
     }
     uv = int2(0, 0);
@@ -123,32 +121,33 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    int2 isize;
-    OutImage.GetDimensions(isize.x, isize.y);
+    int2 isize = Bindless.GetStorageTextureDimensions(pushConsts.SwapChainIdx);
+    Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(0, 0, 0, 1); // Clear the output image
 
-    OutImage[ipos] = float4(0, 0, 0, 1); // Clear the output image
-
+    //ipos = int2(ipos.x, ipos.y);
+    isize = int2(pushConsts.output_w, pushConsts.output_h);
     // line 1
-    DRAW(OutAlbedoBuffer, 0, 0, 4, ipos, isize, 1);
-    DRAWNORMAL(OutNormalBuffer, 1, 0, 4, ipos, isize);
-    DRAWDEPTH(OutDepthBuffer, 2, 0, 4, ipos, isize, 1.0f);
-    DRAWINT(ObjectId0, 3, 0, 4, ipos, isize);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO), 0, 0, 4, ipos, isize, 1);
+    DRAWNORMAL(Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL), 1, 0, 4, ipos, isize);
+    DRAWDEPTH(Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER), 2, 0, 4, ipos, isize, 1.0f);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0), 3, 0, 4, ipos, isize);
 
 // line 2/3 left
 #ifdef SHADER_CLOCK
-    DRAW(ShaderTime, 0, 1, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_SHADER_TIMER), 0, 1, 4, ipos, isize, 1);
 #endif
-    DRAW(OutMotionVector, 0, 2, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR), 0, 2, 4, ipos, isize, 1);
 
     // line 2/3 right
-    DRAW(FinalImage, 3, 1, 4, ipos, isize, 0.005);
-    DRAW(FinalImageSpec, 3, 2, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR), 3, 1, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE), 3, 2, 4, ipos, isize, 0.005);
     
     // center
-    DRAW(Denoised, 0.5, 0.5, 2, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(RenderImage, 0, 3, 4, ipos, isize, 0.005);
-    DRAWINTX(MiniGBuffer, 1, 3, 4, ipos, isize);
-    DRAWINTY(MiniGBuffer, 2, 3, 4, ipos, isize);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE), 0, 3, 4, ipos, isize, 0.005);
+    DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER), 1, 3, 4, ipos, isize);
+    DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER), 2, 3, 4, ipos, isize);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT), 3, 3, 4, ipos, isize);
 }

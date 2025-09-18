@@ -1,103 +1,32 @@
 import Common;
+import Bindless;
 #include "common/ShaderClock.slang"
-
-[[vk::binding(0, 0)]] Sampler2D TextureArray[];
-
-[[vk::binding(0, 1)]] ConstantBuffer<UniformBufferObject> Camera;
-[[vk::binding(1, 1)]] RaytracingAccelerationStructure Scene;
-
-[[vk::binding(0, 2)]] RWTexture2D<float4> FinalImage;
-[[vk::binding(1, 2)]] RWTexture2D<float4> OutImage;
-[[vk::binding(2, 2)]] RWTexture2D<uint> MiniGBuffer;
-[[vk::binding(3, 2)]] RWTexture2D<uint> ObjectId0;
-[[vk::binding(4, 2)]] RWTexture2D<uint> ObjectId1;
-[[vk::binding(5, 2)]] RWTexture2D<float4> OutMotionVector;
-[[vk::binding(6, 2)]] RWTexture2D<float4> OutAlbedoBuffer;
-[[vk::binding(7, 2)]] RWTexture2D<float4> OutNormalBuffer;
-[[vk::binding(8, 2)]] RWTexture2D<float4> ShaderTimerBuffer;
-[[vk::binding(12, 2)]] RWTexture2D<float4> OutImageSpec;
-
-[[vk::binding(0, 3)]] StructuredBuffer<GPUVertex> Vertices;
-[[vk::binding(12, 3)]] StructuredBuffer<uint> Indices;
-[[vk::binding(2, 3)]] StructuredBuffer<Material> Materials;
-[[vk::binding(3, 3)]] StructuredBuffer<ModelData> Offsets;
-[[vk::binding(4, 3)]] StructuredBuffer<NodeProxy> NodeProxies;
-[[vk::binding(5, 3)]] RWStructuredBuffer<AmbientCube> Cubes;
-[[vk::binding(6, 3)]] RWStructuredBuffer<VoxelData> Voxels;
-[[vk::binding(7, 3)]] StructuredBuffer<SphericalHarmonics> HDRSHs;
-[[vk::binding(8, 3)]] StructuredBuffer<LightObject> Lights;
-[[vk::binding(10, 2)]] RWTexture2D<float> OutDepthBuffer;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
-    // compose with renderer and tracer
-    FVisibilityBufferRayCaster rayCaster = { Camera, Vertices, NodeProxies, Offsets, MiniGBuffer, Indices };
-    FHardwareRayTracer tracer = { Vertices, Indices, Materials, Offsets, NodeProxies, Scene };
-    FHardwareDirectIlluminator dIlluminator = { Camera, Scene };
-    //FHardwarePrimaryRayCaster rayCaster = { Camera, tracer };
-    FPathTracingRenderer renderer = { Camera, Vertices, Indices, Materials, Offsets, NodeProxies, Cubes, Voxels, HDRSHs};
 
-    int2 ipos = int2(DTid.xy);
-    int2 isize;
-    OutImage.GetDimensions(isize.x, isize.y);
-    uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
+    FVisibilityBufferRayCasterV2 rayCaster;
+    FHardwareRayTracerV2 tracer;
+    FHardwareDirectIlluminatorV2 dIlluminator;
 
-    // do a primary ray here
-    Vertex hitVertex;
-    NodeProxy hitNode;
-    float3 rayDir;
-    float2 pixelOffset = float2(0, 0);
-    if (!rayCaster.TracePrimaryRay(ipos, isize, RandomSeed, hitVertex, hitNode, rayDir, pixelOffset))
+    FPathTracingRendererV2 renderer;
+    renderer.ExitProbability = 0.5f;
+    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->FastGather;
+    renderer.HitNormalOffset = 0.001f;
+    renderer.SampleDownscale = 1;
+    renderer.FuzzyTracing = false;
+    renderer.Init(DTid.xy);
+
+    if( !renderer.PrimaryHit(rayCaster) )
     {
-        float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, rayDir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0, 0, 0, 0);
-        OutImage[ipos] = skyColor;
-        OutMotionVector[ipos] = float4(0, 0, 0, 0);
-        OutAlbedoBuffer[ipos] = float4(1, 1, 1, 1);
-        OutNormalBuffer[ipos] = float4(0, 1, 0, 1);
-        ObjectId0[ipos] = 65535;
-
-        END_SHADERCLOCK(ipos)
+        END_SHADERCLOCK(DTid.xy)
         return;
     }
-    // MotionVector解析
-    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex);
-    OutMotionVector[ipos] = float4(motion * isize, 0, 0);
 
-    // GBuffer解析
-    float4 albedo = float4(0, 0, 0, 1);
-    float4 illuminaceColor = float4(0, 0, 0, 1);
-    float4 reflectColor = float4(0, 0, 0, 1);
-    float4 gbuffer = float4(0, 0, 0, 0);
-    Material material = Materials[hitVertex.MaterialIndex];
-    Common.FetchGBuffer(hitVertex, Materials[hitVertex.MaterialIndex], hitNode, rayDir, TextureArray, albedo, gbuffer);
-    OutAlbedoBuffer[ipos] = albedo;
-    OutNormalBuffer[ipos] = gbuffer;
-    ObjectId0[ipos] = hitNode.instanceId;
-
-    // if (material.MaterialModel != MaterialDielectric)
-    // {
-    //     hitVertex.Position = hitVertex.Position - rayDir * 0.05;
-    // }  
-
-    // 着色
-    renderer.Render(tracer, dIlluminator, hitVertex, albedo, gbuffer, TextureArray, RandomSeed, illuminaceColor, reflectColor);
-
-    // 合成
-    float4 outColor = float4(illuminaceColor.rgb, 1);
-    outColor.a = length(pixelOffset);
-    OutImage[ipos] = outColor;
-
-    float4 outSpec = float4(reflectColor.rgb, 1);
-    outSpec.a = length(pixelOffset);
-    OutImageSpec[ipos] = outSpec;
-
-    // write to NDC depth
-    float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
-    float ndcDepth = clipPos.z / clipPos.w;
-    OutDepthBuffer[ipos] = ndcDepth;
-    
-    END_SHADERCLOCK(ipos)
+    int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
+    renderer.Render(tracer, dIlluminator, sampleMultiplier);
+    END_SHADERCLOCK(DTid.xy)
 }

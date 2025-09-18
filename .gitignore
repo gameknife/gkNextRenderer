@@ -326,6 +326,9 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
 
+# blend backup
+*.blend1
+
 # Extras
 build
 
@@ -335,10 +338,18 @@ assets/textures/thumb
 android/.gradle/
 android/app/src/main/assets/
 android/local.properties
+slang/
 
 tools/node/
 tools/typescript/
 cmake-build-*/
 .DS_Store
-
 .VSCodeCounter/
+
+# spec local test glb
+assets/models/bistro_simple.glb
+assets/models/bistro.glb
+assets/models/classic.glb
+assets/models/hyrule2.glb
+assets/models/hyrule3.glb
+assets/models/leaktest.glb

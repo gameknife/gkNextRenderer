@@ -10,7 +10,7 @@
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
-#include "renderdoc_app.h"
+#include "ThirdParty/renderdoc/renderdoc_app.h"
 #endif
 
 int main(int argc, const char* argv[]) noexcept

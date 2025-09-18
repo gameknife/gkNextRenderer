@@ -15,7 +15,7 @@ static const float2 haltonSeq[8] = {
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
-static const float TRACE_CORRECTION_OFFSET = 0.001f;
+static const float TRACE_CORRECTION_OFFSET = 0.0f;
 
 namespace Common
 {
@@ -23,7 +23,7 @@ namespace Common
     {
         // Calculate the page index based on the page position
         uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
-        return clamp(pageIndex, 0, 4096);
+        return clamp(pageIndex, 0, 4095);
     }
 
     float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
@@ -47,13 +47,27 @@ namespace Common
         return rayOrigin + rayDir * tEntry;
     }
 
-    public float2 CalculateMotionVector(ConstantBuffer<UniformBufferObject> Camera, NodeProxy node, Vertex v )
+    public float2 CalculateMotionVectorV2(in UniformBufferObject Camera, NodeProxy node, Vertex v, int2 ipos )
     {
         // motion info
         float4 currFrameHPos = mul(Camera.ViewProjectionUnJit, float4(v.Position, 1));
         float2 currfpos = currFrameHPos.xy / currFrameHPos.w * 0.5;
         float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
         float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
+
+        let MotionMoment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
+        
+
+        float4 prevPos = mul(node.combinedPrevTS, float4(v.Position, 1));
+        if( distance(v.Position.xyz, prevPos.xyz) > 0.02)
+        {
+            MotionMoment[ipos] = Bindless.GetGpuscene().Camera[0].TemporalFrames;
+        }
+        else
+        {
+            MotionMoment[ipos] = MotionMoment[ipos] > 0 ? MotionMoment[ipos] - 1 : 0;
+        }
+
         return prevfpos - currfpos;
     }
 
@@ -63,6 +77,38 @@ namespace Common
         float3 vB = tangent.w * cross(normal, tangent.xyz);
         normal = normalize(vNt.x * tangent.xyz + vNt.y * vB + vNt.z * normal);
         return normal;
+    }
+
+    public void FetchGBufferV2(inout Vertex inVertex, in Material inMaterial, in NodeProxy proxy, float3 rayDir, out float4 outAlbedo, out float4 outNormal)
+    {
+        outAlbedo = inMaterial.Diffuse;
+
+        if (inMaterial.DiffuseTextureId >= 0)
+        {
+            float4 tex = Bindless.GetSampleTexture(inMaterial.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
+            outAlbedo *= tex;
+        }
+        float roughness = inMaterial.Fuzziness;
+        if (inMaterial.MRATextureId >= 0)
+        {
+            float4 mra = Bindless.GetSampleTexture(inMaterial.MRATextureId).SampleLevel(inVertex.TexCoord, 0);
+            roughness = roughness * mra.g;
+        }
+
+        // Normal map handling
+        if (inMaterial.NormalTextureId >= 0)
+        {
+            // normal mapping use interpolated normal
+            float3 vNt = Bindless.GetSampleTexture(inMaterial.NormalTextureId).SampleLevel(inVertex.TexCoord, 0).rgb;
+            // here we need local space normal and tangent
+            outNormal.rgb = normalize( mul(proxy.worldTS, float4(mikkTSpace(vNt, inVertex.LocalNormal, inVertex.LocalTangent), 0.0)).xyz );
+            outNormal.a = roughness;
+            inVertex.Normal.rgb = outNormal.rgb; // Update vertex normal for further calculations
+        }
+        else
+        {
+            outNormal = float4(inVertex.Normal.rgb, roughness);
+        }
     }
 
     public void FetchGBuffer(inout Vertex inVertex, in Material inMaterial, in NodeProxy proxy, float3 rayDir, in Sampler2D[] TextureArray, out float4 outAlbedo, out float4 outNormal)
@@ -139,22 +185,27 @@ namespace Common
         return color;
     };
 
-    public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate, in StructuredBuffer<SphericalHarmonics> HDRSHs)
+    public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate)
     {
-        float3 rayColor = EvaluateSH(HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
+        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
         return float4(rayColor * 1.0f, 1.0);
     };
 
-    public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness, in StructuredBuffer<SphericalHarmonics> HDRSHs, in Sampler2D[] TextureSamplers)
+    public float4 SampleIBLV2(uint skyIdx, float3 direction, float rotate, float roughness)
     {
         float3 d = normalize(direction);
         float2 t = float2((atan2(d.x, d.z) + M_PI * rotate) * M_1_OVER_TWO_PI, acos(d.y) * M_1_PI);
-        return min(float4(10, 10, 10, 1), TextureSamplers[NonUniformResourceIndex(skyIdx)].SampleLevel(t, roughness * 8.0f));
+        return min(float4(10, 10, 10, 1), Bindless.GetSampleTexture(skyIdx).SampleLevel(t, roughness * 8.0f));
     };
 
-    bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx,
-                            in ConstantBuffer<UniformBufferObject> Camera, in RWTexture2D<uint> MiniGBuffer, in StructuredBuffer<NodeProxy> NodeProxies, in StructuredBuffer<ModelData> Models, in StructuredBuffer<GPUVertex> Vertices, in StructuredBuffer<uint> Indices)
+    bool traceInScreenSpaceV2(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
     {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
+        ModelData* Models = Bindless.GetGpuscene().Offsets;
+        uint* PrimAddress = Bindless.GetGpuscene().Indices;
+
         const int maxSteps = 5;
         float stepSize = maxDistance / float(maxSteps);
         float3 rayStart = position + rayDir * 0.1;
@@ -172,11 +223,10 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size;
-            MiniGBuffer.GetDimensions(size.x, size.y);
+            int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_MINIGBUFFER);
 
             int2 sampleCoord = int2(currentUV * float2(size));
-            uint packedValue = MiniGBuffer.Load(sampleCoord).r;
+            uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
             uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
             if (vBufferSample.r == 0)
                 continue;
@@ -186,7 +236,7 @@ namespace Common
             float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
             float3 ray_dir = normalize(dir.xyz);
 
-            Vertex sampleVertex = Common.get_material_data(vBufferSample, origin.xyz, ray_dir, NodeProxies, Models, Vertices, Indices);
+            Vertex sampleVertex = Common.get_material_dataV2(vBufferSample, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
 
             float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
             float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
@@ -207,13 +257,13 @@ namespace Common
 // emit primary ray, return hit-info
 public interface IPrimaryRayCaster
 {
-    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset);
+    bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset);
 }
 
 // ray tracer for rendering
 public interface IRayTracer
 {
-    bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode);
+    bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
     bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
 }
@@ -232,7 +282,7 @@ public interface IRenderer
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
         float2 uvOffset = float2(0);
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
@@ -250,7 +300,8 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
         Material hitMaterial;
         float t = 0;
-        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode);
+        float4 tempColor;
+        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode, tempColor);
         if (hitted)
         {
             // 计算命中点到相机的距离
@@ -279,15 +330,22 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
-    FHardwareRayTracer HWTracer;
+    FHardwareRayTracerV2 HWTracer;
 }
 
-public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
+public struct FVisibilityBufferRayCasterV2 : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
+        
+        UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
+        GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
+        ModelData* Models = Bindless.GetGpuscene().Offsets;
+        uint* PrimAddress = Bindless.GetGpuscene().Indices;
+
         // 第一步：先追踪一次顶点，计算距离
-        uint packedValue = VisibilityBuffer[ipos];
+        uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
         uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF); 
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
@@ -297,15 +355,15 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
         float3 ray_dir = normalize(dir.xyz);
 
-        // 获取初始顶点数据
-        Vertex initialVertex = Common.get_material_data(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
-        
         if (vBuffer.x == 0)
         {
             // 没有几何体，直接返回
             outRayDir = ray_dir;
             return false;
         }
+
+        // 获取初始顶点数据
+        Vertex initialVertex = Common.get_material_dataV2(vBuffer, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
         
         // 第二步：计算顶点到相机的距离
         float vertexDistance = length(initialVertex.Position - origin.xyz);
@@ -353,7 +411,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         // 确保偏移后的位置在屏幕范围内
         offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
 
-        uint offsetedPackValue = VisibilityBuffer[offsetPos];
+        uint offsetedPackValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
         uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
 
         float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
@@ -380,7 +438,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         else
         {
             // 使用偏移后的结果
-            Vertex finalVertex = Common.get_material_data(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Models, Vertices, PrimAddress);
+            Vertex finalVertex = Common.get_material_dataV2(finalVBuffer, origin.xyz, final_ray_dir, NodeProxies, Models, Vertices, PrimAddress);
             
             // 只在焦平面附近才进行深度检查
             float distanceToFocus = abs(vertexDistance - Camera.FocusDistance);
@@ -429,22 +487,18 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
                 outRayDir = final_ray_dir;
             }
         }
+
+        outRayLength = length(outVertex.Position - origin.xyz);
         
         return true;
     }
-
-    ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<NodeProxy> NodeProxies;
-    StructuredBuffer<ModelData> Models;
-    RWTexture2D<uint> VisibilityBuffer;
-    StructuredBuffer<uint> PrimAddress;
 }
-
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
         // construct ray
@@ -455,34 +509,39 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
         float3 ray_dir = normalize(dir.xyz);
         outRayDir = ray_dir;
 
-        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode);
+        float4 tempColor;
+        return DDARayTracer.TraceRay(origin.xyz, ray_dir, 800.0f, outVertex, outNode, tempColor);
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
-    FHiVoxelDDARayTracer DDARayTracer;
+    FHiVoxelDDARayTracerV2 DDARayTracer;
 }
 
-public struct FHiVoxelDDARayTracer : IRayTracer
+public struct FHiVoxelDDARayTracerV2 : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode);
+        float4 tempColor;
+        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode, tempColor);
     }
     public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
     {
         float rayLength = length(rayTaget - rayOrigin);
         Vertex outVertex;
         NodeProxy outNode;
-        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode);
+        float4 tempColor;
+        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor);
     }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
     
-        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET + float3(0.5f) * CUBE_UNIT) / CUBE_UNIT;
+        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
         float3 tDelta = abs(CUBE_UNIT / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
@@ -505,7 +564,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     
             float offsetDist = 0;
             float skipLength = 1;
-            if (inSolid(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
@@ -517,41 +576,41 @@ public struct FHiVoxelDDARayTracer : IRayTracer
                 break;
             }
 
-            if (skipLength > 1.0f)
-            {
-                int primaryAxis = 0;
-                if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
-                else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
+            // if (skipLength > 1.0f)
+            // {
+            //     int primaryAxis = 0;
+            //     if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
+            //     else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
                 
-                float voxelSkipLength = skipLength * CUBE_UNIT;
-                float stepsToSkip = 0; 
-                stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
+            //     float voxelSkipLength = skipLength * CUBE_UNIT;
+            //     float stepsToSkip = 0; 
+            //     stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
                 
-                if (stepsToSkip >= 1.0f)
-                {
-                    voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
-                    tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
+            //     if (stepsToSkip >= 1.0f)
+            //     {
+            //         voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
+            //         tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
                     
-                    float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
+            //         float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
                     
-                    for (int axis = 0; axis < 3; ++axis)
-                    {
-                        if (axis != primaryAxis && rayDir[axis] != 0)
-                        {
-                            float stepsOther = timeAdvanced / tDelta[axis];
-                            voxelPos[axis] += stepSign[axis] * floor(stepsOther);
-                            tMax[axis] -= tDelta[axis] * floor(stepsOther);
-                        }
-                    }
+            //         for (int axis = 0; axis < 3; ++axis)
+            //         {
+            //             if (axis != primaryAxis && rayDir[axis] != 0)
+            //             {
+            //                 float stepsOther = timeAdvanced / tDelta[axis];
+            //                 voxelPos[axis] += stepSign[axis] * floor(stepsOther);
+            //                 tMax[axis] -= tDelta[axis] * floor(stepsOther);
+            //             }
+            //         }
                     
-                    i += uint(stepsToSkip - 1);
+            //         i += uint(stepsToSkip - 1);
 
-                    normal = float3(0, 0, 0);
-                    normal[primaryAxis] = -stepSign[primaryAxis];
+            //         normal = float3(0, 0, 0);
+            //         normal[primaryAxis] = -stepSign[primaryAxis];
                     
-                    continue;
-                }
-            }
+            //         continue;
+            //     }
+            // }
    
             // 原始DDA单步进
             normal = float3(0, 0, 0);
@@ -588,8 +647,9 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         return TraceRayDDA(rayOrigin, rayDir, 0, boxMin, boxMax, true, outVertex, outNode);
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
+        PageIndex* Pages = Bindless.GetGpuscene().Pages;
         // DDA voxel traversal
         bool hit = false;
         rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 2;
@@ -651,12 +711,28 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         }
         return hit;
     }
-
-    RWStructuredBuffer<VoxelData> Voxels;
-    StructuredBuffer<PageIndex> Pages;
 }
 
-public struct FHardwareRayTracer : IRayTracer
+public struct FAmbientCubeRayTracerV2 : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        return false;
+    }
+
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return false;
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
+    {
+        float4 probeData = interpolateAmbientCubesV2<FullAmbientCubeSampler>(rayOrigin, rayDir);
+        inoutRayColor.rgb = probeData.rgb;
+        return probeData.a < 0.6;
+    }
+}
+public struct FHardwareRayTracerV2 : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
@@ -671,7 +747,7 @@ public struct FHardwareRayTracer : IRayTracer
                        RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -696,7 +772,7 @@ public struct FHardwareRayTracer : IRayTracer
                        RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -705,7 +781,7 @@ public struct FHardwareRayTracer : IRayTracer
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
 
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         RayDesc ray;
         ray.Origin = rayOrigin;
@@ -716,7 +792,7 @@ public struct FHardwareRayTracer : IRayTracer
         let rayFlags = RAY_FLAG_NONE;
 
         q.TraceRayInline(
-            Scene,
+            Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
             0xff,
             ray);
@@ -731,14 +807,14 @@ public struct FHardwareRayTracer : IRayTracer
 
             float4x3 WorldToObject = q.CommittedRayWorldToObject();
 
-            outNode = NodeProxies[q.CommittedRayInstanceId()];
+            outNode = Bindless.GetGpuscene().Nodes[q.CommittedRayInstanceId()];
             outNode.instanceId = q.CommittedRayInstanceCustomIndex();
-            const ModelData offsets = Offsets[outNode.modelId];
+            const ModelData offsets = Bindless.GetGpuscene().Offsets[outNode.modelId];
             const uint indexOffset = offsets.indexOffset + q.CommittedPrimitiveIndex() * 3;
             const uint vertexOffset = offsets.vertexOffset;
-            const Vertex v0 = UnpackVertex(vertexOffset + Indices[indexOffset], Vertices);
-            const Vertex v1 = UnpackVertex(vertexOffset + Indices[indexOffset + 1], Vertices);
-            const Vertex v2 = UnpackVertex(vertexOffset + Indices[indexOffset + 2], Vertices);
+            const Vertex v0 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset]]);
+            const Vertex v1 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset + 1]]);
+            const Vertex v2 = UnpackVertexV2(Bindless.GetGpuscene().Vertices[vertexOffset + Bindless.GetGpuscene().Indices[indexOffset + 2]]);
             outVertex.MaterialIndex = FetchMaterialId(outNode, v0.MaterialIndex);
             outVertex.Normal = normalize(mul(WorldToObject, Mix(v0.Normal, v1.Normal, v2.Normal, BaryCoords)).xyz);
             outVertex.TexCoord = Mix(v0.TexCoord, v1.TexCoord, v2.TexCoord, BaryCoords);
@@ -748,16 +824,8 @@ public struct FHardwareRayTracer : IRayTracer
         }
         return false;
     }
-
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<Material> Materials;
-    StructuredBuffer<ModelData> Offsets;
-    StructuredBuffer<NodeProxy> NodeProxies;
-    RaytracingAccelerationStructure Scene;
 }
-
-public struct FSoftwareRayTracer : IRayTracer
+public struct FSoftwareRayTracerV2 : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
@@ -771,7 +839,7 @@ public struct FSoftwareRayTracer : IRayTracer
         float3 outPosition;
         float3 outNormal;
         uint outMaterialIdx;
-        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, ModelDatas, Vertices, Indices))
+        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outPosition, outNormal, outMaterialIdx))
         {
             return true;
         }
@@ -787,7 +855,7 @@ public struct FSoftwareRayTracer : IRayTracer
     {
         return false;
     }
-    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode)
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor)
     {
         float3 offsetPos = rayOrigin;
 
@@ -796,7 +864,7 @@ public struct FSoftwareRayTracer : IRayTracer
         const float depthToleration = 0.2;         // Near field depth toleration
 
         // screenspace tracing is heavy, skip
-        if (Common.traceInScreenSpace(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex, Camera, MiniGBuffer, NodeProxies, ModelDatas, Vertices, Indices))
+        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
         {
             outVertex.TexCoord = float2(0.5, 0.5);
             return true;
@@ -804,7 +872,7 @@ public struct FSoftwareRayTracer : IRayTracer
 
         // use dda directly
         // offsetPos = offsetPos + rayDir * longDistanceInit; no need to offset, dda tracing will handle it
-        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode))
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode, inoutRayColor))
         {
             return true;
         }
@@ -812,22 +880,14 @@ public struct FSoftwareRayTracer : IRayTracer
         return false;
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
-    RWTexture2D<uint> MiniGBuffer;
-
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<NodeProxy> NodeProxies;
-    StructuredBuffer<ModelData> ModelDatas;
-
-    FHiVoxelDDARayTracer DDARayTracer;
+    FHiVoxelDDARayTracerV2 DDARayTracer;
 }
 
-public struct FHardwareDirectIlluminator : IDirectIlluminator
+public struct FHardwareDirectIlluminatorV2 : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
-
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float shadow = 0.0f;
         const float3 lightVector = Camera.SunDirection.xyz;
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
@@ -844,16 +904,22 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         directIllumColor = Camera.SunColor * d * shadow;
     }
 
-    // all stuffs like pointers
-    ConstantBuffer<UniformBufferObject> Camera;
-    FHardwareRayTracer HWTracer;
+    FHardwareRayTracerV2 HWTracer;
 }
 
-public struct FSoftwareDirectIlluminator : IDirectIlluminator
+public struct FAmbientCubeIlluminatorV2 : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
+        directIllumColor = float4(0, 0, 0, 0);
+    }
+}
 
+public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
+{
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float shadow = 0.0f;
         const float3 lightVector = Camera.SunDirection.xyz;
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
@@ -871,8 +937,7 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
     }
 
     // all stuffs like pointers
-    ConstantBuffer<UniformBufferObject> Camera;
-    FSoftwareRayTracer HWTracer;
+    FSoftwareRayTracerV2 HWTracer;
 }
 
 public struct FShadowMapDirectIlluminator : IDirectIlluminator
@@ -892,13 +957,13 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
         float closestDepth = ShadowMapSampler.SampleLevel(projCoords.xy, 0).x;
         float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
 
-        if (shadow > 0.01) {
-            float3 outPosition;
-            float3 outNormal;
-            uint outMaterialIdx;
-            float contactShadow = Common.traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Models, Vertices, Indices) ? 0.0 : 1.0;
-            shadow = min(shadow, contactShadow); // 结合两种阴影结果
-        }
+        // if (shadow > 0.01) {
+        //     float3 outPosition;
+        //     float3 outNormal;
+        //     uint outMaterialIdx;
+        //     float contactShadow = Common.traceInScreenSpaceV2(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Models, Vertices, Indices) ? 0.0 : 1.0;
+        //     shadow = min(shadow, contactShadow); // 结合两种阴影结果
+        // }
 
         return shadow;
     };
@@ -927,11 +992,19 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     StructuredBuffer<uint> Indices;
 }
 
-public struct FPathTracingRenderer : IRenderer
+public struct FPathTracingRendererV2
 {
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, in Sampler2D[] TextureArray)
+    public float ExitProbability = 0.5;
+    public bool ExitAfterFirst = false;
+    public float HitNormalOffset = 0.0f;
+    public int SampleDownscale = 1;
+    public bool FuzzyTracing = false;
+
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
-        Material mat = Materials[inVertex.MaterialIndex];
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+
+        Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
         const float dotValue = dot(rayDir, inVertex.Normal);
@@ -962,13 +1035,19 @@ public struct FPathTracingRenderer : IRenderer
         rayDir = trace_dir;
 
         NodeProxy hitNode;
-        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode))
+        float4 tempColor = float4(0, 0, 0, 1);
+        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor))
         {
-            Material hitMat = Materials[inVertex.MaterialIndex];
+            if(FuzzyTracing)
+            {
+                rayColor *= tempColor;
+                return false;
+            }
+            Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
             float4 outAlbedo = hitMat.Diffuse;
             if (hitMat.DiffuseTextureId >= 0)
             {
-                float4 tex = TextureArray[NonUniformResourceIndex(hitMat.DiffuseTextureId)].SampleLevel(inVertex.TexCoord, 0);
+                float4 tex = Bindless.GetSampleTexture(hitMat.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
                 outAlbedo *= tex;
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
@@ -977,7 +1056,7 @@ public struct FPathTracingRenderer : IRenderer
             }
             if (BackFace && mat.MaterialModel != MaterialDielectric)
             {
-                rayColor = 0.0f;
+                rayColor = float4(0.5f,0.5f,0.5f,0);
                 return true;
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight)
@@ -988,78 +1067,98 @@ public struct FPathTracingRenderer : IRenderer
         }
         else
         {
-            float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-            // miss, FinalColor to SkyIBL
-            rayColor *= skyColor;
+            // if(FuzzyTracing)
+            // {
+            //     float4 skyColor = Camera.HasSky ? Common.SampleIBLRough(Camera.SkyIdx, trace_dir, Camera.SkyRotation) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            //     rayColor *= skyColor;
+            // }
+            // else
+            {
+                float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                rayColor *= skyColor;
+            }
             return true;
         }
     }
 
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalColor, inout float4 FinalReflection)
+    [mutating]
+    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, int sampleMultiplier)
     {
-        FinalColor = float4(0, 0, 0, 0);
-        FinalReflection = float4(0, 0, 0, 0);
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
-        Material mat = Materials[inVertex.MaterialIndex];
+        float4 FinalColor = float4(0, 0, 0, 0);
+        float4 FinalReflection = float4(0, 0, 0, 0);
+
+        Material mat = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
             FinalColor = mat.Diffuse;
+            OutSingleDiffuse.Store(pixel_, FinalColor);
+            OutSingleSpecular.Store(pixel_, FinalReflection);
             return;
         }
 
-        const uint sample = Camera.FastGather ? 1 : Camera.NumberOfSamples;
+        const int sample = max(1, Camera.NumberOfSamples / SampleDownscale * sampleMultiplier);
+        
         for (int i = 0; i < sample; i++)
         {
             float4 RayColor = float4(1, 1, 1, 1);
 
             float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-            float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+            float3 ray_dir = normalize(hitPrimaryVertex_.Position - eye.xyz);
 
             float3 direction = ray_dir;
-            Vertex vertexStart = inVertex;
+            Vertex vertexStart = hitPrimaryVertex_;
 
             uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
 
             bool hitReflect = false;
             bool hitMetal = false;
-            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitReflect, hitMetal, TextureArray);
+            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal);
             if (!exitFirst)
             {
-                for (uint b = 1; b < maxBounces; ++b)
+                if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
                 {
-                    bool hitReflectDontCare = false;
-                    bool hitMetalDontCare = false;
-                    if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed, hitMetalDontCare, hitMetalDontCare, TextureArray))
+                    if(!FuzzyTracing) RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                }
+                else
+                {
+                    for (uint b = 1; b < maxBounces; ++b)
                     {
-                        break;
-                    }
-
-                    if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed) < 0.5f))
-                    {
-                        const float3 lightVector = Camera.SunDirection.xyz;
-                        const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-                        if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                        bool hitReflectDontCare = false;
+                        bool hitMetalDontCare = false;
+                        if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitMetalDontCare, hitMetalDontCare))
                         {
-                            RayColor *= Camera.SunColor;
                             break;
                         }
-                    }
 
-                    // 提前退出
-                    const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed) < 0.5f);
+                        if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
+                        {
+                            const float3 lightVector = Camera.SunDirection.xyz;
+                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
+                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                            {
+                                RayColor *= Camera.SunColor;
+                                break;
+                            }
+                        }
 
-                    // 终结路径
-                    if (b == maxBounces - 1 || earlyExit)
-                    {
-                        RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal, Cubes, Voxels);
-                        break;
+                        // 提前退出
+                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
+
+                        // 终结路径
+                        if (b == maxBounces - 1 || earlyExit)
+                        {
+                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                            break;
+                        }
                     }
                 }
             }
 
             if (hitMetal)
             {
-                RayColor *= inAlbedo;
+                RayColor *= primaryAlbedo_;
             }
 
             if (hitReflect)
@@ -1077,125 +1176,86 @@ public struct FPathTracingRenderer : IRenderer
         FinalReflection /= float(sample);
 
         float4 directColor = float4(0, 0, 0, 0);
-        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
+        directIllum.DirectIlluminate(RandomSeed_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
         FinalColor += directColor;
+
+        OutSingleDiffuse.Store(pixel_, FinalColor);
+        OutSingleSpecular.Store(pixel_, FinalReflection);
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<Material> Materials;
-    StructuredBuffer<ModelData> Offsets;
-    StructuredBuffer<NodeProxy> NodeProxies;
-
-    RWStructuredBuffer<AmbientCube> Cubes;
-    RWStructuredBuffer<VoxelData> Voxels;
-    StructuredBuffer<SphericalHarmonics> HDRSHs;
-}
-
-public struct FHybridRenderer : IRenderer
-{
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, Vertex inVertex, float4 inAlbedo, float4 inGBuffer, in Sampler2D[] TextureArray, inout uint4 RandomSeed, inout float4 FinalLambertation, inout float4 FinalReflection)
+    [mutating]
+    public bool PrimaryHit(IPrimaryRayCaster primaryRayCaster)
     {
-        // construct ray
-        float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-        float3 ray_dir = normalize(inVertex.Position - eye.xyz);
+        let Camera = Bindless.GetGpuscene().Camera[0];
 
-        Material mat = Materials[inVertex.MaterialIndex];
-        if (mat.MaterialModel == MaterialDiffuseLight)
+        if (!primaryRayCaster.TracePrimaryRay(pixel_, size_, RandomSeed_, hitPrimaryVertex_, hitPrimaryNode_, primaryRayDir_, primaryRayLength_, primaryPixelOffset_))
         {
-            FinalLambertation = mat.Diffuse;
-            FinalReflection = float4(0, 0, 0, 0);
-            return;
+            float4 skyColor = Camera.HasSky ? Common.SampleIBLV2(Camera.SkyIdx, primaryRayDir_, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0, 0, 0, 0);
+
+            OutSingleDiffuse.Store(pixel_, skyColor);
+            OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
+            OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
+            OutNormal.Store(pixel_, float4(0, 1, 0, 1));
+            OutObjectID.Store(pixel_, 65535);
+
+            return false;
         }
-        float roughness = inGBuffer.a;
 
-        // ibl
-        const float dotValue = dot(ray_dir, inVertex.Normal);
-        const float3 outwardNormal = dotValue > 0 ? -inVertex.Normal : inVertex.Normal;
-        const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
-        const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
-        const float metalProb = mat.Metalness;
+        float4 clipPos = mul(Camera.ViewProjection, float4(hitPrimaryVertex_.Position, 1.0));
+        float ndcDepth = clipPos.z / clipPos.w;
+        float2 motion = Common.CalculateMotionVectorV2(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
+        float4 gbuffer = float4(0, 0, 0, 0);
+        Material material = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
+        Common.FetchGBufferV2(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
 
-        FinalLambertation = float4(0, 0, 0, 0);
-        FinalReflection = float4(0, 0, 0, 0);
+        OutAlbedo.Store(pixel_, primaryAlbedo_);
+        OutNormal.Store(pixel_, gbuffer);
+        OutObjectID.Store(pixel_, hitPrimaryNode_.instanceId);
+        OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
+        OutPrevDepth.Store(pixel_, ndcDepth);
 
-        //const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples / 4);
-        const uint jitcount = Camera.FastGather ? 1 : max(1, Camera.NumberOfSamples);
-        for (int i = 0; i < jitcount; i++)
+        if (material.MaterialModel != MaterialDielectric)
         {
-            float4 rayColor = float4(0, 0, 0, 1);
-            bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
-            bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);
-            bool chanceGGX = chanceReflect || chanceMetal;
-            const float3 trace_next = chanceGGX ? reflect(ray_dir, outwardNormal) : outwardNormal;
-            float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
+            hitPrimaryVertex_.Position = hitPrimaryVertex_.Position - primaryRayDir_ * 0.03f;// - rayDir * rayLength * 0.005;
+        }  
 
-            float4 reflectionColor;
-            Vertex hitVertex;
-            NodeProxy hitNode;
-            if (tracer.TraceRay(inVertex.Position + inVertex.Normal * TRACE_CORRECTION_OFFSET, trace_dir, GENERAL_MAX_TRACE_DISTANCE, hitVertex, hitNode))
-            {
-                Material hitMat = Materials[hitVertex.MaterialIndex];
-                float4 outAlbedo = hitMat.Diffuse;
-                if (hitMat.MaterialModel == MaterialDiffuseLight)
-                {
-                    rayColor = outAlbedo;
-                }
-                else
-                {
-                    if (chanceReflect && !chanceMetal)
-                    {
-                        outAlbedo = float4(1, 1, 1, 1);
-                    }
-                    rayColor = outAlbedo * interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, Cubes, Voxels);
-                }
-            }
-            else
-            {
-                float4 skyAffect = float4(0, 0, 0, 0);
-                // 这里非常影响噪点，直接使用IBL数据，是最精确的。如果使用预处理数据，由于IBL的明度变化不大，因此噪点会小，但丢失光照细节
-                if (Camera.FastGather)
-                {
-                    float simpleRoughness = chanceGGX ? roughness : 1.0;
-                    rayColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_next, Camera.SkyRotation, simpleRoughness, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                }
-                else
-                {
-                    rayColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0, HDRSHs, TextureArray) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                }
-            }
-
-            if (chanceMetal)
-            {
-                rayColor *= inAlbedo;
-            }
-
-            if (chanceGGX)
-            {
-                FinalReflection += rayColor;
-            }
-            else
-            {
-                FinalLambertation += rayColor;
-            }
-        }
-        FinalReflection /= float(jitcount);
-        FinalLambertation /= float(jitcount);
-
-        float4 directColor = float4(0, 0, 0, 0);
-        directIllum.DirectIlluminate(RandomSeed, inVertex.Position, inVertex.Normal, directColor);
-        FinalLambertation += directColor;
+        return true;
     }
 
-    ConstantBuffer<UniformBufferObject> Camera;
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
-    StructuredBuffer<Material> Materials;
-    StructuredBuffer<ModelData> Offsets;
-    StructuredBuffer<NodeProxy> NodeProxies;
+    [mutating]
+    public void Init(uint2 ipos)
+    {
+        let Camera = Bindless.GetGpuscene().Camera[0];
 
-    RWStructuredBuffer<AmbientCube> Cubes;
-    RWStructuredBuffer<VoxelData> Voxels;
-    StructuredBuffer<SphericalHarmonics> HDRSHs;
+        pixel_ = ipos;
+        size_ = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
+        RandomSeed_ = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
+
+        OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
+        OutNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
+        OutObjectID = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+        OutMotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
+        OutPrevDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
+        OutSingleDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
+    }
+
+    int2 pixel_;
+    uint2 size_;
+    uint4 RandomSeed_;
+
+    Vertex hitPrimaryVertex_; 
+    NodeProxy hitPrimaryNode_;
+    float3 primaryRayDir_;
+    float primaryRayLength_;
+    float2 primaryPixelOffset_;
+    float4 primaryAlbedo_;
+
+    RWTexture2D<float4> OutAlbedo;
+    RWTexture2D<float4> OutNormal;
+    RWTexture2D<uint> OutObjectID;
+    RWTexture2D<float4> OutMotionVector;
+    RWTexture2D<float> OutPrevDepth;
+    RWTexture2D<float4> OutSingleDiffuse;
+    RWTexture2D<float4> OutSingleSpecular;
 }

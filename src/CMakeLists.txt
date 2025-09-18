@@ -14,6 +14,7 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
 	"ThirdParty/streamline/*.h"
+	"ThirdParty/ozz/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
@@ -37,9 +38,11 @@ file(GLOB_RECURSE src_files_engine
 	"Options.hpp"
 )
 file(GLOB_RECURSE src_files_editor "Editor/*")
-file(GLOB_RECURSE src_files_magicalego "MagicaLego/*.cpp" "MagicaLego/*.hpp")
+file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
-file(GLOB_RECURSE src_files_gkbenchmark "Application/gkNextBenchmark/*")
+file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
+file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
+file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
 
 # libray and app
 if ( ANDROID )
@@ -69,8 +72,14 @@ add_executable(gkNextRenderer
 	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
-add_executable(gkNextBenchmark
-	${src_files_gkbenchmark}
+add_executable(gkNextStillBenchmark
+	${src_files_benchmarkcommon}
+	${src_files_gkstillbenchmark}
+	DesktopMain.cpp
+)
+add_executable(gkNextMotionBenchmark
+	${src_files_benchmarkcommon}
+	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
 add_executable(gkNextEditor
@@ -82,17 +91,16 @@ add_executable(MagicaLego
 	DesktopMain.cpp
 )
 add_executable(Packager
-	Packager/PackagerMain.cpp
+	Application/Packager/PackagerMain.cpp
 )
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
-	# GCC8 needs an extra lib for <filesystem>.
-	# This is not needed with GCC9 or higher.
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
 # editor stuff
+add_subdirectory(ThirdParty/ozz)
 add_subdirectory(ThirdParty/ImNodeFlow)
 add_subdirectory(ThirdParty/quickjs-ng)
 # postprocess: target setup
@@ -105,7 +113,8 @@ else()
 set(AllTargets 
 gkNextEngine
 gkNextRenderer
-gkNextBenchmark
+gkNextStillBenchmark
+gkNextMotionBenchmark
 gkNextEditor
 Packager
 MagicaLego 
@@ -124,14 +133,14 @@ foreach(target IN LISTS AllTargets)
 	target_include_directories(${target} PRIVATE ${Vulkan_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
-	
+	target_include_directories(${target} PRIVATE ThirdParty/ozz/include)
+
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
-	# if debug
-	# 假设你的目标名称是 MyTarget
-	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
 
+	# if debug
+	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
 
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
@@ -140,7 +149,7 @@ foreach(target IN LISTS AllTargets)
 		# Enable Unity Build for gkNextEngine
 		# Group files for Unity Build optimization
 		if ( NOT ANDROID ) 
-		set_target_properties(${target} PROPERTIES UNITY_BUILD OFF)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
 		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
@@ -150,7 +159,7 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
 
-		target_link_libraries(${target} PRIVATE xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
 		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
 		endif()
@@ -161,7 +170,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
 		target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
-		
 	endif()
 
 	# for android
@@ -216,17 +224,12 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	if (MSVC)
-	add_custom_command(
-			TARGET ${target} POST_BUILD
-			COMMAND echo \"copy ffmpeg exe...\"
-			COMMAND xcopy \"${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe\" \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\" /Y /Q /F
-		)
+	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
-	set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 	# third-party warning fix
 	if (MSVC)
 
@@ -237,6 +240,8 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
+set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
