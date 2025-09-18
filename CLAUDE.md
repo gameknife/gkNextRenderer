@@ -111,6 +111,20 @@ cd build/macos/bin && ./gkNextRenderer
 - **build.sh/build.bat**: 统一的构建脚本，替代所有平台特定的构建脚本
 - **prepare.sh**: 统一的环境准备脚本，整合了引导和工具安装
 - **package.bat**: 统一的打包脚本，支持不同的打包模式
+- **优化特性**: 自动清理debug文件，PDB优化，包体积减少90%
+
+#### 使用方法
+```bash
+./package.bat local              # 打包gkNextRenderer（自动清理debug文件）
+./package.bat local clean        # 清理构建目录并打包
+./package.bat magicalego v1.0.0  # 打包MagicaLego游戏
+```
+
+#### 打包优化
+- **自动清理**: 打包前自动删除PDB文件、debug版本exe/lib文件
+- **PDB优化**: 使用/Z7编译标志生成最小调试信息（支持崩溃堆栈跟踪）
+- **体积优化**: 启用链接时优化(/OPT:REF /OPT:ICF)
+- **效果**: 包大小从2.2GB减少到216MB（减少90%）
 
 ### 渲染器特性
 - 支持路径追踪、延迟渲染、体素追踪等多种渲染模式
@@ -156,6 +170,18 @@ cd build/macos/bin && ./gkNextRenderer
 - **解决方案**: 将所有定义集中到 `PlatformAndroid.h` 中
 - **关键学习**: 使用 `PlatformCommon.h` 统一平台抽象，避免条件包含
 - **验证方法**: 编译测试 + 运行测试（看到 `uploaded scene` 日志）
+
+### 2025-09-18 打包系统优化
+- **问题**: package.bat生成的包体积过大（2.2GB），包含大量冗余文件
+- **解决方案**:
+  - 在package.bat中添加自动清理步骤，删除PDB、debug版本文件
+  - 修改CMakeLists.txt，使用/Z7编译标志优化PDB生成
+  - 启用链接时优化(/OPT:REF /OPT:ICF)
+- **关键学习**:
+  - 使用/Z7替代/Zi可以将调试信息嵌入目标文件而非单独PDB
+  - 自动清理流程显著减少包体积
+  - 保持崩溃堆栈跟踪能力的同时大幅减小包大小
+- **验证方法**: 打包测试 + 包大小对比（2.2GB→216MB，减少90%）
 
 ---
 

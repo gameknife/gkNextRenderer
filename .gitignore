@@ -353,3 +353,6 @@ assets/models/classic.glb
 assets/models/hyrule2.glb
 assets/models/hyrule3.glb
 assets/models/leaktest.glb
+
+# Claude Code files
+.claude/

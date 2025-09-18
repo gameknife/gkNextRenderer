@@ -29,8 +29,14 @@ if (MSVC)
 			string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
 		endif()
 	endforeach()
-	
+
 	add_compile_options("/MP")
+
+	# Configure PDB generation for minimal size (crash stack traces only)
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Z7")
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /Z7")
+	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 endif()
 
 if (UNIX AND !ANDROID)
