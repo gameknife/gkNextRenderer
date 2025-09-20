@@ -104,7 +104,7 @@ static int32_t engine_handle_input(struct android_app* app) {
 return 0;
 }
 
-AndroidLogOutputStream logOutputStream;
+//AndroidLogOutputStream logOutputStream;
 
 void android_main(struct android_app* app)
 {

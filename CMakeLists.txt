@@ -65,7 +65,7 @@ find_package(Jolt CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
-
+find_package(spdlog REQUIRED)
 
 if ( WITH_AVIF )
 find_package(libavif CONFIG REQUIRED)
