@@ -1,6 +1,5 @@
 #include "Vulkan/Enumerate.hpp"
 #include "Vulkan/Strings.hpp"
-#include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"

@@ -78,7 +78,7 @@ PlatformCommon.h (统一入口)
 ## 💻 开发规范
 
 ### 代码风格
-- **头文件包含**: 优先使用 `PlatformCommon.h`
+- **头文件包含**: 优先使用 `CoreMinimal.hpp` 和 `PlatformCommon.h`
 - **宏定义**: 使用 `#if ANDROID` 而非 `#ifdef ANDROID`
 - **命名**: 保持与现有代码风格一致
 - **注释**: 如无特殊要求，避免添加注释
@@ -87,6 +87,18 @@ PlatformCommon.h (统一入口)
 - 避免在源文件中直接定义平台相关宏
 - 将平台特定代码移动到对应的平台头文件中
 - 使用 `PlatformCommon.h` 统一处理平台差异
+
+### 统一头文件约定
+- **CoreMinimal.hpp**: 项目统一头文件，包含所有通用功能
+  - 标准库 (string, vector, memory, filesystem, chrono 等)
+  - fmt 格式化库
+  - spdlog 日志系统 (含 Android 支持)
+  - 基础类型定义和构建检测宏
+  - 性能分析工具集成 (Superluminal)
+- **使用规则**:
+  - 新文件应优先包含 `CoreMinimal.hpp` 而非分散的头文件
+  - 所有通用功能都应通过 CoreMinimal.hpp 提供
+  - 保持头文件轻量，避免循环依赖
 
 ### 验证要求
 - 每次修改后必须运行构建脚本确保编译成功
@@ -144,6 +156,18 @@ PlatformCommon.h (统一入口)
 - `./build.bat android` → `android/gradlew.bat build`
 - 生成 APK 在 `android/app/build/outputs/apk/`
 **学习**: 统一脚本工作正常，优先使用 `build.bat [platform]`
+
+### 2025-09-20: 统一头文件架构重构
+**问题**: 分散的头文件包含导致维护困难，spdlog 日志系统需要统一管理
+**解决**:
+- 更新 `src/Common/CoreMinimal.hpp` 作为项目统一头文件
+- 集成 spdlog、fmt、标准库和平台抽象到 CoreMinimal.hpp
+- 将 14 个文件中的分散 spdlog 包含替换为统一的 CoreMinimal.hpp 包含
+- 实现 38 个 spdlog 函数调用替换为 SPDLOG_LEVEL_ 宏形式，支持编译期控制
+**学习**:
+- 统一头文件大幅简化维护，提高编译效率
+- 编译期日志控制优化生产环境性能
+- 项目约定：所有通用功能都应通过 CoreMinimal.hpp 提供
 
 ## 🎯 工作期望
 

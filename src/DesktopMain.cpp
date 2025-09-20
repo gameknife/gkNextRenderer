@@ -1,4 +1,3 @@
-#include "Utilities/Console.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"
@@ -78,10 +77,8 @@ int main(int argc, const char* argv[]) noexcept
     // Exception Handle
     catch (const std::exception& exception)
     {
-        Utilities::Console::Write(Utilities::Severity::Fatal, [&exception]()
-        {
-            std::cerr << "FATAL: " << exception.what() << std::endl;
-        });
+        SPDLOG_ERROR("FATAL: {}", exception.what());
+        std::cerr << "FATAL: " << exception.what() << std::endl;
     }
     // catch (...)
     // {
