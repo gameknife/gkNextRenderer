@@ -161,7 +161,7 @@ foreach(target IN LISTS AllTargets)
 
 		target_link_libraries(${target} PRIVATE spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")

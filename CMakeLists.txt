@@ -49,7 +49,7 @@ if (ANDROID)
 find_package(game-activity REQUIRED CONFIG)
 else()
 find_package(cpptrace CONFIG REQUIRED)
-find_package(glfw3 REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 endif()
 
