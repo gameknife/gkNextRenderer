@@ -12,6 +12,7 @@
 #include "ThirdParty/renderdoc/renderdoc_app.h"
 #endif
 
+
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine
@@ -77,7 +78,7 @@ int main(int argc, const char* argv[]) noexcept
     // Exception Handle
     catch (const std::exception& exception)
     {
-        SPDLOG_ERROR("FATAL: {}", exception.what());
+        //SPDLOG_ERROR("FATAL: {}", exception.what());
         std::cerr << "FATAL: " << exception.what() << std::endl;
     }
     // catch (...)
