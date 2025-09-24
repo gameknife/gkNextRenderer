@@ -46,14 +46,15 @@ if (UNIX AND !ANDROID)
 endif ()
 
 if (ANDROID)
-find_package(game-activity REQUIRED CONFIG)
+#find_package(game-activity REQUIRED CONFIG)
+
 else()
 find_package(cpptrace CONFIG REQUIRED)
-find_package(SDL3 CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 endif()
 
 #find_package(cxxopts CONFIG REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)

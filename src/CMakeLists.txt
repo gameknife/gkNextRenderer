@@ -46,18 +46,16 @@ file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNex
 
 # libray and app
 if ( ANDROID )
-add_library(gkNextEngine
+add_library(gkNextRenderer SHARED
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
-)
-add_library(gkNextRenderer SHARED
 	${src_files_gkrenderer}
 	AndroidMain.cpp
-	GameActivitySources.cpp
+	#GameActivitySources.cpp
 )
 else()
 add_library(gkNextEngine
@@ -105,8 +103,7 @@ add_subdirectory(ThirdParty/ImNodeFlow)
 add_subdirectory(ThirdParty/quickjs-ng)
 # postprocess: target setup
 if ( ANDROID )
-set(AllTargets 
-gkNextEngine
+set(AllTargets
 gkNextRenderer
 )
 else()
@@ -165,7 +162,7 @@ foreach(target IN LISTS AllTargets)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
+		#target_link_libraries(${target} PRIVATE )
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
 		target_link_libraries(${target} PRIVATE sl.interposer)
@@ -174,8 +171,8 @@ foreach(target IN LISTS AllTargets)
 
 	# for android
 	if ( ANDROID)
-		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
-		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
+		#target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
@@ -244,4 +241,4 @@ set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
-set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
+#set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
