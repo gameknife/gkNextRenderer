@@ -15,6 +15,8 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/tinybvh/*.h"
 	"ThirdParty/streamline/*.h"
 	"ThirdParty/ozz/*.h"
+	"ThirdParty/imgui-custom/*.cpp"
+	"ThirdParty/imgui-custom/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
