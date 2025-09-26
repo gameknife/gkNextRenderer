@@ -8,6 +8,27 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
+# Set iOS bundle identifier if building for iOS
+if (IOS)
+    if (NOT CMAKE_IOS_BUNDLE_IDENTIFIER)
+        set(CMAKE_IOS_BUNDLE_IDENTIFIER "com.gknext.renderer")
+    endif()
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER ${CMAKE_IOS_BUNDLE_IDENTIFIER})
+    set(MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME})
+    set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0")
+
+    # Link required iOS frameworks for audio and CoreAudio
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
+    find_library(COREAUDIO_FRAMEWORK CoreAudio)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+	find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation")
+endif()
+
 foreach (OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJECT_BINARY_DIR}/bin)
@@ -45,14 +66,14 @@ if (UNIX AND !ANDROID)
 	add_compile_options("-fvisibility=hidden")
 endif ()
 
-if (ANDROID)
+if (ANDROID OR IOS)
 #find_package(game-activity REQUIRED CONFIG)
-
 else()
 find_package(cpptrace CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
 endif()
 
+message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 #find_package(cxxopts CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)

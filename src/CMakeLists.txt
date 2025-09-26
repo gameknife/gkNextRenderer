@@ -32,13 +32,18 @@ set_source_files_properties(
 ) 
 endif()
 file(GLOB_RECURSE src_files_engine
-	"Common/*.hpp" 
+	"Common/*.hpp"
 	"Runtime/*.h"
 	"Runtime/*.hpp"
 	"Runtime/*.cpp"
 	"Options.cpp"
 	"Options.hpp"
 )
+
+# Set Engine.cpp to compile as Objective-C++ on iOS
+if (IOS)
+    set_source_files_properties(Runtime/Engine.cpp PROPERTIES LANGUAGE "OBJCXX")
+endif()
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
@@ -58,6 +63,19 @@ add_library(gkNextRenderer SHARED
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
+)
+elseif( IOS )
+add_library(gkNextEngine
+	${src_files_assets}
+	${src_files_utilities}
+	${src_files_engine}
+	${src_files_vulkan}
+	${src_files_rendering}
+	${src_files_thirdparty}
+)
+add_executable(gkNextRenderer
+	${src_files_gkrenderer}
+	DesktopMain.cpp
 )
 else()
 add_library(gkNextEngine
@@ -108,6 +126,11 @@ if ( ANDROID )
 set(AllTargets
 gkNextRenderer
 )
+elseif( IOS )
+set(AllTargets
+gkNextEngine
+gkNextRenderer
+)
 else()
 set(AllTargets 
 gkNextEngine
@@ -147,20 +170,24 @@ foreach(target IN LISTS AllTargets)
 		
 		# Enable Unity Build for gkNextEngine
 		# Group files for Unity Build optimization
-		if ( NOT ANDROID ) 
-		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
-		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
+		# if ( NOT ANDROID ) 
+		# set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
+		# set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
-		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
-		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
-		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
-		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
-		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
-		endif()
+		# set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
+		# set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		# set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
+		# set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
+		# set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+		# endif()
 
 		target_link_libraries(${target} PRIVATE spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 cpptrace::cpptrace)
+		target_link_libraries(${target} PRIVATE SDL3::SDL3)
+		endif()
+
+		if ( NOT ANDROID AND NOT IOS ) 
+		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")

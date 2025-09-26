@@ -4,7 +4,7 @@
 
 #include <fmt/format.h>
 #include <filesystem>
-#include <cpptrace/cpptrace.hpp>
+//#include <cpptrace/cpptrace.hpp>
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
