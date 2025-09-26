@@ -26,7 +26,20 @@ if (IOS)
     find_library(FOUNDATION_FRAMEWORK Foundation)
 	find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
 
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation")
+	# Metal.framework
+	# Foundation.framework.
+	# QuartzCore.framework
+	# CoreGraphics.framework
+	# IOSurface.framework
+	# UIKit.framework
+
+	find_library(METAL_FRAMEWORK Metal)
+	find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+	find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+	find_library(IOSURFACE_FRAMEWORK IOSurface)
+	find_library(UIKIT_FRAMEWORK UIKit)
+
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Metal -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework UIKit")
 endif()
 
 foreach (OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
