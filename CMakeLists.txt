@@ -19,28 +19,12 @@ endif()
 
 # Set iOS bundle identifier if building for iOS
 if (IOS)
-    if( NOT CMAKE_IOS_BUNDLE_IDENTIFIER )
-        set(CMAKE_IOS_BUNDLE_IDENTIFIER "com.gknext.renderer")
-    endif()
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.gknext.renderer")
+    set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.gknext.renderer")
     set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
-    set(MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0")
-    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0")
-
     # Set app as iOS bundle
     set(MACOSX_BUNDLE TRUE)
-
     # iOS deployment target and architecture
     set(CMAKE_XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2")  # 1=iPhone, 2=iPad
-
-    # Set interface orientation (support all orientations)
-    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientation "UIInterfaceOrientationPortrait")
-    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationPortrait "YES")
-    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationLandscapeLeft "YES")
-    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationLandscapeRight "YES")
-    set(CMAKE_XCODE_ATTRIBUTE_UISupportedInterfaceOrientations "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight")
-    set(CMAKE_XCODE_ATTRIBUTE_UISupportedInterfaceOrientations~ipad "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight")
-
     # Link required iOS frameworks for audio and CoreAudio
     find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
     find_library(COREAUDIO_FRAMEWORK CoreAudio)
@@ -52,14 +36,6 @@ if (IOS)
 	find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
 	find_library(IOSURFACE_FRAMEWORK IOSurface)
 	find_library(UIKIT_FRAMEWORK UIKit)
-
-	# Metal.framework
-	# Foundation.framework.
-	# QuartzCore.framework
-	# CoreGraphics.framework
-	# IOSurface.framework
-	# UIKit.framework
-
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Metal -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework UIKit")
 endif()
 
@@ -102,9 +78,8 @@ endif ()
 
 message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 find_package(SDL3 CONFIG REQUIRED)
-# For iOS, we use MoltenVK instead of Vulkan
+
 if (IOS)
-    # Find MoltenVK for iOS
     find_library(MOLTENVK_LIBRARY MoltenVK)
     if (NOT MOLTENVK_LIBRARY)
         message(FATAL_ERROR "MoltenVK library not found for iOS!")
@@ -113,6 +88,7 @@ if (IOS)
 else()
     find_package(Vulkan REQUIRED)
 endif()
+
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -146,19 +122,10 @@ ELSE()
     message(STATUS ${Vulkan_LIBRARY})
 ENDIF()
 
-find_program(Vulkan_GLSLANG_VALIDATOR 
-	NAMES glslangValidator 
-	HINTS ENV VULKAN_SDK 
-	PATH_SUFFIXES bin)
-
 find_program(Vulkan_SLANGC 
 	NAMES slangc 
 	HINTS ENV VULKAN_SDK 
 	PATH_SUFFIXES bin)
-	
-if (NOT Vulkan_GLSLANG_VALIDATOR)
-    message(FATAL_ERROR "glslangValidator not found!")
-endif()
 
 if (NOT Vulkan_SLANGC)
     message(FATAL_ERROR "slangc not found!")

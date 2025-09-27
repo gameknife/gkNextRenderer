@@ -293,6 +293,10 @@ endif()
 
 # iOS specific: copy assets to bundle
 if ( IOS )
+    set_target_properties(gkNextRenderer PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/../ios/Info.plist
+    )
+	
     # Add custom command to copy assets to iOS bundle
     add_custom_command(TARGET gkNextRenderer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
