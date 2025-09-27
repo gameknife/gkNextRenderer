@@ -39,7 +39,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     // Handle command line options.
+#if IOS
+    const char* argv1[] = { "gkNextRenderer", "--renderer=2", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
+    GOptionPtr.reset(new Options(4, argv1));
+#else
     GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+#endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
 

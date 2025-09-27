@@ -74,6 +74,7 @@ add_library(gkNextEngine
 	${src_files_thirdparty}
 )
 add_executable(gkNextRenderer
+	MACOSX_BUNDLE
 	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
@@ -161,8 +162,9 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 
-	# if debug
-	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
+	if( IOS )
+	target_compile_definitions(${target} PUBLIC IOS=1)
+	endif()
 
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
@@ -170,20 +172,34 @@ foreach(target IN LISTS AllTargets)
 		
 		# Enable Unity Build for gkNextEngine
 		# Group files for Unity Build optimization
-		# if ( NOT ANDROID ) 
-		# set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
-		# set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
-
-		# set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
-		# set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
-		# set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
-		# set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
-		# set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
-		# endif()
-
-		target_link_libraries(${target} PRIVATE spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE SDL3::SDL3)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
+
+		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
+		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
+		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
+		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+		endif()
+
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${extra_libs})
+		if ( IOS )
+		get_target_property(_ifaces imgui::imgui INTERFACE_LINK_LIBRARIES)
+
+		# 可能包含生成表达式，先打印看一下
+		message(STATUS "Before: ${_ifaces}")
+
+		# 简单场景：名字直接在列表里
+		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
+
+		# 再写回去
+		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
+
+		message(STATUS "After: ${_ifaces}")
+		target_link_libraries(${target} PRIVATE ${MOLTENVK_LIBRARY})
+		else()
+		target_link_libraries(${target} PRIVATE ${Vulkan_LIBRARIES})
 		endif()
 
 		if ( NOT ANDROID AND NOT IOS ) 
@@ -202,7 +218,6 @@ foreach(target IN LISTS AllTargets)
 
 	# for android
 	if ( ANDROID)
-		#target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
@@ -272,6 +287,17 @@ set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
-if ( NOT ANDROID ) 
+if ( NOT ANDROID )
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
+endif()
+
+# iOS specific: copy assets to bundle
+if ( IOS )
+    # Add custom command to copy assets to iOS bundle
+    add_custom_command(TARGET gkNextRenderer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_BINARY_DIR}/../assets
+            $<TARGET_BUNDLE_DIR:gkNextRenderer>
+        COMMENT "Copying assets to iOS bundle"
+    )
 endif()

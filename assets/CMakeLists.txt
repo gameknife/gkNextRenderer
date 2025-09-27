@@ -15,6 +15,8 @@ set_source_files_properties(${shader_extra_files} PROPERTIES HEADER_FILE_ONLY TR
 set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR})
 if ( ANDROID )
 set(output_base_dir ${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets/assets/)
+elseif ( IOS )
+set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR}/assets/)
 endif()
 
 macro(copy_assets asset_files dir_name copied_files)

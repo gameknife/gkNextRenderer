@@ -6,18 +6,40 @@ set(CMAKE_DEBUG_POSTFIX d)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-set(CMAKE_OSX_ARCHITECTURES "arm64")
+
+# Set architecture based on platform
+if (IOS)
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set(CMAKE_XCODE_ATTRIBUTE_ARCHS[sdk=iphoneos*] "arm64")
+    endif()
+else()
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+endif()
 
 # Set iOS bundle identifier if building for iOS
 if (IOS)
-    if (NOT CMAKE_IOS_BUNDLE_IDENTIFIER)
+    if( NOT CMAKE_IOS_BUNDLE_IDENTIFIER )
         set(CMAKE_IOS_BUNDLE_IDENTIFIER "com.gknext.renderer")
     endif()
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER ${CMAKE_IOS_BUNDLE_IDENTIFIER})
-    set(MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME})
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.gknext.renderer")
     set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
     set(MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0")
+
+    # Set app as iOS bundle
+    set(MACOSX_BUNDLE TRUE)
+
+    # iOS deployment target and architecture
+    set(CMAKE_XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2")  # 1=iPhone, 2=iPad
+
+    # Set interface orientation (support all orientations)
+    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientation "UIInterfaceOrientationPortrait")
+    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationPortrait "YES")
+    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationLandscapeLeft "YES")
+    set(CMAKE_XCODE_ATTRIBUTE_UIInterfaceOrientationLandscapeRight "YES")
+    set(CMAKE_XCODE_ATTRIBUTE_UISupportedInterfaceOrientations "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight")
+    set(CMAKE_XCODE_ATTRIBUTE_UISupportedInterfaceOrientations~ipad "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight")
 
     # Link required iOS frameworks for audio and CoreAudio
     find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
@@ -25,8 +47,13 @@ if (IOS)
     find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
     find_library(FOUNDATION_FRAMEWORK Foundation)
 	find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+	find_library(METAL_FRAMEWORK Metal)
+	find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+	find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+	find_library(IOSURFACE_FRAMEWORK IOSurface)
+	find_library(UIKIT_FRAMEWORK UIKit)
 
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Metal -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework UIKit")
 endif()
 
 foreach (OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
@@ -66,17 +93,19 @@ if (UNIX AND !ANDROID)
 	add_compile_options("-fvisibility=hidden")
 endif ()
 
-if (ANDROID OR IOS)
-#find_package(game-activity REQUIRED CONFIG)
-else()
-find_package(cpptrace CONFIG REQUIRED)
-find_package(RapidJSON CONFIG REQUIRED)
-endif()
-
 message(STATUS "SDL3_DIR: ${SDL3_DIR}")
-#find_package(cxxopts CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
+# For iOS, we use MoltenVK instead of Vulkan
+if (IOS)
+    # Find MoltenVK for iOS
+    find_library(MOLTENVK_LIBRARY MoltenVK)
+    if (NOT MOLTENVK_LIBRARY)
+        message(FATAL_ERROR "MoltenVK library not found for iOS!")
+    endif()
+    message(STATUS "Found MoltenVK: ${MOLTENVK_LIBRARY}")
+else()
+    find_package(Vulkan REQUIRED)
+endif()
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
