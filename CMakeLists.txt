@@ -53,6 +53,13 @@ if (IOS)
 	find_library(IOSURFACE_FRAMEWORK IOSurface)
 	find_library(UIKIT_FRAMEWORK UIKit)
 
+	# Metal.framework
+	# Foundation.framework.
+	# QuartzCore.framework
+	# CoreGraphics.framework
+	# IOSurface.framework
+	# UIKit.framework
+
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Metal -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework UIKit")
 endif()
 
