@@ -6,7 +6,38 @@ set(CMAKE_DEBUG_POSTFIX d)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-set(CMAKE_OSX_ARCHITECTURES "arm64")
+
+# Set architecture based on platform
+if (IOS)
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set(CMAKE_XCODE_ATTRIBUTE_ARCHS[sdk=iphoneos*] "arm64")
+    endif()
+else()
+    set(CMAKE_OSX_ARCHITECTURES "arm64")
+endif()
+
+# Set iOS bundle identifier if building for iOS
+if (IOS)
+    set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.gknext.renderer")
+    set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
+    # Set app as iOS bundle
+    set(MACOSX_BUNDLE TRUE)
+    # iOS deployment target and architecture
+    set(CMAKE_XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2")  # 1=iPhone, 2=iPad
+    # Link required iOS frameworks for audio and CoreAudio
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
+    find_library(COREAUDIO_FRAMEWORK CoreAudio)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+	find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+	find_library(METAL_FRAMEWORK Metal)
+	find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+	find_library(COREGRAPHICS_FRAMEWORK CoreGraphics)
+	find_library(IOSURFACE_FRAMEWORK IOSurface)
+	find_library(UIKIT_FRAMEWORK UIKit)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Metal -framework AudioToolbox -framework AVFoundation -framework CoreAudio -framework CoreFoundation -framework Foundation -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework UIKit")
+endif()
 
 foreach (OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
@@ -45,16 +76,23 @@ if (UNIX AND !ANDROID)
 	add_compile_options("-fvisibility=hidden")
 endif ()
 
-if (ANDROID)
-find_package(game-activity REQUIRED CONFIG)
+message(STATUS "SDL3_DIR: ${SDL3_DIR}")
+find_package(SDL3 CONFIG REQUIRED)
+
+if (IOS)
+    find_library(MOLTENVK_LIBRARY MoltenVK)
+    if (NOT MOLTENVK_LIBRARY)
+        message(FATAL_ERROR "MoltenVK library not found for iOS!")
+    endif()
+    message(STATUS "Found MoltenVK: ${MOLTENVK_LIBRARY}")
 else()
-find_package(cpptrace CONFIG REQUIRED)
-find_package(glfw3 REQUIRED)
-find_package(RapidJSON CONFIG REQUIRED)
+    find_package(Vulkan REQUIRED)
 endif()
 
-#find_package(cxxopts CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
+if(NOT IOS AND NOT ANDROID)
+    find_package(cpptrace CONFIG REQUIRED)
+endif()
+
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -88,19 +126,10 @@ ELSE()
     message(STATUS ${Vulkan_LIBRARY})
 ENDIF()
 
-find_program(Vulkan_GLSLANG_VALIDATOR 
-	NAMES glslangValidator 
-	HINTS ENV VULKAN_SDK 
-	PATH_SUFFIXES bin)
-
 find_program(Vulkan_SLANGC 
 	NAMES slangc 
 	HINTS ENV VULKAN_SDK 
 	PATH_SUFFIXES bin)
-	
-if (NOT Vulkan_GLSLANG_VALIDATOR)
-    message(FATAL_ERROR "glslangValidator not found!")
-endif()
 
 if (NOT Vulkan_SLANGC)
     message(FATAL_ERROR "slangc not found!")

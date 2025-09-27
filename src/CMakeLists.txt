@@ -15,6 +15,8 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/tinybvh/*.h"
 	"ThirdParty/streamline/*.h"
 	"ThirdParty/ozz/*.h"
+	"ThirdParty/imgui-custom/*.cpp"
+	"ThirdParty/imgui-custom/*.h"
 	)
 if (MSVC)
 set_source_files_properties(
@@ -30,13 +32,18 @@ set_source_files_properties(
 ) 
 endif()
 file(GLOB_RECURSE src_files_engine
-	"Common/*.hpp" 
+	"Common/*.hpp"
 	"Runtime/*.h"
 	"Runtime/*.hpp"
 	"Runtime/*.cpp"
 	"Options.cpp"
 	"Options.hpp"
 )
+
+# Set Engine.cpp to compile as Objective-C++ on iOS
+if (IOS)
+    set_source_files_properties(Runtime/Engine.cpp PROPERTIES LANGUAGE "OBJCXX")
+endif()
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
@@ -46,18 +53,30 @@ file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNex
 
 # libray and app
 if ( ANDROID )
-add_library(gkNextEngine
+add_library(gkNextRenderer SHARED
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_engine}
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
-)
-add_library(gkNextRenderer SHARED
 	${src_files_gkrenderer}
 	AndroidMain.cpp
-	GameActivitySources.cpp
+	#GameActivitySources.cpp
+)
+elseif( IOS )
+add_library(gkNextEngine
+	${src_files_assets}
+	${src_files_utilities}
+	${src_files_engine}
+	${src_files_vulkan}
+	${src_files_rendering}
+	${src_files_thirdparty}
+)
+add_executable(gkNextRenderer
+	MACOSX_BUNDLE
+	${src_files_gkrenderer}
+	DesktopMain.cpp
 )
 else()
 add_library(gkNextEngine
@@ -105,7 +124,11 @@ add_subdirectory(ThirdParty/ImNodeFlow)
 add_subdirectory(ThirdParty/quickjs-ng)
 # postprocess: target setup
 if ( ANDROID )
-set(AllTargets 
+set(AllTargets
+gkNextRenderer
+)
+elseif( IOS )
+set(AllTargets
 gkNextEngine
 gkNextRenderer
 )
@@ -139,8 +162,9 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 
-	# if debug
-	#target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:JPH_DEBUG_RENDERER> $<$<CONFIG:Debug>:JPH_PROFILE_ENABLED>)
+	if( IOS )
+	target_compile_definitions(${target} PUBLIC IOS=1)
+	endif()
 
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
@@ -159,13 +183,26 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
 
-		target_link_libraries(${target} PRIVATE spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
-		if ( NOT ANDROID ) 
-		target_link_libraries(${target} PRIVATE glfw cpptrace::cpptrace)
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${extra_libs})
+		
+		# handle moltenvk for iOS
+		if ( IOS )
+		get_target_property(_ifaces imgui::imgui INTERFACE_LINK_LIBRARIES)
+		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
+		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
+		target_link_libraries(${target} PRIVATE ${MOLTENVK_LIBRARY})
+		else()
+		target_link_libraries(${target} PRIVATE ${Vulkan_LIBRARIES})
+		endif()
+
+		if ( NOT ANDROID AND NOT IOS )
+		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngine fmt::fmt)
+		if ( NOT ANDROID ) 
+		target_link_libraries(${target} PRIVATE gkNextEngine)
+		endif()
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
 		target_link_libraries(${target} PRIVATE sl.interposer)
@@ -174,8 +211,7 @@ foreach(target IN LISTS AllTargets)
 
 	# for android
 	if ( ANDROID)
-		target_include_directories(${target} PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
-		target_link_libraries(${target} PRIVATE game-activity::game-activity log android)
+		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
 	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
@@ -244,4 +280,21 @@ set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
+if ( NOT ANDROID )
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
+endif()
+
+# iOS specific: copy assets to bundle
+if ( IOS )
+    set_target_properties(gkNextRenderer PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/../ios/Info.plist
+    )
+
+    # Add custom command to copy assets to iOS bundle
+    add_custom_command(TARGET gkNextRenderer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_BINARY_DIR}/../assets
+            $<TARGET_BUNDLE_DIR:gkNextRenderer>
+        COMMENT "Copying assets to iOS bundle"
+    )
+endif()

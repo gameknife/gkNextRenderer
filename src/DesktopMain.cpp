@@ -3,89 +3,95 @@
 #include "Runtime/Engine.hpp"
 
 #include <fmt/format.h>
-#include <iostream>
 #include <filesystem>
-#include <cpptrace/cpptrace.hpp>
+//#include <cpptrace/cpptrace.hpp>
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
 #endif
 
-int main(int argc, const char* argv[]) noexcept
+#define SDL_MAIN_USE_CALLBACKS
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+
+std::unique_ptr<NextEngine> GApplication;
+std::unique_ptr<Options> GOptionPtr;
+
+SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    // Runtime Main Routine
-    try
+    if( GApplication->Tick() )
     {
-        // Handle command line options.
-        Options options(argc, argv);
-        // Global GOption, can access from everywhere
-        GOption = &options;
-        
-        // Init environment variables
+        return SDL_APP_SUCCESS;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+{
+    if ( GApplication->HandleEvent(*event) )
+    {
+        return SDL_APP_SUCCESS;
+    }
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    // Handle command line options.
+#if IOS
+    const char* argv1[] = { "gkNextRenderer", "--renderer=2", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
+    GOptionPtr.reset(new Options(4, argv1));
+#else
+    GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+#endif
+    // Global GOption, can access from everywhere
+    GOption = GOptionPtr.get();
+
 #if __APPLE__
-        setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
+    setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
 #endif   
-        if(options.RenderDoc)
-        {
+    if(GOption->RenderDoc)
+    {
 #if WIN32
-            RENDERDOC_API_1_1_2* rdoc_api = NULL;
-            const auto mod = LoadLibrary(L"renderdoc.dll");
-            if (mod)
-            {
-                pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-                    (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-                RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
-            }
+        RENDERDOC_API_1_1_2* rdoc_api = NULL;
+        const auto mod = LoadLibrary(L"renderdoc.dll");
+        if (mod)
+        {
+            pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+                (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+            RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
+        }
 #endif
             
 #if __linux__
-            setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
+        setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
 #endif
 
 #if __APPLE__
-            setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
-            setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
-            setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
-            setenv("MTL_CAPTURE_ENABLED", "1", 1);
-            setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
+        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
+        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
+        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
+        setenv("MTL_CAPTURE_ENABLED", "1", 1);
+        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
 #endif
-        }
-
-        NextRenderer::PlatformInit();
-        
-        // Start the application.
-        std::unique_ptr<NextEngine> GApplication;
-        GApplication.reset( new NextEngine(options) );
-
-        // Application Main Loop
-        GApplication->Start();
-        while (1)
-        {
-            if( GApplication->Tick() )
-            {
-                break;
-            }
-        }
-        GApplication->End();
-        
-        // Shutdown
-        GApplication.reset();
-
-        return EXIT_SUCCESS;
     }
-    // Exception Handle
-    catch (const std::exception& exception)
-    {
-        SPDLOG_ERROR("FATAL: {}", exception.what());
-        std::cerr << "FATAL: " << exception.what() << std::endl;
-    }
-    // catch (...)
-    // {
-    //     Utilities::Console::Write(Utilities::Severity::Fatal, []()
-    //     {
-    //         fmt::print(stderr, "FATAL: caught unhandled exception\n");
-    //     });
-    // }
-    return EXIT_FAILURE;
+
+    // Init
+    NextRenderer::PlatformInit();
+        
+    // Start the application.
+    GApplication.reset( new NextEngine(*GOption) );
+    GApplication->Start();
+    
+    return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void *appstate, SDL_AppResult result)
+{
+    // Shutdown
+    GApplication->End();
+    
+    GApplication.reset();
+    GOptionPtr.reset();
 }

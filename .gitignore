@@ -356,3 +356,4 @@ assets/models/leaktest.glb
 
 # Claude Code files
 .claude/
+lib/

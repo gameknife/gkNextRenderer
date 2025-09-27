@@ -1,130 +1,91 @@
-#include "Vulkan/Enumerate.hpp"
-#include "Vulkan/Strings.hpp"
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"
-#include <algorithm>
-#include <cstdlib>
+
 #include <fmt/format.h>
 #include <filesystem>
-#include <iostream>
-
 #include "Runtime/Platform/PlatformCommon.h"
 
-#include <imgui_impl_android.h>
-#include <android/log.h>
-#include <game-activity/native_app_glue/android_native_app_glue.h>
+#if WIN32
+#include "ThirdParty/renderdoc/renderdoc_app.h"
+#endif
 
-std::unique_ptr<NextEngine> GApplication = nullptr;
+#define SDL_MAIN_USE_CALLBACKS
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
+std::unique_ptr<NextEngine> GApplication;
+std::unique_ptr<Options> GOptionPtr;
 
-void handle_cmd(android_app* app, int32_t cmd) {
-    switch (cmd) {
-    case APP_CMD_INIT_WINDOW:
-        // The window is being shown, get it ready.
-        {
-            MakeExternalDirectory(app, "assets/fonts");
-            MakeExternalDirectory(app, "assets/models");
-            MakeExternalDirectory(app, "assets/shaders");
-            MakeExternalDirectory(app, "assets/textures");
-            MakeExternalDirectory(app, "assets/locale");
-            
-            const char* argv[] = { "gkNextRenderer", "--renderer=2", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
-            GOption = new Options(4, argv);
-            GApplication.reset(new NextEngine(*GOption, app->window));
-            GApplication->Start();
-        }
-        break;
-    case APP_CMD_TERM_WINDOW:
-        // The window is being hidden or closed, clean it up.
-        {
-            delete GOption;
-        }
-        break;
-    }
-}
-
-#define SCREEN_SCALE 0.333333f
-
-static int32_t engine_handle_input(struct android_app* app) {
-    ImGuiIO& io = ImGui::GetIO();
-    //auto* engine = (struct engine*)app->userData;
-    auto ib = android_app_swap_input_buffers(app);
-    if (ib && ib->motionEventsCount) {
-        for (int i = 0; i < ib->motionEventsCount; i++) {
-            auto *event = &ib->motionEvents[i];
-            int32_t ptrIdx = 0;
-            switch (event->action & AMOTION_EVENT_ACTION_MASK) {
-            case AMOTION_EVENT_ACTION_POINTER_DOWN:
-            case AMOTION_EVENT_ACTION_POINTER_UP:
-                // Retrieve the index for the starting and the ending of any secondary pointers
-                ptrIdx = (event->action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >>
-                         AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-            case AMOTION_EVENT_ACTION_DOWN:
-            case AMOTION_EVENT_ACTION_UP:
-                io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
-                io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE, GameActivityPointerAxes_getAxisValue(
-            &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE);
-                io.AddMouseButtonEvent(0, event->action == AMOTION_EVENT_ACTION_DOWN);
-
-                GApplication->OnTouch(event->action == AMOTION_EVENT_ACTION_DOWN, GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE,
-                        GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE);
-
-                break;
-            case AMOTION_EVENT_ACTION_MOVE:
-                // Process the move action: the new coordinates for all active touch pointers
-                // are inside the event->pointers[]. Compare with our internally saved
-                // coordinates to find out which pointers are actually moved. Note that there is
-                // no index embedded inside event->action for AMOTION_EVENT_ACTION_MOVE (there
-                // might be multiple pointers moved at the same time).
-                //...
-                    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
-                    io.AddMousePosEvent(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE,
-                        GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE);
-
-                GApplication->OnTouchMove(GameActivityPointerAxes_getAxisValue(
-                        &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_Y) * SCREEN_SCALE,
-                        GameActivityPointerAxes_getAxisValue(
-                    &event->pointers[ptrIdx], AMOTION_EVENT_AXIS_X) * SCREEN_SCALE);
-               break;
-            }
-        }
-        android_app_clear_motion_events(ib);
-    }
-
-    // Process the KeyEvent in a similar way.
-    //...
-
-return 0;
-}
-
-//AndroidLogOutputStream logOutputStream;
-
-void android_main(struct android_app* app)
+SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    app->onAppCmd = handle_cmd;
+    if( GApplication->Tick() )
+    {
+        return SDL_APP_SUCCESS;
+    }
+    return SDL_APP_CONTINUE;
+}
 
-    // Used to poll the events in the main loop
-    int events;
-    android_poll_source* source;
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+{
+    if ( GApplication->HandleEvent(*event) )
+    {
+        return SDL_APP_SUCCESS;
+    }
+    return SDL_APP_CONTINUE;
+}
 
-    // Main loop
-    do {
-        if (ALooper_pollAll(GApplication != nullptr ? 1 : 0, nullptr,
-                            &events, (void**)&source) >= 0) {
-            if (source != NULL) source->process(app, source);
-                            }
-        
-        engine_handle_input(app);
-        
-        // render if vulkan is ready
-        if (GApplication != nullptr) {
-            GApplication->Tick();
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    // Handle command line options.
+    GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+    // Global GOption, can access from everywhere
+    GOption = GOptionPtr.get();
+
+#if __APPLE__
+    setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
+#endif   
+    if(GOption->RenderDoc)
+    {
+#if WIN32
+        RENDERDOC_API_1_1_2* rdoc_api = NULL;
+        const auto mod = LoadLibrary(L"renderdoc.dll");
+        if (mod)
+        {
+            pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+                (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+            RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
         }
-    } while (app->destroyRequested == 0);
+#endif
+            
+#if __linux__
+        setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
+#endif
+
+#if __APPLE__
+        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
+        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
+        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
+        setenv("MTL_CAPTURE_ENABLED", "1", 1);
+        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
+#endif
+    }
+
+    // Init
+    NextRenderer::PlatformInit();
+        
+    // Start the application.
+    GApplication.reset( new NextEngine(*GOption) );
+    GApplication->Start();
+    
+    return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void *appstate, SDL_AppResult result)
+{
+    // Shutdown
+    GApplication->End();
+    
+    GApplication.reset();
+    GOptionPtr.reset();
 }

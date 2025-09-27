@@ -1,21 +1,15 @@
-// Copyright 2022 Google Inc. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+}
 
 android {
     signingConfigs {
+        debug {
+            storeFile file('../keystore/public.jks')
+            storePassword 'public'
+            keyAlias 'public'
+            keyPassword 'public'
+        }
         release {
             storeFile file('../keystore/public.jks')
             storePassword 'public'
@@ -23,37 +17,90 @@ android {
             keyPassword 'public'
         }
     }
-    namespace = "com.gknextrenderer"
-    compileSdkVersion 33
-    //ndkVersion "25.2.9519653" on runner, ndk may differ from the vcpkg one
+    namespace "org.libsdl.helloworld"
+    compileSdk 35
 
     defaultConfig {
-        applicationId  "com.gknextrenderer"
-        minSdkVersion    24
-        targetSdkVersion 33
-        versionCode 272
-        versionName "1.1.0"
+        applicationId 'com.gknext.renderer'
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
 
         externalNativeBuild {
             cmake {
+                arguments '-DANDROID_STL=c++_shared', '-DCMAKE_BUILD_TYPE=Release', '-DANDROID_PLATFORM=33', '-DVCPKG_CMAKE_SYSTEM_VERSION=33', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+                //abiFilters 'arm64-v8a', 'x86_64'
                 abiFilters 'arm64-v8a'
-                arguments '-DCMAKE_BUILD_TYPE=Release', '-DANDROID_PLATFORM=33', '-DVCPKG_CMAKE_SYSTEM_VERSION=33', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
-                targets "gkNextRenderer"
             }
         }
     }
+
     externalNativeBuild {
         cmake {
-            version '3.22.1'
             path '../../CMakeLists.txt'
         }
     }
-    buildTypes.release.minifyEnabled = false
-    buildTypes.release.signingConfig = signingConfigs.release
-    buildFeatures.prefab  = true
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildFeatures {
+        prefab true
+    }
+    ndkVersion '27.0.12077973'
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.4.1'
-    implementation "androidx.games:games-activity:1.1.0"
+    implementation files('libs/SDL3-3.2.22.aar')
+}
+
+task pushAssetsToDevice(type: Exec) {
+    def assetsDir = "$projectDir/src/main/assets/assets"
+    def externalStorageDir = "/sdcard/Android/data/com.gknext.renderer/files"
+
+    onlyIf { file(assetsDir).exists() }
+
+    doFirst {
+        println "Pushing assets from $assetsDir to $externalStorageDir"
+    }
+
+    commandLine 'adb', 'shell', 'mkdir', '-p', externalStorageDir
+
+    doLast {
+        exec {
+            commandLine 'adb', 'push', assetsDir, externalStorageDir
+        }
+        println "Assets pushed successfully"
+    }
+}
+
+task installAndLaunch(type: Exec) {
+    dependsOn pushAssetsToDevice
+
+    doFirst {
+        println "Installing app and launching..."
+    }
+
+    commandLine 'adb', 'install', '-r', "$buildDir/outputs/apk/debug/app-debug.apk"
+
+    doLast {
+        exec {
+            commandLine 'adb', 'shell', 'wm', 'size', '548x1280'
+        }
+        exec {
+            commandLine 'adb', 'shell', 'am', 'start', '-n', 'com.gknext.renderer/org.libsdl.helloworld.HelloWorldActivity', '--es', 'args', '--load-scene=assets/modles/playground.glb'
+        }
+        println "App launched, starting logcat..."
+        exec {
+            commandLine 'adb', 'logcat', '-s', 'gknext'
+        }
+    }
 }
