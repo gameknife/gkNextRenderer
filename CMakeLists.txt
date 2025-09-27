@@ -89,6 +89,10 @@ else()
     find_package(Vulkan REQUIRED)
 endif()
 
+if(NOT IOS AND NOT ANDROID)
+    find_package(cpptrace CONFIG REQUIRED)
+endif()
+
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(Stb REQUIRED)

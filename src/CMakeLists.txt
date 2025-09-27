@@ -184,25 +184,18 @@ foreach(target IN LISTS AllTargets)
 		endif()
 
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${extra_libs})
+		
+		# handle moltenvk for iOS
 		if ( IOS )
 		get_target_property(_ifaces imgui::imgui INTERFACE_LINK_LIBRARIES)
-
-		# 可能包含生成表达式，先打印看一下
-		message(STATUS "Before: ${_ifaces}")
-
-		# 简单场景：名字直接在列表里
 		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
-
-		# 再写回去
 		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
-
-		message(STATUS "After: ${_ifaces}")
 		target_link_libraries(${target} PRIVATE ${MOLTENVK_LIBRARY})
 		else()
 		target_link_libraries(${target} PRIVATE ${Vulkan_LIBRARIES})
 		endif()
 
-		if ( NOT ANDROID AND NOT IOS ) 
+		if ( NOT ANDROID AND NOT IOS )
 		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
 	else()
@@ -296,7 +289,7 @@ if ( IOS )
     set_target_properties(gkNextRenderer PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/../ios/Info.plist
     )
-	
+
     # Add custom command to copy assets to iOS bundle
     add_custom_command(TARGET gkNextRenderer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
