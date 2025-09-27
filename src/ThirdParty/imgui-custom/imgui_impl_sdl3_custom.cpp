@@ -60,6 +60,8 @@
 //  2023-02-23: Accept SDL_GetPerformanceCounter() not returning a monotonically increasing value. (#6189, #6114, #3644)
 //  2023-02-07: Forked "imgui_impl_sdl2" into "imgui_impl_sdl3". Removed version checks for old feature. Refer to imgui_impl_sdl2.cpp for older changelog.
 
+extern float GAndroidMagicScale; // global trick scale on same executable
+
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_impl_sdl3_custom.h"
@@ -892,7 +894,7 @@ void ImGui_ImplSDL3_NewFrame()
     SDL_GetWindowSizeInPixels(bd->Window, &display_w, &display_h);
     io.DisplaySize = ImVec2((float)w, (float)h);
     if (w > 0 && h > 0)
-        io.DisplayFramebufferScale = ImVec2((float)display_w / w, (float)display_h / h);
+        io.DisplayFramebufferScale = ImVec2((float)display_w / w * GAndroidMagicScale, (float)display_h / h * GAndroidMagicScale);
 
     // Update monitors
     ImGui_ImplSDL3_UpdateMonitors();
