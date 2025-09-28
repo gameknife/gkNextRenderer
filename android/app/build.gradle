@@ -3,6 +3,13 @@ plugins {
 }
 
 android {
+    def repoRoot = rootProject.rootDir.absoluteFile.parentFile
+    def ndkPathRaw = android.ndkDirectory?.absolutePath ?: System.getenv("ANDROID_NDK_HOME")
+    if (!ndkPathRaw) {
+        throw new GradleException("Android NDK path not found. Set ANDROID_NDK_HOME or configure ndkVersion.")
+    }
+    def ndkPath = ndkPathRaw.replace('\\', '/')
+
     signingConfigs {
         debug {
             storeFile file('../keystore/public.jks')
@@ -29,7 +36,13 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_shared', '-DCMAKE_BUILD_TYPE=Release', '-DANDROID_PLATFORM=33', '-DVCPKG_CMAKE_SYSTEM_VERSION=33', '-DVCPKG_TARGET_TRIPLET=arm64-android', '-DCMAKE_TOOLCHAIN_FILE=build/vcpkg.android/scripts/buildsystems/vcpkg.cmake', "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$System.env.ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+                arguments '-DANDROID_STL=c++_shared',
+                        '-DCMAKE_BUILD_TYPE=Release',
+                        '-DANDROID_PLATFORM=33',
+                        '-DVCPKG_CMAKE_SYSTEM_VERSION=33',
+                        '-DVCPKG_TARGET_TRIPLET=arm64-android',
+                        "-DCMAKE_TOOLCHAIN_FILE=${repoRoot}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
+                        "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${ndkPath}/build/cmake/android.toolchain.cmake"
                 //abiFilters 'arm64-v8a', 'x86_64'
                 abiFilters 'arm64-v8a'
             }

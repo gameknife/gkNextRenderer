@@ -14,6 +14,7 @@
 - 运行可执行文件（渲染器、编辑器、基准程序）后再提交，确认性能与渲染输出。<br>Run renderer/editor/benchmark binaries before submitting to validate performance and visuals.
 - 准备测试或切分支前，使用 `git status` 确认工作区干净；若需临时保存改动，使用 `git stash push -u` 并在回到任务后恢复。<br>Before testing or switching branches, run `git status` to ensure a clean tree; stash work-in-progress via `git stash push -u` when you need temporary isolation.
 - iOS 构建会自动下载 MoltenVK；可提前执行 `tools/fetch_moltenvk.sh ios` 复用缓存。<br>iOS builds auto-fetch MoltenVK; run `tools/fetch_moltenvk.sh ios` beforehand to reuse the cache.
+- Android 依赖清单按平台裁剪：`./vcpkg.sh android` 会跳过 SDL3 并使用内置 `imgui` 定制；Gradle 工程仍需在 `android/app/libs` 放置官方 SDL3 `.aar`。<br>The Android manifest skips SDL3 (use the `.aar` in `android/app/libs`) and installs an imgui build without the SDL3 binding.
 
 ## 代码风格与命名 / Coding Style & Naming
 - C++ 使用 C++20/C11，开启警告即错误；避免无用符号，优先使用标准库。<br>C++ targets C++20/C11 with warnings-as-errors; avoid unused symbols and prefer STL solutions.

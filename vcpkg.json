@@ -11,7 +11,8 @@
     "cxxopts",
     {
       "name": "sdl3",
-      "features": ["vulkan"]
+      "features": ["vulkan"],
+      "platform": "!(android)"
     },
     "glm",
     {
@@ -21,7 +22,17 @@
         "sdl3-binding",
         "vulkan-binding",
         "docking-experimental"
-      ]
+      ],
+      "platform": "!(android)"
+    },
+    {
+      "name": "imgui",
+      "features": [
+        "freetype",
+        "vulkan-binding",
+        "docking-experimental"
+      ],
+      "platform": "android"
     },
     "stb",
     "tinyobjloader",
