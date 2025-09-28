@@ -22,6 +22,10 @@ It also provides the runtime environment closest to the game (lightweight game e
 
 The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technologies, deliberately avoid outdated technologies, and use new C++ specifications and standard libraries to develop across the board.
 
+## Contribution Guide
+
+Planning to contribute? Read the repository onboarding notes in [Repository Guidelines](AGENTS.md).
+
 ### Subproject
 
 -   **gknex trends**: Main project, path tracking renderer

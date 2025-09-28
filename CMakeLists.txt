@@ -80,7 +80,22 @@ message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 find_package(SDL3 CONFIG REQUIRED)
 
 if (IOS)
-    find_library(MOLTENVK_LIBRARY MoltenVK)
+    if (DEFINED MOLTENVK_ROOT)
+        set(_moltenvk_candidate "${MOLTENVK_ROOT}/lib/libMoltenVK.a")
+        if (EXISTS "${_moltenvk_candidate}")
+            set(MOLTENVK_LIBRARY "${_moltenvk_candidate}" CACHE FILEPATH "MoltenVK static library")
+        endif()
+    endif()
+    if (NOT MOLTENVK_LIBRARY)
+        if (DEFINED MOLTENVK_ROOT)
+            find_library(MOLTENVK_LIBRARY
+                NAMES MoltenVK libMoltenVK
+                PATHS "${MOLTENVK_ROOT}" "${MOLTENVK_ROOT}/lib"
+                NO_DEFAULT_PATH)
+        else()
+            find_library(MOLTENVK_LIBRARY MoltenVK)
+        endif()
+    endif()
     if (NOT MOLTENVK_LIBRARY)
         message(FATAL_ERROR "MoltenVK library not found for iOS!")
     endif()
