@@ -141,9 +141,35 @@ ELSE()
     message(STATUS ${Vulkan_LIBRARY})
 ENDIF()
 
-find_program(Vulkan_SLANGC 
-	NAMES slangc 
-	HINTS ENV VULKAN_SDK 
+set(_slang_hint_dirs)
+list(APPEND _slang_hint_dirs ENV SLANG_ROOT ENV VULKAN_SDK)
+
+if(DEFINED ENV{SLANG_ROOT})
+    list(APPEND _slang_hint_dirs "$ENV{SLANG_ROOT}")
+endif()
+
+if(DEFINED SLANG_ROOT)
+    list(APPEND _slang_hint_dirs "${SLANG_ROOT}")
+endif()
+
+set(_slang_candidate_roots)
+list(APPEND _slang_candidate_roots
+    "${CMAKE_SOURCE_DIR}/external/slang"
+    "${CMAKE_SOURCE_DIR}/slang")
+
+file(GLOB _slang_downloads "${CMAKE_SOURCE_DIR}/external/slang-*")
+list(APPEND _slang_candidate_roots ${_slang_downloads})
+list(REMOVE_DUPLICATES _slang_candidate_roots)
+
+foreach(_slang_root ${_slang_candidate_roots})
+    if(EXISTS "${_slang_root}")
+        list(APPEND _slang_hint_dirs "${_slang_root}")
+    endif()
+endforeach()
+
+find_program(Vulkan_SLANGC
+	NAMES slangc
+	HINTS ${_slang_hint_dirs}
 	PATH_SUFFIXES bin)
 
 if (NOT Vulkan_SLANGC)
