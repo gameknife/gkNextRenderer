@@ -68,48 +68,22 @@ android {
     buildFeatures {
         prefab true
     }
-    ndkVersion '27.0.12077973'
 }
 
 dependencies {
     implementation files('libs/SDL3-3.2.22.aar')
 }
 
-task pushAssetsToDevice(type: Exec) {
-    def assetsDir = "$projectDir/src/main/assets/assets"
-    def externalStorageDir = "/sdcard/Android/data/com.gknext.renderer/files"
-
-    onlyIf { file(assetsDir).exists() }
-
-    doFirst {
-        println "Pushing assets from $assetsDir to $externalStorageDir"
-    }
-
-    commandLine 'adb', 'shell', 'mkdir', '-p', externalStorageDir
-
-    doLast {
-        exec {
-            commandLine 'adb', 'push', assetsDir, externalStorageDir
-        }
-        println "Assets pushed successfully"
-    }
-}
-
 task installAndLaunch(type: Exec) {
-    dependsOn pushAssetsToDevice
-
     doFirst {
         println "Installing app and launching..."
     }
 
-    commandLine 'adb', 'install', '-r', "$buildDir/outputs/apk/debug/app-debug.apk"
-
+    commandLine 'adb', 'install', "$buildDir/outputs/apk/debug/app-debug.apk"
+    
     doLast {
         exec {
-            commandLine 'adb', 'shell', 'wm', 'size', '548x1280'
-        }
-        exec {
-            commandLine 'adb', 'shell', 'am', 'start', '-n', 'com.gknext.renderer/org.libsdl.helloworld.HelloWorldActivity', '--es', 'args', '--load-scene=assets/modles/playground.glb'
+            commandLine 'adb', 'shell', 'am', 'start', '-n', 'com.gknext.renderer/org.libsdl.helloworld.HelloWorldActivity'
         }
         println "App launched, starting logcat..."
         exec {
