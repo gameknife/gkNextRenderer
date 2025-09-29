@@ -62,6 +62,7 @@ if (MSVC)
 	endforeach()
 
 	add_compile_options("/MP")
+	add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>" "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 	# Configure PDB generation for minimal size (crash stack traces only)
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Z7")
