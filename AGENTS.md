@@ -9,12 +9,19 @@
 - `./prepare.sh setup` 自动检测 macOS/Linux 并安装依赖；`./prepare.sh slangc` 下载 Slang 着色器编译器。<br>`./prepare.sh setup` auto-detects macOS/Linux dependencies; `./prepare.sh slangc` fetches the Slang compiler.
 - `./vcpkg.sh <platform>`（Windows 使用 `vcpkg.bat`）安装三方库，依赖变化时请重跑。<br>`./vcpkg.sh <platform>` (`vcpkg.bat` on Windows) bootstraps third-party libraries; rerun when dependencies shift.
 - vcpkg 默认克隆到仓库根目录的 `.vcpkg`；设置 `VCPKG_ROOT` 可复用共享缓存或自定义路径。<br>vcpkg clones into `.vcpkg` by default; set `VCPKG_ROOT` to reuse a shared cache or pick a custom location.
-- `./build.sh <platform>`（或 `build.bat`）调用 CMake+Ninja，产物位于 `build/<platform>/bin/`。<br>`./build.sh <platform>` (`build.bat`) drives CMake+Ninja; outputs land in `build/<platform>/bin/`.
+- `./build.sh <platform>`（或 `build.bat`）调用 CMake+Ninja，产物位于 `build/<platform>/bin/`；macOS 默认配置为 `RelWithDebInfo`，如需 Debug 请手动覆写 `CMAKE_BUILD_TYPE`。<br>`./build.sh <platform>` (`build.bat`) drives CMake+Ninja; macOS runs `RelWithDebInfo` by default—override `CMAKE_BUILD_TYPE` if you need Debug.
 - 增量编译：`cmake --build build/<platform> --target gkNextRenderer`（替换目标名称即可）。<br>Incremental builds: `cmake --build build/<platform> --target gkNextRenderer` (swap target as needed).
 - 运行可执行文件（渲染器、编辑器、基准程序）后再提交，确认性能与渲染输出。<br>Run renderer/editor/benchmark binaries before submitting to validate performance and visuals.
 - 准备测试或切分支前，使用 `git status` 确认工作区干净；若需临时保存改动，使用 `git stash push -u` 并在回到任务后恢复。<br>Before testing or switching branches, run `git status` to ensure a clean tree; stash work-in-progress via `git stash push -u` when you need temporary isolation.
 - iOS 构建会自动下载 MoltenVK；可提前执行 `tools/fetch_moltenvk.sh ios` 复用缓存。<br>iOS builds auto-fetch MoltenVK; run `tools/fetch_moltenvk.sh ios` beforehand to reuse the cache.
 - Android 依赖清单按平台裁剪：`./vcpkg.sh android` 会跳过 SDL3 并使用内置 `imgui` 定制；Gradle 工程仍需在 `android/app/libs` 放置官方 SDL3 `.aar`。<br>The Android manifest skips SDL3 (use the `.aar` in `android/app/libs`) and installs an imgui build without the SDL3 binding.
+
+## 命名与清理流程 / Naming & Cleanup Workflow
+- 推荐使用 `./build.sh <platform>` 生成非 Unity 的 `compile_commands.json`（可通过 `-DGK_ENABLE_UNITY_BUILD=OFF` 禁用 Unity Build）以配合静态分析。<br>Generate a non-unity `compile_commands.json` via `./build.sh <platform>` (`-DGK_ENABLE_UNITY_BUILD=OFF`) for static tooling.
+- 项目根目录维护 `.clang-tidy`（默认函数/方法 PascalCase，变量 camelCase，私有成员尾随 `_`，宏大写；第三方目录自动排除），并在 `tools/clang-tools/` 提供 `run-naming.sh`、`run-clang-tidy.py` 等脚本。<br>A repo-level `.clang-tidy` enforces PascalCase for functions/methods, camelCase for variables, trailing `_` on private members, uppercase macros, excluding ThirdParty; helper scripts live under `tools/clang-tools/`.
+- 批量命名或头文件梳理时，使用 `python3 tools/clang-tools/run-clang-tidy.py -p build/<platform> ... -fix -j <N>`；需确保 `PATH` 含 `/opt/homebrew/opt/llvm/bin` 获取 `clang-tidy` 与 `clang-apply-replacements`。<br>For bulk renames/include cleanup, run `python3 tools/clang-tools/run-clang-tidy.py -p build/<platform> ... -fix -j <N>` with `/opt/homebrew/opt/llvm/bin` on `PATH`.
+- 命名自动化后仍需手动 check API 符号（如 `Sample()`/`sample()`），并保留人工例外：函数/方法 PascalCase、全局变量首字母大写(`GOption`)、局部/参数 camelCase、常量 camelCase。<br>After automation, spot-check API identifiers (e.g., `Sample()` vs `sample()`); enforced conventions: PascalCase for functions/methods, leading-cap globals (`GOption`), camelCase locals/params, camelCase constants.
+- 拼写修正建议辅以 `codespell` 或正则排查（例如 “available”、“Thumbnail” 等常见错误）。<br>For spell fixes, consider `codespell` or targeted regex sweeps (e.g., “available”, “Thumbnail”).
 
 ## 代码风格与命名 / Coding Style & Naming
 - C++ 使用 C++20/C11，开启警告即错误；避免无用符号，优先使用标准库。<br>C++ targets C++20/C11 with warnings-as-errors; avoid unused symbols and prefer STL solutions.

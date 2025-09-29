@@ -144,6 +144,9 @@ MagicaLego
 )
 endif()
 
+# 是否启用 Unity Build（默认开启以维持原有行为，可在配置时通过 -DGK_ENABLE_UNITY_BUILD=OFF 关闭）
+option(GK_ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
+
 # common setup
 foreach(target IN LISTS AllTargets)
 	# common dependencies
@@ -170,9 +173,9 @@ foreach(target IN LISTS AllTargets)
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
 		
-		# Enable Unity Build for gkNextEngine
+		# 若未显式关闭则为 gkNextEngine 启用 Unity Build（Android 默认仍禁用以保持行为）
 		# Group files for Unity Build optimization
-		if ( NOT ANDROID ) 
+		if ( GK_ENABLE_UNITY_BUILD AND NOT ANDROID ) 
 		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
 		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
 
