@@ -210,7 +210,12 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# for android
-	if ( ANDROID)
+	if ( ANDROID )
+		target_link_options(${target} PRIVATE
+	    -Wl,-z,max-page-size=16384
+		-Wl,-z,common-page-size=16384
+		-Wl,--hash-style=gnu
+		)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 

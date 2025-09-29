@@ -37,14 +37,14 @@ android {
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_shared',
-                        '-DCMAKE_BUILD_TYPE=Release',
+                        //'-DCMAKE_BUILD_TYPE=Release',
                         '-DANDROID_PLATFORM=33',
                         '-DVCPKG_CMAKE_SYSTEM_VERSION=33',
                         '-DVCPKG_TARGET_TRIPLET=arm64-android',
                         "-DCMAKE_TOOLCHAIN_FILE=${repoRoot}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
                         "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${ndkPath}/build/cmake/android.toolchain.cmake"
-                //abiFilters 'arm64-v8a', 'x86_64'
-                abiFilters 'arm64-v8a'
+                        //abiFilters 'arm64-v8a', 'x86_64'
+                        abiFilters 'arm64-v8a'
             }
         }
     }
@@ -59,14 +59,20 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField "boolean", "DEBUG", "false"
+        }
+        debug {
+            buildConfigField "boolean", "DEBUG", "true"
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
     buildFeatures {
         prefab true
+        android.buildFeatures.buildConfig true
     }
 }
 

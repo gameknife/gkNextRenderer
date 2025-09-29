@@ -84,6 +84,6 @@ public class HelloWorldActivity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {
-        return new String[] { "SDL3", "gkNextRenderer" };
+        return new String[] { "SDL3", BuildConfig.DEBUG ? "gkNextRendererd" : "gkNextRenderer" };
     }
 }
