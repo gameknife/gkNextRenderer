@@ -4,11 +4,7 @@ plugins {
 
 android {
     def repoRoot = rootProject.rootDir.absoluteFile.parentFile
-    def ndkPathRaw = android.ndkDirectory?.absolutePath ?: System.getenv("ANDROID_NDK_HOME")
-    if (!ndkPathRaw) {
-        throw new GradleException("Android NDK path not found. Set ANDROID_NDK_HOME or configure ndkVersion.")
-    }
-    def ndkPath = ndkPathRaw.replace('\\', '/')
+    def ndkPath = System.getenv("ANDROID_NDK_HOME")
 
     signingConfigs {
         debug {

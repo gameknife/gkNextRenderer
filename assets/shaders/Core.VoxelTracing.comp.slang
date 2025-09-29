@@ -27,7 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVoxelRayCaster rayCasterVoxel;
 
     int2 ipos = int2(DTid.xy);
-    int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_DENOISED);
+    int2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
     // 第一次Tracing
