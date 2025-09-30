@@ -1,4 +1,4 @@
-# gkNextRenderer
+# gkNextEngine
 
 [English](README.en.md) | [简体中文](README.md)
 
@@ -14,24 +14,32 @@
 
 ### 一句话简介
 
-一个基于Vulkan的实时路径跟踪渲染器，目标是实现"**质量**"和"**效率**"能用于"**实时游戏**"的路径跟踪渲染。
+一个跨平台的3D游戏引擎，基于现代c++和vulkan api。实践现代渲染与现代游戏技术。
 
 ### 技术特点
 
-不同于目前游戏中实装的各种光追辅助技术，本项目的目标是最接近GroundTruth的路径跟踪，
-不同于其他GPU PathTracer的实现，本项目的目标是实时，Benchmark使用全动态场景，
-并提供最接近游戏的运行时环境（轻量级游戏引擎），验证实时光追的可行性，并实验最新的GPU特性，为下一代渲染架构作准备。
+**全平台支持** Windows(x86_64) / Linux(x86_64) / Mac(arm64) / Android(arm64) / iOS(arm64)
+
+**现代渲染** 支持硬件光追，软件光追，支持不同效率的实时全局光照
+
+**轻代码库** 核心引擎代码目标5万行以内，1.5万行@2025/09。激进重构，无冗余代码，拥抱成熟的跨平台第三方库，绝不造废轮子。
+
+**直接工具链** 单纯基于gltf的资产管理，大部分资产管理工作前置于Blender
+
+**AI辅助** 拥抱AI，使用各类AI工具辅助开发
 
 ### 开发前提
 
-本项目的初衷是：学习，验证，进步。因此，会激进的使用最新技术，有意的规避陈旧技术，利用新c++规范和标准库，全时跨平台开发。
+本项目的初衷是：学习，验证，进步。
 
-## 贡献指南
+因此，会激进的使用最新技术，有意的规避陈旧技术，利用新c++规范和标准库，全时跨平台开发。
 
-如果你计划提交补丁或新特性，请先阅读仓库的贡献指引：[Repository Guidelines](AGENTS.md)。
+## 子项目
+
+本项目配套多个子项目，推动和验证引擎开发
 
 <details>
-<summary>### 子项目</summary>
+<summary>展开查看</summary>
 
 - **gkNextRenderer**: 主项目，路径追踪渲染器
 - **gkNextEditor**: 基于imgui的编辑器框架，用于编辑场景，完全依赖glb的读写
@@ -53,7 +61,7 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 > *10 seconds Showcase Video*
 
 <details>
-<summary>点击展开/折叠更多图片</summary>
+<summary>展开查看更多图片</summary>
 
 ![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 > *RayTracing Renderer - QX50*
@@ -87,7 +95,7 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ## 技术特性
 
 <details>
-<summary>点击展开/折叠技术特性列表</summary>
+<summary>展开查看</summary>
 
 * Rendering
     * Importance Sampling (BRDF / Light)
@@ -122,15 +130,14 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 </details>
 
-## 运行
-
-1. 下载最新的MagicaLego游戏版本，通过bin/MagicaLego.exe启动
-1. 下载最新Release版本，通过bin/*.exe直接启动
-1. 从头构建运行
-
 ## 构建方式
 
-首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
+项目基于[Microsoft's vcpkg](https://github.com/Microsoft/vcpkg)管理第三方依赖，使用cmake作为构建工具。提供各平台脚本实现一键部署依赖，但需要一定的环境前提：
+
+- 公共前提: 良好的网络环境，能够完全访问github等站点，git已经安装并可用
+- Windows: 已经安装Visual Studio 2022，包含C++工作负载
+- Linux: 无需任何依赖
+- Macos: 已经安装Xcode或者Command Line Tools (作者在Xcode 16.1测试)
 
 项目的[Github Action](.github/workflows)包含windows，linux，android的自动ci脚本，作者会维护其正确性。如有任何环境问题可参阅解决。
 
@@ -201,12 +208,7 @@ brew install ninja
 
 </details>
 
-## Next Todolist
-- [ ] GPU Frustum / Occulusion Culling
-- [ ] GPU Lod Swtiching
-- [ ] Huge Landscape
-
-## 参考项目
+## 第三方库和参考项目
 
 * [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
@@ -215,3 +217,11 @@ brew install ninja
 ## 随感
 
 项目的发展，学习心得，一些随感，记录于 [Thoughts.md](doc/Thoughts.md)，随时更新。
+
+## 贡献指南
+
+欢迎贡献代码，指引文档暂缺
+
+## AI指引
+
+[Repository AI Guidelines](AGENTS.md)
