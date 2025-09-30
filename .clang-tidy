@@ -1,0 +1,64 @@
+# 启用命名规范检查与头文件清理；其他检查默认关闭
+Checks: '-*,readability-identifier-naming,llvm-include-cleaner'
+WarningsAsErrors: ''
+# 仅分析仓库内头文件，排除 ThirdParty / external
+# 仅匹配 src/ 下的头文件，避免 assets/slang 等特殊语法文件触发编译错误
+HeaderFilterRegex: '^(?!.*(ThirdParty|external)/).*/src/.*\\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
+FormatStyle: file
+CheckOptions:
+  # 忽略 main 入口或类似函数的命名偏差
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: 'true'
+  - key: readability-identifier-naming.IgnoreOverriddenMethods
+    value: 'false'
+  # 类型定义统一使用 PascalCase（示例：MyRenderer、UniformBufferObject）
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.UnionCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.NamespaceCase
+    value: CamelCase
+  # 函数和方法统一 camelCase（示例：renderFrame、initPhysics）
+  # 函数和方法统一 PascalCase（示例：RenderFrame、InitPhysics）
+  - key: readability-identifier-naming.FunctionCase
+    value: CamelCase
+  - key: readability-identifier-naming.MethodCase
+    value: CamelCase
+  # 成员、变量、参数统一 camelCase，私有成员尾随下划线（示例：frameCounter、deviceHandle_）
+  - key: readability-identifier-naming.MemberCase
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: _
+  - key: readability-identifier-naming.StaticMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: CamelCase
+  - key: readability-identifier-naming.StaticVariableCase
+    value: camelBack
+  - key: readability-identifier-naming.ParameterCase
+    value: camelBack
+  # 全局变量允许首字母大写（示例：GOption）
+  # 模板参数与常量使用 PascalCase，宏保持全大写（示例：TemplateParam、MaxIterations、MY_MACRO）
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.ConstantCase
+    value: camelBack
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: camelBack
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  # 允许以下划线开头的宏名称保持原状（如 _USE_MATH_DEFINES）
+  - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
+    value: '^_.*'

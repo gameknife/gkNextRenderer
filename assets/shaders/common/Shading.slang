@@ -223,7 +223,7 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = Bindless.GetStorageTextureDimensions(Bindless.RT_MINIGBUFFER);
+            int2 size = Bindless.GetStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
 
             int2 sampleCoord = int2(currentUV * float2(size));
             uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
@@ -1228,7 +1228,7 @@ public struct FPathTracingRendererV2
         let Camera = Bindless.GetGpuscene().Camera[0];
 
         pixel_ = ipos;
-        size_ = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
+        size_ = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
         RandomSeed_ = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
         OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);

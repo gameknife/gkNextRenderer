@@ -29,24 +29,24 @@ jobs:
         java-version: '21'
     - uses: actions/checkout@v4
 
-    - name: Restore cached Primes
-      id: cache-primes-restore
+    - name: Restore cached vcpkg
+      id: cache-vcpkg-restore
       uses: actions/cache/restore@v4
       with:
         path: |
-          build/vcpkg.android
-        key: ${{ runner.os }}-primes
+          .vcpkg
+        key: ${{ runner.os }}-android-vcpkg
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg_android.sh
-      
-    - name: Save Primes
-      id: cache-primes-save
+      run: ./vcpkg.sh android
+
+    - name: Save vcpkg to cache
+      id: cache-vcpkg-save
       uses: actions/cache/save@v4
       with:
         path: |
-          build/vcpkg.android
-        key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
+          .vcpkg
+        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
     - name: Install Dependencies
       run: |
@@ -55,4 +55,4 @@ jobs:
         sudo apt-get update
         sudo apt-get install vulkan-sdk
     - name: Compile gkNextRenderer
-      run: ./build_android.sh
+      run: ./build.sh android

@@ -20,6 +20,12 @@
 ./[Bb]in/
 [Oo]bj/
 [Ll]og/
+.vcpkg/
+external/MoltenVK/
+external/slang*/
+build/
+build-*/
+**/vcpkg_installed/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -353,3 +359,7 @@ assets/models/classic.glb
 assets/models/hyrule2.glb
 assets/models/hyrule3.glb
 assets/models/leaktest.glb
+
+# Claude Code files
+.claude/
+lib/

@@ -1,0 +1,71 @@
+{
+  "name": "gknextrenderer",
+  "version": "1.0.0",
+  "description": "Next generation renderer with Vulkan support",
+  "homepage": "https://github.com/gameknife/gkNextRenderer",
+  "dependencies": [
+    {
+      "name": "cpptrace",
+      "platform": "!(android | ios)"
+    },
+    "cxxopts",
+    {
+      "name": "sdl3",
+      "features": ["vulkan"],
+      "platform": "!(android)"
+    },
+    "glm",
+    {
+      "name": "imgui",
+      "features": [
+        "freetype",
+        "sdl3-binding",
+        "vulkan-binding",
+        "docking-experimental"
+      ],
+      "platform": "!(android)"
+    },
+    {
+      "name": "imgui",
+      "features": [
+        "freetype",
+        "vulkan-binding",
+        "docking-experimental"
+      ],
+      "platform": "android"
+    },
+    "stb",
+    "tinyobjloader",
+    "curl",
+    "tinygltf",
+    "draco",
+    "fmt",
+    "meshoptimizer",
+    "ktx",
+    "joltphysics",
+    "xxhash",
+    "spdlog",
+    "cpp-base64",
+    {
+      "name": "vulkan-loader",
+      "platform": "linux",
+      "features": [
+        "xcb",
+        "xlib",
+        "wayland"
+      ]
+    }
+  ],
+  "features": {
+    "avif": {
+      "description": "Enable AVIF image format support",
+      "dependencies": [
+        {
+          "name": "libavif",
+          "features": ["aom"],
+          "platform": "!(android | ios)"
+        }
+      ]
+    }
+  }
+}

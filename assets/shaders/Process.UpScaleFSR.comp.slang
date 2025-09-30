@@ -275,8 +275,8 @@ float4 doUpscale(RWTexture2D<float4> tex,
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const int2 ipos = int2(DTid.xy);
-    int2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
-    int2 ssize = Bindless.GetStorageTextureDimensions(Bindless.RT_DENOISED);
+    int2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
+    int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
 
     float4 outColor = float4(0, 0, 0, 1);
 

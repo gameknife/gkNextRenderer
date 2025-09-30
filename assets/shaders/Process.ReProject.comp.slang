@@ -73,7 +73,7 @@ float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    uint2 isize = Bindless.GetStorageTextureDimensions(Bindless.RT_SINGLE_DIFFUSE);
+    uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
 
     let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
     let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);

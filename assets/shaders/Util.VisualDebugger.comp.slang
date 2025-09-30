@@ -121,7 +121,7 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    int2 isize = Bindless.GetStorageTextureDimensions(pushConsts.SwapChainIdx);
+    int2 isize = Bindless.GetStorageTextureDimensions<float4>(pushConsts.SwapChainIdx);
     Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(0, 0, 0, 1); // Clear the output image
 
     //ipos = int2(ipos.x, ipos.y);

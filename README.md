@@ -25,6 +25,10 @@
 
 本项目的初衷是：学习，验证，进步。因此，会激进的使用最新技术，有意的规避陈旧技术，利用新c++规范和标准库，全时跨平台开发。
 
+## 贡献指南
+
+如果你计划提交补丁或新特性，请先阅读仓库的贡献指引：[Repository Guidelines](AGENTS.md)。
+
 ### 子项目
 
 - **gkNextRenderer**: 主项目，路径追踪渲染器
@@ -118,11 +122,11 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 本地开发环境部署完成后，各平台可按一下脚本构建
 
-**Windows (Visual Studio 2022)** 
+**Windows (Visual Studio 2022)**
 
 ```
-vcpkg_windows.bat
-build_windows.bat
+vcpkg.bat windows
+build.bat windows
 ```
 
 **Windows (MinGW)**
@@ -135,8 +139,8 @@ cmake's module FindVulkan has a little bug on MingGW, try modified FindVulkan.cm
 set(_Vulkan_library_name vulkan) -> set(_Vulkan_library_name vulkan-1)
 then, execute scripts bellow
 ```
-vcpkg_mingw.sh
-build_mings.sh
+vcpkg.sh mingw
+build.sh mingw
 ```
 
 **Android On Windows**
@@ -146,8 +150,8 @@ Install Android Studio or Android SDK Tool, with NDK 25.1.8937393 installed
 ```
 set ANDROID_NDK_HOME=\path\to\ndk
 #like: set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\25.1.8937393
-vcpkg_android.bat
-build_android.bat
+vcpkg.bat android
+build.bat android
 deploy_android.bat
 ```
 
@@ -158,15 +162,15 @@ deploy_android.bat
 例如，ubuntu
 ```
 sudo apt-get install ninja-dev curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
-./vcpkg_linux.sh
-./build_linux.sh
+./vcpkg.sh linux
+./build.sh linux
 ```
 SteamDeck Archlinux
 ```
 sudo steamos-readonly disable
 sudo pacman -S devel-base ninja
-./vcpkg_linux.sh
-./build_linux.sh
+./vcpkg.sh linux
+./build.sh linux
 ```
 
 **MacOS**
@@ -174,8 +178,8 @@ sudo pacman -S devel-base ninja
 brew install molten-vk
 brew install glslang
 brew install ninja
-./vcpkg_macos.sh
-./build_macos.sh
+./vcpkg.sh macos
+./build.sh macos
 ```
 
 ## Next Todolist

@@ -56,10 +56,10 @@ namespace Bindless
         return StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>();
     }
 
-    public uint2 GetStorageTextureDimensions(int index)
+    public uint2 GetStorageTextureDimensions<T : ITexelElement>(int index)
     {
         uint2 dim;
-        StorageTextureArray[index].as<RWTexture2D<float4>>().GetDimensions(dim.x, dim.y);
+        StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>().GetDimensions(dim.x, dim.y);
         return dim;
     }
 }

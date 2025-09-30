@@ -39,7 +39,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        vcpkg_windows.bat
+        vcpkg.bat windows
       shell: cmd
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -47,7 +47,7 @@ jobs:
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        package_magicalego.bat ${{ github.ref_name }}
+        package.bat magicalego ${{ github.ref_name }}
       shell: cmd
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1

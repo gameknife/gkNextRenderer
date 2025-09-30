@@ -22,6 +22,10 @@ It also provides the runtime environment closest to the game (lightweight game e
 
 The original intention of this project is: learning, verification, and progress. Therefore, we will radically use the latest technologies, deliberately avoid outdated technologies, and use new C++ specifications and standard libraries to develop across the board.
 
+## Contribution Guide
+
+Planning to contribute? Read the repository onboarding notes in [Repository Guidelines](AGENTS.md).
+
 ### Subproject
 
 -   **gknex trends**: Main project, path tracking renderer
@@ -126,8 +130,8 @@ After the local development environment is deployed, each platform can be built 
 
 **Windows (Visual Studio 2022)**
 
-    vcpkg_windows.bat
-    build_windows.bat
+    vcpkg.bat windows
+    build.bat windows
 
 **Windows (MinGW)**
 
@@ -139,8 +143,8 @@ cmake's module FindVulkan has a little bug on MingGW, try modified FindVulkan.cm
 set(\_Vulkan_library_name vulkan) -> set(\_Vulkan_library_name vulkan-1)
 then, execute scripts bellow
 
-    vcpkg_mingw.sh
-    build_mings.sh
+    vcpkg.sh mingw
+    build.sh mingw
 
 **Android On Windows**
 
@@ -149,8 +153,8 @@ Install Android Studio or Android SDK Tool, with NDK 25.1.8937393 installed
 
     set ANDROID_NDK_HOME=\path\to\ndk
     #like: set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\25.1.8937393
-    vcpkg_android.bat
-    build_android.bat
+    vcpkg.bat android
+    build.bat android
     deploy_android.bat
 
 **Linux**
@@ -160,23 +164,23 @@ Each platform needs to install the corresponding dependencies in advance before 
 For example, ubuntu
 
     sudo apt-get install ninja-dev curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
-    ./vcpkg_linux.sh
-    ./build_linux.sh
+    ./vcpkg.sh linux
+    ./build.sh linux
 
 SteamDeck Archlinux
 
     sudo steamos-readonly disable
     sudo pacman -S devel-base ninja
-    ./vcpkg_linux.sh
-    ./build_linux.sh
+    ./vcpkg.sh linux
+    ./build.sh linux
 
 **MacOS**
 
     brew install molten-vk
     brew install glslang
     brew install ninja
-    ./vcpkg_macos.sh
-    ./build_macos.sh
+    ./vcpkg.sh macos
+    ./build.sh macos
 
 ## Next Todolist
 
