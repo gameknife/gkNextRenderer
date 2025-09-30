@@ -35,7 +35,7 @@ jobs:
       with:
         path: |
           vcpkg_installed
-        key: ${{ runner.os }}-primes
+        key: ${{ runner.os }}-android-primes
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
