@@ -8,6 +8,7 @@
 ![linux ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/linux.yml/badge.svg)
 ![macOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/macos.yml/badge.svg)
 ![android ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
+![iOS ci](https://github.com/gameknife/gkNextRenderer/actions/workflows/android.yml/badge.svg)
 
 ## 这是一个什么项目？
 
@@ -29,7 +30,8 @@
 
 如果你计划提交补丁或新特性，请先阅读仓库的贡献指引：[Repository Guidelines](AGENTS.md)。
 
-### 子项目
+<details>
+<summary>### 子项目</summary>
 
 - **gkNextRenderer**: 主项目，路径追踪渲染器
 - **gkNextEditor**: 基于imgui的编辑器框架，用于编辑场景，完全依赖glb的读写
@@ -37,6 +39,8 @@
 - **gkNextBenchmark**: 专用的Benchmark程序，用于静态和实时场景的Benchmark
 - **Packager**: 将资产打包成pkg文件，用于快速部署
 - **Portal**: 子项目组合调用程序，提供可视化的各种部署，调试工具（计划中）
+
+</details>
 
 ## 图库 (TrueHDR)
 
@@ -47,6 +51,9 @@ https://github.com/user-attachments/assets/2d1c61ab-8daa-4f1f-ad14-1f211fca19b0
 https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 > *10 seconds Showcase Video*
+
+<details>
+<summary>点击展开/折叠更多图片</summary>
 
 ![Alt text](gallery/Qx50.avif?raw=true "Qx50")
 > *RayTracing Renderer - QX50*
@@ -75,7 +82,12 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 ![Alt text](gallery/Complex_Android.avif?raw=true "ComplexAndroid")
 > *Hybrid Renderer (Android) - Complex Cubes*
 
+</details>
+
 ## 技术特性
+
+<details>
+<summary>点击展开/折叠技术特性列表</summary>
 
 * Rendering
     * Importance Sampling (BRDF / Light)
@@ -108,6 +120,8 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
     * Full Imgui Pipeline
     * Node-based Material Editor
 
+</details>
+
 ## 运行
 
 1. 下载最新的MagicaLego游戏版本，通过bin/MagicaLego.exe启动
@@ -119,6 +133,9 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 首先，需要安装 [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)。各个平台根据lunarG的指引，完成安装。其他的依赖都基于 [Microsoft's vcpkg](https://github.com/Microsoft/vcpkg) 构建，执行后续的脚本即可完成编译。
 
 项目的[Github Action](.github/workflows)包含windows，linux，android的自动ci脚本，作者会维护其正确性。如有任何环境问题可参阅解决。
+
+<details>
+<summary>点击展开/折叠各平台构建方式</summary>
 
 本地开发环境部署完成后，各平台可按一下脚本构建
 
@@ -181,6 +198,8 @@ brew install ninja
 ./vcpkg.sh macos
 ./build.sh macos
 ```
+
+</details>
 
 ## Next Todolist
 - [ ] GPU Frustum / Occulusion Culling
