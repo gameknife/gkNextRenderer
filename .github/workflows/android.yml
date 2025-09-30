@@ -40,7 +40,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
 
-    - name: Save vcpkg
+    - name: Save vcpkg to cache
       id: cache-vcpkg-save
       uses: actions/cache/save@v4
       with:
