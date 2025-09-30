@@ -29,24 +29,24 @@ jobs:
         java-version: '21'
     - uses: actions/checkout@v4
 
-    - name: Restore cached Primes
-      id: cache-primes-restore
+    - name: Restore cached vcpkg
+      id: cache-vcpkg-restore
       uses: actions/cache/restore@v4
       with:
         path: |
-          vcpkg_installed
-        key: ${{ runner.os }}-android-primes
+          .vcpkg
+        key: ${{ runner.os }}-android-vcpkg
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
-      
-    - name: Save Primes
-      id: cache-primes-save
+
+    - name: Save vcpkg
+      id: cache-vcpkg-save
       uses: actions/cache/save@v4
       with:
         path: |
-          vcpkg_installed
-        key: ${{ steps.cache-primes-restore.outputs.cache-primary-key }}
+          .vcpkg
+        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
     - name: Install Dependencies
       run: |
