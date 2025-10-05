@@ -35,6 +35,7 @@ jobs:
       with:
         path: |
           .vcpkg
+          vcpkg_installed
         key: ${{ runner.os }}-android-vcpkg
 
     - name: Compile vcpkg dependencies
@@ -46,6 +47,7 @@ jobs:
       with:
         path: |
           .vcpkg
+          vcpkg_installed
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
     - name: Install Dependencies

@@ -36,6 +36,7 @@ jobs:
       with:
         path: |
           .vcpkg
+          vcpkg_installed
         key: ${{ runner.os }}-desktop-vcpkg
 
     - name: Compile vcpkg dependencies
@@ -50,6 +51,7 @@ jobs:
       with:
         path: |
           .vcpkg
+          vcpkg_installed
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
     - name: Setup MSBuild
