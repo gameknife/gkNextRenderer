@@ -1240,6 +1240,11 @@ public struct FPathTracingRendererV2
         OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
     }
 
+    public __init()
+    {
+        
+    }
+
     int2 pixel_;
     uint2 size_;
     uint4 RandomSeed_;
