@@ -52,29 +52,6 @@ ensure_bootstrap() {
     fi
 }
 
-select_triplet() {
-    case "$1" in
-        macos) TRIPLET="arm64-osx" ;;
-        macos_x64) TRIPLET="x64-osx" ;;
-        linux) TRIPLET="x64-linux" ;;
-        android) TRIPLET="arm64-android" ;;
-        ios) TRIPLET="arm64-ios" ;;
-        mingw) TRIPLET="x64-mingw-static" ;;
-        windows) TRIPLET="x64-windows-static" ;;
-        *)
-            usage >&2
-            exit 1
-            ;;
-    esac
-}
-
-install_manifest() {
-    log "Installing manifest dependencies for triplet '$1'..."
-    pushd "$PROJECT_ROOT" >/dev/null
-    "$VCPKG_EXE" install --triplet "$1" --feature-flags=manifests
-    popd >/dev/null
-}
-
 # ============================================================================
 # ERROR HANDLING & USAGE
 # ============================================================================
@@ -111,9 +88,7 @@ main() {
     
     ensure_repo
     ensure_bootstrap
-    # select_triplet "$PLATFORM"
-    # install_manifest "$TRIPLET"
-    
+
     log "Done. 如果使用自定义路径，记得复用 VCPKG_ROOT=${VCPKG_ROOT}."
 }
 

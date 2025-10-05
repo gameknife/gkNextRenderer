@@ -18,8 +18,6 @@ REM ============================================================================
     
     call :ensure_repo || goto :error
     call :ensure_bootstrap || goto :error
-    rem call :select_triplet "%PLATFORM%" || goto :error
-    rem call :install_manifest "%TRIPLET%" || goto :error
     
     echo [vcpkg] Done. 如果使用自定义路径，记得复用 VCPKG_ROOT=%VCPKG_ROOT%.
     exit /b %errorlevel%
@@ -77,29 +75,6 @@ REM ============================================================================
         call bootstrap-vcpkg.bat -disableMetrics || goto :error
         popd >nul
     )
-    exit /b 0
-
-:select_triplet
-    set "TMP_PLATFORM=%~1"
-    if /i "%TMP_PLATFORM%"=="windows" (
-        set "TRIPLET=x64-windows-static"
-    ) else if /i "%TMP_PLATFORM%"=="android" (
-        set "TRIPLET=arm64-android"
-    ) else if /i "%TMP_PLATFORM%"=="mingw" (
-        set "TRIPLET=x64-mingw-static"
-    ) else (
-        echo Usage: vcpkg.bat ^<platform^> [manifest-features] 1>&2
-        echo. 1>&2
-        echo Platforms: windows^|android^|mingw 1>&2
-        exit /b 1
-    )
-    exit /b 0
-
-:install_manifest
-    echo [vcpkg] Installing manifest dependencies for triplet %~1...
-    pushd "%PROJECT_ROOT%" >nul || goto :error
-    "%VCPKG_EXE%" install --triplet %~1 --feature-flags=manifests || goto :error
-    popd >nul
     exit /b 0
 
 REM ============================================================================
