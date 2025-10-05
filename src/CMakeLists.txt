@@ -222,7 +222,7 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
-	if (CMAKE_CXX_COMPILER MATCHES ".*mingw.*")
+	if ( MINGW )
 		target_link_libraries(${target} PRIVATE gdi32)
 	endif()
 
