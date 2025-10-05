@@ -101,7 +101,7 @@ DeviceMemory::DeviceMemory(
 	VkExportMemoryAllocateInfoKHR exportMemoryAllocateInfo{};
 	exportMemoryAllocateInfo.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
 #if WIN32 && !defined(__MINGW32__)
-	export_memory_allocate_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+	exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
 #else
 	exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 #endif
@@ -117,7 +117,7 @@ DeviceMemory::DeviceMemory(
 	if(external)
 	{
 #if WIN32 && !defined(__MINGW32__)
-		export_memory_allocate_info.pNext = &export_memory_win32_handle_info;
+		exportMemoryAllocateInfo.pNext = &export_memory_win32_handle_info;
 #endif
 		allocInfo.pNext = &exportMemoryAllocateInfo;
 	}
