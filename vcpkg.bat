@@ -18,8 +18,8 @@ REM ============================================================================
     
     call :ensure_repo || goto :error
     call :ensure_bootstrap || goto :error
-    call :select_triplet "%PLATFORM%" || goto :error
-    call :install_manifest "%TRIPLET%" || goto :error
+    rem call :select_triplet "%PLATFORM%" || goto :error
+    rem call :install_manifest "%TRIPLET%" || goto :error
     
     echo [vcpkg] Done. 如果使用自定义路径，记得复用 VCPKG_ROOT=%VCPKG_ROOT%.
     exit /b %errorlevel%
@@ -33,6 +33,10 @@ REM ============================================================================
     if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
     set "PROJECT_ROOT=%SCRIPT_DIR%"
     set "DEFAULT_VCPKG_ROOT=%PROJECT_ROOT%\.vcpkg"
+    set "VCPKG_DEFAULT_BINARY_CACHE=%PROJECT_ROOT%\.vcpkg_bincache"
+    if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" (
+        mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
+    )
     
     if not defined VCPKG_ROOT set "VCPKG_ROOT=%DEFAULT_VCPKG_ROOT%"
     set "VCPKG_EXE=%VCPKG_ROOT%\vcpkg.exe"

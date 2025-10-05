@@ -5,6 +5,7 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "PROJECT_ROOT=%SCRIPT_DIR%"
 set "BUILD_ROOT=%PROJECT_ROOT%\build"
+set "VCPKG_DEFAULT_BINARY_CACHE=%PROJECT_ROOT%\.vcpkg_bincache"
 
 if not defined VCPKG_ROOT set "VCPKG_ROOT=%PROJECT_ROOT%\.vcpkg"
 set "TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake"

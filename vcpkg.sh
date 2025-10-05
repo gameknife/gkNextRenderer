@@ -9,6 +9,10 @@ init_variables() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_ROOT="$SCRIPT_DIR"
     DEFAULT_VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
+    export VCPKG_DEFAULT_BINARY_CACHE="$PROJECT_ROOT/.vcpkg_bincache"
+    if [ ! -d "$VCPKG_DEFAULT_BINARY_CACHE" ]; then
+        mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+    fi
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
 }
@@ -107,8 +111,8 @@ main() {
     
     ensure_repo
     ensure_bootstrap
-    select_triplet "$PLATFORM"
-    install_manifest "$TRIPLET"
+    # select_triplet "$PLATFORM"
+    # install_manifest "$TRIPLET"
     
     log "Done. 如果使用自定义路径，记得复用 VCPKG_ROOT=${VCPKG_ROOT}."
 }
