@@ -28,8 +28,7 @@ int main(int argc, const char* argv[]) noexcept
         std::string srcPath;
         std::string rootPath;
         std::string regex;
-                
-        const int lineLength = 120;
+        
         cxxopts::Options options("options", "");
         options.add_options()
             ("out", "abs path", cxxopts::value<std::string>(pakPath)->default_value("out.pak"))

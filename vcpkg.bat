@@ -22,7 +22,7 @@ REM ============================================================================
     call :install_manifest "%TRIPLET%" || goto :error
     
     echo [vcpkg] Done. 如果使用自定义路径，记得复用 VCPKG_ROOT=%VCPKG_ROOT%.
-    exit /b 0
+    exit /b %errorlevel%
 
 REM ============================================================================
 REM HELPER FUNCTIONS

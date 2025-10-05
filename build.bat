@@ -22,8 +22,7 @@ if /i "%PLATFORM%"=="windows" (
     goto :error
 )
 
-echo Build completed successfully!
-exit /b 0
+exit /b %errorlevel%
 
 :log
 echo [build] %~1
