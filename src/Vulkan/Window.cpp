@@ -154,7 +154,8 @@ void Window::attemptDragWindow() {
 
 void Window::InitGLFW()
 {
-	if( !SDL_Init(SDL_INIT_VIDEO) )
+    SDL_SetHint( SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1" );
+	if( !SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) )
 	{
 		Throw(std::runtime_error("failed to init SDL."));
 	}

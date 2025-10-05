@@ -270,6 +270,8 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         }
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
         OnKey(event);
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -281,6 +283,9 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         break;
     case SDL_EVENT_MOUSE_WHEEL:
         OnScroll(event.wheel.x, event.wheel.y);
+        break;
+    case SDL_EVENT_DROP_FILE:
+        OnDropFile(event.drop.data);
         break;
     default:
         break;
@@ -389,6 +394,10 @@ bool NextEngine::Tick()
     }
 
     window_->attemptDragWindow();
+
+    // sample gamepad stats
+
+    TickGamepadInput();
     return false;
 }
 
@@ -1007,26 +1016,42 @@ void NextEngine::OnScroll(const double xoffset, const double yoffset)
     gameInstance_->OnScroll(xoffset, yoffset);
 }
 
-void NextEngine::OnDropFile(int pathCount, const char* paths[])
+void NextEngine::OnDropFile(const char* dropPath)
 {
     // add glb to the last, and loaded
-    if (pathCount > 0)
+    std::string path(dropPath);
+    std::string ext = path.substr(path.find_last_of(".") + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    if (ext == "glb" || ext == "gltf")
     {
-        std::string path = paths[pathCount - 1];
-        std::string ext = path.substr(path.find_last_of(".") + 1);
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+        RequestLoadScene(path);
+    }
 
-        if (ext == "glb" || ext == "gltf")
-        {
-            //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
-            RequestLoadScene(path);
-        }
+    if( ext == "hdr")
+    {
+        //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+        //userSettings_.SkyIdx = 0;
+    }
+}
+void NextEngine::TickGamepadInput()
+{
+    int gamepadCount = 0;
+    SDL_JoystickID* gamepads = SDL_GetGamepads(&gamepadCount);
 
-        if( ext == "hdr")
-        {
-            //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-            //userSettings_.SkyIdx = 0;
-        }
+    if (gamepadCount > 0)
+    {
+        SDL_Gamepad* masterGamepad = SDL_GetGamepadFromID(*gamepads);
+
+        gameInstance_->OnGamepadInput(
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTX),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTY),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTX),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTY),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
+        );
     }
 }
 

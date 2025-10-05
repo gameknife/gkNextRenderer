@@ -50,9 +50,9 @@ public:
 	virtual bool OnCursorPosition(double xpos, double ypos) {return false;}
 	virtual bool OnMouseButton(SDL_Event& event) {return false;}
 	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
-	virtual bool OnGamepadInput(float leftStickX, float leftStickY,
-						float rightStickX, float rightStickY,
-						float leftTrigger, float rightTrigger) {return false;}
+	virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
+						int16_t rightStickX, int16_t rightStickY,
+						int16_t leftTrigger, int16_t rightTrigger) {return false;}
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase
@@ -213,7 +213,8 @@ protected:
 	void OnCursorPosition(double xpos, double ypos);
 	void OnMouseButton(SDL_Event& event);
 	void OnScroll(double xoffset, double yoffset);
-	void OnDropFile(int path_count, const char* paths[]);
+	void OnDropFile(const char* path);
+    void TickGamepadInput();
 	
 private:
 	void LoadScene(std::string sceneFileName);
