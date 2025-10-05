@@ -51,6 +51,11 @@ jobs:
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh macos
 
+    - name: Compile gkNextRenderer
+      run: |
+        slangc -v
+        ./build.sh macos
+        
     - name: Save vcpkg to cache
       id: cache-vcpkg-save
       uses: actions/cache/save@v4
@@ -60,7 +65,4 @@ jobs:
           .vcpkg_bincache
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
-    - name: Compile gkNextRenderer
-      run: |
-        slangc -v
-        ./build.sh macos
+
