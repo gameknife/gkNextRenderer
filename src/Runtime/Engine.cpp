@@ -1053,6 +1053,8 @@ void NextEngine::TickGamepadInput()
         SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
         );
     }
+
+    SDL_free(gamepads);
 }
 
 void NextEngine::OnRendererBeforeNextFrame()
