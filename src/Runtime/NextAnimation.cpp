@@ -84,8 +84,8 @@ void NextAnimation::Tick(double deltaSeconds)
 
 #if WIN32
         // Selects joint matrices.
-        const ozz::math::Float4x4& parent = models_[parent_id];
-        const ozz::math::Float4x4& current = models_[i];
+        const ozz::math::Float4x4& parent = models[parentId];
+        const ozz::math::Float4x4& current = models[i];
 
         ozz::math::SimdFloat4 p0 = ozz::math::TransformPoint(parent, {0,0,0,1});
         ozz::math::SimdFloat4 p1 = ozz::math::TransformPoint(current, {0,0,0,1});
