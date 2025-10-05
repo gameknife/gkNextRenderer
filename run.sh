@@ -26,6 +26,9 @@ case "$(uname -s)" in
             default_platform="macos_x64"
         fi
         ;;
+    MINGW*|MSYS*)
+        default_platform="mingw"
+        ;;
     *)
         default_platform="linux"
         ;;
@@ -88,7 +91,7 @@ run_native() {
 
     if [[ ! -d "$resolved_bin" && $bin_overridden -eq 0 ]]; then
         if [[ $platform_overridden -eq 0 ]]; then
-            for fallback in linux macos macos_x64; do
+            for fallback in linux macos macos_x64 mingw; do
                 local candidate="$script_dir/build/$fallback/bin"
                 if [[ -d "$candidate" ]]; then
                     resolved_bin="$candidate"

@@ -35,18 +35,11 @@ jobs:
       with:
         path: |
           .vcpkg
-        key: ${{ runner.os }}-android-vcpkg
+          .vcpkg_bincache
+        key: ${{ runner.os }}-android-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
-
-    - name: Save vcpkg to cache
-      id: cache-vcpkg-save
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          .vcpkg
-        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
     - name: Install Dependencies
       run: |
@@ -54,5 +47,16 @@ jobs:
         sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
         sudo apt-get update
         sudo apt-get install vulkan-sdk
+
     - name: Compile gkNextRenderer
       run: ./build.sh android
+
+    - name: Save vcpkg to cache
+      id: cache-vcpkg-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          .vcpkg
+          .vcpkg_bincache
+        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
+

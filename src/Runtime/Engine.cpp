@@ -212,17 +212,6 @@ NextEngine::NextEngine(Options& options, void* userdata)
     renderer_->DelegateBeforeNextTick = [this]()->void{OnRendererBeforeNextFrame();};
     renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
     renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
-
-    // Initialize IO
-    //window_->OnKey = [this](const int key, const int scancode, const int action, const int mods) { OnKey(key, scancode, action, mods); };
-    window_->OnCursorPosition = [this](const double xpos, const double ypos) { OnCursorPosition(xpos, ypos); };
-    //window_->OnMouseButton = [this](const int button, const int action, const int mods) { OnMouseButton(button, action, mods); };
-    window_->OnScroll = [this](const double xoffset, const double yoffset) { OnScroll(xoffset, yoffset); };
-    window_->OnDropFile = [this](int pathCount, const char* paths[]) { OnDropFile(pathCount, paths); };
-    window_->OnGamepadInput = [this](float leftStickX, float leftStickY,float rightStickX, float rightStickY,float leftTrigger, float rightTrigger) {
-        if (gameInstance_) return gameInstance_->OnGamepadInput(leftStickX, leftStickY,rightStickX, rightStickY,leftTrigger, rightTrigger);
-        return false;
-    };
     
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
@@ -281,6 +270,8 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         }
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
         OnKey(event);
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -289,6 +280,12 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         break;
     case SDL_EVENT_MOUSE_MOTION:
         OnCursorPosition(event.motion.x, event.motion.y);
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+        OnScroll(event.wheel.x, event.wheel.y);
+        break;
+    case SDL_EVENT_DROP_FILE:
+        OnDropFile(event.drop.data);
         break;
     default:
         break;
@@ -397,6 +394,10 @@ bool NextEngine::Tick()
     }
 
     window_->attemptDragWindow();
+
+    // sample gamepad stats
+
+    TickGamepadInput();
     return false;
 }
 
@@ -1015,27 +1016,45 @@ void NextEngine::OnScroll(const double xoffset, const double yoffset)
     gameInstance_->OnScroll(xoffset, yoffset);
 }
 
-void NextEngine::OnDropFile(int pathCount, const char* paths[])
+void NextEngine::OnDropFile(const char* dropPath)
 {
     // add glb to the last, and loaded
-    if (pathCount > 0)
+    std::string path(dropPath);
+    std::string ext = path.substr(path.find_last_of(".") + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    if (ext == "glb" || ext == "gltf")
     {
-        std::string path = paths[pathCount - 1];
-        std::string ext = path.substr(path.find_last_of(".") + 1);
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-        if (ext == "glb" || ext == "gltf")
-        {
-            //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
-            RequestLoadScene(path);
-        }
-
-        if( ext == "hdr")
-        {
-            //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-            //userSettings_.SkyIdx = 0;
-        }
+        //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+        RequestLoadScene(path);
     }
+
+    if( ext == "hdr")
+    {
+        //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
+        //userSettings_.SkyIdx = 0;
+    }
+}
+void NextEngine::TickGamepadInput()
+{
+    int gamepadCount = 0;
+    SDL_JoystickID* gamepads = SDL_GetGamepads(&gamepadCount);
+
+    if (gamepadCount > 0)
+    {
+        SDL_Gamepad* masterGamepad = SDL_GetGamepadFromID(*gamepads);
+
+        gameInstance_->OnGamepadInput(
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTX),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTY),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTX),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTY),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
+        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
+        );
+    }
+
+    SDL_free(gamepads);
 }
 
 void NextEngine::OnRendererBeforeNextFrame()

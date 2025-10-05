@@ -37,7 +37,7 @@ static void UpdateUiScaledMetrics()
 {
     float scale = 1.0f;
 
-    if (GAndroidMagicScale > 0.0f)
+    if (GAndroidMagicScale < 1.0f)
     {
         scale *= 0.75f / GAndroidMagicScale;
     }
@@ -200,6 +200,16 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 		default: break;
 		}
 	}
+    if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
+    {
+        switch (event.gbutton.button)
+        {
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            CreateSphereAndPush(); return true;
+            break;
+        default: break;
+        }
+    }
     return false;
 }
 
@@ -240,8 +250,8 @@ bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 	return true;
 }
 
-bool NextRendererGameInstance::OnGamepadInput(float leftStickX, float leftStickY, float rightStickX, float rightStickY,
-	float leftTrigger, float rightTrigger)
+bool NextRendererGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
+	int16_t leftTrigger, int16_t rightTrigger)
 {
 	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
 }

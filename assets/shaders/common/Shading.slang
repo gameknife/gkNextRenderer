@@ -1226,10 +1226,22 @@ public struct FPathTracingRendererV2
     public void Init(uint2 ipos)
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
-
         pixel_ = ipos;
-        size_ = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
         RandomSeed_ = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
+    }
+
+    public __init()
+    {
+        pixel_ = int2(0, 0);
+        size_ = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+
+        RandomSeed_ = uint4(0, 0, 0, 0);
+        hitPrimaryVertex_ = {};
+        hitPrimaryNode_ = {};
+        primaryRayDir_ = float3(0, 1, 0);
+        primaryRayLength_ = 0;
+        primaryPixelOffset_ = float2(0, 0);
+        primaryAlbedo_ = float4(0, 0, 0, 0);
 
         OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
         OutNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
@@ -1238,11 +1250,6 @@ public struct FPathTracingRendererV2
         OutPrevDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
         OutSingleDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
         OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
-    }
-
-    public __init()
-    {
-        
     }
 
     int2 pixel_;

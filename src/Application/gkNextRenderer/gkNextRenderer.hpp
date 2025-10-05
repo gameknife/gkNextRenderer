@@ -28,10 +28,10 @@ public:
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
-    bool OnGamepadInput(float leftStickX, float leftStickY,
-                    float rightStickX, float rightStickY,
-                    float leftTrigger, float rightTrigger) override;
-    
+    bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
+                    int16_t rightStickX, int16_t rightStickY,
+                    int16_t leftTrigger, int16_t rightTrigger) override;
+
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }
 

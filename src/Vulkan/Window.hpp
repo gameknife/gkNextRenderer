@@ -27,23 +27,8 @@ namespace Vulkan
 		VkExtent2D WindowSize() const;
 
 		// GLFW instance properties (i.e. not bound to a window handler).
-		const char* GetKeyName(int key, int scancode) const;
 		std::vector<const char*> GetRequiredInstanceExtensions() const;
 		double GetTime() const;
-
-		// Callbacks
-		std::function<void(int key, int scancode, int action, int mods)> OnKey;
-		std::function<void(double xpos, double ypos)> OnCursorPosition;
-		std::function<void(int button, int action, int mods)> OnMouseButton;
-		std::function<void(double xoffset, double yoffset)> OnScroll;
-		std::function<void(int path_count, const char* paths[])> OnDropFile;
-		std::function<void(Next_Window* window, int focused)> OnFocus;
-
-		// 添加手柄相关回调
-		std::function<void(int jid, int event)> OnJoystickConnection;
-		std::function<void(float leftStickX, float leftStickY,
-						  float rightStickX, float rightStickY,
-						  float leftTrigger, float rightTrigger)> OnGamepadInput;
 
 		// Methods
 		void Close();

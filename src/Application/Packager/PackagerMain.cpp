@@ -1,15 +1,23 @@
 #include <iostream>
-//#include <boost/program_options.hpp>
 #include <cxxopts.hpp>
 #include "Utilities/FileHelper.hpp"
 #include "Runtime/Engine.hpp"
-
-//using namespace boost::program_options;
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
     return std::make_unique<NextGameInstanceVoid>(config, options, engine);
 }
+
+#if MINGW
+int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR szCmdLine, int sw)
+{
+    (void)hInst;
+    (void)hPrev;
+    (void)szCmdLine;
+    (void)sw;
+    return 0;
+}
+#endif
 
 int main(int argc, const char* argv[]) noexcept
 {
@@ -20,8 +28,7 @@ int main(int argc, const char* argv[]) noexcept
         std::string srcPath;
         std::string rootPath;
         std::string regex;
-                
-        const int lineLength = 120;
+        
         cxxopts::Options options("options", "");
         options.add_options()
             ("out", "abs path", cxxopts::value<std::string>(pakPath)->default_value("out.pak"))

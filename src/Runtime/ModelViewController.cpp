@@ -63,12 +63,12 @@ bool ModelViewController::OnKey(SDL_Event& event)
 }
 
 // 新增手柄输入处理函数
-bool ModelViewController::OnGamepadInput(const float leftStickX, const float leftStickY, 
-                                        const float rightStickX, const float rightStickY,
-                                        const float leftTrigger, const float rightTrigger)
+bool ModelViewController::OnGamepadInput(const int16_t leftStickX, const int16_t leftStickY,
+                                        const int16_t rightStickX, const int16_t rightStickY,
+                                        const int16_t leftTrigger, const int16_t rightTrigger)
 {
-    const float rightStickSensitivity = 5.0f;
-    const float deadZone = 0.5f; // 摇杆死区
+    const float rightStickSensitivity = 0.0001f;
+    const int16_t deadZone = 5000; // 摇杆死区
     bool inputDetected = false;
     
     // 左摇杆控制前后左右移动

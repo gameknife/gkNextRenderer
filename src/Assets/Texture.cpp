@@ -439,6 +439,8 @@ namespace Assets
                        // 在hdr加载的else分支中添加保存逻辑
                         if (!std::filesystem::exists(cacheFileName))
                         {
+                            // 这里会有风险，这个任务在线程，关闭的时候会强制结束线程，文件只写了一半
+
                             stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
                             pixels = stbdata;
                             format = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -511,7 +513,7 @@ namespace Assets
                                     cacheFile.write(reinterpret_cast<const char*>(&actualCompressedSize), sizeof(size_t));
                                     cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
                                 }
-                                
+
                                 cacheFile.close();
                             }
                         

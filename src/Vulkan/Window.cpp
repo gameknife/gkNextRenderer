@@ -12,7 +12,11 @@ namespace Vulkan {
 Window::Window(const WindowConfig& config) :
 	config_(config)
 {
-	window_ = SDL_CreateWindow(config.Title.c_str(), config.Width, config.Height, SDL_WINDOW_BORDERLESS | SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
+#if WIN32
+    flags |= SDL_WINDOW_BORDERLESS;
+#endif
+	window_ = SDL_CreateWindow(config.Title.c_str(), config.Width, config.Height, flags);
 	if( !window_ )
 	{
 		Throw(std::runtime_error("failed to init SDL Window."));
@@ -47,11 +51,6 @@ VkExtent2D Window::WindowSize() const
 	int width, height;
 	SDL_GetWindowSize(window_, &width, &height);
 	return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-}
-
-const char* Window::GetKeyName(const int key, const int scancode) const
-{
-	return "A";//glfwGetKeyName(key, scancode);
 }
 
 std::vector<const char*> Window::GetRequiredInstanceExtensions() const
@@ -155,7 +154,8 @@ void Window::attemptDragWindow() {
 
 void Window::InitGLFW()
 {
-	if( !SDL_Init(SDL_INIT_VIDEO) )
+    SDL_SetHint( SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1" );
+	if( !SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) )
 	{
 		Throw(std::runtime_error("failed to init SDL."));
 	}

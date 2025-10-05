@@ -14,9 +14,6 @@
 
 #include "Node.h"
 #include "Runtime/Engine.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorSets.hpp"
-#include "Vulkan/SwapChain.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -25,9 +22,8 @@ namespace Assets
     Scene::Scene(Vulkan::CommandPool& commandPool,
                  bool supportRayTracing)
     {
-        //int flags = supportRayTracing ? (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         int flags =  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        // host buffers
+
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
                                                     farAmbientCubeBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
@@ -112,8 +108,7 @@ namespace Assets
         }
         
         // static mesh to jolt mesh shape
-        NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine();
-        if (physicsEngine)
+        if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
             std::vector<JPH::RefConst<JPH::MeshShapeSettings> > meshShapes;
             for (auto& model : models_)
@@ -201,7 +196,7 @@ namespace Assets
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
             
             std::vector<std::vector<uint32_t>> slicedIndices;
-            const uint32_t maxIndicesPerSlice = 65535 * 3;
+            constexpr uint32_t maxIndicesPerSlice = 65535 * 3;
             
             // 将localIndices分片，每片最多65535*3个索引
             for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice) {
@@ -214,20 +209,20 @@ namespace Assets
 
             for ( int slice = 0; slice < processSection; ++slice )
             {
-                const auto indexOffset = static_cast<uint32_t>(indices.size());
-                const auto reorderOffset = static_cast<uint32_t>(reorders.size());
+                const auto localIndexOffset = static_cast<uint32_t>(indices.size());
+                const auto localReorderOffset = static_cast<uint32_t>(reorders.size());
                 
-                const auto& localIndices = slicedIndices[slice];
-                uint32_t realSize = uint32_t(localIndices.size());
-                offsets_.push_back({indexOffset, realSize, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+                const auto& localIndiceCount = slicedIndices[slice];
+                uint32_t realSize = uint32_t(localIndiceCount.size());
+                offsets_.push_back({localIndexOffset, realSize, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, localReorderOffset, 0});
 
-                std::vector<uint32_t> provoke(localIndices.size());
-                std::vector<uint32_t> reorder(localVertices.size() + localIndices.size() / 3);
-                std::vector<uint32_t> primIndices(localIndices.size());
+                std::vector<uint32_t> provoke(localIndiceCount.size());
+                std::vector<uint32_t> reorder(localVertices.size() + localIndiceCount.size() / 3);
+                std::vector<uint32_t> primIndices(localIndiceCount.size());
             
-                if (localIndices.size() > 0)
+                if (localIndiceCount.size() > 0)
                 {
-                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndices[0], realSize, localVertices.size()));
+                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndiceCount[0], realSize, localVertices.size()));
                 }
             
                 for ( size_t i = 0; i < provoke.size(); ++i )

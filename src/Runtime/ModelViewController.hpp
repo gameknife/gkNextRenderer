@@ -25,9 +25,9 @@ public:
 	 bool OnTouch(bool down, double xpos, double ypos);
 	 void OnScroll(double xoffset, double yoffset);
 
-	 bool OnGamepadInput(float leftStickX, float leftStickY, 
-	                    float rightStickX, float rightStickY,
-	                    float leftTrigger, float rightTrigger);
+	 bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
+	                    int16_t rightStickX, int16_t rightStickY,
+	                    int16_t leftTrigger, int16_t rightTrigger);
 	 bool UpdateCamera(double speed, double timeDelta);
 
 	void SetModelRotation(double x, double y)

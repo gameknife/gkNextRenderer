@@ -36,12 +36,22 @@ jobs:
       with:
         path: |
           .vcpkg
-        key: ${{ runner.os }}-desktop-vcpkg
+          .vcpkg_bincache
+        key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         vcpkg.bat windows
+      shell: cmd
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Compile gkNextRenderer
+      run: |
+        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+        build.bat windows
       shell: cmd
 
     - name: Save vcpkg to cache
@@ -50,12 +60,5 @@ jobs:
       with:
         path: |
           .vcpkg
+          .vcpkg_bincache
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-    - name: Compile gkNextRenderer
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        build.bat windows
-      shell: cmd
