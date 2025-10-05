@@ -46,7 +46,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-vcpkg
+        key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh macos
@@ -55,7 +55,7 @@ jobs:
       run: |
         slangc -v
         ./build.sh macos
-        
+
     - name: Save vcpkg to cache
       id: cache-vcpkg-save
       uses: actions/cache/save@v4

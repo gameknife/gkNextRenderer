@@ -36,7 +36,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-android-vcpkg
+        key: ${{ runner.os }}-android-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
@@ -47,7 +47,7 @@ jobs:
         sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
         sudo apt-get update
         sudo apt-get install vulkan-sdk
-        
+
     - name: Compile gkNextRenderer
       run: ./build.sh android
 

@@ -37,7 +37,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-vcpkg
+        key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: |
@@ -53,7 +53,7 @@ jobs:
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         build.bat windows
       shell: cmd
-      
+
     - name: Save vcpkg to cache
       id: cache-vcpkg-save
       uses: actions/cache/save@v4
