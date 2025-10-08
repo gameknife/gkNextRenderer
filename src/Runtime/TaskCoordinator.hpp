@@ -238,9 +238,8 @@ public:
     ~TaskThread()
     {
         complete_->wait();
-        terminate_->set();
         thread_->detach();
-        //thread_->join();
+        terminate_->set();
     }
 
     bool IsIdle()

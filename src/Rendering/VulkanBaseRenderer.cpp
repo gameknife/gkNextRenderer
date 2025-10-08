@@ -365,7 +365,7 @@ namespace Vulkan
         shaderFloat16Int8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR;
         shaderFloat16Int8Features.pNext = &hostQueryResetFeatures;
         shaderFloat16Int8Features.shaderFloat16 = true;
-        shaderFloat16Int8Features.shaderInt8 = true;
+        //shaderFloat16Int8Features.shaderInt8 = true;
 
         VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures = {};
         shaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
