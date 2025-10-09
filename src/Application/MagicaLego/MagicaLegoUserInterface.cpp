@@ -312,6 +312,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
             GetGameInstance()->SetCapturing(true);
         }
     }
+    
     BUTTON_TOOLTIP(LOCTEXT("Request Help"))
     ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
@@ -328,8 +329,8 @@ void MagicaLegoUserInterface::DrawTitleBar()
         }
         else
         {
-            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 8;
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 8;
+            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 16;
+            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
         }
     }
     BUTTON_TOOLTIP(LOCTEXT("Switch Render Quality"))

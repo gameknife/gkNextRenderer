@@ -53,4 +53,5 @@ struct UserSettings final
 	bool ShowEdge;
 	bool TickPhysics = true;
 	bool TickAnimation = false;
+    float SceneEpsilonScale = 1.0f;
 };

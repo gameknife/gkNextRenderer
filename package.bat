@@ -26,7 +26,7 @@ if "%MODE%"=="local" (
     exit /b 1
 )
 
-exit /b 0
+exit /b %errorlevel%
 
 :package_local
 set "CLEAN_PARAM=%1"
@@ -37,21 +37,26 @@ if "%CLEAN_PARAM%"=="clean" (
 )
 
 echo Building gkNextRenderer...
-call ./build.bat windows
+call ./build.bat windows || exit /b 1
 
 pushd %CD%
-cd build/windows
+cd build/windows/bin
 
 echo Cleaning up debug files and unnecessary assets...
 del /Q /S *.pdb 2>nul
 del /Q /S *d.exe 2>nul
 del /Q /S *d.lib 2>nul
 
+cd ../
+
 echo Copying package scripts...
 copy /Y ..\..\package\*.bat %CD% >nul 2>&1
 
 echo Creating gkNextRenderer-windows package...
+
+del /Q gkNextRenderer-windows.zip 2>nul
 tar -a -cf gkNextRenderer-windows.zip ./bin ./assets/locale ./assets/shaders ./assets/textures ./assets/fonts ./assets/models ./*.bat
+del /Q *.bat 2>nul
 
 move /Y gkNextRenderer-windows.zip ..\..\ >nul 2>&1
 popd
@@ -69,13 +74,13 @@ if "%VERSION%"=="" (
 )
 
 echo Building MagicaLego...
-call ./build.bat windows
+call ./build.bat windows || exit /b 1
 
 pushd %CD%
 cd build/windows/bin
 
 echo Creating lego asset package...
-.\bin\Packager.exe --out ../assets/paks/lego.pak --src ../assets --regex ".*.hdr|.*.png|.*.spv"
+call Packager.exe --out ../assets/paks/lego.pak --src assets --regex ".*.hdr|.*.png|.*.spv" || exit /b 1
 
 popd
 
