@@ -45,11 +45,16 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 ## 快速开始
 
-项目使用 CMake + Ninja 构建，三方依赖由 vcpkg 管理。建议部署良好网络环境(可完整访问github)，并已安装 Git。
+项目使用 CMake + Ninja / VS2022 构建，三方依赖由 vcpkg 管理。建议部署良好网络环境(可完整访问github)，并已安装 Git。
 
 Windows（Visual Studio 2022）：
 ``` bat
-rem 确保已安装Visual Studio 2022并选择c++工作负载
+rem windows前置安装: 
+rem 确保安装3.31版本的cmake，不要安装4.x版本的cmake
+rem 确保安装Visual Studio 2022并选择c++工作负载
+rem 如果使用Insider 2026版本，也需要至少安装VS2022 BuildTool
+rem 确保安装VulkanSDK 1.4.313.2
+rem 由于vcpkg部分tar包解压有乱码，请确保打开windows语言设置中的[使用Unicode UTF-8提供全球语言支持]
 vcpkg.bat windows
 build.bat windows
 run.bat windows
@@ -57,6 +62,7 @@ run.bat windows
 
 Windows（MSYS2 MinGW）：
 ``` shell
+# 无需前置安装
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
 ./vcpkg.sh mingw
 ./build.sh mingw
@@ -65,7 +71,8 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 
 Linux（示例：Ubuntu）：
 ``` shell
-sudo apt install build-essential ninja-build curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
+# 无需前置安装
+sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool
 ./vcpkg.sh linux
 ./build.sh linux
 ./run.sh linux
@@ -73,6 +80,7 @@ sudo apt install build-essential ninja-build curl unzip tar libxi-dev libxineram
 
 macOS：
 ``` shell
+# 无需前置安装
 brew install molten-vk glslang ninja
 ./vcpkg.sh macos
 ./build.sh macos
