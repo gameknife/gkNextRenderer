@@ -1216,7 +1216,7 @@ public struct FPathTracingRendererV2
 
         if (material.MaterialModel != MaterialDielectric)
         {
-            hitPrimaryVertex_.Position = hitPrimaryVertex_.Position - primaryRayDir_ * 0.03f;// - rayDir * rayLength * 0.005;
+            hitPrimaryVertex_.Position = hitPrimaryVertex_.Position - primaryRayDir_ * Camera.SceneEpsilonScale * 0.01f;// - rayDir * rayLength * 0.005;
         }  
 
         return true;
