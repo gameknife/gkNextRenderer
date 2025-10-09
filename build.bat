@@ -47,23 +47,7 @@ if defined FOUND (
     set "CMAKE=cmake"
 ) else (
     call :warn "cmake.exe 未在 PATH 中找到"
-    goto :error
-)
-exit /b 0
-
-:ensure_msbuild
-for %%X in (msbuild.exe) do (set "FOUND=%%~$PATH:X")
-if defined FOUND (
-    set "MSBUILD=msbuild"
-) else (
-    if exist "%programfiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\msbuild.exe" (
-        set "MSBUILD=%programfiles(x86)%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\msbuild.exe"
-    ) else if exist "%programfiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\msbuild.exe" (
-        set "MSBUILD=%programfiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\msbuild.exe"
-    ) else (
-        call :warn "msbuild.exe 未找到，请安装 Visual Studio 2022"
-        goto :error
-    )
+    exit /b 1
 )
 exit /b 0
 
@@ -105,7 +89,6 @@ set "BUILD_CONFIG=%~1"
 if "%BUILD_CONFIG%"=="" set "BUILD_CONFIG=RelWithDebInfo"
 call :require_toolchain || goto :error
 call :ensure_cmake || goto :error
-call :ensure_msbuild || goto :error
 call :prepare_build_dir "%BUILD_ROOT%\windows"
 cd "%BUILD_ROOT%\windows" || goto :error
 call :SETTIMER

@@ -838,6 +838,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowEdge = userSettings_.ShowEdge;
 
     ubo.ProgressiveRender = progressiveRendering_;
+    ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

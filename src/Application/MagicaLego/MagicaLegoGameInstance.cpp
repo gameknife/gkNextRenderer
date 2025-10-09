@@ -182,7 +182,7 @@ void MagicaLegoGameInstance::OnInit()
     PlayNextBGM();
 
     GetEngine().RequestLoadScene("assets/models/legobricks.glb");
-    //GetEngine().GetUserSettings().ShowVisualDebug = true;
+    GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)

@@ -74,13 +74,13 @@ public struct ALIGN_16 UniformBufferObject
  
     public float BFSigmaNormal;
     public uint BFSize;
- 
     public bool FastGather;
- 
     public bool FastInterpole;
+
     public bool DebugDraw_Lighting;
     public bool DisableSpatialReuse;
     public uint SuperResolution;
+    public float SceneEpsilonScale;
 };
 
 public struct ALIGN_16 NodeProxy
