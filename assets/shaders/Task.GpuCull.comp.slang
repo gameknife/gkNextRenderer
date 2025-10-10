@@ -202,7 +202,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     NodeProxy node = Bindless.GetGpuscene().Nodes[DTid.x];
     ModelData model = Bindless.GetGpuscene().Offsets[node.modelId];
-    float4x4 mvp = mul(Bindless.GetGpuscene().Camera[0].ViewProjection, node.worldTS);
+    float4x4 mvp = mul(Bindless.GetGpuscene().Camera[0].PrevViewProjectionUnJit, node.worldTS);
 
     bool shouldDraw = (node.visible > 0) && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
 
