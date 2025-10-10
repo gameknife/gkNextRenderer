@@ -241,8 +241,6 @@ void NextEngine::Start()
     physicsEngine_.reset(new NextPhysics());
     physicsEngine_->Start();
     
-    gameInstance_->OnInit();
-
     animationEngine_ = std::make_unique<NextAnimation>();
     animationEngine_->Start();
 
@@ -256,6 +254,8 @@ void NextEngine::Start()
     
     // init js engine
     InitJSEngine();
+
+    gameInstance_->OnInit();
 }
 
 bool NextEngine::HandleEvent(SDL_Event& event)
