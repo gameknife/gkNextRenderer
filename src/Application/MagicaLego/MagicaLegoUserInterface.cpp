@@ -228,7 +228,6 @@ void MagicaLegoUserInterface::DrawTitleBar()
             case 1:
                 PushLayout(0x0);
                 GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 512;
-                GetGameInstance()->GetEngine().GetUserSettings().Denoiser = false;
                 waiting_ = true;
                 waitingText_ = "Rendering...";
                 capture_ = true;
@@ -248,8 +247,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 return false;
             case 514:
                 PopLayout();
-                GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
-                GetGameInstance()->GetEngine().GetUserSettings().Denoiser = true;
+                GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 8;
                 counter = 0;
                 capture_ = false;
                 GetGameInstance()->SetCapturing(false);
@@ -503,7 +501,7 @@ void MagicaLegoUserInterface::DrawWatermark()
     ImGui::PushFont(bigFont_);
     ImGui::TextUnformatted("MagicaLEGO");
     ImGui::PopFont();
-    ImGui::Text("%s %s", ICON_FA_GITHUB, "https://github.com/gameknife/gkNextRenderer");
+    ImGui::Text("%s %s", ICON_FA_GITHUB, "https://github.com/gameknife/gkNextEngine");
     ImGui::End();
 }
 
@@ -525,6 +523,7 @@ void MagicaLegoUserInterface::DrawHUD()
 {
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
     ImGui::SetNextWindowPos(ImVec2(buildBarWidth + 30, viewportSize.y - 30), ImGuiCond_Always, ImVec2(0, 1));
+    ImGui::SetNextWindowSize(ImVec2(0,0));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
     ImGui::Begin("HUD", nullptr, panelFlags | ImGuiWindowFlags_NoBackground);

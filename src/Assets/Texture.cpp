@@ -18,8 +18,42 @@
 #include "ThirdParty/lzav/lzav.h"
 
 #include <spdlog/spdlog.h>
+#include <cstdint>
+#include <filesystem>
+#include <limits>
+#include <system_error>
 
 #define M_NEXT_PI 3.14159265358979323846f
+
+namespace
+{
+    constexpr uint32_t kHdrCacheMagic = 0x48445243; // 'HDRC'
+    constexpr uint32_t kHdrCacheVersion = 1;
+
+    struct HdrCacheHeader
+    {
+        uint32_t magic;
+        uint32_t version;
+        uint64_t originalSize;
+        uint64_t compressedSize;
+        uint64_t dataHash;
+    };
+
+    uint64_t HashBuffer(const uint8_t* data, size_t size)
+    {
+        constexpr uint64_t fnvOffset = 1469598103934665603ull;
+        constexpr uint64_t fnvPrime = 1099511628211ull;
+
+        uint64_t hash = fnvOffset;
+        for (size_t i = 0; i < size; ++i)
+        {
+            hash ^= static_cast<uint64_t>(data[i]);
+            hash *= fnvPrime;
+        }
+
+        return hash;
+    }
+}
 
 namespace Assets
 {
@@ -436,168 +470,240 @@ namespace Assets
                     if (hdr)
                     {
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texhdr");
-                       // 在hdr加载的else分支中添加保存逻辑
-                        if (!std::filesystem::exists(cacheFileName))
-                        {
-                            // 这里会有风险，这个任务在线程，关闭的时候会强制结束线程，文件只写了一半
+                        std::filesystem::path cacheFilePath(cacheFileName);
+                        bool cacheLoaded = false;
+                        std::vector<std::vector<float>> mipLevels;
+                        std::vector<std::pair<int, int>> mipDimensions;
 
-                            stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
-                            pixels = stbdata;
-                            format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                            size = width * height * 4 * sizeof(float);
-                        
-                            // Extract spherical harmonics from the base level
-                            SphericalHarmonics sh = ProjectHdrToSh((float*)pixels, width, height);
-                            hdrSphericalHarmonics_[newTextureIdx] = sh;
-                        
-                            // Prefilter environment map for different roughness levels
-                            std::vector<std::vector<float>> mipLevels;
-                            std::vector<std::pair<int, int>> mipDimensions;
-                            PrefilterHdrEnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
-                        
-                            miplevel = static_cast<uint32_t>(mipLevels.size());
-                            
-                            // 保存到缓存文件
-                            std::ofstream cacheFile(cacheFileName, std::ios::binary);
+                        if (std::filesystem::exists(cacheFilePath))
+                        {
+                            std::ifstream cacheFile(cacheFileName, std::ios::binary);
                             if (cacheFile.is_open())
                             {
-                                // 先将所有数据写入内存缓冲区
-                                std::vector<uint8_t> uncompressedData;
-                                
-                                // 写入头部信息
-                                auto writeToBuffer = [&](const void* data, size_t size) {
-                                    const uint8_t* bytes = static_cast<const uint8_t*>(data);
-                                    uncompressedData.insert(uncompressedData.end(), bytes, bytes + size);
-                                };
-                                
-                                writeToBuffer(&width, sizeof(int));
-                                writeToBuffer(&height, sizeof(int));
-                                writeToBuffer(&miplevel, sizeof(uint32_t));
-                                
-                                // 写入球谐系数
-                                writeToBuffer(&sh, sizeof(SphericalHarmonics));
-                                
-                                // 写入mip尺寸信息
-                                size_t mipCount = mipDimensions.size();
-                                writeToBuffer(&mipCount, sizeof(size_t));
-                                for (const auto& dim : mipDimensions)
+                                HdrCacheHeader header{};
+                                cacheFile.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+                                bool validCache = cacheFile.gcount() == sizeof(header)
+                                    && header.magic == kHdrCacheMagic
+                                    && header.version == kHdrCacheVersion
+                                    && header.originalSize > 0
+                                    && header.compressedSize > 0
+                                    && header.originalSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max())
+                                    && header.compressedSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max())
+                                    && header.originalSize <= static_cast<uint64_t>(std::numeric_limits<int>::max())
+                                    && header.compressedSize <= static_cast<uint64_t>(std::numeric_limits<int>::max());
+
+                                if (validCache)
                                 {
-                                    writeToBuffer(&dim.first, sizeof(int));
-                                    writeToBuffer(&dim.second, sizeof(int));
-                                }
-                                
-                                // 写入原始像素数据
-                                writeToBuffer(pixels, size);
-                                
-                                // 写入mip级别数据
-                                for (const auto& mipData : mipLevels)
-                                {
-                                    size_t mipSize = mipData.size();
-                                    writeToBuffer(&mipSize, sizeof(size_t));
-                                    writeToBuffer(mipData.data(), mipSize * sizeof(float));
-                                }
-                                
-                                // 压缩数据
-                                size_t compressedSize = lzav_compress_bound_hi(int(uncompressedData.size()));
-                                std::vector<uint8_t> compressedData(compressedSize);
-                                
-                                size_t actualCompressedSize = lzav_compress_hi(
-                                    uncompressedData.data(), compressedData.data(), 
-                                    int(uncompressedData.size()), int(compressedSize));
-                                
-                                if (actualCompressedSize > 0)
-                                {
-                                    // 写入原始大小和压缩后的数据
-                                    size_t originalSize = uncompressedData.size();
-                                    cacheFile.write(reinterpret_cast<const char*>(&originalSize), sizeof(size_t));
-                                    cacheFile.write(reinterpret_cast<const char*>(&actualCompressedSize), sizeof(size_t));
-                                    cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                                    size_t compressedSize = static_cast<size_t>(header.compressedSize);
+                                    size_t originalSize = static_cast<size_t>(header.originalSize);
+
+                                    std::vector<uint8_t> compressedData(compressedSize);
+                                    cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+                                    if (!cacheFile)
+                                    {
+                                        validCache = false;
+                                    }
+                                    else
+                                    {
+                                        std::vector<uint8_t> uncompressedData(originalSize);
+                                        size_t decompressedSize = lzav_decompress(
+                                            compressedData.data(), uncompressedData.data(),
+                                            static_cast<int>(compressedSize), static_cast<int>(originalSize));
+
+                                        if (decompressedSize != originalSize
+                                            || HashBuffer(uncompressedData.data(), uncompressedData.size()) != header.dataHash)
+                                        {
+                                            validCache = false;
+                                        }
+                                        else
+                                        {
+                                            size_t offset = 0;
+                                            auto readFromBuffer = [&](void* dst, size_t readSize) -> bool
+                                            {
+                                                if (offset + readSize > uncompressedData.size())
+                                                {
+                                                    return false;
+                                                }
+                                                std::memcpy(dst, uncompressedData.data() + offset, readSize);
+                                                offset += readSize;
+                                                return true;
+                                            };
+
+                                            SphericalHarmonics sh{};
+                                            size_t mipCount = 0;
+
+                                            if (!readFromBuffer(&width, sizeof(int))
+                                                || !readFromBuffer(&height, sizeof(int))
+                                                || !readFromBuffer(&miplevel, sizeof(uint32_t))
+                                                || !readFromBuffer(&sh, sizeof(SphericalHarmonics))
+                                                || !readFromBuffer(&mipCount, sizeof(size_t)))
+                                            {
+                                                validCache = false;
+                                            }
+                                            else
+                                            {
+                                                hdrSphericalHarmonics_[newTextureIdx] = sh;
+                                                mipDimensions.resize(mipCount);
+                                                for (auto& dim : mipDimensions)
+                                                {
+                                                    if (!readFromBuffer(&dim.first, sizeof(int))
+                                                        || !readFromBuffer(&dim.second, sizeof(int)))
+                                                    {
+                                                        validCache = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            if (validCache)
+                                            {
+                                                format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                                                size = width * height * 4 * sizeof(float);
+                                                stbdata = reinterpret_cast<uint8_t*>(malloc(size));
+                                                pixels = stbdata;
+                                                if (!readFromBuffer(pixels, size))
+                                                {
+                                                    validCache = false;
+                                                }
+                                            }
+
+                                            if (validCache)
+                                            {
+                                                mipLevels.clear();
+                                                mipLevels.resize(mipCount);
+                                                for (auto& mipData : mipLevels)
+                                                {
+                                                    size_t mipSize = 0;
+                                                    if (!readFromBuffer(&mipSize, sizeof(size_t)))
+                                                    {
+                                                        validCache = false;
+                                                        break;
+                                                    }
+                                                    mipData.resize(mipSize);
+                                                    if (!readFromBuffer(mipData.data(), mipSize * sizeof(float)))
+                                                    {
+                                                        validCache = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            if (validCache)
+                                            {
+                                                textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                                                    commandPool_, width, height, miplevel, format,
+                                                    pixels, size, mipLevels, mipDimensions);
+                                                cacheLoaded = true;
+                                            }
+                                        }
+                                    }
                                 }
 
                                 cacheFile.close();
                             }
-                        
+
+                            if (!cacheLoaded)
+                            {
+                                std::error_code removeError;
+                                std::filesystem::remove(cacheFilePath, removeError);
+                            }
+                        }
+
+                        if (!cacheLoaded)
+                        {
+                            stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(
+                                copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
+                            pixels = stbdata;
+                            format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                            size = width * height * 4 * sizeof(float);
+
+                            SphericalHarmonics sh = ProjectHdrToSh((float*)pixels, width, height);
+                            hdrSphericalHarmonics_[newTextureIdx] = sh;
+
+                            PrefilterHdrEnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
+                            miplevel = static_cast<uint32_t>(mipLevels.size());
+
+                            std::vector<uint8_t> uncompressedData;
+                            auto writeToBuffer = [&](const void* src, size_t writeSize)
+                            {
+                                const uint8_t* bytes = static_cast<const uint8_t*>(src);
+                                uncompressedData.insert(uncompressedData.end(), bytes, bytes + writeSize);
+                            };
+
+                            writeToBuffer(&width, sizeof(int));
+                            writeToBuffer(&height, sizeof(int));
+                            writeToBuffer(&miplevel, sizeof(uint32_t));
+                            writeToBuffer(&sh, sizeof(SphericalHarmonics));
+
+                            size_t mipCount = mipDimensions.size();
+                            writeToBuffer(&mipCount, sizeof(size_t));
+                            for (const auto& dim : mipDimensions)
+                            {
+                                writeToBuffer(&dim.first, sizeof(int));
+                                writeToBuffer(&dim.second, sizeof(int));
+                            }
+
+                            writeToBuffer(pixels, size);
+
+                            for (const auto& mipData : mipLevels)
+                            {
+                                size_t mipSize = mipData.size();
+                                writeToBuffer(&mipSize, sizeof(size_t));
+                                writeToBuffer(mipData.data(), mipSize * sizeof(float));
+                            }
+
+                            size_t uncompressedSize = uncompressedData.size();
+                            if (uncompressedSize <= static_cast<size_t>(std::numeric_limits<int>::max()))
+                            {
+                                size_t compressedBound = lzav_compress_bound_hi(int(uncompressedSize));
+                                std::vector<uint8_t> compressedData(compressedBound);
+                                size_t actualCompressedSize = lzav_compress_hi(
+                                    uncompressedData.data(), compressedData.data(),
+                                    int(uncompressedSize), int(compressedBound));
+
+                                if (actualCompressedSize > 0)
+                                {
+                                    HdrCacheHeader header{};
+                                    header.magic = kHdrCacheMagic;
+                                    header.version = kHdrCacheVersion;
+                                    header.originalSize = static_cast<uint64_t>(uncompressedSize);
+                                    header.compressedSize = static_cast<uint64_t>(actualCompressedSize);
+                                    header.dataHash = HashBuffer(uncompressedData.data(), uncompressedData.size());
+
+                                    std::filesystem::path tempCachePath = cacheFilePath;
+                                    tempCachePath += ".tmp";
+
+                                    std::ofstream cacheFile(tempCachePath, std::ios::binary | std::ios::trunc);
+                                    if (cacheFile.is_open())
+                                    {
+                                        cacheFile.write(reinterpret_cast<const char*>(&header), sizeof(header));
+                                        cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                                        cacheFile.flush();
+                                        cacheFile.close();
+
+                                        std::error_code removeError;
+                                        std::filesystem::remove(cacheFilePath, removeError);
+
+                                        std::error_code renameError;
+                                        std::filesystem::rename(tempCachePath, cacheFilePath, renameError);
+                                        if (renameError)
+                                        {
+                                            std::filesystem::remove(tempCachePath);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        std::error_code removeTempError;
+                                        std::filesystem::remove(tempCachePath, removeTempError);
+                                    }
+                                }
+                            }
+
                             textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
                                 commandPool_, width, height, miplevel, format,
                                 pixels, size, mipLevels, mipDimensions);
                         }
-                        else
-                        {
-                            // 从缓存文件读取
-                            std::ifstream cacheFile(cacheFileName, std::ios::binary);
-                            if (cacheFile.is_open())
-                            {
-                                // 读取原始大小和压缩大小
-                                size_t originalSize, compressedSize;
-                                cacheFile.read(reinterpret_cast<char*>(&originalSize), sizeof(size_t));
-                                cacheFile.read(reinterpret_cast<char*>(&compressedSize), sizeof(size_t));
-                                
-                                // 读取压缩数据
-                                std::vector<uint8_t> compressedData(compressedSize);
-                                cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
-                                
-                                // 解压缩数据
-                                std::vector<uint8_t> uncompressedData(originalSize);
-                                size_t decompressedSize = lzav_decompress(
-                                    compressedData.data(), uncompressedData.data(),
-                                    int(compressedSize), int(originalSize));
-                                
-                                if (decompressedSize == originalSize)
-                                {
-                                    // 从解压缩的数据中读取各个字段
-                                    size_t offset = 0;
-                                    auto readFromBuffer = [&](void* data, size_t size) {
-                                        std::memcpy(data, uncompressedData.data() + offset, size);
-                                        offset += size;
-                                    };
-                                    
-                                    // 读取头部信息
-                                    readFromBuffer(&width, sizeof(int));
-                                    readFromBuffer(&height, sizeof(int));
-                                    readFromBuffer(&miplevel, sizeof(uint32_t));
-                                    
-                                    // 读取球谐系数
-                                    SphericalHarmonics sh;
-                                    readFromBuffer(&sh, sizeof(SphericalHarmonics));
-                                    hdrSphericalHarmonics_[newTextureIdx] = sh;
-                                    
-                                    // 读取mip尺寸信息
-                                    std::vector<std::pair<int, int>> mipDimensions;
-                                    size_t mipCount;
-                                    readFromBuffer(&mipCount, sizeof(size_t));
-                                    mipDimensions.resize(mipCount);
-                                    for (auto& dim : mipDimensions)
-                                    {
-                                        readFromBuffer(&dim.first, sizeof(int));
-                                        readFromBuffer(&dim.second, sizeof(int));
-                                    }
-                                    
-                                    // 读取原始像素数据
-                                    format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                                    size = width * height * 4 * sizeof(float);
-                                    stbdata = reinterpret_cast<uint8_t*>(malloc(size));
-                                    pixels = stbdata;
-                                    readFromBuffer(pixels, size);
-                                    
-                                    // 读取mip级别数据
-                                    std::vector<std::vector<float>> mipLevels(mipCount);
-                                    for (auto& mipData : mipLevels)
-                                    {
-                                        size_t mipSize;
-                                        readFromBuffer(&mipSize, sizeof(size_t));
-                                        mipData.resize(mipSize);
-                                        readFromBuffer(mipData.data(), mipSize * sizeof(float));
-                                    }
-                                    
-                                    textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
-                                        commandPool_, width, height, miplevel, format,
-                                        pixels, size, mipLevels, mipDimensions);
-                                }
-                                
-                                cacheFile.close();
-                            }
-                        }
-                        // can cache to disk, next round will create image directly
                     }
                     else
                     {
