@@ -24,9 +24,6 @@ jobs:
       SDK_VERSION: 1.4.313.1
     steps:
     - uses: actions/checkout@v4
-    - name: Install macOS dependencies
-      run: |
-        brew install ninja
     - name: Install Vulkan SDK
       run: |
         brew install molten-vk
@@ -46,7 +43,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
+        key: ${{ runner.os }}-${{ github.ref_name }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh macos

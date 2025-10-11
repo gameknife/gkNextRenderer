@@ -37,7 +37,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
+        key: ${{ runner.os }}-${{ github.ref_name }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: |

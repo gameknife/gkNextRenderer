@@ -36,7 +36,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-android-bincache
+        key: ${{ runner.os }}-${{ github.ref_name }}-android-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh android
