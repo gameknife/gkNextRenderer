@@ -5,17 +5,18 @@ on:
     branches:
       - main
       - dev
-  push:
-    branches:
-      - main
       - 'releases/**'
-    paths:
-      - '.github/workflows/linux.yml'
-      - 'src/**'
-      - 'assets/shaders/**'
-      - '*.sh'
-      - '*.bat'
-      - '**/CMakeLists.txt'
+  # push:
+  #   branches:
+  #     - main
+  #     - 'releases/**'
+  #   paths:
+  #     - '.github/workflows/macos.yml'
+  #     - 'src/**'
+  #     - 'assets/shaders/**'
+  #     - '*.sh'
+  #     - '*.bat'
+  #     - '**/CMakeLists.txt'
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -41,7 +42,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
+        key: ${{ runner.os }}-${{ github.base_ref }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: ./vcpkg.sh linux
