@@ -113,7 +113,7 @@ namespace Assets
             std::vector<JPH::RefConst<JPH::MeshShapeSettings> > meshShapes;
             for (auto& model : models_)
             {
-                if (model.NumberOfIndices() < 65535 * 3)
+                if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
                     meshShapes.push_back( JPH::RefConst<JPH::MeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
                 }
@@ -130,8 +130,11 @@ namespace Assets
                 {
                     JPH::EMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
                     JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
-                    JPH::BodyID id = physicsEngine->CreateMeshBody(meshShapes[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                    node->BindPhysicsBody(id);
+                    if ( meshShapes[node->GetModel()].GetPtr() && meshShapes[node->GetModel()]->mIndexedTriangles.size() > 0)
+                    {
+                        JPH::BodyID id = physicsEngine->CreateMeshBody(meshShapes[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
+                        node->BindPhysicsBody(id);
+                    }
                 }
             }
 
