@@ -6,17 +6,17 @@ on:
       - main
       - dev
       - 'releases/**'
-  # push:
-  #   branches:
-  #     - main
-  #     - 'releases/**'
-  #   paths:
-  #     - '.github/workflows/macos.yml'
-  #     - 'src/**'
-  #     - 'assets/shaders/**'
-  #     - '*.sh'
-  #     - '*.bat'
-  #     - '**/CMakeLists.txt'
+  push:
+    branches:
+      - main
+      - 'releases/**'
+    paths:
+      - '.github/workflows/macos.yml'
+      - 'src/**'
+      - 'assets/shaders/**'
+      - '*.sh'
+      - '*.bat'
+      - '**/CMakeLists.txt'
 jobs:
   build:
 
@@ -38,7 +38,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-${{ github.base_ref }}-desktop-bincache
+        key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile vcpkg dependencies
       run: |

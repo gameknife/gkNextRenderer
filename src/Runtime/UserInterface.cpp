@@ -115,7 +115,7 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
     
-    vector<uint8_t> tmpData;
+    std::vector<uint8_t> tmpData;
     if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-Regular.ttf", tmpData))
     {
         void* dataSrc = IM_ALLOC(tmpData.size());
