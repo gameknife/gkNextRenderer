@@ -9,7 +9,7 @@ namespace Utilities
 {
     namespace Localization
     {
-        inline std::map<std::string, std::string> locTexts;
+        static std::map<std::string, std::string> locTexts;
         
         static void AddLocText( const char* srcText, const char* locText )
         {
