@@ -52,13 +52,16 @@ namespace Utilities
             std::filesystem::path directory = fullPath.parent_path();
             std::string pattern = fullPath.filename().string();
 
-            for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-                if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
-                    normlizedPath =  std::filesystem::absolute(entry.path()).string();
-                    break;
-                }
+            if ( std::filesystem::exists(directory) )
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+                    if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
+                        normlizedPath =  std::filesystem::absolute(entry.path()).string();
+                        break;
+                    }
+                }    
             }
-
+            
             return normlizedPath;
         }
     }

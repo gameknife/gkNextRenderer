@@ -17,6 +17,8 @@ namespace Utilities
 
         bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
+            outData.clear();
+            
             // pak mounted, read through offset and size
             if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
             {

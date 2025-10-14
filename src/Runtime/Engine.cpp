@@ -405,6 +405,17 @@ void NextEngine::End()
 {
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+
+    // sound manager unit
+    soundDataMaps_.clear();
+    for (auto& [name, sound] : soundMaps_)
+    {
+        ma_sound_uninit(sound.get());
+    }
+    for (auto& [name, decoder] : soundDecoderMaps_)
+    {
+        ma_decoder_uninit(decoder.get());
+    }
     
     physicsEngine_->Stop();
     animationEngine_->Stop();
@@ -429,7 +440,17 @@ void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume
     if( soundMaps_.find(soundName) == soundMaps_.end() )
     {
         auto sound = new ma_sound();
-        ma_sound_init_from_file(audioEngine_.get(), Utilities::FileHelper::GetPlatformFilePath(soundName.c_str()).c_str(), 0, NULL, NULL, sound);
+
+        soundDataMaps_[soundName] = std::vector<uint8_t>();
+
+        // TODO: the music data memory will saved to soundDataMaps_, need manager more careful later
+        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(soundName,  soundDataMaps_[soundName]))
+        {
+            soundDecoderMaps_[soundName].reset(new ma_decoder());
+            ma_decoder_init_memory( soundDataMaps_[soundName].data(),  soundDataMaps_[soundName].size(), nullptr, soundDecoderMaps_[soundName].get());
+            ma_sound_init_from_data_source(audioEngine_.get(), soundDecoderMaps_[soundName].get(), 0, nullptr, sound);
+        }
+        
         soundMaps_[soundName].reset(sound);
     }
 
