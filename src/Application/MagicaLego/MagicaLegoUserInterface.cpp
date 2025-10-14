@@ -100,19 +100,31 @@ MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameIns
 
 void MagicaLegoUserInterface::OnInitUI()
 {
+    std::vector<uint8_t> tmpData;
+    
     if (bigFont_ == nullptr)
     {
         ImFontGlyphRangesBuilder builder;
         builder.AddText("MagicaLego");
         const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-        bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 72, nullptr, glyphRange);
+        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-BoldCondensed.ttf", tmpData))
+        {
+            void* dataSrc = IM_ALLOC(tmpData.size());
+            std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+            bigFont_ = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), 72, nullptr, glyphRange);
+        }
     }
 
     if (boldFont_ == nullptr)
     {
         ImFontGlyphRangesBuilder builder;
         const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-        boldFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 20, nullptr, glyphRange);
+        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-BoldCondensed.ttf", tmpData))
+        {
+            void* dataSrc = IM_ALLOC(tmpData.size());
+            std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+            boldFont_ = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), 20, nullptr, glyphRange);
+        }
     }
 
     introStep_ = EIS_Entry;

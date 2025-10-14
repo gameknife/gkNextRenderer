@@ -1,5 +1,8 @@
 #include "FileHelper.hpp"
 #include <spdlog/spdlog.h>
+#include <optional>
+#include <system_error>
+#include <cstring>
 
 namespace Utilities
 {
@@ -14,6 +17,8 @@ namespace Utilities
 
         bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
+            outData.clear();
+            
             // pak mounted, read through offset and size
             if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
             {
@@ -58,39 +63,102 @@ namespace Utilities
 
             outData.resize(pakEntry.uncompressSize);
             int l = lzav_decompress( compBuf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
+            if (l < 0)
+            {
+                if (pakEntry.size == pakEntry.uncompressSize)
+                {
+                    memcpy(outData.data(), compBuf, pakEntry.size);
+                    free(compBuf);
+                    return true;
+                }
+
+                SPDLOG_ERROR("LoadFile: Failed to decompress entry: {}", entry);
+                free(compBuf);
+                return false;
+            }
+
             free(compBuf);
 
             return true;
         }
 
-        void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex )
+        void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex, bool enableCompression, const std::string& manifestPath )
         {
             filemaps.clear();
-            
-            std::string absSrcPath = FileHelper::GetPlatformFilePath(srcDir.c_str());
-            std::string absRootPath = FileHelper::GetPlatformFilePath(rootPath.c_str());
+
+            auto resolvePath = [](const std::string& path) {
+                return std::filesystem::absolute(FileHelper::GetPlatformFilePath(path.c_str()));
+            };
+
+            std::filesystem::path absSrcPath = resolvePath(srcDir);
+            std::filesystem::path absRootPath = resolvePath(rootPath);
+
+            if (!std::filesystem::exists(absSrcPath))
+            {
+                SPDLOG_ERROR("PakAll: Source directory does not exist: {}", absSrcPath.string());
+                return;
+            }
+
+            if (!std::filesystem::exists(absRootPath))
+            {
+                SPDLOG_ERROR("PakAll: Root directory does not exist: {}", absRootPath.string());
+                return;
+            }
+
+            std::optional<std::regex> filterRegex;
+            if (!regex.empty())
+            {
+                try
+                {
+                    filterRegex.emplace(regex);
+                }
+                catch (const std::regex_error& e)
+                {
+                    SPDLOG_ERROR("PakAll: Invalid regex '{}': {}", regex, e.what());
+                    return;
+                }
+            }
 
             for (const auto& entry : std::filesystem::recursive_directory_iterator(absSrcPath)) {
                 if (entry.is_regular_file()) {
-                    std::string entryPath = entry.path().string();
-                    std::string entryRelativePath = entryPath.substr(absRootPath.size());
-                    std::replace(entryRelativePath.begin(), entryRelativePath.end(), '\\', '/');
-
-                    if (!regex.empty() && !std::regex_match(entryRelativePath, std::regex(regex))) {
+                    std::filesystem::path entryPath = entry.path();
+                    std::error_code relativeError;
+                    std::filesystem::path entryRelativePath = std::filesystem::relative(entryPath, absRootPath, relativeError);
+                    if (relativeError)
+                    {
+                        SPDLOG_WARN("PakAll: Failed to relativize {} against {}: {}", entryPath.string(), absRootPath.string(), relativeError.message());
                         continue;
                     }
-                    
+
+                    std::string entryRelativePathString = entryRelativePath.generic_string();
+
+                    if (entryRelativePathString.empty())
+                    {
+                        SPDLOG_WARN("PakAll: Skipping empty relative path for {}", entryPath.string());
+                        continue;
+                    }
+
+                    if (filterRegex.has_value() && !std::regex_match(entryRelativePathString, filterRegex.value())) {
+                        continue;
+                    }
+
+                    if (!entryRelativePathString.empty() && entryRelativePathString.rfind("..", 0) == 0)
+                    {
+                        SPDLOG_WARN("PakAll: Skipping file outside root: {}", entryPath.string());
+                        continue;
+                    }
+
                     std::ifstream reader(entryPath, std::ios::binary);
                     if (!reader.is_open()) {
-                        SPDLOG_ERROR("PakAll: Failed to open file: {}", entryPath);
+                        SPDLOG_ERROR("PakAll: Failed to open file: {}", entryPath.string());
                         continue;
                     }
                     reader.seekg(0, std::ios::end);
                     size_t fileSize = reader.tellg();
                     reader.close();
-                                        
-                    filemaps[entryRelativePath] = {entryRelativePath, 0, 0, static_cast<uint32_t>(fileSize), static_cast<uint32_t>(fileSize)};
-                    SPDLOG_INFO("entry: {} <- {}", entryRelativePath, entryPath);
+
+                    filemaps[entryRelativePathString] = {entryRelativePathString, 0, 0, static_cast<uint32_t>(fileSize), static_cast<uint32_t>(fileSize)};
+                    SPDLOG_INFO("entry: {} <- {}", entryRelativePathString, entryPath.string());
                 }
             }
 
@@ -117,12 +185,13 @@ namespace Utilities
             writer.seekp(offset);
             // compress and write data
             for (auto& [key, value] : filemaps) {
-                std::ifstream reader(absRootPath + value.name, std::ios::binary);
+                std::filesystem::path sourcePath = absRootPath / value.name;
+                std::ifstream reader(sourcePath, std::ios::binary);
                 if (!reader.is_open()) {
-                    SPDLOG_ERROR("PakAll: Failed to open file: {}", absRootPath + value.name);
+                    SPDLOG_ERROR("PakAll: Failed to open file: {}", sourcePath.string());
                     continue;
                 }
-                
+
                 reader.seekg(0, std::ios::end);
                 size_t fileSize = reader.tellg();
                 reader.seekg(0, std::ios::beg);
@@ -130,27 +199,77 @@ namespace Utilities
                 std::vector<uint8_t> buffer(fileSize);
                 reader.read(reinterpret_cast<char*>(buffer.data()), fileSize);
                 reader.close();
-                                
-                int maxLen = lzav_compress_bound_hi( static_cast<int>(buffer.size()) );
-                void* compBuf = malloc( maxLen );
-                int compLen = lzav_compress_hi( buffer.data(), compBuf, static_cast<int>(buffer.size()), maxLen );
 
-                writer.write(reinterpret_cast<const char*>(compBuf), compLen);
-                value.size = compLen;
+                if (enableCompression)
+                {
+                    int maxLen = lzav_compress_bound_hi( static_cast<int>(buffer.size()) );
+                    void* compBuf = malloc( maxLen );
+                    int compLen = lzav_compress_hi( buffer.data(), compBuf, static_cast<int>(buffer.size()), maxLen );
 
-                free(compBuf);
+                    writer.write(reinterpret_cast<const char*>(compBuf), compLen);
+                    value.size = compLen;
+
+                    free(compBuf);
+                }
+                else
+                {
+                    writer.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
+                    value.size = static_cast<uint32_t>(buffer.size());
+                }
             }
 
             // rewrite offset and size
             writer.seekp(pos);
-            for (const auto& [key, value] : filemaps) {
+            for (auto& [key, value] : filemaps) {
+                value.offset = offset;
                 writer.write(reinterpret_cast<const char*>(&offset), sizeof(uint32_t));
                 writer.write(reinterpret_cast<const char*>(&value.size), sizeof(uint32_t));
                 writer.write(reinterpret_cast<const char*>(&value.uncompressSize), sizeof(uint32_t));
                 offset += value.size;
             }
-            
+
             writer.close();
+
+            if (!manifestPath.empty())
+            {
+                std::filesystem::path manifest(manifestPath);
+                if (!manifest.is_absolute())
+                {
+                    manifest = std::filesystem::absolute(manifest);
+                }
+
+                if (manifest.has_parent_path())
+                {
+                    FileHelper::EnsureDirectoryExists(manifest.parent_path());
+                }
+
+                std::ofstream manifestWriter(manifest, std::ios::binary);
+                if (!manifestWriter.is_open())
+                {
+                    SPDLOG_ERROR("PakAll: Failed to open manifest for writing: {}", manifest.string());
+                }
+                else
+                {
+                    manifestWriter << "{\n  \"entries\": [\n";
+                    bool first = true;
+                    for (const auto& [key, value] : filemaps)
+                    {
+                        if (!first)
+                        {
+                            manifestWriter << ",\n";
+                        }
+                        first = false;
+                        manifestWriter << "    {\n"
+                                       << "      \"name\": \"" << value.name << "\",\n"
+                                       << "      \"offset\": " << value.offset << ",\n"
+                                       << "      \"size\": " << value.size << ",\n"
+                                       << "      \"uncompressedSize\": " << value.uncompressSize << ",\n"
+                                       << "      \"compressed\": " << (enableCompression ? "true" : "false") << "\n"
+                                       << "    }";
+                    }
+                    manifestWriter << "\n  ]\n}\n";
+                }
+            }
         }
 
         void FPackageFileSystem::Reset()

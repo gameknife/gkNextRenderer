@@ -232,23 +232,28 @@ void SceneList::ScanScenes()
 {
     // add relative path
     std::string modelPath = "assets/models/";
-    std::string path = Utilities::FileHelper::GetPlatformFilePath(modelPath.c_str());
-    SPDLOG_INFO("Scanning dir: {}", path);
-    for (const auto& entry : std::filesystem::directory_iterator(path))
-    {
-        std::filesystem::path filename = entry.path().filename();
-        std::string ext = entry.path().extension().string();
-        if (ext != ".glb" && ext != ".gltf") continue;
-        AllScenes.push_back((modelPath / filename).string());
-    }
-    
-    // sort the scene
-    std::sort(AllScenes.begin(), AllScenes.end());
+    std::filesystem::path path = Utilities::FileHelper::GetPlatformFilePath(modelPath.c_str());
 
-    AllScenes.insert(AllScenes.begin(), "RTIO.proc");
-    AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
+    // if with models, scan
+    if (std::filesystem::exists(path))
+    {
+        SPDLOG_INFO("Scanning dir: {}", path.string());
+        for (const auto& entry : std::filesystem::directory_iterator(path))
+        {
+            std::filesystem::path filename = entry.path().filename();
+            std::string ext = entry.path().extension().string();
+            if (ext != ".glb" && ext != ".gltf") continue;
+            AllScenes.push_back((modelPath / filename).string());
+        }
     
-    SPDLOG_INFO("Scene found: {}", AllScenes.size());
+        // sort the scene
+        std::sort(AllScenes.begin(), AllScenes.end());
+
+        AllScenes.insert(AllScenes.begin(), "RTIO.proc");
+        AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
+    
+        SPDLOG_INFO("Scene found: {}", AllScenes.size());
+    }
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)

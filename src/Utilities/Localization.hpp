@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <fstream>
+#include <sstream>
 
 namespace Utilities
 {
@@ -28,18 +29,24 @@ namespace Utilities
 
         static void ReadLocTexts(const char* localeFilePath)
         {
-            // Read from file
-            std::ifstream file(Utilities::FileHelper::GetNormalizedFilePath(localeFilePath));
-            if(file.is_open())
+            std::vector<uint8_t> fileData;
+            Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(localeFilePath, fileData);
+
+            if(!fileData.empty())
             {
+                std::string content(fileData.begin(), fileData.end());
+                std::istringstream stream(content);
                 std::string line;
-                while(std::getline(file, line))
+                
+                while(std::getline(stream, line))
                 {
-                    std::string srcText = line.substr(0, line.find(";"));
-                    std::string locText = line.substr(line.find(";") + 1);
-                    AddLocText(srcText.c_str(), locText.c_str());
+                    size_t separatorPos = line.find(';');
+                    if(separatorPos != std::string::npos)
+                    {
+                        AddLocText(line.substr(0, separatorPos).c_str(), 
+                                   line.substr(separatorPos + 1).c_str());
+                    }
                 }
-                file.close();
             }
         }
 

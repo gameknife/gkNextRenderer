@@ -258,7 +258,9 @@ private:
 	// audio
 	std::unique_ptr<struct ma_engine> audioEngine_;
 	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
-
+    std::unordered_map<std::string, std::vector<uint8_t> > soundDataMaps_;
+    std::unordered_map<std::string, std::unique_ptr<ma_decoder> > soundDecoderMaps_;
+    
 	// physics
 	std::unique_ptr<NextPhysics> physicsEngine_;
 

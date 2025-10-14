@@ -52,13 +52,16 @@ namespace Utilities
             std::filesystem::path directory = fullPath.parent_path();
             std::string pattern = fullPath.filename().string();
 
-            for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-                if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
-                    normlizedPath =  std::filesystem::absolute(entry.path()).string();
-                    break;
-                }
+            if ( std::filesystem::exists(directory) )
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+                    if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
+                        normlizedPath =  std::filesystem::absolute(entry.path()).string();
+                        break;
+                    }
+                }    
             }
-
+            
             return normlizedPath;
         }
     }
@@ -136,7 +139,7 @@ namespace Utilities
             //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
             
             // Paking
-            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "");
+            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "", bool enableCompression = true, const std::string& manifestPath = "");
 
             static FPackageFileSystem& GetInstance()
             {

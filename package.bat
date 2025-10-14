@@ -80,7 +80,7 @@ pushd %CD%
 cd build/windows/bin
 
 echo Creating lego asset package...
-call Packager.exe --out ../assets/paks/lego.pak --src assets --regex ".*.hdr|.*.png|.*.spv" || exit /b 1
+call Packager.exe --out ../assets/paks/lego.pak --src assets --regex ".*.hdr|.*.png|.*.spv|.*.mp3|.*.wav|.*.ttf|.*legobricks.glb|.*locale.*.txt" || exit /b 1
 
 popd
 
@@ -88,7 +88,7 @@ pushd %CD%
 cd build/windows
 
 echo Creating MagicaLego package...
-tar -a -cf "MagicaLego_win64_%VERSION%.zip" ./bin/MagicaLego.exe ./bin/ffmpeg.exe ./bin/vulkan-1.dll ./assets/legos ./assets/sfx ./assets/paks ./assets/locale ./assets/fonts ./assets/models/legobricks.glb
+tar -a -cf "MagicaLego_win64_%VERSION%.zip" ./bin/MagicaLego.exe ./bin/ffmpeg.exe ./bin/vulkan-1.dll ./assets/legos ./assets/paks
 
 move /Y "MagicaLego_win64_%VERSION%.zip" ..\..\ >nul 2>&1
 popd

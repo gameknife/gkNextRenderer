@@ -114,7 +114,15 @@ UserInterface::UserInterface(
 	io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
 	io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
 	const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic() : GOption->locale == "zhCN" ? io.Fonts->GetGlyphRangesChineseFull() : io.Fonts->GetGlyphRangesDefault();
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-Regular.ttf").c_str(), fontSize * scaleFactor, nullptr, glyphRange ))
+    
+    std::vector<uint8_t> tmpData;
+    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-Regular.ttf", tmpData))
+    {
+        void* dataSrc = IM_ALLOC(tmpData.size());
+        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()) , fontSize * scaleFactor, nullptr, glyphRange);
+    }
+	else
 	{
 		Throw(std::runtime_error("failed to load basic ImGui Text font"));
 	}
@@ -128,25 +136,34 @@ UserInterface::UserInterface(
 	config.MergeMode = true;
 	config.GlyphMinAdvanceX = fontSize;
 	config.GlyphOffset = ImVec2(0, 0);
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-regular-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
-	{
-		
-	}
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
-	{
-		
-	}
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-brands-400.ttf").c_str(), fontSize * scaleFactor, &config, iconRange ))
-	{
-		
-	}
 
+    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-regular-400.ttf", tmpData))
+    {
+        void* dataSrc = IM_ALLOC(tmpData.size());
+        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
+    }
+    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-solid-900.ttf", tmpData))
+    {
+        void* dataSrc = IM_ALLOC(tmpData.size());
+        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
+    }
+    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-brands-400.ttf", tmpData))
+    {
+        void* dataSrc = IM_ALLOC(tmpData.size());
+        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
+    }
+    
 	ImFontConfig configLocale;
 	configLocale.MergeMode = true;
-	if (!io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf").c_str(), (fontSize + 2) * scaleFactor, &configLocale, glyphRange ))
-	{
-		Throw(std::runtime_error("failed to load locale ImGui Text font"));
-	}
+    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/DroidSansFallback.ttf", tmpData))
+    {
+        void* dataSrc = IM_ALLOC(tmpData.size());
+        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
+        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), (fontSize + 2) * scaleFactor, &configLocale, glyphRange);
+    }
 
 	if(funcInit != nullptr)
 	{
