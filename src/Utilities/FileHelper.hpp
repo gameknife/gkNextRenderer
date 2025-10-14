@@ -136,7 +136,7 @@ namespace Utilities
             //void PakFromRecord(const std::string& pakFile, const std::string& recordFile);
             
             // Paking
-            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "");
+            void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "", bool enableCompression = true, const std::string& manifestPath = "");
 
             static FPackageFileSystem& GetInstance()
             {
