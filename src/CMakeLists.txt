@@ -272,6 +272,11 @@ foreach(target IN LISTS AllTargets)
 	endif()
 	endif()
 
+	# copy the tsc to bin
+	if (MSVC)
+	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	endif()
+
 	if ( ${target} STREQUAL gkNextEditor )
 	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
 	# third-party warning fix
