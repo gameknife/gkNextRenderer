@@ -1319,7 +1319,7 @@ void NextEngine::CompileTypeScriptSources()
 
     try
     {
-        const fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("src/Typescript/tsconfig.json"));
+        const fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("assets/typescript/tsconfig.json"));
         if (tsconfigPath.empty())
         {
             SPDLOG_DEBUG("TypeScript tsconfig not found; skipping compilation.");
@@ -1339,7 +1339,7 @@ void NextEngine::CompileTypeScriptSources()
         const bool forceCompile = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
         if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir))
         {
-            SPDLOG_DEBUG("TypeScript outputs are up to date; skipping compilation.");
+            SPDLOG_INFO("TypeScript outputs are up to date; skipping compilation.");
             return;
         }
 
@@ -1353,20 +1353,11 @@ void NextEngine::CompileTypeScriptSources()
         }
 
         std::vector<std::string> commands;
-        if (const char* overrideCompiler = std::getenv("NEXTENGINE_TSC"))
-        {
-            if (*overrideCompiler != '\0')
-            {
-                commands.emplace_back(fmt::format("\"{}\" -p \"{}\"", overrideCompiler, tsconfigPath.string()));
-            }
-        }
-
 #if WIN32
-        commands.emplace_back(fmt::format("npx.cmd tsc -p \"{}\"", tsconfigPath.string()));
-        commands.emplace_back(fmt::format("tsc.cmd -p \"{}\"", tsconfigPath.string()));
+        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
+#else
+        commands.emplace_back(fmt::format("./tsc -p \"{}\"", projectDir.string()));
 #endif
-        commands.emplace_back(fmt::format("npx tsc -p \"{}\"", tsconfigPath.string()));
-        commands.emplace_back(fmt::format("tsc -p \"{}\"", tsconfigPath.string()));
 
         for (const std::string& command : commands)
         {
@@ -1376,14 +1367,10 @@ void NextEngine::CompileTypeScriptSources()
             }
 
             SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
-            const int result = std::system(command.c_str());
-            if (result == 0)
-            {
-                SPDLOG_INFO("TypeScript compilation finished successfully.");
-                return;
-            }
+            NextRenderer::OSProcess(command.c_str());
+            return;
 
-            SPDLOG_WARN("TypeScript compiler exited with code {} for command: {}", result, command);
+            //SPDLOG_WARN("TypeScript compiler exited with code {} for command: {}", result, command);
         }
 
         SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
