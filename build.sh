@@ -114,6 +114,28 @@ ensure_moltenvk_ios() {
     fi
 }
 
+fetch_tsc() {
+    local tsc_dir="$PROJECT_ROOT/tools/tsc"
+    local tsc_target=""
+
+    # Determine target binary name based on platform
+    case "$(uname -s)" in
+        CYGWIN*|MINGW*|MSYS*)
+            tsc_target="$tsc_dir/tsc.exe"
+            ;;
+        *)
+            tsc_target="$tsc_dir/tsc"
+            ;;
+    esac
+
+    if [ ! -f "$tsc_target" ]; then
+        log "TSC not found at $tsc_target, downloading..."
+        "$PROJECT_ROOT/tools/fetch_tsc.sh"
+    else
+        log "TSC already exists at $tsc_target, skipping download"
+    fi
+}
+
 detect_platform() {
     case "$(uname -s)" in
         Darwin*)
@@ -137,6 +159,7 @@ detect_platform() {
 
 build_macos() {
     require_toolchain
+    fetch_tsc
     local triplet="$1"
     local dir="$BUILD_ROOT/macos"
     SECONDS=0
@@ -152,6 +175,7 @@ build_macos() {
 
 build_ios() {
     require_toolchain
+    fetch_tsc
     ensure_moltenvk_ios
     local triplet="$1"
     local dir="$BUILD_ROOT/ios"
@@ -170,6 +194,7 @@ build_ios() {
 
 build_linux() {
     require_toolchain
+    fetch_tsc
     ensure_slang_linux
     local dir="$BUILD_ROOT/linux"
     SECONDS=0
@@ -185,6 +210,7 @@ build_linux() {
 
 build_mingw() {
     require_toolchain
+    fetch_tsc
     local dir="$BUILD_ROOT/mingw"
     SECONDS=0
     configure "$dir" -G Ninja \
@@ -197,6 +223,7 @@ build_mingw() {
 }
 
 build_android() {
+    fetch_tsc
     SECONDS=0
     (cd "$PROJECT_ROOT/android" && ./gradlew build)
     log "Android 构建耗时 ${SECONDS}s"
