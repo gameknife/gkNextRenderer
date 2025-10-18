@@ -273,8 +273,12 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# copy the tsc to bin
+	if ( ${target} STREQUAL gkNextEngine )
 	if (MSVC)
 	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	elseif(UNIX)
+	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )

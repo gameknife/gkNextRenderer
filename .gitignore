@@ -349,6 +349,7 @@ slang/
 
 tools/node/
 tools/typescript/
+tools/tsc/
 cmake-build-*/
 .DS_Store
 .VSCodeCounter/
