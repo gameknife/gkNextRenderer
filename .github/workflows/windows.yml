@@ -56,6 +56,7 @@ jobs:
       shell: cmd
 
     - name: Save vcpkg to cache
+      if: github.event_name != 'pull_request'
       id: cache-vcpkg-save
       uses: actions/cache/save@v4
       with:

@@ -51,6 +51,18 @@ if defined FOUND (
 )
 exit /b 0
 
+:fetch_tsc
+set "TSC_DIR=%PROJECT_ROOT%\tools\tsc"
+set "TSC_TARGET=%TSC_DIR%\tsc.exe"
+
+if not exist "%TSC_TARGET%" (
+    call :log "TSC not found at %TSC_TARGET%, downloading..."
+    call "%PROJECT_ROOT%\tools\fetch_tsc.bat"
+) else (
+    call :log "TSC already exists at %TSC_TARGET%, skipping download"
+)
+exit /b 0
+
 :prepare_build_dir
 set "TARGET_DIR=%~1"
 set "CACHED_TOOLCHAIN="
@@ -87,6 +99,7 @@ exit /b 0
 :build_windows
 set "BUILD_CONFIG=%~1"
 if "%BUILD_CONFIG%"=="" set "BUILD_CONFIG=RelWithDebInfo"
+call :fetch_tsc || goto :error
 call :require_toolchain || goto :error
 call :ensure_cmake || goto :error
 call :prepare_build_dir "%BUILD_ROOT%\windows"
