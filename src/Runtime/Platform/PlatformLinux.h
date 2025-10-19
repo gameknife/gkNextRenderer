@@ -21,7 +21,8 @@ namespace NextRenderer
 
     inline void OSProcess(const char* exe)
     {
-
+        int result = system(exe);
+        //(void)result;
     }
 }
 
