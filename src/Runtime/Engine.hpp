@@ -217,11 +217,12 @@ protected:
     void TickGamepadInput();
 	
 private:
-	void LoadScene(std::string sceneFileName);
+        void LoadScene(std::string sceneFileName);
 
-	void InitJSEngine();
-	void TestJSEngine();
-	void InitPhysics();
+        void InitJSEngine();
+        void TestJSEngine();
+        void CompileTypeScriptSources();
+        void InitPhysics();
 
 	// engine stuff
 	std::unique_ptr<Vulkan::Window> window_;

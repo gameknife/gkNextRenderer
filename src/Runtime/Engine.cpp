@@ -15,6 +15,12 @@
 #include <fmt/chrono.h>
 #include <Utilities/FileHelper.hpp>
 #include <filesystem>
+#include <cstdlib>
+#include <optional>
+#include <algorithm>
+#include <system_error>
+#include <initializer_list>
+#include <vector>
 
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
@@ -106,6 +112,116 @@ namespace
         float elapsed;
         std::array<char, 256> outputInfo;
     };
+
+    bool HasExtension(const std::filesystem::path& path, std::initializer_list<const char*> extensions)
+    {
+        const std::string extension = path.extension().string();
+        for (const char* candidate : extensions)
+        {
+            if (extension == candidate)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::optional<std::filesystem::file_time_type> FindLatestTimestamp(const std::filesystem::path& root,
+        std::initializer_list<const char*> extensions)
+    {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        if (!fs::exists(root, ec))
+        {
+            return std::nullopt;
+        }
+
+        fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+        if (ec)
+        {
+            SPDLOG_WARN("Failed to enumerate {}: {}", root.string(), ec.message());
+            return std::nullopt;
+        }
+
+        const fs::recursive_directory_iterator end;
+        std::optional<fs::file_time_type> latest;
+        for (; it != end; it.increment(ec))
+        {
+            if (ec)
+            {
+                SPDLOG_WARN("Directory iteration error under {}: {}", root.string(), ec.message());
+                ec.clear();
+                continue;
+            }
+
+            if (it->is_directory(ec))
+            {
+                if (!ec && it->path().filename() == "node_modules")
+                {
+                    it.disable_recursion_pending();
+                }
+                ec.clear();
+                continue;
+            }
+
+            if (ec)
+            {
+                SPDLOG_WARN("Failed to inspect {}: {}", it->path().string(), ec.message());
+                ec.clear();
+                continue;
+            }
+
+            if (!it->is_regular_file(ec))
+            {
+                ec.clear();
+                continue;
+            }
+
+            if (ec)
+            {
+                SPDLOG_WARN("Failed to query file type for {}: {}", it->path().string(), ec.message());
+                ec.clear();
+                continue;
+            }
+
+            if (!HasExtension(it->path(), extensions))
+            {
+                continue;
+            }
+
+            auto timestamp = it->last_write_time(ec);
+            if (ec)
+            {
+                SPDLOG_WARN("Failed to query timestamp for {}: {}", it->path().string(), ec.message());
+                ec.clear();
+                continue;
+            }
+
+            if (!latest || timestamp > *latest)
+            {
+                latest = timestamp;
+            }
+        }
+
+        return latest;
+    }
+
+    bool HasNewerTypeScriptSources(const std::filesystem::path& projectDir, const std::filesystem::path& outputDir)
+    {
+        auto latestSource = FindLatestTimestamp(projectDir, { ".ts", ".tsx" });
+        if (!latestSource)
+        {
+            return false;
+        }
+
+        auto latestOutput = FindLatestTimestamp(outputDir, { ".js", ".mjs" });
+        if (!latestOutput)
+        {
+            return true;
+        }
+
+        return *latestOutput < *latestSource;
+    }
 }
 
 UserSettings CreateUserSettings(const Options& options)
@@ -1197,9 +1313,79 @@ NextEngine* getEngine() {
     return NextEngine::GetInstance();
 }
 
+void NextEngine::CompileTypeScriptSources()
+{
+    namespace fs = std::filesystem;
+
+    try
+    {
+        const fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("assets/typescript/tsconfig.json"));
+        if (tsconfigPath.empty())
+        {
+            SPDLOG_DEBUG("TypeScript tsconfig not found; skipping compilation.");
+            return;
+        }
+
+        std::error_code ec;
+        if (!fs::exists(tsconfigPath, ec))
+        {
+            SPDLOG_DEBUG("TypeScript tsconfig missing at {}", tsconfigPath.string());
+            return;
+        }
+
+        const fs::path projectDir = tsconfigPath.parent_path();
+        const fs::path outputDir = fs::absolute(projectDir / "../../assets/scripts");
+
+        const bool forceCompile = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
+        if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir))
+        {
+            SPDLOG_INFO("TypeScript outputs are up to date; skipping compilation.");
+            return;
+        }
+
+        if (!fs::exists(outputDir, ec))
+        {
+            fs::create_directories(outputDir, ec);
+            if (ec)
+            {
+                SPDLOG_WARN("Failed to create TypeScript output directory {}: {}", outputDir.string(), ec.message());
+            }
+        }
+
+        std::vector<std::string> commands;
+#if WIN32
+        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
+#else
+        commands.emplace_back(fmt::format("./tsc -p \"{}\"", projectDir.string()));
+#endif
+
+        for (const std::string& command : commands)
+        {
+            if (command.empty())
+            {
+                continue;
+            }
+
+            SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
+            NextRenderer::OSProcess(command.c_str());
+            return;
+
+            //SPDLOG_WARN("TypeScript compiler exited with code {} for command: {}", result, command);
+        }
+
+        SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
+    }
+    catch (const std::exception& e)
+    {
+        SPDLOG_WARN("Exception while compiling TypeScript sources: {}", e.what());
+    }
+}
+
 void NextEngine::InitJSEngine() {
     try
     {
+        CompileTypeScriptSources();
+
         // export classes as a module
         auto& module = JSContext_->addModule("Engine");
         module.function<&Println>("println");
