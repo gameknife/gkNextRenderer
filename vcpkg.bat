@@ -32,6 +32,7 @@ REM ============================================================================
     set "PROJECT_ROOT=%SCRIPT_DIR%"
     set "DEFAULT_VCPKG_ROOT=%PROJECT_ROOT%\.vcpkg"
     set "VCPKG_DEFAULT_BINARY_CACHE=%PROJECT_ROOT%\.vcpkg_bincache"
+    set "VCPKG_GIT_REF=2025.10.17"
     if not exist "%VCPKG_DEFAULT_BINARY_CACHE%" (
         mkdir "%VCPKG_DEFAULT_BINARY_CACHE%"
     )
@@ -60,7 +61,10 @@ REM ============================================================================
     ) else (
         echo [vcpkg] Updating vcpkg in %VCPKG_ROOT%...
         pushd "%VCPKG_ROOT%" >nul || goto :error
-        git pull --ff-only
+        rem git pull --ff-only
+        git fetch origin --tags --force
+        git -c advice.detachedHead=false checkout --force "%VCPKG_GIT_REF%"
+        git reset --hard "%VCPKG_GIT_REF%"
         if errorlevel 1 (
             echo [vcpkg] Warning: 无法访问远程仓库，继续使用现有 vcpkg 副本。>&2
         )
