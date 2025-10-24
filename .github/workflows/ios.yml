@@ -1,4 +1,4 @@
-name: MacOS CI
+name: iOS CI
 
 on:
   pull_request:
@@ -39,7 +39,7 @@ jobs:
         echo "Downloaded and added slangc to PATH"
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh macos
+      run: ./vcpkg.sh ios
 
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore
@@ -48,12 +48,12 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
-
+        key: ${{ runner.os }}-ios-bincache
+        
     - name: Compile gkNextRenderer
       run: |
         slangc -v
-        ./build.sh macos
+        ./build.sh ios
 
     - name: Save vcpkg to cache
       if: github.event_name != 'pull_request'

@@ -187,6 +187,7 @@ build_ios() {
         -D VCPKG_MANIFEST_MODE=ON \
         -D VCPKG_MANIFEST_DIR="$PROJECT_ROOT" \
         -D MOLTENVK_ROOT="$moltenvk_root" \
+        -D GK_IOS_SKIP_CODE_SIGN=ON \
         -D CMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
     build_target "$dir" --config RelWithDebInfo
     log "iOS 构建耗时 ${SECONDS}s"

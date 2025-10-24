@@ -11,7 +11,7 @@ on:
       - main
       - 'releases/**'
     paths:
-      - '.github/workflows/macos.yml'
+      - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
       - '*.sh'
@@ -35,6 +35,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install vulkan-sdk
 
+    - name: Compile vcpkg dependencies
+      run: ./vcpkg.sh linux
+
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore
       uses: actions/cache/restore@v4
@@ -43,9 +46,6 @@ jobs:
           .vcpkg
           .vcpkg_bincache
         key: ${{ runner.os }}-desktop-bincache
-
-    - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh linux
 
     - name: Compile gkNextRenderer
       run: ./build.sh linux
