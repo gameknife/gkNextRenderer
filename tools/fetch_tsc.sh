@@ -39,7 +39,7 @@ init_variables() {
     PLATFORM="$(uname -s)"
     case "$PLATFORM" in
         Darwin*)
-            TSC_URL="https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-amd64"
+            TSC_URL="https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64"
             TSC_TARGET="$TSC_DIR/tsc"
             ;;
         Linux*)

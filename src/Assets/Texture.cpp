@@ -70,7 +70,7 @@ namespace Assets
                                     float* targetPixels, int targetWidth, int targetHeight, 
                                     float roughness)
     {
-        const int sampleCount = std::max(1, static_cast<int>(128 * (1.0f - roughness) + 64 * roughness));
+        const int sampleCount = std::max(1, static_cast<int>(8 * (1.0f - roughness) + 16 * roughness));
         
         for (int y = 0; y < targetHeight; ++y)
         {

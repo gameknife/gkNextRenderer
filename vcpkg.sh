@@ -15,6 +15,7 @@ init_variables() {
     fi
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
+    VCPKG_GIT_REF="2025.10.17"
 }
 
 parse_arguments() {
@@ -39,9 +40,12 @@ ensure_repo() {
         git clone https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
     else
         log "Updating vcpkg in $VCPKG_ROOT..."
-        if ! git -C "$VCPKG_ROOT" pull --ff-only; then
-            warn "无法访问远程仓库，继续使用现有 vcpkg 副本。"
-        fi
+        # if ! git -C "$VCPKG_ROOT" pull --ff-only; then
+        #     warn "无法访问远程仓库，继续使用现有 vcpkg 副本。"
+        # fi
+        git -C "$VCPKG_ROOT" fetch origin --tags --force
+        git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
+        git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
     fi
 }
 
