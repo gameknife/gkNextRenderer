@@ -29,6 +29,7 @@ jobs:
       run: |
         brew install molten-vk
         brew install glslang
+
     - name: Download and setup slangc
       run: |
         curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-1.4.313.0/slang-vulkan-sdk-1.4.313.0-macos-aarch64.zip -o slang.zip
@@ -36,7 +37,10 @@ jobs:
         unzip slang.zip -d slang
         echo "$PWD/slang/bin" >> $GITHUB_PATH
         echo "Downloaded and added slangc to PATH"
-        
+
+    - name: Compile vcpkg dependencies
+      run: ./vcpkg.sh macos
+
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore
       uses: actions/cache/restore@v4
@@ -45,9 +49,6 @@ jobs:
           .vcpkg
           .vcpkg_bincache
         key: ${{ runner.os }}-desktop-bincache
-
-    - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh macos
 
     - name: Compile gkNextRenderer
       run: |
