@@ -58,18 +58,19 @@ REM ============================================================================
     if not exist "%VCPKG_ROOT%\.git" (
         echo [vcpkg] Cloning vcpkg into %VCPKG_ROOT%...
         git clone https://github.com/microsoft/vcpkg "%VCPKG_ROOT%" || goto :error
-    ) else (
-        echo [vcpkg] Updating vcpkg in %VCPKG_ROOT%...
-        pushd "%VCPKG_ROOT%" >nul || goto :error
-        rem git pull --ff-only
-        git fetch origin --tags --force
-        git -c advice.detachedHead=false checkout --force "%VCPKG_GIT_REF%"
-        git reset --hard "%VCPKG_GIT_REF%"
-        if errorlevel 1 (
-            echo [vcpkg] Warning: 无法访问远程仓库，继续使用现有 vcpkg 副本。>&2
-        )
-        popd >nul
     )
+
+    echo [vcpkg] Updating vcpkg in %VCPKG_ROOT%...
+    pushd "%VCPKG_ROOT%" >nul || goto :error
+    rem git pull --ff-only
+    git fetch origin --tags --force
+    git -c advice.detachedHead=false checkout --force "%VCPKG_GIT_REF%"
+    git reset --hard "%VCPKG_GIT_REF%"
+    if errorlevel 1 (
+        echo [vcpkg] Warning: 无法访问远程仓库，继续使用现有 vcpkg 副本。>&2
+    )
+    popd >nul
+    
     exit /b 0
 
 :ensure_bootstrap

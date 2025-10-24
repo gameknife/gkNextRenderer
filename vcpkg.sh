@@ -43,10 +43,11 @@ ensure_repo() {
         # if ! git -C "$VCPKG_ROOT" pull --ff-only; then
         #     warn "无法访问远程仓库，继续使用现有 vcpkg 副本。"
         # fi
-        git -C "$VCPKG_ROOT" fetch origin --tags --force
-        git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
-        git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
     fi
+
+    git -C "$VCPKG_ROOT" fetch origin --tags --force
+    git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
+    git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
 }
 
 ensure_bootstrap() {
