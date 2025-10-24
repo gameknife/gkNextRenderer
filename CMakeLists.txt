@@ -19,7 +19,10 @@ endif()
 
 # Set iOS bundle identifier if building for iOS
 if (IOS)
-    set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.gknext.renderer")
+    set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.tzy.gknext")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual")
+    set(CMAKE_XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "nz.new.dev.wildcard")
+    set(CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "LWJL2YZH4A")
     set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
     # Set app as iOS bundle
     set(MACOSX_BUNDLE TRUE)
