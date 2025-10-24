@@ -1,6 +1,6 @@
-name: Android CI
+name: iOS CI
 
-on: 
+on:
   pull_request:
     branches:
       - main
@@ -20,16 +20,23 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-22.04
+    runs-on: macos-latest
     env: 
-      SDK_VERSION: 1.4.309
+      SDK_VERSION: 1.4.313.1
     steps:
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '21'
     - uses: actions/checkout@v4
-
+    - name: Install Vulkan SDK
+      run: |
+        brew install molten-vk
+        brew install glslang
+    - name: Download and setup slangc
+      run: |
+        curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-1.4.313.0/slang-vulkan-sdk-1.4.313.0-macos-aarch64.zip -o slang.zip
+        mkdir -p slang
+        unzip slang.zip -d slang
+        echo "$PWD/slang/bin" >> $GITHUB_PATH
+        echo "Downloaded and added slangc to PATH"
+        
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore
       uses: actions/cache/restore@v4
@@ -37,20 +44,15 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
-        key: ${{ runner.os }}-android-bincache
+        key: ${{ runner.os }}-ios-bincache
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh android
-
-    - name: Install Dependencies
-      run: |
-        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
-        sudo apt-get update
-        sudo apt-get install vulkan-sdk
+      run: ./vcpkg.sh ios
 
     - name: Compile gkNextRenderer
-      run: ./build.sh android
+      run: |
+        slangc -v
+        ./build.sh ios
 
     - name: Save vcpkg to cache
       if: github.event_name != 'pull_request'
@@ -61,4 +63,5 @@ jobs:
           .vcpkg
           .vcpkg_bincache
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
+
 
