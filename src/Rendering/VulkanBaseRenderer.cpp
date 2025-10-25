@@ -174,12 +174,11 @@ namespace Vulkan
 {
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                            const bool enableValidationLayers,
-                                           std::unique_ptr<Instance> instance) :
+                                           Instance* instance) :
         presentMode_(presentMode)
     {
         window_ = window;
-        assert(instance);
-        instance_ = std::move(instance);
+        instance_.reset(instance);
         debugUtilsMessenger_.reset(enableValidationLayers
                        ? new DebugUtilsMessenger( *instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
                        : nullptr);

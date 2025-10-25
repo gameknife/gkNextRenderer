@@ -69,43 +69,33 @@ namespace NextRenderer
         {
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
+        Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
 
-        auto instance = std::make_unique<Vulkan::Instance>(*window, validationLayers, VK_API_VERSION_1_2);
-
-        const bool rayTracingSupported = !GOption->ForceNoRT && instance->SupportsRayQuery();
-        const bool wantsRayTracingRenderer = rendererType <= static_cast<uint32_t>(Vulkan::ERT_VoxelTracing);
-        auto requestedType = static_cast<Vulkan::ERendererType>(rendererType);
-
-        const bool useRayTracingRenderer = wantsRayTracingRenderer && rayTracingSupported;
-
+        const bool useRayTracingRenderer = !GOption->ForceNoRT && instance->SupportsRayQuery();
+        
         Vulkan::VulkanBaseRenderer* renderer = nullptr;
         if (useRayTracingRenderer)
         {
-            renderer = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, std::move(instance));
+            renderer = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
         }
         else
         {
-            renderer = new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, std::move(instance));
+            renderer = new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);
         }
 
-        const auto supportedTypes = useRayTracingRenderer
-            ? std::initializer_list<Vulkan::ERendererType>{
-                  Vulkan::ERT_PathTracing, Vulkan::ERT_ModernDeferred,
-                  Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing}
-            : std::initializer_list<Vulkan::ERendererType>{
-                  Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred,
-                  Vulkan::ERT_VoxelTracing};
+        const auto supportedTypes = useRayTracingRenderer ? std::initializer_list{Vulkan::ERT_PathTracing, Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing} : std::initializer_list{Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
 
         for (auto type : supportedTypes)
         {
             renderer->RegisterLogicRenderer(type);
         }
 
+        auto requestedType = static_cast<Vulkan::ERendererType>(rendererType);
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
         }
-
+        
         renderer->SwitchLogicRenderer(requestedType);
         return renderer;
     }

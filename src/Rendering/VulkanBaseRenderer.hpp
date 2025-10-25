@@ -79,7 +79,7 @@ namespace Vulkan
 		virtual void DrawFrame();
 
 
-		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, std::unique_ptr<class Instance> instance);
+		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }

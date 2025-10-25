@@ -38,9 +38,8 @@ namespace Vulkan::RayTracing
     }
     
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                                               const bool enableValidationLayers,
-                                               std::unique_ptr<Vulkan::Instance> instance) :
-        Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, std::move(instance))
+                                               const bool enableValidationLayers, Instance* instance) :
+        Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance)
     {
 
     }
