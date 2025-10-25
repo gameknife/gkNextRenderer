@@ -22,6 +22,7 @@ namespace Vulkan
 		const std::vector<VkLayerProperties>& Layers() const { return layers_; }
 		const std::vector<VkPhysicalDevice>& PhysicalDevices() const { return physicalDevices_; }
 		const std::vector<const char*>& ValidationLayers() const { return validationLayers_; }
+		bool SupportsRayQuery() const;
 
 	private:
 

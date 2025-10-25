@@ -36,6 +36,7 @@
 #include "Runtime/Engine.hpp"
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include <spdlog/spdlog.h>
+#include <utility>
 
 #if WITH_STREAMLINE
 #include "ThirdParty/streamline/include/sl.h"
@@ -146,24 +147,6 @@ namespace
         puts("");
     }
 
-    bool SupportRayQuery(const Vulkan::VulkanBaseRenderer& application)
-    {
-        bool supportRayQuery = false;
-        for (const auto& device : application.PhysicalDevices())
-        {
-            const auto extensions = Vulkan::GetEnumerateVector(device, static_cast<const char*>(nullptr),
-                                                               vkEnumerateDeviceExtensionProperties);
-            const auto hasRayTracing = std::any_of(extensions.begin(), extensions.end(),
-               [](const VkExtensionProperties& extension)
-               {
-                   return strcmp(extension.extensionName,VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
-               });
-
-            supportRayQuery = supportRayQuery | hasRayTracing;
-        }
-        return supportRayQuery;
-    }
-
     void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application)
     {
         const auto& swapChain = application.SwapChain();
@@ -190,15 +173,13 @@ namespace
 namespace Vulkan
 {
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                                           const bool enableValidationLayers) :
+                                           const bool enableValidationLayers,
+                                           std::unique_ptr<Instance> instance) :
         presentMode_(presentMode)
     {
-        const auto validationLayers = enableValidationLayers
-                                          ? std::vector<const char*>{"VK_LAYER_KHRONOS_validation"}
-                                          : std::vector<const char*>{};
-
         window_ = window;
-        instance_.reset(new Instance(*window_, validationLayers, VK_API_VERSION_1_2));
+        assert(instance);
+        instance_ = std::move(instance);
         debugUtilsMessenger_.reset(enableValidationLayers
                        ? new DebugUtilsMessenger( *instance_, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
                        : nullptr);
@@ -207,7 +188,7 @@ namespace Vulkan
         forceSDR_ = GOption->ForceSDR;
 
         uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-        supportRayTracing_ = !GOption->ForceNoRT && SupportRayQuery(*this);
+        supportRayTracing_ = !GOption->ForceNoRT && instance_->SupportsRayQuery();
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
