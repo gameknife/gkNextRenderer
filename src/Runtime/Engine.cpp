@@ -8,6 +8,7 @@
 #include "Vulkan/Window.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Instance.hpp"
 #include "ScreenShot.hpp"
 
 #include <iostream>
@@ -21,6 +22,7 @@
 #include <system_error>
 #include <initializer_list>
 #include <vector>
+#include <memory>
 
 #include "Options.hpp"
 #include "TaskCoordinator.hpp"
@@ -40,7 +42,6 @@
 #include "NextAnimation.h"
 #include "NextPhysics.h"
 #include "Platform/PlatformCommon.h"
-#include "Utilities/Exception.hpp"
 
 #include "Common/CoreMinimal.hpp"
 
@@ -62,37 +63,40 @@ namespace NextRenderer
 
     Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers)
     {
-        switch(rendererType)
+        std::vector<const char*> validationLayers;
+        if (enableValidationLayers)
         {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-                {
-                    auto ptr = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers);
-                    if(!ptr->supportRayTracing_) {
-                        break;
-                    }
-                    ptr->RegisterLogicRenderer(Vulkan::ERT_PathTracing);
-                    ptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
-                    ptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
-                    ptr->RegisterLogicRenderer(Vulkan::ERT_VoxelTracing);
-                    ptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
-                    return ptr;
-                }
-            default: break;
+            validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
-        // fallback renderer
-        auto fallbackptr =  new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers);
-        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_ModernDeferred);
-        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_LegacyDeferred);
-        fallbackptr->RegisterLogicRenderer(Vulkan::ERT_VoxelTracing);
-        if( rendererType != Vulkan::ERT_ModernDeferred && rendererType != Vulkan::ERT_LegacyDeferred )
+        Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
+
+        const bool useRayTracingRenderer = !GOption->ForceNoRT && instance->SupportsRayQuery();
+
+        std::vector supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
+        Vulkan::VulkanBaseRenderer* renderer = nullptr;
+        if (useRayTracingRenderer)
         {
-            rendererType = Vulkan::ERT_ModernDeferred;
+            renderer = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
+            supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
         }
-        fallbackptr->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
-        return fallbackptr;
+        else
+        {
+            renderer = new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);
+        }
+
+        for (auto type : supportedTypes)
+        {
+            renderer->RegisterLogicRenderer(type);
+        }
+
+        auto requestedType = static_cast<Vulkan::ERendererType>(rendererType);
+        if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
+        {
+            requestedType = *supportedTypes.begin();
+        }
+        
+        renderer->SwitchLogicRenderer(requestedType);
+        return renderer;
     }
 
 }
@@ -807,7 +811,6 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
 
 glm::ivec2 NextEngine::GetMonitorSize() const
 {
-    glm::ivec2 pos{0,0};
     glm::ivec2 size{1920,1080};
 
     SDL_Rect rect;

@@ -30,6 +30,7 @@ namespace Vulkan
 
 	class RenderImage;
 	class DescriptorSetManager;
+	class Instance;
 }
 
 namespace Assets
@@ -78,7 +79,7 @@ namespace Vulkan
 		virtual void DrawFrame();
 
 
-		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
 
 		const class Device& Device() const { return *device_; }
 		class CommandPool& CommandPool() { return *commandPool_; }

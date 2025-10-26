@@ -4,6 +4,7 @@
 #include "Window.hpp"
 #include "Utilities/Exception.hpp"
 #include <algorithm>
+#include <cstring>
 #include <fmt/format.h>
 
 namespace Vulkan {
@@ -90,6 +91,25 @@ void Instance::GetVulkanPhysicalDevices()
 	{
 		Throw(std::runtime_error("found no Vulkan physical devices"));
 	}
+}
+
+bool Instance::SupportsRayQuery() const
+{
+	for (const auto& device : physicalDevices_)
+	{
+		const auto extensions = GetEnumerateVector(device, static_cast<const char*>(nullptr),
+		                                           vkEnumerateDeviceExtensionProperties);
+		const auto hasRayQuery = std::any_of(extensions.begin(), extensions.end(),
+			[](const VkExtensionProperties& extension)
+			{
+				return std::strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
+			});
+		if (hasRayQuery)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)

@@ -28,7 +28,7 @@ namespace Vulkan::RayTracing
 
 		VULKAN_NON_COPIABLE(RayTraceBaseRenderer);
 
-		RayTraceBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers);
+		RayTraceBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
 		virtual ~RayTraceBaseRenderer();
 				
 		std::vector<TopLevelAccelerationStructure>& TLAS() { return topAs_; }

@@ -11,6 +11,7 @@
 #include <chrono>
 #include <numeric>
 #include <spdlog/spdlog.h>
+#include <utility>
 
 #include "Runtime/Engine.hpp"
 
@@ -37,8 +38,8 @@ namespace Vulkan::RayTracing
     }
     
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
-                                               const bool enableValidationLayers) :
-        Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers)
+                                               const bool enableValidationLayers, Instance* instance) :
+        Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance)
     {
 
     }
