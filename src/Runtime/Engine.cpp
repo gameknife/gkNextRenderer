@@ -42,7 +42,6 @@
 #include "NextAnimation.h"
 #include "NextPhysics.h"
 #include "Platform/PlatformCommon.h"
-#include "Utilities/Exception.hpp"
 
 #include "Common/CoreMinimal.hpp"
 
@@ -72,18 +71,18 @@ namespace NextRenderer
         Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
 
         const bool useRayTracingRenderer = !GOption->ForceNoRT && instance->SupportsRayQuery();
-        
+
+        std::vector supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
         Vulkan::VulkanBaseRenderer* renderer = nullptr;
         if (useRayTracingRenderer)
         {
             renderer = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
+            supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
         }
         else
         {
             renderer = new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);
         }
-
-        const auto supportedTypes = useRayTracingRenderer ? std::initializer_list{Vulkan::ERT_PathTracing, Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing} : std::initializer_list{Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
 
         for (auto type : supportedTypes)
         {
@@ -812,7 +811,6 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
 
 glm::ivec2 NextEngine::GetMonitorSize() const
 {
-    glm::ivec2 pos{0,0};
     glm::ivec2 size{1920,1080};
 
     SDL_Rect rect;

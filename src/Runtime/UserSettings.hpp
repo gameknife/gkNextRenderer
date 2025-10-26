@@ -5,15 +5,15 @@
 
 struct UserSettings final
 {
-	int RendererType;
+	int32_t RendererType;
 	
 	// Scene
 	int SceneIndex {};
 
 	// Renderer
 	int32_t NumberOfSamples;
-	int32_t NumberOfBounces;
-	int32_t MaxNumberOfBounces;
+	uint32_t NumberOfBounces;
+	uint32_t MaxNumberOfBounces;
 	bool AdaptiveSample;
 	float AdaptiveVariance;
 	int AdaptiveSteps;
@@ -22,7 +22,7 @@ struct UserSettings final
 	bool FastInterpole = false;
 	bool DebugDraw_Lighting = false;
 	bool DisableSpatialReuse = false;
-	int SuperResolution = 1;
+	uint32_t SuperResolution = 1;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera
@@ -39,7 +39,7 @@ struct UserSettings final
 
 	// Performance
 	bool UseCheckerBoardRendering;
-	int TemporalFrames;
+	uint32_t TemporalFrames;
 
 	// Denoise
 	bool Denoiser;

@@ -229,7 +229,7 @@ private:
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
 	// need remove
-	int rendererType = 0;
+	uint32_t rendererType = 0;
 
 	// settings, may move into scene
 	mutable UserSettings userSettings_{};
@@ -244,7 +244,7 @@ private:
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
 	bool progressiveRendering_{};
-	int progressivePreFrames_{};
+	uint32_t progressivePreFrames_{};
 
 	// game instance
 	std::unique_ptr<NextGameInstanceBase> gameInstance_;
