@@ -334,13 +334,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         if (samples > 1)
         {
-            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 1;
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 64;
+            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 4;
+            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 32;
         }
         else
         {
             GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 16;
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 16;
+            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 8;
         }
     }
     BUTTON_TOOLTIP(LOCTEXT("Switch Render Quality"))

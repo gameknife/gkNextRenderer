@@ -59,8 +59,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // options
     // options.SceneName = "legobricks.glb";
-    options.Samples = 8;
-    options.Temporal = 16;
+    options.Samples = 16;
+    options.Temporal = 8;
     options.ForceSDR = true;
     options.RendererType = 0;
     options.locale = "zhCN";
@@ -95,7 +95,8 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
     glm::vec3 renderLocation = GetRenderLocationFromBlockLocation(blockLocation);
     uint32_t instanceId = rayResult.InstanceId;
-
+    lastSelectIndex_ = instanceId;
+    
     if (!bMouseLeftDown_)
     {
         if (currentMode_ == ELegoMode::ELM_Place)
@@ -144,6 +145,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     case ELegoMode::ELM_Select:
         lastSelectLocation_ = node->GetName() == "blockInst" ? GetBlockLocationFromRenderLocation(glm::vec3((node->WorldTransform() * glm::vec4(0, 0.0475f, 0, 1)))) : invalidPos;
         if (currentCamMode_ == ECamMode::ECM_AutoFocus && lastSelectLocation_ != invalidPos) cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
+        GetEngine().GetScene().SetSelectedId(lastSelectIndex_);
         break;
     }
 }
@@ -197,8 +199,11 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // select edge showing
     GetEngine().GetUserSettings().ShowEdge = currentMode_ == ELegoMode::ELM_Select && lastSelectLocation_ != invalidPos;
 
+    
     // camera center lerping
-    realCameraCenter_ = glm::mix(realCameraCenter_, cameraCenter_, 0.1f);
+    const float speed = 0.025f;
+    float t = 1.0f - glm::pow(1.0f - speed, float(deltaSeconds) * 60.0f);
+    realCameraCenter_ = glm::mix(realCameraCenter_, cameraCenter_, t);
 
     // indicator update
     float invDelta = static_cast<float>(deltaSeconds) / 60.0f;

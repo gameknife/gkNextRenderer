@@ -244,6 +244,7 @@ private:
     std::vector<uint32_t> oneLinePlacedInstance_{};
     glm::i16vec3 lastPlacedLocation_{};
     glm::i16vec3 lastSelectLocation_{};
+    uint32_t lastSelectIndex_{};
     std::unique_ptr<class MagicaLegoUserInterface> UserInterface_;
 
     // Indicator Stuff
