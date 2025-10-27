@@ -632,7 +632,7 @@ namespace Vulkan
             bufferClearPipeline_->BindPipeline(commandBuffer, &imageIndex);
             vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
 
-            VkClearColorValue clearColor = {{1.0f, 0.0f, 0.0f, 1.0f}};
+            VkClearColorValue clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
             VkImageSubresourceRange imageRange = {};
             imageRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             imageRange.baseMipLevel = 0;
