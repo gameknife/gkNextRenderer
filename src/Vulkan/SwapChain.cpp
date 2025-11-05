@@ -32,6 +32,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	auto extent = ChooseSwapExtent(window, details.Capabilities);
 	const auto imageCount = ChooseImageCount(details.Capabilities);
 
+
 #if ANDROID
     GAndroidMagicScale = 1280.f / float(extent.height);
 

@@ -900,7 +900,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
     pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
-    
+
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
