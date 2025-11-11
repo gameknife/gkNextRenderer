@@ -274,7 +274,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.SuperResolution = options.SuperResolution;
     
 #if ANDROID || IOS
-    userSettings.NumberOfSamples = 2;
+    userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
     userSettings.FastGather = true;
 #endif

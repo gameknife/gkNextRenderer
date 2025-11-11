@@ -1,7 +1,6 @@
 #include "Texture.hpp"
 #include "Utilities/StbImage.hpp"
 #include "Utilities/Exception.hpp"
-#include <imgui_impl_vulkan.h>
 #include "Common/CoreMinimal.hpp"
 #include <ktx.h>
 

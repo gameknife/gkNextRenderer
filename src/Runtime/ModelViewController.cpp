@@ -127,14 +127,9 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
         mousePosX_ = xpos;
         mousePosY_ = ypos;
     }
-
-#if ANDROID
-    const auto deltaY = static_cast<float>(xpos - mousePosX_) * mouseSensitive_ * -1;
-    const auto deltaX = static_cast<float>(ypos - mousePosY_) * mouseSensitive_;
-#else
+    
     const auto deltaX = static_cast<float>(xpos - mousePosX_) * mouseSensitive_;
     const auto deltaY = static_cast<float>(ypos - mousePosY_) * mouseSensitive_;
-#endif
 
     if (mouseLeftPressed_)
     {

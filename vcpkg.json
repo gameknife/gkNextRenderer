@@ -29,7 +29,6 @@
       "name": "imgui",
       "features": [
         "freetype",
-        "vulkan-binding",
         "docking-experimental"
       ],
       "platform": "android"
