@@ -64,6 +64,7 @@ private:
 	bool cameraMovingForward_{};
 	bool cameraMovingDown_{};
 	bool cameraMovingUp_{};
+    glm::vec2 cameraMovingSpeed_{};
 
 	// with smooth movement
 	double cameraRotX_{};

@@ -45,17 +45,17 @@ bool ModelViewController::OnKey(SDL_Event& event)
 {
     switch (event.key.key)
     {
-    case SDLK_S: cameraMovingBackward_ = event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_S: cameraMovingBackward_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
-    case SDLK_W: cameraMovingForward_ =event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_W: cameraMovingForward_ =event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
-    case SDLK_A: cameraMovingLeft_ = event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_A: cameraMovingLeft_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
-    case SDLK_D: cameraMovingRight_ = event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_D: cameraMovingRight_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
-    case SDLK_Q: cameraMovingDown_ = event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_Q: cameraMovingDown_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
-    case SDLK_E: cameraMovingUp_ = event.key.type != SDL_EVENT_KEY_UP;
+    case SDLK_E: cameraMovingUp_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
         return true;
     default: return false;
     }
@@ -67,29 +67,34 @@ bool ModelViewController::OnGamepadInput(const int16_t leftStickX, const int16_t
                                         const int16_t rightStickX, const int16_t rightStickY,
                                         const int16_t leftTrigger, const int16_t rightTrigger)
 {
-    const float rightStickSensitivity = 0.0001f;
-    const int16_t deadZone = 5000; // 摇杆死区
+    const float stickSensitivity = 0.0000352f; // 1 / 32767
+    const int16_t deadZone = 3000; // 摇杆死区
+    const double stickThreshold = 0.7; // 摇杆阈值
     bool inputDetected = false;
     
     // 左摇杆控制前后左右移动
     if (std::abs(leftStickX) > deadZone) {
         cameraMovingRight_ = leftStickX > 0;
         cameraMovingLeft_ = leftStickX < 0;
+        cameraMovingSpeed_.x = std::abs(leftStickX) * stickSensitivity;
         inputDetected = true;
     }
     else {
         cameraMovingRight_ = false;
         cameraMovingLeft_ = false;
+        cameraMovingSpeed_.x = 1.0f;
     }
     
     if (std::abs(leftStickY) > deadZone) {
         cameraMovingForward_ = leftStickY < 0;
         cameraMovingBackward_ = leftStickY > 0;
+        cameraMovingSpeed_.y = std::abs(leftStickY) * stickSensitivity;
         inputDetected = true;
     }
     else {
         cameraMovingForward_ = false;
         cameraMovingBackward_ = false;
+        cameraMovingSpeed_.y = 1.0f;
     }
     
     // 扳机键控制上下移动
@@ -111,8 +116,10 @@ bool ModelViewController::OnGamepadInput(const int16_t leftStickX, const int16_t
     
     // 右摇杆可以用于视角旋转
     if (std::abs(rightStickX) > deadZone || std::abs(rightStickY) > deadZone) {
-        cameraRotX_ = rightStickX * rightStickSensitivity;  // 根据需要调整灵敏度
-        cameraRotY_ = rightStickY * rightStickSensitivity;
+        cameraRotX_ = rightStickX * stickSensitivity;  // 根据需要调整灵敏度
+        cameraRotX_ = glm::sign(cameraRotX_) * glm::min(stickThreshold, cameraRotX_ * cameraRotX_);
+        cameraRotY_ = rightStickY * stickSensitivity;
+        cameraRotY_ = glm::sign(cameraRotY_) * glm::min(stickThreshold, cameraRotY_ * cameraRotY_);
         inputDetected = true;
     }
     
@@ -192,17 +199,17 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 {
     const auto d = static_cast<float>(speed * timeDelta);
 
-    if (cameraMovingLeft_) MoveRight(-d);
-    if (cameraMovingRight_) MoveRight(d);
-    if (cameraMovingBackward_) MoveForward(-d);
-    if (cameraMovingForward_) MoveForward(d);
+    if (cameraMovingLeft_) MoveRight(-d * cameraMovingSpeed_.x);
+    if (cameraMovingRight_) MoveRight(d * cameraMovingSpeed_.x);
+    if (cameraMovingBackward_) MoveForward(-d * cameraMovingSpeed_.y);
+    if (cameraMovingForward_) MoveForward(d * cameraMovingSpeed_.y);
     if (cameraMovingDown_) MoveUp(-d);
     if (cameraMovingUp_) MoveUp(d);
 
     modelRotX_ = glm::mix(modelRotX_, rawModelRotX_, 0.5);
     modelRotY_ = glm::mix(modelRotY_, rawModelRotY_, 0.5);
 
-    const double rotationDiv = 1200;
+    const double rotationDiv = 1 / timeDelta;
     Rotate(static_cast<float>(cameraRotX_ / rotationDiv), static_cast<float>(cameraRotY_ / rotationDiv));
 
     const bool updated =
