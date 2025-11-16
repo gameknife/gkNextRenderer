@@ -999,6 +999,7 @@ public struct FPathTracingRendererV2
     public float HitNormalOffset = 0.0f;
     public int SampleDownscale = 1;
     public bool FuzzyTracing = false;
+    public bool ForceExitAfterFirst = false;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal)
     {
@@ -1117,7 +1118,7 @@ public struct FPathTracingRendererV2
             bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal);
             if (!exitFirst)
             {
-                if(ExitAfterFirst && mat.MaterialModel != MaterialDielectric)
+                if(ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric) )
                 {
                     if(!FuzzyTracing) RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
                 }

@@ -15,6 +15,8 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/tinybvh/*.h"
 	"ThirdParty/streamline/*.h"
 	"ThirdParty/ozz/*.h"
+	)
+file(GLOB_RECURSE src_files_customimgui
 	"ThirdParty/imgui-custom/*.cpp"
 	"ThirdParty/imgui-custom/*.h"
 	)
@@ -60,6 +62,7 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
+	${src_files_customimgui}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp

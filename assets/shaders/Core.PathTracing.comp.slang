@@ -18,6 +18,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.HitNormalOffset = 0.001f * Bindless.GetGpuscene().Camera->SceneEpsilonScale;
     renderer.SampleDownscale = 1;
     renderer.FuzzyTracing = false;
+    renderer.ForceExitAfterFirst = false;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )

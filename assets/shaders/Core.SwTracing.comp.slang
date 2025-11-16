@@ -18,6 +18,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.HitNormalOffset = CUBE_UNIT * 0.5;
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;
+    renderer.ForceExitAfterFirst = false;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
