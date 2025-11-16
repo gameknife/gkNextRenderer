@@ -64,10 +64,21 @@ private:
 	bool cameraMovingForward_{};
 	bool cameraMovingDown_{};
 	bool cameraMovingUp_{};
+    
+    bool cameraMovingLeftJoystick_{};
+    bool cameraMovingRightJoystick_{};
+    bool cameraMovingBackwardJoystick_{};
+    bool cameraMovingForwardJoystick_{};
+    bool cameraMovingDownJoystick_{};
+    bool cameraMovingUpJoystick_{};
+    
+    glm::vec2 cameraMovingSpeed_{};
 
 	// with smooth movement
 	double cameraRotX_{};
 	double cameraRotY_{};
+    double cameraRotXAbs_{};
+    double cameraRotYAbs_{};
 	double modelRotX_{};
 	double modelRotY_{};
 

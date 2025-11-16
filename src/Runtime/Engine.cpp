@@ -274,7 +274,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.SuperResolution = options.SuperResolution;
     
 #if ANDROID || IOS
-    userSettings.NumberOfSamples = 2;
+    userSettings.NumberOfSamples = 1;
     userSettings.Denoiser = false;
     userSettings.FastGather = true;
 #endif
@@ -900,7 +900,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
     pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
-    
+
     ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
                                       extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
     ubo.Projection[1][1] *= -1;
@@ -1120,7 +1120,8 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
         userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse()
+        userInterface_->WantsToCaptureMouse() ||
+        window_->IsCapturingMouse()
         )
     {
         return;
@@ -1172,8 +1173,9 @@ void NextEngine::OnDropFile(const char* dropPath)
 
     if( ext == "hdr")
     {
-        //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-        //userSettings_.SkyIdx = 0;
+        uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
+        scene_->GetEnvSettings().SkyIdx = newTextureId;
+        //userSettings_. = 0;
     }
 }
 void NextEngine::TickGamepadInput()

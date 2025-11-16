@@ -139,15 +139,18 @@ void Window::attemptDragWindow() {
 			s_xpos >= 0 && s_xpos <= (static_cast<double>(w_xsiz) - closeAreaWidth) &&
 			s_ypos >= 0 && s_ypos <= titleAreaHeight) {
 			SDL_SetWindowPosition(window_, wXpos + static_cast<int>(cXpos - s_xpos), wYpos + static_cast<int>(cYpos - s_ypos));
+		    capturedMouse_ = true;
 			}
 		if (
 			s_xpos >= (static_cast<double>(w_xsiz) - 15) && s_xpos <= (static_cast<double>(w_xsiz)) &&
 			s_ypos >= (static_cast<double>(w_ysiz) - 15) && s_ypos <= (static_cast<double>(w_ysiz))) {
 			SDL_SetWindowSize(window_, w_xsiz + static_cast<int>(cXpos - s_xpos), w_ysiz + static_cast<int>(cYpos - s_ypos));
+		    capturedMouse_ = true;
 			}
 	}
 	if (flag != SDL_BUTTON_LEFT && dragState == 1) {
 		dragState = 0;
+	    capturedMouse_ = false;
 	}
 #endif
 }

@@ -17,10 +17,13 @@
 #include <imgui_freetype.h>
 #if !ANDROID
 #include <imgui_impl_sdl3.h>
+#include <imgui_impl_vulkan.h>
 #else
 #include <ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h>
+#include <ThirdParty/imgui-custom/imgui_impl_vulkan_custom.h>
 #endif
-#include <imgui_impl_vulkan.h>
+
+
 
 #include <array>
 #include <filesystem>

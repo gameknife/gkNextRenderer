@@ -46,11 +46,14 @@ namespace Vulkan
 		// Static methods
 		static void InitGLFW();
 		static void TerminateGLFW();
+	    
+	    bool IsCapturingMouse() const { return capturedMouse_; }
 	private:
 
 		const WindowConfig config_;
 		Next_Window* window_{};
-
+	    
+	    bool capturedMouse_ = false;
 		double s_xpos = 0, s_ypos = 0;
 		int w_xsiz = 0, w_ysiz = 0;
 		int dragState = 0;

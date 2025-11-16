@@ -8,6 +8,8 @@
 #include "Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
+#include <spdlog/spdlog.h>
+
 #include "ImageMemoryBarrier.hpp"
 
 float GAndroidMagicScale = 1.0f;
@@ -32,15 +34,28 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	auto extent = ChooseSwapExtent(window, details.Capabilities);
 	const auto imageCount = ChooseImageCount(details.Capabilities);
 
+    SPDLOG_INFO("precreate swapchain: {} x {}", extent.width, extent.height);
+
 #if ANDROID
-    GAndroidMagicScale = 1280.f / float(extent.height);
-
 	float aspect = extent.width / static_cast<float>(extent.height);
-	extent.height = 1280;
-	extent.width = floorf(1280 * aspect);
-
+    if( aspect < 1.0 )
+    {
+        GAndroidMagicScale = 1280.f / float(extent.height);
+        
+    	extent.height = 1280;
+	    extent.width = floorf(1280 * aspect);
+    }
+    else
+    {
+        GAndroidMagicScale = 1280.f / float(extent.width);
+        
+        extent.height = 1280;
+	    extent.width = floorf(1280 / aspect);
+    }
     SDL_SetWindowFullscreen(window.Handle(), true);
 #endif
+
+    SPDLOG_INFO("postcreate swapchain: {} x {}", extent.width, extent.height);
 	
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
