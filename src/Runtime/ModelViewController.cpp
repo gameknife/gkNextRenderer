@@ -12,6 +12,9 @@ void ModelViewController::Reset(const Assets::Camera& renderCamera)
 
     cameraRotX_ = 0;
     cameraRotY_ = 0;
+    cameraRotXAbs_ = 0;
+    cameraRotYAbs_ = 0;
+    
     modelRotX_ = 0;
     modelRotY_ = 0;
     rawModelRotX_ = 0;
@@ -22,7 +25,7 @@ void ModelViewController::Reset(const Assets::Camera& renderCamera)
     mouseLeftPressed_ = false;
     mouseRightPressed_ = false;
 
-    mouseSensitive_ = 0.5;
+    mouseSensitive_ = 0.0002;
 
     fieldOfView_ = renderCamera.FieldOfView;
 
@@ -74,44 +77,44 @@ bool ModelViewController::OnGamepadInput(const int16_t leftStickX, const int16_t
     
     // 左摇杆控制前后左右移动
     if (std::abs(leftStickX) > deadZone) {
-        cameraMovingRight_ = leftStickX > 0;
-        cameraMovingLeft_ = leftStickX < 0;
+        cameraMovingRightJoystick_ = leftStickX > 0;
+        cameraMovingLeftJoystick_ = leftStickX < 0;
         cameraMovingSpeed_.x = std::abs(leftStickX) * stickSensitivity;
         inputDetected = true;
     }
     else {
-        cameraMovingRight_ = false;
-        cameraMovingLeft_ = false;
+        cameraMovingRightJoystick_ = false;
+        cameraMovingLeftJoystick_ = false;
         cameraMovingSpeed_.x = 1.0f;
     }
     
     if (std::abs(leftStickY) > deadZone) {
-        cameraMovingForward_ = leftStickY < 0;
-        cameraMovingBackward_ = leftStickY > 0;
+        cameraMovingForwardJoystick_ = leftStickY < 0;
+        cameraMovingBackwardJoystick_ = leftStickY > 0;
         cameraMovingSpeed_.y = std::abs(leftStickY) * stickSensitivity;
         inputDetected = true;
     }
     else {
-        cameraMovingForward_ = false;
-        cameraMovingBackward_ = false;
+        cameraMovingForwardJoystick_ = false;
+        cameraMovingBackwardJoystick_ = false;
         cameraMovingSpeed_.y = 1.0f;
     }
     
     // 扳机键控制上下移动
     if (leftTrigger > deadZone) {
-        cameraMovingDown_ = true;
+        cameraMovingDownJoystick_ = true;
         inputDetected = true;
     }
     else {
-        cameraMovingDown_ = false;
+        cameraMovingDownJoystick_ = false;
     }
     
     if (rightTrigger > deadZone) {
-        cameraMovingUp_ = true;
+        cameraMovingUpJoystick_ = true;
         inputDetected = true;
     }
     else {
-        cameraMovingUp_ = false;
+        cameraMovingUpJoystick_ = false;
     }
     
     // 右摇杆可以用于视角旋转
@@ -140,14 +143,14 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
 
     if (mouseLeftPressed_)
     {
-        cameraRotX_ += deltaX;
-        cameraRotY_ += deltaY;
+        cameraRotXAbs_ += deltaX;
+        cameraRotYAbs_ += deltaY;
     }
 
     if (mouseRightPressed_)
     {
-        rawModelRotX_ += deltaX;
-        rawModelRotY_ += deltaY;
+        rawModelRotX_ += deltaX * 500.0;
+        rawModelRotY_ += deltaY * 500.0;
     }
 
     mousePosX_ = xpos;
@@ -199,33 +202,35 @@ bool ModelViewController::UpdateCamera(const double speed, const double timeDelt
 {
     const auto d = static_cast<float>(speed * timeDelta);
 
-    if (cameraMovingLeft_) MoveRight(-d * cameraMovingSpeed_.x);
-    if (cameraMovingRight_) MoveRight(d * cameraMovingSpeed_.x);
-    if (cameraMovingBackward_) MoveForward(-d * cameraMovingSpeed_.y);
-    if (cameraMovingForward_) MoveForward(d * cameraMovingSpeed_.y);
-    if (cameraMovingDown_) MoveUp(-d);
-    if (cameraMovingUp_) MoveUp(d);
+    if (cameraMovingLeft_ || cameraMovingLeftJoystick_) MoveRight(-d * cameraMovingSpeed_.x);
+    if (cameraMovingRight_ || cameraMovingRightJoystick_) MoveRight(d * cameraMovingSpeed_.x);
+    if (cameraMovingBackward_ || cameraMovingBackwardJoystick_) MoveForward(-d * cameraMovingSpeed_.y);
+    if (cameraMovingForward_ || cameraMovingForwardJoystick_) MoveForward(d * cameraMovingSpeed_.y);
+    if (cameraMovingDown_ || cameraMovingDownJoystick_) MoveUp(-d);
+    if (cameraMovingUp_ || cameraMovingUpJoystick_) MoveUp(d);
 
     modelRotX_ = glm::mix(modelRotX_, rawModelRotX_, 0.5);
     modelRotY_ = glm::mix(modelRotY_, rawModelRotY_, 0.5);
 
     const double rotationDiv = 1 / timeDelta;
-    Rotate(static_cast<float>(cameraRotX_ / rotationDiv), static_cast<float>(cameraRotY_ / rotationDiv));
+    Rotate(static_cast<float>(cameraRotX_ / rotationDiv + cameraRotXAbs_), static_cast<float>(cameraRotY_ / rotationDiv + cameraRotYAbs_));
 
     const bool updated =
-        cameraMovingLeft_ ||
-        cameraMovingRight_ ||
-        cameraMovingBackward_ ||
-        cameraMovingForward_ ||
-        cameraMovingDown_ ||
-        cameraMovingUp_ ||
-        cameraRotY_ != 0.0 ||
-        cameraRotX_ != 0.0 ||
+        cameraMovingLeft_ || cameraMovingLeftJoystick_ ||
+        cameraMovingRight_ || cameraMovingRightJoystick_ ||
+        cameraMovingBackward_ || cameraMovingBackwardJoystick_ ||
+        cameraMovingForward_ || cameraMovingForwardJoystick_ ||
+        cameraMovingDown_ || cameraMovingDownJoystick_ ||
+        cameraMovingUp_ || cameraMovingUpJoystick_ ||
+        (cameraRotY_ + cameraRotYAbs_) != 0.0 ||
+        (cameraRotX_ + cameraRotXAbs_) != 0.0 ||
         glm::abs(rawModelRotX_ - modelRotX_) > 0.01 ||
         glm::abs(rawModelRotY_ - modelRotY_) > 0.01 || movedByEvent_;;
 
     cameraRotY_ = 0;
     cameraRotX_ = 0;
+    cameraRotXAbs_ = 0;
+    cameraRotYAbs_ = 0;
     movedByEvent_ = false;
     
     return updated;

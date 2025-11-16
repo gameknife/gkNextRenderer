@@ -1120,7 +1120,8 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||
         userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse()
+        userInterface_->WantsToCaptureMouse() ||
+        window_->IsCapturingMouse()
         )
     {
         return;
@@ -1172,8 +1173,9 @@ void NextEngine::OnDropFile(const char* dropPath)
 
     if( ext == "hdr")
     {
-        //Assets::GlobalTexturePool::UpdateHDRTexture(0, path, Vulkan::SamplerConfig());
-        //userSettings_.SkyIdx = 0;
+        uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
+        scene_->GetEnvSettings().SkyIdx = newTextureId;
+        //userSettings_. = 0;
     }
 }
 void NextEngine::TickGamepadInput()
