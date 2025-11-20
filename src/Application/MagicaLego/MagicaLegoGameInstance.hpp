@@ -151,7 +151,7 @@ public:
     void TryChangeSelectionBrushIdx(int16_t idx);
 
     int16_t GetCurrentBrushIdx() const { return currentBlockIdx_; }
-    void SetCurrentBrushIdx(int16_t idx) { currentBlockIdx_ = idx; }
+    void SetCurrentBrushIdx(int16_t idx);
 
     // Replay
     int GetCurrentStep() const { return currentPreviewStep; }
@@ -253,6 +253,9 @@ private:
     glm::vec3 indicatorMaxTarget_{};
     glm::vec3 indicatorMinCurrent_{};
     glm::vec3 indicatorMaxCurrent_{};
+    glm::vec3 currentBlockPosTarget_{};
+    glm::vec3 currentBlockPosCurrent_{};
+    std::shared_ptr<Assets::Node> previewNode_;
 
     // BGM Stuff
     uint32_t currentBGM_ = 0;

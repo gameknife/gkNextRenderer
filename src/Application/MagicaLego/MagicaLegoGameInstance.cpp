@@ -109,6 +109,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 
                 indicatorMinTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<0>(indicator), 1.0f));
                 indicatorMaxTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<1>(indicator), 1.0f));
+                currentBlockPosTarget_ = renderLocation;
                 indicatorDrawRequest_ = true;
             }
         }
@@ -209,7 +210,15 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     float invDelta = static_cast<float>(deltaSeconds) / 60.0f;
     indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
     indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
-
+    currentBlockPosCurrent_ = glm::mix(currentBlockPosCurrent_, currentBlockPosTarget_, invDelta * 1000.0f);
+    
+    // draw preview block
+    if ( previewNode_.get() )
+    {
+        previewNode_->SetTranslation(currentBlockPosCurrent_);
+        previewNode_->RecalcTransform();
+    }
+    
     // draw if no capturing
     if (indicatorDrawRequest_ && !bCapturing_)
     {
@@ -292,6 +301,16 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     BasicNodeIndicatorMap["Plate2x2"] = {glm::vec3(-0.12f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.12f)};
     BasicNodeIndicatorMap["Corner2x2"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.12f, 0.032f, 0.12f)};
 
+    
+    glm::mat4 orientation = GetOrientationMatrix(EOrientation::EO_North);
+    uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size() - 1);
+    previewNode_ = Assets::Node::CreateNode("previewBlock", GetRenderLocationFromBlockLocation({0,0,0}), glm::quat(orientation), glm::vec3(1), GetBasicBlock(currentBlockIdx_)->modelId_,
+                                                    instanceId, false);
+    previewNode_->SetMaterial( { GetBasicBlock(currentBlockIdx_)->matType} );
+    previewNode_->SetVisible(true);
+    previewNode_->SetRayCastVisible(false);
+    GetEngine().GetScene().Nodes().push_back(previewNode_);
+    
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBasePlane::EBP_Small);
 
@@ -416,6 +435,16 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
             FPlacedBlock block{lastSelectLocation_, currentBlock.orientation, 0, idx, 0, 0};
             PlaceDynamicBlock(block);
         }
+    }
+}
+
+void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
+{
+    currentBlockIdx_ = idx;
+    if (previewNode_.get())
+    {
+        previewNode_->SetModelId( GetBasicBlock(idx)->modelId_ );
+        previewNode_->SetMaterial( { GetBasicBlock(idx)->matType } );
     }
 }
 

@@ -39,7 +39,9 @@ namespace Assets
         const std::string& GetName() const {return name_; }
 
         void SetVisible(bool visible) { visible_ = visible; }
+        void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool IsVisible() const { return visible_; }
+        bool IsRayCastVisible() const { return rayCastVisible_; }
         bool IsDrawable() const { return modelId_ != -1; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
@@ -54,6 +56,7 @@ namespace Assets
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         void SetMaterial(const std::array<uint32_t, 16>& materials);
+        void SetModelId(uint32_t modelId) { modelId_ = modelId; }
         std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
 
@@ -77,6 +80,7 @@ namespace Assets
         uint32_t modelId_;
         uint32_t instanceId_;
         bool visible_;
+        bool rayCastVisible_;
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
