@@ -216,6 +216,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     if ( previewNode_.get() )
     {
         previewNode_->SetTranslation(currentBlockPosCurrent_);
+        previewNode_->SetRotation(GetOrientationMatrix(currentOrientation_));
         previewNode_->RecalcTransform();
     }
     
