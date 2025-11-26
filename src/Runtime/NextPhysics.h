@@ -8,6 +8,7 @@
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Body/MotionType.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
+#include <glm/detail/type_quat.hpp>
 
 #include "Vulkan/Vulkan.hpp"
 
@@ -40,6 +41,7 @@ enum class ENextBodyShape
 struct FNextPhysicsBody
 {
     glm::vec3 position;
+    glm::quat rotation;
     glm::vec3 velocity;
     ENextBodyShape shape;
     JPH::BodyID bodyID;

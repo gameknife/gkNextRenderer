@@ -127,6 +127,8 @@ public:
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
+    
+    void TestSpawnPhysicsBlock();
 
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }

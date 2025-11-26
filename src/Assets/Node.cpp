@@ -87,6 +87,7 @@ namespace Assets
             if (body != nullptr)
             {
                 SetTranslation(body->position);
+                SetRotation(body->rotation);
                 RecalcTransform(true);
             }
         }
