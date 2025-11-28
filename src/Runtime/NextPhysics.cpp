@@ -401,7 +401,6 @@ JPH::BodyID NextPhysics::AddBodyInternal(FNextPhysicsBody& body, bool optimizeBr
 JPH::BodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, JPH::EMotionType motionType)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-	BodyID bodyId(-1);
 
 	// Now create a dynamic body to bounce on the floor
 	// Note that this uses the shorthand version of creating and adding a body to the world
@@ -410,12 +409,12 @@ JPH::BodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, JPH:
 	sphereSettings.mInertiaMultiplier = 2.0f;
 	//sphere_settings.mRestitution = 0.05f;
 	sphereSettings.mMotionQuality = EMotionQuality::LinearCast;
-	bodyId = bodyInterface.CreateAndAddBody(sphereSettings, EActivation::Activate);
+	BodyID bodyId = bodyInterface.CreateAndAddBody(sphereSettings, EActivation::Activate);
 
 	// Now you can interact with the dynamic body, in this case we're going to give it a velocity.
 	// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
 	//body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
-	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Sphere, bodyId, motionType };
+	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
 	return AddBodyInternal(body, true);
 }
 
@@ -426,10 +425,10 @@ JPH::BodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, JPH
     
 	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
 	BodyCreationSettings floorSettings(new BoxShape(Vec3(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f)), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, Layers::MOVING);
-	//floor_settings.mRestitution = 0.05f;
-	//floorSettings.mFriction = 0.5f;
+	//floorSettings.mRestitution = 0.05f;
+	floorSettings.mFriction = 0.5f;
     //floorSettings.mInertiaMultiplier = 2.0f;
-    //floorSettings.mMotionQuality = EMotionQuality::LinearCast;
+    floorSettings.mMotionQuality = EMotionQuality::LinearCast;
 	// Create the actual rigid body
 	bodyId = bodyInterface.CreateAndAddBody(floorSettings, EActivation::Activate);
 

@@ -95,6 +95,9 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
 {
 	models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0,0,0), 0.2f));
 	modelId_ = static_cast<uint32_t>(models.size() - 1);
+    
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.1,-0.1,-0.1), glm::vec3(0.1,0.1,0.1)));
+    boxModelId_ = static_cast<uint32_t>(models.size() - 1);
 
 	matIds_.clear();
 	
@@ -195,7 +198,7 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 			break;
 		case SDLK_F2: GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay; return true;
 			break;
-		case SDLK_SPACE: CreateSphereAndPush(); return true;
+		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
 		default: break;
 		}
@@ -266,13 +269,6 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
 	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), modelId_,
 															   instanceId, false);
-	// int random = std::rand() % matPreparedForAdd.size();
-	// Assets::FMaterial instanced = matPreparedForAdd[random];
-	// instanced.gpuMaterial_.Diffuse = glm::vec4(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 0.8f + 0.2f,
-	// 											static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 0.8f + 0.2f,
-	// 											static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 0.8f + 0.2f, 1.0);
-	//
-	// uint32_t newMatId = GetEngine().GetScene().AddMaterial(instanced);
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
 	newNode->SetMaterial( { newMatId } );
@@ -285,6 +281,29 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	GetEngine().GetScene().MarkDirty();
 
 	GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
+}
+
+void NextRendererGameInstance::CreateBoxAndPush()
+{
+    glm::vec3 forward = modelViewController_.GetForward();
+    glm::vec3 center = modelViewController_.GetPosition() + forward * 0.1f + modelViewController_.GetRight() * 0.5f + modelViewController_.GetUp() * -0.5f;
+    glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
+    glm::vec3 shotDir = normalize((farTarget - center));
+    uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
+    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), boxModelId_,
+                                                               instanceId, false);
+
+    uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
+    newNode->SetMaterial( { newMatId } );
+    newNode->SetVisible(true);
+    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.2,0.2,0.2}, JPH::EMotionType::Dynamic);
+    newNode->BindPhysicsBody(id);
+
+    GetEngine().GetScene().Nodes().push_back(newNode);
+    GetEngine().GetScene().MarkDirty();
+
+    GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
 }
 
 void NextRendererGameInstance::DrawSettings()
