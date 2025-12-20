@@ -86,7 +86,15 @@ namespace Assets
             auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
             if (body != nullptr)
             {
-                SetTranslation(body->position);
+                // Physics body position is the center of mass in world space.
+                // Node translation is the mesh pivot in world space.
+                // We need to calculate: Translation = BodyPos - Rotated(Scaled(Offset))
+                
+                glm::vec3 scaledOffset = physicsOffset_ * scaling_;
+                glm::vec3 rotatedOffset = body->rotation * scaledOffset;
+                glm::vec3 newTranslation = body->position - rotatedOffset;
+
+                SetTranslation(newTranslation);
                 SetRotation(body->rotation);
                 RecalcTransform(true);
             }

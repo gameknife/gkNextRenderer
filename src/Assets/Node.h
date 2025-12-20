@@ -66,6 +66,9 @@ namespace Assets
         ENodeMobility GetMobility() const { return mobility_; }
 
         const JPH::BodyID& GetPhysicsBody() const { return physicsBodyTemp_; }
+
+        void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
+        const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
         
     private:
         std::string name_;
@@ -74,6 +77,7 @@ namespace Assets
         mutable glm::quat rotation_;
         mutable glm::vec3 scaling_;
 
+        glm::vec3 physicsOffset_ = glm::vec3(0.0f);
         glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;

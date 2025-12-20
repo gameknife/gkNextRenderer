@@ -160,13 +160,13 @@ namespace Assets
                 }
             }
 
-            // create 6 plane bodys
-            physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), JPH::EMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), JPH::EMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), JPH::EMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), JPH::EMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), JPH::EMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), JPH::EMotionType::Static);
+            // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), JPH::EMotionType::Static);
+             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), JPH::EMotionType::Static);
         }
       
 

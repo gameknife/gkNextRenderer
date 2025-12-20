@@ -431,15 +431,22 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
 {
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
     
-    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("phyblock", currentBlockPosCurrent_ + glm::vec3(0,0.2,0), glm::quat(), glm::vec3(1), GetBasicBlock(GetCurrentBrushIdx())->modelId_,
+    glm::vec3 meshPos = currentBlockPosCurrent_ + glm::vec3(0,0.2,0);
+    glm::vec3 bodyExtent = glm::vec3(0.08,0.0945,0.08);
+    // mesh pivot is at bottom center, physics body pivot is at center of mass
+    glm::vec3 physicsOffset = glm::vec3(0, bodyExtent.y * 0.5f, 0);
+    glm::vec3 bodyPos = meshPos + physicsOffset;
+
+    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("phyblock", meshPos, glm::quat(), glm::vec3(1), GetBasicBlock(GetCurrentBrushIdx())->modelId_,
                                                                instanceId, false);
     
     newNode->SetMaterial( { GetBasicBlock(GetCurrentBrushIdx())->matType } );
     newNode->SetVisible(true);
     newNode->SetRayCastVisible(false);
     newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(currentBlockPosCurrent_ + glm::vec3(0,0.2,0), glm::vec3(0.08,0.096,0.08), JPH::EMotionType::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, JPH::EMotionType::Dynamic);
     newNode->BindPhysicsBody(id);
+    newNode->SetPhysicsOffset(physicsOffset);
     
     GetEngine().GetScene().Nodes().push_back(newNode);
     GetEngine().GetScene().MarkDirty();

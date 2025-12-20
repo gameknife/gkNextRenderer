@@ -96,7 +96,7 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
 	models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0,0,0), 0.2f));
 	modelId_ = static_cast<uint32_t>(models.size() - 1);
     
-    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.1,-0.1,-0.1), glm::vec3(0.1,0.1,0.1)));
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.2,-0.2,-0.2), glm::vec3(0.2,0.2,0.2)));
     boxModelId_ = static_cast<uint32_t>(models.size() - 1);
 
 	matIds_.clear();
@@ -287,7 +287,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
 {
     glm::vec3 forward = modelViewController_.GetForward();
     glm::vec3 center = modelViewController_.GetPosition() + forward * 0.1f + modelViewController_.GetRight() * 0.5f + modelViewController_.GetUp() * -0.5f;
-    glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
+    glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 200.f;
     glm::vec3 shotDir = normalize((farTarget - center));
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
     std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), boxModelId_,
@@ -297,13 +297,13 @@ void NextRendererGameInstance::CreateBoxAndPush()
     newNode->SetMaterial( { newMatId } );
     newNode->SetVisible(true);
     newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.2,0.2,0.2}, JPH::EMotionType::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, JPH::EMotionType::Dynamic);
     newNode->BindPhysicsBody(id);
 
     GetEngine().GetScene().Nodes().push_back(newNode);
     GetEngine().GetScene().MarkDirty();
 
-    GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
+    GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 100000.f);
 }
 
 void NextRendererGameInstance::DrawSettings()
