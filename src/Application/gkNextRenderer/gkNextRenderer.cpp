@@ -277,7 +277,7 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, JPH::EMotionType::Dynamic);
 	newNode->BindPhysicsBody(id);
 
-	GetEngine().GetScene().Nodes().push_back(newNode);
+	GetEngine().GetScene().AddNode(newNode);
 	GetEngine().GetScene().MarkDirty();
 
 	GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
@@ -300,7 +300,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, JPH::EMotionType::Dynamic);
     newNode->BindPhysicsBody(id);
 
-    GetEngine().GetScene().Nodes().push_back(newNode);
+    GetEngine().GetScene().AddNode(newNode);
     GetEngine().GetScene().MarkDirty();
 
     GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 100000.f);

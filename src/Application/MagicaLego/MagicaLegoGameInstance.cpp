@@ -279,7 +279,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
             auto newNode = Assets::Node::CreateNode(nodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
             newNode->SetMaterial( matId );
-            GetEngine().GetScene().Nodes().push_back(newNode);
+            GetEngine().GetScene().AddNode(newNode);
         }
     }
 
@@ -310,7 +310,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     previewNode_->SetMaterial( { GetBasicBlock(currentBlockIdx_)->matType} );
     previewNode_->SetVisible(true);
     previewNode_->SetRayCastVisible(false);
-    GetEngine().GetScene().Nodes().push_back(previewNode_);
+    GetEngine().GetScene().AddNode(previewNode_);
     
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBasePlane::EBP_Small);

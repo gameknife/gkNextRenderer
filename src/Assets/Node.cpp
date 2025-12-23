@@ -142,6 +142,18 @@ namespace Assets
         materialIdx_ = materials;
     }
 
+    void Node::SetVisible(bool visible)
+    {
+        visible_ = visible;
+        if (NextEngine::GetInstance())
+        {
+            if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                physics->SetBodyActive(physicsBodyTemp_, visible);
+            }
+        }
+    }
+
     NodeProxy Node::GetNodeProxy() const
     {
         NodeProxy proxy;

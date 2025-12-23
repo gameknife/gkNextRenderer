@@ -79,6 +79,8 @@ public:
 
     FNextPhysicsBody* GetBody(JPH::BodyID bodyID);
 
+    void SetBodyActive(JPH::BodyID bodyID, bool active);
+
     void OnSceneStarted();
     void OnSceneDestroyed();
 private:

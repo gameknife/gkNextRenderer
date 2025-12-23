@@ -38,7 +38,7 @@ namespace Assets
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }
 
-        void SetVisible(bool visible) { visible_ = visible; }
+        void SetVisible(bool visible);
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool IsVisible() const { return visible_; }
         bool IsRayCastVisible() const { return rayCastVisible_; }

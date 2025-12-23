@@ -531,6 +531,23 @@ FNextPhysicsBody* NextPhysics::GetBody(JPH::BodyID bodyID)
 	return nullptr;
 }
 
+void NextPhysics::SetBodyActive(JPH::BodyID bodyID, bool active)
+{
+    if (bodyID.IsInvalid()) return;
+    
+    BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+    bool isAdded = bodyInterface.IsAdded(bodyID);
+
+    if (active && !isAdded)
+    {
+        bodyInterface.AddBody(bodyID, EActivation::Activate);
+    }
+    else if (!active && isAdded)
+    {
+        bodyInterface.RemoveBody(bodyID);
+    }
+}
+
 void NextPhysics::OnSceneStarted()
 {
 	TimeElapsed = 0;
