@@ -45,6 +45,7 @@
     "xxhash",
     "spdlog",
     "cpp-base64",
+    "catch2",
     {
       "name": "vulkan-loader",
       "platform": "linux",
