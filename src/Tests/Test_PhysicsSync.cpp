@@ -37,10 +37,11 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 // Helper to simulate engine loop
-void SimulateEngine(NextEngine* engine, int frames, double deltaSeconds)
+void SimulateEngine(NextEngine* engine, int frames)
 {
     for (int i = 0; i < frames; ++i)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // Simulate frame time
         engine->Tick();
         // Since Tick() inside might use real system time or internal logic,
         // we might need to manually step physics if Tick() doesn't do it deterministically enough for tests,
@@ -69,6 +70,8 @@ TEST_CASE("Physical Simulation of Static Body", "[Integration][Physics]") {
     auto engine = std::make_unique<NextEngine>(*GOption);
     engine->Start(); // Start sets status, but main loop is manual usually or handled by SDL
     // Wait for engine to be ready? Start() might be non-blocking or just init state.
+    
+    SimulateEngine(engine.get(), 60);
     
     // Get Physics Engine
     auto physics = engine->GetPhysicsEngine();
@@ -159,7 +162,7 @@ TEST_CASE("Physical Simulation of Static Body", "[Integration][Physics]") {
         floorNode->SetVisible(false); // DISABLE FLOOR
         
         // Simulate
-        for(int i=0; i<frames; ++i) engine->Tick();
+        SimulateEngine(engine.get(), 60);
         
         auto* bodyInfo2 = physics->GetBody(ballBodyId2);
         REQUIRE(bodyInfo2 != nullptr);
@@ -167,9 +170,12 @@ TEST_CASE("Physical Simulation of Static Body", "[Integration][Physics]") {
         // Gravity is -9.8. t=1s. d = 0.5*g*t^2 = -4.9m. 5 - 4.9 = 0.1. 
         // Wait, if it hits floor it stays at 0.5. If it passes through, it goes to < 0.
         // Let's run more frames to be sure.
-        for(int i=0; i<30; ++i) engine->Tick();
+        SimulateEngine(engine.get(), 60);
         
         // INFO("Ball2 Y (Invisible Floor): " << bodyInfo2->position.y);
         REQUIRE(bodyInfo2->position.y < -1.0f); // Should be below floor center
     }
+    
+    engine->End();
+    engine.reset();
 }
