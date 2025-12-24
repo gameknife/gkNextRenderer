@@ -124,5 +124,8 @@ if [ "$CLEAN" -eq 1 ]; then
     rm -rf "$PROJECT_ROOT/out/build/$PRESET"
 fi
 
-log "Building with preset: $PRESET"
+log "Configuring preset: $PRESET"
+cmake --preset "$PRESET"
+
+log "Building preset: $PRESET"
 cmake --build --preset "$PRESET"
