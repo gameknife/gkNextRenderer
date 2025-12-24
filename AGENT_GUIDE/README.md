@@ -1,45 +1,58 @@
-# Agent 指南索引
+# Gemini Code Assistant Guidelines
 
-## 🚀 按需阅读指南
+This document outlines the operational guidelines, development conventions, and testing strategies for the Gemini Code Assistant working on the `gkNextRenderer` project.
 
-| 任务类型 | 推荐阅读层级 | 预估时间 | 链接 |
-|---------|-------------|---------|------|
-| 简单任务 | Layer 1 | 30秒 | [核心模式](./core-patterns.md) |
-| 复杂开发 | Layer 1+2 | 2.5分钟 | [核心模式](./core-patterns.md) → [上下文规则](./contextual-rules.md) |
-| 紧急修复 | Layer 3 | 15秒 | [快速命令](./quick-commands.md) |
+## Development Conventions
 
-## 📋 完整分层指引
+### Language Preference
+*   All interactions and documentation should be conducted in **Chinese (中文)** unless specified otherwise.
 
-### 1. [核心模式](./core-patterns.md) - Layer 1
-**架构原则、关键命令、成功标准**
-- 平台抽象和统一头文件使用
-- 构建验证流程
-- 成功识别标准
+### Coding Style
+*   Adhere to the project's `.clang-format` for C++ code.
+*   Follow modern C++20 standards.
+*   Maintain consistent naming conventions as observed in existing files (e.g., `CamelCase` for classes/methods, `camelCase_` or `_camelCase` for member variables).
 
-### 2. [上下文规则](./contextual-rules.md) - Layer 2
-**代码开发、构建系统、测试规则**
-- 代码风格和约定
-- 构建系统使用规则
-- 测试和验证要求
+### Architecture & Patterns
+*   **Engine Architecture**: The engine uses a Singleton pattern for `NextEngine`.
+*   **Physics**: Jolt Physics is used. `NextPhysics` wrapper handles integration.
+*   **Assets**: `Scene`, `Node`, `Model` manage the scene graph.
+*   **Rendering**: Vulkan-based renderer.
 
-### 3. [快速命令](./quick-commands.md) - Layer 3
-**任务类型指南、紧急命令**
-- 按任务类型的操作流程
-- 常见问题快速解决方案
-- 应急命令集合
+## Testing Strategy
 
-## 💡 使用技巧
+The project uses **Catch2** for unit and integration testing.
 
-**Agent 工作流程**:
-1. 始终使用中文交流
-2. 优先使用 TodoWrite 工具跟踪任务进度
-3. 根据任务复杂度选择阅读层级
-4. 每次代码修改后必须构建验证
+### Test Location
+*   Test source files are located in `src/Tests/`.
+*   The test executable target is `gkNextUnitTests`.
 
-**快速定位**:
-- 遇到构建问题 → 直接查看 [快速命令](./quick-commands.md)
-- 开发新功能 → 阅读 [核心模式](./core-patterns.md) + [上下文规则](./contextual-rules.md)
-- 不确定操作流程 → 从 [核心模式](./core-patterns.md) 开始
+### Writing Tests
+1.  **Framework**: Use `Catch2` macros (`TEST_CASE`, `SECTION`, `REQUIRE`, `CHECK`).
+2.  **Integration Tests**:
+    *   For tests requiring the full engine stack (Physics, Scene), instantiating `NextEngine` is possible but requires a valid Vulkan environment (GPU) and compiled Shaders.
+    *   **Limitation**: Running full engine tests in headless CI/CD environments without GPU/Display may fail.
+    *   **Workaround**: For logic-only tests, prefer mocking dependencies or testing components (`NextPhysics`, `Node`) in isolation if possible.
+3.  **Mocking**:
+    *   To test `NextGameInstanceBase` subclasses, create a Mock/Test implementation (as seen in `Test_PhysicsSync.cpp`).
+    *   Avoid testing `VulkanBaseRenderer` logic in unit tests unless the environment supports it.
 
----
-*此指南设计为可维护的分层结构，每层可独立更新。如需修改，请联系项目维护者。*
+### Running Tests
+*   **Build**: Ensure `gkNextUnitTests` target is built.
+    ```bat
+    build.bat windows
+    ```
+*   **Execute**: Run the executable from the `bin` directory.
+    ```bat
+    .\build\windows\bin\gkNextUnitTests.exe
+    ```
+*   **Prerequisites**:
+    *   Ensure `assets` directory is accessible (usually run from project root, but currently CWD handling in tests might need adjustment or assets need to be in place).
+    *   **Important**: Shaders (`.spv` files) must be compiled and available in `assets/shaders`. The engine runtime throws an exception if shaders are missing.
+
+### Current Test Issues & Troubleshooting
+*   **Shader Missing Exception**: The engine startup currently fails if `Process.UpScaleFSR.comp.slang.spv` is missing. Ensure shaders are compiled before running integration tests that initialize `NextEngine`.
+*   **Path Issues**: `FileHelper` uses relative paths. Ensure the test executable is run with the correct Working Directory (Project Root) or assets are copied to the executable directory.
+
+## Modification Log
+
+*   **2025-12-23**: Added `SetBodyActive` to `NextPhysics` and synchronized `Node::SetVisible` with physics body activation. Added `catch2` to `vcpkg.json` and created initial `gkNextUnitTests` framework.

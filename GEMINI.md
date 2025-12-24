@@ -13,6 +13,7 @@ The project is structured as a collection of libraries and executables. The main
 *   `MagicaLego`: A Voxel/Lego style prototype for path tracing validation.
 *   `gkNextBenchmark`: A set of benchmarks for static and real-time scenes.
 *   `Packager`: A tool for packing assets into `.pkg` files.
+*   `gkNextUnitTests`: Unit and Integration tests using Catch2.
 
 ## Technologies
 
@@ -26,6 +27,8 @@ The project uses the following technologies:
 *   **ImGui:** The editor is built using ImGui.
 *   **glTF:** The engine uses the glTF 2.0 format for assets and scenes.
 *   **Blender:** The recommended tool for creating and editing assets.
+*   **Jolt Physics:** Used for physics simulation.
+*   **Catch2:** Used for unit testing.
 
 A full list of dependencies can be found in the `vcpkg.json` file.
 
@@ -49,6 +52,16 @@ build.bat windows
 rem Run the main renderer
 run.bat windows
 ```
+
+### Running Tests
+
+To run the unit/integration tests:
+
+```bat
+.\build\windows\bin\gkNextUnitTests.exe
+```
+
+*Note: Integration tests may require a valid Vulkan environment (GPU) and compiled shaders in `assets/shaders`.*
 
 ### Linux
 
@@ -99,7 +112,11 @@ run.bat windows --target gkNextEditor.exe
 
 *   **Language Preference:** All future interactions should be conducted in Chinese (中文).
 *   **Coding Style:** The project uses a `.clang-format` file to enforce a consistent coding style.
-*   **Testing:** There is no dedicated test suite, but the project includes several benchmarks that can be used to test the engine's performance and correctness.
+*   **Testing:** 
+    *   Tests are located in `src/Tests`.
+    *   Use `Catch2` framework.
+    *   Ensure tests handle resource paths correctly (usually project root).
+    *   Mock dependencies where possible to avoid full engine initialization overhead/failures in CI.
 *   **Contributions:** Contributions are welcome. Please open an issue or pull request on GitHub.
 *   **Documentation:** The `doc` directory contains additional documentation, including `Thoughts.md`, which contains notes and ideas about the project.
 *   **Agent Guide:** The `AGENT_GUIDE` directory contains guidelines for AI agents working on the project.
