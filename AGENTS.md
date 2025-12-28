@@ -1,3 +1,9 @@
+# AGENTS.md
+
+This file provides guidance to Qoder (qoder.com) when working with code in this repository.
+
+---
+
 # 🤖 Agent 指引
 
 ## 📍 核心指引位置
