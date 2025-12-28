@@ -28,6 +28,7 @@ detect_platform() {
         Darwin*) 
             if [ "$(uname -m)" = "arm64" ]; then echo "macos-arm64"; else echo "macos-x64"; fi ;;
         Linux*) echo "linux-release" ;; 
+        MINGW*|MSYS*) echo "mingw" ;;
         *) echo "unknown" ;; 
     esac
 }
@@ -41,7 +42,12 @@ ensure_vcpkg() {
 }
 
 ensure_tsc() {
-    if [ ! -f "$PROJECT_ROOT/tools/tsc/tsc" ]; then
+    local tsc_bin="$PROJECT_ROOT/tools/tsc/tsc"
+    if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* ]]; then
+        tsc_bin="$tsc_bin.exe"
+    fi
+
+    if [ ! -f "$tsc_bin" ]; then
         log "Fetching TypeScript Compiler (TSC)..."
         "$PROJECT_ROOT/tools/fetch_tsc.sh"
     fi
@@ -87,7 +93,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --clean    Clean build directory before building"
             echo "  --android  Build for Android"
             echo "Presets (auto-detected if omitted):"
-            echo "  macos-arm64, macos-x64, linux-release"
+            echo "  macos-arm64, macos-x64, linux-release, mingw"
             exit 0 
             ;; 
         *) PRESET="$1"; shift ;; 

@@ -32,7 +32,7 @@ case "$(uname -s)" in
         default_preset="linux-release"
         ;;
     MINGW*|MSYS*)
-        default_preset="windows-dev" 
+        default_preset="mingw" 
         ;;
     *)
         default_preset="unknown"

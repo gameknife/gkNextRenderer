@@ -92,6 +92,16 @@
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-osx"
       }
+    },
+    {
+      "name": "mingw",
+      "inherits": "base",
+      "generator": "Ninja",
+      "displayName": "MinGW Release",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -114,6 +124,11 @@
       "name": "macos-x64",
       "configurePreset": "macos-x64",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "mingw",
+      "configurePreset": "mingw",
+      "configuration": "Release"
     }
   ]
 }
