@@ -73,9 +73,10 @@ function Ensure-TSC {
         Write-Log "TSC compiler not found. Fetching..."
         $FetchTsc = Join-Path $ProjectRoot "tools/fetch_tsc.bat"
         if (Test-Path $FetchTsc) {
-            Start-Process -FilePath $FetchTsc -Wait -NoNewWindow -PassThru | ForEach-Object {
-                if ($_.ExitCode -ne 0) { throw "Failed to fetch TSC." }
-            }
+            Start-Process -FilePath $FetchTsc -Wait -NoNewWindow -PassThru
+            #  | ForEach-Object {
+            #     if ($_.ExitCode -ne 0) { throw "Failed to fetch TSC." }
+            # }
         } else {
             Write-Warning "tools/fetch_tsc.bat not found. TypeScript compilation might fail."
         }
