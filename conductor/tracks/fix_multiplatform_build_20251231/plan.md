@@ -2,7 +2,7 @@
 
 ## Phase 1: GitHub Actions Workflow Fixes
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Windows builds. [648c8b00]
-- [ ] Task: Fix `build.yml` (or equivalent) to use correct arguments for Linux builds.
+- [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Linux builds. [bb4d846f]
 - [ ] Task: Fix `build.yml` (or equivalent) to use correct arguments for macOS builds.
 - [ ] Task: Verify workflow syntax and dry-run (if possible).
 - [ ] Task: Conductor - User Manual Verification 'GitHub Actions Workflow Fixes' (Protocol in workflow.md)
