@@ -433,9 +433,30 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 		
 		// auto fetch timer & display
 		auto times = gpuTimer->FetchAllTimes(4);
+		float totalGpuTime = 0;
+		for(auto& time : times) {
+			if (std::get<2>(time) == 0) totalGpuTime += std::get<1>(time);
+		}
+
 		for(auto& time : times)
 		{
-			ImGui::Text("%s: %.2fms", std::get<0>(time).c_str(), std::get<1>(time));
+			float ms = std::get<1>(time);
+			int depth = std::get<2>(time);
+			std::string name = std::get<0>(time);
+
+			ImGui::Indent(depth * 10.0f);
+			ImGui::Text("%s: %.2fms", name.c_str(), ms);
+			
+			if (totalGpuTime > 0) {
+				ImGui::SameLine(ImGui::GetWindowWidth() - 60);
+				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+				char buf[32];
+				sprintf(buf, "##%s_bar", name.c_str());
+				ImGui::ProgressBar(ms / 16.67f, ImVec2(50, 2), "");
+				ImGui::PopStyleColor();
+			}
+
+			ImGui::Unindent(depth * 10.0f);
 		}
 
 		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));

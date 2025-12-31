@@ -185,18 +185,14 @@ namespace Vulkan
 				lastStats.push_back(std::make_tuple(name, stackDepth, time));
 			}
 		}
-		std::vector<std::tuple<std::string, float> > FetchAllTimes( int maxStack )
+		std::vector<std::tuple<std::string, float, int> > FetchAllTimes( int maxStack )
 		{
-			std::vector<std::tuple<std::string, float> > result;
+			std::vector<std::tuple<std::string, float, int> > result;
 			for(auto& [name, stackDepth, time] : lastStats)
 			{
-				std::string prefix = "";
-			    for (size_t i = 0; i < stackDepth; i++) {
-			    	prefix += (i == stackDepth - 1) ? " - " : "   ";
-			    }
 				if (maxStack > stackDepth)
 				{
-					result.push_back(std::make_tuple(prefix + name, time));
+					result.push_back(std::make_tuple(name, time, stackDepth));
 				}
 			}
 			return result;
