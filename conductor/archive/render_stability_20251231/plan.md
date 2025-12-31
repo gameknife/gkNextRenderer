@@ -11,6 +11,6 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2: 全面打点与 UI 升级' (Protocol in workflow.md)
 
 ## Phase 3: 稳定性增强与校验
-- [ ] Task: 确保调试模式下正确启用了 Vulkan Validation Layers。
-- [ ] Task: 运行主要场景（如 CornellBox, Sponza），收集并修复 Validation Layers 报告的 Error 和 Warning。
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: 稳定性增强与校验' (Protocol in workflow.md)
+- [x] Task: 确保调试模式下正确启用了 Vulkan Validation Layers。 [fd44793]
+- [x] 运行主要场景（如 CornellBox, Sponza），收集并修复 Validation Layers 报告的 Error 和 Warning。 [fd44793]
+- [~] Task: Conductor - User Manual Verification 'Phase 3: 稳定性增强与校验' (Protocol in workflow.md)
