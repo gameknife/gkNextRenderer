@@ -48,7 +48,7 @@ jobs:
         key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile gkNextRenderer
-      run: ./build.sh linux
+      run: ./build.sh linux-release
 
     - name: Save vcpkg to cache
       if: github.event_name != 'pull_request'
