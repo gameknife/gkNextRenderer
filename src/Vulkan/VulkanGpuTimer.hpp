@@ -182,6 +182,31 @@ namespace Vulkan
 			return result;
 		}
 
+		// Folder management
+		void PushGpuFolder(const std::string& name) {
+			gpuFolderStack_.push_back(currentGpuFolder_.length());
+			currentGpuFolder_ += name;
+		}
+		void PopGpuFolder() {
+			if (!gpuFolderStack_.empty()) {
+				currentGpuFolder_.resize(gpuFolderStack_.back());
+				gpuFolderStack_.pop_back();
+			}
+		}
+		const std::string& GetCurrentGpuFolder() const { return currentGpuFolder_; }
+
+		void PushCpuFolder(const std::string& name) {
+			cpuFolderStack_.push_back(currentCpuFolder_.length());
+			currentCpuFolder_ += name;
+		}
+		void PopCpuFolder() {
+			if (!cpuFolderStack_.empty()) {
+				currentCpuFolder_.resize(cpuFolderStack_.back());
+				cpuFolderStack_.pop_back();
+			}
+		}
+		const std::string& GetCurrentCpuFolder() const { return currentCpuFolder_; }
+
 		std::vector<std::tuple<std::string, int, float> > lastStats; // name, depth, duration seconds
 		VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
 		std::vector<uint64_t> time_stamps{};
@@ -191,6 +216,11 @@ namespace Vulkan
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
 		bool started_ = false;
+
+		std::string currentGpuFolder_;
+		std::vector<size_t> gpuFolderStack_;
+		std::string currentCpuFolder_;
+		std::vector<size_t> cpuFolderStack_;
 	};
 
 	class ScopedGpuTimer
@@ -202,41 +232,29 @@ namespace Vulkan
 		{
 			timer_->Start(commandBuffer_, name_.c_str());
 			folderTimer = true;
-			PushFolder(foldername);
+			timer_->PushGpuFolder(foldername);
 		}
 		ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name ):commandBuffer_(commandBuffer),timer_(timer), name_(name)
 		{
-			timer_->Start(commandBuffer_, (folderName_ + name_).c_str());
+			timer_->Start(commandBuffer_, (timer_->GetCurrentGpuFolder() + name_).c_str());
 		}
 		virtual ~ScopedGpuTimer()
 		{
 			if (folderTimer)
 			{
-				PopFolder();
+				timer_->PopGpuFolder();
 				timer_->End(commandBuffer_, name_.c_str());
 			}
 			else
 			{
-				timer_->End(commandBuffer_, (folderName_ + name_).c_str());
+				timer_->End(commandBuffer_, (timer_->GetCurrentGpuFolder() + name_).c_str());
 			}
 		}
 		VkCommandBuffer commandBuffer_;
 		VulkanGpuTimer* timer_;
 		std::string name_;
 		bool folderTimer = false;
-
-		static std::string folderName_;
-		static void PushFolder(const std::string& name)
-		{
-			folderName_ = name;
-		}
-		static void PopFolder()
-		{
-			folderName_ = "";
-		}
 	};
-
-	inline std::string ScopedGpuTimer::folderName_;
 
 	class ScopedCpuTimer
 	{
@@ -245,25 +263,16 @@ namespace Vulkan
 		
 		ScopedCpuTimer(VulkanGpuTimer* timer, const char* name ):timer_(timer), name_(name)
 		{
-			timer_->StartCpuTimer((folderName_ + name_).c_str());
+			timer_->StartCpuTimer((timer_->GetCurrentCpuFolder() + name_).c_str());
 		}
 		virtual ~ScopedCpuTimer()
 		{
-			timer_->EndCpuTimer( (folderName_ + name_).c_str());
+			timer_->EndCpuTimer( (timer_->GetCurrentCpuFolder() + name_).c_str());
 		}
 		VulkanGpuTimer* timer_;
 		std::string name_;
 
-		static std::string folderName_;
-		static void PushFolder(const std::string& name)
-		{
-			folderName_ = name;
-		}
-		static void PopFolder(const std::string& name)
-		{
-			folderName_ = "";
-		}
+		// Static methods removed as per refactoring plan.
+		// If manual folder management is needed, expose methods on VulkanGpuTimer.
 	};
-
-	inline std::string ScopedCpuTimer::folderName_;
 }
