@@ -1,13 +1,15 @@
 # Spec: 增强渲染管线的稳定性与性能分析能力
 
 ## 目标
-提高 gkNextEngine 在复杂场景下的渲染稳定性，并提供直观的性能瓶颈分析工具。
+基于现有的 `VulkanGpuTimer` 基础，优化其健壮性，覆盖更多的渲染路径，并提供更直观的性能分析可视化。同时强化 Vulkan 层的校验以提升引擎稳定性。
 
 ## 范围
-1. **GPU Timestamp Queries**: 实现跨平台的 GPU 计时器，测量关键渲染 Pass（如 G-Buffer, Ray Tracing, Post-processing）的耗时。
-2. **Pipeline State Validation**: 强化 Vulkan 校验层的集成，在开发模式下自动捕获潜在的管线状态冲突。
-3. **UI 集成**: 在 ImGui 编辑器中实时展示 GPU 性能指标。
+1. **GPU Timestamp Queries**: 审查并重构现有的 `VulkanGpuTimer`，解决潜在的线程安全问题（如静态成员变量），并确保跨平台（尤其是 Android）的兼容性。
+2. **Coverage & Instrumentation**: 确保所有关键渲染 Pass（包括 G-Buffer, Shadow, Ray Tracing, Post-processing, Compute Shaders）都被 `SCOPED_GPU_TIMER` 正确覆盖。
+3. **Advanced UI**: 在 ImGui 中升级性能展示，支持层级折叠或更清晰的时间线视图，而不仅仅是简单的文本列表。
+4. **Pipeline Validation**: 启用并修复 Vulkan Validation Layers 报告的高优先级错误。
 
 ## 成功标准
-- 能够在编辑器中看到每个主要渲染阶段的精确毫秒级 GPU 耗时。
-- 修复任何在校验模式下发现的严重 Vulkan 警告或错误。
+- `VulkanGpuTimer` 无静态状态依赖，支持嵌套调用且线程安全。
+- 编辑器 UI 能清晰展示渲染管线的完整层级耗时。
+- 在开启 Validation Layers 的情况下运行 benchmark 场景无严重报错。

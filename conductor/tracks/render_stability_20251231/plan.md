@@ -1,16 +1,16 @@
 # Plan: 增强渲染管线的稳定性与性能分析能力
 
-## Phase 1: 基础架构搭建
-- [ ] Task: 设计并实现 `GpuProfiler` 类，用于管理 Vulkan Query Pools 和计时戳。
-- [ ] Task: 在渲染循环的起始和结束处插入全局计时锚点。
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: 基础架构搭建' (Protocol in workflow.md)
+## Phase 1: 现有分析器审计与重构
+- [ ] Task: 审查 `VulkanGpuTimer` 代码，特别是 `ScopedGpuTimer` 中的静态 `folderName_`，将其改为成员变量或上下文相关存储以解决潜在风险。
+- [ ] Task: 验证当前 `GpuTimer` 在 Android 平台上的可用性，确保 `vkCmdWriteTimestamp` 正确工作。
+- [ ] Task: Conductor - User Manual Verification 'Phase 1: 现有分析器审计与重构' (Protocol in workflow.md)
 
-## Phase 2: 详细 Pass 测量与 UI 展示
-- [ ] Task: 为 `gkNextRenderer` 中的每个主要渲染 Pass（G-Buffer, Shadow, Path Tracing）添加计时器。
-- [ ] Task: 在 `gkNextEditor` 中创建一个新的性能分析面板，展示实时耗时曲线。
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: 详细 Pass 测量与 UI 展示' (Protocol in workflow.md)
+## Phase 2: 全面打点与 UI 升级
+- [ ] Task: 扫描所有渲染 Pass（`gkNextRenderer`, `PostProcess`, `RayTracing` 等），补充缺失的 `SCOPED_GPU_TIMER` 宏。
+- [ ] Task: 优化 ImGui 的性能面板展示，支持按层级缩进显示，并考虑添加简单的柱状图或百分比占比。
+- [ ] Task: Conductor - User Manual Verification 'Phase 2: 全面打点与 UI 升级' (Protocol in workflow.md)
 
 ## Phase 3: 稳定性增强与校验
-- [ ] Task: 审查并优化当前的 Vulkan 实例创建逻辑，确保在调试模式下启用所有必要的验证特性。
-- [ ] Task: 运行集成测试并根据校验层输出修复现有的 API 使用警告。
+- [ ] Task: 确保调试模式下正确启用了 Vulkan Validation Layers。
+- [ ] Task: 运行主要场景（如 CornellBox, Sponza），收集并修复 Validation Layers 报告的 Error 和 Warning。
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: 稳定性增强与校验' (Protocol in workflow.md)
