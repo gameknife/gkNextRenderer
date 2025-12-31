@@ -3,7 +3,7 @@
 ## Phase 1: 现有分析器审计与重构
 - [x] Task: 审查 `VulkanGpuTimer` 代码，特别是 `ScopedGpuTimer` 中的静态 `folderName_`，将其改为成员变量或上下文相关存储以解决潜在风险。 [6be5855]
 - [x] Task: 验证当前 `GpuTimer` 在 Android 平台上的可用性，确保 `vkCmdWriteTimestamp` 正确工作。 [03c1a8b]
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: 现有分析器审计与重构' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: 现有分析器审计与重构' (Protocol in workflow.md)
 
 ## Phase 2: 全面打点与 UI 升级
 - [ ] Task: 扫描所有渲染 Pass（`gkNextRenderer`, `PostProcess`, `RayTracing` 等），补充缺失的 `SCOPED_GPU_TIMER` 宏。
