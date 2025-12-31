@@ -8,7 +8,7 @@
 ## Phase 2: 全面打点与 UI 升级
 - [x] Task: 扫描所有渲染 Pass（`gkNextRenderer`, `PostProcess`, `RayTracing` 等），补充缺失的 `SCOPED_GPU_TIMER` 宏。 [20869e0]
 - [x] Task: 优化 ImGui 的性能面板展示，支持按层级缩进显示，并考虑添加简单的柱状图或百分比占比。 [4bcd83f]
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: 全面打点与 UI 升级' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2: 全面打点与 UI 升级' (Protocol in workflow.md)
 
 ## Phase 3: 稳定性增强与校验
 - [ ] Task: 确保调试模式下正确启用了 Vulkan Validation Layers。
