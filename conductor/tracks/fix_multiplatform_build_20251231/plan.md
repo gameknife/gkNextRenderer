@@ -1,6 +1,7 @@
 # Plan: Fix Multi-Platform Build System Issues
 
 ## Phase 1: GitHub Actions Workflow Fixes
+- [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Windows builds. [648c8b00]
 - [ ] Task: Fix `build.yml` (or equivalent) to use correct arguments for Linux builds.
 - [ ] Task: Fix `build.yml` (or equivalent) to use correct arguments for macOS builds.
 - [ ] Task: Verify workflow syntax and dry-run (if possible).
