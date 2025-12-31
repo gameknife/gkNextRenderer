@@ -30,6 +30,7 @@ public:
 	bool ForceNoRT{};
 	bool ForceSoftGen{};
 	bool HardwareQuery{};
+	bool Validation{};
 	std::string locale{};
 
 	// Renderer options.

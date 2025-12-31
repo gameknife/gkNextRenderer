@@ -109,6 +109,7 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 
                 indicatorMinTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<0>(indicator), 1.0f));
                 indicatorMaxTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<1>(indicator), 1.0f));
+                currentBlockPosTarget_ = renderLocation;
                 indicatorDrawRequest_ = true;
             }
         }
@@ -209,7 +210,16 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     float invDelta = static_cast<float>(deltaSeconds) / 60.0f;
     indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
     indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
-
+    currentBlockPosCurrent_ = glm::mix(currentBlockPosCurrent_, currentBlockPosTarget_, invDelta * 1000.0f);
+    
+    // draw preview block
+    if ( previewNode_.get() )
+    {
+        previewNode_->SetTranslation(currentBlockPosCurrent_);
+        previewNode_->SetRotation(GetOrientationMatrix(currentOrientation_));
+        previewNode_->RecalcTransform();
+    }
+    
     // draw if no capturing
     if (indicatorDrawRequest_ && !bCapturing_)
     {
@@ -269,7 +279,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
             auto newNode = Assets::Node::CreateNode(nodeName, location, glm::quat(1,0,0,0), glm::vec3(1), modelId, basementInstanceId_, false);
             newNode->SetMaterial( matId );
-            GetEngine().GetScene().Nodes().push_back(newNode);
+            GetEngine().GetScene().AddNode(newNode);
         }
     }
 
@@ -292,6 +302,16 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     BasicNodeIndicatorMap["Plate2x2"] = {glm::vec3(-0.12f, 0.00f, -0.04f), glm::vec3(0.04f, 0.032f, 0.12f)};
     BasicNodeIndicatorMap["Corner2x2"] = {glm::vec3(-0.04f, 0.00f, -0.04f), glm::vec3(0.12f, 0.032f, 0.12f)};
 
+    
+    glm::mat4 orientation = GetOrientationMatrix(EOrientation::EO_North);
+    uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size() - 1);
+    previewNode_ = Assets::Node::CreateNode("previewBlock", GetRenderLocationFromBlockLocation({0,0,0}), glm::quat(orientation), glm::vec3(1), GetBasicBlock(currentBlockIdx_)->modelId_,
+                                                    instanceId, false);
+    previewNode_->SetMaterial( { GetBasicBlock(currentBlockIdx_)->matType} );
+    previewNode_->SetVisible(true);
+    previewNode_->SetRayCastVisible(false);
+    GetEngine().GetScene().AddNode(previewNode_);
+    
     instanceCountBeforeDynamics_ = static_cast<int>(GetEngine().GetScene().Nodes().size());
     SwitchBasePlane(EBasePlane::EBP_Small);
 
@@ -334,6 +354,8 @@ bool MagicaLegoGameInstance::OnKey(SDL_Event& event)
         case SDLK_2: SwitchBasePlane(EBasePlane::EBP_Mid);
             break;
         case SDLK_3: SwitchBasePlane(EBasePlane::EBP_Small);
+            break;
+        case SDLK_SPACE: TestSpawnPhysicsBlock();
             break;
         default: break;
         }
@@ -405,6 +427,33 @@ bool MagicaLegoGameInstance::OnScroll(double xoffset, double yoffset)
     return true;
 }
 
+void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
+{
+    uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
+    
+    glm::vec3 meshPos = currentBlockPosCurrent_ + glm::vec3(0,0.2,0);
+    glm::vec3 bodyExtent = glm::vec3(0.08,0.0945,0.08);
+    // mesh pivot is at bottom center, physics body pivot is at center of mass
+    glm::vec3 physicsOffset = glm::vec3(0, bodyExtent.y * 0.5f, 0);
+    glm::vec3 bodyPos = meshPos + physicsOffset;
+
+    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("phyblock", meshPos, glm::quat(), glm::vec3(1), GetBasicBlock(GetCurrentBrushIdx())->modelId_,
+                                                               instanceId, false);
+    
+    newNode->SetMaterial( { GetBasicBlock(GetCurrentBrushIdx())->matType } );
+    newNode->SetVisible(true);
+    newNode->SetRayCastVisible(false);
+    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, JPH::EMotionType::Dynamic);
+    newNode->BindPhysicsBody(id);
+    newNode->SetPhysicsOffset(physicsOffset);
+    
+    GetEngine().GetScene().Nodes().push_back(newNode);
+    GetEngine().GetScene().MarkDirty();
+    
+    //GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
+}
+
 void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
 {
     if (currentMode_ == ELegoMode::ELM_Select)
@@ -416,6 +465,16 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
             FPlacedBlock block{lastSelectLocation_, currentBlock.orientation, 0, idx, 0, 0};
             PlaceDynamicBlock(block);
         }
+    }
+}
+
+void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
+{
+    currentBlockIdx_ = idx;
+    if (previewNode_.get())
+    {
+        previewNode_->SetModelId( GetBasicBlock(idx)->modelId_ );
+        previewNode_->SetMaterial( { GetBasicBlock(idx)->matType } );
     }
 }
 

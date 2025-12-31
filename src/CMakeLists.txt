@@ -296,6 +296,18 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+# Test Target
+if ( NOT ANDROID )
+find_package(Catch2 3 REQUIRED)
+add_executable(gkNextUnitTests 
+	Tests/Test_PhysicsSync.cpp
+	Tests/Test_GpuTimerLogic.cpp
+)
+target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain)
+target_include_directories(gkNextUnitTests PRIVATE .)
+set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
+endif()
+
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")

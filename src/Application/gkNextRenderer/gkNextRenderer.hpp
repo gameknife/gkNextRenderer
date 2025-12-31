@@ -36,6 +36,7 @@ public:
     NextEngine& GetEngine() { return *engine_; }
 
     void CreateSphereAndPush();
+    void CreateBoxAndPush();
 
 private:
     void DrawSettings();
@@ -45,6 +46,7 @@ private:
     ModelViewController modelViewController_;
 
     uint32_t modelId_;
+    uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
     struct ImFont* bigFont_ {};
 };

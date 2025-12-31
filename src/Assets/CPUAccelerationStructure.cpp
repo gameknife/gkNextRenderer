@@ -241,12 +241,12 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 
     for (auto& node : scene.Nodes())
     {
-        node->RecalcTransform(true);
-
         uint32_t modelId = node->GetModel();
         if (modelId == -1) continue;
         if (!node->IsVisible()) continue;
+        if (!node->IsRayCastVisible()) continue;
 
+        node->RecalcTransform(true);
         mat4 worldTS = node->WorldTransform();
         worldTS = transpose(worldTS);
 

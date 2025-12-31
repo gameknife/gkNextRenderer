@@ -38,8 +38,10 @@ namespace Assets
         uint32_t GetModel() const { return modelId_; }
         const std::string& GetName() const {return name_; }
 
-        void SetVisible(bool visible) { visible_ = visible; }
+        void SetVisible(bool visible);
+        void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool IsVisible() const { return visible_; }
+        bool IsRayCastVisible() const { return rayCastVisible_; }
         bool IsDrawable() const { return modelId_ != -1; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
@@ -54,6 +56,7 @@ namespace Assets
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         void SetMaterial(const std::array<uint32_t, 16>& materials);
+        void SetModelId(uint32_t modelId) { modelId_ = modelId; }
         std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
 
@@ -63,6 +66,9 @@ namespace Assets
         ENodeMobility GetMobility() const { return mobility_; }
 
         const JPH::BodyID& GetPhysicsBody() const { return physicsBodyTemp_; }
+
+        void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
+        const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
         
     private:
         std::string name_;
@@ -71,12 +77,14 @@ namespace Assets
         mutable glm::quat rotation_;
         mutable glm::vec3 scaling_;
 
+        glm::vec3 physicsOffset_ = glm::vec3(0.0f);
         glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
         uint32_t modelId_;
         uint32_t instanceId_;
         bool visible_;
+        bool rayCastVisible_;
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;

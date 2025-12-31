@@ -103,13 +103,6 @@ namespace NextRenderer
 
 namespace
 {
-    const bool enableValidationLayers =
-#if defined(NDEBUG) || ANDROID || IOS
-        false;
-#else
-        true;
-#endif
-
     struct SceneTaskContext
     {
         bool success;
@@ -323,7 +316,12 @@ NextEngine::NextEngine(Options& options, void* userdata)
     window_.reset( new Vulkan::Window(windowConfig));
         
     // Initialize Renderer
-    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.PresentMode), enableValidationLayers) );
+    bool shouldEnableValidation = options.Validation;
+#ifndef NDEBUG
+    shouldEnableValidation = true;
+#endif
+
+    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.PresentMode), shouldEnableValidation) );
     rendererType = options.RendererType;
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};

@@ -8,6 +8,8 @@
 
 #include "CPUAccelerationStructure.h"
 #include "Model.hpp"
+#include "Runtime/NextPhysics.h"
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
 namespace Vulkan
 {
@@ -109,6 +111,8 @@ namespace Assets
 
 		void MarkEnvDirty();
 
+		void AddNode(std::shared_ptr<Node> node);
+
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
@@ -204,5 +208,6 @@ namespace Assets
 
 		glm::vec3 sceneAABBMin_ {FLT_MAX, FLT_MAX, FLT_MAX};
 		glm::vec3 sceneAABBMax_ {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+		std::vector<JPH::RefConst<JPH::MeshShapeSettings> > cachedMeshShapes_;
 	};
 }

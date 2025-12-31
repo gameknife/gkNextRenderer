@@ -86,7 +86,16 @@ namespace Assets
             auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
             if (body != nullptr)
             {
-                SetTranslation(body->position);
+                // Physics body position is the center of mass in world space.
+                // Node translation is the mesh pivot in world space.
+                // We need to calculate: Translation = BodyPos - Rotated(Scaled(Offset))
+                
+                glm::vec3 scaledOffset = physicsOffset_ * scaling_;
+                glm::vec3 rotatedOffset = body->rotation * scaledOffset;
+                glm::vec3 newTranslation = body->position - rotatedOffset;
+
+                SetTranslation(newTranslation);
+                SetRotation(body->rotation);
                 RecalcTransform(true);
             }
         }
@@ -133,6 +142,18 @@ namespace Assets
         materialIdx_ = materials;
     }
 
+    void Node::SetVisible(bool visible)
+    {
+        visible_ = visible;
+        if (NextEngine::GetInstance())
+        {
+            if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                physics->SetBodyActive(physicsBodyTemp_, visible);
+            }
+        }
+    }
+
     NodeProxy Node::GetNodeProxy() const
     {
         NodeProxy proxy;
@@ -154,7 +175,7 @@ namespace Assets
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t id, uint32_t instanceId, bool replace):
     name_(name),
     translation_(translation), rotation_(rotation), scaling_(scale), 
-    modelId_(id), instanceId_(instanceId), visible_(false), mobility_(ENodeMobility::Static)
+    modelId_(id), instanceId_(instanceId), visible_(false), rayCastVisible_(true), mobility_(ENodeMobility::Static)
     {
         RecalcLocalTransform();
         RecalcTransform();
