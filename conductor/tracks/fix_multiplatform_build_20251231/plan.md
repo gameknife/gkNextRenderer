@@ -4,7 +4,7 @@
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Windows builds. [648c8b00]
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Linux builds. [bb4d846f]
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for macOS builds. [f31af8cc]
-- [ ] Task: Verify workflow syntax and dry-run (if possible).
+- [x] Task: Verify workflow syntax and dry-run (if possible). [47c4934c]
 - [ ] Task: Conductor - User Manual Verification 'GitHub Actions Workflow Fixes' (Protocol in workflow.md)
 
 ## Phase 2: Linux & Android Configuration
