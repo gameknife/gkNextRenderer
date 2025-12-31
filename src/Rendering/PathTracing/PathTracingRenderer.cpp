@@ -139,6 +139,7 @@ namespace Vulkan::RayTracing
 #if WITH_OIDN
             if (baseRender_.supportDenoiser_)
             {
+                SCOPED_GPU_TIMER("oidn compose");
                 ImageMemoryBarrier::Insert(commandBuffer, rtDenoise1_->GetImage().Handle(), subresourceRange, 0,
                                            VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                            VK_IMAGE_LAYOUT_GENERAL);

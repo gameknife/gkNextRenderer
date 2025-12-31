@@ -548,6 +548,7 @@ namespace Vulkan
     {
         SingleTimeCommands::Submit(CommandPool(), [&](VkCommandBuffer commandBuffer)
         {
+            SCOPED_GPU_TIMER("screenshot");
             const auto& image = swapChain_->Images()[currentImageIndex_];
 
             ImageMemoryBarrier::FullInsert(commandBuffer, image, 0, VK_ACCESS_TRANSFER_READ_BIT,
@@ -863,6 +864,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::InitializeBarriers(VkCommandBuffer commandBuffer)
     {
+        SCOPED_GPU_TIMER("barriers");
         for ( auto& storageImage : bindlessStorageImages_ )
         {
             if ( storageImage ) storageImage->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
