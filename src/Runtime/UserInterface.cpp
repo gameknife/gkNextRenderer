@@ -448,11 +448,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 			ImGui::Text("%s: %.2fms", name.c_str(), ms);
 			
 			if (totalGpuTime > 0) {
-				ImGui::SameLine(ImGui::GetWindowWidth() - 60);
+				ImGui::SameLine(200); // Fixed position for the bars
 				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
-				char buf[32];
-				sprintf(buf, "##%s_bar", name.c_str());
-				ImGui::ProgressBar(ms / 16.67f, ImVec2(50, 2), "");
+				ImGui::ProgressBar(ms / 16.67f, ImVec2(50, ImGui::GetTextLineHeight()), "");
 				ImGui::PopStyleColor();
 			}
 
