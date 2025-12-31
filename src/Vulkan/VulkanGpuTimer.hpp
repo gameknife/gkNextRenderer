@@ -12,7 +12,7 @@
 #define SCOPED_GPU_TIMER_FOLDER(name, folder) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name, folder)
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
-#define BENCH_MARK_CHECK() if(!GOption->HardwareQuery) return
+#define BENCH_MARK_CHECK() if(!GOption->HardwareQuery || !valid_) return
 
 namespace Vulkan 
 {
@@ -25,13 +25,33 @@ namespace Vulkan
 		{
 			time_stamps.resize(totalCount);
 			timeStampPeriod_ = prop.limits.timestampPeriod;
+			
+			if (timeStampPeriod_ == 0) {
+				valid_ = false;
+				return;
+			}
+
 			VkQueryPoolCreateInfo query_pool_info{};
 			query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
 			query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
 			query_pool_info.queryCount = static_cast<uint32_t>(time_stamps.size());
-			Check(vkCreateQueryPool(device_.Handle(), &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
+			
+			// Use try-catch or noexcept check if possible, but here we just rely on Check not crashing the app if we handle it?
+			// The project's Check throws runtime_error.
+			try {
+				Check(vkCreateQueryPool(device_.Handle(), &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
+				valid_ = true;
+			}
+			catch(...) {
+				valid_ = false;
+				query_pool_timestamps = VK_NULL_HANDLE;
+			}
 		}
-		virtual ~VulkanGpuTimer() {vkDestroyQueryPool(device_.Handle(), query_pool_timestamps, nullptr);}
+		virtual ~VulkanGpuTimer() {
+			if (query_pool_timestamps != VK_NULL_HANDLE) {
+				vkDestroyQueryPool(device_.Handle(), query_pool_timestamps, nullptr);
+			}
+		}
 
 		void Reset(VkCommandBuffer commandBuffer)
 		{
@@ -216,6 +236,7 @@ namespace Vulkan
 		uint32_t queryIdx = 0;
 		float timeStampPeriod_ = 1;
 		bool started_ = false;
+		bool valid_ = false;
 
 		std::string currentGpuFolder_;
 		std::vector<size_t> gpuFolderStack_;
