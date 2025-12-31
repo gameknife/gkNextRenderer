@@ -34,6 +34,7 @@ Options::Options(const int argc, const char* argv[])
 		("forcesoftgen", "Forcing software raytracing for ambient cube gen.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
 		("superres", "SuperResolution: 50% / 66% / 100% -> 0 / 1 / 2.", cxxopts::value<uint32_t>(SuperResolution)->default_value("1"))
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
+		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
 	
 		("h,help", "Print usage");
 	try
