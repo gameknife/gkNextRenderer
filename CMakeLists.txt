@@ -104,6 +104,7 @@ message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 find_package(SDL3 CONFIG REQUIRED)
 
 if (IOS)
+    message(STATUS "MoltenVK: ${MOLTENVK_ROOT}")
     if (DEFINED MOLTENVK_ROOT)
         set(_moltenvk_candidate "${MOLTENVK_ROOT}/lib/libMoltenVK.a")
         if (EXISTS "${_moltenvk_candidate}")
