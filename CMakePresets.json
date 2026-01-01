@@ -139,6 +139,21 @@
       }
     },
     {
+      "name": "ios-debug",
+      "inherits": "base",
+      "displayName": "iOS Debug",
+      "description": "Debug configuration for iOS builds on macOS host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "mingw",
       "inherits": "base",
       "generator": "Ninja",
