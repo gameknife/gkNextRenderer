@@ -128,6 +128,7 @@
       "inherits": "base",
       "displayName": "iOS Release",
       "description": "Release configuration for iOS builds on macOS host",
+      "generator": "Xcode",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -135,22 +136,10 @@
       },
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "ios-debug",
-      "inherits": "base",
-      "displayName": "iOS Debug",
-      "description": "Debug configuration for iOS builds on macOS host",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      },
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "GK_IOS_SKIP_CODE_SIGN": "ON",
+        "MOLTENVK_ROOT": "${sourceDir}/external/MoltenVK/ios"
       }
     },
     {
@@ -188,6 +177,11 @@
     {
       "name": "mingw",
       "configurePreset": "mingw",
+      "configuration": "Release"
+    },
+    {
+      "name": "ios-release",
+      "configurePreset": "ios-release",
       "configuration": "Release"
     }
   ]

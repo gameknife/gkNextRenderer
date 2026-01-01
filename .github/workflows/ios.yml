@@ -53,7 +53,7 @@ jobs:
     - name: Compile gkNextRenderer
       run: |
         slangc -v
-        ./build.sh ios
+        ./build.sh ios-release
 
     - name: Save vcpkg to cache
       if: github.event_name != 'pull_request'
