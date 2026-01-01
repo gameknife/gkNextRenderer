@@ -79,6 +79,21 @@
       }
     },
     {
+      "name": "android-linux-release",
+      "inherits": "base",
+      "displayName": "Android on Linux Release",
+      "description": "Release configuration for Android builds on Linux host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "macos-base",
       "hidden": true,
       "inherits": "base",
