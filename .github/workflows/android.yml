@@ -50,7 +50,7 @@ jobs:
         key: ${{ runner.os }}-android-bincache
 
     - name: Compile gkNextRenderer
-      run: ./build.sh android
+      run: ./build.sh --android
 
     - name: Save vcpkg to cache
       if: github.event_name != 'pull_request'
