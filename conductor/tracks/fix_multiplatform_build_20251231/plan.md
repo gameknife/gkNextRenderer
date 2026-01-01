@@ -15,6 +15,6 @@
 
 ## Phase 3: macOS & iOS Configuration
 - [x] Task: Update `CMakePresets.json` to include `ios-release` preset. [b21a7341]
-- [ ] Task: Update `CMakePresets.json` to include `ios-debug` preset.
+- [x] Task: Update `CMakePresets.json` to include `ios-debug` preset. [4f1cded3]
 - [ ] Task: Update `build.sh` to handle new iOS presets if necessary.
 - [ ] Task: Conductor - User Manual Verification 'macOS & iOS Configuration' (Protocol in workflow.md)
