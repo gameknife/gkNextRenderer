@@ -8,7 +8,7 @@
 - [x] Task: Conductor - User Manual Verification 'GitHub Actions Workflow Fixes' (Protocol in workflow.md) [5ad86f1b]
 
 ## Phase 2: Linux & Android Configuration
-- [ ] Task: Update `CMakePresets.json` to include `android-linux-debug` preset.
+- [x] Task: Update `CMakePresets.json` to include `android-linux-debug` preset. [110e3fa1]
 - [ ] Task: Update `CMakePresets.json` to include `android-linux-release` preset.
 - [ ] Task: Update `build.sh` to handle new Android presets if necessary.
 - [ ] Task: Conductor - User Manual Verification 'Linux & Android Configuration' (Protocol in workflow.md)
