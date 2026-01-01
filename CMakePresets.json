@@ -124,6 +124,21 @@
       }
     },
     {
+      "name": "ios-release",
+      "inherits": "base",
+      "displayName": "iOS Release",
+      "description": "Release configuration for iOS builds on macOS host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "mingw",
       "inherits": "base",
       "generator": "Ninja",
