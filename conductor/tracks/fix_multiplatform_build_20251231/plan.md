@@ -10,7 +10,7 @@
 ## Phase 2: Linux & Android Configuration
 - [x] Task: Update `CMakePresets.json` to include `android-linux-debug` preset. [110e3fa1]
 - [x] Task: Update `CMakePresets.json` to include `android-linux-release` preset. [5d51a28a]
-- [ ] Task: Update `build.sh` to handle new Android presets if necessary.
+- [x] Task: Update `build.sh` to handle new Android presets if necessary. [c1e4db49 - No changes needed]
 - [ ] Task: Conductor - User Manual Verification 'Linux & Android Configuration' (Protocol in workflow.md)
 
 ## Phase 3: macOS & iOS Configuration
