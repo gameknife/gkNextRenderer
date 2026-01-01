@@ -17,4 +17,4 @@
 - [x] Task: Update `CMakePresets.json` to include `ios-release` preset. [b21a7341]
 - [x] Task: Update `CMakePresets.json` to include `ios-debug` preset. [4f1cded3]
 - [x] Task: Update `build.sh` to handle new iOS presets if necessary. [bd8dc243 - No changes needed]
-- [ ] Task: Conductor - User Manual Verification 'macOS & iOS Configuration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'macOS & iOS Configuration' (Protocol in workflow.md) [900ea04e]
