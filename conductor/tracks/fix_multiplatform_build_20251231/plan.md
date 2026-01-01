@@ -5,7 +5,7 @@
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for Linux builds. [bb4d846f]
 - [x] Task: Fix `build.yml` (or equivalent) to use correct arguments for macOS builds. [f31af8cc]
 - [x] Task: Verify workflow syntax and dry-run (if possible). [47c4934c]
-- [ ] Task: Conductor - User Manual Verification 'GitHub Actions Workflow Fixes' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'GitHub Actions Workflow Fixes' (Protocol in workflow.md) [5ad86f1b]
 
 ## Phase 2: Linux & Android Configuration
 - [ ] Task: Update `CMakePresets.json` to include `android-linux-debug` preset.
