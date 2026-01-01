@@ -64,6 +64,36 @@
       "displayName": "Linux Release"
     },
     {
+      "name": "android-linux-debug",
+      "inherits": "base",
+      "displayName": "Android on Linux Debug",
+      "description": "Debug configuration for Android builds on Linux host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-linux-release",
+      "inherits": "base",
+      "displayName": "Android on Linux Release",
+      "description": "Release configuration for Android builds on Linux host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "macos-base",
       "hidden": true,
       "inherits": "base",
@@ -91,6 +121,25 @@
       "displayName": "macOS x64",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-osx"
+      }
+    },
+    {
+      "name": "ios-release",
+      "inherits": "base",
+      "displayName": "iOS Release",
+      "description": "Release configuration for iOS builds on macOS host",
+      "generator": "Xcode",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "GK_IOS_SKIP_CODE_SIGN": "ON",
+        "MOLTENVK_ROOT": "${sourceDir}/external/MoltenVK/ios"
       }
     },
     {
@@ -128,6 +177,11 @@
     {
       "name": "mingw",
       "configurePreset": "mingw",
+      "configuration": "Release"
+    },
+    {
+      "name": "ios-release",
+      "configurePreset": "ios-release",
       "configuration": "Release"
     }
   ]
