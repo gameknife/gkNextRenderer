@@ -64,6 +64,21 @@
       "displayName": "Linux Release"
     },
     {
+      "name": "android-linux-debug",
+      "inherits": "base",
+      "displayName": "Android on Linux Debug",
+      "description": "Debug configuration for Android builds on Linux host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "macos-base",
       "hidden": true,
       "inherits": "base",
