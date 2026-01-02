@@ -64,13 +64,19 @@ endforeach()
 set (CMAKE_CXX_STANDARD 20)
 set (CMAKE_C_STANDARD 11)
 
+# --- Standard Project Options ---
+add_library(gk_project_options INTERFACE)
+
 if (WIN32)
-	add_definitions(-DUNICODE -D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
-	add_definitions(-DWIN32_LEAN_AND_MEAN)
+    target_compile_definitions(gk_project_options INTERFACE
+        UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS
+        WIN32_LEAN_AND_MEAN
+    )
 endif ()
 
 if (MINGW)
-    add_link_options("-municode")
+    target_link_options(gk_project_options INTERFACE "-municode")
+    target_compile_definitions(gk_project_options INTERFACE MINGW=1)
 endif()
 
 if (MSVC)
@@ -80,8 +86,8 @@ if (MSVC)
 		endif()
 	endforeach()
 
-	add_compile_options("/MP")
-	add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>" "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+	target_compile_options(gk_project_options INTERFACE "/MP")
+    target_compile_options(gk_project_options INTERFACE "$<$<C_COMPILER_ID:MSVC>:/utf-8>" "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 	# Configure PDB generation for minimal size (crash stack traces only)
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Z7")
@@ -90,15 +96,12 @@ if (MSVC)
 	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 endif()
 
-if (MINGW)
-    add_definitions(-DMINGW=1)
-endif()
-
 if (UNIX AND !ANDROID)
-	add_definitions(-DUNIX)
-	add_compile_options("-Wall")
-	add_compile_options("-fvisibility=hidden")
+	target_compile_definitions(gk_project_options INTERFACE UNIX)
+	target_compile_options(gk_project_options INTERFACE "-Wall")
+	target_compile_options(gk_project_options INTERFACE "-fvisibility=hidden")
 endif ()
+# ------------------------------
 
 message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 find_package(SDL3 CONFIG REQUIRED)
