@@ -10,7 +10,7 @@
 - [x] Task: [TDD] Create a validation script to check for deprecated CMake globals and verify target-based linking. [9e38cb2]
 - [x] Task: Refactor `CMakeLists.txt` to remove global include/link settings and use `target_*` commands. [65d5f6f]
 - [x] Task: Modularize CMake logic: Move complex setup (e.g., vcpkg setup, toolchain checks) into `cmake/` modules. [1f484b3]
-- [ ] Task: Standardize output directories in CMake (bin/lib) to match the new spec.
+- [x] Task: Standardize output directories in CMake (bin/lib) to match the new spec. [b9b58d9]
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Modern CMake Refactoring' (Protocol in workflow.md)
 
 ## Phase 3: Shell Script Refactoring (Unix)
