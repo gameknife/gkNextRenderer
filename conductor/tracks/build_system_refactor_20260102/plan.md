@@ -7,7 +7,7 @@
 - [~] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Design' (Protocol in workflow.md)
 
 ## Phase 2: Modern CMake Refactoring
-- [ ] Task: [TDD] Create a validation script to check for deprecated CMake globals and verify target-based linking.
+- [x] Task: [TDD] Create a validation script to check for deprecated CMake globals and verify target-based linking. [9e38cb2]
 - [ ] Task: Refactor `CMakeLists.txt` to remove global include/link settings and use `target_*` commands.
 - [ ] Task: Modularize CMake logic: Move complex setup (e.g., vcpkg setup, toolchain checks) into `cmake/` modules.
 - [ ] Task: Standardize output directories in CMake (bin/lib) to match the new spec.
