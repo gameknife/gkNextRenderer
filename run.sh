@@ -101,9 +101,26 @@ run_native() {
         fi
     fi
 
-    # Priority 3: Fallback / Smart Search
+    # Priority 3: Old Build Location Fallback (before smart search)
+    if [[ -z "$resolved_bin" ]]; then
+       # Map preset names to old platform names
+       local old_plat="unknown"
+       case "$preset" in
+           macos-arm64|macos-x64) old_plat="macos" ;;
+           linux-*) old_plat="linux" ;;
+           windows-*) old_plat="windows" ;;
+           mingw) old_plat="mingw" ;;
+       esac
+       
+       local old_path="$script_dir/build/$old_plat/bin"
+       if [[ -d "$old_path" ]]; then
+            resolved_bin="$old_path"
+       fi
+    fi
+    
+    # Priority 4: Smart Search (try all presets)
     if [[ -z "$resolved_bin" && $bin_overridden -eq 0 && $preset_overridden -eq 0 ]]; then
-        # Try finding any valid build output if default preset failed
+        # Try finding any valid build output in new preset locations
         for fallback in macos-arm64 macos-x64 linux-release windows-dev; do
             local candidate="$script_dir/out/build/$fallback/bin"
             if [[ -d "$candidate" ]]; then
@@ -112,21 +129,6 @@ run_native() {
                 break
             fi
         done
-    fi
-    
-    # Priority 4: Old Build Location Fallback
-    if [[ -z "$resolved_bin" ]]; then
-       # Map preset names to old platform names roughly
-       local old_plat="unknown"
-       if [[ "$preset" == *"macos"* ]]; then old_plat="macos"; fi
-       if [[ "$preset" == *"linux"* ]]; then old_plat="linux"; fi
-       if [[ "$preset" == *"windows"* ]]; then old_plat="windows"; fi
-       
-       local old_path="$script_dir/build/$old_plat/bin"
-       if [[ -d "$old_path" ]]; then
-            resolved_bin="$old_path"
-            echo "Warning: Using legacy build directory: $old_path" >&2
-       fi
     fi
 
     if [[ -z "$resolved_bin" || ! -d "$resolved_bin" ]]; then
@@ -152,7 +154,10 @@ run_native() {
          fi
     fi
 
-    local cmd=("./$(basename "$exe")" "${cmd_args[@]}")
+    local cmd=("./$(basename "$exe")")
+    if [[ ${#cmd_args[@]} -gt 0 ]]; then
+        cmd+=("${cmd_args[@]}")
+    fi
     echo "Working dir: $resolved_bin"
     echo "Command: ${cmd[*]}"
     [[ $dry_run -eq 1 ]] && exit 0
