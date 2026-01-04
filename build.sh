@@ -81,17 +81,32 @@ ensure_ios_deps() {
 PRESET=""
 CLEAN=0
 TARGET_ANDROID=0
+FEATURES=""
+EXTRA_CMAKE_ARGS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --clean) CLEAN=1; shift ;; 
         --android) TARGET_ANDROID=1; shift ;; 
+        --feature)
+            if [ -n "$FEATURES" ]; then
+                FEATURES="$FEATURES,$2"
+            else
+                FEATURES="$2"
+            fi
+
+            if [ "$2" == "avif" ]; then
+                EXTRA_CMAKE_ARGS="$EXTRA_CMAKE_ARGS -DWITH_AVIF=ON"
+            fi
+            shift 2
+            ;;
         --help|-h) 
             echo "Usage: ./build.sh [options] [preset]"
             echo "Options:"
-            echo "  --clean    Clean build directory before building"
-            echo "  --android  Build for Android"
+            echo "  --clean         Clean build directory before building"
+            echo "  --android       Build for Android"
+            echo "  --feature <val> Enable a feature (e.g. avif)"
             echo "Presets (auto-detected if omitted):"
             echo "  macos-arm64, macos-x64, linux-release, mingw"
             exit 0 
@@ -99,6 +114,10 @@ while [[ $# -gt 0 ]]; do
         *) PRESET="$1"; shift ;; 
     esac
 done
+
+if [ -n "$FEATURES" ]; then
+    EXTRA_CMAKE_ARGS="$EXTRA_CMAKE_ARGS -DVCPKG_MANIFEST_FEATURES=$FEATURES"
+fi
 
 # Android Build
 if [ "$TARGET_ANDROID" -eq 1 ]; then
@@ -130,8 +149,8 @@ if [ "$CLEAN" -eq 1 ]; then
     rm -rf "$PROJECT_ROOT/out/build/$PRESET"
 fi
 
-log "Configuring preset: $PRESET"
-cmake --preset "$PRESET"
+log "Configuring preset: $PRESET (Features: $FEATURES)"
+cmake --preset "$PRESET" $EXTRA_CMAKE_ARGS
 
 log "Building preset: $PRESET"
 cmake --build --preset "$PRESET"

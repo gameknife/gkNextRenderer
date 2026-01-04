@@ -27,7 +27,10 @@ param (
     [string]$Target = "windows-dev",
 
     [Parameter()]
-    [switch]$Clean = $false
+    [switch]$Clean = $false,
+
+    [Parameter()]
+    [string[]]$Feature = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,8 +101,23 @@ function Build-Native {
         }
     }
 
+    $ExtraArgs = @()
+    if ($Feature.Count -gt 0) {
+        $FeatureString = $Feature -join ","
+        $ExtraArgs += "-DVCPKG_MANIFEST_FEATURES=$FeatureString"
+        if ($Feature -contains "avif") {
+            $ExtraArgs += "-DWITH_AVIF=ON"
+        }
+    }
+
     Write-Log "Configuring ($Preset)..."
-    cmake --preset $Preset
+    if ($ExtraArgs.Count -gt 0) {
+        Write-Log "Features: $($Feature -join ",")"
+        cmake --preset $Preset $ExtraArgs
+    } else {
+        cmake --preset $Preset
+    }
+
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }
 
     Write-Log "Building ($Preset)..."
