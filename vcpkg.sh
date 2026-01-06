@@ -33,26 +33,27 @@ ensure_repo() {
     if [ ! -d "$VCPKG_ROOT/.git" ]; then
         log "Cloning vcpkg into $VCPKG_ROOT..."
         git clone https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
-    else
-        if [ "$UPDATE_REPO" -eq 1 ]; then
-            log "Updating vcpkg in $VCPKG_ROOT (git pull)..."
-            git -C "$VCPKG_ROOT" pull --ff-only || warn "Failed to update vcpkg repo."
-        fi
     fi
 
-    # Only checkout/reset if we are NOT updating (or if we want to enforce specific version even after update?)
-    # Usually pinned version is preferred. If --update is passed, maybe we want latest? 
-    # The spec says "--update: Force git pull". 
-    # But usually projects want a pinned version.
-    # Let's assume --update brings it to the pinned version or latest?
-    # Spec says "Force git pull".
-    # Existing code resets to VCPKG_GIT_REF.
-    # If I update, I probably want to update the REF or ignore it?
-    # Let's keep strict pinning for stability, but --update might be used to fetch new refs if VCPKG_GIT_REF changed in script.
-    
-    git -C "$VCPKG_ROOT" fetch origin --tags --force
-    git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
-    git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
+    # Only force checkout specific ref if we are NOT updating.
+    # If we updated, we presume the user wants the latest state they just pulled.
+    if [ "$UPDATE_REPO" -eq 0 ]; then
+        git -C "$VCPKG_ROOT" fetch origin --tags --force
+        git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
+        git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
+    else
+        # If updating, ensure we are on a branch that tracks origin
+        # (Usually master).
+        # But if we are detached, pull might fail without context.
+        # "pull --ff-only" works if we have an upstream.
+        # If we are detached at a specific commit, pull might be ambiguous.
+        
+        # Helper: switch to master before pulling if we want "latest"
+        git -C "$VCPKG_ROOT" checkout master || git -C "$VCPKG_ROOT" checkout -b master origin/master
+        
+        log "Updating vcpkg in $VCPKG_ROOT (git pull)..."
+        git -C "$VCPKG_ROOT" pull --ff-only || warn "Failed to update vcpkg repo."
+    fi
 }
 
 ensure_bootstrap() {
