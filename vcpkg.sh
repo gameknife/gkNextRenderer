@@ -16,22 +16,17 @@ init_variables() {
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
     VCPKG_GIT_REF="2025.10.17"
+    UPDATE_REPO=0
 }
 
 parse_arguments() {
-    if [ $# -eq 0 ]; then
-        usage
-        exit 1
-    fi
-    
-    PLATFORM="$1"
-    FEATURES="${2:-}"
-    
-    if [ -n "$FEATURES" ]; then
-        export VCPKG_MANIFEST_FEATURES="$FEATURES"
-    else
-        unset VCPKG_MANIFEST_FEATURES || true
-    fi
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --update) UPDATE_REPO=1; shift ;;
+            -h|--help) usage; exit 0 ;;
+            *) warn "Unknown argument: $1"; shift ;;
+        esac
+    done
 }
 
 ensure_repo() {
@@ -39,12 +34,22 @@ ensure_repo() {
         log "Cloning vcpkg into $VCPKG_ROOT..."
         git clone https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
     else
-        log "Updating vcpkg in $VCPKG_ROOT..."
-        # if ! git -C "$VCPKG_ROOT" pull --ff-only; then
-        #     warn "无法访问远程仓库，继续使用现有 vcpkg 副本。"
-        # fi
+        if [ "$UPDATE_REPO" -eq 1 ]; then
+            log "Updating vcpkg in $VCPKG_ROOT (git pull)..."
+            git -C "$VCPKG_ROOT" pull --ff-only || warn "Failed to update vcpkg repo."
+        fi
     fi
 
+    # Only checkout/reset if we are NOT updating (or if we want to enforce specific version even after update?)
+    # Usually pinned version is preferred. If --update is passed, maybe we want latest? 
+    # The spec says "--update: Force git pull". 
+    # But usually projects want a pinned version.
+    # Let's assume --update brings it to the pinned version or latest?
+    # Spec says "Force git pull".
+    # Existing code resets to VCPKG_GIT_REF.
+    # If I update, I probably want to update the REF or ignore it?
+    # Let's keep strict pinning for stability, but --update might be used to fetch new refs if VCPKG_GIT_REF changed in script.
+    
     git -C "$VCPKG_ROOT" fetch origin --tags --force
     git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
     git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
@@ -66,20 +71,11 @@ warn() { printf '[vcpkg] Warning: %s\n' "$*" >&2; }
 
 usage() {
     cat <<USAGE
-Usage: ./vcpkg.sh <platform> [manifest-features]
+Usage: ./vcpkg.sh [options]
 
-Platforms:
-  macos        (arm64-osx)
-  macos_x64    (x64-osx)
-  linux        (x64-linux)
-  android      (arm64-android)
-  ios          (arm64-ios)
-  mingw        (x64-mingw-static)
-  windows      (x64-windows-static)
-
-Examples:
-  ./vcpkg.sh macos
-  ./vcpkg.sh linux avif
+Options:
+  --update     Force git pull on the vcpkg repository.
+  -h, --help   Show this help.
 USAGE
 }
 
