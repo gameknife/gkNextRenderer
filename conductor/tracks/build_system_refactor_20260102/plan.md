@@ -13,7 +13,7 @@
 - [x] Task: Standardize output directories in CMake (bin/lib) to match the new spec. [b9b58d9]
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Modern CMake Refactoring' (Protocol in workflow.md) [327729f]
 
-## Phase 3: Shell Script Refactoring (Unix)
+## Phase 3: Shell Script Refactoring (Unix) [checkpoint: 39859b7]
 - [x] Task: [TDD] Create `tests/build_system/test_build_sh.sh` to verify `build.sh` arguments (help, invalid args, successful build). [d1daf99]
 - [x] Task: Refactor `build.sh` to implement the standard CLI interface and parameter parsing. [d1daf99]
 - [x] Task: Refactor `run.sh` to support standardized arguments (`--target`, `--config`). [7060802]
