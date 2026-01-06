@@ -16,7 +16,7 @@
 ## Phase 3: Shell Script Refactoring (Unix)
 - [x] Task: [TDD] Create `tests/build_system/test_build_sh.sh` to verify `build.sh` arguments (help, invalid args, successful build). [d1daf99]
 - [x] Task: Refactor `build.sh` to implement the standard CLI interface and parameter parsing. [d1daf99]
-- [ ] Task: Refactor `run.sh` to support standardized arguments (`--target`, `--config`).
+- [x] Task: Refactor `run.sh` to support standardized arguments (`--target`, `--config`). [7060802]
 - [ ] Task: Refactor `vcpkg.sh` to clean up logic and align with new directory structures.
 - [ ] Task: Verify entire Unix build chain (vcpkg -> build -> run) works with new scripts.
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Shell Script Refactoring (Unix)' (Protocol in workflow.md)
