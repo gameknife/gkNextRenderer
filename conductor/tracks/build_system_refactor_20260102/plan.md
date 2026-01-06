@@ -4,7 +4,7 @@
 - [x] Task: Analyze current build scripts and CMake files to identify all existing logical branches and parameters. [analysis]
 - [x] Task: Define the standard command-line interface (CLI) specification for all scripts (`build`, `run`, `vcpkg`). [docs/CLI_SPEC.md]
 - [x] Task: Design the new directory structure for CMake modules and build artifacts. [docs/CMAKE_STRUCTURE.md]
-- [~] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Design' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Design' (Protocol in workflow.md) [f03ed9e]
 
 ## Phase 2: Modern CMake Refactoring
 - [x] Task: [TDD] Create a validation script to check for deprecated CMake globals and verify target-based linking. [9e38cb2]
