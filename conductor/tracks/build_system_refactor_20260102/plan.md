@@ -6,7 +6,7 @@
 - [x] Task: Design the new directory structure for CMake modules and build artifacts. [docs/CMAKE_STRUCTURE.md]
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Analysis & Design' (Protocol in workflow.md) [f03ed9e]
 
-## Phase 2: Modern CMake Refactoring
+## Phase 2: Modern CMake Refactoring [checkpoint: 6725f3e]
 - [x] Task: [TDD] Create a validation script to check for deprecated CMake globals and verify target-based linking. [9e38cb2]
 - [x] Task: Refactor `CMakeLists.txt` to remove global include/link settings and use `target_*` commands. [65d5f6f]
 - [x] Task: Modularize CMake logic: Move complex setup (e.g., vcpkg setup, toolchain checks) into `cmake/` modules. [1f484b3]
