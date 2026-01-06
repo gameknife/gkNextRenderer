@@ -16,5 +16,5 @@ endif()
 
 if(UNIX OR MINGW)
   find_package(Threads)
-  target_link_libraries(quickjs ${CMAKE_DL_LIBS} m Threads::Threads)
+  target_link_libraries(quickjs PRIVATE ${CMAKE_DL_LIBS} m Threads::Threads)
 endif()
