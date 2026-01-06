@@ -19,7 +19,7 @@
 - [x] Task: Refactor `run.sh` to support standardized arguments (`--target`, `--config`). [7060802]
 - [x] Task: Refactor `vcpkg.sh` to clean up logic and align with new directory structures. [ea6884e]
 - [x] Task: Verify entire Unix build chain (vcpkg -> build -> run) works with new scripts. [ea6884e]
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Shell Script Refactoring (Unix)' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Shell Script Refactoring (Unix)' (Protocol in workflow.md) [c5f3df3]
 
 ## Phase 4: Batch Script Refactoring (Windows)
 - [ ] Task: [TDD] Create `tests/build_system/test_build_bat.bat` (or equivalent) to verify `build.bat` arguments.
