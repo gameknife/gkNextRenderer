@@ -1,6 +1,6 @@
 # Plan: Build System Refactoring & Standardization
 
-## Phase 1: Analysis & Design
+## Phase 1: Analysis & Design [checkpoint: 6eb10a3]
 - [x] Task: Analyze current build scripts and CMake files to identify all existing logical branches and parameters. [analysis]
 - [x] Task: Define the standard command-line interface (CLI) specification for all scripts (`build`, `run`, `vcpkg`). [docs/CLI_SPEC.md]
 - [x] Task: Design the new directory structure for CMake modules and build artifacts. [docs/CMAKE_STRUCTURE.md]
