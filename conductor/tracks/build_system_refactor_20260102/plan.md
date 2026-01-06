@@ -14,8 +14,8 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Modern CMake Refactoring' (Protocol in workflow.md) [327729f]
 
 ## Phase 3: Shell Script Refactoring (Unix)
-- [ ] Task: [TDD] Create `tests/build_system/test_build_sh.sh` to verify `build.sh` arguments (help, invalid args, successful build).
-- [ ] Task: Refactor `build.sh` to implement the standard CLI interface and parameter parsing.
+- [x] Task: [TDD] Create `tests/build_system/test_build_sh.sh` to verify `build.sh` arguments (help, invalid args, successful build). [d1daf99]
+- [x] Task: Refactor `build.sh` to implement the standard CLI interface and parameter parsing. [d1daf99]
 - [ ] Task: Refactor `run.sh` to support standardized arguments (`--target`, `--config`).
 - [ ] Task: Refactor `vcpkg.sh` to clean up logic and align with new directory structures.
 - [ ] Task: Verify entire Unix build chain (vcpkg -> build -> run) works with new scripts.
