@@ -11,7 +11,7 @@
 - [x] Task: Refactor `CMakeLists.txt` to remove global include/link settings and use `target_*` commands. [65d5f6f]
 - [x] Task: Modularize CMake logic: Move complex setup (e.g., vcpkg setup, toolchain checks) into `cmake/` modules. [1f484b3]
 - [x] Task: Standardize output directories in CMake (bin/lib) to match the new spec. [b9b58d9]
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Modern CMake Refactoring' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Modern CMake Refactoring' (Protocol in workflow.md) [327729f]
 
 ## Phase 3: Shell Script Refactoring (Unix)
 - [ ] Task: [TDD] Create `tests/build_system/test_build_sh.sh` to verify `build.sh` arguments (help, invalid args, successful build).
