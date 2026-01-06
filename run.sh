@@ -50,17 +50,16 @@ cmd_args=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --target|--preset|--bin-dir|--present-mode|--scene)
-            [[ $# -lt 2 ]] && { echo "Missing value for $1" >&2; exit 1; }
-            case "$1" in
-                --target) target="$2" ;;
-                --preset) preset="$2"; preset_overridden=1 ;;
-                --bin-dir) bin_dir="$2"; bin_overridden=1 ;;
-                --present-mode) cmd_args+=("--present-mode=$2") ;;
-                --scene) cmd_args+=("--load-scene=$2") ;;
-            esac
-            shift 2
-            ;;
+        --target) target="$2"; shift 2 ;;
+        --target=*) target="${1#*=}"; shift ;;
+        --preset) preset="$2"; preset_overridden=1; shift 2 ;;
+        --preset=*) preset="${1#*=}"; preset_overridden=1; shift ;;
+        --bin-dir) bin_dir="$2"; bin_overridden=1; shift 2 ;;
+        --bin-dir=*) bin_dir="${1#*=}"; bin_overridden=1; shift ;;
+        --present-mode) cmd_args+=("--present-mode=$2"); shift 2 ;;
+        --present-mode=*) cmd_args+=("--present-mode=${1#*=}"); shift ;;
+        --scene) cmd_args+=("--load-scene=$2"); shift 2 ;;
+        --scene=*) cmd_args+=("--load-scene=${1#*=}"); shift ;;
         --list) list_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
         -h|--help) print_usage; exit 0 ;;
