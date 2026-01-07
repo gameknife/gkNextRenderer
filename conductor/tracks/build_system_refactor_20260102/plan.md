@@ -29,9 +29,9 @@
 - [x] Task: Verify entire Windows build chain works with new scripts. [e7f8d9a]
 - [x] Task: Conductor - User Manual Verification 'Phase 4: Batch Script Refactoring (Windows)' (Protocol in workflow.md) [42b6b05]
 
-## Phase 5: Cleanup & CI Integration
-- [ ] Task: Update `vcpkg.json` and `vcpkg-configuration.json` to remove obsolete entries.
-- [ ] Task: Update `README.md` and project documentation to reflect the new build commands and options.
-- [ ] Task: Review and update Github Workflows (`.github/workflows`) to use the new script parameters.
-- [ ] Task: Final full-system verification on all supported platforms (via CI or local checks).
-- [ ] Task: Conductor - User Manual Verification 'Phase 5: Cleanup & CI Integration' (Protocol in workflow.md)
+## Phase 5: Cleanup & CI Integration [checkpoint: 3f6804c]
+- [x] Task: Update `vcpkg.json` and `vcpkg-configuration.json` to remove obsolete entries. [9f1eb63]
+- [x] Task: Update `README.md` and project documentation to reflect the new build commands and options. [9f1eb63]
+- [x] Task: Review and update Github Workflows (`.github/workflows`) to use the new script parameters. [9f1eb63]
+- [x] Task: Final full-system verification on all supported platforms (via CI or local checks). [9f1eb63]
+- [x] Task: Conductor - User Manual Verification 'Phase 5: Cleanup & CI Integration' (Protocol in workflow.md) [3f6804c]
