@@ -45,9 +45,46 @@ cd build/[platform]/bin && ./gkNextRenderer
 
 ## 🏗️ 项目结构（补充）
 
-- `src/` 核心代码：`Application/` 启动程序，`Rendering/`+`Vulkan/`+`Runtime/` 为引擎主体，`Assets/` 负责资源桥接
-- `assets/` 存放资源与着色器，`tools/` 保存辅助脚本与文档
-- `AGENT_GUIDE/` Agent专用分层指引目录
+- `src/Runtime/` 核心运行时代码，包含平台抽象层 `Platform/`
+- `src/Vulkan/` Vulkan 渲染核心
+- `src/Rendering/` 渲染逻辑与管线
+- `src/Assets/` 资源管理（Scene、Node、Model 场景图）
+- `src/Application/` 应用启动入口
+- `src/Common/` 通用代码，包含 `CoreMinimal.hpp` 统一头文件
+- `src/Tests/` 单元测试（Catch2 框架）
+- `assets/` 资源与着色器，`android/` Android 项目目录
+- `AGENT_GUIDE/` Agent 专用分层指引目录
+
+## 🧪 测试策略
+
+### 测试框架
+- **框架**: Catch2（目标：`gkNextUnitTests`）
+- **位置**: `src/Tests/`
+- **运行**: `./build.[bat|sh] [platform]` 后执行 `./build/[platform]/bin/gkNextUnitTests[.exe]`
+
+### 测试约定
+- 使用 Catch2 宏：`TEST_CASE`, `SECTION`, `REQUIRE`, `CHECK`
+- 集成测试需要完整引擎栈（GPU + 编译的 Shaders）
+- 优先独立测试组件（如 `NextPhysics`、`Node`），避免在无 GPU 环境中测试 `VulkanBaseRenderer`
+- 运行测试前确保 `assets/shaders/*.spv` 已编译，工作目录为项目根目录
+
+### 当前已知问题
+- **Shader 依赖**: 引擎启动需要 `Process.UpScaleFSR.comp.slang.spv` 等着色器文件
+- **路径问题**: `FileHelper` 使用相对路径，需从项目根运行
+
+## 🔧 开发约定
+
+### 代码风格
+- 遵循 `.clang-format` 配置
+- 使用现代 C++20 标准
+- 命名约定：`CamelCase` 类/方法，`camelCase_` 或 `_camelCase` 成员变量
+- 除非明确要求，否则不添加代码注释
+
+### 引擎架构模式
+- **引擎核心**: Singleton 模式 `NextEngine`
+- **物理系统**: Jolt Physics（通过 `NextPhysics` 包装集成）
+- **场景管理**: `Scene`、`Node`、`Model` 场景图
+- **渲染后端**: 完整 Vulkan 管线
 
 ## 💡 关键历史经验
 

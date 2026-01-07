@@ -51,33 +51,33 @@ The project uses CMake + Ninja, with dependencies managed by vcpkg. Ensure a rel
 Windows (Visual Studio 2022):
 ``` bat
 rem Make sure VS2022 with C++ workload is installed
-vcpkg.bat windows
-build.bat windows
-run.bat windows
+vcpkg.bat
+build.bat --preset windows-dev
+run.bat --preset windows-dev
 ```
 
 Windows (MSYS2 MinGW):
 ``` shell
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./vcpkg.sh mingw
-./build.sh mingw
-./run.sh mingw
+./vcpkg.sh
+./build.sh --preset mingw
+./run.sh --preset mingw
 ```
 
 Linux (example: Ubuntu):
 ``` shell
 sudo apt install build-essential ninja-build curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
-./vcpkg.sh linux
-./build.sh linux
-./run.sh linux
+./vcpkg.sh
+./build.sh --preset linux-release
+./run.sh --preset linux-release
 ```
 
 macOS:
 ``` shell
 brew install molten-vk glslang ninja
-./vcpkg.sh macos
-./build.sh macos
-./run.sh macos
+./vcpkg.sh
+./build.sh --preset macos-arm64
+./run.sh --preset macos-arm64
 ```
 
 Android (on Windows):
@@ -85,9 +85,9 @@ Android (on Windows):
 rem Requires JDK 17+, Android SDK, and NDK r27 (e.g., 27.0.12077973)
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-vcpkg.bat android
-build.bat android
-run.bat android
+vcpkg.bat
+build.bat --android
+run.bat --preset android
 ```
 
 See repository scripts and `.github/workflows` for more details.

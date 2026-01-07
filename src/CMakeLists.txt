@@ -125,6 +125,11 @@ endif()
 add_subdirectory(ThirdParty/ozz)
 add_subdirectory(ThirdParty/ImNodeFlow)
 add_subdirectory(ThirdParty/quickjs-ng)
+
+target_link_libraries(ozz PRIVATE gk_project_options)
+target_link_libraries(ImNodeFlow PRIVATE gk_project_options)
+target_link_libraries(quickjs PRIVATE gk_project_options)
+
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets
@@ -154,6 +159,8 @@ option(GK_ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
 foreach(target IN LISTS AllTargets)
 	# common dependencies
 	add_dependencies(${target} Assets)
+	target_link_libraries(${target} PRIVATE gk_project_options)
+
 	set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
 	# include paths
@@ -303,7 +310,7 @@ add_executable(gkNextUnitTests
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
 )
-target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain)
+target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
