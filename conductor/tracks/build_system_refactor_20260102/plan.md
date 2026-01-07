@@ -21,13 +21,13 @@
 - [x] Task: Verify entire Unix build chain (vcpkg -> build -> run) works with new scripts. [ea6884e]
 - [x] Task: Conductor - User Manual Verification 'Phase 3: Shell Script Refactoring (Unix)' (Protocol in workflow.md) [c5f3df3]
 
-## Phase 4: Batch Script Refactoring (Windows)
-- [ ] Task: [TDD] Create `tests/build_system/test_build_bat.bat` (or equivalent) to verify `build.bat` arguments.
-- [ ] Task: Refactor `build.bat` to implement the standard CLI interface and parameter parsing (matching Unix scripts).
-- [ ] Task: Refactor `run.bat` to support standardized arguments.
-- [ ] Task: Refactor `vcpkg.bat` to ensure consistency with the Unix version.
-- [ ] Task: Verify entire Windows build chain works with new scripts.
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Batch Script Refactoring (Windows)' (Protocol in workflow.md)
+## Phase 4: Batch Script Refactoring (Windows) [checkpoint: 42b6b05]
+- [x] Task: [TDD] Create `tests/build_system/test_build_bat.bat` (or equivalent) to verify `build.bat` arguments. [9d2d0a0]
+- [x] Task: Refactor `build.bat` to implement the standard CLI interface and parameter parsing (matching Unix scripts). [9d2d0a0]
+- [x] Task: Refactor `run.bat` to support standardized arguments. [e7f8d9a]
+- [x] Task: Refactor `vcpkg.bat` to ensure consistency with the Unix version. [e7f8d9a]
+- [x] Task: Verify entire Windows build chain works with new scripts. [e7f8d9a]
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Batch Script Refactoring (Windows)' (Protocol in workflow.md) [42b6b05]
 
 ## Phase 5: Cleanup & CI Integration
 - [ ] Task: Update `vcpkg.json` and `vcpkg-configuration.json` to remove obsolete entries.
