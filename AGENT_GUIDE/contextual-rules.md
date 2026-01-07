@@ -21,18 +21,19 @@
 ## 🛠️ 构建系统规则
 
 ### 统一脚本使用
-- **优先使用**: `build.bat [platform]` 和 `vcpkg.bat [platform]`
-- **支持平台**: windows, macos, linux, android, mingw
-- **自动检测**: 脚本支持自动平台检测，但仍建议明确指定平台
+- **Windows 脚本开发**: 核心逻辑必须使用 PowerShell (`.ps1`) 编写。Batch (`.bat`) 文件仅作为调用 `.ps1` 的包装器，不包含复杂逻辑。
+- **优先使用**: `build.[bat|sh] --preset [name]` 和 `vcpkg.[bat|sh]`
+- **支持平台**: windows-dev, linux-release, macos-arm64, android 等（参见 CMakePresets.json）
+- **自动检测**: 脚本支持自动平台检测，但仍建议明确指定 `--preset`
 
 ### 构建输出管理
-- **桌面端**: 输出到 `build/{platform}/bin/`
+- **桌面端**: 输出到 `out/build/{preset}/bin/`
 - **Android**: 输出到 `android/app/build/outputs/apk/`
-- **清理策略**: 必要时可删除整个 `build/` 目录重新构建
+- **清理策略**: 使用 `--clean` 参数或删除整个 `out/` 目录重新构建
 
 ### 构建问题排查
-1. **依赖检查**: 确认 `./vcpkg.[bat|sh] [platform]` 已执行
-2. **清理重建**: 删除 `build/` 目录后重新构建
+1. **依赖检查**: 确认 `vcpkg.[bat|sh]` 已执行（带 `--update` 可更新）
+2. **清理重建**: 使用 `--clean` 参数重新构建
 3. **日志分析**: 查看编译输出定位具体错误
 4. **平台验证**: 确保在正确的平台上构建
 
