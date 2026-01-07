@@ -53,39 +53,38 @@ Windows（Visual Studio 2022）：
 rem windows前置安装: 
 rem 确保安装3.31版本的cmake，不要安装4.x版本的cmake
 rem 确保安装Visual Studio 2022并选择c++工作负载
-rem 如果使用Insider 2026版本，也需要至少安装VS2022 BuildTool
 rem 确保安装VulkanSDK 1.4.313.2
 rem 由于vcpkg部分tar包解压有乱码，请确保打开windows语言设置中的[使用Unicode UTF-8提供全球语言支持]
-vcpkg.bat windows
-build.bat windows
-run.bat windows
+vcpkg.bat
+build.bat --preset windows-dev
+run.bat --preset windows-dev
 ```
 
 Windows（MSYS2 MinGW）：
 ``` shell
 # 无需前置安装
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./vcpkg.sh mingw
-./build.sh mingw
-./run.sh mingw
+./vcpkg.sh
+./build.sh --preset mingw
+./run.sh --preset mingw
 ```
 
 Linux（示例：Ubuntu）：
 ``` shell
 # 无需前置安装
 sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool
-./vcpkg.sh linux
-./build.sh linux
-./run.sh linux
+./vcpkg.sh
+./build.sh --preset linux-release
+./run.sh --preset linux-release
 ```
 
 macOS：
 ``` shell
 # 无需前置安装
 brew install molten-vk glslang ninja
-./vcpkg.sh macos
-./build.sh macos
-./run.sh macos
+./vcpkg.sh
+./build.sh --preset macos-arm64
+./run.sh --preset macos-arm64
 ```
 
 Android（在 Windows）：
@@ -93,9 +92,9 @@ Android（在 Windows）：
 rem 需 JDK 17+，安装 Android SDK 与 NDK r27（示例：27.0.12077973）
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-vcpkg.bat android
-build.bat android
-run.bat android
+vcpkg.bat
+build.bat --android
+run.bat --preset android
 ```
 
 更多用法与约定请见仓库脚本与 `.github/workflows`。

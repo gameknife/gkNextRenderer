@@ -21,30 +21,30 @@
 
 ### 依赖安装
 ```bash
-./vcpkg.bat windows    # Windows
-./vcpkg.sh macos       # macOS
-./vcpkg.sh linux       # Linux
-./vcpkg.sh android     # Android
+./vcpkg.bat    # Windows
+./vcpkg.sh     # macOS/Linux
 ```
 
 ### 项目构建
 ```bash
-./build.bat windows    # Windows
-./build.sh macos       # macOS
-./build.sh linux       # Linux
-./build.bat android    # Android
+./build.bat --preset windows-dev   # Windows
+./build.sh --preset macos-arm64    # macOS
+./build.sh --preset linux-release  # Linux
+./build.bat --android              # Android
 ```
 
 ### 快速验证
 ```bash
 # Windows
-cd build/windows/bin && ./gkNextRenderer.exe
+./run.bat --target gkNextRenderer --dry-run
+./run.bat --preset windows-dev
 
 # macOS/Linux
-cd build/[platform]/bin && ./gkNextRenderer
+./run.sh --target gkNextRenderer --dry-run
+./run.sh --preset [preset_name]
 
 # Android
-./gradlew.bat build  # 在 android/ 目录下
+./run.bat --preset android
 ```
 
 ## ✅ 成功标准
@@ -60,9 +60,9 @@ cd build/[platform]/bin && ./gkNextRenderer
 - 渲染窗口正常显示
 
 ### 输出目录
-- **Windows**: `build/windows/bin/`
-- **macOS**: `build/macos/bin/`
-- **Linux**: `build/linux/bin/`
+- **Windows**: `out/build/windows-dev/bin/`
+- **macOS**: `out/build/macos-arm64/bin/`
+- **Linux**: `out/build/linux-release/bin/`
 - **Android**: `android/app/build/outputs/apk/`
 
 ## 🔄 基本工作流程

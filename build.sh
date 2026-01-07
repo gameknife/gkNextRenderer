@@ -79,24 +79,43 @@ ensure_ios_deps() {
 # ==============================================================================
 
 PRESET=""
+CONFIG=""
+TARGET=""
 CLEAN=0
 TARGET_ANDROID=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --clean) CLEAN=1; shift ;; 
-        --android) TARGET_ANDROID=1; shift ;; 
-        --help|-h) 
-            echo "Usage: ./build.sh [options] [preset]"
+        --clean) CLEAN=1; shift ;;
+        --android) TARGET_ANDROID=1; shift ;;
+        --preset) PRESET="$2"; shift 2 ;;
+        --preset=*) PRESET="${1#*=}"; shift ;;
+        --config) CONFIG="$2"; shift 2 ;;
+        --config=*) CONFIG="${1#*=}"; shift ;;
+        --target) TARGET="$2"; shift 2 ;;
+        --target=*) TARGET="${1#*=}"; shift ;;
+        --help|-h)
+            echo "Usage: ./build.sh [options]"
             echo "Options:"
-            echo "  --clean    Clean build directory before building"
-            echo "  --android  Build for Android"
-            echo "Presets (auto-detected if omitted):"
-            echo "  macos-arm64, macos-x64, linux-release, mingw"
-            exit 0 
-            ;; 
-        *) PRESET="$1"; shift ;; 
+            echo "  --preset <name>  CMake preset to use"
+            echo "  --config <type>  Build configuration (Debug, Release, etc.)"
+            echo "  --target <name>  Specific target to build"
+            echo "  --clean          Clean build directory before building"
+            echo "  --android        Build for Android"
+            echo "  -h, --help       Show this help"
+            exit 0
+            ;;
+        *)
+            # Allow positional argument for preset for backward compatibility
+            if [[ "$1" != -* ]] && [ -z "$PRESET" ]; then
+                PRESET="$1"
+                shift
+            else
+                warn "Unknown argument: $1"
+                shift
+            fi
+            ;;
     esac
 done
 
@@ -134,4 +153,14 @@ log "Configuring preset: $PRESET"
 cmake --preset "$PRESET"
 
 log "Building preset: $PRESET"
-cmake --build --preset "$PRESET"
+CMAKE_BUILD_ARGS=("--build" "--preset" "$PRESET")
+
+if [ -n "$CONFIG" ]; then
+    CMAKE_BUILD_ARGS+=("--config" "$CONFIG")
+fi
+
+if [ -n "$TARGET" ]; then
+    CMAKE_BUILD_ARGS+=("--target" "$TARGET")
+fi
+
+cmake "${CMAKE_BUILD_ARGS[@]}"

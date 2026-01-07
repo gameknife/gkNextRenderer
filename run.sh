@@ -50,17 +50,16 @@ cmd_args=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --target|--preset|--bin-dir|--present-mode|--scene)
-            [[ $# -lt 2 ]] && { echo "Missing value for $1" >&2; exit 1; }
-            case "$1" in
-                --target) target="$2" ;;
-                --preset) preset="$2"; preset_overridden=1 ;;
-                --bin-dir) bin_dir="$2"; bin_overridden=1 ;;
-                --present-mode) cmd_args+=("--present-mode=$2") ;;
-                --scene) cmd_args+=("--load-scene=$2") ;;
-            esac
-            shift 2
-            ;;
+        --target) target="$2"; shift 2 ;;
+        --target=*) target="${1#*=}"; shift ;;
+        --preset) preset="$2"; preset_overridden=1; shift 2 ;;
+        --preset=*) preset="${1#*=}"; preset_overridden=1; shift ;;
+        --bin-dir) bin_dir="$2"; bin_overridden=1; shift 2 ;;
+        --bin-dir=*) bin_dir="${1#*=}"; bin_overridden=1; shift ;;
+        --present-mode) cmd_args+=("--present-mode=$2"); shift 2 ;;
+        --present-mode=*) cmd_args+=("--present-mode=${1#*=}"); shift ;;
+        --scene) cmd_args+=("--load-scene=$2"); shift 2 ;;
+        --scene=*) cmd_args+=("--load-scene=${1#*=}"); shift ;;
         --list) list_only=1; shift ;;
         --dry-run) dry_run=1; shift ;;
         -h|--help) print_usage; exit 0 ;;
@@ -101,9 +100,26 @@ run_native() {
         fi
     fi
 
-    # Priority 3: Fallback / Smart Search
+    # Priority 3: Old Build Location Fallback (before smart search)
+    if [[ -z "$resolved_bin" ]]; then
+       # Map preset names to old platform names
+       local old_plat="unknown"
+       case "$preset" in
+           macos-arm64|macos-x64) old_plat="macos" ;;
+           linux-*) old_plat="linux" ;;
+           windows-*) old_plat="windows" ;;
+           mingw) old_plat="mingw" ;;
+       esac
+       
+       local old_path="$script_dir/build/$old_plat/bin"
+       if [[ -d "$old_path" ]]; then
+            resolved_bin="$old_path"
+       fi
+    fi
+    
+    # Priority 4: Smart Search (try all presets)
     if [[ -z "$resolved_bin" && $bin_overridden -eq 0 && $preset_overridden -eq 0 ]]; then
-        # Try finding any valid build output if default preset failed
+        # Try finding any valid build output in new preset locations
         for fallback in macos-arm64 macos-x64 linux-release windows-dev; do
             local candidate="$script_dir/out/build/$fallback/bin"
             if [[ -d "$candidate" ]]; then
@@ -112,21 +128,6 @@ run_native() {
                 break
             fi
         done
-    fi
-    
-    # Priority 4: Old Build Location Fallback
-    if [[ -z "$resolved_bin" ]]; then
-       # Map preset names to old platform names roughly
-       local old_plat="unknown"
-       if [[ "$preset" == *"macos"* ]]; then old_plat="macos"; fi
-       if [[ "$preset" == *"linux"* ]]; then old_plat="linux"; fi
-       if [[ "$preset" == *"windows"* ]]; then old_plat="windows"; fi
-       
-       local old_path="$script_dir/build/$old_plat/bin"
-       if [[ -d "$old_path" ]]; then
-            resolved_bin="$old_path"
-            echo "Warning: Using legacy build directory: $old_path" >&2
-       fi
     fi
 
     if [[ -z "$resolved_bin" || ! -d "$resolved_bin" ]]; then
@@ -152,7 +153,10 @@ run_native() {
          fi
     fi
 
-    local cmd=("./$(basename "$exe")" "${cmd_args[@]}")
+    local cmd=("./$(basename "$exe")")
+    if [[ ${#cmd_args[@]} -gt 0 ]]; then
+        cmd+=("${cmd_args[@]}")
+    fi
     echo "Working dir: $resolved_bin"
     echo "Command: ${cmd[*]}"
     [[ $dry_run -eq 1 ]] && exit 0

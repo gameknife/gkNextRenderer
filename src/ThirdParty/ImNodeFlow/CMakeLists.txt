@@ -16,7 +16,7 @@ add_library(ImNodeFlow ${_SRCS} ${_HDRS})
 find_package(imgui)
 
 # LINK CONAN LIBS
-target_link_libraries(ImNodeFlow imgui::imgui)
+target_link_libraries(ImNodeFlow PRIVATE imgui::imgui)
 
 # PREP TO USE "#include <>"
 target_include_directories(ImNodeFlow PUBLIC include)

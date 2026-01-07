@@ -16,38 +16,44 @@ init_variables() {
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
     VCPKG_GIT_REF="2025.10.17"
+    UPDATE_REPO=0
 }
 
 parse_arguments() {
-    if [ $# -eq 0 ]; then
-        usage
-        exit 1
-    fi
-    
-    PLATFORM="$1"
-    FEATURES="${2:-}"
-    
-    if [ -n "$FEATURES" ]; then
-        export VCPKG_MANIFEST_FEATURES="$FEATURES"
-    else
-        unset VCPKG_MANIFEST_FEATURES || true
-    fi
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --update) UPDATE_REPO=1; shift ;;
+            -h|--help) usage; exit 0 ;;
+            *) warn "Unknown argument: $1"; shift ;;
+        esac
+    done
 }
 
 ensure_repo() {
     if [ ! -d "$VCPKG_ROOT/.git" ]; then
         log "Cloning vcpkg into $VCPKG_ROOT..."
         git clone https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
-    else
-        log "Updating vcpkg in $VCPKG_ROOT..."
-        # if ! git -C "$VCPKG_ROOT" pull --ff-only; then
-        #     warn "无法访问远程仓库，继续使用现有 vcpkg 副本。"
-        # fi
     fi
 
-    git -C "$VCPKG_ROOT" fetch origin --tags --force
-    git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
-    git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
+    # Only force checkout specific ref if we are NOT updating.
+    # If we updated, we presume the user wants the latest state they just pulled.
+    if [ "$UPDATE_REPO" -eq 0 ]; then
+        git -C "$VCPKG_ROOT" fetch origin --tags --force
+        git -C "$VCPKG_ROOT" checkout --force "$VCPKG_GIT_REF"
+        git -C "$VCPKG_ROOT" reset --hard "$VCPKG_GIT_REF"
+    else
+        # If updating, ensure we are on a branch that tracks origin
+        # (Usually master).
+        # But if we are detached, pull might fail without context.
+        # "pull --ff-only" works if we have an upstream.
+        # If we are detached at a specific commit, pull might be ambiguous.
+        
+        # Helper: switch to master before pulling if we want "latest"
+        git -C "$VCPKG_ROOT" checkout master || git -C "$VCPKG_ROOT" checkout -b master origin/master
+        
+        log "Updating vcpkg in $VCPKG_ROOT (git pull)..."
+        git -C "$VCPKG_ROOT" pull --ff-only || warn "Failed to update vcpkg repo."
+    fi
 }
 
 ensure_bootstrap() {
@@ -66,20 +72,11 @@ warn() { printf '[vcpkg] Warning: %s\n' "$*" >&2; }
 
 usage() {
     cat <<USAGE
-Usage: ./vcpkg.sh <platform> [manifest-features]
+Usage: ./vcpkg.sh [options]
 
-Platforms:
-  macos        (arm64-osx)
-  macos_x64    (x64-osx)
-  linux        (x64-linux)
-  android      (arm64-android)
-  ios          (arm64-ios)
-  mingw        (x64-mingw-static)
-  windows      (x64-windows-static)
-
-Examples:
-  ./vcpkg.sh macos
-  ./vcpkg.sh linux avif
+Options:
+  --update     Force git pull on the vcpkg repository.
+  -h, --help   Show this help.
 USAGE
 }
 

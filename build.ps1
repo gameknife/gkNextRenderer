@@ -23,11 +23,19 @@
 [CmdletBinding()]
 param (
     [Parameter(Position = 0)]
-    [ValidateSet("windows-dev", "android")]
-    [string]$Target = "windows-dev",
+    [string]$Preset = "windows-dev",
 
     [Parameter()]
-    [switch]$Clean = $false
+    [string]$Config,
+
+    [Parameter()]
+    [string]$Target,
+
+    [Parameter()]
+    [switch]$Clean = $false,
+
+    [Parameter()]
+    [switch]$Android = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,12 +46,12 @@ $VcpkgToolchain = Join-Path $VcpkgRoot "scripts/buildsystems/vcpkg.cmake"
 
 function Write-Log {
     param([string]$Message)
-    Write-Host "[Build] $Message" -ForegroundColor Cyan
+    Write-Host "[build] $Message" -ForegroundColor Cyan
 }
 
 function Write-ErrorLog {
     param([string]$Message)
-    Write-Host "[Error] $Message" -ForegroundColor Red
+    Write-Host "[build] Error: $Message" -ForegroundColor Red
 }
 
 function Test-Command {
@@ -93,17 +101,25 @@ function Build-Native {
     if ($Clean) {
         $BuildDir = Join-Path $ProjectRoot "out/build/$Preset"
         if (Test-Path $BuildDir) {
-            Write-Log "Cleaning $BuildDir..."
+            Write-Log "Cleaning build for preset: $Preset..."
             Remove-Item -Path $BuildDir -Recurse -Force
         }
     }
 
-    Write-Log "Configuring ($Preset)..."
+    Write-Log "Configuring preset: $Preset"
     cmake --preset $Preset
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }
 
-    Write-Log "Building ($Preset)..."
-    cmake --build --preset $Preset
+    Write-Log "Building preset: $Preset"
+    $BuildArgs = @("--build", "--preset", $Preset)
+    if ($Config) {
+        $BuildArgs += @("--config", $Config)
+    }
+    if ($Target) {
+        $BuildArgs += @("--target", $Target)
+    }
+    
+    cmake $BuildArgs
     
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed."
@@ -135,9 +151,10 @@ function Build-Android {
 $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 try {
-    switch ($Target) {
-        "android" { Build-Android }
-        default   { Build-Native -Preset $Target }
+    if ($Android) {
+        Build-Android
+    } else {
+        Build-Native -Preset $Preset
     }
     
     $StopWatch.Stop()
