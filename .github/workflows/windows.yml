@@ -34,7 +34,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        vcpkg.bat windows
+        vcpkg.bat
       shell: cmd
 
     - name: Restore cached vcpkg
@@ -52,7 +52,7 @@ jobs:
     - name: Compile gkNextRenderer
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        build.bat windows
+        build.bat --preset windows-dev
       shell: cmd
 
     - name: Save vcpkg to cache
