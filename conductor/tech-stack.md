@@ -26,7 +26,7 @@
 ## 构建与开发环境
 - **Modern CMake**：采用基于 Target 的现代构建模式，严格隔离编译属性，并通过 CMake Presets (v3) 统一全平台构建配置。
 - **vcpkg**：高效管理第三方库依赖。
-- **标准化 CLI 脚本**：统一的 `build`, `run`, `vcpkg` 脚本接口。Windows 平台采用 PowerShell 作为核心脚本语言（提供更强的逻辑处理能力和一致性），Batch 脚本仅作为调用包装器（Shim）。Unix 平台采用 Bash。
+- **标准化 CLI 脚本**：统一的 `vcpkg`, `build`, `run`, `package` 脚本接口，确保 Windows (`.bat`, `.ps1`) 和 Unix (`.sh`) 在参数和功能上的一致性。支持 `--config`, `--target`, `--clean` 等标准化参数。
 - **Ninja / Visual Studio**：推荐的后端构建工具。
 
 ## 目标平台
