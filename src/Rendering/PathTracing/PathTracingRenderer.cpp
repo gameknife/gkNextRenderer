@@ -152,7 +152,7 @@ namespace Vulkan::RayTracing
             else
 #endif
             {
-                if (!(baseRender_.SupportDLSSRR() && NextEngine::GetInstance()->GetUserSettings().DLSSRR))
+                //if (!(baseRender_.SupportDLSSRR() && NextEngine::GetInstance()->GetUserSettings().DLSSRR))
                 {
                     composePipelineNonDenoiser_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                     vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);

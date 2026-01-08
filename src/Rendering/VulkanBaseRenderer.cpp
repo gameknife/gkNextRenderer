@@ -42,6 +42,7 @@
 #include "ThirdParty/streamline/include/sl.h"
 #include "ThirdParty/streamline/include/sl_consts.h"
 #include "ThirdParty/streamline/include/sl_dlss.h"
+#include "ThirdParty/streamline/include/sl_dlss_d.h"
 #include "ThirdParty/streamline/include/sl_helpers_vk.h"
 #endif
 
@@ -953,23 +954,49 @@ namespace Vulkan
             return;
         }
 
-        // 1. DLSS Options
-        sl::DLSSOptions dlssOptions;
-        switch (settings.SuperResolution)
-        {
-        case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
-        case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-        case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
-        case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
-        default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-        }
-        dlssOptions.outputWidth = SwapChain().Extent().width;
-        dlssOptions.outputHeight = SwapChain().Extent().height;
-        dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
+        bool useDLSSRR = SupportDLSSRR() && settings.DLSSRR;
         
-        if (SL_FAILED(res1, slDLSSSetOptions(viewport, dlssOptions)))
+        // 1. DLSS Options
+        if (useDLSSRR)
         {
-            SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
+            sl::DLSSDOptions dlssOptions;
+            switch (settings.SuperResolution)
+            {
+            case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
+            case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+            case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
+            case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+            default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+            }
+            dlssOptions.outputWidth = SwapChain().Extent().width;
+            dlssOptions.outputHeight = SwapChain().Extent().height;
+            dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
+            dlssOptions.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
+        
+            if (SL_FAILED(res1, slDLSSDSetOptions(viewport, dlssOptions)))
+            {
+                SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
+            }
+        }
+        else
+        {
+            sl::DLSSOptions dlssOptions;
+            switch (settings.SuperResolution)
+            {
+            case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
+            case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+            case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
+            case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+            default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+            }
+            dlssOptions.outputWidth = SwapChain().Extent().width;
+            dlssOptions.outputHeight = SwapChain().Extent().height;
+            dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
+        
+            if (SL_FAILED(res1, slDLSSSetOptions(viewport, dlssOptions)))
+            {
+                SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
+            }
         }
 
         // 2. Constants
@@ -990,7 +1017,7 @@ namespace Vulkan
         constants.cameraNear = 0.2f;
         constants.cameraFar = 2000.0f;
         constants.cameraFOV = 60.0f * 3.14159f / 180.0f; 
-        constants.cameraAspectRatio = (float)dlssOptions.outputWidth / (float)dlssOptions.outputHeight;
+        constants.cameraAspectRatio = (float)SwapChain().Extent().width / (float)SwapChain().Extent().height;
         
         constants.depthInverted = sl::Boolean::eFalse;
         constants.cameraMotionIncluded = sl::Boolean::eTrue;
@@ -1030,55 +1057,60 @@ namespace Vulkan
         slOutput.nativeFormat = (uint32_t)swapChain_->Format();
         sl::ResourceTag tagOutput(&slOutput, sl::kBufferTypeScalingOutputColor, sl::eOnlyValidNow);
         slSetTagForFrame(*frameToken, viewport, &tagOutput, 1, commandBuffer);
-
-        if (SupportDLSSRR() && settings.DLSSRR)
+        
+        if (useDLSSRR)
         {
             // Albedo
             auto& resAlbedo = bindlessStorageImages_[Assets::Bindless::RT_ALBEDO];
             auto slAlbedo = toSlResource(resAlbedo->GetImage(), resAlbedo->GetImageMemory().Handle(), resAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagAlbedo(&slAlbedo, sl::kBufferTypeAlbedo, sl::eValidUntilPresent);
+            sl::ResourceTag tagAlbedo(&slAlbedo, sl::kBufferTypeAlbedo, sl::eOnlyValidNow);
             slSetTagForFrame(*frameToken, viewport, &tagAlbedo, 1, commandBuffer);
 
             // Specular Albedo
             auto& resSpecAlbedo = bindlessStorageImages_[Assets::Bindless::RT_SPECULAR_ALBEDO];
             auto slSpecAlbedo = toSlResource(resSpecAlbedo->GetImage(), resSpecAlbedo->GetImageMemory().Handle(), resSpecAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagSpecAlbedo(&slSpecAlbedo, sl::kBufferTypeSpecularAlbedo, sl::eValidUntilPresent);
+            sl::ResourceTag tagSpecAlbedo(&slSpecAlbedo, sl::kBufferTypeSpecularAlbedo, sl::eOnlyValidNow);
             slSetTagForFrame(*frameToken, viewport, &tagSpecAlbedo, 1, commandBuffer);
 
             // Normals
             auto& resNormal = bindlessStorageImages_[Assets::Bindless::RT_NORMAL];
             auto slNormal = toSlResource(resNormal->GetImage(), resNormal->GetImageMemory().Handle(), resNormal->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagNormal(&slNormal, sl::kBufferTypeNormals, sl::eValidUntilPresent);
+            sl::ResourceTag tagNormal(&slNormal, sl::kBufferTypeNormalRoughness, sl::eOnlyValidNow);
             slSetTagForFrame(*frameToken, viewport, &tagNormal, 1, commandBuffer);
+            
+            // auto& resMV = bindlessStorageImages_[Assets::Bindless::RT_MOTIONVECTOR];
+            // auto slMV = toSlResource(resMV->GetImage(), resMV->GetImageMemory().Handle(), resMV->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            // sl::ResourceTag tagMV(&slMV, sl::kBufferTypeSpecularMotionVectors, sl::eOnlyValidNow);
+            // slSetTagForFrame(*frameToken, viewport, &tagMV, 1, commandBuffer);
 
             // Diffuse Noisy
-            auto& resDiffNoisy = bindlessStorageImages_[Assets::Bindless::RT_SINGLE_DIFFUSE];
-            auto slDiffNoisy = toSlResource(resDiffNoisy->GetImage(), resDiffNoisy->GetImageMemory().Handle(), resDiffNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagDiffNoisy(&slDiffNoisy, sl::kBufferTypeDiffuseHitNoisy, sl::eValidUntilPresent);
-            slSetTagForFrame(*frameToken, viewport, &tagDiffNoisy, 1, commandBuffer);
-
-            // Specular Noisy
-            auto& resSpecNoisy = bindlessStorageImages_[Assets::Bindless::RT_SINGLE_SPECULAR];
-            auto slSpecNoisy = toSlResource(resSpecNoisy->GetImage(), resSpecNoisy->GetImageMemory().Handle(), resSpecNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagSpecNoisy(&slSpecNoisy, sl::kBufferTypeSpecularHitNoisy, sl::eValidUntilPresent);
-            slSetTagForFrame(*frameToken, viewport, &tagSpecNoisy, 1, commandBuffer);
+            // auto& resDiffNoisy = bindlessStorageImages_[Assets::Bindless::RT_ACCUMLATE_DIFFUSE];
+            // auto slDiffNoisy = toSlResource(resDiffNoisy->GetImage(), resDiffNoisy->GetImageMemory().Handle(), resDiffNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            // sl::ResourceTag tagDiffNoisy(&slDiffNoisy, sl::kBufferTypeDiffuseHitNoisy, sl::eOnlyValidNow);
+            // slSetTagForFrame(*frameToken, viewport, &tagDiffNoisy, 1, commandBuffer);
+            //
+            // // Specular Noisy
+            // auto& resSpecNoisy = bindlessStorageImages_[Assets::Bindless::RT_ACCUMLATE_SPECULAR];
+            // auto slSpecNoisy = toSlResource(resSpecNoisy->GetImage(), resSpecNoisy->GetImageMemory().Handle(), resSpecNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            // sl::ResourceTag tagSpecNoisy(&slSpecNoisy, sl::kBufferTypeSpecularHitNoisy, sl::eOnlyValidNow);
+            // slSetTagForFrame(*frameToken, viewport, &tagSpecNoisy, 1, commandBuffer);
 
             // Diffuse Hit Dist
             auto& resDiffHitDist = bindlessStorageImages_[Assets::Bindless::RT_DIFFUSE_HITDIST];
             auto slDiffHitDist = toSlResource(resDiffHitDist->GetImage(), resDiffHitDist->GetImageMemory().Handle(), resDiffHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagDiffHitDist(&slDiffHitDist, sl::kBufferTypeDiffuseHitDistance, sl::eValidUntilPresent);
+            sl::ResourceTag tagDiffHitDist(&slDiffHitDist, sl::kBufferTypeDiffuseHitDistance, sl::eOnlyValidNow);
             slSetTagForFrame(*frameToken, viewport, &tagDiffHitDist, 1, commandBuffer);
-
-            // Specular Hit Dist
-            auto& resSpecHitDist = bindlessStorageImages_[Assets::Bindless::RT_SPECULAR_HITDIST];
-            auto slSpecHitDist = toSlResource(resSpecHitDist->GetImage(), resSpecHitDist->GetImageMemory().Handle(), resSpecHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagSpecHitDist(&slSpecHitDist, sl::kBufferTypeSpecularHitDistance, sl::eValidUntilPresent);
-            slSetTagForFrame(*frameToken, viewport, &tagSpecHitDist, 1, commandBuffer);
+            //
+            // // Specular Hit Dist
+            // auto& resSpecHitDist = bindlessStorageImages_[Assets::Bindless::RT_SPECULAR_HITDIST];
+            // auto slSpecHitDist = toSlResource(resSpecHitDist->GetImage(), resSpecHitDist->GetImageMemory().Handle(), resSpecHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            // sl::ResourceTag tagSpecHitDist(&slSpecHitDist, sl::kBufferTypeSpecularHitDistance, sl::eOnlyValidNow);
+            // slSetTagForFrame(*frameToken, viewport, &tagSpecHitDist, 1, commandBuffer);
         }
 
         // 4. Evaluate
         const sl::BaseStructure* inputs[] = { &viewport };
-        if (SL_FAILED(res3, slEvaluateFeature(sl::kFeatureDLSS, *frameToken, inputs, 1, commandBuffer)))
+        if (SL_FAILED(res3, slEvaluateFeature(useDLSSRR ? sl::kFeatureDLSS_RR : sl::kFeatureDLSS, *frameToken, inputs, 1, commandBuffer)))
         {
             SPDLOG_ERROR("slEvaluateFeature DLSS failed: {}", (int)res3);
         }
