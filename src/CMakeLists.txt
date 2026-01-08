@@ -1,5 +1,7 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+option(WITH_STREAMLINE "Enable Nvidia Streamline" OFF)
+
 # directory naming
 file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
 file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
@@ -211,6 +213,13 @@ foreach(target IN LISTS AllTargets)
 		if ( NOT ANDROID AND NOT IOS )
 		target_link_libraries(${target} PRIVATE cpptrace::cpptrace)
 		endif()
+
+		if ( WITH_STREAMLINE )
+			target_compile_definitions(${target} PUBLIC WITH_STREAMLINE=1)
+			target_include_directories(${target} PRIVATE ThirdParty/streamline/include)
+			target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+			target_link_libraries(${target} PRIVATE sl.interposer)
+		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		if ( NOT ANDROID ) 
@@ -289,6 +298,11 @@ foreach(target IN LISTS AllTargets)
 	elseif(UNIX)
 	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
+
+	if ( WITH_STREAMLINE )
+		file(GLOB SL_BINS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/streamline/bin/*")
+		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
@@ -312,6 +326,9 @@ add_executable(gkNextUnitTests
 )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)
+if ( WITH_STREAMLINE )
+	target_link_directories(gkNextUnitTests PRIVATE ThirdParty/streamline/lib/x64)
+endif()
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 

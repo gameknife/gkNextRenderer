@@ -31,7 +31,8 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "WITH_OIDN": "OFF",
         "WITH_AVIF": "OFF",
-        "WITH_SUPERLUMINAL": "OFF"
+        "WITH_SUPERLUMINAL": "OFF",
+        "WITH_STREAMLINE": "ON"
       }
     },
     {

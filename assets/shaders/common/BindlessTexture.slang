@@ -25,6 +25,10 @@ namespace Bindless
 
     public static const int RT_MOTIONMOMENT = 14;
 
+    public static const int RT_DIFFUSE_HITDIST = 15;
+    public static const int RT_SPECULAR_HITDIST = 16;
+    public static const int RT_SPECULAR_ALBEDO = 17;
+
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
     public static const int RT_SINGLE_PREV_ALBEDO = 22;
