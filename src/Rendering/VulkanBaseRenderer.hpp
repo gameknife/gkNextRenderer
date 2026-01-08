@@ -14,7 +14,7 @@
 
 namespace StreamlineWrapper
 {
-	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily);
+	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
 }
 
@@ -119,7 +119,12 @@ namespace Vulkan
 
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		
+		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
 		bool VisualDebug() const {return visualDebug_;}
+		
+		bool SupportDLSS() const { return supportDLSS_; }
+		bool SupportDLSSRR() const { return supportDLSSRR_; }
 
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
@@ -143,6 +148,8 @@ namespace Vulkan
 		
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
+		bool supportDLSS_{};
+		bool supportDLSSRR_{};
 		bool supportDenoiser_ {};
 		bool showWireframe_ {};
 		int frameCount_{};

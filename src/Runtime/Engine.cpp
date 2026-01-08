@@ -265,6 +265,8 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.FastGather = false;
 
     userSettings.SuperResolution = options.SuperResolution;
+    userSettings.DLSS = options.DLSS;
+    userSettings.DLSSRR = options.DLSSRR;
     
 #if ANDROID || IOS
     userSettings.NumberOfSamples = 1;
@@ -907,13 +909,19 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     projectionUnJit = ubo.Projection;
 #endif
 
-    if (userSettings_.TAA)
+    if (userSettings_.TAA || userSettings_.DLSS)
     {
         std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
         glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
         
         ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
         ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+
+        ubo.Jitter = glm::vec4(jitter.x, jitter.y, 0, 0);
+    }
+    else
+    {
+        ubo.Jitter = glm::vec4(0, 0, 0, 0);
     }
     
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
@@ -921,6 +929,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
     ubo.ViewProjection = ubo.Projection * ubo.ModelView;
     ubo.ViewProjectionUnJit = projectionUnJit * ubo.ModelView;
+    ubo.ProjectionUnJit = projectionUnJit;
+    ubo.ProjectionInverseUnJit = glm::inverse(projectionUnJit);
     
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
     ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;

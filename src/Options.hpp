@@ -27,6 +27,8 @@ public:
 	bool ForceSDR{};
 	bool ReferenceMode{};
 	uint32_t SuperResolution{};
+	bool DLSS{};
+	bool DLSSRR{};
 	bool ForceNoRT{};
 	bool ForceSoftGen{};
 	bool HardwareQuery{};

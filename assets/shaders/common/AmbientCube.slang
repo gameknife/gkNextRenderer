@@ -499,7 +499,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
             Vertex hitVertex;
             NodeProxy hitNode;
             float4 tempColor = float4(0.0);
-            if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode, tempColor))
+            float hitDist = 0;
+            if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode, tempColor, hitDist))
             {
                 Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 float4 outAlbedo = hitMaterial.Diffuse;
@@ -558,9 +559,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
         NodeProxy hitNode;
         float4 tempColor = float4(0.0);
         uint TempInstanceId;
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor))
+        float hitDist = 0;
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor, hitDist))
         {
-            return length(hitVertex.Position - origin);
+            return hitDist;
         }
         return 255;
     }
@@ -571,9 +573,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         Vertex hitVertex;
         NodeProxy hitNode;
         float4 tempColor;
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor))
+        float hitDist = 0;
+        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor, hitDist))
         {
-            float hitDist = length(hitVertex.Position - origin);
             OutDistanceToSolid = hitDist;
 
             if (OutDistanceToSolid <= CUBE_UNIT)

@@ -21,6 +21,8 @@ namespace Vulkan
 		~DepthBuffer();
 
 		VkFormat Format() const { return format_; }
+		const class Image& GetImage() const { return *image_; }
+		const class DeviceMemory& GetImageMemory() const { return *imageMemory_; }
 		const class ImageView& ImageView() const { return *imageView_; }
 
 		static bool HasStencilComponent(const VkFormat format)

@@ -426,6 +426,35 @@ void NextRendererGameInstance::DrawSettings()
 #endif
 			ImGui::NewLine();
 		}
+
+		if( ImGui::CollapsingHeader(LOCTEXT("Upscaling"), ImGuiTreeNodeFlags_DefaultOpen) )
+		{
+			if (GetEngine().GetRenderer().SupportDLSS())
+			{
+				ImGui::Checkbox("NVIDIA DLSS", &userSetting.DLSS);
+				if (userSetting.DLSS)
+				{
+					const char* dlssModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance" };
+					ImGui::Combo("DLSS Mode", (int*)&userSetting.SuperResolution, dlssModes, IM_ARRAYSIZE(dlssModes));
+					
+					if (GetEngine().GetRenderer().SupportDLSSRR())
+					{
+						ImGui::Checkbox("DLSS Ray Reconstruction", &userSetting.DLSSRR);
+					}
+				}
+			}
+			else
+			{
+				ImGui::TextDisabled("DLSS not supported on this hardware.");
+			}
+            
+            if (!userSetting.DLSS)
+            {
+                const char* fsrModes[] = { "1.0x (Off)", "1.5x (Quality)", "2.0x (Balanced)", "4.0x (Performance)" };
+				ImGui::Combo("Software Upscale", (int*)&userSetting.SuperResolution, fsrModes, IM_ARRAYSIZE(fsrModes));
+            }
+			ImGui::NewLine();
+		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
 		{

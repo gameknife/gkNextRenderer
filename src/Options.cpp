@@ -33,6 +33,8 @@ Options::Options(const int argc, const char* argv[])
 		("forcenort", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
 		("forcesoftgen", "Forcing software raytracing for ambient cube gen.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
 		("superres", "SuperResolution: 50% / 66% / 100% -> 0 / 1 / 2.", cxxopts::value<uint32_t>(SuperResolution)->default_value("1"))
+		("dlss", "Enable NVIDIA DLSS Super Resolution.", cxxopts::value<bool>(DLSS)->default_value("false"))
+		("dlssrr", "Enable NVIDIA DLSS Ray Reconstruction.", cxxopts::value<bool>(DLSSRR)->default_value("false"))
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
 	

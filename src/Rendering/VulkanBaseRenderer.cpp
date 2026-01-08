@@ -45,58 +45,102 @@
 #include "ThirdParty/streamline/include/sl_helpers_vk.h"
 #endif
 
+#if WITH_STREAMLINE
+static sl::Resource toSlResource(const Vulkan::Image& image, VkDeviceMemory memory, VkImageView view, VkImageLayout layout)
+{
+    sl::Resource res(sl::ResourceType::eTex2d, (void*)image.Handle(), (void*)memory, (void*)view, (uint32_t)layout);
+    res.width = image.Extent().width;
+    res.height = image.Extent().height;
+    res.nativeFormat = (uint32_t)image.Format();
+    res.mipLevels = 1;
+    res.arrayLayers = 1;
+    return res;
+}
+
+static sl::float4x4 toSlMatrix(const glm::mat4& m)
+{
+    sl::float4x4 res;
+    res.row[0] = sl::float4(m[0][0], m[1][0], m[2][0], m[3][0]);
+    res.row[1] = sl::float4(m[0][1], m[1][1], m[2][1], m[3][1]);
+    res.row[2] = sl::float4(m[0][2], m[1][2], m[2][2], m[3][2]);
+    res.row[3] = sl::float4(m[0][3], m[1][3], m[2][3], m[3][3]);
+    return res;
+}
+#endif
+
 namespace StreamlineWrapper
 {
-   void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily)
+   void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
    {
 #if WITH_STREAMLINE
-       // sl::Preferences pref{};
-       // pref.showConsole = false; // for debugging, set to false in production
-       // pref.logLevel = sl::LogLevel::eOff;
-       // pref.pathsToPlugins = {}; // change this if Streamline plugins are not located next to the executable
-       // pref.numPathsToPlugins = 0; // change this if Streamline plugins are not located next to the executable
-       // pref.pathToLogsAndData = {}; // change this to enable logging to a file
-       // //pref.logMessageCallback = myLogMessageCallback; // highly recommended to track warning/error messages in your callback
-       // //pref.applicationId = myId; // Provided by NVDA, required if using NGX components (DLSS 2/3)
-       // //pref.engineType = myEngine; // If using UE or Unity
-       // //pref.engineVersion = myEngineVersion; // Optional version
-       // //pref.projectId = myProjectId; // Optional project id
-       // if(SL_FAILED(res, slInit(pref)))
-       // {
-       //     // Handle error, check the logs
-       //     if(res == sl::Result::eErrorDriverOutOfDate) { /* inform user */}
-       //     // and so on ...
-       // }
-       //
-       // sl::VulkanInfo slVulkanInfo{};
-       // slVulkanInfo.device = device;
-       // slVulkanInfo.instance = instance;
-       // slVulkanInfo.physicalDevice = physicalDevice;
-       // slVulkanInfo.computeQueueIndex = computeQueueIdx;
-       // slVulkanInfo.computeQueueFamily = computeQueueFamily;
-       // slVulkanInfo.graphicsQueueIndex = graphicsQueueIdx;
-       // slVulkanInfo.graphicsQueueFamily = graphicsQueueFamily;
-       // // slVulkanInfo.opticalFlowQueueIndex = vulkanInfo.opticalFlowQueueIndex;
-       // // slVulkanInfo.opticalFlowQueueFamily = vulkanInfo.opticalFlowQueueFamily;
-       // // slVulkanInfo.useNativeOpticalFlowMode = vulkanInfo.useNativeOpticalFlowMode;
-       // // slVulkanInfo.computeQueueCreateFlags = vulkanInfo.computeQueueCreateFlags;
-       // // slVulkanInfo.graphicsQueueCreateFlags = vulkanInfo.graphicsQueueCreateFlags;
-       // // slVulkanInfo.opticalFlowQueueCreateFlags = vulkanInfo.opticalFlowQueueCreateFlags;
-       //
-       // if(SL_FAILED(res, slSetVulkanInfo(slVulkanInfo)))
-       // {
-       //     // Handle error, check the logs
-       // }
+        sl::Preferences pref{};
+        pref.showConsole = true; // for debugging, set to false in production
+        pref.logLevel = sl::LogLevel::eVerbose;
+        pref.pathsToPlugins = {}; // change this if Streamline plugins are not located next to the executable
+        pref.numPathsToPlugins = 0; // change this if Streamline plugins are not located next to the executable
+        pref.pathToLogsAndData = {}; // change this to enable logging to a file
+        //pref.logMessageCallback = myLogMessageCallback; // highly recommended to track warning/error messages in your callback
+        pref.applicationId = 12345678; // Provided by NVDA, required if using NGX components (DLSS 2/3)
+        pref.engine = sl::EngineType::eCustom; // If using UE or Unity
+        pref.engineVersion = "1.0.0"; // Optional version
+        pref.projectId = "36cf6361-1044-4603-9ef3-066606660666"; // Optional project id (GUID format)
+        pref.flags |= sl::PreferenceFlags::eUseFrameBasedResourceTagging;
+
+        sl::Feature features[] = { sl::kFeatureDLSS, sl::kFeatureDLSS_RR };
+        pref.featuresToLoad = features;
+        pref.numFeaturesToLoad = sizeof(features) / sizeof(sl::Feature);
+        pref.renderAPI = sl::RenderAPI::eVulkan;
+
+        sl::Result res;
+        if(SL_FAILED(res, slInit(pref)))
+        {
+            SPDLOG_ERROR("Streamline slInit failed: {}", (int)res);
+            return;
+        }
+        
+       sl::VulkanInfo slVulkanInfo{};
+       slVulkanInfo.device = device;
+       slVulkanInfo.instance = instance;
+       slVulkanInfo.physicalDevice = physicalDevice;
+       slVulkanInfo.computeQueueIndex = computeQueueIdx;
+       slVulkanInfo.computeQueueFamily = computeQueueFamily;
+       slVulkanInfo.graphicsQueueIndex = graphicsQueueIdx;
+       slVulkanInfo.graphicsQueueFamily = graphicsQueueFamily;
+       
+       if(SL_FAILED(res, slSetVulkanInfo(slVulkanInfo)))
+       {
+            SPDLOG_ERROR("Streamline slSetVulkanInfo failed: {}", (int)res);
+       }
+       else
+       {
+            SPDLOG_INFO("Streamline Initialized Successfully.");
+            
+            sl::AdapterInfo adapterInfo{};
+            adapterInfo.vkPhysicalDevice = physicalDevice;
+            
+            sl::Result checkRes = slIsFeatureSupported(sl::kFeatureDLSS, adapterInfo);
+            outSupportDLSS = (checkRes == sl::Result::eOk);
+            
+            checkRes = slIsFeatureSupported(sl::kFeatureDLSS_RR, adapterInfo);
+            outSupportDLSSRR = (checkRes == sl::Result::eOk);
+            
+            SPDLOG_INFO("DLSS Support: {}, RR Support: {}", outSupportDLSS, outSupportDLSSRR);
+       }
+#else
+       outSupportDLSS = false;
+       outSupportDLSSRR = false;
 #endif
    }
+
 
     void Shutdown()
    {
 #if WITH_STREAMLINE
-       // if(SL_FAILED(res, slShutdown()))
-       // {
-       //     // Handle error, check the logs
-       // }
+       sl::Result res;
+       if(SL_FAILED(res, slShutdown()))
+       {
+           SPDLOG_ERROR("Streamline slShutdown failed: {}", (int)res);
+       }
 #endif
    }
 }
@@ -260,10 +304,13 @@ namespace Vulkan
         SetVulkanDevice(*this, GOption->GpuIdx);
         PrintVulkanSwapChainInformation(*this);
         currentFrame_ = 0;
+
+        StreamlineWrapper::Init(device_->Handle(), instance_->Handle(), device_->PhysicalDevice(), 0, device_->ComputeFamilyIndex(), 0, device_->GraphicsFamilyIndex(), supportDLSS_, supportDLSSRR_);
     }
 
     void VulkanBaseRenderer::End()
     {
+        StreamlineWrapper::Shutdown();
         device_->WaitIdle();
         gpuTimer_.reset();
     }
@@ -300,12 +347,14 @@ namespace Vulkan
         deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
         deviceFeatures.shaderInt16 = true;
         deviceFeatures.shaderInt64 = true;
-
+        
         // Required extensions. windows only
 #if WIN32
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
-                                      VK_KHR_SHADER_CLOCK_EXTENSION_NAME
+                                      VK_KHR_SHADER_CLOCK_EXTENSION_NAME,
+                                      VK_NVX_BINARY_IMPORT_EXTENSION_NAME,
+                                      VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
                                   });
 
         // Opt-in into mandatory device features.
@@ -357,6 +406,20 @@ namespace Vulkan
         storage16BitFeatures.pNext = &shaderDrawParametersFeatures;
         storage16BitFeatures.storageBuffer16BitAccess = true;
 
+#if WITH_STREAMLINE
+        VkPhysicalDeviceVulkan12Features deviceVulkan12Features = {};
+        deviceVulkan12Features.timelineSemaphore = true;
+        deviceVulkan12Features.pNext = &shaderDrawParametersFeatures;
+        storage16BitFeatures.pNext = &deviceVulkan12Features;
+        
+        requiredExtensions.insert(requiredExtensions.end(),
+                                  {
+                                      VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME,
+                                      VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+                                      VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME
+                                  });
+#endif
+        
         device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures,
                                        &storage16BitFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
@@ -435,6 +498,9 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         CREATE_STORAGE_IMAGE(RT_MOTIONMOMENT, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_DIFFUSE_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SPECULAR_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SPECULAR_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
 
         for (uint32_t i = 0; i != swapChain_->Images().size(); i++)
         {
@@ -871,6 +937,167 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+#if WITH_STREAMLINE
+        if (!supportDLSS_) return;
+
+        auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        
+        sl::ViewportHandle viewport(0);
+        sl::FrameToken* frameToken;
+        uint32_t uintFrameCount = (uint32_t)frameCount_;
+        if (SL_FAILED(res0, slGetNewFrameToken(frameToken, &uintFrameCount)))
+        {
+            SPDLOG_ERROR("slGetNewFrameToken failed: {}", (int)res0);
+            return;
+        }
+
+        // 1. DLSS Options
+        sl::DLSSOptions dlssOptions;
+        switch (settings.SuperResolution)
+        {
+        case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
+        case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+        case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
+        case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+        default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+        }
+        dlssOptions.outputWidth = SwapChain().Extent().width;
+        dlssOptions.outputHeight = SwapChain().Extent().height;
+        dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
+        
+        if (SL_FAILED(res1, slDLSSSetOptions(viewport, dlssOptions)))
+        {
+            SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
+        }
+
+        // 2. Constants
+        sl::Constants constants{};
+        constants.cameraViewToClip = toSlMatrix(lastUBO.ProjectionUnJit);
+        constants.clipToCameraView = toSlMatrix(lastUBO.ProjectionInverseUnJit);
+        constants.clipToPrevClip = toSlMatrix(lastUBO.PrevViewProjectionUnJit * lastUBO.ModelViewInverse * lastUBO.ProjectionInverseUnJit); 
+        constants.prevClipToClip = toSlMatrix(lastUBO.ProjectionUnJit * lastUBO.ModelView * lastUBO.PrevViewProjectionUnJit);
+        
+        constants.jitterOffset = sl::float2(lastUBO.Jitter.x, lastUBO.Jitter.y);
+        constants.mvecScale = {1.0f / (float)SwapChain().RenderExtent().width,1.0f / (float)SwapChain().RenderExtent().height}; 
+        
+        constants.cameraPos = sl::float3(lastUBO.ModelViewInverse[3][0], lastUBO.ModelViewInverse[3][1], lastUBO.ModelViewInverse[3][2]);
+        constants.cameraFwd = sl::float3(-lastUBO.ModelViewInverse[2][0], -lastUBO.ModelViewInverse[2][1], -lastUBO.ModelViewInverse[2][2]);
+        constants.cameraUp = sl::float3(lastUBO.ModelViewInverse[1][0], lastUBO.ModelViewInverse[1][1], lastUBO.ModelViewInverse[1][2]);
+        constants.cameraRight = sl::float3(lastUBO.ModelViewInverse[0][0], lastUBO.ModelViewInverse[0][1], lastUBO.ModelViewInverse[0][2]);
+        
+        constants.cameraNear = 0.2f;
+        constants.cameraFar = 2000.0f;
+        constants.cameraFOV = 60.0f * 3.14159f / 180.0f; 
+        constants.cameraAspectRatio = (float)dlssOptions.outputWidth / (float)dlssOptions.outputHeight;
+        
+        constants.depthInverted = sl::Boolean::eFalse;
+        constants.cameraMotionIncluded = sl::Boolean::eTrue;
+        constants.motionVectors3D = sl::Boolean::eFalse;
+        constants.reset = frameCount_ < 2 ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+        constants.cameraPinholeOffset = sl::float2(0.0f, 0.0f);
+        
+        if (SL_FAILED(res2, slSetConstants(constants, *frameToken, viewport)))
+        {
+            SPDLOG_ERROR("slSetConstants failed: {}", (int)res2);
+        }
+
+        // 3. Tags
+        // Depth
+        auto slDepth = toSlResource(depthBuffer_->GetImage(), depthBuffer_->GetImageMemory().Handle(), depthBuffer_->ImageView().Handle(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        slDepth.width = SwapChain().RenderExtent().width;
+        slDepth.height = SwapChain().RenderExtent().height;
+        sl::ResourceTag tagDepth(&slDepth, sl::kBufferTypeDepth, sl::eOnlyValidNow);
+        slSetTagForFrame(*frameToken, viewport, &tagDepth, 1, commandBuffer);
+
+        // Motion Vectors
+        auto& resMV = bindlessStorageImages_[Assets::Bindless::RT_MOTIONVECTOR];
+        auto slMV = toSlResource(resMV->GetImage(), resMV->GetImageMemory().Handle(), resMV->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+        sl::ResourceTag tagMV(&slMV, sl::kBufferTypeMotionVectors, sl::eOnlyValidNow);
+        slSetTagForFrame(*frameToken, viewport, &tagMV, 1, commandBuffer);
+
+        // Scaling Input (Color)
+        auto& resInput = bindlessStorageImages_[Assets::Bindless::RT_DENOISED];
+        auto slInput = toSlResource(resInput->GetImage(), resInput->GetImageMemory().Handle(), resInput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+        sl::ResourceTag tagInput(&slInput, sl::kBufferTypeScalingInputColor, sl::eOnlyValidNow);
+        slSetTagForFrame(*frameToken, viewport, &tagInput, 1, commandBuffer);
+
+        // Scaling Output
+        sl::Resource slOutput(sl::ResourceType::eTex2d, (void*)swapChain_->Images()[imageIndex], nullptr, (void*)swapChain_->ImageViews()[imageIndex]->Handle(), (uint32_t)VK_IMAGE_LAYOUT_GENERAL);
+        slOutput.width = SwapChain().Extent().width;
+        slOutput.height = SwapChain().Extent().height;
+        slOutput.nativeFormat = (uint32_t)swapChain_->Format();
+        sl::ResourceTag tagOutput(&slOutput, sl::kBufferTypeScalingOutputColor, sl::eOnlyValidNow);
+        slSetTagForFrame(*frameToken, viewport, &tagOutput, 1, commandBuffer);
+
+        if (SupportDLSSRR() && settings.DLSSRR)
+        {
+            // Albedo
+            auto& resAlbedo = bindlessStorageImages_[Assets::Bindless::RT_ALBEDO];
+            auto slAlbedo = toSlResource(resAlbedo->GetImage(), resAlbedo->GetImageMemory().Handle(), resAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagAlbedo(&slAlbedo, sl::kBufferTypeAlbedo, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagAlbedo, 1, commandBuffer);
+
+            // Specular Albedo
+            auto& resSpecAlbedo = bindlessStorageImages_[Assets::Bindless::RT_SPECULAR_ALBEDO];
+            auto slSpecAlbedo = toSlResource(resSpecAlbedo->GetImage(), resSpecAlbedo->GetImageMemory().Handle(), resSpecAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagSpecAlbedo(&slSpecAlbedo, sl::kBufferTypeSpecularAlbedo, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagSpecAlbedo, 1, commandBuffer);
+
+            // Normals
+            auto& resNormal = bindlessStorageImages_[Assets::Bindless::RT_NORMAL];
+            auto slNormal = toSlResource(resNormal->GetImage(), resNormal->GetImageMemory().Handle(), resNormal->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagNormal(&slNormal, sl::kBufferTypeNormals, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagNormal, 1, commandBuffer);
+
+            // Diffuse Noisy
+            auto& resDiffNoisy = bindlessStorageImages_[Assets::Bindless::RT_SINGLE_DIFFUSE];
+            auto slDiffNoisy = toSlResource(resDiffNoisy->GetImage(), resDiffNoisy->GetImageMemory().Handle(), resDiffNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagDiffNoisy(&slDiffNoisy, sl::kBufferTypeDiffuseHitNoisy, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagDiffNoisy, 1, commandBuffer);
+
+            // Specular Noisy
+            auto& resSpecNoisy = bindlessStorageImages_[Assets::Bindless::RT_SINGLE_SPECULAR];
+            auto slSpecNoisy = toSlResource(resSpecNoisy->GetImage(), resSpecNoisy->GetImageMemory().Handle(), resSpecNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagSpecNoisy(&slSpecNoisy, sl::kBufferTypeSpecularHitNoisy, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagSpecNoisy, 1, commandBuffer);
+
+            // Diffuse Hit Dist
+            auto& resDiffHitDist = bindlessStorageImages_[Assets::Bindless::RT_DIFFUSE_HITDIST];
+            auto slDiffHitDist = toSlResource(resDiffHitDist->GetImage(), resDiffHitDist->GetImageMemory().Handle(), resDiffHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagDiffHitDist(&slDiffHitDist, sl::kBufferTypeDiffuseHitDistance, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagDiffHitDist, 1, commandBuffer);
+
+            // Specular Hit Dist
+            auto& resSpecHitDist = bindlessStorageImages_[Assets::Bindless::RT_SPECULAR_HITDIST];
+            auto slSpecHitDist = toSlResource(resSpecHitDist->GetImage(), resSpecHitDist->GetImageMemory().Handle(), resSpecHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
+            sl::ResourceTag tagSpecHitDist(&slSpecHitDist, sl::kBufferTypeSpecularHitDistance, sl::eValidUntilPresent);
+            slSetTagForFrame(*frameToken, viewport, &tagSpecHitDist, 1, commandBuffer);
+        }
+
+        // 4. Evaluate
+        const sl::BaseStructure* inputs[] = { &viewport };
+        if (SL_FAILED(res3, slEvaluateFeature(sl::kFeatureDLSS, *frameToken, inputs, 1, commandBuffer)))
+        {
+            SPDLOG_ERROR("slEvaluateFeature DLSS failed: {}", (int)res3);
+        }
+        else
+        {
+            // VulkanThreadContext* thread = (VulkanThreadContext*)m_getThreadContext();
+            //
+            // if (thread->PipelineBindPoint != VK_PIPELINE_BIND_POINT_MAX_ENUM)
+            // {
+            //     vkCmdBindPipeline(commandBuffer, thread->PipelineBindPoint, thread->Pipeline);
+            // }
+            // if (thread->PipelineBindPointDesc != VK_PIPELINE_BIND_POINT_MAX_ENUM)
+            // {
+            //     vkCmdBindDescriptorSets(commandBuffer, thread->PipelineBindPointDesc, thread->Layout, thread->FirstSet, thread->DescriptorCount, thread->DescriptorSets, thread->DynamicOffsetCount, thread->DynamicOffsets);
+            // }
+        }
+#endif
+    }
+
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
         switch (type)
@@ -1027,6 +1254,14 @@ namespace Vulkan
                 GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
+#if WITH_STREAMLINE
+                if (SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
+                {
+                    UpdateStreamline(commandBuffer, imageIndex);
+                }
+                else
+#endif
+                {
 #if false
                 std::array<uint32_t, 5> pushConst = { imageIndex, uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y), uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height) };
                 simpleComposePipeline_->BindPipeline(commandBuffer, pushConst.data());
@@ -1048,6 +1283,7 @@ namespace Vulkan
                                1, &blitRegion,
                                VK_FILTER_LINEAR);
 #endif
+                }
                 SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             }
         }

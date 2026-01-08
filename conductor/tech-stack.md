@@ -7,6 +7,7 @@
 
 ## 图形与渲染
 - **Vulkan API**：作为唯一的图形 API，利用其底层控制能力实现高性能渲染，并支持硬件加速的光线追踪、GPU-Driven 管线和全 Bindless 设计。
+- **NVIDIA Streamline / DLSS**: 集成 NVIDIA Streamline SDK，支持 DLSS Super Resolution 和 Ray Reconstruction，显著提升光线追踪质量与性能。
 - **Slang / GLSL**：用于编写着色器代码，利用 Slang 的现代特性进行着色器管理。
 
 ## 核心第三方库

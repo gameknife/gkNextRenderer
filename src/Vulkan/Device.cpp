@@ -144,17 +144,12 @@ Device::Device(
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
 	
 	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
-
-
-	// dlss integrate
-	StreamlineWrapper::Init(device_, surface.Instance().Handle(), physicalDevice, 0, computeFamilyIndex_, 0, graphicsFamilyIndex_);
 }
 
 Device::~Device()
 {
 	if (device_ != nullptr)
 	{
-		StreamlineWrapper::Shutdown();
 		vkDestroyDevice(device_, nullptr);
 		device_ = nullptr;
 		deviceProcedures_.reset();
