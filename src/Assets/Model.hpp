@@ -15,6 +15,8 @@ namespace Assets
         float FieldOfView;
         float Aperture;
         float FocalDistance;
+        float NearPlane = 0.2f;
+        float FarPlane = 2000.0f;
     };
 
     struct EnvironmentSetting

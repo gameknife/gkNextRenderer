@@ -1019,9 +1019,10 @@ namespace Vulkan
         constants.cameraUp = sl::float3(lastUBO.ModelViewInverse[1][0], lastUBO.ModelViewInverse[1][1], lastUBO.ModelViewInverse[1][2]);
         constants.cameraRight = sl::float3(lastUBO.ModelViewInverse[0][0], lastUBO.ModelViewInverse[0][1], lastUBO.ModelViewInverse[0][2]);
         
-        constants.cameraNear = 0.2f;
-        constants.cameraFar = 2000.0f;
-        constants.cameraFOV = 60.0f * 3.14159f / 180.0f; 
+        auto& camera = GetScene().GetRenderCamera();
+        constants.cameraNear = camera.NearPlane;
+        constants.cameraFar = camera.FarPlane;
+        constants.cameraFOV = glm::radians(camera.FieldOfView); 
         constants.cameraAspectRatio = (float)SwapChain().Extent().width / (float)SwapChain().Extent().height;
         
         constants.depthInverted = sl::Boolean::eFalse;
