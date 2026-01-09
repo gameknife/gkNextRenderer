@@ -75,8 +75,8 @@ namespace StreamlineWrapper
    {
 #if WITH_STREAMLINE
         sl::Preferences pref{};
-        pref.showConsole = true; // for debugging, set to false in production
-        pref.logLevel = sl::LogLevel::eVerbose;
+        //pref.showConsole = true; // for debugging, set to false in production
+        //pref.logLevel = sl::LogLevel::eVerbose;
         pref.pathsToPlugins = {}; // change this if Streamline plugins are not located next to the executable
         pref.numPathsToPlugins = 0; // change this if Streamline plugins are not located next to the executable
         pref.pathToLogsAndData = {}; // change this to enable logging to a file
@@ -90,7 +90,7 @@ namespace StreamlineWrapper
         sl::Feature features[] = { sl::kFeatureDLSS, sl::kFeatureDLSS_RR };
         pref.featuresToLoad = features;
         pref.numFeaturesToLoad = sizeof(features) / sizeof(sl::Feature);
-        pref.renderAPI = sl::RenderAPI::eVulkan;
+        //pref.renderAPI = sl::RenderAPI::eVulkan;
 
         sl::Result res;
         if(SL_FAILED(res, slInit(pref)))
@@ -962,26 +962,25 @@ namespace Vulkan
             sl::DLSSDOptions dlssOptions;
             switch (settings.SuperResolution)
             {
-            case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
-            case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-            case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
-            case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
-            default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+                case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
+                case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+                case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
+                case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+                default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
             }
-            dlssOptions.dlaaPreset = sl::DLSSDPreset::ePresetD;
-            dlssOptions.qualityPreset = sl::DLSSDPreset::ePresetD;
-            dlssOptions.balancedPreset = sl::DLSSDPreset::ePresetD;
-            dlssOptions.performancePreset = sl::DLSSDPreset::ePresetD;
-            dlssOptions.ultraPerformancePreset = sl::DLSSDPreset::ePresetD;
+            dlssOptions.dlaaPreset = sl::DLSSDPreset::ePresetE;
+            dlssOptions.qualityPreset = sl::DLSSDPreset::ePresetE;
+            dlssOptions.balancedPreset = sl::DLSSDPreset::ePresetE;
+            dlssOptions.performancePreset = sl::DLSSDPreset::ePresetE;
+            dlssOptions.ultraPerformancePreset = sl::DLSSDPreset::ePresetE;
             dlssOptions.outputWidth = SwapChain().Extent().width;
             dlssOptions.outputHeight = SwapChain().Extent().height;
             dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
             dlssOptions.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
-            dlssOptions.sharpness = 0.5f;
         
             if (SL_FAILED(res1, slDLSSDSetOptions(viewport, dlssOptions)))
             {
-                SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
+                SPDLOG_ERROR("slDLSSDSetOptions failed: {}", (int)res1);
             }
         }
         else
@@ -989,21 +988,15 @@ namespace Vulkan
             sl::DLSSOptions dlssOptions;
             switch (settings.SuperResolution)
             {
-            case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
-            case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-            case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
-            case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
-            default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+                case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
+                case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
+                case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
+                case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+                default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
             }
-            dlssOptions.dlaaPreset = sl::DLSSPreset::ePresetK;
-            dlssOptions.qualityPreset = sl::DLSSPreset::ePresetK;
-            dlssOptions.balancedPreset = sl::DLSSPreset::ePresetK;
-            dlssOptions.performancePreset = sl::DLSSPreset::ePresetK;
-            dlssOptions.ultraPerformancePreset = sl::DLSSPreset::ePresetK;
             dlssOptions.outputWidth = SwapChain().Extent().width;
             dlssOptions.outputHeight = SwapChain().Extent().height;
             dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
-            dlssOptions.sharpness = 0.5f;
             
             if (SL_FAILED(res1, slDLSSSetOptions(viewport, dlssOptions)))
             {
@@ -1125,19 +1118,6 @@ namespace Vulkan
         if (SL_FAILED(res3, slEvaluateFeature(useDLSSRR ? sl::kFeatureDLSS_RR : sl::kFeatureDLSS, *frameToken, inputs, 1, commandBuffer)))
         {
             SPDLOG_ERROR("slEvaluateFeature DLSS failed: {}", (int)res3);
-        }
-        else
-        {
-            // VulkanThreadContext* thread = (VulkanThreadContext*)m_getThreadContext();
-            //
-            // if (thread->PipelineBindPoint != VK_PIPELINE_BIND_POINT_MAX_ENUM)
-            // {
-            //     vkCmdBindPipeline(commandBuffer, thread->PipelineBindPoint, thread->Pipeline);
-            // }
-            // if (thread->PipelineBindPointDesc != VK_PIPELINE_BIND_POINT_MAX_ENUM)
-            // {
-            //     vkCmdBindDescriptorSets(commandBuffer, thread->PipelineBindPointDesc, thread->Layout, thread->FirstSet, thread->DescriptorCount, thread->DescriptorSets, thread->DynamicOffsetCount, thread->DynamicOffsets);
-            // }
         }
 #endif
     }

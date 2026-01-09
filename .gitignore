@@ -362,6 +362,9 @@ assets/models/hyrule2.glb
 assets/models/hyrule3.glb
 assets/models/leaktest.glb
 
+# third party libraries
+src/ThirdParty/streamline/bin/
+
 # Claude Code files
 .claude/
 lib/
