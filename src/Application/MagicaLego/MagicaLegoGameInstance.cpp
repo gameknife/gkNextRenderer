@@ -64,7 +64,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.ForceSDR = true;
     options.RendererType = 0;
     options.locale = "zhCN";
-    options.SuperResolution = 2;
+    options.SuperResolution = 4;
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);

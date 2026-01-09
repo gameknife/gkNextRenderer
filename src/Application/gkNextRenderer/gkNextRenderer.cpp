@@ -431,11 +431,18 @@ void NextRendererGameInstance::DrawSettings()
 		{
 			if (GetEngine().GetRenderer().SupportDLSS())
 			{
-				ImGui::Checkbox("NVIDIA DLSS", &userSetting.DLSS);
+				if (ImGui::Checkbox("NVIDIA DLSS", &userSetting.DLSS))
+                {
+                    GetEngine().GetRenderer().RequestRecreateSwapChain();
+                }
+                
 				if (userSetting.DLSS)
 				{
-					const char* dlssModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance" };
-					ImGui::Combo("DLSS Mode", (int*)&userSetting.SuperResolution, dlssModes, IM_ARRAYSIZE(dlssModes));
+					const char* dlssModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "DLAA (Native)" };
+					if (ImGui::Combo("DLSS Mode", (int*)&userSetting.SuperResolution, dlssModes, IM_ARRAYSIZE(dlssModes)))
+                    {
+                        GetEngine().GetRenderer().RequestRecreateSwapChain();
+                    }
 					
 					if (GetEngine().GetRenderer().SupportDLSSRR())
 					{
@@ -450,8 +457,11 @@ void NextRendererGameInstance::DrawSettings()
             
             if (!userSetting.DLSS)
             {
-                const char* fsrModes[] = { "1.0x (Off)", "1.5x (Quality)", "2.0x (Balanced)", "4.0x (Performance)" };
-				ImGui::Combo("Software Upscale", (int*)&userSetting.SuperResolution, fsrModes, IM_ARRAYSIZE(fsrModes));
+                const char* fsrModes[] = { "Quality (1.5x)", "Balanced (1.7x)", "Performance (2.0x)", "Ultra Performance (3.0x)", "Native (1.0x)" };
+				if (ImGui::Combo("Software Upscale", (int*)&userSetting.SuperResolution, fsrModes, IM_ARRAYSIZE(fsrModes)))
+                {
+                    GetEngine().GetRenderer().RequestRecreateSwapChain();
+                }
             }
 			ImGui::NewLine();
 		}

@@ -518,9 +518,23 @@ namespace Vulkan
         }
 
         // SwapChaine
-        int divider = 4 - ( GOption->ReferenceMode ? 0 : GOption->SuperResolution );
+        float scale = 1.0f;
+        auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        if (!GOption->ReferenceMode)
+        {
+            switch(settings.SuperResolution)
+            {
+                case 0: scale = 1.5f; break; // Quality
+                case 1: scale = 1.7f; break; // Balanced
+                case 2: scale = 2.0f; break; // Performance
+                case 3: scale = 3.0f; break; // UltraPerformance
+                case 4: scale = 1.0f; break; // Native
+                default: scale = 1.5f; break;
+            }
+        }
+        
         swapChain_.reset(new class SwapChain(*device_, presentMode_, forceSDR_));
-        swapChain_->UpdateRenderViewport(0, 0, swapChain_->Extent().width * 2 / divider,swapChain_->Extent().height * 2 / divider);
+        swapChain_->UpdateRenderViewport(0, 0, (uint32_t)(swapChain_->Extent().width / scale), (uint32_t)(swapChain_->Extent().height / scale));
         swapChain_->UpdateOutputViewport( 0, 0, swapChain_->Extent().width, swapChain_->Extent().height);
 
         // depthBuffer
@@ -609,6 +623,13 @@ namespace Vulkan
         swapChain_.reset();
 
         currentFence = nullptr;
+    }
+
+    void VulkanBaseRenderer::RecreateSwapChain()
+    {
+        device_->WaitIdle();
+        DeleteSwapChain();
+        CreateSwapChain();
     }
 
     void VulkanBaseRenderer::CaptureScreenShot()
@@ -774,6 +795,13 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DrawFrame()
     {
+        if (requestRecreateSwapChain_)
+        {
+            RecreateSwapChain();
+            requestRecreateSwapChain_ = false;
+            return;
+        }
+
         {
             PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::DrawFrame", PERFORMANCEAPI_MAKE_COLOR(200, 255, 200));
             SCOPED_CPU_TIMER("draw-frame");
@@ -966,6 +994,7 @@ namespace Vulkan
                 case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
                 case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
                 case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+                case 4: dlssOptions.mode = sl::DLSSMode::eDLAA; break;
                 default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
             }
             dlssOptions.dlaaPreset = sl::DLSSDPreset::ePresetE;
@@ -992,6 +1021,7 @@ namespace Vulkan
                 case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
                 case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
                 case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
+                case 4: dlssOptions.mode = sl::DLSSMode::eDLAA; break;
                 default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
             }
             dlssOptions.outputWidth = SwapChain().Extent().width;
@@ -1399,12 +1429,5 @@ namespace Vulkan
     {
         lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->OutputExtent());
         uniformBuffers_[imageIndex].SetValue(lastUBO);
-    }
-
-    void VulkanBaseRenderer::RecreateSwapChain()
-    {
-        device_->WaitIdle();
-        DeleteSwapChain();
-        CreateSwapChain();
     }
 }
