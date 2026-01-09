@@ -1082,6 +1082,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     stats.Stats["gpu"] = renderer_->Device().DeviceProperties().deviceName;
     
     stats.FramebufferSize = GetWindow().FramebufferSize();
+    stats.RenderSize = renderer_->SwapChain().RenderExtent();
     stats.FrameRate = frameRate;
     
     stats.TotalFrames = totalFrames_;

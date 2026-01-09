@@ -405,7 +405,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 	if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
 	{
-		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
+		ImGui::Text("Statistics (%dx%d -> %dx%d):", statistics.RenderSize.width, statistics.RenderSize.height, statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
 		ImGui::Separator();
 		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);

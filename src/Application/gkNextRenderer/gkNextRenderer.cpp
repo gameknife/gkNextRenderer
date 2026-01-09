@@ -457,8 +457,8 @@ void NextRendererGameInstance::DrawSettings()
             
             if (!userSetting.DLSS)
             {
-                const char* fsrModes[] = { "Quality (1.5x)", "Balanced (1.7x)", "Performance (2.0x)", "Ultra Performance (3.0x)", "Native (1.0x)" };
-				if (ImGui::Combo("Software Upscale", (int*)&userSetting.SuperResolution, fsrModes, IM_ARRAYSIZE(fsrModes)))
+                const char* upscaleModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "Native" };
+				if (ImGui::Combo("Upscale Mode", (int*)&userSetting.SuperResolution, upscaleModes, IM_ARRAYSIZE(upscaleModes)))
                 {
                     GetEngine().GetRenderer().RequestRecreateSwapChain();
                 }
