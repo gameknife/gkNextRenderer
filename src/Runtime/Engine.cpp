@@ -1084,6 +1084,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.RenderSize = renderer_->SwapChain().RenderExtent();
     stats.FrameRate = frameRate;
+    stats.RenderTime = GetTime();
     
     stats.TotalFrames = totalFrames_;
     stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
