@@ -40,6 +40,15 @@ The project can be built and run on Windows, Linux, macOS, Android, and iOS. The
 *   `build.bat` / `build.sh`: Builds the project using CMake.
 *   `run.bat` / `run.sh`: Runs the executables.
 
+### AVIF Support
+
+The engine supports AVIF texture loading and screenshot saving. This feature is optional and can be enabled using the `--avif` flag during build.
+
+```bat
+rem Build with AVIF support
+build.bat --avif
+```
+
 ### Windows (Visual Studio 2022)
 
 ```bat

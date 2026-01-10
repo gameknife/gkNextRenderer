@@ -11,7 +11,7 @@ $DefaultVcpkgRoot = Join-Path $ProjectRoot ".vcpkg"
 $VcpkgDefaultBinaryCache = Join-Path $ProjectRoot ".vcpkg_bincache"
 
 # Configuration
-$VcpkgGitRef = "2025.10.17"
+$VcpkgGitRef = "2025.12.12"
 $Update = $false
 
 function Show-Usage {

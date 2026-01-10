@@ -32,7 +32,7 @@
         "WITH_OIDN": "OFF",
         "WITH_AVIF": "OFF",
         "WITH_SUPERLUMINAL": "OFF",
-        "WITH_STREAMLINE": "ON"
+        "WITH_STREAMLINE": "OFF"
       }
     },
     {

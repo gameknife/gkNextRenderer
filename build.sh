@@ -83,12 +83,14 @@ CONFIG=""
 TARGET=""
 CLEAN=0
 TARGET_ANDROID=0
+AVIF=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --clean) CLEAN=1; shift ;;
         --android) TARGET_ANDROID=1; shift ;;
+        --avif) AVIF=1; shift ;;
         --preset) PRESET="$2"; shift 2 ;;
         --preset=*) PRESET="${1#*=}"; shift ;;
         --config) CONFIG="$2"; shift 2 ;;
@@ -103,6 +105,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --target <name>  Specific target to build"
             echo "  --clean          Clean build directory before building"
             echo "  --android        Build for Android"
+            echo "  --avif           Enable AVIF support"
             echo "  -h, --help       Show this help"
             exit 0
             ;;
@@ -150,7 +153,11 @@ if [ "$CLEAN" -eq 1 ]; then
 fi
 
 log "Configuring preset: $PRESET"
-cmake --preset "$PRESET"
+CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
+if [ "$AVIF" -eq 1 ]; then
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
+fi
+cmake "${CMAKE_CONFIGURE_ARGS[@]}"
 
 log "Building preset: $PRESET"
 CMAKE_BUILD_ARGS=("--build" "--preset" "$PRESET")

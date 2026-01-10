@@ -11,6 +11,7 @@ set "CONFIG="
 set "TARGET="
 set "CLEAN=0"
 set "ANDROID=0"
+set "AVIF=0"
 
 set "SCRIPT_DIR=%~dp0"
 
@@ -26,6 +27,11 @@ if /i "%~1"=="--clean" (
 )
 if /i "%~1"=="--android" (
     set "ANDROID=1"
+    shift
+    goto arg_loop
+)
+if /i "%~1"=="--avif" (
+    set "AVIF=1"
     shift
     goto arg_loop
 )
@@ -72,6 +78,7 @@ if "!ANDROID!"=="1" (
 )
 
 if "!CLEAN!"=="1" set "PS_ARGS=!PS_ARGS! -Clean"
+if "!AVIF!"=="1" set "PS_ARGS=!PS_ARGS! -Avif"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!build.ps1" !PS_ARGS!
 exit /b %errorlevel%
@@ -84,5 +91,6 @@ echo   --config ^<type^>  Build configuration (Debug, Release, etc.)
 echo   --target ^<name^>  Specific target to build
 echo   --clean          Clean build directory before building
 echo   --android        Build for Android
+echo   --avif           Enable AVIF support
 echo   -h, --help       Show this help
 exit /b 0

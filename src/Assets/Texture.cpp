@@ -16,8 +16,13 @@
 #include "Vulkan/DescriptorSets.hpp"
 #include "ThirdParty/lzav/lzav.h"
 
+#if WITH_AVIF
+#include <avif/avif.h>
+#endif
+
 #include <spdlog/spdlog.h>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <limits>
 #include <system_error>
@@ -444,6 +449,52 @@ namespace Assets
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
                 // load from ktx inside glb
+#if WITH_AVIF
+                if (mime.find("image/avif") != std::string::npos)
+                {
+                    avifDecoder* decoder = avifDecoderCreate();
+                    avifResult res = avifDecoderSetIOMemory(decoder, copyedData, bytelength);
+                    if (res == AVIF_RESULT_OK)
+                    {
+                        res = avifDecoderParse(decoder);
+                    }
+                    if (res == AVIF_RESULT_OK)
+                    {
+                        res = avifDecoderNextImage(decoder);
+                    }
+                    if (res == AVIF_RESULT_OK)
+                    {
+                        width = decoder->image->width;
+                        height = decoder->image->height;
+                        format = VK_FORMAT_R8G8B8A8_UNORM;
+                        size = width * height * 4;
+                        
+                        avifRGBImage rgb;
+                        avifRGBImageSetDefaults(&rgb, decoder->image);
+                        rgb.format = AVIF_RGB_FORMAT_RGBA;
+                        rgb.depth = 8;
+                        
+                        stbdata = (uint8_t*)malloc(size);
+                        rgb.pixels = stbdata;
+                        rgb.rowBytes = width * 4;
+                        
+                        if (avifImageYUVToRGB(decoder->image, &rgb) != AVIF_RESULT_OK)
+                        {
+                            free(stbdata);
+                            stbdata = nullptr;
+                        }
+                        else
+                        {
+                            pixels = stbdata;
+                            miplevel = 1;
+                        }
+                    }
+                    avifDecoderDestroy(decoder);
+                    
+                    if (!stbdata) Throw(std::runtime_error("failed to load avif image"));
+                }
+                else
+#endif
                 if (mime.find("image/ktx") != std::string::npos)
                 {
                     result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);

@@ -35,7 +35,10 @@ param (
     [switch]$Clean = $false,
 
     [Parameter()]
-    [switch]$Android = $false
+    [switch]$Android = $false,
+
+    [Parameter()]
+    [switch]$Avif = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -107,7 +110,12 @@ function Build-Native {
     }
 
     Write-Log "Configuring preset: $Preset"
-    cmake --preset $Preset
+    $ConfigureArgs = @("--preset", $Preset)
+    if ($Avif) {
+        $ConfigureArgs += "-DGK_ENABLE_AVIF=ON"
+        $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES=avif"
+    }
+    cmake $ConfigureArgs
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }
 
     Write-Log "Building preset: $Preset"

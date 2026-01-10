@@ -11,6 +11,8 @@
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/ScreenShot.hpp"
+#include "Utilities/FileHelper.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -126,6 +128,11 @@ void NextRendererGameInstance::OnPreConfigUI()
 
 bool NextRendererGameInstance::OnRenderUI()
 {
+	if (isTakingScreenshot_)
+	{
+		return true;
+	}
+
 	UpdateUiScaledMetrics();
 
 	DrawTitleBar();
@@ -574,7 +581,23 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_CAMERA, ImVec2(TitlebarSize, TitlebarSize)))
     {
+        std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+        Utilities::FileHelper::EnsureDirectoryExists(folderPath);
 
+        auto now = std::chrono::system_clock::now();
+        std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::tm* tm_ptr = std::localtime(&in_time_t);
+        std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
+        std::string filename = (std::filesystem::path(folderPath) / timestamp).string();
+
+        isTakingScreenshot_ = true;
+
+        GetEngine().AddTimerTask(0.2, [this, filename, folderPath]() {
+            ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
+            NextRenderer::OSCommand(folderPath.c_str());
+            isTakingScreenshot_ = false;
+            return true;
+        });
     }
     BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
 	ImGui::SameLine();
@@ -582,13 +605,13 @@ void NextRendererGameInstance::DrawTitleBar()
 	{
 		GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings;
 	}
-	BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
+	BUTTON_TOOLTIP(LOCTEXT("Toggle Settings Panel"))
 	ImGui::SameLine();
 	if (ImGui::Button(ICON_FA_GAUGE_SIMPLE_HIGH, ImVec2(TitlebarSize, TitlebarSize)))
 	{
 		GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
 	}
-	BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
+	BUTTON_TOOLTIP(LOCTEXT("Toggle Performance Overlay"))
 	ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
