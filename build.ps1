@@ -38,7 +38,10 @@ param (
     [switch]$Android = $false,
 
     [Parameter()]
-    [switch]$Avif = $false
+    [switch]$Avif = $false,
+
+    [Parameter()]
+    [switch]$Dlss = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -114,6 +117,9 @@ function Build-Native {
     if ($Avif) {
         $ConfigureArgs += "-DGK_ENABLE_AVIF=ON"
         $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES=avif"
+    }
+    if ($Dlss) {
+        $ConfigureArgs += "-DGK_ENABLE_DLSS=ON"
     }
     cmake $ConfigureArgs
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }

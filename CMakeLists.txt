@@ -10,6 +10,11 @@ if (GK_ENABLE_AVIF)
     set(WITH_AVIF ON CACHE BOOL "Enable AVIF" FORCE)
 endif()
 
+option(GK_ENABLE_DLSS "Enable DLSS support" OFF)
+if (GK_ENABLE_DLSS)
+    set(WITH_STREAMLINE ON CACHE BOOL "Enable Nvidia Streamline" FORCE)
+endif()
+
 include(cmake/SetupDependencies.cmake)
 
 set(MAIN_PROJECT "gkNextRenderer")

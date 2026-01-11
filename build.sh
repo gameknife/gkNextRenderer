@@ -84,6 +84,7 @@ TARGET=""
 CLEAN=0
 TARGET_ANDROID=0
 AVIF=0
+DLSS=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -91,6 +92,7 @@ while [[ $# -gt 0 ]]; do
         --clean) CLEAN=1; shift ;;
         --android) TARGET_ANDROID=1; shift ;;
         --avif) AVIF=1; shift ;;
+        --dlss) DLSS=1; shift ;;
         --preset) PRESET="$2"; shift 2 ;;
         --preset=*) PRESET="${1#*=}"; shift ;;
         --config) CONFIG="$2"; shift 2 ;;
@@ -106,6 +108,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --clean          Clean build directory before building"
             echo "  --android        Build for Android"
             echo "  --avif           Enable AVIF support"
+            echo "  --dlss           Enable DLSS support"
             echo "  -h, --help       Show this help"
             exit 0
             ;;
@@ -156,6 +159,9 @@ log "Configuring preset: $PRESET"
 CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
 if [ "$AVIF" -eq 1 ]; then
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
+fi
+if [ "$DLSS" -eq 1 ]; then
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
 fi
 cmake "${CMAKE_CONFIGURE_ARGS[@]}"
 
