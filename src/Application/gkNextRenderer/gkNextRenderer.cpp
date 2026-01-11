@@ -423,7 +423,7 @@ void NextRendererGameInstance::DrawSettings()
 		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 #if WITH_OIDN
-			ImGui::Checkbox("Use OIDN", &UserSetting.Denoiser);
+			ImGui::Checkbox("Use OIDN", &userSetting.Denoiser);
 #else
 			ImGui::Checkbox(LOCTEXT("Use JBF"), &userSetting.Denoiser);
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f");

@@ -41,7 +41,10 @@ param (
     [switch]$Avif = $false,
 
     [Parameter()]
-    [switch]$Dlss = $false
+    [switch]$Dlss = $false,
+
+    [Parameter()]
+    [switch]$Oidn = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -120,6 +123,9 @@ function Build-Native {
     }
     if ($Dlss) {
         $ConfigureArgs += "-DGK_ENABLE_DLSS=ON"
+    }
+    if ($Oidn) {
+        $ConfigureArgs += "-DGK_ENABLE_OIDN=ON"
     }
     cmake $ConfigureArgs
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }

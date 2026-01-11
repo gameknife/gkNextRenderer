@@ -85,6 +85,7 @@ CLEAN=0
 TARGET_ANDROID=0
 AVIF=0
 DLSS=0
+OIDN=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -93,6 +94,7 @@ while [[ $# -gt 0 ]]; do
         --android) TARGET_ANDROID=1; shift ;;
         --avif) AVIF=1; shift ;;
         --dlss) DLSS=1; shift ;;
+        --oidn) OIDN=1; shift ;;
         --preset) PRESET="$2"; shift 2 ;;
         --preset=*) PRESET="${1#*=}"; shift ;;
         --config) CONFIG="$2"; shift 2 ;;
@@ -109,6 +111,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --android        Build for Android"
             echo "  --avif           Enable AVIF support"
             echo "  --dlss           Enable DLSS support"
+            echo "  --oidn           Enable OIDN support"
             echo "  -h, --help       Show this help"
             exit 0
             ;;
@@ -162,6 +165,9 @@ if [ "$AVIF" -eq 1 ]; then
 fi
 if [ "$DLSS" -eq 1 ]; then
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
+fi
+if [ "$OIDN" -eq 1 ]; then
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=ON")
 fi
 cmake "${CMAKE_CONFIGURE_ARGS[@]}"
 

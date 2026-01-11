@@ -13,6 +13,7 @@ set "CLEAN=0"
 set "ANDROID=0"
 set "AVIF=0"
 set "DLSS=0"
+set "OIDN=0"
 
 set "SCRIPT_DIR=%~dp0"
 
@@ -38,6 +39,11 @@ if /i "%~1"=="--avif" (
 )
 if /i "%~1"=="--dlss" (
     set "DLSS=1"
+    shift
+    goto arg_loop
+)
+if /i "%~1"=="--oidn" (
+    set "OIDN=1"
     shift
     goto arg_loop
 )
@@ -86,6 +92,7 @@ if "!ANDROID!"=="1" (
 if "!CLEAN!"=="1" set "PS_ARGS=!PS_ARGS! -Clean"
 if "!AVIF!"=="1" set "PS_ARGS=!PS_ARGS! -Avif"
 if "!DLSS!"=="1" set "PS_ARGS=!PS_ARGS! -Dlss"
+if "!OIDN!"=="1" set "PS_ARGS=!PS_ARGS! -Oidn"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!build.ps1" !PS_ARGS!
 exit /b %errorlevel%
@@ -100,5 +107,6 @@ echo   --clean          Clean build directory before building
 echo   --android        Build for Android
 echo   --avif           Enable AVIF support
 echo   --dlss           Enable DLSS support
+echo   --oidn           Enable OIDN support
 echo   -h, --help       Show this help
 exit /b 0

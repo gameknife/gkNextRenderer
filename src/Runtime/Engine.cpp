@@ -981,7 +981,12 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSigma = userSettings_.DenoiseSigma;
     ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
+
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
+    
+#if WITH_OIDN
+    ubo.BFSize = 0;
+#endif
     
     ubo.ShowEdge = userSettings_.ShowEdge;
 

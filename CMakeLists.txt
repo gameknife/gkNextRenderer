@@ -15,6 +15,11 @@ if (GK_ENABLE_DLSS)
     set(WITH_STREAMLINE ON CACHE BOOL "Enable Nvidia Streamline" FORCE)
 endif()
 
+option(GK_ENABLE_OIDN "Enable OpenImageDenoise support" OFF)
+if (GK_ENABLE_OIDN)
+    set(WITH_OIDN ON CACHE BOOL "Enable OIDN" FORCE)
+endif()
+
 include(cmake/SetupDependencies.cmake)
 
 set(MAIN_PROJECT "gkNextRenderer")
