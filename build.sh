@@ -188,7 +188,7 @@ if [ "$CLEAN" -eq 1 ]; then
     rm -rf "$PROJECT_ROOT/out/build/$PRESET"
 fi
 
-log "Configuring preset: $Preset"
+log "Configuring preset: $PRESET"
 CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
 if [ "$AVIF" -eq 1 ]; then
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
