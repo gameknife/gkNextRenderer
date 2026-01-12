@@ -76,16 +76,11 @@ cd android && ./gradlew clean
 # 验证编译
 ./build.sh [platform]
 
+# 验证带可选特性的编译
+./build.bat windows-dev --oidn --dlss --avif
+
 # 验证运行（Windows）
-cd build/windows/bin && ./gkNextRenderer.exe
-
-# 验证运行（macOS/Linux）
-cd build/macos/bin && ./gkNextRenderer
-# 或
-cd build/linux/bin && ./gkNextRenderer
-
-# 验证Android APK
-cd android && ./gradlew.bat build && ./gradlew.bat installDebug
+./run.bat windows-dev
 ```
 
 ### 日志查看

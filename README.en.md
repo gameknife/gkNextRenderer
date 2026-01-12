@@ -90,6 +90,19 @@ build.bat --android
 run.bat --preset android
 ```
 
+### Build Options
+
+`build.bat` and `build.sh` support the following optional flags to enable specific features:
+
+- `--avif`: Enable AVIF texture loading and screenshot support.
+- `--dlss`: Enable NVIDIA DLSS support (Windows only). Automatically downloads and deploys the Streamline SDK.
+- `--oidn`: Enable Intel OpenImageDenoise support. Automatically downloads and deploys the OIDN runtime.
+
+Example:
+``` bat
+build.bat --oidn --dlss
+```
+
 See repository scripts and `.github/workflows` for more details.
 
 ## Technical Highlights (Overview)
