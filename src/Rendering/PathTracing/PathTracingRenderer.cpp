@@ -217,11 +217,19 @@ namespace Vulkan::RayTracing
         size_t SrcImageSize = extent.width * extent.height * 4 * 2;
         size_t SrcImageW8 = 4 * 2 * extent.width;
         size_t SrcImage8 = 4 * 2;
+
+#if __linux__
+        oidn::BufferRef colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef outBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD,rtDenoise1_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef albedoBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef normalBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtNormal_->GetExternalHandle(), SrcImageSize);
+#else
         oidn::BufferRef colorBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, SrcImageSize);
         oidn::BufferRef outBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, SrcImageSize);
         oidn::BufferRef albedoBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, SrcImageSize);
         oidn::BufferRef normalBuf = device.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, SrcImageSize);
-
+#endif
+        
         filter = device.newFilter("RT"); // generic ray tracing filter
         filter.setImage("color", colorBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // beauty
         filter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux

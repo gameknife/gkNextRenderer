@@ -76,6 +76,8 @@ namespace Vulkan::RayTracing
         requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
 #if WIN32 && !defined(__MINGW32__)
         requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+#elif __linux__
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
 #endif
 #endif
 
