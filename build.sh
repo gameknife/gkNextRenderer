@@ -90,6 +90,20 @@ ensure_oidn() {
     fi
 }
 
+ensure_streamline() {
+    local sl_lib="$PROJECT_ROOT/src/ThirdParty/streamline/lib/x64/sl.interposer.lib"
+    
+    if [ ! -f "$sl_lib" ]; then
+        log "Streamline SDK not found. Fetching..."
+        if [ -f "$PROJECT_ROOT/tools/fetch_streamline.bat" ]; then
+             # Call the bat file as it's Windows-only anyway
+             cmd.exe /c "$(cygpath -w "$PROJECT_ROOT/tools/fetch_streamline.bat")"
+        else
+             warn "tools/fetch_streamline.bat not found. DLSS support might fail."
+        fi
+    fi
+}
+
 # ==============================================================================
 # Main Logic
 # ==============================================================================
@@ -183,7 +197,19 @@ else
 fi
 
 if [ "$DLSS" -eq 1 ]; then
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
+    # Check if we are on Windows (MINGW/MSYS)
+    IS_WINDOWS=0
+    case "$(uname -s)" in
+        MINGW*|MSYS*) IS_WINDOWS=1 ;;
+    esac
+
+    if [ "$IS_WINDOWS" -eq 1 ]; then
+        ensure_streamline
+        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
+    else
+        warn "DLSS/Streamline is currently only supported on Windows. Disabling."
+        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
+    fi
 else
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
 fi

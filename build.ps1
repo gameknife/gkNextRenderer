@@ -114,6 +114,20 @@ function Ensure-OIDN {
     }
 }
 
+function Ensure-Streamline {
+    $StreamlineTarget = Join-Path $ProjectRoot "src/ThirdParty/streamline/lib/x64/sl.interposer.lib"
+    if (-not (Test-Path $StreamlineTarget)) {
+        Write-Log "Streamline SDK not found. Fetching..."
+        $FetchStreamline = Join-Path $ProjectRoot "tools/fetch_streamline.bat"
+        if (Test-Path $FetchStreamline) {
+            & $FetchStreamline
+            if ($LASTEXITCODE -ne 0) { throw "Failed to fetch Streamline SDK." }
+        } else {
+            Write-Warning "tools/fetch_streamline.bat not found. DLSS support might fail."
+        }
+    }
+}
+
 function Build-Native {
     param([string]$Preset)
 
@@ -140,6 +154,7 @@ function Build-Native {
     }
     
     if ($Dlss) {
+        Ensure-Streamline
         $ConfigureArgs += "-DGK_ENABLE_DLSS=ON"
     } else {
         $ConfigureArgs += "-DGK_ENABLE_DLSS=OFF"
