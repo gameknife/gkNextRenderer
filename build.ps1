@@ -100,6 +100,20 @@ function Ensure-TSC {
     }
 }
 
+function Ensure-OIDN {
+    $OidnTarget = Join-Path $ProjectRoot "src/ThirdParty/oidn/bin/OpenImageDenoise.dll"
+    if (-not (Test-Path $OidnTarget)) {
+        Write-Log "OIDN binaries not found. Fetching..."
+        $FetchOidn = Join-Path $ProjectRoot "tools/fetch_oidn.bat"
+        if (Test-Path $FetchOidn) {
+            & $FetchOidn
+            if ($LASTEXITCODE -ne 0) { throw "Failed to fetch OIDN." }
+        } else {
+            Write-Warning "tools/fetch_oidn.bat not found. OIDN support might fail."
+        }
+    }
+}
+
 function Build-Native {
     param([string]$Preset)
 
@@ -120,12 +134,22 @@ function Build-Native {
     if ($Avif) {
         $ConfigureArgs += "-DGK_ENABLE_AVIF=ON"
         $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES=avif"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_AVIF=OFF"
+        $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES="
     }
+    
     if ($Dlss) {
         $ConfigureArgs += "-DGK_ENABLE_DLSS=ON"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_DLSS=OFF"
     }
+    
     if ($Oidn) {
+        Ensure-OIDN
         $ConfigureArgs += "-DGK_ENABLE_OIDN=ON"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_OIDN=OFF"
     }
     cmake $ConfigureArgs
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }

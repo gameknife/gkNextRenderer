@@ -4,7 +4,7 @@
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
 #if WITH_OIDN
-#include <oidn.hpp>
+#include <OpenImageDenoise/oidn.hpp>
 #endif
 
 namespace Vulkan

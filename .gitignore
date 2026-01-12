@@ -364,6 +364,7 @@ assets/models/leaktest.glb
 
 # third party libraries
 src/ThirdParty/*/bin/
+src/ThirdParty/oidn/
 # Claude Code files
 .claude/
 lib/

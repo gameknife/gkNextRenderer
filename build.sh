@@ -74,6 +74,22 @@ ensure_ios_deps() {
     fi
 }
 
+ensure_oidn() {
+    local oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.so"
+    if [[ "$(uname -s)" == "Darwin"* ]]; then
+        oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.dylib"
+    fi
+    
+    if [ ! -f "$oidn_lib" ]; then
+        log "OIDN binaries not found. Fetching..."
+        if [ -f "$PROJECT_ROOT/tools/fetch_oidn.sh" ]; then
+             "$PROJECT_ROOT/tools/fetch_oidn.sh"
+        else
+             warn "tools/fetch_oidn.sh not found. OIDN support might fail."
+        fi
+    fi
+}
+
 # ==============================================================================
 # Main Logic
 # ==============================================================================
@@ -158,16 +174,25 @@ if [ "$CLEAN" -eq 1 ]; then
     rm -rf "$PROJECT_ROOT/out/build/$PRESET"
 fi
 
-log "Configuring preset: $PRESET"
+log "Configuring preset: $Preset"
 CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
 if [ "$AVIF" -eq 1 ]; then
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=OFF" "-DVCPKG_MANIFEST_FEATURES=")
 fi
+
 if [ "$DLSS" -eq 1 ]; then
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
 fi
+
 if [ "$OIDN" -eq 1 ]; then
+    ensure_oidn
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=ON")
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=OFF")
 fi
 cmake "${CMAKE_CONFIGURE_ARGS[@]}"
 
