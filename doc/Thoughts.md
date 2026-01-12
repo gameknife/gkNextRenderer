@@ -63,6 +63,10 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - 使用ImGUI开发了一个基础的编辑器框架，配合docking branch，很快便搭建起了一个类似主流引擎的编辑器架子。快速的接入了outliner，content browser，detail面板的雏形，接下来可以引入node editor，先做一个类似blender的可视化材质预览器，接下来再考虑材质编辑的事情。
     - ImGUI的代码写起来，其实处处能感觉到slate的味道，但是写起来又更加的舒服，继续的用一段时间看看。
 
+- **[DLSS/Streamline]** 最近接入了Nvidia的Streamline框架，从而支持了DLSS Super Resolution和Ray Reconstruction。DLSS的效果确实是目前最好的降噪和缩放方案，尤其是RR对于光追阴影和反射的细节保留，是常规降噪器无法比拟的。
+    - **[参数同步]** 在接入过程中发现，DLSS对Camera参数（Near/Far/FOV/Jitter）的准确性非常敏感。之前代码中存在一些Hardcode的Near/Far值（0.2/2000.0），在场景发生变化或相机动态调整时，会导致DLSS的重投影矩阵与渲染矩阵不匹配，产生严重的残影或闪烁。
+    - **[重构思考]** 借此机会，将Camera的Near/Far Plane正式引入了`Assets::Camera`结构。在现代渲染器中，即使是一个简单的常量，也应该保证全局的一致性。通过从`Scene`的`RenderCamera`动态获取参数给SL使用，解决了画面不稳定的问题。这也提醒我，随着引擎模块增加，全局状态的一致性管理变得尤为重要。
+
 - **[OpenImageDenoise]** 这是intel推出的一个专门面向RayTracing的降噪器，Blender Cycles也在使用，效果比Optix好。接进来还是花了不少功夫，主要是CUDA与VULKAN共享显存这件事。可以参考的代码不多，不过做完之后，效果非常好，FAST质量下，1080p的scene0可以跑到100fps左右，给16的temporal, 基本可以认为是Realtime PathTracing了。感觉，小拇指碰到了一下“圣杯”。cmake的时候，通过`-D WITH_OIDN=1`打开
 
 - **[What's next]** 项目的下一步走向何方？这是个问题，项目的初衷，可以说已经达到了80%了。抱着补课的目的开始这个项目，学习光追，学习现代渲染框架。目前可以说已经得到了我想要的了。在项目前期开发的过程中，不断的刷新了认知，收获了更多未曾考虑过的东西。反而，感觉项目的进度，从80%退回到了一个可能5%？项目未来我希望他成为新的尖端技术的试验田，就像gkENGINE对于刚入行的我一样，我可以通过这个项目，快速验证，学习，实践工作中的所需，可以自由的无所顾忌的coding，同时不断磨练自己的基础coding水平，同时在整个项目中里不留任何妥协。慢慢的做成一个可用的游戏开发工具。<br>

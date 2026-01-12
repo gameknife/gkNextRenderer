@@ -35,7 +35,16 @@ param (
     [switch]$Clean = $false,
 
     [Parameter()]
-    [switch]$Android = $false
+    [switch]$Android = $false,
+
+    [Parameter()]
+    [switch]$Avif = $false,
+
+    [Parameter()]
+    [switch]$Dlss = $false,
+
+    [Parameter()]
+    [switch]$Oidn = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +100,34 @@ function Ensure-TSC {
     }
 }
 
+function Ensure-OIDN {
+    $OidnTarget = Join-Path $ProjectRoot "src/ThirdParty/oidn/bin/OpenImageDenoise.dll"
+    if (-not (Test-Path $OidnTarget)) {
+        Write-Log "OIDN binaries not found. Fetching..."
+        $FetchOidn = Join-Path $ProjectRoot "tools/fetch_oidn.bat"
+        if (Test-Path $FetchOidn) {
+            & $FetchOidn
+            if ($LASTEXITCODE -ne 0) { throw "Failed to fetch OIDN." }
+        } else {
+            Write-Warning "tools/fetch_oidn.bat not found. OIDN support might fail."
+        }
+    }
+}
+
+function Ensure-Streamline {
+    $StreamlineTarget = Join-Path $ProjectRoot "src/ThirdParty/streamline/lib/x64/sl.interposer.lib"
+    if (-not (Test-Path $StreamlineTarget)) {
+        Write-Log "Streamline SDK not found. Fetching..."
+        $FetchStreamline = Join-Path $ProjectRoot "tools/fetch_streamline.bat"
+        if (Test-Path $FetchStreamline) {
+            & $FetchStreamline
+            if ($LASTEXITCODE -ne 0) { throw "Failed to fetch Streamline SDK." }
+        } else {
+            Write-Warning "tools/fetch_streamline.bat not found. DLSS support might fail."
+        }
+    }
+}
+
 function Build-Native {
     param([string]$Preset)
 
@@ -107,7 +144,29 @@ function Build-Native {
     }
 
     Write-Log "Configuring preset: $Preset"
-    cmake --preset $Preset
+    $ConfigureArgs = @("--preset", $Preset)
+    if ($Avif) {
+        $ConfigureArgs += "-DGK_ENABLE_AVIF=ON"
+        $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES=avif"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_AVIF=OFF"
+        $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES="
+    }
+    
+    if ($Dlss) {
+        Ensure-Streamline
+        $ConfigureArgs += "-DGK_ENABLE_DLSS=ON"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_DLSS=OFF"
+    }
+    
+    if ($Oidn) {
+        Ensure-OIDN
+        $ConfigureArgs += "-DGK_ENABLE_OIDN=ON"
+    } else {
+        $ConfigureArgs += "-DGK_ENABLE_OIDN=OFF"
+    }
+    cmake $ConfigureArgs
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }
 
     Write-Log "Building preset: $Preset"

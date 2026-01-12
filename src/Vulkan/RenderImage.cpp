@@ -62,7 +62,12 @@ namespace Vulkan {
         handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
         handleInfo.memory = imageMemory_->Handle();
         image_->Device().GetDeviceProcedures().vkGetMemoryWin32HandleKHR(image_->Device().Handle(), &handleInfo, &handle);
-        #endif
+#elif __linux__
+        VkMemoryGetFdInfoKHR fdInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR };
+        fdInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+        fdInfo.memory = imageMemory_->Handle();
+        image_->Device().GetDeviceProcedures().vkGetMemoryFdKHR(image_->Device().Handle(), &fdInfo, &handle);
+#endif
         return handle;
     }
 }

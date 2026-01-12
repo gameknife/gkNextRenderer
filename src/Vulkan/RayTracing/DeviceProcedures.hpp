@@ -100,6 +100,12 @@ namespace Vulkan
 			const VkMemoryGetWin32HandleInfoKHR* pGetWin32HandleInfo,
 			HANDLE* pHandle)>
 		vkGetMemoryWin32HandleKHR;
+#else
+		const std::function<VkResult(
+			VkDevice device,
+			const VkMemoryGetFdInfoKHR* pGetFdInfo,
+			int* pFd)>
+		vkGetMemoryFdKHR;
 #endif
 	private:
 

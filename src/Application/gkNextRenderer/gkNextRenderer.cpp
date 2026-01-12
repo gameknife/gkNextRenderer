@@ -11,6 +11,8 @@
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/ScreenShot.hpp"
+#include "Utilities/FileHelper.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -126,6 +128,11 @@ void NextRendererGameInstance::OnPreConfigUI()
 
 bool NextRendererGameInstance::OnRenderUI()
 {
+	if (isTakingScreenshot_)
+	{
+		return true;
+	}
+
 	UpdateUiScaledMetrics();
 
 	DrawTitleBar();
@@ -416,7 +423,7 @@ void NextRendererGameInstance::DrawSettings()
 		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 #if WITH_OIDN
-			ImGui::Checkbox("Use OIDN", &UserSetting.Denoiser);
+			ImGui::Checkbox("Use OIDN", &userSetting.Denoiser);
 #else
 			ImGui::Checkbox(LOCTEXT("Use JBF"), &userSetting.Denoiser);
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f");
@@ -424,6 +431,45 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &userSetting.DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
 			ImGui::SliderInt(LOCTEXT("DenoiseSize"), &userSetting.DenoiseSize, 1, 10);
 #endif
+			ImGui::NewLine();
+		}
+
+		if( ImGui::CollapsingHeader(LOCTEXT("Upscaling"), ImGuiTreeNodeFlags_DefaultOpen) )
+		{
+			if (GetEngine().GetRenderer().SupportDLSS())
+			{
+				if (ImGui::Checkbox("NVIDIA DLSS", &userSetting.DLSS))
+                {
+                    GetEngine().GetRenderer().RequestRecreateSwapChain();
+                }
+                
+				if (userSetting.DLSS)
+				{
+					const char* dlssModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "DLAA (Native)" };
+					if (ImGui::Combo("DLSS Mode", (int*)&userSetting.SuperResolution, dlssModes, IM_ARRAYSIZE(dlssModes)))
+                    {
+                        GetEngine().GetRenderer().RequestRecreateSwapChain();
+                    }
+					
+					if (GetEngine().GetRenderer().SupportDLSSRR())
+					{
+						ImGui::Checkbox("DLSS Ray Reconstruction", &userSetting.DLSSRR);
+					}
+				}
+			}
+			else
+			{
+				ImGui::TextDisabled("DLSS not supported on this hardware.");
+			}
+            
+            if (!userSetting.DLSS)
+            {
+                const char* upscaleModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "Native" };
+				if (ImGui::Combo("Upscale Mode", (int*)&userSetting.SuperResolution, upscaleModes, IM_ARRAYSIZE(upscaleModes)))
+                {
+                    GetEngine().GetRenderer().RequestRecreateSwapChain();
+                }
+            }
 			ImGui::NewLine();
 		}
 		
@@ -535,7 +581,23 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_CAMERA, ImVec2(TitlebarSize, TitlebarSize)))
     {
+        std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+        Utilities::FileHelper::EnsureDirectoryExists(folderPath);
 
+        auto now = std::chrono::system_clock::now();
+        std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::tm* tm_ptr = std::localtime(&in_time_t);
+        std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
+        std::string filename = (std::filesystem::path(folderPath) / timestamp).string();
+
+        isTakingScreenshot_ = true;
+
+        GetEngine().AddTimerTask(0.2, [this, filename, folderPath]() {
+            ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
+            NextRenderer::OSCommand(folderPath.c_str());
+            isTakingScreenshot_ = false;
+            return true;
+        });
     }
     BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
 	ImGui::SameLine();
@@ -543,13 +605,13 @@ void NextRendererGameInstance::DrawTitleBar()
 	{
 		GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings;
 	}
-	BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
+	BUTTON_TOOLTIP(LOCTEXT("Toggle Settings Panel"))
 	ImGui::SameLine();
 	if (ImGui::Button(ICON_FA_GAUGE_SIMPLE_HIGH, ImVec2(TitlebarSize, TitlebarSize)))
 	{
 		GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
 	}
-	BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
+	BUTTON_TOOLTIP(LOCTEXT("Toggle Performance Overlay"))
 	ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));

@@ -31,6 +31,7 @@ namespace Vulkan
 		~RenderImage();
 
 		const Image& GetImage() const { return *image_; }
+		const DeviceMemory& GetImageMemory() const { return *imageMemory_; }
 		const ImageView& GetImageView() const { return *imageView_; }
 		const Vulkan::Sampler& Sampler() const { return *sampler_; }
 		void InsertBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout) const;

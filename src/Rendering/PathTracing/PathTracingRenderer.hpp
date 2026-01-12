@@ -4,7 +4,7 @@
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
 #if WITH_OIDN
-#include <oidn.hpp>
+#include <OpenImageDenoise/oidn.hpp>
 #endif
 
 namespace Vulkan
@@ -64,7 +64,8 @@ namespace Vulkan::RayTracing
 #if WITH_OIDN
 		std::unique_ptr<RenderImage> rtDenoise0_;
 		std::unique_ptr<RenderImage> rtDenoise1_;
-		std::unique_ptr<PipelineCommon::FinalComposePipeline> composePipelineDenoiser_;
+	    std::unique_ptr<RenderImage> rtAlbedo_;
+	    std::unique_ptr<RenderImage> rtNormal_;
 		oidn::DeviceRef device;
 		oidn::FilterRef filter;
 #endif

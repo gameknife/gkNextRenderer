@@ -32,7 +32,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     options.Temporal = 16;
     options.ForceSDR = true;
     options.NoDenoiser = true;
-    options.SuperResolution = 0;
+    options.SuperResolution = 2;
 }
 
 void EditorGameInstance::OnInit()

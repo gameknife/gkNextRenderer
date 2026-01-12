@@ -217,7 +217,17 @@ if ($DryRun) { exit 0 }
 
 Push-Location $ResolvedBin
 try {
-    $Proc = Start-Process -FilePath ".\$ExeName" -ArgumentList $LaunchArgs -Wait -PassThru -NoNewWindow
+    $ProcessArgs = @{
+        FilePath = ".\$ExeName"
+        Wait = $true
+        PassThru = $true
+        NoNewWindow = $true
+    }
+    if ($LaunchArgs.Count -gt 0) {
+        $ProcessArgs["ArgumentList"] = $LaunchArgs
+    }
+
+    $Proc = Start-Process @ProcessArgs
     exit $Proc.ExitCode
 } finally {
     Pop-Location

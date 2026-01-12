@@ -74,6 +74,36 @@ ensure_ios_deps() {
     fi
 }
 
+ensure_oidn() {
+    local oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.so"
+    if [[ "$(uname -s)" == "Darwin"* ]]; then
+        oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.dylib"
+    fi
+    
+    if [ ! -f "$oidn_lib" ]; then
+        log "OIDN binaries not found. Fetching..."
+        if [ -f "$PROJECT_ROOT/tools/fetch_oidn.sh" ]; then
+             "$PROJECT_ROOT/tools/fetch_oidn.sh"
+        else
+             warn "tools/fetch_oidn.sh not found. OIDN support might fail."
+        fi
+    fi
+}
+
+ensure_streamline() {
+    local sl_lib="$PROJECT_ROOT/src/ThirdParty/streamline/lib/x64/sl.interposer.lib"
+    
+    if [ ! -f "$sl_lib" ]; then
+        log "Streamline SDK not found. Fetching..."
+        if [ -f "$PROJECT_ROOT/tools/fetch_streamline.bat" ]; then
+             # Call the bat file as it's Windows-only anyway
+             cmd.exe /c "$(cygpath -w "$PROJECT_ROOT/tools/fetch_streamline.bat")"
+        else
+             warn "tools/fetch_streamline.bat not found. DLSS support might fail."
+        fi
+    fi
+}
+
 # ==============================================================================
 # Main Logic
 # ==============================================================================
@@ -83,12 +113,18 @@ CONFIG=""
 TARGET=""
 CLEAN=0
 TARGET_ANDROID=0
+AVIF=0
+DLSS=0
+OIDN=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --clean) CLEAN=1; shift ;;
         --android) TARGET_ANDROID=1; shift ;;
+        --avif) AVIF=1; shift ;;
+        --dlss) DLSS=1; shift ;;
+        --oidn) OIDN=1; shift ;;
         --preset) PRESET="$2"; shift 2 ;;
         --preset=*) PRESET="${1#*=}"; shift ;;
         --config) CONFIG="$2"; shift 2 ;;
@@ -103,6 +139,9 @@ while [[ $# -gt 0 ]]; do
             echo "  --target <name>  Specific target to build"
             echo "  --clean          Clean build directory before building"
             echo "  --android        Build for Android"
+            echo "  --avif           Enable AVIF support"
+            echo "  --dlss           Enable DLSS support"
+            echo "  --oidn           Enable OIDN support"
             echo "  -h, --help       Show this help"
             exit 0
             ;;
@@ -150,7 +189,38 @@ if [ "$CLEAN" -eq 1 ]; then
 fi
 
 log "Configuring preset: $PRESET"
-cmake --preset "$PRESET"
+CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
+if [ "$AVIF" -eq 1 ]; then
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=OFF" "-DVCPKG_MANIFEST_FEATURES=")
+fi
+
+if [ "$DLSS" -eq 1 ]; then
+    # Check if we are on Windows (MINGW/MSYS)
+    IS_WINDOWS=0
+    case "$(uname -s)" in
+        MINGW*|MSYS*) IS_WINDOWS=1 ;;
+    esac
+
+    if [ "$IS_WINDOWS" -eq 1 ]; then
+        ensure_streamline
+        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
+    else
+        warn "DLSS/Streamline is currently only supported on Windows. Disabling."
+        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
+    fi
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
+fi
+
+if [ "$OIDN" -eq 1 ]; then
+    ensure_oidn
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=ON")
+else
+    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=OFF")
+fi
+cmake "${CMAKE_CONFIGURE_ARGS[@]}"
 
 log "Building preset: $PRESET"
 CMAKE_BUILD_ARGS=("--build" "--preset" "$PRESET")

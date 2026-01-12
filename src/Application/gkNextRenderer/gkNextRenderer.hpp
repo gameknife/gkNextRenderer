@@ -49,4 +49,6 @@ private:
     uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
     struct ImFont* bigFont_ {};
+
+    bool isTakingScreenshot_ = false;
 };

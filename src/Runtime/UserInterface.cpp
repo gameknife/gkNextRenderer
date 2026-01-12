@@ -405,39 +405,66 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 
 	if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
 	{
-		ImGui::Text("Statistics (%dx%d):", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
-		ImGui::Text("%s", statistics.Stats["gpu"].c_str());
+		// Colors
+		const ImVec4 colHeader = ImVec4(0.8f, 0.8f, 1.0f, 1.0f);
+		const ImVec4 colLabel  = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+		const ImVec4 colVal    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+		const ImVec4 colGood   = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
+		const ImVec4 colWarn   = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+		const ImVec4 colBad    = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+
+		// Helper
+		auto LabelVal = [&](const char* label, const char* fmt, auto... args) {
+			ImGui::TextColored(colLabel, "%s", label);
+			ImGui::SameLine();
+			ImGui::TextColored(colVal, fmt, args...);
+		};
+		
+		ImGui::TextColored(colHeader, "Resolution: %dx%d -> %dx%d", statistics.RenderSize.width, statistics.RenderSize.height, statistics.FramebufferSize.width, statistics.FramebufferSize.height);
+		ImGui::TextColored(colLabel, "%s", statistics.Stats["gpu"].c_str());
+		
 		ImGui::Separator();
-		ImGui::Text("Frame rate: %.0f fps", statistics.FrameRate);
+
+		// FPS
+		ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood : (statistics.FrameRate > 30.0f ? colWarn : colBad);
+		ImGui::TextColored(colLabel, "Frame rate:"); ImGui::SameLine();
+		ImGui::TextColored(fpsColor, "%.0f fps", statistics.FrameRate);
 		
-		ImGui::Text("Node: %s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
-		ImGui::Text("Instance: %s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
-		ImGui::Text("Texture: %d", statistics.TextureCount);
-		
+		LabelVal("Frame time:", "%.2f ms", statistics.FrameTime);
+
+		ImGui::Separator();
+
+		// Scene
+		LabelVal("Node:", "%s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
+		LabelVal("Instance:", "%s", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
+		LabelVal("Texture:", "%d", statistics.TextureCount);
+
+		ImGui::Separator();
+
+		// GPU Stats
 		auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
 		uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
 		uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
-		ImGui::Text("GPU Draw: %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str());
-		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
-		ImGui::Text("GPU Tri: %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str());
-		ImGui::Text("  - Cull/Vis: %s/%s", Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.CulledTriangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
 		
+		ImGui::TextColored(colHeader, "GPU Stats (Visible/Total):");
+		LabelVal("Draws:", "%s / %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
+		LabelVal("Tris:", "%s / %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str(), Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
+
 		uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
 		uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
 		uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
-		ImGui::Text("Tasks: %d / %d / %d", mainTasks, lowTasks, completeTasks);
+		LabelVal("Tasks:", "%d / %d / %d", mainTasks, lowTasks, completeTasks);
 
 		ImGui::Separator();
 		
-		ImGui::Text("frametime: %.2fms", statistics.FrameTime);
-		
-		// auto fetch timer & display
+		// Timers
 		auto times = gpuTimer->FetchAllTimes(4);
 		float totalGpuTime = 0;
 		for(auto& time : times) {
 			if (std::get<2>(time) == 0) totalGpuTime += std::get<1>(time);
 		}
 
+		ImGui::TextColored(colHeader, "GPU Time (%.2fms):", totalGpuTime);
 		for(auto& time : times)
 		{
 			float ms = std::get<1>(time);
@@ -445,26 +472,33 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
 			std::string name = std::get<0>(time);
 
 			ImGui::Indent(depth * 10.0f);
-			ImGui::Text("%s: %.2fms", name.c_str(), ms);
+			ImGui::TextColored(depth == 0 ? colVal : colLabel, "%s: %.2fms", name.c_str(), ms);
 			
 			if (totalGpuTime > 0) {
-				ImGui::SameLine(200); // Fixed position for the bars
-				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
-				ImGui::ProgressBar(ms / 16.67f, ImVec2(50, ImGui::GetTextLineHeight()), "");
-				ImGui::PopStyleColor();
-			}
+				ImGui::SameLine(200); 
 
+				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0,0,0,0));
+				ImGui::PushStyleColor(ImGuiCol_Border, colLabel);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+				ImGui::ProgressBar(ms / (totalGpuTime > 0.001f ? totalGpuTime : 1.0f), ImVec2(50, ImGui::GetTextLineHeight()), "");
+				
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor(3);
+			}
 			ImGui::Unindent(depth * 10.0f);
 		}
-
-		ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
-		ImGui::Text("  - hwquery: %.2fms", gpuTimer->GetCpuTime("hwquery"));
-		ImGui::Text("  - fence: %.2fms", gpuTimer->GetCpuTime("fence"));
-		ImGui::Text("  - present: %.2fms", gpuTimer->GetCpuTime("present"));
 		
-		ImGui::Text("Frame: %d", statistics.TotalFrames);
+		ImGui::TextColored(colHeader, "CPU Time (%.2fms):", gpuTimer->GetCpuTime("draw-frame"));
+		// ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
+		LabelVal("  - hwquery:", "%.2fms", gpuTimer->GetCpuTime("hwquery"));
+		LabelVal("  - fence:", "%.2fms", gpuTimer->GetCpuTime("fence"));
+		LabelVal("  - present:", "%.2fms", gpuTimer->GetCpuTime("present"));
 		
-		ImGui::Text("Time: %s", fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
+		ImGui::Separator();
+		LabelVal("Frame:", "%d", statistics.TotalFrames);
+		LabelVal("Time:", "%s", fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 	}
 	ImGui::End();
 }

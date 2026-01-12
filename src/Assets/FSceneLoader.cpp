@@ -104,18 +104,32 @@ namespace Assets
     {
         tinygltf::Node& node = model.nodes[nodeIdx];
         
-        glm::vec3 translation = node.translation.empty()
-                           ? glm::vec3(0)
-                           : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-        glm::vec3 scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-        glm::quat rotation = node.rotation.empty()
-                                   ? glm::quat(1, 0, 0, 0)
-                                   : glm::quat(
-                                       static_cast<float>(node.rotation[3]),
-                                       static_cast<float>(node.rotation[0]),
-                                       static_cast<float>(node.rotation[1]),
-                                       static_cast<float>(node.rotation[2]));
-        rotation = glm::normalize(rotation);
+        glm::vec3 translation;
+        glm::vec3 scale;
+        glm::quat rotation;
+
+        if (!node.matrix.empty())
+        {
+            glm::dmat4 dmat = glm::make_mat4(node.matrix.data());
+            glm::mat4 mat = glm::mat4(dmat);
+            glm::vec3 skew;
+            glm::vec4 perspective;
+            glm::decompose(mat, scale, rotation, translation, skew, perspective);
+        }
+        else
+        {
+            translation = node.translation.empty()
+                               ? glm::vec3(0)
+                               : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+            scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+            rotation = node.rotation.empty()
+                                       ? glm::quat(1, 0, 0, 0)
+                                       : glm::quat(
+                                           static_cast<float>(node.rotation[3]),
+                                           static_cast<float>(node.rotation[0]),
+                                           static_cast<float>(node.rotation[1]),
+                                           static_cast<float>(node.rotation[2]));
+        }
 
         uint32_t meshId = -1;
         if(node.mesh != -1)
@@ -737,7 +751,8 @@ namespace Assets
             cameraInit.cameras[i].Aperture = 0.0f;
             cameraInit.cameras[i].FocalDistance = 1000.0f;
             cameraInit.cameras[i].FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / float(M_PI);
-            
+            cameraInit.cameras[i].NearPlane = static_cast<float>(cam.perspective.znear);
+            cameraInit.cameras[i].FarPlane = static_cast<float>(cam.perspective.zfar);
             if( cam.extras.Has("F-Stop") )
             {
                 cameraInit.cameras[i].Aperture = 0.2f / cam.extras.Get("F-Stop").GetNumberAsDouble();

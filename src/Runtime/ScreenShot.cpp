@@ -1,5 +1,6 @@
 #include "ScreenShot.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
+#include "Utilities/Exception.hpp"
 
 #include "curl/curl.h"
 #include "stb_image_write.h"

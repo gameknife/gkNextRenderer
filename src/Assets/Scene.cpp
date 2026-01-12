@@ -132,10 +132,14 @@ namespace Assets
                     JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
                     if ( cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0)
                     {
-                        JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                        node->BindPhysicsBody(id);
+                        glm::vec3 worldScale = node->WorldScale();
+                        if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                        {
+                            JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
+                            node->BindPhysicsBody(id);
 
-                        physicsEngine->SetBodyActive(id, node->IsVisible());
+                            physicsEngine->SetBodyActive(id, node->IsVisible());
+                        }
                     }
                 }
             }

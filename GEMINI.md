@@ -40,6 +40,33 @@ The project can be built and run on Windows, Linux, macOS, Android, and iOS. The
 *   `build.bat` / `build.sh`: Builds the project using CMake.
 *   `run.bat` / `run.sh`: Runs the executables.
 
+### Optional Build Features
+
+The engine supports several optional features that can be enabled during the build process using specific flags.
+
+#### AVIF Support
+Enables AVIF texture loading and screenshot saving.
+```bat
+build.bat --avif
+```
+
+#### DLSS Support (Windows Only)
+Enables NVIDIA DLSS support. This will automatically invoke `tools/fetch_streamline.bat` to download and deploy the necessary NVIDIA Streamline SDK.
+```bat
+build.bat --dlss
+```
+
+#### OIDN Support
+Enables Intel OpenImageDenoise support for high-quality denoising. This will automatically invoke `tools/fetch_oidn.bat` or `tools/fetch_oidn.sh` to download and deploy the OIDN runtime libraries.
+```bat
+build.bat --oidn
+```
+
+Flags can be combined:
+```bat
+build.bat --avif --oidn --dlss
+```
+
 ### Windows (Visual Studio 2022)
 
 ```bat

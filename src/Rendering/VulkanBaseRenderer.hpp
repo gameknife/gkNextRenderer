@@ -14,7 +14,7 @@
 
 namespace StreamlineWrapper
 {
-	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily);
+	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
 }
 
@@ -104,6 +104,7 @@ namespace Vulkan
 		void CreateRenderImages();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
+		void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
 		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -119,7 +120,12 @@ namespace Vulkan
 
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		
+		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
 		bool VisualDebug() const {return visualDebug_;}
+		
+		bool SupportDLSS() const { return supportDLSS_; }
+		bool SupportDLSSRR() const { return supportDLSSRR_; }
 
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
@@ -143,6 +149,8 @@ namespace Vulkan
 		
 		bool checkerboxRendering_{};
 		bool supportRayTracing_ {};
+		bool supportDLSS_{};
+		bool supportDLSSRR_{};
 		bool supportDenoiser_ {};
 		bool showWireframe_ {};
 		int frameCount_{};
@@ -152,16 +160,18 @@ namespace Vulkan
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
+
 	protected:
 		Assets::UniformBufferObject lastUBO;
 		std::vector<std::unique_ptr<RenderImage> > bindlessStorageImages_;
 		uint32_t tempStorageImageCreated_ {};
 	private:
-
-		void UpdateUniformBuffer(uint32_t imageIndex);
 		void RecreateSwapChain();
 
+		void UpdateUniformBuffer(uint32_t imageIndex);
+
 		const VkPresentModeKHR presentMode_;
+		bool requestRecreateSwapChain_ = false;
 
 		std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > logicRenderers_;
 		ERendererType currentLogicRenderer_;

@@ -97,6 +97,19 @@ build.bat --android
 run.bat --preset android
 ```
 
+### 编译选项
+
+`build.bat` 与 `build.sh` 支持以下可选参数以开启特定功能：
+
+- `--avif`：开启 AVIF 纹理加载与截图支持。
+- `--dlss`：开启 NVIDIA DLSS 支持（仅限 Windows）。会自动下载并部署 Streamline SDK。
+- `--oidn`：开启 Intel OpenImageDenoise 降噪器支持。会自动下载并部署 OIDN 运行时库。
+
+示例：
+``` bat
+build.bat --oidn --dlss
+```
+
 更多用法与约定请见仓库脚本与 `.github/workflows`。
 
 ## 技术要点（概览）

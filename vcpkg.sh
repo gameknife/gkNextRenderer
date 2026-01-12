@@ -15,7 +15,7 @@ init_variables() {
     fi
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
-    VCPKG_GIT_REF="2025.10.17"
+    VCPKG_GIT_REF="2025.12.12"
     UPDATE_REPO=0
 }
 

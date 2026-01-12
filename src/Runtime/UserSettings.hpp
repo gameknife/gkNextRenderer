@@ -23,6 +23,8 @@ struct UserSettings final
 	bool DebugDraw_Lighting = false;
 	bool DisableSpatialReuse = false;
 	uint32_t SuperResolution = 1;
+	bool DLSS = false;
+	bool DLSSRR = false;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera

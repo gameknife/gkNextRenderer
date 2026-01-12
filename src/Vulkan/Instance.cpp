@@ -22,6 +22,11 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	// Check the validation layers and add them to the list of required extensions.
 	CheckVulkanValidationLayerSupport(validationLayers);
 
+#if WITH_STREAMLINE
+    extensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
+    extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+#endif
+    
 #if !ANDROID
 	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif

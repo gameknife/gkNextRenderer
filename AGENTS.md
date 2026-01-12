@@ -30,13 +30,21 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 ```bash
 # 构建（选择你的平台）
-./build.sh macos       # macOS
-./build.sh linux       # Linux
-./build.bat windows    # Windows
-./build.bat android    # Android
+./build.sh macos            # macOS
+./build.sh linux-release    # Linux
+./build.bat windows-dev     # Windows
+./build.bat --android       # Android
+
+# 可选编译选项 (支持组合)
+# --avif: 开启 AVIF 支持
+# --dlss: 开启 DLSS 支持 (Windows Only)
+# --oidn: 开启 OIDN 支持
+./build.bat windows-dev --oidn --dlss
+```
 
 # 快速验证
-cd build/[platform]/bin && ./gkNextRenderer
+```bash
+./run.bat windows-dev
 ```
 
 ## ✅ 成功标准
