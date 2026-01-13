@@ -369,3 +369,4 @@ src/ThirdParty/Streamline/
 # Claude Code files
 .claude/
 lib/
+.vcpkg_cache/

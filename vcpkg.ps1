@@ -9,6 +9,13 @@ $ScriptDir = $PSScriptRoot
 $ProjectRoot = $ScriptDir
 $DefaultVcpkgRoot = Join-Path $ProjectRoot ".vcpkg"
 $VcpkgDefaultBinaryCache = Join-Path $ProjectRoot ".vcpkg_bincache"
+$VcpkgDownloads = Join-Path $ProjectRoot ".vcpkg_cache/downloads"
+$VcpkgRegistriesCache = Join-Path $ProjectRoot ".vcpkg_cache/registries"
+
+# Set Environment Variables
+$env:VCPKG_DEFAULT_BINARY_CACHE = $VcpkgDefaultBinaryCache
+$env:VCPKG_DOWNLOADS = $VcpkgDownloads
+$env:X_VCPKG_REGISTRIES_CACHE = $VcpkgRegistriesCache
 
 # Configuration
 $VcpkgGitRef = "2025.12.12"
@@ -36,6 +43,12 @@ foreach ($Arg in $AllArgs) {
 # Environment Setup
 if (-not (Test-Path $VcpkgDefaultBinaryCache)) {
     New-Item -ItemType Directory -Path $VcpkgDefaultBinaryCache -Force | Out-Null
+}
+if (-not (Test-Path $VcpkgDownloads)) {
+    New-Item -ItemType Directory -Path $VcpkgDownloads -Force | Out-Null
+}
+if (-not (Test-Path $VcpkgRegistriesCache)) {
+    New-Item -ItemType Directory -Path $VcpkgRegistriesCache -Force | Out-Null
 }
 
 $VcpkgRoot = $env:VCPKG_ROOT

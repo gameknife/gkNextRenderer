@@ -45,6 +45,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
+          .vcpkg_cache
         key: ${{ runner.os }}-desktop-bincache
 
     - name: Compile gkNextRenderer
@@ -58,6 +59,7 @@ jobs:
         path: |
           .vcpkg
           .vcpkg_bincache
+          .vcpkg_cache
         key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
 
 

@@ -10,8 +10,17 @@ init_variables() {
     PROJECT_ROOT="$SCRIPT_DIR"
     DEFAULT_VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
     export VCPKG_DEFAULT_BINARY_CACHE="$PROJECT_ROOT/.vcpkg_bincache"
+    export VCPKG_DOWNLOADS="$PROJECT_ROOT/.vcpkg_cache/downloads"
+    export X_VCPKG_REGISTRIES_CACHE="$PROJECT_ROOT/.vcpkg_cache/registries"
+
     if [ ! -d "$VCPKG_DEFAULT_BINARY_CACHE" ]; then
         mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+    fi
+    if [ ! -d "$VCPKG_DOWNLOADS" ]; then
+        mkdir -p "$VCPKG_DOWNLOADS"
+    fi
+    if [ ! -d "$X_VCPKG_REGISTRIES_CACHE" ]; then
+        mkdir -p "$X_VCPKG_REGISTRIES_CACHE"
     fi
     VCPKG_ROOT="${VCPKG_ROOT:-$DEFAULT_VCPKG_ROOT}"
     VCPKG_EXE="$VCPKG_ROOT/vcpkg"
