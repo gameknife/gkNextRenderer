@@ -134,6 +134,7 @@ public:
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
 	float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
+    float GetFrameRate() const { return frameRate_; }
 	uint32_t GetTotalFrames() const { return totalFrames_; }
 	uint32_t GetTestNumber() const { return 20; }
 
@@ -243,6 +244,8 @@ private:
 	double time_{};
 	double deltaSeconds_{};
 	double smoothedDeltaSeconds_{};
+    float frameRate_{};
+    double lastFrameTime_{};
 	bool progressiveRendering_{};
 	uint32_t progressivePreFrames_{};
 
