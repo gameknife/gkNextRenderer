@@ -616,10 +616,8 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
     ImGui::SameLine();
-    float deltaSeconds = GetEngine().GetSmoothDeltaSeconds();
-    ImGui::SameLine();
     ImGui::SetCursorPosY((TitlebarSize - ImGui::GetTextLineHeight()) / 2);
-    ImGui::TextUnformatted(fmt::format("{:.0f}fps", 1.0f / deltaSeconds).c_str());
+    ImGui::TextUnformatted(fmt::format("{:.0f}fps", GetEngine().GetFrameRate()).c_str());
     ImGui::End();
 
     ImGui::PopStyleColor();

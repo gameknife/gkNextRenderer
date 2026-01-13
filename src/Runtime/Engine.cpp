@@ -1065,17 +1065,15 @@ void NextEngine::OnRendererDeleteSwapChain()
 
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-    static float frameRate = 0.0;
-    static double lastTime = 0.0;
     static double lastTimestamp = 0.0;
     double now = GetWindow().GetTime();
     
     // Record delta time between calls to Render.
     if(totalFrames_ % 30 == 0)
     {
-        const auto timeDelta = now - lastTime;
-        lastTime = now;
-        frameRate = static_cast<float>(30 / timeDelta);
+        const auto timeDelta = now - lastFrameTime_;
+        lastFrameTime_ = now;
+        frameRate_ = static_cast<float>(30 / timeDelta);
     }
     
     // Render the UI
@@ -1088,7 +1086,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.RenderSize = renderer_->SwapChain().RenderExtent();
-    stats.FrameRate = frameRate;
+    stats.FrameRate = frameRate_;
     stats.RenderTime = GetTime();
     
     stats.TotalFrames = totalFrames_;
