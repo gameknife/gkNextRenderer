@@ -16,6 +16,11 @@ if (GK_ENABLE_DLSS)
 endif()
 
 option(GK_ENABLE_OIDN "Enable OpenImageDenoise support" OFF)
+if (APPLE)
+    message(STATUS "OIDN is not supported on macOS. Disabling.")
+    set(GK_ENABLE_OIDN OFF CACHE BOOL "Enable OpenImageDenoise support" FORCE)
+endif()
+
 if (GK_ENABLE_OIDN)
     set(WITH_OIDN ON CACHE BOOL "Enable OIDN" FORCE)
 endif()
