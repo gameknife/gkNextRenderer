@@ -12,6 +12,14 @@ PROJECT_ROOT="$SCRIPT_DIR"
 export VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
 export VCPKG_BINARY_SOURCES="clear;files,$PROJECT_ROOT/.vcpkg_bincache,readwrite"
 
+# Timing
+TOTAL_START=$(date +%s)
+CONFIG_TIME=0
+BUILD_TIME=0
+
+SYSTEM_CPU="Unknown"
+SYSTEM_MEM="Unknown"
+
 # Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -107,9 +115,48 @@ ensure_streamline() {
     fi
 }
 
+show_system_info() {
+    local cpu_model=""
+    local mem_size=""
+
+    if [[ "$(uname -s)" == "Darwin"* ]]; then
+        cpu_model=$(sysctl -n machdep.cpu.brand_string)
+        mem_size=$(sysctl -n hw.memsize)
+        mem_size=$((mem_size / 1024 / 1024 / 1024))
+        mem_size="${mem_size}GB"
+    elif [[ "$(uname -s)" == "Linux"* ]]; then
+        if [ -f /proc/cpuinfo ]; then
+            cpu_model=$(grep -m1 'model name' /proc/cpuinfo | sed 's/model name\s*:\s*//')
+        fi
+        if [ -f /proc/meminfo ]; then
+            local mem_kb=$(grep -m1 'MemTotal' /proc/meminfo | awk '{print $2}')
+            local mem_gb=$((mem_kb / 1024 / 1024))
+            mem_size="${mem_gb}GB"
+        fi
+    fi
+    
+    # Fallback for MinGW/MSYS
+    if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* ]]; then
+         # Try to use wmic if available, otherwise skip
+         if command -v wmic &> /dev/null; then
+             cpu_model=$(wmic cpu get name | sed -n '2p' | tr -d '\r')
+             local mem_bytes=$(wmic ComputerSystem get TotalPhysicalMemory | sed -n '2p' | tr -d '\r')
+             local mem_gb=$((mem_bytes / 1024 / 1024 / 1024))
+             mem_size="${mem_gb}GB"
+         fi
+    fi
+
+    if [ -n "$cpu_model" ]; then
+        SYSTEM_CPU="$cpu_model"
+        SYSTEM_MEM="$mem_size"
+    fi
+}
+
 # ==============================================================================
 # Main Logic
 # ==============================================================================
+
+show_system_info
 
 PRESET=""
 CONFIG=""
@@ -223,7 +270,11 @@ if [ "$OIDN" -eq 1 ]; then
 else
     CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=OFF")
 fi
+
+start_time=$(date +%s)
 cmake "${CMAKE_CONFIGURE_ARGS[@]}"
+end_time=$(date +%s)
+CONFIG_TIME=$((end_time - start_time))
 
 log "Building preset: $PRESET"
 CMAKE_BUILD_ARGS=("--build" "--preset" "$PRESET")
@@ -236,4 +287,23 @@ if [ -n "$TARGET" ]; then
     CMAKE_BUILD_ARGS+=("--target" "$TARGET")
 fi
 
+start_time=$(date +%s)
 cmake "${CMAKE_BUILD_ARGS[@]}"
+end_time=$(date +%s)
+BUILD_TIME=$((end_time - start_time))
+
+TOTAL_END=$(date +%s)
+TOTAL_TIME=$((TOTAL_END - TOTAL_START))
+
+log "--------------------------------------------------"
+log "Build Statistics:"
+log "  System:      $SYSTEM_CPU, $SYSTEM_MEM RAM"
+log "  Preset:      $PRESET"
+if [ "$CONFIG_TIME" -gt 0 ]; then
+    log "  Configure:   ${CONFIG_TIME}s"
+fi
+if [ "$BUILD_TIME" -gt 0 ]; then
+    log "  Build:       ${BUILD_TIME}s"
+fi
+log "  Total:       ${TOTAL_TIME}s"
+log "--------------------------------------------------"

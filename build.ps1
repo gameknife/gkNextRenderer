@@ -57,6 +57,10 @@ $VcpkgDefaultBinaryCache = Join-Path $ProjectRoot ".vcpkg_bincache"
 $env:VCPKG_ROOT = $VcpkgRoot
 $env:VCPKG_BINARY_SOURCES = "clear;files,$VcpkgDefaultBinaryCache,readwrite"
 
+$script:ConfigDuration = 0
+$script:BuildDuration = 0
+$script:SystemInfo = "Unknown"
+
 function Write-Log {
     param([string]$Message)
     Write-Host "[build] $Message" -ForegroundColor Cyan
@@ -148,7 +152,7 @@ function Build-Native {
     }
 
     Write-Log "Configuring preset: $Preset"
-    $ConfigureArgs = @("--preset", $Preset)
+    $ConfigureArgs = @("--preset", $Preset, "-Wno-dev")
     if ($Avif) {
         $ConfigureArgs += "-DGK_ENABLE_AVIF=ON"
         $ConfigureArgs += "-DVCPKG_MANIFEST_FEATURES=avif"
@@ -170,7 +174,12 @@ function Build-Native {
     } else {
         $ConfigureArgs += "-DGK_ENABLE_OIDN=OFF"
     }
+    
+    $ConfigStopWatch = [System.Diagnostics.Stopwatch]::StartNew()
     cmake $ConfigureArgs
+    $ConfigStopWatch.Stop()
+    $script:ConfigDuration = $ConfigStopWatch.Elapsed.TotalSeconds
+    
     if ($LASTEXITCODE -ne 0) { throw "Configuration failed." }
 
     Write-Log "Building preset: $Preset"
@@ -182,7 +191,15 @@ function Build-Native {
         $BuildArgs += @("--target", $Target)
     }
     
+    # Reduce MSBuild verbosity for Windows presets
+    if ($Preset -eq "windows-dev" -or $Preset -eq "windows-base") {
+        $BuildArgs += @("--", "/verbosity:minimal", "/consoleloggerparameters:Summary")
+    }
+    
+    $BuildStopWatch = [System.Diagnostics.Stopwatch]::StartNew()
     cmake $BuildArgs
+    $BuildStopWatch.Stop()
+    $script:BuildDuration = $BuildStopWatch.Elapsed.TotalSeconds
     
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed."
@@ -209,11 +226,24 @@ function Build-Android {
     }
 }
 
+function Show-SystemInfo {
+    try {
+        $cpu = Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name -First 1
+        $mem = Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty TotalPhysicalMemory
+        $memGb = [math]::Round($mem / 1GB, 1)
+        $script:SystemInfo = "$cpu, ${memGb}GB RAM"
+    } catch {
+        $script:SystemInfo = "Information unavailable"
+    }
+}
+
 # --- Main Execution ---
 
 $StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 try {
+    Show-SystemInfo
+
     if ($Android) {
         Build-Android
     } else {
@@ -221,7 +251,19 @@ try {
     }
     
     $StopWatch.Stop()
-    Write-Log "Build completed successfully in $($StopWatch.Elapsed.TotalSeconds.ToString("N2")) seconds."
+    
+    Write-Log "--------------------------------------------------"
+    Write-Log "Build Statistics:"
+    Write-Log "  System:      $($script:SystemInfo)"
+    Write-Log "  Preset:      $Preset"
+    if ($script:ConfigDuration -gt 0) {
+        Write-Log "  Configure:   $($script:ConfigDuration.ToString("N2"))s"
+    }
+    if ($script:BuildDuration -gt 0) {
+        Write-Log "  Build:       $($script:BuildDuration.ToString("N2"))s"
+    }
+    Write-Log "  Total:       $($StopWatch.Elapsed.TotalSeconds.ToString("N2"))s"
+    Write-Log "--------------------------------------------------"
 }
 catch {
     Write-ErrorLog $_.Exception.Message
