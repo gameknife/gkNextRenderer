@@ -20,7 +20,7 @@ on:
 jobs:
   build:
 
-    runs-on: windows-2022
+    runs-on: windows-latest
     env:
       SDK_VERSION: 1.4.313.1
     steps:
