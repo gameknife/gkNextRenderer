@@ -212,6 +212,56 @@ namespace Assets
 
     std::string FSceneLoader::currSceneName = "default";
 
+    static glm::vec4 GetAttributeValue(const tinygltf::Model& model, const tinygltf::Accessor& accessor, size_t index)
+    {
+        const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+        const unsigned char* bufferData = model.buffers[view.buffer].data.data();
+        const unsigned char* dataPtr = bufferData + view.byteOffset + accessor.byteOffset + index * accessor.ByteStride(view);
+
+        auto readComponent = [&](const unsigned char* ptr) -> float {
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) return *reinterpret_cast<const float*>(ptr);
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_DOUBLE) return static_cast<float>(*reinterpret_cast<const double*>(ptr));
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_BYTE) {
+                float v = static_cast<float>(*reinterpret_cast<const int8_t*>(ptr));
+                return accessor.normalized ? std::max(v / 127.0f, -1.0f) : v;
+            }
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+                float v = static_cast<float>(*reinterpret_cast<const uint8_t*>(ptr));
+                return accessor.normalized ? v / 255.0f : v;
+            }
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT) {
+                float v = static_cast<float>(*reinterpret_cast<const int16_t*>(ptr));
+                return accessor.normalized ? std::max(v / 32767.0f, -1.0f) : v;
+            }
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                float v = static_cast<float>(*reinterpret_cast<const uint16_t*>(ptr));
+                return accessor.normalized ? v / 65535.0f : v;
+            }
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_INT) {
+                 return static_cast<float>(*reinterpret_cast<const int*>(ptr));
+            }
+            if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) return static_cast<float>(*reinterpret_cast<const unsigned int*>(ptr));
+            return 0.0f;
+        };
+
+        int componentSize = 1;
+        if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT || accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) componentSize = 2;
+        if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_INT || accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT || accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) componentSize = 4;
+        if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_DOUBLE) componentSize = 8;
+
+        int numComponents = 1;
+        if (accessor.type == TINYGLTF_TYPE_VEC2) numComponents = 2;
+        if (accessor.type == TINYGLTF_TYPE_VEC3) numComponents = 3;
+        if (accessor.type == TINYGLTF_TYPE_VEC4) numComponents = 4;
+
+        glm::vec4 res(0,0,0,1);
+
+        for (int i = 0; i < numComponents && i < 4; ++i) {
+            res[i] = readComponent(dataPtr + i * componentSize);
+        }
+        return res;
+    }
+
     void FSceneLoader::GenerateMikkTSpace(Assets::Model *m)
     {
         SMikkTSpaceContext mikktspaceContext;
@@ -422,71 +472,35 @@ namespace Assets
                     continue;
                 }
                
-                tinygltf::Accessor positionAccessor = model.accessors[primtive.attributes["POSITION"]];
-                tinygltf::Accessor normalAccessor = model.accessors[primtive.attributes["NORMAL"]];
-                tinygltf::Accessor texcoordAccessor = model.accessors[primtive.attributes["TEXCOORD_0"]];
+                int posIdx = -1;
+                if (primtive.attributes.find("POSITION") != primtive.attributes.end()) posIdx = primtive.attributes["POSITION"];
+                int normIdx = -1;
+                if (primtive.attributes.find("NORMAL") != primtive.attributes.end()) normIdx = primtive.attributes["NORMAL"];
+                int uvIdx = -1;
+                if (primtive.attributes.find("TEXCOORD_0") != primtive.attributes.end()) uvIdx = primtive.attributes["TEXCOORD_0"];
+                int tanIdx = -1;
+                if (primtive.attributes.find("TANGENT") != primtive.attributes.end()) tanIdx = primtive.attributes["TANGENT"];
 
-                tinygltf::Accessor tangentAccessor;
-                tinygltf::BufferView tangentView;
-                int tangentStride = 0;
-                
-                if(primtive.attributes.find("TANGENT") != primtive.attributes.end())
-                {
-                    hasTangent = true;
+                if (posIdx == -1) continue;
 
-                    tangentAccessor = model.accessors[primtive.attributes["TANGENT"]];
-                    tangentView = model.bufferViews[tangentAccessor.bufferView];
-                    tangentStride = tangentAccessor.ByteStride(tangentView);
-                }
-
-                tinygltf::BufferView positionView = model.bufferViews[positionAccessor.bufferView];
-                tinygltf::BufferView normalView = model.bufferViews[normalAccessor.bufferView];
-                tinygltf::BufferView texcoordView = model.bufferViews[texcoordAccessor.bufferView];
-
-                int positionStride = positionAccessor.ByteStride(positionView);
-                int normalStride = normalAccessor.ByteStride(normalView);
-                int texcoordStride = texcoordAccessor.ByteStride(texcoordView);
+                tinygltf::Accessor positionAccessor = model.accessors[posIdx];
+                if (tanIdx != -1) hasTangent = true;
                 
                 for (size_t i = 0; i < positionAccessor.count; ++i)
                 {
                     Vertex vertex;
-                    float* position = reinterpret_cast<float*>(&model.buffers[positionView.buffer].data[positionView.byteOffset + positionAccessor.byteOffset + i *
-                        positionStride]);
-                    vertex.Position = vec3(
-                        position[0],
-                        position[1],
-                        position[2]
-                    );
-                    float* normal = reinterpret_cast<float*>(&model.buffers[normalView.buffer].data[normalView.byteOffset + normalAccessor.byteOffset + i *
-                        normalStride]);
-                    vertex.Normal = vec3(
-                        normal[0],
-                        normal[1],
-                        normal[2]
-                    );
+                    vertex.Position = glm::vec3(GetAttributeValue(model, positionAccessor, i));
 
-                    if(hasTangent)
-                    {
-                        float* tangent = reinterpret_cast<float*>(&model.buffers[tangentView.buffer].data[tangentView.byteOffset + tangentAccessor.byteOffset + i *
-                       tangentStride]);
-                        vertex.Tangent = vec4(
-                            tangent[0],
-                            tangent[1],
-                            tangent[2],
-                            tangent[3]
-                        );
-                    }
+                    if (normIdx != -1)
+                        vertex.Normal = glm::vec3(GetAttributeValue(model, model.accessors[normIdx], i));
+                    else
+                        vertex.Normal = glm::vec3(0, 1, 0);
 
-                    if(texcoordView.byteOffset + i *
-                        texcoordStride < model.buffers[texcoordView.buffer].data.size())
-                    {
-                        float* texcoord = reinterpret_cast<float*>(&model.buffers[texcoordView.buffer].data[texcoordView.byteOffset + texcoordAccessor.byteOffset + i *
-                  texcoordStride]);
-                        vertex.TexCoord = vec2(
-                            texcoord[0],
-                            texcoord[1]
-                        );              
-                    }
+                    if (tanIdx != -1)
+                        vertex.Tangent = GetAttributeValue(model, model.accessors[tanIdx], i);
+
+                    if (uvIdx != -1)
+                        vertex.TexCoord = glm::vec2(GetAttributeValue(model, model.accessors[uvIdx], i));
                     
                     vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
@@ -510,6 +524,11 @@ namespace Assets
                     else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT )
                     {
                         int32* data = reinterpret_cast<int32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                        indices.push_back(*data + vertextOffset);
+                    }
+                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
+                    {
+                        uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertextOffset);
                     }
                     else
