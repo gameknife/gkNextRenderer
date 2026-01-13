@@ -71,16 +71,6 @@ namespace Vulkan::RayTracing
 
         if (fakeRequireRayTracingPipeline) requiredExtensions.insert(requiredExtensions.end(), {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME});
 
-#if WITH_OIDN
-        // Required extensions.
-        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
-#if WIN32 && !defined(__MINGW32__)
-        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
-#elif __linux__
-        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
-#endif
-#endif
-
         // Required device features.
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
         accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;

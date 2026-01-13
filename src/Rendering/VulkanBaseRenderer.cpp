@@ -348,6 +348,20 @@ namespace Vulkan
         deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
         deviceFeatures.shaderInt16 = true;
         deviceFeatures.shaderInt64 = true;
+
+#if WITH_OIDN
+        // Required extensions.
+        requiredExtensions.insert(requiredExtensions.end(),
+                                  {
+                                    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME
+                                  });
+#if WIN32 && !defined(__MINGW32__)
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+#elif __linux__ || __APPLE__
+        requiredExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
+#endif
+        
+#endif
         
         // Required extensions. windows only
 #if WIN32
@@ -430,6 +444,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::OnDeviceSet()
     {
+#if WITH_OIDN
+        InitOIDN();
+#endif
+
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->OnDeviceSet();
@@ -507,6 +525,10 @@ namespace Vulkan
         {
             globalTexturePool_->BindStorageTexture( Assets::Bindless::RT_SWAPCHAIN0 + i, *swapChain_->ImageViews()[i] );
         }
+
+#if WITH_OIDN
+        SetupOIDN(swapChain_->RenderExtent());
+#endif
     }
 
     void VulkanBaseRenderer::CreateSwapChain()
@@ -590,6 +612,13 @@ namespace Vulkan
         {
             logicRenderer.second->DeleteSwapChain();
         }
+
+#if WITH_OIDN
+        rtDenoise0_.reset();
+        rtDenoise1_.reset();
+        rtAlbedo_.reset();
+        rtNormal_.reset();
+#endif
 
         if (DelegateDeleteSwapChain)
         {
@@ -946,6 +975,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::BeforeNextFrame()
     {
+#if WITH_OIDN
+        ExecuteOIDN();
+#endif
+
         for (auto& logicRenderer : logicRenderers_)
         {
             logicRenderer.second->BeforeNextFrame();
@@ -1425,9 +1458,112 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::CaptureOIDN(VkCommandBuffer commandBuffer)
+    {
+#if WITH_OIDN
+        if (supportDenoiser_)
+        {
+            VkImageCopy copyRegion;
+            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.srcOffset = {0, 0, 0};
+            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.dstOffset = {0, 0, 0};
+            copyRegion.extent = {GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->GetImage().Extent().width, GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->GetImage().Extent().height, 1};
+
+            rtAlbedo_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            vkCmdCopyImage(commandBuffer, GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtAlbedo_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            
+            rtNormal_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            GetStorageImage(Assets::Bindless::RT_NORMAL)->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            vkCmdCopyImage(commandBuffer, GetStorageImage(Assets::Bindless::RT_NORMAL)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtNormal_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            
+            
+            rtDenoise0_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            vkCmdCopyImage(commandBuffer, GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rtDenoise0_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            
+            rtDenoise1_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            vkCmdCopyImage(commandBuffer, rtDenoise1_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+        }
+#endif
+    }
+
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
         lastUBO = GetUniformBufferObject(swapChain_->RenderOffset(), swapChain_->OutputExtent());
         uniformBuffers_[imageIndex].SetValue(lastUBO);
     }
+
+#if WITH_OIDN
+    void VulkanBaseRenderer::InitOIDN()
+    {
+        // Query the UUID of the Vulkan physical device
+        VkPhysicalDeviceIDProperties id_properties{};
+        id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 properties{};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &id_properties;
+        vkGetPhysicalDeviceProperties2(Device().PhysicalDevice(), &properties);
+
+        oidn::UUID uuid;
+        std::memcpy(uuid.bytes, id_properties.deviceUUID, sizeof(uuid.bytes));
+
+        oidnDevice = oidn::newDevice(uuid); // CPU or GPU if available
+        oidnDevice.commit();
+    }
+
+    void VulkanBaseRenderer::SetupOIDN(const VkExtent2D& extent)
+    {
+        const auto format = SwapChain().Format();
+        const auto tiling = VK_IMAGE_TILING_OPTIMAL;
+ 
+        rtDenoise0_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "denoise0"));
+        rtDenoise1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true, "denoise1"));
+        rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "albedocopy"));
+        rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "normalcopy"));
+        
+        size_t SrcImageSize = extent.width * extent.height * 4 * 2;
+        size_t SrcImageW8 = 4 * 2 * extent.width;
+        size_t SrcImage8 = 4 * 2;
+
+#if __linux__ || __APPLE__
+        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD,rtDenoise1_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtNormal_->GetExternalHandle(), SrcImageSize);
+#else
+        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, SrcImageSize);
+#endif
+        
+        oidnFilter = oidnDevice.newFilter("RT"); // generic ray tracing filter
+        oidnFilter.setImage("color", colorBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // beauty
+        oidnFilter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        oidnFilter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
+        oidnFilter.setImage("output", outBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // denoised beauty
+        oidnFilter.set("hdr", true); // beauty image is HDR
+        oidnFilter.set("quality", oidn::Quality::Balanced);
+        oidnFilter.set("cleanAux", true);
+        oidnFilter.commit();
+    }
+
+    void VulkanBaseRenderer::ExecuteOIDN()
+    {
+        SCOPED_CPU_TIMER("OIDN");
+        if (supportDenoiser_)
+        {
+            oidnFilter.executeAsync();
+            oidnDevice.sync();
+        }
+    }
+#endif
 }
