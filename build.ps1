@@ -52,6 +52,10 @@ $ScriptDir = $PSScriptRoot
 $ProjectRoot = $ScriptDir
 $VcpkgRoot = Join-Path $ProjectRoot ".vcpkg"
 $VcpkgToolchain = Join-Path $VcpkgRoot "scripts/buildsystems/vcpkg.cmake"
+$VcpkgDefaultBinaryCache = Join-Path $ProjectRoot ".vcpkg_bincache"
+
+$env:VCPKG_ROOT = $VcpkgRoot
+$env:VCPKG_BINARY_SOURCES = "clear;files,$VcpkgDefaultBinaryCache,readwrite"
 
 function Write-Log {
     param([string]$Message)
