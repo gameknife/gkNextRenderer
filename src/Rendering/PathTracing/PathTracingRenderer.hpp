@@ -3,10 +3,6 @@
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
-#if WITH_OIDN
-#include <OpenImageDenoise/oidn.hpp>
-#endif
-
 namespace Vulkan
 {
 	namespace PipelineCommon
@@ -50,8 +46,6 @@ namespace Vulkan::RayTracing
 		void BeforeNextFrame() override;
 	
 	private:
-		void CreateOutputImage(const VkExtent2D& extent);
-
 		// individual textures
 		std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> rayTracingPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
@@ -60,15 +54,6 @@ namespace Vulkan::RayTracing
 		uint32_t prevSingleDiffuseId_{};
 		uint32_t prevSingleSpecularId_{};
 		uint32_t prevSingleAlbedoId_{};
-
-#if WITH_OIDN
-		std::unique_ptr<RenderImage> rtDenoise0_;
-		std::unique_ptr<RenderImage> rtDenoise1_;
-	    std::unique_ptr<RenderImage> rtAlbedo_;
-	    std::unique_ptr<RenderImage> rtNormal_;
-		oidn::DeviceRef device;
-		oidn::FilterRef filter;
-#endif
 	};
 
 }

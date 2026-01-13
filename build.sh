@@ -9,6 +9,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR"
 
+export VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
+export VCPKG_BINARY_SOURCES="clear;files,$PROJECT_ROOT/.vcpkg_bincache,readwrite"
+
 # Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'

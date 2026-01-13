@@ -12,6 +12,10 @@
 #include <functional>
 #include <map>
 
+#if WITH_OIDN
+#include <OpenImageDenoise/oidn.hpp>
+#endif
+
 namespace StreamlineWrapper
 {
 	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
@@ -161,10 +165,26 @@ namespace Vulkan
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 
+		void CaptureOIDN(VkCommandBuffer commandBuffer);
+
 	protected:
 		Assets::UniformBufferObject lastUBO;
 		std::vector<std::unique_ptr<RenderImage> > bindlessStorageImages_;
 		uint32_t tempStorageImageCreated_ {};
+
+#if WITH_OIDN
+		std::unique_ptr<RenderImage> rtDenoise0_;
+		std::unique_ptr<RenderImage> rtDenoise1_;
+		std::unique_ptr<RenderImage> rtAlbedo_;
+		std::unique_ptr<RenderImage> rtNormal_;
+		oidn::DeviceRef oidnDevice;
+		oidn::FilterRef oidnFilter;
+
+		void InitOIDN();
+		void SetupOIDN(const VkExtent2D& extent);
+		void ExecuteOIDN();
+#endif
+
 	private:
 		void RecreateSwapChain();
 
