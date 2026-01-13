@@ -91,6 +91,11 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     // Shutdown
     GApplication->End();
     
+    if (GOption->FastExit)
+    {
+        std::quick_exit(0);
+    }
+
     GApplication.reset();
     GOptionPtr.reset();
 }
