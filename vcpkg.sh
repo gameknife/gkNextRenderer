@@ -9,12 +9,12 @@ init_variables() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_ROOT="$SCRIPT_DIR"
     DEFAULT_VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
-    export VCPKG_DEFAULT_BINARY_CACHE="$PROJECT_ROOT/.vcpkg_bincache"
+    export VCPKG_BINARY_SOURCES="clear;files,$PROJECT_ROOT/.vcpkg_bincache,readwrite"
     export VCPKG_DOWNLOADS="$PROJECT_ROOT/.vcpkg_cache/downloads"
     export X_VCPKG_REGISTRIES_CACHE="$PROJECT_ROOT/.vcpkg_cache/registries"
 
-    if [ ! -d "$VCPKG_DEFAULT_BINARY_CACHE" ]; then
-        mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+    if [ ! -d "$PROJECT_ROOT/.vcpkg_bincache" ]; then
+        mkdir -p "$PROJECT_ROOT/.vcpkg_bincache"
     fi
     if [ ! -d "$VCPKG_DOWNLOADS" ]; then
         mkdir -p "$VCPKG_DOWNLOADS"

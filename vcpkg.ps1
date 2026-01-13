@@ -13,7 +13,7 @@ $VcpkgDownloads = Join-Path $ProjectRoot ".vcpkg_cache/downloads"
 $VcpkgRegistriesCache = Join-Path $ProjectRoot ".vcpkg_cache/registries"
 
 # Set Environment Variables
-$env:VCPKG_DEFAULT_BINARY_CACHE = $VcpkgDefaultBinaryCache
+$env:VCPKG_BINARY_SOURCES = "clear;files,$VcpkgDefaultBinaryCache,readwrite"
 $env:VCPKG_DOWNLOADS = $VcpkgDownloads
 $env:X_VCPKG_REGISTRIES_CACHE = $VcpkgRegistriesCache
 
