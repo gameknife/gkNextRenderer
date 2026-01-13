@@ -37,7 +37,8 @@ Options::Options(const int argc, const char* argv[])
 		("dlssrr", "Enable NVIDIA DLSS Ray Reconstruction.", cxxopts::value<bool>(DLSSRR)->default_value("false"))
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
-	
+		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
+
 		("h,help", "Print usage");
 	try
 	{
