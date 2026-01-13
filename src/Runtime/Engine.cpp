@@ -523,8 +523,11 @@ bool NextEngine::Tick()
 
 void NextEngine::End()
 {
-    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    if (!GOption->FastExit)
+    {
+        TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+        TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    }
 
     // sound manager unit
     soundDataMaps_.clear();
@@ -543,6 +546,8 @@ void NextEngine::End()
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
+
+    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
 }
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)

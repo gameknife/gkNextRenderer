@@ -33,6 +33,7 @@ public:
 	bool ForceSoftGen{};
 	bool HardwareQuery{};
 	bool Validation{};
+	bool FastExit{true};
 	std::string locale{};
 
 	// Renderer options.
