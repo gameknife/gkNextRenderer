@@ -18,7 +18,7 @@
 
 namespace StreamlineWrapper
 {
-	void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
+	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
 }
 
@@ -237,8 +237,6 @@ namespace Vulkan
 		uint32_t currentImageIndex_{};
 		size_t currentFrame_{};
 		Fence* currentFence;
-
-		uint64_t uptime {};
 	};
 	
 	class LogicRendererBase

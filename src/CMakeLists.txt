@@ -123,14 +123,18 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
-# editor stuff
+if ( WITH_OZZ )
 add_subdirectory(ThirdParty/ozz)
-add_subdirectory(ThirdParty/ImNodeFlow)
-add_subdirectory(ThirdParty/quickjs-ng)
-
 target_link_libraries(ozz PRIVATE gk_project_options)
+endif()
+
+add_subdirectory(ThirdParty/ImNodeFlow)
 target_link_libraries(ImNodeFlow PRIVATE gk_project_options)
+
+if( WITH_QUICKJS)
+add_subdirectory(ThirdParty/quickjs-ng)
 target_link_libraries(quickjs PRIVATE gk_project_options)
+endif()
 
 # postprocess: target setup
 if ( ANDROID )
@@ -197,8 +201,7 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
-
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${extra_libs})
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco ${extra_libs})
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -238,7 +241,7 @@ foreach(target IN LISTS AllTargets)
 		-Wl,-z,common-page-size=16384
 		-Wl,--hash-style=gnu
 		)
-		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog ozz xxHash::xxhash meshoptimizer::meshoptimizer Jolt::Jolt quickjs KTX::ktx fmt::fmt CURL::libcurl glm::glm imgui::imgui tinyobjloader::tinyobjloader draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
 	if ( MINGW )
@@ -264,6 +267,27 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
+	if ( WITH_PHYSIC )
+		target_compile_definitions(${target} PUBLIC WITH_PHYSIC=1)
+		target_link_libraries(${target} PRIVATE Jolt::Jolt )
+	endif()
+
+	if ( WITH_QUICKJS )
+		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
+		target_link_libraries(${target} PRIVATE quickjs )
+	endif()
+
+	if ( WITH_OZZ )
+		target_compile_definitions(${target} PUBLIC WITH_OZZ=1)
+		target_link_libraries(${target} PRIVATE ozz )
+	endif()
+
+	if ( WITH_KTX2 )
+		target_compile_definitions(${target} PUBLIC WITH_KTX2=1)
+		target_link_libraries(${target} PRIVATE KTX::ktx )
+	endif()
+	
+	
 	if( WIN32 )
 		target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
 	endif()	
@@ -331,9 +355,11 @@ add_executable(gkNextUnitTests
 )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)
+
 if ( WITH_STREAMLINE )
 	target_link_directories(gkNextUnitTests PRIVATE ThirdParty/streamline/lib/x64)
 endif()
+
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 
@@ -345,8 +371,14 @@ target_link_libraries(gkNextUnitTests PRIVATE OpenImageDenoise )
 endif()
 
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+
+if ( WITH_QUICKJS )
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
+endif()
+
+if ( WITH_OZZ )
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
+endif()
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 if ( NOT ANDROID )
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")

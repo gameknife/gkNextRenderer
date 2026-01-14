@@ -107,7 +107,45 @@ namespace Assets
             if (node != nullptr) node->SetMobility(Node::ENodeMobility::Kinematic);
         }
         
+        // calculate the scene aabb
+        sceneAABBMin_ = { FLT_MAX, FLT_MAX, FLT_MAX };
+        sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        for (auto& node : nodes_)
+        {
+            if (node->IsVisible() && node->GetModel() != -1)
+            {
+                glm::vec3 localaabbMin = models_[node->GetModel()].GetLocalAABBMin();
+                glm::vec3 localaabbMax = models_[node->GetModel()].GetLocalAABBMax();
+
+                auto& worldMtx = node->WorldTransform();
+
+                glm::vec3 corners[8];
+                corners[0] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[1] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[2] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[3] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[4] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[5] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[6] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMax.z, 1.0f));
+                corners[7] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMax.z, 1.0f));
+
+                // Find the new min and max from the transformed corners
+                glm::vec3 worldAABBMin = corners[0];
+                glm::vec3 worldAABBMax = corners[0];
+                for (int i = 1; i < 8; ++i)
+                {
+                    worldAABBMin = glm::min(worldAABBMin, corners[i]);
+                    worldAABBMax = glm::max(worldAABBMax, corners[i]);
+                }
+
+                // Update the scene's AABB
+                sceneAABBMin_ = glm::min(sceneAABBMin_, worldAABBMin);
+                sceneAABBMax_ = glm::max(sceneAABBMax_, worldAABBMax);
+            }
+        }
+        
         // static mesh to jolt mesh shape
+#if WITH_PHYSIC
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
             cachedMeshShapes_.clear();
@@ -143,29 +181,7 @@ namespace Assets
                     }
                 }
             }
-
-            // calculate the scene aabb
-            sceneAABBMin_ = { FLT_MAX, FLT_MAX, FLT_MAX };
-            sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-            for (auto& node : nodes_)
-            {
-                if (node->IsVisible() && node->GetModel() != -1)
-                {
-                    glm::vec3 localaabbMin = models_[node->GetModel()].GetLocalAABBMin();
-                    glm::vec3 localaabbMax = models_[node->GetModel()].GetLocalAABBMax();
-
-                    auto& worldMtx = node->WorldTransform();
-
-                    // TODO: need better algo
-                    glm::vec3 aabbMin = glm::vec3(worldMtx * glm::vec4(localaabbMin, 1.0f));
-                    glm::vec3 aabbMax = glm::vec3(worldMtx * glm::vec4(localaabbMax, 1.0f));
-                    sceneAABBMin_ = glm::min(aabbMin, sceneAABBMin_);
-                    sceneAABBMin_ = glm::min(aabbMax, sceneAABBMin_);
-                    sceneAABBMax_ = glm::max(aabbMin, sceneAABBMax_);
-                    sceneAABBMax_ = glm::max(aabbMax, sceneAABBMax_);
-                }
-            }
-
+            
             // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), JPH::EMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), JPH::EMotionType::Static);
@@ -174,7 +190,7 @@ namespace Assets
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), JPH::EMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), JPH::EMotionType::Static);
         }
-      
+#endif      
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;

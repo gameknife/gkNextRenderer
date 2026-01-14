@@ -34,7 +34,6 @@
       "platform": "android"
     },
     "stb",
-    "tinyobjloader",
     "curl",
     "tinygltf",
     "draco",

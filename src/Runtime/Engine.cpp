@@ -29,7 +29,9 @@
 #include "Utilities/Localization.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
+#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
+#endif
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
@@ -47,6 +49,7 @@
 
 // spdlog logging
 #include <spdlog/spdlog.h>
+#include <spdlog/stopwatch.h>
 
 #if ANDROID
 #include <spdlog/sinks/android_sink.h>
@@ -285,6 +288,9 @@ NextEngine::NextEngine(Options& options, void* userdata)
     spdlog::flush_on(spdlog::level::debug);
     spdlog::flush_every(std::chrono::seconds(1));
     
+    SPDLOG_INFO("---- Next Engine Initializing...");
+    spdlog::stopwatch stopwatch;
+    
 #if ANDROID
     std::string tag = "gknext";
     auto android_logger = spdlog::android_logger_mt("android", tag);
@@ -292,7 +298,6 @@ NextEngine::NextEngine(Options& options, void* userdata)
     spdlog::set_default_logger(android_logger);
 #endif
     
-    SPDLOG_INFO("Next Engine Initilizaing...");
     instance_ = this;
 
     status_ = NextRenderer::EApplicationStatus::Starting;
@@ -316,29 +321,11 @@ NextEngine::NextEngine(Options& options, void* userdata)
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
-        
-    // Initialize Renderer
-    bool shouldEnableValidation = options.Validation;
-#ifndef NDEBUG
-    shouldEnableValidation = true;
-#endif
-
-    renderer_.reset( NextRenderer::CreateRenderer(options.RendererType, window_.get(), static_cast<VkPresentModeKHR>(options.PresentMode), shouldEnableValidation) );
-    rendererType = options.RendererType;
-    
-    renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
-    renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
-    renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
-    renderer_->DelegateBeforeNextTick = [this]()->void{OnRendererBeforeNextFrame();};
-    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
-    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
     
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-
-    // Initialize JS Engine
-    JSRuntime_.reset(new qjs::Runtime());
-    JSContext_.reset(new qjs::Context(*JSRuntime_));
+    
+    SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
 NextEngine::~NextEngine()
@@ -355,6 +342,25 @@ NextEngine::~NextEngine()
 void NextEngine::Start()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
+    
+    SPDLOG_INFO("---- Next Engine Starting...");
+    spdlog::stopwatch stopwatch;
+    
+    // Initialize Renderer
+    bool shouldEnableValidation = GOption->Validation;
+#ifndef NDEBUG
+    shouldEnableValidation = true;
+#endif
+
+    renderer_.reset( NextRenderer::CreateRenderer(GOption->RendererType, window_.get(), static_cast<VkPresentModeKHR>(GOption->PresentMode), shouldEnableValidation) );
+    rendererType = GOption->RendererType;
+    
+    renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
+    renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
+    renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
+    renderer_->DelegateBeforeNextTick = [this]()->void{OnRendererBeforeNextFrame();};
+    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
+    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
     
     renderer_->Start();
 
@@ -376,6 +382,8 @@ void NextEngine::Start()
     InitJSEngine();
 
     gameInstance_->OnInit();
+    
+    SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
 
 bool NextEngine::HandleEvent(SDL_Event& event)
@@ -440,13 +448,18 @@ bool NextEngine::Tick()
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
 
+#if WITH_PHYSIC
     if (userSettings_.TickPhysics && physicsEngine_) physicsEngine_->Tick(deltaSeconds_);
+#endif
+    
     if (userSettings_.TickAnimation && animationEngine_) animationEngine_->Tick(deltaSeconds_); //pause dev, wait next
 
+#if WITH_QUICKJS
     if (JSTickCallback_)
     {
         JSTickCallback_(deltaSeconds_);
     }
+#endif
 
     // tick
     if (status_ == NextRenderer::EApplicationStatus::Running)
@@ -552,7 +565,9 @@ void NextEngine::End()
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
 {
+#if WITH_QUICKJS
     JSTickCallback_ = callback;
+#endif
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -1317,20 +1332,11 @@ void NextEngine::LoadScene(std::string sceneFileName)
     1);
 }
 
-
-class MyClass
-{
-public:
-    MyClass() {}
-    MyClass(std::vector<int>) {}
-
-    double memberVariable = 5.5;
-    std::string MemberFunction(const std::string& s) { return "Hello, " + s; }
-};
-
+#if WITH_QUICKJS
 void Println(qjs::rest<std::string> args) {
     for (auto const & arg : args) { SPDLOG_INFO("{}", arg); }
 }
+#endif
 
 NextEngine* getEngine() {
     return NextEngine::GetInstance();
@@ -1390,10 +1396,10 @@ void NextEngine::CompileTypeScriptSources()
             }
 
             SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
+            spdlog::stopwatch stopwatch;
             NextRenderer::OSProcess(command.c_str());
+            SPDLOG_INFO("---- Compiling TypeScript in {}", stopwatch.elapsed_ms());
             return;
-
-            //SPDLOG_WARN("TypeScript compiler exited with code {} for command: {}", result, command);
         }
 
         SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
@@ -1405,6 +1411,11 @@ void NextEngine::CompileTypeScriptSources()
 }
 
 void NextEngine::InitJSEngine() {
+#if WITH_QUICKJS
+    // Initialize JS Engine
+    JSRuntime_.reset(new qjs::Runtime());
+    JSContext_.reset(new qjs::Context(*JSRuntime_));
+    
     try
     {
         CompileTypeScriptSources();
@@ -1448,51 +1459,7 @@ void NextEngine::InitJSEngine() {
         if((bool) exc["stack"])
             std::cerr << (std::string) exc["stack"] << std::endl;
     }
-}
-
-void NextEngine::TestJSEngine()
-{
-    try
-    {
-        // export classes as a module
-        auto& module = JSContext_->addModule("MyModule");
-        module.function<&Println>("println");
-        module.class_<MyClass>("MyClass")
-                .constructor<>()
-                .constructor<std::vector<int>>("MyClassA")
-                .fun<&MyClass::memberVariable>("member_variable")
-                .fun<&MyClass::MemberFunction>("member_function");
-        // import module
-        JSContext_->eval(R"xxx(
-            import * as my from 'MyModule';
-            globalThis.my = my;
-        )xxx", "<import>", JS_EVAL_TYPE_MODULE);
-        // evaluate js code
-        JSContext_->eval(R"xxx(
-            let v1 = new my.MyClass();
-            v1.member_variable = 1;
-            let v2 = new my.MyClassA([1,2,3]);
-            function my_callback(str) {
-              my.println("Call callback from javascript:", v2.member_function(str));
-            }
-        )xxx");
-
-        // callback
-        auto cb = (std::function<void(const std::string&)>) JSContext_->eval("my_callback");
-        cb("World from cpp");
-
-        // passing c++ objects to JS
-        auto lambda = JSContext_->eval("x=>my.println(x.member_function('Lambda from javascript'))").as<std::function<void(qjs::shared_ptr<MyClass>)>>();
-        auto v3 = qjs::make_shared<MyClass>(JSContext_->ctx, std::vector{1,2,3});
-        lambda(v3);
-    }
-    catch(qjs::exception)
-    {
-        auto exc = JSContext_->getException();
-        std::cerr << (std::string) exc << std::endl;
-        if((bool) exc["stack"])
-            std::cerr << (std::string) exc["stack"] << std::endl;
-    }
+#endif
 }
 
 void NextEngine::InitPhysics()

@@ -15,7 +15,7 @@
 - **用户界面 (ImGui)**：用于构建引擎编辑器、节点材质编辑器以及各种调试工具。
 - **物理引擎 (Jolt Physics)**：集成高性能的物理模拟能力。
 - **数学库 (glm)**：提供符合图形编程习惯的数学计算。
-- **资产加载 (tinygltf, tinyobjloader)**：支持 glTF 2.0 和 OBJ 格式 the 资产导入。
+- **资产加载 (tinygltf)**：支持 glTF 2.0 资产导入。
 - **图像处理 (stb, ktx, libavif)**：支持多种图像格式及 KTX 纹理加载。
 - **基础工具 (fmt, spdlog, xxHash, nlohmann-json)**：提供日志打印、字符串格式化、快速哈希和 JSON 处理。
 
