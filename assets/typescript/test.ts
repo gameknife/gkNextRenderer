@@ -6,13 +6,12 @@ class ScriptComponent extends NE.NextComponent {
         this.id_ = 1;
     }
     get_info() {
-        return this.name_ + " " + this.id_;
+        let frame = NE.GetEngine().GetTestNumber();
+        return `[test.ts] ${this.name_} ${this.id_} at ${frame}`;
     }
 }
 
 let testComponent = new ScriptComponent();
 NE.println(testComponent.get_info());
-NE.println("Hello World from typescript");
-
-let frame = NE.GetEngine().GetTestNumber();
-NE.println("Frame: ", frame);
+//NE.println("Hello World from typescript");
+//NE.println("Frame: ", frame);

@@ -14,7 +14,15 @@
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_MANIFEST_MODE": "ON",
-        "VCPKG_INSTALL_OPTIONS": "--no-print-usage"
+        "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
+        "WITH_OIDN": "OFF",
+        "WITH_AVIF": "OFF",
+        "WITH_SUPERLUMINAL": "OFF",
+        "WITH_STREAMLINE": "OFF",
+        "WITH_PHYSIC": "ON",
+        "WITH_QUICKJS": "OFF",
+        "WITH_OZZ": "OFF",
+        "WITH_KTX2": "ON"
       }
     },
     {
@@ -29,11 +37,7 @@
         "rhs": "Windows"
       },
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
-        "WITH_OIDN": "OFF",
-        "WITH_AVIF": "OFF",
-        "WITH_SUPERLUMINAL": "OFF",
-        "WITH_STREAMLINE": "OFF"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
       }
     },
     {

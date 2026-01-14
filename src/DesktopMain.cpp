@@ -1,10 +1,6 @@
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"
-
-#include <fmt/format.h>
-#include <filesystem>
-//#include <cpptrace/cpptrace.hpp>
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
