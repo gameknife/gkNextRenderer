@@ -33,7 +33,9 @@
         "WITH_OIDN": "OFF",
         "WITH_AVIF": "OFF",
         "WITH_SUPERLUMINAL": "OFF",
-        "WITH_STREAMLINE": "OFF"
+        "WITH_STREAMLINE": "OFF",
+        "WITH_PHYSIC": "ON",
+        "WITH_QUICKJS": "ON"
       }
     },
     {

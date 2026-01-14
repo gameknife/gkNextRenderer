@@ -34,8 +34,6 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	auto extent = ChooseSwapExtent(window, details.Capabilities);
 	const auto imageCount = ChooseImageCount(details.Capabilities);
 
-    SPDLOG_INFO("precreate swapchain: {} x {}", extent.width, extent.height);
-
 #if ANDROID
 	float aspect = extent.width / static_cast<float>(extent.height);
     if( aspect < 1.0 )
@@ -54,8 +52,6 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     }
     SDL_SetWindowFullscreen(window.Handle(), true);
 #endif
-
-    SPDLOG_INFO("postcreate swapchain: {} x {}", extent.width, extent.height);
 	
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

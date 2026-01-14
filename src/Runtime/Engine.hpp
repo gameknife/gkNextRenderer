@@ -221,7 +221,6 @@ private:
         void LoadScene(std::string sceneFileName);
 
         void InitJSEngine();
-        void TestJSEngine();
         void CompileTypeScriptSources();
         void InitPhysics();
 

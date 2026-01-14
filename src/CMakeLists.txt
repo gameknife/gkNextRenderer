@@ -264,6 +264,14 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
+	if ( WITH_PHYSIC )
+		target_compile_definitions(${target} PUBLIC WITH_PHYSIC=1)
+	endif()
+
+	if ( WITH_QUICKJS )
+		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
+	endif()
+	
 	if( WIN32 )
 		target_compile_definitions(${target} PUBLIC VK_USE_PLATFORM_WIN32_KHR PLATFORM__WINDOWS)
 	endif()	

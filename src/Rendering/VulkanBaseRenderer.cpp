@@ -71,9 +71,15 @@ static sl::float4x4 toSlMatrix(const glm::mat4& m)
 
 namespace StreamlineWrapper
 {
-   void Init(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
+    bool GStreamLineInit = false;
+    bool GStreamLineEnabled = false;
+    
+   void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
    {
 #if WITH_STREAMLINE
+       if (GStreamLineInit) return;
+       GStreamLineInit = true;
+       
         sl::Preferences pref{};
         //pref.showConsole = true; // for debugging, set to false in production
         //pref.logLevel = sl::LogLevel::eVerbose;
@@ -127,6 +133,8 @@ namespace StreamlineWrapper
             
             SPDLOG_INFO("DLSS Support: {}, RR Support: {}", outSupportDLSS, outSupportDLSSRR);
        }
+       
+       GStreamLineEnabled = true;
 #else
        outSupportDLSS = false;
        outSupportDLSSRR = false;
@@ -137,10 +145,13 @@ namespace StreamlineWrapper
     void Shutdown()
    {
 #if WITH_STREAMLINE
-       sl::Result res;
-       if(SL_FAILED(res, slShutdown()))
+       if (GStreamLineEnabled)
        {
-           SPDLOG_ERROR("Streamline slShutdown failed: {}", (int)res);
+           sl::Result res;
+           if(SL_FAILED(res, slShutdown()))
+           {
+               SPDLOG_ERROR("Streamline slShutdown failed: {}", (int)res);
+           }
        }
 #endif
    }
@@ -155,8 +166,6 @@ namespace
     
     void PrintVulkanDevices(const Vulkan::VulkanBaseRenderer& application)
     {
-        puts("Vulkan Devices:");
-
         for (const auto& device : application.PhysicalDevices())
         {
             VkPhysicalDeviceDriverProperties driverProp{};
@@ -188,8 +197,6 @@ namespace
                    return strcmp(extension.extensionName,VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
                });
         }
-
-        puts("");
     }
 
     void PrintVulkanSwapChainInformation(const Vulkan::VulkanBaseRenderer& application)
@@ -210,8 +217,6 @@ namespace
 
         SPDLOG_INFO("Setting Device [{}]", deviceProp.properties.deviceName);
         application.SetPhysicalDevice(pDevice);
-
-        puts("");
     }
 }
 
@@ -231,7 +236,6 @@ namespace Vulkan
         supportDenoiser_ = false;
         forceSDR_ = GOption->ForceSDR;
 
-        uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
         supportRayTracing_ = !GOption->ForceNoRT && instance_->SupportsRayQuery();
     }
 
@@ -292,9 +296,6 @@ namespace Vulkan
         OnDeviceSet();
         CreateSwapChain();
         window_->Show();
-
-        uptime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - uptime;
-        SPDLOG_INFO("renderer initialized in {:.2f}ms", uptime * 1e-6f);
     }
 
     void VulkanBaseRenderer::Start()
@@ -306,7 +307,8 @@ namespace Vulkan
         PrintVulkanSwapChainInformation(*this);
         currentFrame_ = 0;
 
-        StreamlineWrapper::Init(device_->Handle(), instance_->Handle(), device_->PhysicalDevice(), 0, device_->ComputeFamilyIndex(), 0, device_->GraphicsFamilyIndex(), supportDLSS_, supportDLSSRR_);
+        supportDLSS_ = true;
+        supportDLSSRR_ = true;
     }
 
     void VulkanBaseRenderer::End()
@@ -1003,6 +1005,8 @@ namespace Vulkan
     {
 #if WITH_STREAMLINE
         if (!supportDLSS_) return;
+        
+        StreamlineWrapper::LazyInit(device_->Handle(), instance_->Handle(), device_->PhysicalDevice(), 0, device_->ComputeFamilyIndex(), 0, device_->GraphicsFamilyIndex(), supportDLSS_, supportDLSSRR_);
 
         auto& settings = NextEngine::GetInstance()->GetUserSettings();
         
