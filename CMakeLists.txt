@@ -15,6 +15,16 @@ if (GK_ENABLE_DLSS)
     set(WITH_STREAMLINE ON CACHE BOOL "Enable Nvidia Streamline" FORCE)
 endif()
 
+option(GK_ENABLE_KTX2 "Enable KTX2 support" ON)
+if (GK_ENABLE_KTX2)
+    set(WITH_KTX2 ON CACHE BOOL "Enable KTX2" FORCE)
+endif()
+
+option(GK_ENABLE_PHYSIC "Enable Physics support" ON)
+if (GK_ENABLE_PHYSIC)
+    set(WITH_PHYSIC ON CACHE BOOL "Enable Physics" FORCE)
+endif()
+
 option(GK_ENABLE_OIDN "Enable OpenImageDenoise support" OFF)
 if (APPLE)
     message(STATUS "OIDN is not supported on macOS. Disabling.")
