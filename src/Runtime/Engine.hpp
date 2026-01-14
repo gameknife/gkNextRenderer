@@ -274,10 +274,12 @@ private:
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
 	// quickjs
+#if WITH_QUICKJS
 	std::unique_ptr<qjs::Runtime> JSRuntime_;
 	std::unique_ptr<qjs::Context> JSContext_;
 	std::function<void(double)> JSTickCallback_;
-
+#endif
+    
 	// engine status
 	NextRenderer::EApplicationStatus status_{};
 };

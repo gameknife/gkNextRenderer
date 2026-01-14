@@ -29,7 +29,9 @@
 #include "Utilities/Localization.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
+#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
+#endif
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
@@ -452,11 +454,12 @@ bool NextEngine::Tick()
     
     if (userSettings_.TickAnimation && animationEngine_) animationEngine_->Tick(deltaSeconds_); //pause dev, wait next
 
-    
+#if WITH_QUICKJS
     if (JSTickCallback_)
     {
         JSTickCallback_(deltaSeconds_);
     }
+#endif
 
     // tick
     if (status_ == NextRenderer::EApplicationStatus::Running)
@@ -562,7 +565,9 @@ void NextEngine::End()
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
 {
+#if WITH_QUICKJS
     JSTickCallback_ = callback;
+#endif
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -1327,20 +1332,11 @@ void NextEngine::LoadScene(std::string sceneFileName)
     1);
 }
 
-
-class MyClass
-{
-public:
-    MyClass() {}
-    MyClass(std::vector<int>) {}
-
-    double memberVariable = 5.5;
-    std::string MemberFunction(const std::string& s) { return "Hello, " + s; }
-};
-
+#if WITH_QUICKJS
 void Println(qjs::rest<std::string> args) {
     for (auto const & arg : args) { SPDLOG_INFO("{}", arg); }
 }
+#endif
 
 NextEngine* getEngine() {
     return NextEngine::GetInstance();

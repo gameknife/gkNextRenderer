@@ -1,6 +1,8 @@
 #include "NextAnimation.h"
 
 #include "Engine.hpp"
+
+#if WITH_OZZ
 #include "animation/runtime/sampling_job.h"
 #include "animation/runtime/animation.h"
 #include "animation/runtime/local_to_model_job.h"
@@ -10,8 +12,8 @@
 #include "base/maths/simd_math.h"
 #include "base/containers/vector.h"
 #include "Utilities/FileHelper.hpp"
-
 std::unique_ptr<ozz::animation::SamplingJob::Context> SContext;
+#endif
 
 NextAnimation::NextAnimation()
 {
@@ -23,6 +25,7 @@ NextAnimation::~NextAnimation()
 
 void NextAnimation::Start()
 {
+#if WITH_OZZ
     // test ozz animation
     skeleton_.reset(new ozz::animation::Skeleton());
     animation_.reset(new ozz::animation::Animation());
@@ -34,11 +37,13 @@ void NextAnimation::Start()
     // Allocates runtime buffers.
     const int numJoints = skeleton_->num_joints();
     SContext->Resize(numJoints);
+#endif
 }
 
 float AbsoluteTimer = 0;
 void NextAnimation::Tick(double deltaSeconds)
 {
+#if WITH_OZZ
     AbsoluteTimer += float(deltaSeconds);
     float timeRatio = glm::fract(AbsoluteTimer * 0.1f);
     
@@ -97,11 +102,14 @@ void NextAnimation::Tick(double deltaSeconds)
         // NextEngine::GetInstance()->DrawAuxPoint(to, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), 2.0f);
 #endif
     }
+#endif
 }
 
 void NextAnimation::Stop()
 {
+#if WITH_OZZ
     skeleton_.reset();
     animation_.reset();
     SContext.reset();
+#endif
 }

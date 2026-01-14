@@ -14,6 +14,8 @@ public:
     void Tick(double DeltaSeconds);
     void Stop();
 
+#if WITH_OZZ
     std::unique_ptr<ozz::animation::Skeleton> skeleton_;
     std::unique_ptr<ozz::animation::Animation> animation_;
+#endif
 };

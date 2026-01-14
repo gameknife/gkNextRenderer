@@ -2,7 +2,6 @@
 #include "Utilities/StbImage.hpp"
 #include "Utilities/Exception.hpp"
 #include "Common/CoreMinimal.hpp"
-#include <ktx.h>
 
 #include "Options.hpp"
 #include "Runtime/TaskCoordinator.hpp"
@@ -21,6 +20,10 @@
 #include <filesystem>
 #include <limits>
 #include <system_error>
+
+#if WITH_KTX2
+#include <ktx.h>
+#endif
 
 #define M_NEXT_PI 3.14159265358979323846f
 
@@ -434,18 +437,22 @@ namespace Assets
                 const auto timer = std::chrono::high_resolution_clock::now();
 
                 // Load the texture in normal host memory.
-                int width, height, channels;
+                int width = 32;
+                int height = 32;
+                int channels = 4;
                 uint8_t* stbdata = nullptr;
                 uint8_t* pixels = nullptr;
                 uint32_t size = 0;
                 uint32_t miplevel = 1;
                 VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-
+#if WITH_KTX2
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
+#endif
                 // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
+#if WITH_KTX2
                     result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
                     if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
                     result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
@@ -461,6 +468,7 @@ namespace Assets
                     width = kTexture->baseWidth;
                     height = kTexture->baseHeight;
                     miplevel = 1;
+#endif
                 }
                 else
                 {
@@ -706,6 +714,7 @@ namespace Assets
                     }
                     else
                     {
+#if WITH_KTX2
                         // ldr texture, try cache fist
                         // hash the texname
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
@@ -761,11 +770,11 @@ namespace Assets
                         width = kTexture->baseWidth;
                         height = kTexture->baseHeight;
                         miplevel = 1;
+#endif
                     }
                 }
 
                 // create texture image
-                //if ( !textureImages_[newTextureIdx] )
                 if (!hdr)
                 {
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
@@ -775,9 +784,11 @@ namespace Assets
 
                 // clean up
                 if (stbdata) stbi_image_free(stbdata);
-                if (kTexture)
-                    ktxTexture_Destroy(ktxTexture(kTexture));
-
+                
+#if WITH_KTX2
+                if (kTexture) ktxTexture_Destroy(ktxTexture(kTexture));
+#endif
+                
                 // transfer
                 taskContext.textureId = newTextureIdx;
                 taskContext.needFlushHDRSH = hdr;

@@ -35,3 +35,6 @@ if (UNIX AND !ANDROID)
 	target_compile_options(gk_project_options INTERFACE "-Wall")
 	target_compile_options(gk_project_options INTERFACE "-fvisibility=hidden")
 endif ()
+
+# LTCG
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
