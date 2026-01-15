@@ -453,21 +453,29 @@ namespace Assets
                 if (mime.find("image/ktx") != std::string::npos)
                 {
 #if WITH_KTX2
-                    result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
-                    if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
-                    if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    pixels = ktxTexture_GetData(ktxTexture(kTexture));
+                    auto loadKtxFromMemory = [&]() -> bool {
+                        result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
+                        if (KTX_SUCCESS != result) return false;
+                        result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
+                        if (KTX_SUCCESS != result) return false;
+                        pixels = ktxTexture_GetData(ktxTexture(kTexture));
 
-                    ktx_size_t offset;
-                    ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
-                    pixels += offset;
-                    size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
+                        ktx_size_t offset;
+                        ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
+                        pixels += offset;
+                        size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
 
-                    format = static_cast<VkFormat>(kTexture->vkFormat);
-                    width = kTexture->baseWidth;
-                    height = kTexture->baseHeight;
-                    miplevel = 1;
+                        format = static_cast<VkFormat>(kTexture->vkFormat);
+                        width = kTexture->baseWidth;
+                        height = kTexture->baseHeight;
+                        miplevel = 1;
+                        return true;
+                    };
+                    
+                    if (!loadKtxFromMemory())
+                    {
+                        SPDLOG_ERROR("load texture {} failed.", texname);
+                    }
 #endif
                 }
                 else
