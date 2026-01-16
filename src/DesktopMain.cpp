@@ -1,6 +1,7 @@
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/GltfTestRunner.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
@@ -13,6 +14,7 @@
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Options> GOptionPtr;
+std::unique_ptr<GltfTestRunner> GTestRunner;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -78,6 +80,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         
     // Start the application.
     GApplication.reset( new NextEngine(*GOption) );
+
+    if (GOption->TestGltfRobustness)
+    {
+        GTestRunner = std::make_unique<GltfTestRunner>(GApplication.get());
+        GApplication->AddTickedTask([](double dt){ return GTestRunner->Update(dt); });
+    }
+
     GApplication->Start();
     
     return SDL_APP_CONTINUE;
@@ -93,6 +102,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
         std::quick_exit(0);
     }
 
+    GTestRunner.reset();
     GApplication.reset();
     GOptionPtr.reset();
 }
