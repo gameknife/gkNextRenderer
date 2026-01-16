@@ -308,6 +308,11 @@ namespace Assets
         cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
     }
 
+    void Scene::CleanUp()
+    {
+        cpuAccelerationStructure_.ClearAllTasks();
+    }
+
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
         nodes_.push_back(node);
