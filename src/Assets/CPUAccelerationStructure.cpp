@@ -33,6 +33,8 @@ uint PackBytes(glm::u32vec4 values)
 FMaterial& FetchMaterial(uint matId)
 {
     auto& materials = NextEngine::GetInstance()->GetScene().Materials();
+    assert(matId < materials.size());
+    matId = matId % materials.size(); // wrap around
     return materials[matId];
 }
 
