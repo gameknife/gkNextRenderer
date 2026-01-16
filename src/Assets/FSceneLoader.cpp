@@ -336,6 +336,7 @@ namespace Assets
                 
                 // create texture
                 auto& image = model.images[imageIdx];
+
                 std::string texname = image.name.empty() ? fmt::format("tex_{}", imageIdx) : image.name;
                 if (image.bufferView == -1)
                 {
@@ -493,10 +494,18 @@ namespace Assets
             uint32_t sectionIdx = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
-                tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
-                if( primtive.mode != TINYGLTF_MODE_TRIANGLES || indexAccessor.count == 0)
+                if (primtive.mode != TINYGLTF_MODE_TRIANGLES)
                 {
                     continue;
+                }
+
+                if (primtive.indices != -1)
+                {
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    if (indexAccessor.count == 0)
+                    {
+                        continue;
+                    }
                 }
                
                 int posIdx = -1;
@@ -543,29 +552,42 @@ namespace Assets
                 }
                 
                 sectionIdx++;
-                tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
-                int strideIndex = indexAccessor.ByteStride(indexView);
-                for (size_t i = 0; i < indexAccessor.count; ++i)
+                
+                if (primtive.indices != -1)
                 {
-                    if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    const tinygltf::BufferView& indexView = model.bufferViews[indexAccessor.bufferView];
+                    int strideIndex = indexAccessor.ByteStride(indexView);
+
+                    for (size_t i = 0; i < indexAccessor.count; ++i)
                     {
-                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
+                        if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
+                        {
+                            uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                        {
+                            uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
+                        {
+                            uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else
+                        {
+                            SPDLOG_ERROR("Unsupported index component type: {}", indexAccessor.componentType);
+                            assert(0);
+                        }
                     }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                }
+                else
+                {
+                    for (size_t i = 0; i < positionAccessor.count; ++i)
                     {
-                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
-                    {
-                        uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
-                    else
-                    {
-                        SPDLOG_ERROR("Unsupported index component type: {}", indexAccessor.componentType);
-                        assert(0);
+                        indices.push_back(static_cast<uint32_t>(i) + vertextOffset);
                     }
                 }
 
