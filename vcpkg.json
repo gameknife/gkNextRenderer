@@ -35,6 +35,7 @@
     },
     "stb",
     "curl",
+    "nlohmann-json",
     "tinygltf",
     "draco",
     "fmt",

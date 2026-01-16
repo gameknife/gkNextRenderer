@@ -371,6 +371,8 @@ namespace Assets
             lambdaLoadTexture(mat.pbrMetallicRoughness.baseColorTexture.index, true);
             lambdaLoadTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
             lambdaLoadTexture(mat.normalTexture.index, false);
+            lambdaLoadTexture(mat.occlusionTexture.index, false);
+            lambdaLoadTexture(mat.emissiveTexture.index, true);
         }
         
         // load all materials
@@ -394,6 +396,19 @@ namespace Assets
             
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
+
+            if (mat.occlusionTexture.index != -1 && mat.occlusionTexture.index != mat.pbrMetallicRoughness.metallicRoughnessTexture.index)
+            {
+                SPDLOG_WARN("Material '{}': Separate Occlusion texture not supported. Pack it into the R channel of Metallic-Roughness texture.", mat.name);
+            }
+            if (mat.alphaMode != "OPAQUE")
+            {
+                 SPDLOG_WARN("Material '{}': Alpha mode '{}' not fully supported (assumed OPAQUE).", mat.name, mat.alphaMode);
+            }
+            if (mat.doubleSided)
+            {
+                 SPDLOG_WARN("Material '{}': Double sided not supported.", mat.name);
+            }
             
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()
                                           ? glm::vec3(0)
@@ -450,6 +465,18 @@ namespace Assets
             {
                 float power = static_cast<float>(emissive->second.Get("emissiveStrength").GetNumberAsDouble());
                 m = Material::DiffuseLight(emissiveColor * power * 100.0f);
+                if (mat.emissiveTexture.index != -1)
+                {
+                    m.DiffuseTextureId = lambdaGetTexture(mat.emissiveTexture.index);
+                }
+            }
+            else if (glm::length(emissiveColor) > 0.0f)
+            {
+                m = Material::DiffuseLight(emissiveColor * 5.0f);
+                if (mat.emissiveTexture.index != -1)
+                {
+                    m.DiffuseTextureId = lambdaGetTexture(mat.emissiveTexture.index);
+                }
             }
 
             materials.push_back( { m, mat.name } );
@@ -480,6 +507,15 @@ namespace Assets
                 if (primtive.attributes.find("TEXCOORD_0") != primtive.attributes.end()) uvIdx = primtive.attributes["TEXCOORD_0"];
                 int tanIdx = -1;
                 if (primtive.attributes.find("TANGENT") != primtive.attributes.end()) tanIdx = primtive.attributes["TANGENT"];
+
+                if (primtive.attributes.find("TEXCOORD_1") != primtive.attributes.end())
+                {
+                     // SPDLOG_WARN("Mesh '{}': TEXCOORD_1 found but ignored.", mesh.name);
+                }
+                if (primtive.attributes.find("JOINTS_0") != primtive.attributes.end())
+                {
+                     SPDLOG_WARN("Mesh '{}': JOINTS_0 found but skinning not supported.", mesh.name);
+                }
 
                 if (posIdx == -1) continue;
 
@@ -521,11 +557,6 @@ namespace Assets
                         uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
                         indices.push_back(*data + vertextOffset);
                     }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT )
-                    {
-                        int32* data = reinterpret_cast<int32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
                     else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
                     {
                         uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
@@ -533,6 +564,7 @@ namespace Assets
                     }
                     else
                     {
+                        SPDLOG_ERROR("Unsupported index component type: {}", indexAccessor.componentType);
                         assert(0);
                     }
                 }
@@ -610,6 +642,12 @@ namespace Assets
             std::map<std::string, AnimationTrack> trackMaps;
             for ( auto& track : animation.channels )
             {
+                if (animation.samplers[track.sampler].interpolation == "CUBICSPLINE")
+                {
+                    SPDLOG_WARN("Animation '{}': Cubic Spline interpolation not supported. Track ignored.", animation.name);
+                    continue;
+                }
+
                 if (track.target_path == "scale")
                 {
                     tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];

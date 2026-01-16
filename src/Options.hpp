@@ -57,6 +57,10 @@ public:
 	uint32_t Height{};
 	uint32_t PresentMode{};
 	bool Fullscreen{};
+
+	// Test options
+	bool TestGltfRobustness{};
+	std::string TestGltfFilter{};
 };
 
 extern Options* GOption;
