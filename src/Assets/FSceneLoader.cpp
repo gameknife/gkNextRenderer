@@ -324,10 +324,23 @@ namespace Assets
         textureIdMap.resize(model.images.size(), -1);
         auto lambdaLoadTexture = [&textureIdMap, &model, filepath](int texture, bool srgb)
         {
-            if (texture != -1)
+            if (texture != -1 && texture < model.textures.size())
             {
                 int imageIdx = model.textures[texture].source;
+                if (model.textures[texture].extensions.find("EXT_texture_webp") != model.textures[texture].extensions.end())
+                {
+                     if (model.textures[texture].extensions["EXT_texture_webp"].Has("source"))
+                     {
+                         imageIdx = model.textures[texture].extensions["EXT_texture_webp"].Get("source").GetNumberAsInt();
+                     }
+                }
+
                 if (imageIdx == -1) imageIdx = texture;
+
+                if (imageIdx >= textureIdMap.size())
+                {
+                    return;
+                }
 
                 if (textureIdMap[imageIdx] != -1)
                 {
@@ -336,6 +349,11 @@ namespace Assets
                 
                 // create texture
                 auto& image = model.images[imageIdx];
+
+                // if (image.width <= 0 || image.height <= 0)
+                // {
+                //     return;
+                // }
 
                 std::string texname = image.name.empty() ? fmt::format("tex_{}", imageIdx) : image.name;
                 if (image.bufferView == -1)
@@ -361,7 +379,21 @@ namespace Assets
             if (texture != -1)
             {
                 int imageIdx = model.textures[texture].source;
+                if (model.textures[texture].extensions.find("EXT_texture_webp") != model.textures[texture].extensions.end())
+                {
+                     if (model.textures[texture].extensions["EXT_texture_webp"].Has("source"))
+                     {
+                         imageIdx = model.textures[texture].extensions["EXT_texture_webp"].Get("source").GetNumberAsInt();
+                     }
+                }
+                
                 if (imageIdx == -1) imageIdx = texture;
+
+                if (imageIdx >= textureIdMap.size())
+                {
+                    return -1;
+                }
+
                 return textureIdMap[imageIdx];
             }
             return -1;
