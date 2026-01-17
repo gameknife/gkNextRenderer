@@ -1,0 +1,8 @@
+{
+  "track_id": "gltf_skinning_20260117",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-17T00:10:00Z",
+  "updated_at": "2026-01-17T00:10:00Z",
+  "description": "为项目添加gltf的蒙皮骨骼动画支持"
+}
