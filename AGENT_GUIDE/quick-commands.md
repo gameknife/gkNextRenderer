@@ -174,10 +174,10 @@ ls -la CMakeLists.txt
 ### Windows
 ```batch
 # 快速构建
-build.bat windows
+./build.bat windows-dev
 
 # 快速运行
-cd build\windows\bin && gkNextRenderer.exe
+.\run.bat
 ```
 
 ### macOS/Linux

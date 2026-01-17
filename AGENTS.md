@@ -44,7 +44,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 # 快速验证
 ```bash
-./run.bat windows-dev
+./run.bat
 ```
 
 ## ✅ 成功标准
@@ -68,7 +68,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 ### 测试框架
 - **框架**: Catch2（目标：`gkNextUnitTests`）
 - **位置**: `src/Tests/`
-- **运行**: `./build.[bat|sh] [platform]` 后执行 `./build/[platform]/bin/gkNextUnitTests[.exe]`
+- **运行**: `./build.[bat|sh] [platform]` 后执行 `./out/build/[platform]/bin/gkNextUnitTests[.exe]`
 
 ### 测试约定
 - 使用 Catch2 宏：`TEST_CASE`, `SECTION`, `REQUIRE`, `CHECK`
