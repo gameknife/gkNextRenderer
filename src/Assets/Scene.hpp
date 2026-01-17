@@ -49,6 +49,7 @@ namespace Assets
 			std::vector<AnimationTrack>& tracks);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
+	    void CleanUp();
 		//void RebuildBVH();
 
 		const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;

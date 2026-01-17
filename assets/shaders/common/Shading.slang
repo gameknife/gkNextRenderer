@@ -1019,13 +1019,22 @@ public struct FPathTracingRendererV2
         Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
+        float metalness = mat.Metalness;
+
+        if (mat.MRATextureId >= 0)
+        {
+            float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(inVertex.TexCoord, 0);
+            roughness = roughness * mra.g;
+            metalness = metalness * mra.b;
+        }
+
         const float dotValue = dot(rayDir, inVertex.Normal);
         const bool BackFace = dotValue > 0;
         const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
         const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
-        const float metalProb = mat.Metalness;
+        const float metalProb = metalness;
 
         bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
         bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);

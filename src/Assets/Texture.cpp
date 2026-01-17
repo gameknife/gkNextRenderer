@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <limits>
 #include <system_error>
+#include <webp/decode.h>
 
 #if WITH_KTX2
 #include <ktx.h>
@@ -449,26 +450,51 @@ namespace Assets
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
 #endif
+                bool useWebPFree = false;
                 // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
 #if WITH_KTX2
-                    result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
-                    if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
-                    if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to load ktx2 texture image "));
-                    pixels = ktxTexture_GetData(ktxTexture(kTexture));
+                    auto loadKtxFromMemory = [&]() -> bool {
+                        result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
+                        if (KTX_SUCCESS != result) return false;
+                        result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
+                        if (KTX_SUCCESS != result) return false;
+                        pixels = ktxTexture_GetData(ktxTexture(kTexture));
 
-                    ktx_size_t offset;
-                    ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
-                    pixels += offset;
-                    size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
+                        ktx_size_t offset;
+                        ktxTexture_GetImageOffset(ktxTexture(kTexture), 0, 0, 0, &offset);
+                        pixels += offset;
+                        size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
 
-                    format = static_cast<VkFormat>(kTexture->vkFormat);
-                    width = kTexture->baseWidth;
-                    height = kTexture->baseHeight;
-                    miplevel = 1;
+                        format = static_cast<VkFormat>(kTexture->vkFormat);
+                        width = kTexture->baseWidth;
+                        height = kTexture->baseHeight;
+                        miplevel = 1;
+                        return true;
+                    };
+                    
+                    if (!loadKtxFromMemory())
+                    {
+                        SPDLOG_ERROR("load texture {} failed.", texname);
+                    }
 #endif
+                }
+                else if (mime.find("image/webp") != std::string::npos)
+                {
+                     stbdata = WebPDecodeRGBA(copyedData, bytelength, &width, &height);
+                     if (stbdata)
+                     {
+                         size = width * height * 4;
+                         pixels = stbdata;
+                         format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+                         miplevel = 1;
+                         useWebPFree = true;
+                     }
+                     else
+                     {
+                         SPDLOG_ERROR("Failed to decode WebP image: {}", texname);
+                     }
                 }
                 else
                 {
@@ -783,7 +809,11 @@ namespace Assets
                 BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
                 // clean up
-                if (stbdata) stbi_image_free(stbdata);
+                if (stbdata)
+                {
+                    if (useWebPFree) WebPFree(stbdata);
+                    else stbi_image_free(stbdata);
+                }
                 
 #if WITH_KTX2
                 if (kTexture) ktxTexture_Destroy(ktxTexture(kTexture));
@@ -803,7 +833,7 @@ namespace Assets
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
-                //SPDLOG_INFO("{}", taskContext.outputInfo.data());
+                SPDLOG_INFO("{}", taskContext.outputInfo.data());
                 delete[] copyedData;
 
                 if (taskContext.needFlushHDRSH)

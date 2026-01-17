@@ -39,6 +39,9 @@ Options::Options(const int argc, const char* argv[])
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
 		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
 
+		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
+		("test-gltf-filter", "Filter for glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""))
+
 		("h,help", "Print usage");
 	try
 	{

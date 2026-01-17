@@ -8,7 +8,7 @@ implementing Common;
 #endif
 
 public static const int MAX_NODES = 65535; // 256;
-public static const int MAX_MATERIALS = 8192;
+public static const int MAX_MATERIALS = 16384;
 
 public struct ALIGN_16 GPUDrivenStat
 {
@@ -225,17 +225,17 @@ public struct ALIGN_16 Material
     public int DiffuseTextureId;
     public int MRATextureId;
     public int NormalTextureId;
+    public int EmissiveTextureId;
+    
     public float Fuzziness;
-
     public float RefractionIndex;
     public uint MaterialModel;
     public float Metalness;
-    public float RefractionIndex2;
     
+    public float RefractionIndex2;
     public float NormalTextureScale;
     public float Reserverd2;
     public float Reserverd3;
-    public float Reserverd4;
 };
 
 public struct ALIGN_16 Vertex

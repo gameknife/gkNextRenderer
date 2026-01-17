@@ -108,6 +108,8 @@ public:
     void RequestUpdate(glm::vec3 worldPos, float radius);
 
     void GenShadowMap(Assets::Scene& scene);
+    
+    void ClearAllTasks();
 
 private:
     std::vector<FCPUBLASContext> bvhBLASContexts;

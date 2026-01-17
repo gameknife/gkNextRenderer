@@ -1258,6 +1258,8 @@ void NextEngine::LoadScene(std::string sceneFileName)
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
+    scene_->CleanUp();
+    
     status_ = NextRenderer::EApplicationStatus::Loading;
     
     std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
