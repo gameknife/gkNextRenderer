@@ -1,5 +1,6 @@
 #include "FSceneLoader.h"
 #include "Common/CoreMinimal.hpp"
+#include <cfloat>
 
 #include "ThirdParty/mikktspace/mikktspace.h"
 #include <spdlog/spdlog.h>
@@ -629,8 +630,7 @@ namespace Assets
             models.push_back(Assets::Model(mesh.name, std::move(vertices), std::move(indices), !hasTangent));
         }
 
-        // default auto camera
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, models);
+
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
@@ -683,6 +683,9 @@ namespace Assets
             //     nodeMap[nodeIdx]->SetParent(sceneNode);
             // }
         }
+
+        // default auto camera
+        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
 
         // if no camera, add default
         if (cameraInit.cameras.empty() )
@@ -878,33 +881,64 @@ namespace Assets
         return true;
     }
 
-    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
+    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
-        glm::vec3 boundsMin, boundsMax;
-        for (int i = 0; i < models.size(); i++)
+        glm::vec3 boundsMin(FLT_MAX), boundsMax(-FLT_MAX);
+        bool hasModel = false;
+
+        for (const auto& node : nodes)
         {
-            auto& model = models[i];
-            glm::vec3 aabbMin = model.GetLocalAABBMin();
-            glm::vec3 aabbMax = model.GetLocalAABBMax();
-            if (i == 0)
+            if (node->IsDrawable())
             {
-                boundsMin = aabbMin;
-                boundsMax = aabbMax;
-            }
-            else
-            {
-                boundsMin = glm::min(aabbMin, boundsMin);
-                boundsMax = glm::max(aabbMax, boundsMax);
+                uint32_t modelIdx = node->GetModel();
+                if (modelIdx < models.size())
+                {
+                    auto& model = models[modelIdx];
+                    glm::vec3 aabbMin = model.GetLocalAABBMin();
+                    glm::vec3 aabbMax = model.GetLocalAABBMax();
+
+                    // Transform 8 corners
+                    glm::vec3 corners[8] = {
+                        {aabbMin.x, aabbMin.y, aabbMin.z},
+                        {aabbMax.x, aabbMin.y, aabbMin.z},
+                        {aabbMin.x, aabbMax.y, aabbMin.z},
+                        {aabbMax.x, aabbMax.y, aabbMin.z},
+                        {aabbMin.x, aabbMin.y, aabbMax.z},
+                        {aabbMax.x, aabbMin.y, aabbMax.z},
+                        {aabbMin.x, aabbMax.y, aabbMax.z},
+                        {aabbMax.x, aabbMax.y, aabbMax.z}
+                    };
+
+                    const glm::mat4& worldTransform = node->WorldTransform();
+
+                    for (int k = 0; k < 8; k++)
+                    {
+                        glm::vec4 worldPos = worldTransform * glm::vec4(corners[k], 1.0f);
+                        boundsMin = glm::min(boundsMin, glm::vec3(worldPos));
+                        boundsMax = glm::max(boundsMax, glm::vec3(worldPos));
+                    }
+                    hasModel = true;
+                }
             }
         }
 
+        if (!hasModel)
+        {
+             boundsMin = glm::vec3(-10, -10, -10);
+             boundsMax = glm::vec3(10, 10, 10);
+        }
+
         glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+        float radius = length(boundsMax - boundsMin);
 
         Camera newCamera;
-        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + radius * 1.5f), boundsCenter, vec3(0, 1, 0));
         newCamera.FieldOfView = 40;
         newCamera.Aperture = 0.0f;
+        newCamera.name = "AutoCamera";
+        newCamera.NearPlane = glm::min( radius * 0.5f, 0.2f);
+        newCamera.FarPlane = glm::min( radius * 100.f, 1000.f);
 
         return newCamera;
     }
