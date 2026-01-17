@@ -51,9 +51,9 @@ The project uses CMake + Ninja, with dependencies managed by vcpkg. Ensure a rel
 Windows (Visual Studio 2022):
 ``` bat
 rem Make sure VS2022 with C++ workload is installed
-vcpkg.bat
-build.bat --preset windows-dev
-run.bat --preset windows-dev
+vcpkg.bat windows
+.\build.bat windows-dev
+.\run.bat
 ```
 
 Windows (MSYS2 MinGW):
