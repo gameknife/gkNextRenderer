@@ -237,12 +237,13 @@ foreach(target IN LISTS AllTargets)
 
 	# for android
 	if ( ANDROID )
+		find_package(WebP CONFIG REQUIRED)
 		target_link_options(${target} PRIVATE
 	    -Wl,-z,max-page-size=16384
 		-Wl,-z,common-page-size=16384
 		-Wl,--hash-style=gnu
 		)
-		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
 	if ( MINGW )
