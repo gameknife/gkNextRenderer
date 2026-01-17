@@ -71,13 +71,13 @@ build.bat --avif --oidn --dlss
 
 ```bat
 rem Install dependencies
-vcpkg.bat windows
+.\vcpkg.bat windows
 
 rem Build the project
-build.bat windows
+.\build.bat windows-dev
 
 rem Run the main renderer
-run.bat windows
+.\run.bat
 ```
 
 ### Running Tests
@@ -85,7 +85,7 @@ run.bat windows
 To run the unit/integration tests:
 
 ```bat
-.\build\windows\bin\gkNextUnitTests.exe
+.\out\build\windows-dev\bin\gkNextUnitTests.exe
 ```
 
 *Note: Integration tests may require a valid Vulkan environment (GPU) and compiled shaders in `assets/shaders`.*

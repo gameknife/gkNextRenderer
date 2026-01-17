@@ -101,10 +101,20 @@ namespace Assets
         cpuAccelerationStructure_.InitBVH(*this);
 
         // force static flag
+        std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
+        {
+            if (node == nullptr) return;
+            node->SetMobility(Node::ENodeMobility::Kinematic);
+            for (auto& child : node->Children())
+            {
+                SetKinematicRecursive(child.get());
+            }
+        };
+
         for ( auto& track : tracks_ )
         {
             Node* node = GetNode(track.NodeName_);
-            if (node != nullptr) node->SetMobility(Node::ENodeMobility::Kinematic);
+            SetKinematicRecursive(node);
         }
         
         // calculate the scene aabb
@@ -308,6 +318,11 @@ namespace Assets
         cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
     }
 
+    void Scene::CleanUp()
+    {
+        cpuAccelerationStructure_.ClearAllTasks();
+    }
+
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
         nodes_.push_back(node);
@@ -383,10 +398,14 @@ namespace Assets
             for (auto& track : tracks_)
             {
                 if (!track.Playing()) continue;
-                track.Time_ += deltaSeconds;
+                track.Time_ += deltaSeconds * track.PlaySpeed_;
                 if (track.Time_ > durationMax)
                 {
-                    track.Time_ = 0;
+                    track.PlaySpeed_ = -1.0f;
+                }
+                if ( track.Time_ < 0.0f )
+                {
+                    track.PlaySpeed_ = 1.0f;
                 }
                 Node* node = GetNode(track.NodeName_);
                 if (node)
@@ -405,7 +424,21 @@ namespace Assets
                     MarkDirty();
 
                     // to physicSys
-                    NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(node->GetPhysicsBody(), translation, rotation, 0.01f);
+                    std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
+                    {
+                        if (!n) return;
+                        JPH::BodyID bodyID = n->GetPhysicsBody();
+                        if (!bodyID.IsInvalid())
+                        {
+                            NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                        }
+
+                        for (auto& child : n->Children())
+                        {
+                            UpdatePhysicsBodyRecursive(child.get());
+                        }
+                    };
+                    UpdatePhysicsBodyRecursive(node);
 
                     // temporal if camera node, request override
                     if (node->GetName() == "Shot.BlueCar")

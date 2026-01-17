@@ -9,32 +9,32 @@ namespace Assets
     {
         static Material Lambertian(const glm::vec3& diffuse, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, 1.0f, 1.f, Enum::Lambertian, 0};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, 1.0f, 1.f, Enum::Lambertian, 0};
         }
 
         static Material Metallic(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, fuzziness, 1.45f, Enum::Metallic, 1};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, fuzziness, 1.45f, Enum::Metallic, 1};
         }
 
         static Material Mixture(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, fuzziness, 1.45f, Enum::Mixture, 0};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, fuzziness, 1.45f, Enum::Mixture, 0};
         }
 
         static Material Dielectric(const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(1.0f, 1.0f, 1.0f, 1), textureId, -1, -1, fuzziness, refractionIndex, Enum::Dielectric, 0, refractionIndex};
+            return Material{glm::vec4(1.0f, 1.0f, 1.0f, 1), textureId, -1, -1, -1, fuzziness, refractionIndex, Enum::Dielectric, 0, refractionIndex};
         }
 
         static Material Isotropic(const glm::vec3& diffuse, const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, fuzziness, refractionIndex, Enum::Isotropic};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, fuzziness, refractionIndex, Enum::Isotropic};
         }
 
         static Material DiffuseLight(const glm::vec3& diffuse, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, 0.0f, 0.0f, Enum::DiffuseLight};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, 0.0f, 0.0f, Enum::DiffuseLight};
         }
 
         enum class Enum : uint32_t
@@ -51,9 +51,11 @@ namespace Assets
 
         // Base material
         glm::vec4 Diffuse;
+        
         int32_t DiffuseTextureId;
         int32_t MRATextureId;
         int32_t NormalTextureId;
+        int32_t EmissiveTextureId;
 
         // Metal fuzziness
         float Fuzziness;
@@ -71,6 +73,7 @@ namespace Assets
         float RefractionIndex2;
         float NormalTextureScale;
         float Reserverd2;
+        float Reserverd3;
     };
 
     // For upper usage

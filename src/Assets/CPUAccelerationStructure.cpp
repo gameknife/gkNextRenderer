@@ -435,6 +435,23 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
 
     lastBatchTasks.push_back(taskId);
 }
+void FCPUAccelerationStructure::ClearAllTasks()
+{
+    // 等待所有并行任务完成
+    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    
+    // 清空待更新队列
+    while (!needUpdateGroups.empty())
+    {
+        needUpdateGroups.pop();
+    }
+    
+    // 清空当前批次任务列表
+    lastBatchTasks.clear();
+    
+    // 重置刷新标志
+    needFlush = false;
+}
 
 void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
@@ -647,3 +664,5 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
         }
     }
 }
+
+

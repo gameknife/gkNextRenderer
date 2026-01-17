@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <limits>
 #include <system_error>
+#include <webp/decode.h>
 
 #if WITH_KTX2
 #include <ktx.h>
@@ -449,6 +450,7 @@ namespace Assets
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
 #endif
+                bool useWebPFree = false;
                 // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
@@ -477,6 +479,22 @@ namespace Assets
                         SPDLOG_ERROR("load texture {} failed.", texname);
                     }
 #endif
+                }
+                else if (mime.find("image/webp") != std::string::npos)
+                {
+                     stbdata = WebPDecodeRGBA(copyedData, bytelength, &width, &height);
+                     if (stbdata)
+                     {
+                         size = width * height * 4;
+                         pixels = stbdata;
+                         format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+                         miplevel = 1;
+                         useWebPFree = true;
+                     }
+                     else
+                     {
+                         SPDLOG_ERROR("Failed to decode WebP image: {}", texname);
+                     }
                 }
                 else
                 {
@@ -791,7 +809,11 @@ namespace Assets
                 BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
                 // clean up
-                if (stbdata) stbi_image_free(stbdata);
+                if (stbdata)
+                {
+                    if (useWebPFree) WebPFree(stbdata);
+                    else stbi_image_free(stbdata);
+                }
                 
 #if WITH_KTX2
                 if (kTexture) ktxTexture_Destroy(ktxTexture(kTexture));
@@ -811,7 +833,7 @@ namespace Assets
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
-                //SPDLOG_INFO("{}", taskContext.outputInfo.data());
+                SPDLOG_INFO("{}", taskContext.outputInfo.data());
                 delete[] copyedData;
 
                 if (taskContext.needFlushHDRSH)

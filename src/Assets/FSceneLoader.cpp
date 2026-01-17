@@ -1,5 +1,6 @@
 #include "FSceneLoader.h"
 #include "Common/CoreMinimal.hpp"
+#include <cfloat>
 
 #include "ThirdParty/mikktspace/mikktspace.h"
 #include <spdlog/spdlog.h>
@@ -324,10 +325,23 @@ namespace Assets
         textureIdMap.resize(model.images.size(), -1);
         auto lambdaLoadTexture = [&textureIdMap, &model, filepath](int texture, bool srgb)
         {
-            if (texture != -1)
+            if (texture != -1 && texture < model.textures.size())
             {
                 int imageIdx = model.textures[texture].source;
+                if (model.textures[texture].extensions.find("EXT_texture_webp") != model.textures[texture].extensions.end())
+                {
+                     if (model.textures[texture].extensions["EXT_texture_webp"].Has("source"))
+                     {
+                         imageIdx = model.textures[texture].extensions["EXT_texture_webp"].Get("source").GetNumberAsInt();
+                     }
+                }
+
                 if (imageIdx == -1) imageIdx = texture;
+
+                if (imageIdx >= textureIdMap.size())
+                {
+                    return;
+                }
 
                 if (textureIdMap[imageIdx] != -1)
                 {
@@ -336,6 +350,12 @@ namespace Assets
                 
                 // create texture
                 auto& image = model.images[imageIdx];
+
+                // if (image.width <= 0 || image.height <= 0)
+                // {
+                //     return;
+                // }
+
                 std::string texname = image.name.empty() ? fmt::format("tex_{}", imageIdx) : image.name;
                 if (image.bufferView == -1)
                 {
@@ -360,7 +380,21 @@ namespace Assets
             if (texture != -1)
             {
                 int imageIdx = model.textures[texture].source;
+                if (model.textures[texture].extensions.find("EXT_texture_webp") != model.textures[texture].extensions.end())
+                {
+                     if (model.textures[texture].extensions["EXT_texture_webp"].Has("source"))
+                     {
+                         imageIdx = model.textures[texture].extensions["EXT_texture_webp"].Get("source").GetNumberAsInt();
+                     }
+                }
+                
                 if (imageIdx == -1) imageIdx = texture;
+
+                if (imageIdx >= textureIdMap.size())
+                {
+                    return -1;
+                }
+
                 return textureIdMap[imageIdx];
             }
             return -1;
@@ -371,6 +405,8 @@ namespace Assets
             lambdaLoadTexture(mat.pbrMetallicRoughness.baseColorTexture.index, true);
             lambdaLoadTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index, false);
             lambdaLoadTexture(mat.normalTexture.index, false);
+            lambdaLoadTexture(mat.occlusionTexture.index, false);
+            lambdaLoadTexture(mat.emissiveTexture.index, true);
         }
         
         // load all materials
@@ -381,6 +417,7 @@ namespace Assets
             m.DiffuseTextureId = -1;
             m.MRATextureId = -1;
             m.NormalTextureId = -1;
+            m.EmissiveTextureId = -1;
             m.NormalTextureScale = 1.0f;
 
             m.MaterialModel = Material::Enum::Mixture;
@@ -394,6 +431,19 @@ namespace Assets
             
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
+
+            if (mat.occlusionTexture.index != -1 && mat.occlusionTexture.index != mat.pbrMetallicRoughness.metallicRoughnessTexture.index)
+            {
+                SPDLOG_WARN("Material '{}': Separate Occlusion texture not supported. Pack it into the R channel of Metallic-Roughness texture.", mat.name);
+            }
+            if (mat.alphaMode != "OPAQUE")
+            {
+                 SPDLOG_WARN("Material '{}': Alpha mode '{}' not fully supported (assumed OPAQUE).", mat.name, mat.alphaMode);
+            }
+            if (mat.doubleSided)
+            {
+                 SPDLOG_WARN("Material '{}': Double sided not supported.", mat.name);
+            }
             
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()
                                           ? glm::vec3(0)
@@ -446,10 +496,21 @@ namespace Assets
             }
 
             auto emissive = mat.extensions.find("KHR_materials_emissive_strength");
+            // TODO: may impl per pixel mat type
             if (emissive != mat.extensions.end())
             {
                 float power = static_cast<float>(emissive->second.Get("emissiveStrength").GetNumberAsDouble());
-                m = Material::DiffuseLight(emissiveColor * power * 100.0f);
+                if (mat.emissiveTexture.index != -1)
+                {
+                    m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
+                }
+            }
+            else if (glm::length(emissiveColor) > 0.0f)
+            {
+                if (mat.emissiveTexture.index != -1)
+                {
+                    m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
+                }
             }
 
             materials.push_back( { m, mat.name } );
@@ -466,10 +527,18 @@ namespace Assets
             uint32_t sectionIdx = 0;
             for (tinygltf::Primitive& primtive : mesh.primitives)
             {
-                tinygltf::Accessor indexAccessor = model.accessors[primtive.indices];
-                if( primtive.mode != TINYGLTF_MODE_TRIANGLES || indexAccessor.count == 0)
+                if (primtive.mode != TINYGLTF_MODE_TRIANGLES)
                 {
                     continue;
+                }
+
+                if (primtive.indices != -1)
+                {
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    if (indexAccessor.count == 0)
+                    {
+                        continue;
+                    }
                 }
                
                 int posIdx = -1;
@@ -480,6 +549,15 @@ namespace Assets
                 if (primtive.attributes.find("TEXCOORD_0") != primtive.attributes.end()) uvIdx = primtive.attributes["TEXCOORD_0"];
                 int tanIdx = -1;
                 if (primtive.attributes.find("TANGENT") != primtive.attributes.end()) tanIdx = primtive.attributes["TANGENT"];
+
+                if (primtive.attributes.find("TEXCOORD_1") != primtive.attributes.end())
+                {
+                     // SPDLOG_WARN("Mesh '{}': TEXCOORD_1 found but ignored.", mesh.name);
+                }
+                if (primtive.attributes.find("JOINTS_0") != primtive.attributes.end())
+                {
+                     SPDLOG_WARN("Mesh '{}': JOINTS_0 found but skinning not supported.", mesh.name);
+                }
 
                 if (posIdx == -1) continue;
 
@@ -507,33 +585,42 @@ namespace Assets
                 }
                 
                 sectionIdx++;
-                tinygltf::BufferView indexView = model.bufferViews[indexAccessor.bufferView];
-                int strideIndex = indexAccessor.ByteStride(indexView);
-                for (size_t i = 0; i < indexAccessor.count; ++i)
+                
+                if (primtive.indices != -1)
                 {
-                    if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    const tinygltf::BufferView& indexView = model.bufferViews[indexAccessor.bufferView];
+                    int strideIndex = indexAccessor.ByteStride(indexView);
+
+                    for (size_t i = 0; i < indexAccessor.count; ++i)
                     {
-                        uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
+                        if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
+                        {
+                            uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                        {
+                            uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
+                        {
+                            uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
+                            indices.push_back(*data + vertextOffset);
+                        }
+                        else
+                        {
+                            SPDLOG_ERROR("Unsupported index component type: {}", indexAccessor.componentType);
+                            assert(0);
+                        }
                     }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
+                }
+                else
+                {
+                    for (size_t i = 0; i < positionAccessor.count; ++i)
                     {
-                        uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT )
-                    {
-                        int32* data = reinterpret_cast<int32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
-                    else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
-                    {
-                        uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                        indices.push_back(*data + vertextOffset);
-                    }
-                    else
-                    {
-                        assert(0);
+                        indices.push_back(static_cast<uint32_t>(i) + vertextOffset);
                     }
                 }
 
@@ -543,8 +630,7 @@ namespace Assets
             models.push_back(Assets::Model(mesh.name, std::move(vertices), std::move(indices), !hasTangent));
         }
 
-        // default auto camera
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, models);
+
 
         auto& root = model.scenes[0];
         if(root.extras.Has("SkyIdx"))
@@ -598,6 +684,9 @@ namespace Assets
             // }
         }
 
+        // default auto camera
+        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
+
         // if no camera, add default
         if (cameraInit.cameras.empty() )
         {
@@ -610,6 +699,12 @@ namespace Assets
             std::map<std::string, AnimationTrack> trackMaps;
             for ( auto& track : animation.channels )
             {
+                if (animation.samplers[track.sampler].interpolation == "CUBICSPLINE")
+                {
+                    SPDLOG_WARN("Animation '{}': Cubic Spline interpolation not supported. Track ignored.", animation.name);
+                    continue;
+                }
+
                 if (track.target_path == "scale")
                 {
                     tinygltf::Accessor inputAccessor = model.accessors[animation.samplers[track.sampler].input];
@@ -786,33 +881,64 @@ namespace Assets
         return true;
     }
 
-    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<Model>& models)
+    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
-        glm::vec3 boundsMin, boundsMax;
-        for (int i = 0; i < models.size(); i++)
+        glm::vec3 boundsMin(FLT_MAX), boundsMax(-FLT_MAX);
+        bool hasModel = false;
+
+        for (const auto& node : nodes)
         {
-            auto& model = models[i];
-            glm::vec3 aabbMin = model.GetLocalAABBMin();
-            glm::vec3 aabbMax = model.GetLocalAABBMax();
-            if (i == 0)
+            if (node->IsDrawable())
             {
-                boundsMin = aabbMin;
-                boundsMax = aabbMax;
-            }
-            else
-            {
-                boundsMin = glm::min(aabbMin, boundsMin);
-                boundsMax = glm::max(aabbMax, boundsMax);
+                uint32_t modelIdx = node->GetModel();
+                if (modelIdx < models.size())
+                {
+                    auto& model = models[modelIdx];
+                    glm::vec3 aabbMin = model.GetLocalAABBMin();
+                    glm::vec3 aabbMax = model.GetLocalAABBMax();
+
+                    // Transform 8 corners
+                    glm::vec3 corners[8] = {
+                        {aabbMin.x, aabbMin.y, aabbMin.z},
+                        {aabbMax.x, aabbMin.y, aabbMin.z},
+                        {aabbMin.x, aabbMax.y, aabbMin.z},
+                        {aabbMax.x, aabbMax.y, aabbMin.z},
+                        {aabbMin.x, aabbMin.y, aabbMax.z},
+                        {aabbMax.x, aabbMin.y, aabbMax.z},
+                        {aabbMin.x, aabbMax.y, aabbMax.z},
+                        {aabbMax.x, aabbMax.y, aabbMax.z}
+                    };
+
+                    const glm::mat4& worldTransform = node->WorldTransform();
+
+                    for (int k = 0; k < 8; k++)
+                    {
+                        glm::vec4 worldPos = worldTransform * glm::vec4(corners[k], 1.0f);
+                        boundsMin = glm::min(boundsMin, glm::vec3(worldPos));
+                        boundsMax = glm::max(boundsMax, glm::vec3(worldPos));
+                    }
+                    hasModel = true;
+                }
             }
         }
 
+        if (!hasModel)
+        {
+             boundsMin = glm::vec3(-10, -10, -10);
+             boundsMax = glm::vec3(10, 10, 10);
+        }
+
         glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
+        float radius = length(boundsMax - boundsMin);
 
         Camera newCamera;
-        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + glm::length(boundsMax - boundsMin)), boundsCenter, vec3(0, 1, 0));
+        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + radius * 1.5f), boundsCenter, vec3(0, 1, 0));
         newCamera.FieldOfView = 40;
         newCamera.Aperture = 0.0f;
+        newCamera.name = "AutoCamera";
+        newCamera.NearPlane = glm::min( radius * 0.5f, 0.2f);
+        newCamera.FarPlane = glm::min( radius * 100.f, 1000.f);
 
         return newCamera;
     }

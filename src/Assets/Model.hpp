@@ -114,6 +114,7 @@ namespace Assets
         
         float Time_;
         float Duration_;
+        float PlaySpeed_ = 1.0f;
 
         bool Playing_{};
     };
