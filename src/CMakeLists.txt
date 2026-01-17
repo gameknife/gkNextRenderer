@@ -201,7 +201,8 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco ${extra_libs})
+		find_package(WebP CONFIG REQUIRED)
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
 		
 		# handle moltenvk for iOS
 		if ( IOS )

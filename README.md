@@ -55,9 +55,9 @@ rem 确保安装3.31版本的cmake，不要安装4.x版本的cmake
 rem 确保安装Visual Studio 2022并选择c++工作负载
 rem 确保安装VulkanSDK 1.4.313.2
 rem 由于vcpkg部分tar包解压有乱码，请确保打开windows语言设置中的[使用Unicode UTF-8提供全球语言支持]
-vcpkg.bat
-build.bat --preset windows-dev
-run.bat --preset windows-dev
+vcpkg.bat windows
+.\build.bat windows-dev
+.\run.bat
 ```
 
 Windows（MSYS2 MinGW）：
