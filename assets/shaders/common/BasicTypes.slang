@@ -8,7 +8,7 @@ implementing Common;
 #endif
 
 public static const int MAX_NODES = 65535; // 256;
-public static const int MAX_MATERIALS = 8192;
+public static const int MAX_MATERIALS = 16384;
 
 public struct ALIGN_16 GPUDrivenStat
 {
