@@ -388,10 +388,10 @@ namespace Assets
             for (auto& track : tracks_)
             {
                 if (!track.Playing()) continue;
-                track.Time_ += deltaSeconds;
-                if (track.Time_ > durationMax)
+                track.Time_ += deltaSeconds * track.PlaySpeed_;
+                if (track.Time_ > durationMax || track.Time_ < 0.0f)
                 {
-                    track.Time_ = 0;
+                    track.PlaySpeed_ *= -1.0f;
                 }
                 Node* node = GetNode(track.NodeName_);
                 if (node)
