@@ -18,7 +18,7 @@ namespace
 
 AccelerationStructure::AccelerationStructure(const class DeviceProcedures& deviceProcedures, const RayTracingProperties& rayTracingProperties) :
 	deviceProcedures_(deviceProcedures),
-	flags_(VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR),
+	flags_(VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR),
 	device_(deviceProcedures.Device()),
 	rayTracingProperties_(rayTracingProperties)
 {

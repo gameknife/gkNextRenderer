@@ -34,6 +34,11 @@ namespace Vulkan::RayTracing
 			Buffer& resultBuffer,
 			VkDeviceSize resultOffset);
 
+		void Update(
+			VkCommandBuffer commandBuffer,
+			Buffer& scratchBuffer,
+			VkDeviceSize scratchOffset);
+
 	private:
 
 		BottomLevelGeometry geometries_;
