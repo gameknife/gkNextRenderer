@@ -26,12 +26,14 @@
     - [x] **Goal:** Render the animated mesh using standard rasterization (or a simple debug shader). Verify that the mesh deforms visibly when an animation plays, even if Ray Tracing isn't updated yet.
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Compute Skinning Implementation' (Protocol in workflow.md)
 
-## Phase 3: Ray Tracing & BLAS Integration
-- [ ] Task: BLAS Update Logic
-    - [ ] Modify the acceleration structure builder to support dynamic mesh updates.
-    - [ ] Implement `vkCmdBuildAccelerationStructuresKHR` for updating BLAS using the skinned vertex buffer.
-    - [ ] Optimize for `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR`.
-- [ ] Task: **Checkpoint: Ray Tracing Verification**
+## Phase 3: Ray Tracing & BLAS Integration [checkpoint: 6ac8916]
+- [x] Task: BLAS Update Logic 6ac8916
+    - [x] Modify the acceleration structure builder to support dynamic mesh updates.
+    - [x] Implement `vkCmdBuildAccelerationStructuresKHR` for updating BLAS using the skinned vertex buffer.
+    - [x] Optimize for `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR`.
+- [x] Task: **Checkpoint: Ray Tracing Verification** 6ac8916
+    - [x] **Goal:** Observe the animated mesh in a full Path Tracing / Ray Tracing view. Verify that reflections and shadows correctly follow the deforming mesh (confirming BLAS updates).
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Ray Tracing & BLAS Integration' (Protocol in workflow.md)
     - [ ] **Goal:** Observe the animated mesh in a full Path Tracing / Ray Tracing view. Verify that reflections and shadows correctly follow the deforming mesh (confirming BLAS updates).
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Ray Tracing & BLAS Integration' (Protocol in workflow.md)
 
