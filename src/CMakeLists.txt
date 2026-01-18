@@ -352,6 +352,7 @@ endforeach()
 if ( NOT ANDROID )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests 
+	Tests/TestCommon.cpp
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
