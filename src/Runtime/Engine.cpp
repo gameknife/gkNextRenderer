@@ -1267,26 +1267,27 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
+    std::shared_ptr< std::vector<Assets::Skeleton> > skeletons = std::make_shared< std::vector<Assets::Skeleton> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
     physicsEngine_->OnSceneDestroyed();
     Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
     
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
-        
+        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks, *skeletons);
+
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
         std::string info = fmt::format("parsed scene [{}] on cpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
@@ -1306,8 +1307,8 @@ void NextEngine::LoadScene(std::string sceneFileName)
 
             gameInstance_->BeforeSceneRebuild(*nodes, *models, *materials, *lights, *tracks);
             scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
+            scene_->PostLoad(*skeletons);
             scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-                    
             renderer_->SetScene(scene_);
                     
             userSettings_.CameraIdx = 0;

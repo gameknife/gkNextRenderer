@@ -8,6 +8,7 @@
 
 #include "CPUAccelerationStructure.h"
 #include "Model.hpp"
+#include "Skeleton.hpp"
 #include "Runtime/NextPhysics.h"
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
@@ -41,6 +42,8 @@ namespace Assets
 
 		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
 		~Scene();
+
+		void PostLoad(const std::vector<Skeleton>& skeletons);
 
 		void Reload(std::vector<std::shared_ptr<Node>>& nodes,
 			std::vector<Model>& models,

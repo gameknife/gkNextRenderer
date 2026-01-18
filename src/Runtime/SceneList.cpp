@@ -270,30 +270,15 @@ int32_t SceneList::AddExternalScene(std::string absPath)
 
 bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& camera, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                           std::vector<Assets::FMaterial>& materials,
-                          std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+                          std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
+                          std::vector<Assets::Skeleton>& skeletons)
 {
     std::filesystem::path filepath = filename;
     std::string ext = filepath.extension().string();
     materials.push_back({Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)), "root_default"});
     if (ext == ".glb" || ext == ".gltf")
     {
-        std::vector<Assets::Skeleton> skeletons;
-        bool res = Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
-        
-        if (res)
-        {
-            for (auto& node : nodes)
-            {
-                if (node->GetSkin() != -1 && node->GetSkin() < skeletons.size())
-                {
-                    auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
-                    comp->AddAnimations(tracks);
-                    comp->PlayAnimation("Default");
-                    node->SetSkinnedMesh(comp);
-                }
-            }
-        }
-        return res;
+        return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
     }
     if (ext == ".proc")
     {

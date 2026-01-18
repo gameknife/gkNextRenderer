@@ -91,6 +91,20 @@ namespace Assets
         cpuShadowMap_.reset();
     }
 
+    void Scene::PostLoad(const std::vector<Skeleton>& skeletons)
+    {
+        for (auto& node : nodes_)
+        {
+            if (node->GetSkin() != -1 && node->GetSkin() < skeletons.size())
+            {
+                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
+                comp->AddAnimations(tracks_);
+                comp->PlayAnimation("Default");
+                node->SetSkinnedMesh(comp);
+            }
+        }
+    }
+
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
