@@ -769,19 +769,22 @@ namespace Vulkan
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
 
+        if (true)
         {
             SCOPED_GPU_TIMER("skinning pass");
             auto& scene = GetScene();
+
+            if (skinnedVertexBuffer_) {
+                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), skinnedSimpleVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
+            } else {
+                scene.SetSkinningBuffers(0, 0, 0);
+            }
 
             skinningPipeline_->BindPipeline(commandBuffer, scene, imageIndex);
 
             Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
             if (skinnedVertexBuffer_)
             {
-                gpuScene.SkinnedVertices = skinnedVertexBuffer_->GetDeviceAddress();
-                gpuScene.SkinnedVerticesSimple = skinnedSimpleVertexBuffer_->GetDeviceAddress();
-                gpuScene.JointMatrices = jointMatricesBuffer_->GetDeviceAddress();
-
                 uint32_t proxyIdx = 0;
                 for (auto& node : scene.Nodes())
                 {

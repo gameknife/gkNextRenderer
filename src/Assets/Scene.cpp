@@ -389,6 +389,9 @@ namespace Assets
 
         gpuScene_.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
         gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
+        gpuScene_.SkinnedVertices = skinnedVerticesAddr_;
+        gpuScene_.SkinnedVerticesSimple = skinnedVerticesSimpleAddr_;
+        gpuScene_.JointMatrices = jointMatricesAddr_;
 
         gpuScene_.SwapChainIndex = imageIndex;
 
@@ -673,4 +676,12 @@ namespace Assets
             outMatrix = overrideModelView;
         }
     }
+
+    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices)
+    {
+        skinnedVerticesAddr_ = skinnedVertices;
+        skinnedVerticesSimpleAddr_ = skinnedVerticesSimple;
+        jointMatricesAddr_ = jointMatrices;
+    }
 }
+

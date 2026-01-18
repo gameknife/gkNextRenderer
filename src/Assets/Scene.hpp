@@ -114,6 +114,8 @@ namespace Assets
 
 		void AddNode(std::shared_ptr<Node> node);
 
+		void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices);
+
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
@@ -219,5 +221,9 @@ namespace Assets
 		glm::vec3 sceneAABBMin_ {FLT_MAX, FLT_MAX, FLT_MAX};
 		glm::vec3 sceneAABBMax_ {-FLT_MAX, -FLT_MAX, -FLT_MAX};
 		std::vector<JPH::RefConst<JPH::MeshShapeSettings> > cachedMeshShapes_;
+
+		VkDeviceAddress skinnedVerticesAddr_ = 0;
+		VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
+		VkDeviceAddress jointMatricesAddr_ = 0;
 	};
 }
