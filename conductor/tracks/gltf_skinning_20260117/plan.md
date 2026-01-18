@@ -1,6 +1,6 @@
 # Implementation Plan: glTF Skinned Animation Support
 
-## Phase 1: Foundation and Data Structures
+## Phase 1: Foundation and Data Structures [checkpoint: c68667d]
 - [x] Task: Extend Asset Loading for Skinned Meshes f3a070f
     - [x] Update `GltfLoader` to parse `skins`, `joints`, and `animations` using `tinygltf`.
     - [x] Define `Skeleton` and `AnimationClip` structures in the `Assets` namespace.
@@ -12,7 +12,8 @@
     - [x] Allocate GPU buffers for bone matrices (Joint Buffers).
     - [x] Ensure mesh data (positions, weights, joints) is correctly uploaded for skinning.
 - [x] Task: **Checkpoint: Data Verification** f3a070f
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
+    - [x] **Goal:** Verify that a sample glTF file with skinning data is loaded without errors. Inspect logs or debuggers to ensure bone hierarchies and animation clips are populated correctly in memory. (Verified via debug logs during development)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
 
 ## Phase 2: Compute Skinning Implementation
 - [ ] Task: Develop Skinning Compute Shader
