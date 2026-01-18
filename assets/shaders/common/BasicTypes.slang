@@ -90,11 +90,13 @@ public struct ALIGN_16 NodeProxy
 {
     public uint instanceId;
     public uint modelId;
-    public uint visible;
-    public uint nort;
+    public uint skinId;
+    public uint jointMatrixOffset;
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
     public uint matId[16];
+    public uint visible;
+    public uint nort;
 };
 
 public struct ALIGN_16 ModelData
@@ -289,6 +291,9 @@ public struct ALIGN_8 GPUScene
 
     uint64_t SkinWeights;
     uint64_t SkinJoints;
+    uint64_t SkinnedVertices;
+    uint64_t SkinnedVerticesSimple;
+    uint64_t JointMatrices;
 
     uint SwapChainIndex;
     uint custom_data_0;
@@ -329,6 +334,9 @@ public struct ALIGN_8 GPUScene
     public uint64_t TLAS;
     public float4 *SkinWeights;
     public uint4 *SkinJoints;
+    public GPUVertex *SkinnedVertices;
+    public half4 *SkinnedVerticesSimple;
+    public float4x4 *JointMatrices;
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
 	}
@@ -435,6 +443,23 @@ public struct ALIGN_8 GPUScene
     public property uint4* SkinJoints
     {
         get { return (uint4*)SkinWeights_SkinJoints_Address.y; }
+    }
+
+    uint64_t2 SkinnedVertices_JointMatrices_Address;
+    public property GPUVertex* SkinnedVertices
+    {
+        get { return (GPUVertex*)SkinnedVertices_JointMatrices_Address.x; }
+    }
+    
+    uint64_t2 SkinnedVerticesSimple_Reserved_Address;
+    public property half4* SkinnedVerticesSimple
+    {
+        get { return (half4*)SkinnedVerticesSimple_Reserved_Address.x; }
+    }
+
+    public property float4x4* JointMatrices
+    {
+        get { return (float4x4*)SkinnedVertices_JointMatrices_Address.y; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {
