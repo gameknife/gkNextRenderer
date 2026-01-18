@@ -14,6 +14,7 @@
 
 #include "Node.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include <spdlog/spdlog.h>
 
@@ -412,6 +413,15 @@ namespace Assets
     {
         if ( NextEngine::GetInstance()->GetUserSettings().TickAnimation)
         {
+            for (auto& node : nodes_)
+            {
+                if (auto skinnedMesh = node->GetSkinnedMesh())
+                {
+                    skinnedMesh->Update(deltaSeconds);
+                    MarkDirty();
+                }
+            }
+
             float durationMax = 0;
 
             for (auto& track : tracks_)
@@ -552,6 +562,7 @@ namespace Assets
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
                     
+                    uint32_t currentJointOffset = 0;
                     for (auto& node : nodes_)
                     {
                         // record all
@@ -567,12 +578,20 @@ namespace Assets
                             auto model = GetModel(node->GetModel());
                             if (model)
                             {
+                                uint32_t nodeJointOffset = 0;
+                                if (auto skinnedMesh = node->GetSkinnedMesh())
+                                {
+                                    nodeJointOffset = currentJointOffset;
+                                    currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
+                                }
+
                                 for ( uint32_t section = 0; section < model->SectionCount(); ++section)
                                 {
                                     NodeProxy proxy = node->GetNodeProxy();
                                     proxy.combinedPrevTS = combined;
                                     proxy.modelId = node->GetModel() * 10 + section;
                                     proxy.nort = section == 0 ? 0 : 1;
+                                    proxy.jointMatrixOffset = nodeJointOffset;
                                     nodeProxys.push_back(proxy);
                                     indirectDrawBatchCount_++;
                                 }        

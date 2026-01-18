@@ -187,8 +187,8 @@ namespace Vulkan
 
 	private:
 		void RecreateSwapChain();
-
 		void UpdateUniformBuffer(uint32_t imageIndex);
+		void UpdateSkinningBuffers();
 
 		const VkPresentModeKHR presentMode_;
 		bool requestRecreateSwapChain_ = false;
@@ -226,7 +226,21 @@ namespace Vulkan
 
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> skinningPipeline_;
 		
+		std::unique_ptr<Buffer> skinnedVertexBuffer_;
+		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
+
+		std::unique_ptr<Buffer> skinnedSimpleVertexBuffer_;
+		std::unique_ptr<DeviceMemory> skinnedSimpleVertexBufferMemory_;
+
+		std::unique_ptr<Buffer> jointMatricesBuffer_;
+		std::unique_ptr<DeviceMemory> jointMatricesBufferMemory_;
+
+		uint32_t currentSkinnedVertexBufferSize_{};
+		uint32_t currentSkinnedSimpleVertexBufferSize_{};
+		uint32_t currentJointMatrixBufferSize_{};
+
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;
