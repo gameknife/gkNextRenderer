@@ -70,6 +70,9 @@ namespace Assets
         void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
         const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
         
+        void SetSkin(int32_t skinIndex) { skinIndex_ = skinIndex; }
+        int32_t GetSkin() const { return skinIndex_; }
+
     private:
         std::string name_;
 
@@ -82,6 +85,7 @@ namespace Assets
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
         uint32_t modelId_;
+        int32_t skinIndex_ = -1;
         uint32_t instanceId_;
         bool visible_;
         bool rayCastVisible_;

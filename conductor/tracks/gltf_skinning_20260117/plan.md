@@ -1,18 +1,18 @@
 # Implementation Plan: glTF Skinned Animation Support
 
 ## Phase 1: Foundation and Data Structures
-- [ ] Task: Extend Asset Loading for Skinned Meshes
-    - [ ] Update `GltfLoader` to parse `skins`, `joints`, and `animations` using `tinygltf`.
-    - [ ] Define `Skeleton` and `AnimationClip` structures in the `Assets` namespace.
-    - [ ] Load and store Inverse Bind Matrices.
+- [x] Task: Extend Asset Loading for Skinned Meshes
+    - [x] Update `GltfLoader` to parse `skins`, `joints`, and `animations` using `tinygltf`.
+    - [x] Define `Skeleton` and `AnimationClip` structures in the `Assets` namespace.
+    - [x] Load and store Inverse Bind Matrices.
 - [ ] Task: Implement `SkinnedMeshComponent`
     - [ ] Create the component class to store animation playback state and skeleton reference.
     - [ ] Implement playback logic (update current time, sample animation curves).
 - [ ] Task: GPU Buffer Management
     - [ ] Allocate GPU buffers for bone matrices (Joint Buffers).
     - [ ] Ensure mesh data (positions, weights, joints) is correctly uploaded for skinning.
-- [ ] Task: **Checkpoint: Data Verification**
-    - [ ] **Goal:** Verify that a sample glTF file with skinning data is loaded without errors. Inspect logs or debuggers to ensure bone hierarchies and animation clips are populated correctly in memory.
+- [x] Task: **Checkpoint: Data Verification**
+    - [x] **Goal:** Verify that a sample glTF file with skinning data is loaded without errors. Inspect logs or debuggers to ensure bone hierarchies and animation clips are populated correctly in memory. (Verified via debug logs during development)
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
 
 ## Phase 2: Compute Skinning Implementation

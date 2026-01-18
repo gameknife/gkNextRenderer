@@ -134,6 +134,11 @@ namespace Assets
         const std::vector<Vertex>& CPUVertices() const { return vertices_; }
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
+
+        const std::vector<glm::vec4>& CPUWeights() const { return weights_; }
+        std::vector<glm::vec4>& CPUWeights() { return weights_; }
+        const std::vector<glm::uvec4>& CPUJoints() const { return joints_; }
+        std::vector<glm::uvec4>& CPUJoints() { return joints_; }
         
         glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
@@ -155,6 +160,8 @@ namespace Assets
         
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
+        std::vector<glm::vec4> weights_;
+        std::vector<glm::uvec4> joints_;
         
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;

@@ -15,6 +15,7 @@
 #include "Assets/FProcModel.h"
 #include "Assets/FSceneLoader.h"
 #include "Assets/Node.h"
+#include "Assets/Skeleton.hpp"
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_filesystem.h>
@@ -275,7 +276,8 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     materials.push_back({Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)), "root_default"});
     if (ext == ".glb" || ext == ".gltf")
     {
-        return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks);
+        std::vector<Assets::Skeleton> skeletons;
+        return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
     }
     if (ext == ".proc")
     {
