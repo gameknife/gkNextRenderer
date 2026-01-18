@@ -15,7 +15,7 @@
     - [x] **Goal:** Verify that a sample glTF file with skinning data is loaded without errors. Inspect logs or debuggers to ensure bone hierarchies and animation clips are populated correctly in memory. (Verified via debug logs during development)
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
 
-## Phase 2: Compute Skinning Implementation [checkpoint: a2c8330]
+## Phase 2: Compute Skinning Implementation [checkpoint: be84727]
 - [x] Task: Develop Skinning Compute Shader d726c50
     - [x] Write Slang/GLSL compute shader for vertex deformation.
     - [x] Implement 4-weight linear blend skinning (LBS).
