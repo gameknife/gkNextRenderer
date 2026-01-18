@@ -159,8 +159,11 @@ namespace Assets
         NodeProxy proxy;
         proxy.instanceId = instanceId_;
         proxy.modelId = modelId_;
+        proxy.skinId = skinIndex_;
+        proxy.jointMatrixOffset = 0;
         proxy.worldTS = WorldTransform();
         proxy.visible = visible_ ? 1 : 0;
+        proxy.nort = 0; // Default
         for ( int i = 0; i < materialIdx_.size(); i++ )
         {
             if (i < 16)

@@ -288,6 +288,7 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
                 {
                     auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
                     comp->AddAnimations(tracks);
+                    comp->PlayAnimation("Default");
                     node->SetSkinnedMesh(comp);
                 }
             }

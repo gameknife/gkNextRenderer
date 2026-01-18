@@ -174,6 +174,10 @@ namespace Assets
         {
             sceneNode->SetSkin(node.skin);
         }
+        else
+        {
+            sceneNode->SetSkin(0xFFFFFFFF);
+        }
 
         outNodes.push_back(sceneNode);
 
@@ -981,7 +985,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
-                    createTrack.AnimationName = animation.name;
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -1030,7 +1034,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
-                    createTrack.AnimationName = animation.name;
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -1080,7 +1084,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
                     
-                    createTrack.AnimationName = animation.name;
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
