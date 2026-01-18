@@ -26,7 +26,7 @@
     - [x] **Goal:** Render the animated mesh using standard rasterization (or a simple debug shader). Verify that the mesh deforms visibly when an animation plays, even if Ray Tracing isn't updated yet.
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Compute Skinning Implementation' (Protocol in workflow.md)
 
-## Phase 3: Ray Tracing & BLAS Integration [checkpoint: 6ac8916]
+## Phase 3: Ray Tracing & BLAS Integration [checkpoint: e2d33dd]
 - [x] Task: BLAS Update Logic 6ac8916
     - [x] Modify the acceleration structure builder to support dynamic mesh updates.
     - [x] Implement `vkCmdBuildAccelerationStructuresKHR` for updating BLAS using the skinned vertex buffer.
