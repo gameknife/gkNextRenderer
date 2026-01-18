@@ -38,8 +38,8 @@
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Ray Tracing & BLAS Integration' (Protocol in workflow.md)
 
 ## Phase 4: Debugging and Polish
-- [x] Task: Debug Visualization
+- [x] Task: Debug Visualization (fc2507d)
     - [x] Implement a system to draw skeletal hierarchies using the existing line rendering utility.
-- [x] Task: Playback API & Name-based Selection
-- [x] Task: Integration Test
-- [x] Task: Checkpoint: Final Feature Review
+- [x] Task: Playback API & Name-based Selection (fc2507d)
+- [x] Task: Integration Test (fc2507d)
+- [x] Task: Checkpoint: Final Feature Review (fc2507d)
