@@ -5,6 +5,8 @@
 
 #include "glm/ext.hpp"
 
+namespace Runtime { class SkinnedMeshComponent; }
+
 namespace Assets
 {
     class Node : public std::enable_shared_from_this<Node>
@@ -73,6 +75,9 @@ namespace Assets
         void SetSkin(int32_t skinIndex) { skinIndex_ = skinIndex; }
         int32_t GetSkin() const { return skinIndex_; }
 
+        void SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh) { skinnedMesh_ = skinnedMesh; }
+        Runtime::SkinnedMeshComponent* GetSkinnedMesh() const { return skinnedMesh_.get(); }
+
     private:
         std::string name_;
 
@@ -86,6 +91,7 @@ namespace Assets
         glm::mat4 prevTransform_;
         uint32_t modelId_;
         int32_t skinIndex_ = -1;
+        std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh_;
         uint32_t instanceId_;
         bool visible_;
         bool rayCastVisible_;

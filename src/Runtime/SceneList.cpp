@@ -16,6 +16,7 @@
 #include "Assets/FSceneLoader.h"
 #include "Assets/Node.h"
 #include "Assets/Skeleton.hpp"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_filesystem.h>
@@ -277,7 +278,21 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     if (ext == ".glb" || ext == ".gltf")
     {
         std::vector<Assets::Skeleton> skeletons;
-        return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+        bool res = Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+        
+        if (res)
+        {
+            for (auto& node : nodes)
+            {
+                if (node->GetSkin() != -1 && node->GetSkin() < skeletons.size())
+                {
+                    auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
+                    comp->AddAnimations(tracks);
+                    node->SetSkinnedMesh(comp);
+                }
+            }
+        }
+        return res;
     }
     if (ext == ".proc")
     {

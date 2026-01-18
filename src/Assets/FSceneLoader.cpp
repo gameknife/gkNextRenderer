@@ -981,6 +981,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
+                    createTrack.AnimationName = animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -1029,6 +1030,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
+                    createTrack.AnimationName = animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -1078,6 +1080,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
                     
+                    createTrack.AnimationName = animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 

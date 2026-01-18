@@ -106,6 +106,7 @@ namespace Assets
         
         void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
         
+        std::string AnimationName;
         std::string NodeName_;
         
         AnimationChannel<glm::vec3> TranslationChannel;
