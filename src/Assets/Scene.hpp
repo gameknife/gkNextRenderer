@@ -120,6 +120,9 @@ namespace Assets
 		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
 		Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
 
+		Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
+		Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
+
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 
 		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
@@ -173,6 +176,12 @@ namespace Assets
 
 		std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
 
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;

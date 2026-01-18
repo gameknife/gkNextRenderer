@@ -82,6 +82,11 @@ namespace Assets
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
 
+        skinWeightBuffer_.reset();
+        skinWeightBufferMemory_.reset();
+        skinJointBuffer_.reset();
+        skinJointBufferMemory_.reset();
+
         cpuShadowMap_.reset();
     }
 
@@ -206,6 +211,8 @@ namespace Assets
         std::vector<GPUVertex> vertices;
         std::vector<glm::detail::hdata> simpleVertices;
         std::vector<uint32_t> indices;
+        std::vector<glm::vec4> allWeights;
+        std::vector<glm::uvec4> allJoints;
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
 
@@ -225,6 +232,19 @@ namespace Assets
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.y));
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
+            }
+            
+            const auto& weights = model.CPUWeights();
+            const auto& joints = model.CPUJoints();
+            if (!weights.empty() && weights.size() == model.CPUVertices().size())
+            {
+                allWeights.insert(allWeights.end(), weights.begin(), weights.end());
+                allJoints.insert(allJoints.end(), joints.begin(), joints.end());
+            }
+            else
+            {
+                allWeights.resize(allWeights.size() + model.CPUVertices().size(), glm::vec4(0));
+                allJoints.resize(allJoints.size() + model.CPUVertices().size(), glm::uvec4(0));
             }
             
             const std::vector<Vertex>& localVertices = model.CPUVertices();
@@ -305,6 +325,8 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_, skinWeightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_, skinJointBufferMemory_);
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
@@ -363,6 +385,9 @@ namespace Assets
         gpuScene_.IndirectDrawCommands = indirectDrawBuffer_->GetDeviceAddress();
         gpuScene_.GPUDrivenStats = gpuDrivenStatsBuffer_->GetDeviceAddress();
         gpuScene_.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
+
+        gpuScene_.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
+        gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
 
         gpuScene_.SwapChainIndex = imageIndex;
 
