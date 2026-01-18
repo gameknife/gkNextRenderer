@@ -8,9 +8,9 @@
 - [x] Task: Implement `SkinnedMeshComponent` 2de9065
     - [x] Create the component class to store animation playback state and skeleton reference.
     - [x] Implement playback logic (update current time, sample animation curves).
-- [ ] Task: GPU Buffer Management
-    - [ ] Allocate GPU buffers for bone matrices (Joint Buffers).
-    - [ ] Ensure mesh data (positions, weights, joints) is correctly uploaded for skinning.
+- [x] Task: GPU Buffer Management 409f04c
+    - [x] Allocate GPU buffers for bone matrices (Joint Buffers).
+    - [x] Ensure mesh data (positions, weights, joints) is correctly uploaded for skinning.
 - [x] Task: **Checkpoint: Data Verification** f3a070f
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
 
