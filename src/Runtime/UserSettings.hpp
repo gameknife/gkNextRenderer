@@ -53,6 +53,7 @@ struct UserSettings final
 	float PaperWhiteNit;
 
 	bool ShowEdge;
+	bool ShowDebugSkeleton = false;
 	bool TickPhysics = true;
 	bool TickAnimation = true;
     float SceneEpsilonScale = 1.0f;

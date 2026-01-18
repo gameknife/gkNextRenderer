@@ -13,6 +13,7 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Runtime/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 extern float GAndroidMagicScale;
 
@@ -492,6 +493,54 @@ void NextRendererGameInstance::DrawSettings()
 			}
 
 			ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &userSetting.PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
+			ImGui::NewLine();
+		}
+
+		if( ImGui::CollapsingHeader(LOCTEXT("Animation"), ImGuiTreeNodeFlags_None) )
+		{
+			ImGui::Checkbox(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
+			ImGui::Checkbox(LOCTEXT("Show Debug Skeleton"), &userSetting.ShowDebugSkeleton);
+            
+            ImGui::Separator();
+            for (auto& node : GetEngine().GetScene().Nodes())
+            {
+                if (auto skinnedMesh = node->GetSkinnedMesh())
+                {
+                    ImGui::PushID(node->GetName().c_str());
+                    ImGui::Text("%s", node->GetName().c_str());
+                    auto animNames = skinnedMesh->GetAnimationNames();
+                    if (!animNames.empty())
+                    {
+                        std::string current = skinnedMesh->GetCurrentAnimationName();
+                        int selectedAnim = -1;
+                        for(int i=0; i<static_cast<int>(animNames.size()); ++i) {
+                            if(animNames[i] == current) {
+                                selectedAnim = i;
+                                break;
+                            }
+                        }
+
+                        std::vector<const char*> animPtrs;
+                        for (const auto& name : animNames) animPtrs.push_back(name.c_str());
+                        
+                        if (ImGui::Combo("##AnimList", &selectedAnim, animPtrs.data(), static_cast<int>(animPtrs.size())))
+                        {
+                            skinnedMesh->PlayAnimation(animNames[selectedAnim]);
+                        }
+                        
+                        float speed = skinnedMesh->GetPlaySpeed();
+                        if (ImGui::SliderFloat("Speed", &speed, -2.0f, 2.0f, "%.2f"))
+                        {
+                            skinnedMesh->SetPlaySpeed(speed);
+                        }
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("No animations");
+                    }
+                    ImGui::PopID();
+                }
+            }
 			ImGui::NewLine();
 		}
 

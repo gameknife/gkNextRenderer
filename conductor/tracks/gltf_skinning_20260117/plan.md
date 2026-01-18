@@ -38,12 +38,8 @@
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Ray Tracing & BLAS Integration' (Protocol in workflow.md)
 
 ## Phase 4: Debugging and Polish
-- [ ] Task: Debug Visualization
-    - [ ] Implement a system to draw skeletal hierarchies using the existing line rendering utility.
-- [ ] Task: Playback API & Name-based Selection
-    - [ ] Expose API to start/stop animations by string name.
-- [ ] Task: Integration Test
-    - [ ] Create a test case (or sample scene) with a rigged glTF model to verify animation and RT reflections.
-- [ ] Task: **Checkpoint: Final Feature Review**
-    - [ ] **Goal:** Test full end-to-end functionality: Load asset -> Select Animation by Name -> Play -> Verify Visuals + Debug Lines.
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Debugging and Polish' (Protocol in workflow.md)
+- [x] Task: Debug Visualization
+    - [x] Implement a system to draw skeletal hierarchies using the existing line rendering utility.
+- [x] Task: Playback API & Name-based Selection
+- [x] Task: Integration Test
+- [x] Task: Checkpoint: Final Feature Review

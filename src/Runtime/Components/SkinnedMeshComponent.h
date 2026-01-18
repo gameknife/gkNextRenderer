@@ -21,9 +21,15 @@ namespace Runtime
         
         void PlayAnimation(const std::string& name, bool loop = true);
         void StopAnimation();
+        void SetPlaySpeed(float speed) { currentState_.PlaySpeed = speed; }
+        float GetPlaySpeed() const { return currentState_.PlaySpeed; }
         
+        void DrawDebugSkeleton(const glm::mat4& worldTransform);
+
         const std::vector<glm::mat4>& GetJointMatrices() const { return jointMatrices_; }
         const Assets::Skeleton& GetSkeleton() const { return skeleton_; }
+        std::vector<std::string> GetAnimationNames() const;
+        std::string GetCurrentAnimationName() const { return currentState_.Playing ? currentState_.Name : ""; }
 
     private:
         void UpdateJoints();
@@ -45,6 +51,7 @@ namespace Runtime
             std::string Name;
             float CurrentTime;
             float Duration;
+            float PlaySpeed = 1.0f;
             bool Loop;
             bool Playing;
         };

@@ -421,6 +421,10 @@ namespace Assets
                 if (auto skinnedMesh = node->GetSkinnedMesh())
                 {
                     skinnedMesh->Update(deltaSeconds);
+                    if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
+                    {
+                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+                    }
                     MarkDirty();
                 }
             }

@@ -1,4 +1,5 @@
 #include "SkinnedMeshComponent.h"
+#include "Runtime/Engine.hpp"
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <functional>
@@ -70,11 +71,21 @@ namespace Runtime
         currentState_.Playing = false;
     }
 
+    std::vector<std::string> SkinnedMeshComponent::GetAnimationNames() const
+    {
+        std::vector<std::string> names;
+        for (const auto& pair : animations_)
+        {
+            names.push_back(pair.first);
+        }
+        return names;
+    }
+
     void SkinnedMeshComponent::Update(float deltaTime)
     {
         if (!currentState_.Playing) return;
         
-        currentState_.CurrentTime += deltaTime;
+        currentState_.CurrentTime += deltaTime * currentState_.PlaySpeed;
         
         if (currentState_.CurrentTime > currentState_.Duration)
         {
@@ -85,6 +96,18 @@ namespace Runtime
             else
             {
                 currentState_.CurrentTime = currentState_.Duration;
+                currentState_.Playing = false;
+            }
+        }
+        else if (currentState_.CurrentTime < 0.0f)
+        {
+            if (currentState_.Loop)
+            {
+                currentState_.CurrentTime = currentState_.Duration + fmod(currentState_.CurrentTime, currentState_.Duration);
+            }
+            else
+            {
+                currentState_.CurrentTime = 0.0f;
                 currentState_.Playing = false;
             }
         }
@@ -116,6 +139,21 @@ namespace Runtime
         }
         
         UpdateJoints();
+    }
+
+    void SkinnedMeshComponent::DrawDebugSkeleton(const glm::mat4& worldTransform)
+    {
+        for (size_t i = 0; i < skeleton_.Joints.size(); ++i)
+        {
+            int parentIdx = skeleton_.Joints[i].ParentIndex;
+            if (parentIdx != -1)
+            {
+                glm::vec3 start = glm::vec3(worldTransform * runtimeJoints_[parentIdx].GlobalTransform * glm::vec4(0, 0, 0, 1));
+                glm::vec3 end = glm::vec3(worldTransform * runtimeJoints_[i].GlobalTransform * glm::vec4(0, 0, 0, 1));
+                
+                NextEngine::GetInstance()->DrawAuxLine(start, end, glm::vec4(0, 1, 0, 1), 2.0f);
+            }
+        }
     }
 
     void SkinnedMeshComponent::UpdateJoints()
