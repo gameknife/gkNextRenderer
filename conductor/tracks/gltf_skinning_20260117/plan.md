@@ -15,16 +15,16 @@
     - [x] **Goal:** Verify that a sample glTF file with skinning data is loaded without errors. Inspect logs or debuggers to ensure bone hierarchies and animation clips are populated correctly in memory. (Verified via debug logs during development)
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation and Data Structures' (Protocol in workflow.md)
 
-## Phase 2: Compute Skinning Implementation
-- [ ] Task: Develop Skinning Compute Shader
-    - [ ] Write Slang/GLSL compute shader for vertex deformation.
-    - [ ] Implement 4-weight linear blend skinning (LBS).
-- [ ] Task: Integrate Skinning Pass into Renderer
-    - [ ] Add a new compute pass to the frame graph or rendering pipeline.
-    - [ ] Handle synchronization (barriers) between skinning pass and subsequent rendering/RT passes.
-- [ ] Task: **Checkpoint: Visual Verification (Rasterization)**
-    - [ ] **Goal:** Render the animated mesh using standard rasterization (or a simple debug shader). Verify that the mesh deforms visibly when an animation plays, even if Ray Tracing isn't updated yet.
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Compute Skinning Implementation' (Protocol in workflow.md)
+## Phase 2: Compute Skinning Implementation [checkpoint: a2c8330]
+- [x] Task: Develop Skinning Compute Shader d726c50
+    - [x] Write Slang/GLSL compute shader for vertex deformation.
+    - [x] Implement 4-weight linear blend skinning (LBS).
+- [x] Task: Integrate Skinning Pass into Renderer a2c8330
+    - [x] Add a new compute pass to the frame graph or rendering pipeline.
+    - [x] Handle synchronization (barriers) between skinning pass and subsequent rendering/RT passes.
+- [x] Task: **Checkpoint: Visual Verification (Rasterization)** a2c8330
+    - [x] **Goal:** Render the animated mesh using standard rasterization (or a simple debug shader). Verify that the mesh deforms visibly when an animation plays, even if Ray Tracing isn't updated yet.
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Compute Skinning Implementation' (Protocol in workflow.md)
 
 ## Phase 3: Ray Tracing & BLAS Integration
 - [ ] Task: BLAS Update Logic
