@@ -802,7 +802,8 @@ namespace Vulkan
                             gpuScene.custom_data_1 = vertexOffset;
                             gpuScene.custom_data_2 = vertexCount;
 
-                            vkCmdPushConstants(commandBuffer, skinningPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                            VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
+                            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                                0, sizeof(Assets::GPUScene), &gpuScene);
 
                             uint32_t groupCount = (vertexCount + 63) / 64;
@@ -1555,7 +1556,8 @@ namespace Vulkan
                 Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
                 gpuScene.custom_data_0 = offsetInCubes;
                     
-                vkCmdPushConstants(commandBuffer, softAmbientCubeGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                VkPipelineLayout layout = softAmbientCubeGenPipeline_->PipelineLayout().Handle();
+                vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                    0, sizeof(Assets::GPUScene), &gpuScene);
                 
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
