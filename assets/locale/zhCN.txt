@@ -2,6 +2,9 @@ AdaptiveSample;自适应采样
 AdaptiveVariance;自适应采样阈值
 AntiAlias;抗锯齿
 Aperture;光圈
+Animation;动画
+Tick Animation;开启播放
+Show Debug Skeleton;显示骨骼
 Base;基座
 Blocks;基础块
 Brush Bar, switch Block, select Color to build.;笔刷区，切换方块，选择颜色建造
