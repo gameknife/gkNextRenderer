@@ -287,6 +287,9 @@ public struct ALIGN_8 GPUScene
     uint64_t GPUDrivenStats;
     uint64_t TLAS;
 
+    uint64_t SkinWeights;
+    uint64_t SkinJoints;
+
     uint SwapChainIndex;
     uint custom_data_0;
     uint custom_data_1;
@@ -324,6 +327,8 @@ public struct ALIGN_8 GPUScene
    
     public GPUDrivenStat *GPUDrivenStats;
     public uint64_t TLAS;
+    public float4 *SkinWeights;
+    public uint4 *SkinJoints;
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
 	}
@@ -420,6 +425,16 @@ public struct ALIGN_8 GPUScene
     public property GPUDrivenStat* GPUDrivenStats
     {
         get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
+    }
+
+    uint64_t2 SkinWeights_SkinJoints_Address;
+    public property float4* SkinWeights
+    {
+        get { return (float4*)SkinWeights_SkinJoints_Address.x; }
+    }
+    public property uint4* SkinJoints
+    {
+        get { return (uint4*)SkinWeights_SkinJoints_Address.y; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {
