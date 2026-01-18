@@ -421,7 +421,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     return false;
 }
 
-bool NextEngine::Tick()
+bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
     
@@ -438,6 +438,7 @@ bool NextEngine::Tick()
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
     deltaSeconds_ = time_ - prevTime;
+    if (forcingDelta) deltaSeconds_ = 1.0 / 30.0;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
     
@@ -540,6 +541,7 @@ void NextEngine::End()
     {
         TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+        TaskCoordinator::DestroyInstance();
     }
 
     // sound manager unit

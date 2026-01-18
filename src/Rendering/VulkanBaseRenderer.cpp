@@ -319,6 +319,7 @@ namespace Vulkan
         StreamlineWrapper::Shutdown();
         device_->WaitIdle();
         gpuTimer_.reset();
+        globalTexturePool_.reset();
     }
 
     Assets::Scene& VulkanBaseRenderer::GetScene()

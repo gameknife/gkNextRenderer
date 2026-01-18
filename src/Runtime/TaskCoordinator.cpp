@@ -36,6 +36,18 @@ void TaskCoordinator::TestCase()
     TaskCoordinator taskCoordinator;
 }
 
+TaskCoordinator::~TaskCoordinator()
+{
+    for (auto& thread : threads_)
+    {
+        thread.reset();
+    }
+    for (auto& thread : lowThreads_)
+    {
+        thread.reset();
+    }
+}
+
 uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority)
 {
     static uint32_t taskId = 0;

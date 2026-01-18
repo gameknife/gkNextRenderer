@@ -121,7 +121,7 @@ public:
 
 	void Start();
 	bool HandleEvent(SDL_Event& event);
-	bool Tick();
+	bool Tick(bool forcingDelta = false);
 	void End();
 	
 	void OnTouch(bool down, double xpos, double ypos);

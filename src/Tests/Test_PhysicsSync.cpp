@@ -1,59 +1,16 @@
-#define CATCH_CONFIG_MAIN
 #include <catch2/catch_all.hpp>
-#include "Runtime/Engine.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/Node.h"
+#include "TestCommon.hpp"
 #include "Runtime/NextPhysics.h"
-#include "Options.hpp"
-#include <memory>
-#include <thread>
+#include "Assets/Node.h"
 
-std::unique_ptr<Options> GOptionPtr;
+// Note: TestCommon.hpp provides EngineTestFixture and the necessary CreateGameInstance implementation
 
-class TestGameInstance : public NextGameInstanceBase
-{
-public:
-    using NextGameInstanceBase::NextGameInstanceBase;
-    void OnInit() override {}
-    void OnTick(double deltaSeconds) override {}
-    void OnDestroy() override {}
-    bool OnRenderUI() override { return false; }
-};
-
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
-{
-    return std::make_unique<TestGameInstance>(config, options, engine);
-}
-
-void SimulateEngine(NextEngine* engine, int frames)
-{
-    for (int i = 0; i < frames; ++i)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        engine->Tick();
-    }
-}
-
-TEST_CASE("Physical Simulation of Static Body Visibility", "[Integration][Physics]") {
+TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibility", "[Integration][Physics]") {
     
-    const char* argv[] = { 
-        "gkNextUnitTests", 
-        "--width=800", 
-        "--height=600",
-        "--renderer=0" 
-    };
-    int argc = sizeof(argv) / sizeof(argv[0]);
+    // Engine is already started by Fixture constructor
+    // engine_ and options_ are available
     
-    GOptionPtr.reset(new Options(argc, argv));
-    GOption = GOptionPtr.get();
-    
-    auto engine = std::make_unique<NextEngine>(*GOption);
-    engine->Start();
-    
-    // Warm up
-    SimulateEngine(engine.get(), 10);
-    
-    auto physics = engine->GetPhysicsEngine();
+    auto physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
     
     SECTION("Static Node Collision Toggles with Visibility") {
@@ -72,7 +29,7 @@ TEST_CASE("Physical Simulation of Static Body Visibility", "[Integration][Physic
             glm::vec3 ballPos(0, 5, 0);
             auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, JPH::EMotionType::Dynamic);
             
-            SimulateEngine(engine.get(), 60);
+            Simulate(120);
             
             auto* bodyInfo = physics->GetBody(ballBodyId);
             REQUIRE(bodyInfo != nullptr);
@@ -88,7 +45,7 @@ TEST_CASE("Physical Simulation of Static Body Visibility", "[Integration][Physic
             glm::vec3 ballPos(0, 5, 0);
             auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, JPH::EMotionType::Dynamic);
             
-            SimulateEngine(engine.get(), 60);
+            Simulate(120);
             
             auto* bodyInfo = physics->GetBody(ballBodyId);
             REQUIRE(bodyInfo != nullptr);
@@ -96,7 +53,4 @@ TEST_CASE("Physical Simulation of Static Body Visibility", "[Integration][Physic
             CHECK(bodyInfo->position.y < -1.0f);
         }
     }
-    
-    engine->End();
-    engine.reset();
 }
