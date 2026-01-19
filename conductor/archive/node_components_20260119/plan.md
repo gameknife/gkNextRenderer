@@ -1,0 +1,47 @@
+# Plan: Node Component Refactor
+
+## Phase 1: Foundation & Component System [checkpoint: f65b3e4]
+- [x] Task: Define `Component` base class and generic management in `Node` f65b3e4
+    - [x] Create `src/Assets/Component.h` with a base `Component` class.
+    - [x] Add `std::vector<std::shared_ptr<Component>> components_` to `Node`.
+    - [x] Implement `Node::AddComponent<T>()` with "one per type" enforcement.
+    - [x] Implement `Node::GetComponent<T>()` using `dynamic_pointer_cast`.
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Component System' (Protocol in workflow.md) f65b3e4
+
+## Phase 2: RenderComponent Refactor [checkpoint: ea08589]
+- [x] Task: Create `RenderComponent` and migrate data ea08589
+    - [x] Implement `RenderComponent` inheriting from `Component`.
+    - [x] Move `modelId`, `materialIdx`, `visible`, and `rayCastVisible` to `RenderComponent`.
+    - [x] Update `Node` to remove these fields and their direct getters/setters.
+- [x] Task: Update Renderer and Scene loading for `RenderComponent` ea08589
+    - [x] Update `GltfLoader` or equivalent to attach `RenderComponent` during node creation.
+    - [x] Update rendering loops to fetch data via `node->GetComponent<RenderComponent>()`.
+- [x] Task: Conductor - User Manual Verification 'Phase 2: RenderComponent Refactor' (Protocol in workflow.md) ea08589
+
+## Phase 3: PhysicsComponent Refactor [checkpoint: d0dfd12]
+- [x] Task: Create `PhysicsComponent` and migrate data d0dfd12
+    - [x] Implement `PhysicsComponent` inheriting from `Component`.
+    - [x] Move `physicsBodyTemp`, `mobility`, and `physicsOffset` to `PhysicsComponent`.
+    - [x] Update `Node` to remove these fields and their direct getters/setters.
+- [x] Task: Update Physics System for `PhysicsComponent` d0dfd12
+    - [x] Update physics initialization to use `node->GetComponent<PhysicsComponent>()`.
+    - [x] Update physics-to-transform sync logic.
+- [x] Task: Conductor - User Manual Verification 'Phase 3: PhysicsComponent Refactor' (Protocol in workflow.md) d0dfd12
+
+## Phase 4: SkinnedMeshComponent Integration [checkpoint: 72aafc5]
+- [x] Task: Adapt `SkinnedMeshComponent` to the new system 72aafc5
+    - [x] Update `SkinnedMeshComponent` to inherit from `Component`.
+    - [x] Move `skinIndex` (if applicable) to `RenderComponent` or manage via `SkinnedMeshComponent`.
+    - [x] Remove `skinnedMesh_` pointer from `Node`.
+- [x] Task: Update Skinned Mesh call sites 72aafc5
+    - [x] Update animation and skinning logic to retrieve the component via `GetComponent<SkinnedMeshComponent>()`.
+- [x] Task: Conductor - User Manual Verification 'Phase 4: SkinnedMeshComponent Integration' (Protocol in workflow.md) 72aafc5
+
+## Phase 5: Cleanup & Verification [checkpoint: f2c21ac]
+- [x] Task: Final `Node` interface cleanup f2c21ac
+    - [x] Remove all redundant helper methods in `Node`.
+    - [x] Ensure `Node` header is minimal (Hierarchy + Transform).
+- [x] Task: Run full test suite and verify renderer/physics f2c21ac
+    - [x] Execute `gkNextUnitTests.exe`.
+    - [x] Manually verify complex scenes (with skinning and physics) in the renderer.
+- [x] Task: Conductor - User Manual Verification 'Phase 5: Cleanup & Verification' (Protocol in workflow.md) f2c21ac
