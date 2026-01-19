@@ -38,7 +38,7 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 4: SkinnedMeshComponent Integration' (Protocol in workflow.md) 72aafc5
 
 ## Phase 5: Cleanup & Verification
-- [ ] Task: Final `Node` interface cleanup
+- [~] Task: Final `Node` interface cleanup
     - [ ] Remove all redundant helper methods in `Node`.
     - [ ] Ensure `Node` header is minimal (Hierarchy + Transform).
 - [ ] Task: Run full test suite and verify renderer/physics

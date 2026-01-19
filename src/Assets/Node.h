@@ -57,22 +57,6 @@ namespace Assets
 
         NodeProxy GetNodeProxy() const;
 
-        void BindPhysicsBody(NextBodyID bodyId);
-
-        void SetMobility(ENodeMobility staticType);
-        ENodeMobility GetMobility() const;
-
-        const NextBodyID& GetPhysicsBody() const;
-
-        void SetPhysicsOffset(const glm::vec3& offset);
-        const glm::vec3& GetPhysicsOffset() const;
-        
-        void SetSkin(int32_t skinIndex);
-        int32_t GetSkin() const;
-
-        void SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh);
-        Runtime::SkinnedMeshComponent* GetSkinnedMesh() const;
-
         // New Component System
         template <typename T>
         void AddComponent(std::shared_ptr<T> component)
@@ -116,9 +100,6 @@ namespace Assets
         }
 
     private:
-        std::shared_ptr<PhysicsComponent> GetOrAddPhysicsComponent();
-        std::shared_ptr<PhysicsComponent> GetPhysicsComponent() const;
-
         std::string name_;
 
         mutable glm::vec3 translation_;
@@ -143,5 +124,8 @@ namespace Assets
         // ENodeMobility mobility_; // Moved
 
         std::vector<std::shared_ptr<Component>> components_;
+        
+        // Helper to avoid allocating PhysicsComponent if not needed immediately during migration? 
+        // No, let's alloc on demand
     };
 }

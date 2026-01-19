@@ -518,7 +518,7 @@ void NextRendererGameInstance::DrawSettings()
             ImGui::Separator();
             for (auto& node : GetEngine().GetScene().Nodes())
             {
-                if (auto skinnedMesh = node->GetSkinnedMesh())
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                 {
                     ImGui::PushID(node->GetName().c_str());
                     ImGui::Text("%s", node->GetName().c_str());

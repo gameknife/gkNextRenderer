@@ -223,7 +223,7 @@ namespace Vulkan::RayTracing
                 for (const auto& node : scene.Nodes())
                 {
                     auto render = node->GetComponent<Assets::RenderComponent>();
-                    if (render && render->GetModelId() == modelIdx && node->GetSkin() != -1)
+                    if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
                     {
                         hasSkin = true;
                         break;
@@ -322,7 +322,7 @@ namespace Vulkan::RayTracing
             for (const auto& node : scene.Nodes())
             {
                 auto render = node->GetComponent<Assets::RenderComponent>();
-                if (render && render->GetModelId() == modelIdx && node->GetSkin() != -1)
+                if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
                 {
                     hasSkin = true;
                     break;

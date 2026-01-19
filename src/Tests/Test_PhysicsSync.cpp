@@ -21,7 +21,11 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
         auto bodyId = physics->CreateBoxBody(floorPos, glm::vec3(10, 1, 10), NextMotionType::Static);
         
         auto floorNode = Assets::Node::CreateNode("Floor", floorPos, glm::quat(1,0,0,0), glm::vec3(1), 0);
-        floorNode->BindPhysicsBody(bodyId);
+        
+        // Setup Physics
+        auto physComp = std::make_shared<Assets::PhysicsComponent>();
+        physComp->BindPhysicsBody(bodyId);
+        floorNode->AddComponent(physComp);
         
         // Setup RenderComponent (though not strictly needed for physics test, good for completeness)
         auto renderComp = std::make_shared<Assets::RenderComponent>();

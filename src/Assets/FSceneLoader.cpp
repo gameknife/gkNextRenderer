@@ -176,11 +176,17 @@ namespace Assets
 
         if (node.skin != -1)
         {
-            sceneNode->SetSkin(node.skin);
+            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            {
+                render->SetSkinIndex(node.skin);
+            }
         }
         else
         {
-            sceneNode->SetSkin(0xFFFFFFFF);
+            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            {
+                render->SetSkinIndex(0xFFFFFFFF);
+            }
         }
 
         outNodes.push_back(sceneNode);

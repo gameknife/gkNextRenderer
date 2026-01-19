@@ -95,12 +95,13 @@ namespace Assets
     {
         for (auto& node : nodes_)
         {
-            if (node->GetSkin() != -1 && node->GetSkin() < skeletons.size())
+            auto render = node->GetComponent<RenderComponent>();
+            if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
             {
-                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
+                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
                 comp->AddAnimations(tracks_);
                 comp->PlayAnimation("Default");
-                node->SetSkinnedMesh(comp);
+                node->AddComponent(comp);
             }
         }
     }
@@ -480,7 +481,7 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                if (auto skinnedMesh = node->GetSkinnedMesh())
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                 {
                     skinnedMesh->Update(deltaSeconds);
                     if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
@@ -653,7 +654,7 @@ namespace Assets
                             if (model)
                             {
                                 uint32_t nodeJointOffset = 0;
-                                if (auto skinnedMesh = node->GetSkinnedMesh())
+                                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                                 {
                                     nodeJointOffset = currentJointOffset;
                                     currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
