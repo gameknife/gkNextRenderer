@@ -2,8 +2,13 @@
 #include "Common/CoreMinimal.hpp"
 #include "UniformBuffer.hpp"
 #include "Runtime/NextPhysics.h"
+#include "Component.h"
 
 #include "glm/ext.hpp"
+
+#include <vector>
+#include <memory>
+#include <type_traits>
 
 namespace Runtime { class SkinnedMeshComponent; }
 
@@ -78,6 +83,48 @@ namespace Assets
         void SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh) { skinnedMesh_ = skinnedMesh; }
         Runtime::SkinnedMeshComponent* GetSkinnedMesh() const { return skinnedMesh_.get(); }
 
+        // New Component System
+        template <typename T>
+        void AddComponent(std::shared_ptr<T> component)
+        {
+            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            
+            // Remove existing component of same type
+            for (auto it = components_.begin(); it != components_.end(); )
+            {
+                if (std::dynamic_pointer_cast<T>(*it))
+                {
+                    it = components_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            
+            if (component)
+            {
+                component->SetOwner(this);
+                components_.push_back(component);
+            }
+        }
+
+        template <typename T>
+        std::shared_ptr<T> GetComponent() const
+        {
+            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            
+            for (const auto& comp : components_)
+            {
+                auto casted = std::dynamic_pointer_cast<T>(comp);
+                if (casted)
+                {
+                    return casted;
+                }
+            }
+            return nullptr;
+        }
+
     private:
         std::string name_;
 
@@ -101,5 +148,7 @@ namespace Assets
         std::array<uint32_t, 16> materialIdx_;
         NextBodyID physicsBodyTemp_;
         ENodeMobility mobility_;
+
+        std::vector<std::shared_ptr<Component>> components_;
     };
 }
