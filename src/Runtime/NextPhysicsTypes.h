@@ -6,11 +6,7 @@
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Body/MotionType.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
-
-namespace JPH
-{
-    class MeshShapeSettings;
-}
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
 using NextBodyID = JPH::BodyID;
 using NextMotionType = JPH::EMotionType;
