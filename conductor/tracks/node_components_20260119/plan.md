@@ -8,15 +8,15 @@
     - [x] Implement `Node::GetComponent<T>()` using `dynamic_pointer_cast`.
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Component System' (Protocol in workflow.md) f65b3e4
 
-## Phase 2: RenderComponent Refactor
-- [~] Task: Create `RenderComponent` and migrate data
-    - [ ] Implement `RenderComponent` inheriting from `Component`.
-    - [ ] Move `modelId`, `materialIdx`, `visible`, and `rayCastVisible` to `RenderComponent`.
-    - [ ] Update `Node` to remove these fields and their direct getters/setters.
-- [ ] Task: Update Renderer and Scene loading for `RenderComponent`
-    - [ ] Update `GltfLoader` or equivalent to attach `RenderComponent` during node creation.
-    - [ ] Update rendering loops to fetch data via `node->GetComponent<RenderComponent>()`.
-- [~] Task: Conductor - User Manual Verification 'Phase 2: RenderComponent Refactor' (Protocol in workflow.md)
+## Phase 2: RenderComponent Refactor [checkpoint: ea08589]
+- [x] Task: Create `RenderComponent` and migrate data ea08589
+    - [x] Implement `RenderComponent` inheriting from `Component`.
+    - [x] Move `modelId`, `materialIdx`, `visible`, and `rayCastVisible` to `RenderComponent`.
+    - [x] Update `Node` to remove these fields and their direct getters/setters.
+- [x] Task: Update Renderer and Scene loading for `RenderComponent` ea08589
+    - [x] Update `GltfLoader` or equivalent to attach `RenderComponent` during node creation.
+    - [x] Update rendering loops to fetch data via `node->GetComponent<RenderComponent>()`.
+- [x] Task: Conductor - User Manual Verification 'Phase 2: RenderComponent Refactor' (Protocol in workflow.md) ea08589
 
 ## Phase 3: PhysicsComponent Refactor
 - [ ] Task: Create `PhysicsComponent` and migrate data
