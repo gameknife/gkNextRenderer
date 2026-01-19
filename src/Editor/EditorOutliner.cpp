@@ -2,6 +2,7 @@
 #include "EditorGUI.h"
 #include "Assets/Model.hpp"
 #include "Assets/Node.h"
+#include "Assets/RenderComponent.h"
 #include "Assets/Scene.hpp"
 
 
@@ -17,7 +18,9 @@ void DrawNode(Assets::Scene* scene, Assets::Node* node)
 
     
     ImGui::PushStyleColor(ImGuiCol_Text, selected ? Editor::ActiveColor : ImGui::GetColorU32(ImGuiCol_Text));
-    if (ImGui::TreeNodeEx(((node->GetModel() == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node->GetName()).c_str(), flag))
+    auto render = node->GetComponent<Assets::RenderComponent>();
+    int modelId = render ? render->GetModelId() : -1;
+    if (ImGui::TreeNodeEx(((modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node->GetName()).c_str(), flag))
     {
         ImGui::PopStyleColor();
         if (ImGui::IsItemClicked())

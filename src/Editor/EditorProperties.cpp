@@ -1,5 +1,6 @@
 #include "EditorGUI.h"
 #include "Assets/Node.h"
+#include "Assets/RenderComponent.h"
 #include "Assets/Scene.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -68,17 +69,18 @@ void Editor::GUI::ShowProperties()
             ImGui::NewLine();
             ImGui::Text(ICON_FA_CUBE " Mesh");
             ImGui::Separator();
-            int modelId = selectedObj->GetModel();
+            auto render = selectedObj->GetComponent<Assets::RenderComponent>();
+            int modelId = render ? render->GetModelId() : -1;
             ImGui::InputInt("##ModelId", &modelId, 1, 1, ImGuiInputTextFlags_ReadOnly);
 
             ImGui::NewLine();
             ImGui::Text( ICON_FA_CIRCLE_HALF_STROKE " Material");
             ImGui::Separator();
             
-            if(current_scene != nullptr && modelId != -1)
+            if(current_scene != nullptr && modelId != -1 && render)
             {
                 auto& model = current_scene->Models()[modelId];
-                auto& mats = selectedObj->Materials();
+                auto& mats = render->Materials();
                 for ( auto& mat : mats)
                 {
                     int matIdx = mat;

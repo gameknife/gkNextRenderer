@@ -357,6 +357,7 @@ add_executable(gkNextUnitTests
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_ComponentSystem.cpp
+	Tests/Test_RenderComponent.cpp
 )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)

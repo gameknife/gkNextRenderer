@@ -6,6 +6,7 @@
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/Node.h"
+#include "Assets/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
@@ -221,7 +222,8 @@ namespace Vulkan::RayTracing
                 bool hasSkin = false;
                 for (const auto& node : scene.Nodes())
                 {
-                    if (node->GetModel() == modelIdx && node->GetSkin() != -1)
+                    auto render = node->GetComponent<Assets::RenderComponent>();
+                    if (render && render->GetModelId() == modelIdx && node->GetSkin() != -1)
                     {
                         hasSkin = true;
                         break;
@@ -319,7 +321,8 @@ namespace Vulkan::RayTracing
             bool hasSkin = false;
             for (const auto& node : scene.Nodes())
             {
-                if (node->GetModel() == modelIdx && node->GetSkin() != -1)
+                auto render = node->GetComponent<Assets::RenderComponent>();
+                if (render && render->GetModelId() == modelIdx && node->GetSkin() != -1)
                 {
                     hasSkin = true;
                     break;

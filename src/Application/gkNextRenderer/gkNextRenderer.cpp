@@ -7,6 +7,7 @@
 
 #include "Assets/FProcModel.h"
 #include "Assets/Node.h"
+#include "Assets/RenderComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
@@ -275,12 +276,16 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
 	glm::vec3 shotDir = normalize((farTarget - center));
 	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), modelId_,
-															   instanceId, false);
+	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), instanceId);
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-	newNode->SetMaterial( { newMatId } );
-	newNode->SetVisible(true);
+	
+	auto renderComp = std::make_shared<Assets::RenderComponent>();
+	renderComp->SetModelId(modelId_);
+	renderComp->SetMaterial({newMatId});
+	renderComp->SetVisible(true);
+	newNode->AddComponent(renderComp);
+	
 	newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
 	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
 	newNode->BindPhysicsBody(id);
@@ -298,12 +303,16 @@ void NextRendererGameInstance::CreateBoxAndPush()
     glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 200.f;
     glm::vec3 shotDir = normalize((farTarget - center));
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), boxModelId_,
-                                                               instanceId, false);
+    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), instanceId);
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-    newNode->SetMaterial( { newMatId } );
-    newNode->SetVisible(true);
+    
+    auto renderComp = std::make_shared<Assets::RenderComponent>();
+    renderComp->SetModelId(boxModelId_);
+    renderComp->SetMaterial({newMatId});
+    renderComp->SetVisible(true);
+    newNode->AddComponent(renderComp);
+    
     newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
     newNode->BindPhysicsBody(id);

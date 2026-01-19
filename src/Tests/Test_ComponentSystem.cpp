@@ -11,8 +11,8 @@ public:
 };
 
 TEST_CASE("Component System Basics", "[Unit][Component]") {
-    // CreateNode(name, translation, rotation, scale, modelId, instanceId, replace)
-    auto node = Assets::Node::CreateNode("TestNode", glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), 0, 0, false);
+    // CreateNode(name, translation, rotation, scale, instanceId)
+    auto node = Assets::Node::CreateNode("TestNode", glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), 0);
     
     SECTION("Add and Get Component") {
         auto comp = std::make_shared<TestComponent>();
