@@ -10,7 +10,7 @@
 #include "Model.hpp"
 #include "Skeleton.hpp"
 #include "Runtime/NextPhysics.h"
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include "Runtime/NextPhysicsTypes.h"
 
 namespace Vulkan
 {
@@ -224,7 +224,7 @@ namespace Assets
 
 		glm::vec3 sceneAABBMin_ {FLT_MAX, FLT_MAX, FLT_MAX};
 		glm::vec3 sceneAABBMax_ {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-		std::vector<JPH::RefConst<JPH::MeshShapeSettings> > cachedMeshShapes_;
+		std::vector<NextRefConst<NextMeshShapeSettings> > cachedMeshShapes_;
 
 		VkDeviceAddress skinnedVerticesAddr_ = 0;
 		VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
