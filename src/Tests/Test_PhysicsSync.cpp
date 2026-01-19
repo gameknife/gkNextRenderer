@@ -17,7 +17,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
         // 1. Create Static Floor
         // Using CreateBoxBody directly to bypass MeshShape dependency in unit test environment
         glm::vec3 floorPos(0, -1, 0);
-        auto bodyId = physics->CreateBoxBody(floorPos, glm::vec3(10, 1, 10), JPH::EMotionType::Static);
+        auto bodyId = physics->CreateBoxBody(floorPos, glm::vec3(10, 1, 10), NextMotionType::Static);
         
         auto floorNode = Assets::Node::CreateNode("Floor", floorPos, glm::quat(1,0,0,0), glm::vec3(1), 0, 0, false);
         floorNode->BindPhysicsBody(bodyId);
@@ -27,7 +27,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
             floorNode->SetVisible(true);
             
             glm::vec3 ballPos(0, 5, 0);
-            auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, JPH::EMotionType::Dynamic);
+            auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, NextMotionType::Dynamic);
             
             Simulate(120);
             
@@ -43,7 +43,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
             floorNode->SetVisible(false);
             
             glm::vec3 ballPos(0, 5, 0);
-            auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, JPH::EMotionType::Dynamic);
+            auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, NextMotionType::Dynamic);
             
             Simulate(120);
             

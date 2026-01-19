@@ -62,12 +62,12 @@ namespace Assets
         std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         NodeProxy GetNodeProxy() const;
 
-        void BindPhysicsBody(JPH::BodyID bodyId) { physicsBodyTemp_ = bodyId; }
+        void BindPhysicsBody(NextBodyID bodyId) { physicsBodyTemp_ = bodyId; }
 
         void SetMobility(ENodeMobility staticType) { mobility_ = staticType; }
         ENodeMobility GetMobility() const { return mobility_; }
 
-        const JPH::BodyID& GetPhysicsBody() const { return physicsBodyTemp_; }
+        const NextBodyID& GetPhysicsBody() const { return physicsBodyTemp_; }
 
         void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
         const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
@@ -99,7 +99,7 @@ namespace Assets
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
         std::array<uint32_t, 16> materialIdx_;
-        JPH::BodyID physicsBodyTemp_;
+        NextBodyID physicsBodyTemp_;
         ENodeMobility mobility_;
     };
 }

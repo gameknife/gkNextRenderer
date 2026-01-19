@@ -59,7 +59,7 @@ namespace
                 
                 if (length(center - vec3(4, 0.2f, 0)) > 0.9f)
                 {
-                    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, JPH::EMotionType::Dynamic);
+                    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
                     
                     if (chooseMat < 0.7f) // Diffuse
                     {
@@ -159,21 +159,21 @@ namespace
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx0});
-        auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
         nodes.back()->SetMobility(Assets::Node::ENodeMobility::Dynamic);
         nodes.back()->BindPhysicsBody(body1);
         
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx1});
-        auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
         nodes.back()->SetMobility(Assets::Node::ENodeMobility::Dynamic);
         nodes.back()->BindPhysicsBody(body2);
         
         nodes.push_back(Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), modelIdx, static_cast<uint32_t>(nodes.size()), isProc));
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({matIdx2});
-        auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, JPH::EMotionType::Dynamic);
+        auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
         nodes.back()->SetMobility(Assets::Node::ENodeMobility::Dynamic);
         nodes.back()->BindPhysicsBody(body3);
         
@@ -217,7 +217,7 @@ namespace
         nodes.back()->SetVisible(true);
         nodes.back()->SetMaterial({prevMatId + 5});
 
-        auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, JPH::EMotionType::Dynamic);
+        auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, NextMotionType::Dynamic);
         nodes.back()->SetMobility(Assets::Node::ENodeMobility::Dynamic);
         nodes.back()->BindPhysicsBody(id);
         

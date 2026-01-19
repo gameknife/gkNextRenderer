@@ -282,7 +282,7 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	newNode->SetMaterial( { newMatId } );
 	newNode->SetVisible(true);
 	newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, JPH::EMotionType::Dynamic);
+	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
 	newNode->BindPhysicsBody(id);
 
 	GetEngine().GetScene().AddNode(newNode);
@@ -305,7 +305,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
     newNode->SetMaterial( { newMatId } );
     newNode->SetVisible(true);
     newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, JPH::EMotionType::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
     newNode->BindPhysicsBody(id);
 
     GetEngine().GetScene().AddNode(newNode);
