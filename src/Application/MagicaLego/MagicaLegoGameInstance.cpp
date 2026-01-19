@@ -2,6 +2,7 @@
 #include "Assets/Scene.hpp"
 #include "Assets/Node.h"
 #include "Assets/RenderComponent.h"
+#include "Assets/PhysicsComponent.h"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -454,10 +455,12 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
     renderComp->SetRayCastVisible(false);
     newNode->AddComponent(renderComp);
 
-    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
+    auto phys = std::make_shared<Assets::PhysicsComponent>();
+    phys->SetMobility(Assets::ENodeMobility::Dynamic);
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, NextMotionType::Dynamic);
-    newNode->BindPhysicsBody(id);
-    newNode->SetPhysicsOffset(physicsOffset);
+    phys->BindPhysicsBody(id);
+    phys->SetPhysicsOffset(physicsOffset);
+    newNode->AddComponent(phys);
     
     GetEngine().GetScene().Nodes().push_back(newNode);
     GetEngine().GetScene().MarkDirty();

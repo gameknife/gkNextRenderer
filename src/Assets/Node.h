@@ -3,6 +3,7 @@
 #include "UniformBuffer.hpp"
 #include "Runtime/NextPhysics.h"
 #include "Component.h"
+#include "PhysicsComponent.h"
 
 #include "glm/ext.hpp"
 
@@ -17,14 +18,9 @@ namespace Assets
     class Node : public std::enable_shared_from_this<Node>
     {
     public:
-        enum class ENodeMobility
-        {
-            Static,
-            Dynamic,
-            Kinematic
-        };
+        // Use enum from PhysicsComponent to maintain compatibility, but eventually we should use Assets::ENodeMobility directly
+        using ENodeMobility = Assets::ENodeMobility;
         
-        // Removed modelId from signature
         static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId = 0);
         Node(std::string name,  glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId);
         
@@ -46,7 +42,7 @@ namespace Assets
         const std::string& GetName() const {return name_; }
 
         // Render properties moved to RenderComponent
-        // Physics properties (except those not yet migrated)
+        // Physics properties moved to PhysicsComponent
 
         uint32_t GetInstanceId() const { return instanceId_; }
         bool TickVelocity(glm::mat4& combinedTS);
@@ -61,15 +57,15 @@ namespace Assets
 
         NodeProxy GetNodeProxy() const;
 
-        void BindPhysicsBody(NextBodyID bodyId) { physicsBodyTemp_ = bodyId; }
+        void BindPhysicsBody(NextBodyID bodyId);
 
-        void SetMobility(ENodeMobility staticType) { mobility_ = staticType; }
-        ENodeMobility GetMobility() const { return mobility_; }
+        void SetMobility(ENodeMobility staticType);
+        ENodeMobility GetMobility() const;
 
-        const NextBodyID& GetPhysicsBody() const { return physicsBodyTemp_; }
+        const NextBodyID& GetPhysicsBody() const;
 
-        void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
-        const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
+        void SetPhysicsOffset(const glm::vec3& offset);
+        const glm::vec3& GetPhysicsOffset() const;
         
         void SetSkin(int32_t skinIndex) { skinIndex_ = skinIndex; }
         int32_t GetSkin() const { return skinIndex_; }
@@ -120,13 +116,16 @@ namespace Assets
         }
 
     private:
+        std::shared_ptr<PhysicsComponent> GetOrAddPhysicsComponent();
+        std::shared_ptr<PhysicsComponent> GetPhysicsComponent() const;
+
         std::string name_;
 
         mutable glm::vec3 translation_;
         mutable glm::quat rotation_;
         mutable glm::vec3 scaling_;
 
-        glm::vec3 physicsOffset_ = glm::vec3(0.0f);
+        // glm::vec3 physicsOffset_ = glm::vec3(0.0f); // Moved
         glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
@@ -140,9 +139,12 @@ namespace Assets
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
         // std::array<uint32_t, 16> materialIdx_; // Moved
-        NextBodyID physicsBodyTemp_;
-        ENodeMobility mobility_;
+        // NextBodyID physicsBodyTemp_; // Moved
+        // ENodeMobility mobility_; // Moved
 
         std::vector<std::shared_ptr<Component>> components_;
+        
+        // Helper to avoid allocating PhysicsComponent if not needed immediately during migration? 
+        // No, let's alloc on demand
     };
 }

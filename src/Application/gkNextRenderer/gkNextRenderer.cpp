@@ -8,6 +8,7 @@
 #include "Assets/FProcModel.h"
 #include "Assets/Node.h"
 #include "Assets/RenderComponent.h"
+#include "Assets/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
@@ -286,9 +287,11 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	renderComp->SetVisible(true);
 	newNode->AddComponent(renderComp);
 	
-	newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
+	auto phys = std::make_shared<Assets::PhysicsComponent>();
+	phys->SetMobility(Assets::ENodeMobility::Dynamic);
 	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
-	newNode->BindPhysicsBody(id);
+	phys->BindPhysicsBody(id);
+	newNode->AddComponent(phys);
 
 	GetEngine().GetScene().AddNode(newNode);
 	GetEngine().GetScene().MarkDirty();
@@ -313,9 +316,11 @@ void NextRendererGameInstance::CreateBoxAndPush()
     renderComp->SetVisible(true);
     newNode->AddComponent(renderComp);
     
-    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
+    auto phys = std::make_shared<Assets::PhysicsComponent>();
+    phys->SetMobility(Assets::ENodeMobility::Dynamic);
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
-    newNode->BindPhysicsBody(id);
+    phys->BindPhysicsBody(id);
+    newNode->AddComponent(phys);
 
     GetEngine().GetScene().AddNode(newNode);
     GetEngine().GetScene().MarkDirty();

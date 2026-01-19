@@ -1,5 +1,6 @@
 #include "Node.h"
 #include "RenderComponent.h"
+#include "PhysicsComponent.h"
 
 #include "Runtime/Engine.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
@@ -82,16 +83,17 @@ namespace Assets
 
     bool Node::TickVelocity(glm::mat4& combinedTS)
     {
-        if (mobility_ == ENodeMobility::Dynamic)
+        auto physComp = GetComponent<PhysicsComponent>();
+        if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
         {
-            auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physicsBodyTemp_);
+            auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physComp->GetPhysicsBody());
             if (body != nullptr)
             {
                 // Physics body position is the center of mass in world space.
                 // Node translation is the mesh pivot in world space.
                 // We need to calculate: Translation = BodyPos - Rotated(Scaled(Offset))
                 
-                glm::vec3 scaledOffset = physicsOffset_ * scaling_;
+                glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * scaling_;
                 glm::vec3 rotatedOffset = body->rotation * scaledOffset;
                 glm::vec3 newTranslation = body->position - rotatedOffset;
 
@@ -172,7 +174,7 @@ namespace Assets
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId):
     name_(name),
     translation_(translation), rotation_(rotation), scaling_(scale), 
-    instanceId_(instanceId), mobility_(ENodeMobility::Static)
+    instanceId_(instanceId)
     {
         RecalcLocalTransform();
         RecalcTransform();
@@ -180,5 +182,57 @@ namespace Assets
         // Always set prevTransform to current to avoid huge velocity on first frame
         // If "replace" logic was needed, it should be handled by caller setting prevTransform manually or specific init method
         prevTransform_ = transform_;
+    }
+
+    // Helper: Implement legacy methods by delegating to component
+    void Node::BindPhysicsBody(NextBodyID bodyId)
+    {
+        GetOrAddPhysicsComponent()->BindPhysicsBody(bodyId);
+    }
+
+    void Node::SetMobility(ENodeMobility staticType)
+    {
+        GetOrAddPhysicsComponent()->SetMobility(staticType);
+    }
+
+    Node::ENodeMobility Node::GetMobility() const
+    {
+        if (auto comp = GetPhysicsComponent()) return comp->GetMobility();
+        return ENodeMobility::Static; // Default
+    }
+
+    const NextBodyID& Node::GetPhysicsBody() const
+    {
+        static NextBodyID invalidBody;
+        if (auto comp = GetPhysicsComponent()) return comp->GetPhysicsBody();
+        return invalidBody;
+    }
+
+    void Node::SetPhysicsOffset(const glm::vec3& offset)
+    {
+        GetOrAddPhysicsComponent()->SetPhysicsOffset(offset);
+    }
+
+    const glm::vec3& Node::GetPhysicsOffset() const
+    {
+        static glm::vec3 zero(0.0f);
+        if (auto comp = GetPhysicsComponent()) return comp->GetPhysicsOffset();
+        return zero;
+    }
+
+    std::shared_ptr<PhysicsComponent> Node::GetOrAddPhysicsComponent()
+    {
+        auto comp = GetComponent<PhysicsComponent>();
+        if (!comp)
+        {
+            comp = std::make_shared<PhysicsComponent>();
+            AddComponent(comp);
+        }
+        return comp;
+    }
+
+    std::shared_ptr<PhysicsComponent> Node::GetPhysicsComponent() const
+    {
+        return GetComponent<PhysicsComponent>();
     }
 }

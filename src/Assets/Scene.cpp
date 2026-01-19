@@ -12,6 +12,7 @@
 
 #include "Node.h"
 #include "RenderComponent.h"
+#include "PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -123,7 +124,16 @@ namespace Assets
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
         {
             if (node == nullptr) return;
-            node->SetMobility(Node::ENodeMobility::Kinematic);
+            if (auto phys = node->GetComponent<PhysicsComponent>())
+            {
+                phys->SetMobility(Node::ENodeMobility::Kinematic);
+            }
+            else
+            {
+                auto newPhys = std::make_shared<PhysicsComponent>();
+                newPhys->SetMobility(Node::ENodeMobility::Kinematic);
+                node->AddComponent(newPhys);
+            }
             for (auto& child : node->Children())
             {
                 SetKinematicRecursive(child.get());
@@ -194,25 +204,38 @@ namespace Assets
             {
                 auto render = node->GetComponent<Assets::RenderComponent>();
                 // bind the mesh shape to the node
-                if (node->GetMobility() != Node::ENodeMobility::Dynamic && render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])// && node->GetParent() == nullptr)
+                if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
                 {
-                    NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                    NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                    auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                    Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
+                    
+                    if (mobility != Node::ENodeMobility::Dynamic)
+                    {
+                        NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                        NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                    bool validShape = false;
+                        bool validShape = false;
 #if WITH_PHYSIC
-                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
 #endif
 
-                    if ( validShape )
-                    {
-                        glm::vec3 worldScale = node->WorldScale();
-                        if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                        if ( validShape )
                         {
-                            NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                            node->BindPhysicsBody(id);
+                            glm::vec3 worldScale = node->WorldScale();
+                            if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                            {
+                                NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                                
+                                if (!phys)
+                                {
+                                    phys = std::make_shared<Assets::PhysicsComponent>();
+                                    phys->SetMobility(mobility);
+                                    node->AddComponent(phys);
+                                }
+                                phys->BindPhysicsBody(id);
 
-                            physicsEngine->SetBodyActive(id, render->IsVisible());
+                                physicsEngine->SetBodyActive(id, render->IsVisible());
+                            }
                         }
                     }
                 }
@@ -372,22 +395,35 @@ namespace Assets
         {
             auto render = node->GetComponent<Assets::RenderComponent>();
              // bind the mesh shape to the node
-            if (node->GetMobility() != Node::ENodeMobility::Dynamic && render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])// && node->GetParent() == nullptr)
+            if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
-                bool validShape = false;
+                if (mobility != Node::ENodeMobility::Dynamic)
+                {
+                    NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                    NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                    bool validShape = false;
 #if WITH_PHYSIC
-                if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
 #endif
 
-                if ( validShape )
-                {
-                    NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                    node->BindPhysicsBody(id);
+                    if ( validShape )
+                    {
+                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                        
+                        if (!phys)
+                        {
+                            phys = std::make_shared<Assets::PhysicsComponent>();
+                            phys->SetMobility(mobility);
+                            node->AddComponent(phys);
+                        }
+                        phys->BindPhysicsBody(id);
 
-                    physicsEngine->SetBodyActive(id, render->IsVisible());
+                        physicsEngine->SetBodyActive(id, render->IsVisible());
+                    }
                 }
             }
         }
@@ -495,10 +531,14 @@ namespace Assets
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
                         if (!n) return;
-                        NextBodyID bodyID = n->GetPhysicsBody();
-                        if (!bodyID.IsInvalid())
+                        auto phys = n->GetComponent<Assets::PhysicsComponent>();
+                        if (phys)
                         {
-                            NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            NextBodyID bodyID = phys->GetPhysicsBody();
+                            if (!bodyID.IsInvalid())
+                            {
+                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            }
                         }
 
                         for (auto& child : n->Children())

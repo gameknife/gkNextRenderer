@@ -16,6 +16,7 @@
 #include "Assets/FSceneLoader.h"
 #include "Assets/Node.h"
 #include "Assets/RenderComponent.h"
+#include "Assets/PhysicsComponent.h"
 #include "Assets/Skeleton.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -116,8 +117,10 @@ namespace
                     }
                     
                     nodes.push_back(newNode);
-                    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-                    newNode->BindPhysicsBody(id);
+                    auto phys = std::make_shared<Assets::PhysicsComponent>();
+                    phys->SetMobility(Assets::ENodeMobility::Dynamic);
+                    phys->BindPhysicsBody(id);
+                    newNode->AddComponent(phys);
                 }
             }
         }
@@ -178,8 +181,10 @@ namespace
             newNode->AddComponent(renderComp);
             
             auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
-            newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-            newNode->BindPhysicsBody(body1);
+            auto phys1 = std::make_shared<Assets::PhysicsComponent>();
+            phys1->SetMobility(Assets::ENodeMobility::Dynamic);
+            phys1->BindPhysicsBody(body1);
+            newNode->AddComponent(phys1);
             nodes.push_back(newNode);
         }
         
@@ -192,8 +197,10 @@ namespace
             newNode->AddComponent(renderComp);
             
             auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-            newNode->BindPhysicsBody(body2);
+            auto phys2 = std::make_shared<Assets::PhysicsComponent>();
+            phys2->SetMobility(Assets::ENodeMobility::Dynamic);
+            phys2->BindPhysicsBody(body2);
+            newNode->AddComponent(phys2);
             nodes.push_back(newNode);
         }
         
@@ -206,8 +213,10 @@ namespace
             newNode->AddComponent(renderComp);
 
             auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-            newNode->BindPhysicsBody(body3);
+            auto phys3 = std::make_shared<Assets::PhysicsComponent>();
+            phys3->SetMobility(Assets::ENodeMobility::Dynamic);
+            phys3->BindPhysicsBody(body3);
+            newNode->AddComponent(phys3);
             nodes.push_back(newNode);
         }
         
@@ -262,8 +271,10 @@ namespace
             newNode->AddComponent(renderComp);
             
             auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, NextMotionType::Dynamic);
-            newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-            newNode->BindPhysicsBody(id);
+            auto phys = std::make_shared<Assets::PhysicsComponent>();
+            phys->SetMobility(Assets::ENodeMobility::Dynamic);
+            phys->BindPhysicsBody(id);
+            newNode->AddComponent(phys);
             nodes.push_back(newNode);
         }
         
