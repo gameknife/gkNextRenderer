@@ -28,14 +28,14 @@
     - [x] Update physics-to-transform sync logic.
 - [x] Task: Conductor - User Manual Verification 'Phase 3: PhysicsComponent Refactor' (Protocol in workflow.md) d0dfd12
 
-## Phase 4: SkinnedMeshComponent Integration
-- [~] Task: Adapt `SkinnedMeshComponent` to the new system
-    - [ ] Update `SkinnedMeshComponent` to inherit from `Component`.
-    - [ ] Move `skinIndex` (if applicable) to `RenderComponent` or manage via `SkinnedMeshComponent`.
-    - [ ] Remove `skinnedMesh_` pointer from `Node`.
-- [ ] Task: Update Skinned Mesh call sites
-    - [ ] Update animation and skinning logic to retrieve the component via `GetComponent<SkinnedMeshComponent>()`.
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: SkinnedMeshComponent Integration' (Protocol in workflow.md)
+## Phase 4: SkinnedMeshComponent Integration [checkpoint: 72aafc5]
+- [x] Task: Adapt `SkinnedMeshComponent` to the new system 72aafc5
+    - [x] Update `SkinnedMeshComponent` to inherit from `Component`.
+    - [x] Move `skinIndex` (if applicable) to `RenderComponent` or manage via `SkinnedMeshComponent`.
+    - [x] Remove `skinnedMesh_` pointer from `Node`.
+- [x] Task: Update Skinned Mesh call sites 72aafc5
+    - [x] Update animation and skinning logic to retrieve the component via `GetComponent<SkinnedMeshComponent>()`.
+- [x] Task: Conductor - User Manual Verification 'Phase 4: SkinnedMeshComponent Integration' (Protocol in workflow.md) 72aafc5
 
 ## Phase 5: Cleanup & Verification
 - [ ] Task: Final `Node` interface cleanup
