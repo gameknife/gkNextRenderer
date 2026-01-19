@@ -37,11 +37,11 @@
     - [x] Update animation and skinning logic to retrieve the component via `GetComponent<SkinnedMeshComponent>()`.
 - [x] Task: Conductor - User Manual Verification 'Phase 4: SkinnedMeshComponent Integration' (Protocol in workflow.md) 72aafc5
 
-## Phase 5: Cleanup & Verification
-- [~] Task: Final `Node` interface cleanup
-    - [ ] Remove all redundant helper methods in `Node`.
-    - [ ] Ensure `Node` header is minimal (Hierarchy + Transform).
-- [ ] Task: Run full test suite and verify renderer/physics
-    - [ ] Execute `gkNextUnitTests.exe`.
-    - [ ] Manually verify complex scenes (with skinning and physics) in the renderer.
-- [ ] Task: Conductor - User Manual Verification 'Phase 5: Cleanup & Verification' (Protocol in workflow.md)
+## Phase 5: Cleanup & Verification [checkpoint: f2c21ac]
+- [x] Task: Final `Node` interface cleanup f2c21ac
+    - [x] Remove all redundant helper methods in `Node`.
+    - [x] Ensure `Node` header is minimal (Hierarchy + Transform).
+- [x] Task: Run full test suite and verify renderer/physics f2c21ac
+    - [x] Execute `gkNextUnitTests.exe`.
+    - [x] Manually verify complex scenes (with skinning and physics) in the renderer.
+- [x] Task: Conductor - User Manual Verification 'Phase 5: Cleanup & Verification' (Protocol in workflow.md) f2c21ac
