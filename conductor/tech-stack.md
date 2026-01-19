@@ -30,6 +30,9 @@
 - **标准化 CLI 脚本**：统一的 `vcpkg`, `build`, `run`, `package` 脚本接口，确保 Windows (`.bat`, `.ps1`) 和 Unix (`.sh`) 在参数和功能上的一致性。支持 `--config`, `--target`, `--clean` 等标准化参数。
 - **Ninja / Visual Studio**：推荐的后端构建工具。
 
+## 架构模式
+- **基于组件的对象系统 (Component-Based Architecture)**：`Node` 采用组件化设计，作为实体的容器。渲染、物理、骨骼动画等功能逻辑已解耦为独立的组件（`RenderComponent`, `PhysicsComponent`, `SkinnedMeshComponent`），通过泛型接口进行管理。
+
 ## 目标平台
 - **桌面端**：Windows (x86_64), Linux (x86_64), macOS (Apple Silicon)。
 - **移动端**：Android (arm64-v8a), iOS (arm64)。

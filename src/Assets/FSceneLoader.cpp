@@ -25,6 +25,7 @@
 
 #include "Material.hpp"
 #include "Node.h"
+#include "RenderComponent.h"
 #include "Utilities/FileHelper.hpp"
 
 namespace Assets
@@ -155,10 +156,12 @@ namespace Assets
         }
 
         uint32_t primaryMatIdx = 0;
-        std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, meshId, uint32_t(outNodes.size()), false);
+        std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
         if (meshId != -1)
         {
-            sceneNode->SetVisible(true);
+            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            renderComp->SetModelId(meshId);
+            renderComp->SetVisible(true);
             std::array<uint32_t, 16> materialIdx {};
             for (int i = 0; i < model.meshes[node.mesh].primitives.size(); i++)
             {
@@ -167,16 +170,23 @@ namespace Assets
                 materialIdx[i] = (max(0, primitive.material + materialOffset));
                 primaryMatIdx = primitive.material + materialOffset;
             }
-            sceneNode->SetMaterial(materialIdx);
+            renderComp->SetMaterial(materialIdx);
+            sceneNode->AddComponent(renderComp);
         }
 
         if (node.skin != -1)
         {
-            sceneNode->SetSkin(node.skin);
+            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            {
+                render->SetSkinIndex(node.skin);
+            }
         }
         else
         {
-            sceneNode->SetSkin(0xFFFFFFFF);
+            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            {
+                render->SetSkinIndex(0xFFFFFFFF);
+            }
         }
 
         outNodes.push_back(sceneNode);
@@ -1161,9 +1171,10 @@ namespace Assets
 
         for (const auto& node : nodes)
         {
-            if (node->IsDrawable())
+            auto render = node->GetComponent<Assets::RenderComponent>();
+            if (render && render->IsDrawable())
             {
-                uint32_t modelIdx = node->GetModel();
+                uint32_t modelIdx = render->GetModelId();
                 if (modelIdx < models.size())
                 {
                     auto& model = models[modelIdx];

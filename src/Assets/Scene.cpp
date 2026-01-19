@@ -11,6 +11,8 @@
 #include "Runtime/NextPhysics.h"
 
 #include "Node.h"
+#include "RenderComponent.h"
+#include "PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -93,12 +95,13 @@ namespace Assets
     {
         for (auto& node : nodes_)
         {
-            if (node->GetSkin() != -1 && node->GetSkin() < skeletons.size())
+            auto render = node->GetComponent<RenderComponent>();
+            if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
             {
-                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[node->GetSkin()]);
+                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
                 comp->AddAnimations(tracks_);
                 comp->PlayAnimation("Default");
-                node->SetSkinnedMesh(comp);
+                node->AddComponent(comp);
             }
         }
     }
@@ -122,7 +125,16 @@ namespace Assets
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
         {
             if (node == nullptr) return;
-            node->SetMobility(Node::ENodeMobility::Kinematic);
+            if (auto phys = node->GetComponent<PhysicsComponent>())
+            {
+                phys->SetMobility(Node::ENodeMobility::Kinematic);
+            }
+            else
+            {
+                auto newPhys = std::make_shared<PhysicsComponent>();
+                newPhys->SetMobility(Node::ENodeMobility::Kinematic);
+                node->AddComponent(newPhys);
+            }
             for (auto& child : node->Children())
             {
                 SetKinematicRecursive(child.get());
@@ -140,10 +152,11 @@ namespace Assets
         sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
         for (auto& node : nodes_)
         {
-            if (node->IsVisible() && node->GetModel() != -1)
+            auto render = node->GetComponent<Assets::RenderComponent>();
+            if (render && render->IsVisible() && render->GetModelId() != -1)
             {
-                glm::vec3 localaabbMin = models_[node->GetModel()].GetLocalAABBMin();
-                glm::vec3 localaabbMax = models_[node->GetModel()].GetLocalAABBMax();
+                glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
+                glm::vec3 localaabbMax = models_[render->GetModelId()].GetLocalAABBMax();
 
                 auto& worldMtx = node->WorldTransform();
 
@@ -190,26 +203,40 @@ namespace Assets
 
             for (auto& node : nodes_)
             {
+                auto render = node->GetComponent<Assets::RenderComponent>();
                 // bind the mesh shape to the node
-                if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
+                if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
                 {
-                    NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                    NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                    auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                    Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
+                    
+                    if (mobility != Node::ENodeMobility::Dynamic)
+                    {
+                        NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                        NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                    bool validShape = false;
+                        bool validShape = false;
 #if WITH_PHYSIC
-                    if (cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0) validShape = true;
+                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
 #endif
 
-                    if ( validShape )
-                    {
-                        glm::vec3 worldScale = node->WorldScale();
-                        if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                        if ( validShape )
                         {
-                            NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                            node->BindPhysicsBody(id);
+                            glm::vec3 worldScale = node->WorldScale();
+                            if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                            {
+                                NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                                
+                                if (!phys)
+                                {
+                                    phys = std::make_shared<Assets::PhysicsComponent>();
+                                    phys->SetMobility(mobility);
+                                    node->AddComponent(phys);
+                                }
+                                phys->BindPhysicsBody(id);
 
-                            physicsEngine->SetBodyActive(id, node->IsVisible());
+                                physicsEngine->SetBodyActive(id, render->IsVisible());
+                            }
                         }
                     }
                 }
@@ -367,23 +394,37 @@ namespace Assets
         nodes_.push_back(node);
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
+            auto render = node->GetComponent<Assets::RenderComponent>();
              // bind the mesh shape to the node
-            if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
+            if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
-                bool validShape = false;
+                if (mobility != Node::ENodeMobility::Dynamic)
+                {
+                    NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                    NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                    bool validShape = false;
 #if WITH_PHYSIC
-                if (cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0) validShape = true;
+                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
 #endif
 
-                if ( validShape )
-                {
-                    NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                    node->BindPhysicsBody(id);
+                    if ( validShape )
+                    {
+                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                        
+                        if (!phys)
+                        {
+                            phys = std::make_shared<Assets::PhysicsComponent>();
+                            phys->SetMobility(mobility);
+                            node->AddComponent(phys);
+                        }
+                        phys->BindPhysicsBody(id);
 
-                    physicsEngine->SetBodyActive(id, node->IsVisible());
+                        physicsEngine->SetBodyActive(id, render->IsVisible());
+                    }
                 }
             }
         }
@@ -440,7 +481,7 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                if (auto skinnedMesh = node->GetSkinnedMesh())
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                 {
                     skinnedMesh->Update(deltaSeconds);
                     if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
@@ -491,10 +532,14 @@ namespace Assets
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
                         if (!n) return;
-                        NextBodyID bodyID = n->GetPhysicsBody();
-                        if (!bodyID.IsInvalid())
+                        auto phys = n->GetComponent<Assets::PhysicsComponent>();
+                        if (phys)
                         {
-                            NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            NextBodyID bodyID = phys->GetPhysicsBody();
+                            if (!bodyID.IsInvalid())
+                            {
+                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            }
                         }
 
                         for (auto& child : n->Children())
@@ -595,7 +640,8 @@ namespace Assets
                     for (auto& node : nodes_)
                     {
                         // record all
-                        if (node->IsDrawable())
+                        auto render = node->GetComponent<Assets::RenderComponent>();
+                        if (render && render->IsDrawable())
                         {
                             glm::mat4 combined;
                             if (node->TickVelocity(combined))
@@ -604,11 +650,11 @@ namespace Assets
                                 //MarkDirty();
                             }
 
-                            auto model = GetModel(node->GetModel());
+                            auto model = GetModel(render->GetModelId());
                             if (model)
                             {
                                 uint32_t nodeJointOffset = 0;
-                                if (auto skinnedMesh = node->GetSkinnedMesh())
+                                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                                 {
                                     nodeJointOffset = currentJointOffset;
                                     currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
@@ -618,7 +664,7 @@ namespace Assets
                                 {
                                     NodeProxy proxy = node->GetNodeProxy();
                                     proxy.combinedPrevTS = combined;
-                                    proxy.modelId = node->GetModel() * 10 + section;
+                                    proxy.modelId = render->GetModelId() * 10 + section;
                                     proxy.nort = section == 0 ? 0 : 1;
                                     proxy.jointMatrixOffset = nodeJointOffset;
                                     nodeProxys.push_back(proxy);
