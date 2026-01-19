@@ -1,6 +1,7 @@
 #include "Node.h"
 #include "RenderComponent.h"
 #include "PhysicsComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Runtime/Engine.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
@@ -156,15 +157,16 @@ namespace Assets
             {
                 proxy.matId[i] = mats[i];
             }
+            proxy.skinId = renderComp->GetSkinIndex();
         }
         else
         {
              proxy.modelId = -1;
              proxy.visible = 0;
              for ( int i = 0; i < 16; i++ ) proxy.matId[i] = 0;
+             proxy.skinId = -1;
         }
 
-        proxy.skinId = skinIndex_;
         proxy.jointMatrixOffset = 0; // Default
         proxy.nort = 0; // Default
 
@@ -234,5 +236,42 @@ namespace Assets
     std::shared_ptr<PhysicsComponent> Node::GetPhysicsComponent() const
     {
         return GetComponent<PhysicsComponent>();
+    }
+
+    void Node::SetSkin(int32_t skinIndex)
+    {
+        // Ideally this should go to RenderComponent, let's try to find it
+        auto render = GetComponent<RenderComponent>();
+        if (!render)
+        {
+            // If no render component, we might create one or ignore. 
+            // For now, let's create one if we are setting skin, as skin implies rendering.
+            render = std::make_shared<RenderComponent>();
+            AddComponent(render);
+        }
+        render->SetSkinIndex(skinIndex);
+    }
+
+    int32_t Node::GetSkin() const
+    {
+        if (auto render = GetComponent<RenderComponent>())
+        {
+            return render->GetSkinIndex();
+        }
+        return -1;
+    }
+
+    void Node::SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh)
+    {
+        AddComponent(skinnedMesh);
+    }
+
+    Runtime::SkinnedMeshComponent* Node::GetSkinnedMesh() const
+    {
+        if (auto comp = GetComponent<Runtime::SkinnedMeshComponent>())
+        {
+            return comp.get();
+        }
+        return nullptr;
     }
 }

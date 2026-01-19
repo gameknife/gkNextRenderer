@@ -25,10 +25,14 @@ namespace Assets
         
         bool IsDrawable() const { return modelId_ != -1; }
 
+        void SetSkinIndex(int32_t skinIndex) { skinIndex_ = skinIndex; }
+        int32_t GetSkinIndex() const { return skinIndex_; }
+
     private:
         uint32_t modelId_ = -1;
         std::array<uint32_t, 16> materialIdx_ = {0}; // Initialize with defaults
         bool visible_ = true;
         bool rayCastVisible_ = true;
+        int32_t skinIndex_ = -1;
     };
 }

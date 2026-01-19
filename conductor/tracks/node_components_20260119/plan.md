@@ -29,7 +29,7 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 3: PhysicsComponent Refactor' (Protocol in workflow.md) d0dfd12
 
 ## Phase 4: SkinnedMeshComponent Integration
-- [ ] Task: Adapt `SkinnedMeshComponent` to the new system
+- [~] Task: Adapt `SkinnedMeshComponent` to the new system
     - [ ] Update `SkinnedMeshComponent` to inherit from `Component`.
     - [ ] Move `skinIndex` (if applicable) to `RenderComponent` or manage via `SkinnedMeshComponent`.
     - [ ] Remove `skinnedMesh_` pointer from `Node`.

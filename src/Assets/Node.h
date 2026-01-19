@@ -67,11 +67,11 @@ namespace Assets
         void SetPhysicsOffset(const glm::vec3& offset);
         const glm::vec3& GetPhysicsOffset() const;
         
-        void SetSkin(int32_t skinIndex) { skinIndex_ = skinIndex; }
-        int32_t GetSkin() const { return skinIndex_; }
+        void SetSkin(int32_t skinIndex);
+        int32_t GetSkin() const;
 
-        void SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh) { skinnedMesh_ = skinnedMesh; }
-        Runtime::SkinnedMeshComponent* GetSkinnedMesh() const { return skinnedMesh_.get(); }
+        void SetSkinnedMesh(std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh);
+        Runtime::SkinnedMeshComponent* GetSkinnedMesh() const;
 
         // New Component System
         template <typename T>
@@ -130,8 +130,8 @@ namespace Assets
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
         // uint32_t modelId_; // Moved
-        int32_t skinIndex_ = -1;
-        std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh_;
+        // int32_t skinIndex_ = -1; // Moved
+        // std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh_; // Moved
         uint32_t instanceId_;
         // bool visible_; // Moved
         // bool rayCastVisible_; // Moved
@@ -143,8 +143,5 @@ namespace Assets
         // ENodeMobility mobility_; // Moved
 
         std::vector<std::shared_ptr<Component>> components_;
-        
-        // Helper to avoid allocating PhysicsComponent if not needed immediately during migration? 
-        // No, let's alloc on demand
     };
 }

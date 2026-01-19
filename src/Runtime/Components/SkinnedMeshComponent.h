@@ -3,13 +3,14 @@
 #include "Assets/Skeleton.hpp"
 #include "Assets/Animation.hpp"
 #include "Assets/Model.hpp"
+#include "Assets/Component.h"
 #include <map>
 #include <vector>
 #include <string>
 
 namespace Runtime
 {
-    class SkinnedMeshComponent
+    class SkinnedMeshComponent : public Assets::Component
     {
     public:
         SkinnedMeshComponent(const Assets::Skeleton& skeleton);
