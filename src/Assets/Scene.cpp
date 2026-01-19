@@ -9,8 +9,6 @@
 #include <meshoptimizer.h>
 #include <glm/detail/type_half.hpp>
 #include "Runtime/NextPhysics.h"
-#include <Jolt/Core/Reference.h>
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
 #include "Node.h"
 #include "Runtime/Engine.hpp"
@@ -175,7 +173,6 @@ namespace Assets
         }
         
         // static mesh to jolt mesh shape
-#if WITH_PHYSIC
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
             cachedMeshShapes_.clear();
@@ -183,11 +180,11 @@ namespace Assets
             {
                 if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
-                    cachedMeshShapes_.push_back( JPH::RefConst<JPH::MeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
+                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
                 }
                 else
                 {
-                    cachedMeshShapes_.push_back( JPH::RefConst<JPH::MeshShapeSettings>(nullptr)  );
+                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(nullptr)  );
                 }
             }
 
@@ -196,14 +193,20 @@ namespace Assets
                 // bind the mesh shape to the node
                 if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
                 {
-                    JPH::EMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
-                    JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
-                    if ( cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0)
+                    NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                    NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                    bool validShape = false;
+#if WITH_PHYSIC
+                    if (cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0) validShape = true;
+#endif
+
+                    if ( validShape )
                     {
                         glm::vec3 worldScale = node->WorldScale();
                         if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
                         {
-                            JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
+                            NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
                             node->BindPhysicsBody(id);
 
                             physicsEngine->SetBodyActive(id, node->IsVisible());
@@ -213,14 +216,13 @@ namespace Assets
             }
             
             // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
-            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), JPH::EMotionType::Static);
-             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
+             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
         }
-#endif      
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
@@ -368,11 +370,17 @@ namespace Assets
              // bind the mesh shape to the node
             if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
             {
-                JPH::EMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
-                JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
-                if ( cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0)
+                NextMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                NextObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                bool validShape = false;
+#if WITH_PHYSIC
+                if (cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0) validShape = true;
+#endif
+
+                if ( validShape )
                 {
-                    JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
+                    NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
                     node->BindPhysicsBody(id);
 
                     physicsEngine->SetBodyActive(id, node->IsVisible());
@@ -483,7 +491,7 @@ namespace Assets
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
                         if (!n) return;
-                        JPH::BodyID bodyID = n->GetPhysicsBody();
+                        NextBodyID bodyID = n->GetPhysicsBody();
                         if (!bodyID.IsInvalid())
                         {
                             NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);

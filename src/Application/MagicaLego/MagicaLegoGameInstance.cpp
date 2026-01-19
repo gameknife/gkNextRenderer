@@ -444,7 +444,7 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
     newNode->SetVisible(true);
     newNode->SetRayCastVisible(false);
     newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, JPH::EMotionType::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, NextMotionType::Dynamic);
     newNode->BindPhysicsBody(id);
     newNode->SetPhysicsOffset(physicsOffset);
     
