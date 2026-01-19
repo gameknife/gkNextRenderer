@@ -2,6 +2,7 @@
 #include "TestCommon.hpp"
 #include "Runtime/NextPhysics.h"
 #include "Assets/Node.h"
+#include "Assets/RenderComponent.h"
 
 // Note: TestCommon.hpp provides EngineTestFixture and the necessary CreateGameInstance implementation
 
@@ -13,18 +14,27 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
     auto physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
     
-    SECTION("Static Node Collision Toggles with Visibility") {
+    SECTION("Static Node Collision Toggles") {
         // 1. Create Static Floor
         // Using CreateBoxBody directly to bypass MeshShape dependency in unit test environment
         glm::vec3 floorPos(0, -1, 0);
         auto bodyId = physics->CreateBoxBody(floorPos, glm::vec3(10, 1, 10), NextMotionType::Static);
         
-        auto floorNode = Assets::Node::CreateNode("Floor", floorPos, glm::quat(1,0,0,0), glm::vec3(1), 0, 0, false);
-        floorNode->BindPhysicsBody(bodyId);
+        auto floorNode = Assets::Node::CreateNode("Floor", floorPos, glm::quat(1,0,0,0), glm::vec3(1), 0);
         
-        // SCENARIO 1: Visible = True (Default collision)
+        // Setup Physics
+        auto physComp = std::make_shared<Assets::PhysicsComponent>();
+        physComp->BindPhysicsBody(bodyId);
+        floorNode->AddComponent(physComp);
+        
+        // Setup RenderComponent (though not strictly needed for physics test, good for completeness)
+        auto renderComp = std::make_shared<Assets::RenderComponent>();
+        floorNode->AddComponent(renderComp);
+
+        // SCENARIO 1: Body Active (Default collision)
         {
-            floorNode->SetVisible(true);
+            physics->SetBodyActive(bodyId, true);
+            renderComp->SetVisible(true); // Visual only now
             
             glm::vec3 ballPos(0, 5, 0);
             auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, NextMotionType::Dynamic);
@@ -38,9 +48,10 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
             CHECK(bodyInfo->position.y < 1.0f);
         }
 
-        // SCENARIO 2: Visible = False (No Collision)
+        // SCENARIO 2: Body Inactive (No Collision)
         {
-            floorNode->SetVisible(false);
+            physics->SetBodyActive(bodyId, false);
+            renderComp->SetVisible(false);
             
             glm::vec3 ballPos(0, 5, 0);
             auto ballBodyId = physics->CreateSphereBody(ballPos, 1.0f, NextMotionType::Dynamic);
