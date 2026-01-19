@@ -10,5 +10,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Refactor Node to use RenderComponent, PhysicsComponent, and SkinnedMeshComponent.**
+- [x] **Track: Refactor Node to use RenderComponent, PhysicsComponent, and SkinnedMeshComponent.**
 *Link: [./tracks/node_components_20260119/](./tracks/node_components_20260119/)*
