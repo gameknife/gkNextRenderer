@@ -18,15 +18,15 @@
     - [x] Update rendering loops to fetch data via `node->GetComponent<RenderComponent>()`.
 - [x] Task: Conductor - User Manual Verification 'Phase 2: RenderComponent Refactor' (Protocol in workflow.md) ea08589
 
-## Phase 3: PhysicsComponent Refactor
-- [~] Task: Create `PhysicsComponent` and migrate data
-    - [ ] Implement `PhysicsComponent` inheriting from `Component`.
-    - [ ] Move `physicsBodyTemp`, `mobility`, and `physicsOffset` to `PhysicsComponent`.
-    - [ ] Update `Node` to remove these fields and their direct getters/setters.
-- [~] Task: Update Physics System for `PhysicsComponent`
-    - [ ] Update physics initialization to use `node->GetComponent<PhysicsComponent>()`.
-    - [ ] Update physics-to-transform sync logic.
-- [~] Task: Conductor - User Manual Verification 'Phase 3: PhysicsComponent Refactor' (Protocol in workflow.md)
+## Phase 3: PhysicsComponent Refactor [checkpoint: d0dfd12]
+- [x] Task: Create `PhysicsComponent` and migrate data d0dfd12
+    - [x] Implement `PhysicsComponent` inheriting from `Component`.
+    - [x] Move `physicsBodyTemp`, `mobility`, and `physicsOffset` to `PhysicsComponent`.
+    - [x] Update `Node` to remove these fields and their direct getters/setters.
+- [x] Task: Update Physics System for `PhysicsComponent` d0dfd12
+    - [x] Update physics initialization to use `node->GetComponent<PhysicsComponent>()`.
+    - [x] Update physics-to-transform sync logic.
+- [x] Task: Conductor - User Manual Verification 'Phase 3: PhysicsComponent Refactor' (Protocol in workflow.md) d0dfd12
 
 ## Phase 4: SkinnedMeshComponent Integration
 - [ ] Task: Adapt `SkinnedMeshComponent` to the new system
