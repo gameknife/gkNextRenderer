@@ -1,12 +1,12 @@
 # Plan: Node Component Refactor
 
-## Phase 1: Foundation & Component System
-- [~] Task: Define `Component` base class and generic management in `Node`
-    - [ ] Create `src/Assets/Component.h` with a base `Component` class.
-    - [ ] Add `std::vector<std::shared_ptr<Component>> components_` to `Node`.
-    - [ ] Implement `Node::AddComponent<T>()` with "one per type" enforcement.
-    - [ ] Implement `Node::GetComponent<T>()` using `dynamic_pointer_cast`.
-- [~] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Component System' (Protocol in workflow.md)
+## Phase 1: Foundation & Component System [checkpoint: f65b3e4]
+- [x] Task: Define `Component` base class and generic management in `Node` f65b3e4
+    - [x] Create `src/Assets/Component.h` with a base `Component` class.
+    - [x] Add `std::vector<std::shared_ptr<Component>> components_` to `Node`.
+    - [x] Implement `Node::AddComponent<T>()` with "one per type" enforcement.
+    - [x] Implement `Node::GetComponent<T>()` using `dynamic_pointer_cast`.
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Component System' (Protocol in workflow.md) f65b3e4
 
 ## Phase 2: RenderComponent Refactor
 - [ ] Task: Create `RenderComponent` and migrate data
