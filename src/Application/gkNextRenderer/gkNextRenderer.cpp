@@ -7,8 +7,8 @@
 
 #include "Assets/FProcModel.h"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
-#include "Assets/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
@@ -281,14 +281,14 @@ void NextRendererGameInstance::CreateSphereAndPush()
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
 	
-	auto renderComp = std::make_shared<Assets::RenderComponent>();
+	auto renderComp = std::make_shared<Runtime::RenderComponent>();
 	renderComp->SetModelId(modelId_);
 	renderComp->SetMaterial({newMatId});
 	renderComp->SetVisible(true);
 	newNode->AddComponent(renderComp);
 	
-	auto phys = std::make_shared<Assets::PhysicsComponent>();
-	phys->SetMobility(Assets::ENodeMobility::Dynamic);
+	auto phys = std::make_shared<Runtime::PhysicsComponent>();
+	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
 	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
 	phys->BindPhysicsBody(id);
 	newNode->AddComponent(phys);
@@ -310,14 +310,14 @@ void NextRendererGameInstance::CreateBoxAndPush()
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
     
-    auto renderComp = std::make_shared<Assets::RenderComponent>();
+    auto renderComp = std::make_shared<Runtime::RenderComponent>();
     renderComp->SetModelId(boxModelId_);
     renderComp->SetMaterial({newMatId});
     renderComp->SetVisible(true);
     newNode->AddComponent(renderComp);
     
-    auto phys = std::make_shared<Assets::PhysicsComponent>();
-    phys->SetMobility(Assets::ENodeMobility::Dynamic);
+    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
     phys->BindPhysicsBody(id);
     newNode->AddComponent(phys);

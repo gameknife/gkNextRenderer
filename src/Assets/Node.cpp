@@ -1,6 +1,6 @@
 #include "Node.h"
-#include "RenderComponent.h"
-#include "PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Runtime/Engine.hpp"
@@ -84,7 +84,7 @@ namespace Assets
 
     bool Node::TickVelocity(glm::mat4& combinedTS)
     {
-        auto physComp = GetComponent<PhysicsComponent>();
+        auto physComp = GetComponent<Runtime::PhysicsComponent>();
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
         {
             auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physComp->GetPhysicsBody());
@@ -147,7 +147,7 @@ namespace Assets
         proxy.instanceId = instanceId_;
         proxy.worldTS = WorldTransform();
         
-        auto renderComp = GetComponent<RenderComponent>();
+        auto renderComp = GetComponent<Runtime::RenderComponent>();
         if (renderComp)
         {
             proxy.modelId = renderComp->GetModelId();

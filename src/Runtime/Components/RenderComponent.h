@@ -1,11 +1,11 @@
 #pragma once
-#include "Component.h"
+#include "Assets/Component.h"
 #include <array>
 #include <cstdint>
 
-namespace Assets
+namespace Runtime
 {
-    class RenderComponent : public Component
+    class RenderComponent : public Assets::Component
     {
     public:
         RenderComponent() = default;

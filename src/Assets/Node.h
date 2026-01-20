@@ -3,7 +3,7 @@
 #include "UniformBuffer.hpp"
 #include "Runtime/NextPhysics.h"
 #include "Component.h"
-#include "PhysicsComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 
 #include "glm/ext.hpp"
 
@@ -19,7 +19,7 @@ namespace Assets
     {
     public:
         // Use enum from PhysicsComponent to maintain compatibility, but eventually we should use Assets::ENodeMobility directly
-        using ENodeMobility = Assets::ENodeMobility;
+        using ENodeMobility = Runtime::ENodeMobility;
         
         static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId = 0);
         Node(std::string name,  glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId);

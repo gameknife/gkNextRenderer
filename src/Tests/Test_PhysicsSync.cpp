@@ -2,7 +2,7 @@
 #include "TestCommon.hpp"
 #include "Runtime/NextPhysics.h"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 
 // Note: TestCommon.hpp provides EngineTestFixture and the necessary CreateGameInstance implementation
 
@@ -23,12 +23,12 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
         auto floorNode = Assets::Node::CreateNode("Floor", floorPos, glm::quat(1,0,0,0), glm::vec3(1), 0);
         
         // Setup Physics
-        auto physComp = std::make_shared<Assets::PhysicsComponent>();
+        auto physComp = std::make_shared<Runtime::PhysicsComponent>();
         physComp->BindPhysicsBody(bodyId);
         floorNode->AddComponent(physComp);
         
         // Setup RenderComponent (though not strictly needed for physics test, good for completeness)
-        auto renderComp = std::make_shared<Assets::RenderComponent>();
+        auto renderComp = std::make_shared<Runtime::RenderComponent>();
         floorNode->AddComponent(renderComp);
 
         // SCENARIO 1: Body Active (Default collision)

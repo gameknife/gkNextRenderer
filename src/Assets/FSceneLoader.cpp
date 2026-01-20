@@ -25,7 +25,7 @@
 
 #include "Material.hpp"
 #include "Node.h"
-#include "RenderComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Utilities/FileHelper.hpp"
 
 namespace Assets
@@ -159,7 +159,7 @@ namespace Assets
         std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
         if (meshId != -1)
         {
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(meshId);
             renderComp->SetVisible(true);
             std::array<uint32_t, 16> materialIdx {};
@@ -176,14 +176,14 @@ namespace Assets
 
         if (node.skin != -1)
         {
-            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            if (auto render = sceneNode->GetComponent<Runtime::RenderComponent>()) 
             {
                 render->SetSkinIndex(node.skin);
             }
         }
         else
         {
-            if (auto render = sceneNode->GetComponent<RenderComponent>())
+            if (auto render = sceneNode->GetComponent<Runtime::RenderComponent>()) 
             {
                 render->SetSkinIndex(0xFFFFFFFF);
             }
@@ -336,7 +336,7 @@ namespace Assets
             }
             if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, gltfFile.string()) )
             {
-                SPDLOG_ERROR("failed to parse gltf file: {}\nErr: {}\nWarn: {}", filename, err, warn);
+                SPDLOG_ERROR("failed to parse gltf file: \nErr: {}\nWarn: {}", filename, err, warn);
                 return false;
             }
         }
@@ -502,7 +502,7 @@ namespace Assets
                              }
         
         
-                
+                    
         
         
                              std::map<int, int> nodeToJointIndex;
@@ -520,7 +520,7 @@ namespace Assets
                              }
         
         
-                
+                    
         
         
                              for (size_t i = 0; i < skin.joints.size(); ++i)
@@ -610,7 +610,7 @@ namespace Assets
                              }
         
         
-                
+                    
         
         
                              // Hierarchy
@@ -845,13 +845,13 @@ namespace Assets
                     vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
 
-                    if (jointsIdx != -1) {
+                    if (jointsIdx != -1) { 
                          joints.push_back(glm::uvec4(GetAttributeValue(model, model.accessors[jointsIdx], i)));
                     } else {
                          joints.push_back(glm::uvec4(0));
                     }
                     
-                    if (weightsIdx != -1) {
+                    if (weightsIdx != -1) { 
                          weights.push_back(GetAttributeValue(model, model.accessors[weightsIdx], i));
                     } else {
                          weights.push_back(glm::vec4(0));
@@ -1171,7 +1171,7 @@ namespace Assets
 
         for (const auto& node : nodes)
         {
-            auto render = node->GetComponent<Assets::RenderComponent>();
+            auto render = node->GetComponent<Runtime::RenderComponent>();
             if (render && render->IsDrawable())
             {
                 uint32_t modelIdx = render->GetModelId();

@@ -1,9 +1,9 @@
 #pragma once
-#include "Component.h"
+#include "Assets/Component.h"
 #include "Runtime/NextPhysics.h"
 #include <glm/glm.hpp>
 
-namespace Assets
+namespace Runtime
 {
     enum class ENodeMobility
     {
@@ -12,7 +12,7 @@ namespace Assets
         Kinematic
     };
 
-    class PhysicsComponent : public Component
+    class PhysicsComponent : public Assets::Component
     {
     public:
         PhysicsComponent() = default;

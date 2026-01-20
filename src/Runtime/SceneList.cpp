@@ -15,8 +15,8 @@
 #include "Assets/FProcModel.h"
 #include "Assets/FSceneLoader.h"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
-#include "Assets/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Assets/Skeleton.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -76,7 +76,7 @@ namespace
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Assets::RenderComponent>();
+                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
                         renderComp->SetModelId(meshIdx);
                         renderComp->SetVisible(true);
                         renderComp->SetMaterial({matId});
@@ -94,7 +94,7 @@ namespace
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Assets::RenderComponent>();
+                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
                         renderComp->SetModelId(meshIdx);
                         renderComp->SetVisible(true);
                         renderComp->SetMaterial({matId});
@@ -109,7 +109,7 @@ namespace
                                                                  quat(1, 0, 0, 0),
                                                                  vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Assets::RenderComponent>();
+                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
                         renderComp->SetModelId(meshIdx);
                         renderComp->SetVisible(true);
                         renderComp->SetMaterial({matId});
@@ -117,8 +117,8 @@ namespace
                     }
                     
                     nodes.push_back(newNode);
-                    auto phys = std::make_shared<Assets::PhysicsComponent>();
-                    phys->SetMobility(Assets::ENodeMobility::Dynamic);
+                    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+                    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
                     phys->BindPhysicsBody(id);
                     newNode->AddComponent(phys);
                 }
@@ -156,7 +156,7 @@ namespace
         models.push_back(Assets::FProcModel::CreateBox(vec3(-1000, -0.5, -1000), vec3(1000, 0, 1000)));
         {
             auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(0);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({prevMatId + 0});
@@ -174,15 +174,15 @@ namespace
         
         {
             auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(modelIdx);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({matIdx0});
             newNode->AddComponent(renderComp);
             
             auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys1 = std::make_shared<Assets::PhysicsComponent>();
-            phys1->SetMobility(Assets::ENodeMobility::Dynamic);
+            auto phys1 = std::make_shared<Runtime::PhysicsComponent>();
+            phys1->SetMobility(Runtime::ENodeMobility::Dynamic);
             phys1->BindPhysicsBody(body1);
             newNode->AddComponent(phys1);
             nodes.push_back(newNode);
@@ -190,15 +190,15 @@ namespace
         
         {
             auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(modelIdx);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({matIdx1});
             newNode->AddComponent(renderComp);
             
             auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys2 = std::make_shared<Assets::PhysicsComponent>();
-            phys2->SetMobility(Assets::ENodeMobility::Dynamic);
+            auto phys2 = std::make_shared<Runtime::PhysicsComponent>();
+            phys2->SetMobility(Runtime::ENodeMobility::Dynamic);
             phys2->BindPhysicsBody(body2);
             newNode->AddComponent(phys2);
             nodes.push_back(newNode);
@@ -206,15 +206,15 @@ namespace
         
         {
             auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(modelIdx);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({matIdx2});
             newNode->AddComponent(renderComp);
 
             auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys3 = std::make_shared<Assets::PhysicsComponent>();
-            phys3->SetMobility(Assets::ENodeMobility::Dynamic);
+            auto phys3 = std::make_shared<Runtime::PhysicsComponent>();
+            phys3->SetMobility(Runtime::ENodeMobility::Dynamic);
             phys3->BindPhysicsBody(body3);
             newNode->AddComponent(phys3);
             nodes.push_back(newNode);
@@ -244,7 +244,7 @@ namespace
         int cboxModel = Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights);
         {
             auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(cboxModel);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({prevMatId + 0,prevMatId + 1,prevMatId + 2,prevMatId + 3});
@@ -264,15 +264,15 @@ namespace
         
         {
             auto newNode = Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(cboxModel + 2);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({prevMatId + 5});
             newNode->AddComponent(renderComp);
             
             auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, NextMotionType::Dynamic);
-            auto phys = std::make_shared<Assets::PhysicsComponent>();
-            phys->SetMobility(Assets::ENodeMobility::Dynamic);
+            auto phys = std::make_shared<Runtime::PhysicsComponent>();
+            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
             phys->BindPhysicsBody(id);
             newNode->AddComponent(phys);
             nodes.push_back(newNode);
@@ -280,7 +280,7 @@ namespace
         
         {
             auto newNode = Assets::Node::CreateNode("Box", boxPos, quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(cboxModel + 1);
             renderComp->SetVisible(true);
             renderComp->SetMaterial({prevMatId + 4});

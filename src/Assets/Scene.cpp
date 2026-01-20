@@ -11,8 +11,8 @@
 #include "Runtime/NextPhysics.h"
 
 #include "Node.h"
-#include "RenderComponent.h"
-#include "PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -95,7 +95,7 @@ namespace Assets
     {
         for (auto& node : nodes_)
         {
-            auto render = node->GetComponent<RenderComponent>();
+            auto render = node->GetComponent<Runtime::RenderComponent>();
             if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
             {
                 auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
@@ -125,13 +125,13 @@ namespace Assets
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
         {
             if (node == nullptr) return;
-            if (auto phys = node->GetComponent<PhysicsComponent>())
+            if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
             {
                 phys->SetMobility(Node::ENodeMobility::Kinematic);
             }
             else
             {
-                auto newPhys = std::make_shared<PhysicsComponent>();
+                auto newPhys = std::make_shared<Runtime::PhysicsComponent>();
                 newPhys->SetMobility(Node::ENodeMobility::Kinematic);
                 node->AddComponent(newPhys);
             }
@@ -152,7 +152,7 @@ namespace Assets
         sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
         for (auto& node : nodes_)
         {
-            auto render = node->GetComponent<Assets::RenderComponent>();
+            auto render = node->GetComponent<Runtime::RenderComponent>();
             if (render && render->IsVisible() && render->GetModelId() != -1)
             {
                 glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
@@ -203,11 +203,11 @@ namespace Assets
 
             for (auto& node : nodes_)
             {
-                auto render = node->GetComponent<Assets::RenderComponent>();
+                auto render = node->GetComponent<Runtime::RenderComponent>();
                 // bind the mesh shape to the node
                 if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
                 {
-                    auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                    auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                     Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
                     
                     if (mobility != Node::ENodeMobility::Dynamic)
@@ -229,7 +229,7 @@ namespace Assets
                                 
                                 if (!phys)
                                 {
-                                    phys = std::make_shared<Assets::PhysicsComponent>();
+                                    phys = std::make_shared<Runtime::PhysicsComponent>();
                                     phys->SetMobility(mobility);
                                     node->AddComponent(phys);
                                 }
@@ -394,11 +394,11 @@ namespace Assets
         nodes_.push_back(node);
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
-            auto render = node->GetComponent<Assets::RenderComponent>();
+            auto render = node->GetComponent<Runtime::RenderComponent>();
              // bind the mesh shape to the node
             if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                auto phys = node->GetComponent<Assets::PhysicsComponent>();
+                auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
                 if (mobility != Node::ENodeMobility::Dynamic)
@@ -417,7 +417,7 @@ namespace Assets
                         
                         if (!phys)
                         {
-                            phys = std::make_shared<Assets::PhysicsComponent>();
+                            phys = std::make_shared<Runtime::PhysicsComponent>();
                             phys->SetMobility(mobility);
                             node->AddComponent(phys);
                         }
@@ -532,7 +532,7 @@ namespace Assets
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
                         if (!n) return;
-                        auto phys = n->GetComponent<Assets::PhysicsComponent>();
+                        auto phys = n->GetComponent<Runtime::PhysicsComponent>();
                         if (phys)
                         {
                             NextBodyID bodyID = phys->GetPhysicsBody();
@@ -640,7 +640,7 @@ namespace Assets
                     for (auto& node : nodes_)
                     {
                         // record all
-                        auto render = node->GetComponent<Assets::RenderComponent>();
+                        auto render = node->GetComponent<Runtime::RenderComponent>();
                         if (render && render->IsDrawable())
                         {
                             glm::mat4 combined;
@@ -756,4 +756,3 @@ namespace Assets
         jointMatricesAddr_ = jointMatrices;
     }
 }
-

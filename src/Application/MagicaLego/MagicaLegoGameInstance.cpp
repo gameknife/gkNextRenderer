@@ -1,8 +1,8 @@
 #include "MagicaLegoGameInstance.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
-#include "Assets/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -259,7 +259,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
 
     // BasePlane Root
     Assets::Node* base = GetEngine().GetScene().GetNode("BasePlane12x12");
-    auto baseRender = base->GetComponent<Assets::RenderComponent>();
+    auto baseRender = base->GetComponent<Runtime::RenderComponent>();
     if (baseRender) baseRender->SetVisible(false);
     uint32_t modelId = baseRender ? baseRender->GetModelId() : 0;
     // Copy materials
@@ -282,7 +282,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
             }
             glm::vec3 location = glm::vec3((x - 10.25) * 0.96f, 0.0f, (z - 9.5) * 0.96f);
             auto newNode = Assets::Node::CreateNode(nodeName, location, glm::quat(1,0,0,0), glm::vec3(1), basementInstanceId_);
-            auto renderComp = std::make_shared<Assets::RenderComponent>();
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(modelId);
             renderComp->SetMaterial(matId);
             newNode->AddComponent(renderComp);
@@ -313,7 +313,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     glm::mat4 orientation = GetOrientationMatrix(EOrientation::EO_North);
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size() - 1);
     previewNode_ = Assets::Node::CreateNode("previewBlock", GetRenderLocationFromBlockLocation({0,0,0}), glm::quat(orientation), glm::vec3(1), instanceId);
-    auto previewRender = std::make_shared<Assets::RenderComponent>();
+    auto previewRender = std::make_shared<Runtime::RenderComponent>();
     previewRender->SetModelId(GetBasicBlock(currentBlockIdx_)->modelId_);
     previewRender->SetMaterial({ GetBasicBlock(currentBlockIdx_)->matType });
     previewRender->SetVisible(true);
@@ -448,15 +448,15 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
 
     std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("phyblock", meshPos, glm::quat(), glm::vec3(1), instanceId);
     
-    auto renderComp = std::make_shared<Assets::RenderComponent>();
+    auto renderComp = std::make_shared<Runtime::RenderComponent>();
     renderComp->SetModelId(GetBasicBlock(GetCurrentBrushIdx())->modelId_);
     renderComp->SetMaterial( { GetBasicBlock(GetCurrentBrushIdx())->matType } );
     renderComp->SetVisible(true);
     renderComp->SetRayCastVisible(false);
     newNode->AddComponent(renderComp);
 
-    auto phys = std::make_shared<Assets::PhysicsComponent>();
-    phys->SetMobility(Assets::ENodeMobility::Dynamic);
+    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
     auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, NextMotionType::Dynamic);
     phys->BindPhysicsBody(id);
     phys->SetPhysicsOffset(physicsOffset);
@@ -487,7 +487,7 @@ void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
     currentBlockIdx_ = idx;
     if (previewNode_.get())
     {
-        if (auto render = previewNode_->GetComponent<Assets::RenderComponent>())
+        if (auto render = previewNode_->GetComponent<Runtime::RenderComponent>())
         {
             render->SetModelId( GetBasicBlock(idx)->modelId_ );
             render->SetMaterial( { GetBasicBlock(idx)->matType } );
@@ -539,7 +539,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
     auto node = scene.GetNode(blockName);
     if (node)
     {
-        auto render = node->GetComponent<Assets::RenderComponent>();
+        auto render = node->GetComponent<Runtime::RenderComponent>();
         if (!render) return;
 
         FBasicBlock newBlock;
@@ -621,7 +621,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane type)
     {
         if (node->GetName() == "BigBase" || node->GetName() == "MidBase" || node->GetName() == "SmallBase")
         {
-            if (auto r = node->GetComponent<Assets::RenderComponent>()) r->SetVisible(false);
+            if (auto r = node->GetComponent<Runtime::RenderComponent>()) r->SetVisible(false);
         }
     }
 
@@ -632,7 +632,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane type)
         {
             if (node->GetName() == "BigBase" || node->GetName() == "MidBase" || node->GetName() == "SmallBase")
             {
-                if (auto r = node->GetComponent<Assets::RenderComponent>()) r->SetVisible(true);
+                if (auto r = node->GetComponent<Runtime::RenderComponent>()) r->SetVisible(true);
             }
         }
         break;
@@ -641,7 +641,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane type)
         {
             if (node->GetName() == "MidBase" || node->GetName() == "SmallBase")
             {
-                if (auto r = node->GetComponent<Assets::RenderComponent>()) r->SetVisible(true);
+                if (auto r = node->GetComponent<Runtime::RenderComponent>()) r->SetVisible(true);
             }
         }
         break;
@@ -650,7 +650,7 @@ void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane type)
         {
             if (node->GetName() == "SmallBase")
             {
-                if (auto r = node->GetComponent<Assets::RenderComponent>()) r->SetVisible(true);
+                if (auto r = node->GetComponent<Runtime::RenderComponent>()) r->SetVisible(true);
             }
         }
         break;
@@ -774,7 +774,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                 glm::mat4 orientation = GetOrientationMatrix(block.second.orientation);
                 uint32_t instanceId = instanceCountBeforeDynamics_ + GetHashFromBlockLocation(block.second.location);
                 std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("blockInst", GetRenderLocationFromBlockLocation(block.second.location), glm::quat(orientation), glm::vec3(1), instanceId);
-                auto renderComp = std::make_shared<Assets::RenderComponent>();
+                auto renderComp = std::make_shared<Runtime::RenderComponent>();
                 renderComp->SetModelId(basicBlock->modelId_);
                 renderComp->SetMaterial( {basicBlock->matType} );
                 renderComp->SetVisible(true);

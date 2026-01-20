@@ -1,6 +1,6 @@
 #include "EditorGUI.h"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Assets/Scene.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -69,7 +69,7 @@ void Editor::GUI::ShowProperties()
             ImGui::NewLine();
             ImGui::Text(ICON_FA_CUBE " Mesh");
             ImGui::Separator();
-            auto render = selectedObj->GetComponent<Assets::RenderComponent>();
+            auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
             int modelId = render ? render->GetModelId() : -1;
             ImGui::InputInt("##ModelId", &modelId, 1, 1, ImGuiInputTextFlags_ReadOnly);
 

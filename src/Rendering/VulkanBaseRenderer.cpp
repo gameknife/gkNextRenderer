@@ -26,7 +26,7 @@
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/Node.h"
-#include "Assets/RenderComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Utilities/Exception.hpp"
@@ -790,7 +790,7 @@ namespace Vulkan
                 uint32_t proxyIdx = 0;
                 for (auto& node : scene.Nodes())
                 {
-                    auto render = node->GetComponent<Assets::RenderComponent>();
+                    auto render = node->GetComponent<Runtime::RenderComponent>();
                     if (render && render->IsDrawable())
                     {
                         auto modelIdx = render->GetModelId();
@@ -1708,4 +1708,3 @@ namespace Vulkan
     }
 #endif
 }
-
