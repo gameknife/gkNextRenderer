@@ -28,9 +28,7 @@
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
-
-#define MINIAUDIO_IMPLEMENTATION
-#include "ThirdParty/miniaudio/miniaudio.h"
+#include "NextAudio.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -257,13 +255,8 @@ void NextEngine::Start()
     animationEngine_ = std::make_unique<NextAnimation>();
     animationEngine_->Start();
 
-    ma_result result;
-    audioEngine_.reset( new ma_engine() );
-
-    result = ma_engine_init(NULL, audioEngine_.get());
-    if (result != MA_SUCCESS) {
-        //Throw(std::runtime_error(std::string("failed to init audio engine.")));
-    }
+    audioEngine_ = std::make_unique<NextAudio>();
+    audioEngine_->Start();
     
     if (quickJSEngine_)
     {
@@ -431,20 +424,13 @@ void NextEngine::End()
         TaskCoordinator::DestroyInstance();
     }
 
-    // sound manager unit
-    soundDataMaps_.clear();
-    for (auto& [name, sound] : soundMaps_)
+    if (audioEngine_)
     {
-        ma_sound_uninit(sound.get());
+        audioEngine_->Stop();
     }
-    for (auto& [name, decoder] : soundDecoderMaps_)
-    {
-        ma_decoder_uninit(decoder.get());
-    }
-    
+
     physicsEngine_->Stop();
     animationEngine_->Stop();
-    ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
@@ -467,52 +453,28 @@ void NextEngine::AddTimerTask(double delay, DelayedTask task)
 
 void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (audioEngine_)
     {
-        auto sound = new ma_sound();
-
-        soundDataMaps_[soundName] = std::vector<uint8_t>();
-
-        // TODO: the music data memory will saved to soundDataMaps_, need manager more careful later
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(soundName,  soundDataMaps_[soundName]))
-        {
-            soundDecoderMaps_[soundName].reset(new ma_decoder());
-            ma_decoder_init_memory( soundDataMaps_[soundName].data(),  soundDataMaps_[soundName].size(), nullptr, soundDecoderMaps_[soundName].get());
-            ma_sound_init_from_data_source(audioEngine_.get(), soundDecoderMaps_[soundName].get(), 0, nullptr, sound);
-        }
-        
-        soundMaps_[soundName].reset(sound);
+        audioEngine_->PlaySound(soundName, loop, volume);
     }
-
-    ma_sound* sound = soundMaps_[soundName].get();
-
-    // restart the sound
-    ma_sound_stop(sound);
-    ma_sound_set_looping(sound, loop);
-    ma_sound_set_volume(sound, volume);
-    ma_sound_seek_to_pcm_frame(sound, 0);
-    ma_sound_start(sound);
 }
 
 void NextEngine::PauseSound(const std::string& soundName, bool pause)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (audioEngine_)
     {
-        return;
+        audioEngine_->PauseSound(soundName, pause);
     }
-
-    ma_sound* sound = soundMaps_[soundName].get();
-    pause ? ma_sound_stop(sound) : ma_sound_start(sound);
 }
 
 bool NextEngine::IsSoundPlaying(const std::string& soundName)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (!audioEngine_)
     {
         return false;
     }
-    ma_sound* sound = soundMaps_[soundName].get();
-    return ma_sound_is_playing(sound);
+
+    return audioEngine_->IsSoundPlaying(soundName);
 }
 
 void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)

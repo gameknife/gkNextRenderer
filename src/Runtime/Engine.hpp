@@ -9,11 +9,11 @@
 #include "Vulkan/Window.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
-#include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
 class NextPhysics;
 class QuickJSEngine;
+class NextAudio;
 
 class NextEngine;
 class NextAnimation;
@@ -252,10 +252,7 @@ private:
 	std::unique_ptr<class UserInterface> userInterface_;
 
 	// audio
-	std::unique_ptr<struct ma_engine> audioEngine_;
-	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
-    std::unordered_map<std::string, std::vector<uint8_t> > soundDataMaps_;
-    std::unordered_map<std::string, std::unique_ptr<ma_decoder> > soundDecoderMaps_;
+	std::unique_ptr<NextAudio> audioEngine_;
     
 	// physics
 	std::unique_ptr<NextPhysics> physicsEngine_;
