@@ -274,6 +274,10 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE Jolt::Jolt )
 	endif()
 
+	if ( WITH_AUDIO )
+		target_compile_definitions(${target} PUBLIC WITH_AUDIO=1)
+	endif()
+
 	if ( WITH_QUICKJS )
 		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
 		target_link_libraries(${target} PRIVATE quickjs )
