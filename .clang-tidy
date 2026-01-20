@@ -26,7 +26,6 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.NamespaceCase
     value: CamelCase
-  # 函数和方法统一 camelCase（示例：renderFrame、initPhysics）
   # 函数和方法统一 PascalCase（示例：RenderFrame、InitPhysics）
   - key: readability-identifier-naming.FunctionCase
     value: CamelCase
