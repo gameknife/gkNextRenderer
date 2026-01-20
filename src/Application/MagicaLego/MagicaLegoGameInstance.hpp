@@ -2,6 +2,7 @@
 // ReSharper disable once CppUnusedIncludeDirective
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include "Utilities/FileHelper.hpp"
 
 #define MAGICALEGO_SAVE_VERSION 1

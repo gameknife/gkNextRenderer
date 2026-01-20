@@ -10,6 +10,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -241,13 +242,13 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 		auto mousePos = GetEngine().GetMousePos();
 		glm::vec3 org;
 		glm::vec3 dir;
-		GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
 		GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
 		{
 			if (result.Hitted)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-				GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+                NextEngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
 			}
 			return true;
 		});

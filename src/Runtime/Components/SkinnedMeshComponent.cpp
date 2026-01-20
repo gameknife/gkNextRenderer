@@ -1,5 +1,6 @@
 #include "SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <functional>
@@ -151,7 +152,7 @@ namespace Runtime
                 glm::vec3 start = glm::vec3(worldTransform * runtimeJoints_[parentIdx].GlobalTransform * glm::vec4(0, 0, 0, 1));
                 glm::vec3 end = glm::vec3(worldTransform * runtimeJoints_[i].GlobalTransform * glm::vec4(0, 0, 0, 1));
                 
-                NextEngine::GetInstance()->DrawAuxLine(start, end, glm::vec4(0, 1, 0, 1), 2.0f);
+                NextEngineHelper::DrawAuxLine(start, end, glm::vec4(0, 1, 0, 1), 2.0f);
             }
         }
     }

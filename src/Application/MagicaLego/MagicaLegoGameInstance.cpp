@@ -225,7 +225,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // draw if no capturing
     if (indicatorDrawRequest_ && !bCapturing_)
     {
-        GetEngine().DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5, 0.65, 1, 0.75), 2.0);
+        NextEngineHelper::DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5, 0.65, 1, 0.75), 2.0);
         indicatorDrawRequest_ = false;
     }
 }
@@ -810,7 +810,7 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
 
 void MagicaLegoGameInstance::CPURaycast()
 {
-    glm::vec3 dir = GetEngine().ProjectScreenToWorld(mousePos_);
+    glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
     GetEngine().RayCastGPU(cachedCameraPos_, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hitted)
