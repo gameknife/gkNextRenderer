@@ -1,0 +1,39 @@
+name: Android CI (Self)
+
+on: 
+  pull_request:
+    branches:
+      - main
+      - dev
+      - 'releases/**'
+  push:
+    branches:
+      - main
+      - 'releases/**'
+    paths:
+      - '.github/workflows/**'
+      - 'src/**'
+      - 'assets/shaders/**'
+      - '*.sh'
+      - '*.bat'
+      - '**/CMakeLists.txt'
+jobs:
+  build:
+    runs-on: self-hosted
+    env:
+      SDK_VERSION: 1.4.313.1
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        clean: false
+   
+    - name: Compile vcpkg dependencies
+      run: |
+        vcpkg.bat
+      shell: cmd
+
+    - name: Compile gkNextRenderer
+      run: |
+        build.bat --preset android
+      shell: cmd
+
