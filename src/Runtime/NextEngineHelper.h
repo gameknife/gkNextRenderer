@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include <glm/glm.hpp>
 
 class NextEngine;
 
