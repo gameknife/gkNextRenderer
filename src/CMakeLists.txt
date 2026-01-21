@@ -44,9 +44,8 @@ file(GLOB_RECURSE src_files_engine
 	"Options.hpp"
 )
 
-# Set Engine.cpp to compile as Objective-C++ on iOS
 if (IOS)
-    set_source_files_properties(Runtime/Engine.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Runtime/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
