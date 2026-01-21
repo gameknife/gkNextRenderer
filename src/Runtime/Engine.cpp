@@ -10,11 +10,11 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "ScreenShot.hpp"
+#include "QuickJSEngine.hpp"
 
 #include <iostream>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
-#include <Utilities/FileHelper.hpp>
 #include <filesystem>
 #include <cstdlib>
 #include <optional>
@@ -28,13 +28,7 @@
 #include "TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
-
-#if WITH_QUICKJS
-#include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
-
-#define MINIAUDIO_IMPLEMENTATION
-#include "ThirdParty/miniaudio/miniaudio.h"
+#include "NextAudio.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -112,116 +106,6 @@ namespace
         float elapsed;
         std::array<char, 256> outputInfo;
     };
-
-    bool HasExtension(const std::filesystem::path& path, std::initializer_list<const char*> extensions)
-    {
-        const std::string extension = path.extension().string();
-        for (const char* candidate : extensions)
-        {
-            if (extension == candidate)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    std::optional<std::filesystem::file_time_type> FindLatestTimestamp(const std::filesystem::path& root,
-        std::initializer_list<const char*> extensions)
-    {
-        namespace fs = std::filesystem;
-        std::error_code ec;
-        if (!fs::exists(root, ec))
-        {
-            return std::nullopt;
-        }
-
-        fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
-        if (ec)
-        {
-            SPDLOG_WARN("Failed to enumerate {}: {}", root.string(), ec.message());
-            return std::nullopt;
-        }
-
-        const fs::recursive_directory_iterator end;
-        std::optional<fs::file_time_type> latest;
-        for (; it != end; it.increment(ec))
-        {
-            if (ec)
-            {
-                SPDLOG_WARN("Directory iteration error under {}: {}", root.string(), ec.message());
-                ec.clear();
-                continue;
-            }
-
-            if (it->is_directory(ec))
-            {
-                if (!ec && it->path().filename() == "node_modules")
-                {
-                    it.disable_recursion_pending();
-                }
-                ec.clear();
-                continue;
-            }
-
-            if (ec)
-            {
-                SPDLOG_WARN("Failed to inspect {}: {}", it->path().string(), ec.message());
-                ec.clear();
-                continue;
-            }
-
-            if (!it->is_regular_file(ec))
-            {
-                ec.clear();
-                continue;
-            }
-
-            if (ec)
-            {
-                SPDLOG_WARN("Failed to query file type for {}: {}", it->path().string(), ec.message());
-                ec.clear();
-                continue;
-            }
-
-            if (!HasExtension(it->path(), extensions))
-            {
-                continue;
-            }
-
-            auto timestamp = it->last_write_time(ec);
-            if (ec)
-            {
-                SPDLOG_WARN("Failed to query timestamp for {}: {}", it->path().string(), ec.message());
-                ec.clear();
-                continue;
-            }
-
-            if (!latest || timestamp > *latest)
-            {
-                latest = timestamp;
-            }
-        }
-
-        return latest;
-    }
-
-    bool HasNewerTypeScriptSources(const std::filesystem::path& projectDir, const std::filesystem::path& outputDir)
-    {
-        auto latestSource = FindLatestTimestamp(projectDir, { ".ts", ".tsx" });
-        if (!latestSource)
-        {
-            return false;
-        }
-
-        auto latestOutput = FindLatestTimestamp(outputDir, { ".js", ".mjs" });
-        if (!latestOutput)
-        {
-            return true;
-        }
-
-        return *latestOutput < *latestSource;
-    }
 }
 
 UserSettings CreateUserSettings(const Options& options)
@@ -248,6 +132,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.ShowVisualDebug = false;
     userSettings.HeatmapScale = 1.0f;
+    userSettings.DebugDraw_BoundingBox = false;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Temporal;
@@ -321,6 +206,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
     window_.reset( new Vulkan::Window(windowConfig));
+    quickJSEngine_ = std::make_unique<QuickJSEngine>();
     
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
@@ -370,16 +256,13 @@ void NextEngine::Start()
     animationEngine_ = std::make_unique<NextAnimation>();
     animationEngine_->Start();
 
-    ma_result result;
-    audioEngine_.reset( new ma_engine() );
-
-    result = ma_engine_init(NULL, audioEngine_.get());
-    if (result != MA_SUCCESS) {
-        //Throw(std::runtime_error(std::string("failed to init audio engine.")));
-    }
+    audioEngine_ = std::make_unique<NextAudio>();
+    audioEngine_->Start();
     
-    // init js engine
-    InitJSEngine();
+    if (quickJSEngine_)
+    {
+        quickJSEngine_->Initialize();
+    }
 
     gameInstance_->OnInit();
     
@@ -421,7 +304,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     return false;
 }
 
-bool NextEngine::Tick()
+bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
     
@@ -438,6 +321,7 @@ bool NextEngine::Tick()
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
     deltaSeconds_ = time_ - prevTime;
+    if (forcingDelta) deltaSeconds_ = 1.0 / 30.0;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
     
@@ -454,12 +338,10 @@ bool NextEngine::Tick()
     
     if (userSettings_.TickAnimation && animationEngine_) animationEngine_->Tick(deltaSeconds_); //pause dev, wait next
 
-#if WITH_QUICKJS
-    if (JSTickCallback_)
+    if (quickJSEngine_)
     {
-        JSTickCallback_(deltaSeconds_);
+        quickJSEngine_->Tick(deltaSeconds_);
     }
-#endif
 
     // tick
     if (status_ == NextRenderer::EApplicationStatus::Running)
@@ -540,22 +422,16 @@ void NextEngine::End()
     {
         TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+        TaskCoordinator::DestroyInstance();
     }
 
-    // sound manager unit
-    soundDataMaps_.clear();
-    for (auto& [name, sound] : soundMaps_)
+    if (audioEngine_)
     {
-        ma_sound_uninit(sound.get());
+        audioEngine_->Stop();
     }
-    for (auto& [name, decoder] : soundDecoderMaps_)
-    {
-        ma_decoder_uninit(decoder.get());
-    }
-    
+
     physicsEngine_->Stop();
     animationEngine_->Stop();
-    ma_engine_uninit(audioEngine_.get());
     gameInstance_->OnDestroy();
     renderer_->End();
     userInterface_.reset();
@@ -565,9 +441,10 @@ void NextEngine::End()
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
 {
-#if WITH_QUICKJS
-    JSTickCallback_ = callback;
-#endif
+    if (quickJSEngine_)
+    {
+        quickJSEngine_->RegisterTickCallback(std::move(callback));
+    }
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -577,159 +454,33 @@ void NextEngine::AddTimerTask(double delay, DelayedTask task)
 
 void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (audioEngine_)
     {
-        auto sound = new ma_sound();
-
-        soundDataMaps_[soundName] = std::vector<uint8_t>();
-
-        // TODO: the music data memory will saved to soundDataMaps_, need manager more careful later
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(soundName,  soundDataMaps_[soundName]))
-        {
-            soundDecoderMaps_[soundName].reset(new ma_decoder());
-            ma_decoder_init_memory( soundDataMaps_[soundName].data(),  soundDataMaps_[soundName].size(), nullptr, soundDecoderMaps_[soundName].get());
-            ma_sound_init_from_data_source(audioEngine_.get(), soundDecoderMaps_[soundName].get(), 0, nullptr, sound);
-        }
-        
-        soundMaps_[soundName].reset(sound);
+        audioEngine_->PlaySound(soundName, loop, volume);
     }
-
-    ma_sound* sound = soundMaps_[soundName].get();
-
-    // restart the sound
-    ma_sound_stop(sound);
-    ma_sound_set_looping(sound, loop);
-    ma_sound_set_volume(sound, volume);
-    ma_sound_seek_to_pcm_frame(sound, 0);
-    ma_sound_start(sound);
 }
 
 void NextEngine::PauseSound(const std::string& soundName, bool pause)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (audioEngine_)
     {
-        return;
+        audioEngine_->PauseSound(soundName, pause);
     }
-
-    ma_sound* sound = soundMaps_[soundName].get();
-    pause ? ma_sound_stop(sound) : ma_sound_start(sound);
 }
 
 bool NextEngine::IsSoundPlaying(const std::string& soundName)
 {
-    if( soundMaps_.find(soundName) == soundMaps_.end() )
+    if (!audioEngine_)
     {
         return false;
     }
-    ma_sound* sound = soundMaps_[soundName].get();
-    return ma_sound_is_playing(sound);
+
+    return audioEngine_->IsSoundPlaying(soundName);
 }
 
 void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
     ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
-}
-
-glm::vec3 NextEngine::ProjectScreenToWorld(glm::vec2 locationSS)
-{
-    glm::vec3 org;
-    glm::vec3 dir;
-    GetScreenToWorldRay(locationSS, org, dir );
-    return dir;
-}
-
-glm::vec3 NextEngine::ProjectWorldToScreen(glm::vec3 locationWS)
-{
-    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
-    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
-    
-    glm::vec4 transformed = prevUBO_.ViewProjection * glm::vec4(locationWS, 1.0f);
-    transformed = transformed / transformed.w;
-    // from ndc to screenspace
-    transformed.x += 1.0f;
-    transformed.x *= vkextent.width / 2;
-    transformed.y += 1.0f;
-    transformed.y *= vkextent.height / 2;
-    
-    transformed.x += vkoffset.x;
-    transformed.y += vkoffset.y;
-    
-    return transformed;
-}
-
-void NextEngine::GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
-{
-    // should consider rt offset
-    
-    auto vkoffset = GetRenderer().SwapChain().OutputOffset();
-    auto vkextent = GetRenderer().SwapChain().OutputExtent(); // TODO: use render extent on editor
-    glm::vec2 offset = {vkoffset.x, vkoffset.y};
-    glm::vec2 extent = {vkextent.width, vkextent.height};
-    glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
-    glm::vec2 uv = pixel / extent * glm::vec2(2.0,2.0) - glm::vec2(1.0,1.0);
-    glm::vec4 origin = prevUBO_.ModelViewInverse * glm::vec4(0, 0, 0, 1);
-    glm::vec4 target = prevUBO_.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
-    glm::vec3 raydir = prevUBO_.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0,0.0,0.0))), 0.0);
-    org = glm::vec3(origin);
-    dir = raydir;
-}
-
-void NextEngine::DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
-{
-    auto transformedFrom = ProjectWorldToScreen(from);
-    auto transformedTo = ProjectWorldToScreen(to);
-
-    // should clip with z == 1, clip to new point
-    if(transformedFrom.z < 1 && transformedTo.z < 1)
-    {
-        userInterface_->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y, size, color );
-    }
-}
-
-void NextEngine::DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
-{
-    // Draw the box with 12 lines
-    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z), color, size);
-    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z), color, size);
-
-    DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z), color, size);
-
-    DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z), color, size);
-    DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
-}
-
-static std::vector<int32_t> AuxCounter;
-void NextEngine::DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick)
-{
-    if (durationInTick > 0)
-    {
-        AuxCounter.push_back(durationInTick);
-        int32_t id = static_cast<int32_t>(AuxCounter.size()) - 1;
-        AddTickedTask( [this, location, color, size, id](double deltaSeconds)->bool
-        {
-            auto transformed = ProjectWorldToScreen(location);
-            if(transformed.z < 1)
-            {
-                userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
-            }
-            return (AuxCounter[id] -= 1) <= 0;
-        });
-    }
-    else
-    {
-        auto transformed = ProjectWorldToScreen(location);
-        if(transformed.z < 1)
-        {
-            userInterface_->DrawPoint(transformed.x, transformed.y, size, color);
-        }
-    }
 }
 
 glm::dvec2 NextEngine::GetMousePos()
@@ -1267,26 +1018,27 @@ void NextEngine::LoadScene(std::string sceneFileName)
     std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
     std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
     std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
+    std::shared_ptr< std::vector<Assets::Skeleton> > skeletons = std::make_shared< std::vector<Assets::Skeleton> >();
     std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
     physicsEngine_->OnSceneDestroyed();
     Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
     
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
         
-        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks);
-        
+        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks, *skeletons);
+
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
         std::string info = fmt::format("parsed scene [{}] on cpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks](ResTask& task)
+    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
@@ -1306,8 +1058,8 @@ void NextEngine::LoadScene(std::string sceneFileName)
 
             gameInstance_->BeforeSceneRebuild(*nodes, *models, *materials, *lights, *tracks);
             scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
+            scene_->PostLoad(*skeletons);
             scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-                    
             renderer_->SetScene(scene_);
                     
             userSettings_.CameraIdx = 0;
@@ -1332,136 +1084,6 @@ void NextEngine::LoadScene(std::string sceneFileName)
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
-}
-
-#if WITH_QUICKJS
-void Println(qjs::rest<std::string> args) {
-    for (auto const & arg : args) { SPDLOG_INFO("{}", arg); }
-}
-#endif
-
-NextEngine* getEngine() {
-    return NextEngine::GetInstance();
-}
-
-void NextEngine::CompileTypeScriptSources()
-{
-    namespace fs = std::filesystem;
-
-    try
-    {
-        const fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("assets/typescript/tsconfig.json"));
-        if (tsconfigPath.empty())
-        {
-            SPDLOG_DEBUG("TypeScript tsconfig not found; skipping compilation.");
-            return;
-        }
-
-        std::error_code ec;
-        if (!fs::exists(tsconfigPath, ec))
-        {
-            SPDLOG_DEBUG("TypeScript tsconfig missing at {}", tsconfigPath.string());
-            return;
-        }
-
-        const fs::path projectDir = tsconfigPath.parent_path();
-        const fs::path outputDir = fs::absolute(projectDir / "../../assets/scripts");
-
-        const bool forceCompile = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
-        if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir))
-        {
-            SPDLOG_INFO("TypeScript outputs are up to date; skipping compilation.");
-            return;
-        }
-
-        if (!fs::exists(outputDir, ec))
-        {
-            fs::create_directories(outputDir, ec);
-            if (ec)
-            {
-                SPDLOG_WARN("Failed to create TypeScript output directory {}: {}", outputDir.string(), ec.message());
-            }
-        }
-
-        std::vector<std::string> commands;
-#if WIN32
-        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
-#else
-        commands.emplace_back(fmt::format("./tsc -p \"{}\"", projectDir.string()));
-#endif
-
-        for (const std::string& command : commands)
-        {
-            if (command.empty())
-            {
-                continue;
-            }
-
-            SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
-            spdlog::stopwatch stopwatch;
-            NextRenderer::OSProcess(command.c_str());
-            SPDLOG_INFO("---- Compiling TypeScript in {}", stopwatch.elapsed_ms());
-            return;
-        }
-
-        SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
-    }
-    catch (const std::exception& e)
-    {
-        SPDLOG_WARN("Exception while compiling TypeScript sources: {}", e.what());
-    }
-}
-
-void NextEngine::InitJSEngine() {
-#if WITH_QUICKJS
-    // Initialize JS Engine
-    JSRuntime_.reset(new qjs::Runtime());
-    JSContext_.reset(new qjs::Context(*JSRuntime_));
-    
-    try
-    {
-        CompileTypeScriptSources();
-
-        // export classes as a module
-        auto& module = JSContext_->addModule("Engine");
-        module.function<&Println>("println");
-        module.function<&getEngine>("GetEngine");
-
-        module.class_<NextEngine>("NextEngine")
-                .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
-                .fun<&NextEngine::GetTestNumber>("GetTestNumber")
-                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
-                .fun<&NextEngine::GetScenePtr>("GetScenePtr");
-        module.class_<Assets::Scene>("Scene")
-                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount");
-        module.class_<NextComponent>("NextComponent")
-                .constructor<>()
-                .fun<&NextComponent::name_> ("name_")
-                .fun<&NextComponent::id_> ("id_");
-
-        // TODO use node.exe + tsc to compile the typescript to js realtime
-        // NextRenderer::OSProcess(fmt::format("").c_str());    
-
-        // Current load the script from file
-        std::vector<uint8_t> scriptBuffer;
-        if ( Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer) )
-        {
-            JSContext_->eval( std::string_view( (char*)scriptBuffer.data()), "<import>", JS_EVAL_TYPE_MODULE);
-        }
-        else
-        {
-            //Throw(std::runtime_error(std::string("failed to load script.")));
-            //SPDLOG_WARN("Failed to load script");
-        }
-    }
-    catch(qjs::exception)
-    {
-        auto exc = JSContext_->getException();
-        std::cerr << (std::string) exc << std::endl;
-        if((bool) exc["stack"])
-            std::cerr << (std::string) exc["stack"] << std::endl;
-    }
-#endif
 }
 
 void NextEngine::InitPhysics()

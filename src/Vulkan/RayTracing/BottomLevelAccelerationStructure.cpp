@@ -58,4 +58,19 @@ void BottomLevelAccelerationStructure::Generate(
 	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
 }
 
+void BottomLevelAccelerationStructure::Update(
+	VkCommandBuffer commandBuffer,
+	Buffer& scratchBuffer,
+	const VkDeviceSize scratchOffset)
+{
+	const VkAccelerationStructureBuildRangeInfoKHR* pBuildOffsetInfo = geometries_.BuildOffsetInfo().data();
+
+	buildGeometryInfo_.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+	buildGeometryInfo_.srcAccelerationStructure = Handle();
+	buildGeometryInfo_.dstAccelerationStructure = Handle();
+	buildGeometryInfo_.scratchData.deviceAddress = scratchBuffer.GetDeviceAddress() + scratchOffset;
+
+	deviceProcedures_.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo_, &pBuildOffsetInfo);
+}
+
 }

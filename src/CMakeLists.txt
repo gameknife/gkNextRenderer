@@ -44,9 +44,8 @@ file(GLOB_RECURSE src_files_engine
 	"Options.hpp"
 )
 
-# Set Engine.cpp to compile as Objective-C++ on iOS
 if (IOS)
-    set_source_files_properties(Runtime/Engine.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Runtime/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
 file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
@@ -274,6 +273,10 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE Jolt::Jolt )
 	endif()
 
+	if ( WITH_AUDIO )
+		target_compile_definitions(${target} PUBLIC WITH_AUDIO=1)
+	endif()
+
 	if ( WITH_QUICKJS )
 		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
 		target_link_libraries(${target} PRIVATE quickjs )
@@ -352,8 +355,13 @@ endforeach()
 if ( NOT ANDROID )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests 
+	Tests/TestCommon.cpp
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
+	Tests/Test_GltfSkinning.cpp
+	Tests/Test_ComponentSystem.cpp
+	Tests/Test_RenderComponent.cpp
+	Tests/Test_PhysicsComponent.cpp
 )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)

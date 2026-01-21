@@ -79,7 +79,7 @@ namespace Vulkan::PipelineCommon
 		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
 						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
 	}
-
+    
 	ZeroBindPipeline::ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile):PipelineBase(swapChain)
 	{
 		// Create descriptor pool/sets.

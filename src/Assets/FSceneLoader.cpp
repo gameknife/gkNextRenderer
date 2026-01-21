@@ -25,6 +25,7 @@
 
 #include "Material.hpp"
 #include "Node.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Utilities/FileHelper.hpp"
 
 namespace Assets
@@ -155,10 +156,12 @@ namespace Assets
         }
 
         uint32_t primaryMatIdx = 0;
-        std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, meshId, uint32_t(outNodes.size()), false);
+        std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
         if (meshId != -1)
         {
-            sceneNode->SetVisible(true);
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
+            renderComp->SetModelId(meshId);
+            renderComp->SetVisible(true);
             std::array<uint32_t, 16> materialIdx {};
             for (int i = 0; i < model.meshes[node.mesh].primitives.size(); i++)
             {
@@ -167,8 +170,25 @@ namespace Assets
                 materialIdx[i] = (max(0, primitive.material + materialOffset));
                 primaryMatIdx = primitive.material + materialOffset;
             }
-            sceneNode->SetMaterial(materialIdx);
+            renderComp->SetMaterial(materialIdx);
+            sceneNode->AddComponent(renderComp);
         }
+
+        if (node.skin != -1)
+        {
+            if (auto render = sceneNode->GetComponent<Runtime::RenderComponent>()) 
+            {
+                render->SetSkinIndex(node.skin);
+            }
+        }
+        else
+        {
+            if (auto render = sceneNode->GetComponent<Runtime::RenderComponent>()) 
+            {
+                render->SetSkinIndex(0xFFFFFFFF);
+            }
+        }
+
         outNodes.push_back(sceneNode);
 
         nodeMap[nodeIdx] = sceneNode;
@@ -274,7 +294,7 @@ namespace Assets
     
     bool FSceneLoader::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
-                              std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+                              std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
     {
         int32_t materialOffset = static_cast<int32_t>(materials.size());
         int32_t modelIdx = static_cast<int32_t>(models.size());
@@ -316,7 +336,7 @@ namespace Assets
             }
             if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, gltfFile.string()) )
             {
-                SPDLOG_ERROR("failed to parse glb file: {}", filename);
+                SPDLOG_ERROR("failed to parse gltf file: \nErr: {}\nWarn: {}", filename, err, warn);
                 return false;
             }
         }
@@ -409,7 +429,90 @@ namespace Assets
             lambdaLoadTexture(mat.emissiveTexture.index, true);
         }
         
-        // load all materials
+        
+        // Load skeletons
+        for (const auto& skin : model.skins)
+        {
+            Assets::Skeleton skeleton;
+            skeleton.Name = skin.name;
+            skeleton.RootJointIndex = 0;
+            
+            std::vector<glm::mat4> ibms;
+            if (skin.inverseBindMatrices != -1)
+            {
+                const auto& accessor = model.accessors[skin.inverseBindMatrices];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+                int stride = accessor.ByteStride(bufferView);
+                
+                ibms.resize(accessor.count);
+                const unsigned char* dataPtr = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+                
+                for(size_t i=0; i<accessor.count; ++i)
+                {
+                    const float* m = reinterpret_cast<const float*>(dataPtr + i * stride);
+                    ibms[i] = glm::make_mat4(m);
+                }
+            }
+
+            std::map<int, int> nodeToJointIndex;
+            for(size_t i=0; i<skin.joints.size(); ++i)
+            {
+                nodeToJointIndex[skin.joints[i]] = static_cast<int>(i);
+            }
+
+            for (size_t i = 0; i < skin.joints.size(); ++i)
+            {
+                int nodeIdx = skin.joints[i];
+                auto& node = model.nodes[nodeIdx];
+                
+                Assets::Joint joint;
+                joint.Name = node.name;
+                if (i < ibms.size())
+                {
+                    joint.InverseBindMatrix = ibms[i];
+                }
+                
+                if (!node.matrix.empty())
+                {
+                    glm::dmat4 dmat = glm::make_mat4(node.matrix.data());
+                    glm::mat4 mat = glm::mat4(dmat);
+                    glm::vec3 skew;
+                    glm::vec4 perspective;
+                    glm::decompose(mat, joint.Scale, joint.Rotation, joint.Translation, skew, perspective);
+                }
+                else
+                {
+                    joint.Translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+                    joint.Scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+                    joint.Rotation = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(static_cast<float>(node.rotation[3]), static_cast<float>(node.rotation[0]), static_cast<float>(node.rotation[1]), static_cast<float>(node.rotation[2]));
+                }
+                
+                skeleton.Joints.push_back(joint);
+            }
+
+            // Hierarchy
+            for(size_t i=0; i<skin.joints.size(); ++i)
+            {
+                int nodeIdx = skin.joints[i];
+                auto& node = model.nodes[nodeIdx];
+                for (int child : node.children)
+                {
+                    if (nodeToJointIndex.find(child) != nodeToJointIndex.end())
+                    {
+                        int childIdx = nodeToJointIndex[child];
+                        skeleton.Joints[childIdx].ParentIndex = static_cast<int>(i);
+                        skeleton.Joints[i].Children.push_back(childIdx);
+                    }
+                }
+            }
+            
+            skeletons.push_back(skeleton);
+        }
+        
+        
+                
+                // load all materials
         for (tinygltf::Material& mat : model.materials)
         {
             Material m{};
@@ -522,6 +625,8 @@ namespace Assets
             bool hasTangent = false;
             std::vector<Vertex> vertices;
             std::vector<uint32_t> indices;
+            std::vector<glm::vec4> weights;
+            std::vector<glm::uvec4> joints;
 
             uint32_t vertextOffset = 0;
             uint32_t sectionIdx = 0;
@@ -554,10 +659,11 @@ namespace Assets
                 {
                      // SPDLOG_WARN("Mesh '{}': TEXCOORD_1 found but ignored.", mesh.name);
                 }
-                if (primtive.attributes.find("JOINTS_0") != primtive.attributes.end())
-                {
-                     SPDLOG_WARN("Mesh '{}': JOINTS_0 found but skinning not supported.", mesh.name);
-                }
+                
+                int jointsIdx = -1;
+                if (primtive.attributes.find("JOINTS_0") != primtive.attributes.end()) jointsIdx = primtive.attributes["JOINTS_0"];
+                int weightsIdx = -1;
+                if (primtive.attributes.find("WEIGHTS_0") != primtive.attributes.end()) weightsIdx = primtive.attributes["WEIGHTS_0"];
 
                 if (posIdx == -1) continue;
 
@@ -582,6 +688,18 @@ namespace Assets
                     
                     vertex.MaterialIndex = sectionIdx;
                     vertices.push_back(vertex);
+
+                    if (jointsIdx != -1) { 
+                         joints.push_back(glm::uvec4(GetAttributeValue(model, model.accessors[jointsIdx], i)));
+                    } else {
+                         joints.push_back(glm::uvec4(0));
+                    }
+                    
+                    if (weightsIdx != -1) { 
+                         weights.push_back(GetAttributeValue(model, model.accessors[weightsIdx], i));
+                    } else {
+                         weights.push_back(glm::vec4(0));
+                    }
                 }
                 
                 sectionIdx++;
@@ -628,6 +746,11 @@ namespace Assets
             }
             
             models.push_back(Assets::Model(mesh.name, std::move(vertices), std::move(indices), !hasTangent));
+            if (!weights.empty())
+            {
+                models.back().CPUWeights() = std::move(weights);
+                models.back().CPUJoints() = std::move(joints);
+            }
         }
 
 
@@ -716,6 +839,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -764,6 +888,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
 
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -813,6 +938,7 @@ namespace Assets
                     std::string nodeName = model.nodes[track.target_node].name;
                     AnimationTrack& createTrack = trackMaps[nodeName];
                     
+                    createTrack.AnimationName = animation.name == "" ? "Default" : animation.name;
                     createTrack.NodeName_ = nodeName;
                     createTrack.Time_ = 0;
 
@@ -889,9 +1015,10 @@ namespace Assets
 
         for (const auto& node : nodes)
         {
-            if (node->IsDrawable())
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (render && render->IsDrawable())
             {
-                uint32_t modelIdx = node->GetModel();
+                uint32_t modelIdx = render->GetModelId();
                 if (modelIdx < models.size())
                 {
                     auto& model = models[modelIdx];

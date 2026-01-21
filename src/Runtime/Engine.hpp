@@ -9,16 +9,11 @@
 #include "Vulkan/Window.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
-#include "ThirdParty/miniaudio/miniaudio.h"
 #include "Utilities/FileHelper.hpp"
 
 class NextPhysics;
-
-namespace qjs
-{
-	class Context;
-	class Runtime;
-}
+class QuickJSEngine;
+class NextAudio;
 
 class NextEngine;
 class NextAnimation;
@@ -121,7 +116,7 @@ public:
 
 	void Start();
 	bool HandleEvent(SDL_Event& event);
-	bool Tick();
+	bool Tick(bool forcingDelta = false);
 	void End();
 	
 	void OnTouch(bool down, double xpos, double ypos);
@@ -154,14 +149,6 @@ public:
 
 	// pak
 	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
-
-	// fast aux drawing using interface
-	glm::vec3 ProjectScreenToWorld(glm::vec2 locationSS);
-	glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS);
-	void GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& origin, glm::vec3& dir);
-	void DrawAuxLine( glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1 );
-	void DrawAuxBox( glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1 );
-	void DrawAuxPoint( glm::vec3 location, glm::vec4 color, float size = 1, int32_t durationInTick = 0 );
 
 	// cursor pos
 	glm::dvec2 GetMousePos();
@@ -220,8 +207,6 @@ protected:
 private:
         void LoadScene(std::string sceneFileName);
 
-        void InitJSEngine();
-        void CompileTypeScriptSources();
         void InitPhysics();
 
 	// engine stuff
@@ -259,10 +244,7 @@ private:
 	std::unique_ptr<class UserInterface> userInterface_;
 
 	// audio
-	std::unique_ptr<struct ma_engine> audioEngine_;
-	std::unordered_map<std::string, std::unique_ptr<ma_sound> > soundMaps_;
-    std::unordered_map<std::string, std::vector<uint8_t> > soundDataMaps_;
-    std::unordered_map<std::string, std::unique_ptr<ma_decoder> > soundDecoderMaps_;
+	std::unique_ptr<NextAudio> audioEngine_;
     
 	// physics
 	std::unique_ptr<NextPhysics> physicsEngine_;
@@ -273,12 +255,7 @@ private:
 	// package
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
-	// quickjs
-#if WITH_QUICKJS
-	std::unique_ptr<qjs::Runtime> JSRuntime_;
-	std::unique_ptr<qjs::Context> JSContext_;
-	std::function<void(double)> JSTickCallback_;
-#endif
+	std::unique_ptr<QuickJSEngine> quickJSEngine_;
     
 	// engine status
 	NextRenderer::EApplicationStatus status_{};

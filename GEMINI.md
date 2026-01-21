@@ -1,149 +1,52 @@
-# Gemini Code Assistant Context
+# Gemini 代码助手上下文 (Gemini Code Assistant Context)
 
-This document provides context for the Gemini code assistant to understand the `gkNextRenderer` project.
+本文档为 Gemini 代码助手提供 `gkNextRenderer` 项目的核心上下文。
 
-## Project Overview
+## 项目概览
 
-`gkNextRenderer` is a cross-platform 3D game engine written in modern C++. It focuses on modern rendering techniques and game technology practices. The engine supports Windows, Linux, macOS, Android, and iOS.
+`gkNextRenderer` 是一个使用现代 C++ 编写的跨平台 3D 游戏引擎，专注于现代渲染技术和游戏技术实践。引擎支持 Windows, Linux, macOS, Android 和 iOS。
 
-The project is structured as a collection of libraries and executables. The main library is `gkNextEngine`, which contains the core engine functionality. Several executables are built on top of this library, including:
+项目结构由一系列库和可执行文件组成。核心库为 `gkNextEngine`。主要可执行文件包括：
+*   `gkNextRenderer`: 主渲染器，支持路径追踪 (Path Tracing) 和混合渲染。
+*   `gkNextEditor`: 基于 ImGui 的场景编辑器。
+*   `gkNextUnitTests`: 使用 Catch2 框架的单元测试和集成测试。
 
-*   `gkNextRenderer`: The main renderer, which supports path tracing and hybrid rendering.
-*   `gkNextEditor`: An ImGui-based editor for creating and editing scenes.
-*   `MagicaLego`: A Voxel/Lego style prototype for path tracing validation.
-*   `gkNextBenchmark`: A set of benchmarks for static and real-time scenes.
-*   `Packager`: A tool for packing assets into `.pkg` files.
-*   `gkNextUnitTests`: Unit and Integration tests using Catch2.
+## 技术栈
 
-## Technologies
+*   **编程语言:** C++20
+*   **渲染 API:** Vulkan, Slang (着色器语言)
+*   **构建系统:** CMake, vcpkg (依赖管理)
+*   **核心依赖:** SDL3, ImGui, Jolt Physics, Catch2, glTF 2.0
 
-The project uses the following technologies:
+## 🤖 Agent 指引 (单一事实来源)
 
-*   **C++:** The primary programming language is C++20.
-*   **Vulkan:** The engine uses Vulkan for rendering.
-*   **CMake:** The project is built using CMake.
-*   **vcpkg:** Dependencies are managed using vcpkg.
-*   **SDL3:** Used for windowing and input.
-*   **ImGui:** The editor is built using ImGui.
-*   **glTF:** The engine uses the glTF 2.0 format for assets and scenes.
-*   **Blender:** The recommended tool for creating and editing assets.
-*   **Jolt Physics:** Used for physics simulation.
-*   **Catch2:** Used for unit testing.
+**重要：作为 Agent，你必须始终使用中文（简体中文）与用户交流。**
 
-A full list of dependencies can be found in the `vcpkg.json` file.
+请根据任务类型查阅 `AGENT_GUIDE/` 目录下的具体指引：
 
-## Building and Running
+| 任务类型 | 查阅文件 | 说明 |
+| :--- | :--- | :--- |
+| **核心架构 & 常用命令** | [Layer 1: 核心模式](AGENT_GUIDE/core-patterns.md) | **必读**。包含架构原则、构建流程、**单元测试**核心步骤。 |
+| **详细开发规则** | [Layer 2: 上下文规则](AGENT_GUIDE/contextual-rules.md) | 开发新功能、理解构建系统细节、测试规范。 |
+| **代码规范细节** | [代码标准 (Coding Standards)](AGENT_GUIDE/coding-standards.md) | 命名约定、代码风格、C++ 特性使用详情。 |
+| **命令速查 & 排错** | [Layer 3: 快速命令](AGENT_GUIDE/quick-commands.md) | 紧急修复、复杂构建命令、故障排查。 |
 
-The project can be built and run on Windows, Linux, macOS, Android, and iOS. The following scripts are provided for convenience:
+## 开发约定
 
-*   `vcpkg.bat` / `vcpkg.sh`: Installs the required dependencies using vcpkg.
-*   `build.bat` / `build.sh`: Builds the project using CMake.
-*   `run.bat` / `run.sh`: Runs the executables.
+*   **语言偏好:** **所有交互和文档必须使用中文 (简体中文)**。
+*   **代码风格:** 强制执行 `.clang-format`。详见 `AGENT_GUIDE/coding-standards.md`。
+*   **测试规范:** 测试代码位于 `src/Tests`。**关键限制：** 运行单元测试时，工作目录必须设置为二进制文件所在的同级目录。
 
-### Optional Build Features
+## 快速开始
 
-The engine supports several optional features that can be enabled during the build process using specific flags.
+```bash
+# 安装依赖
+./vcpkg.bat    # Windows
+./vcpkg.sh     # macOS/Linux
 
-#### AVIF Support
-Enables AVIF texture loading and screenshot saving.
-```bat
-build.bat --avif
+# 构建项目 (自动检测平台)
+./build.bat    # Windows
+./build.sh     # macOS/Linux
 ```
 
-#### DLSS Support (Windows Only)
-Enables NVIDIA DLSS support. This will automatically invoke `tools/fetch_streamline.bat` to download and deploy the necessary NVIDIA Streamline SDK.
-```bat
-build.bat --dlss
-```
-
-#### OIDN Support
-Enables Intel OpenImageDenoise support for high-quality denoising. This will automatically invoke `tools/fetch_oidn.bat` or `tools/fetch_oidn.sh` to download and deploy the OIDN runtime libraries.
-```bat
-build.bat --oidn
-```
-
-Flags can be combined:
-```bat
-build.bat --avif --oidn --dlss
-```
-
-### Windows (Visual Studio 2022)
-
-```bat
-rem Install dependencies
-.\vcpkg.bat windows
-
-rem Build the project
-.\build.bat windows-dev
-
-rem Run the main renderer
-.\run.bat
-```
-
-### Running Tests
-
-To run the unit/integration tests:
-
-```bat
-.\out\build\windows-dev\bin\gkNextUnitTests.exe
-```
-
-*Note: Integration tests may require a valid Vulkan environment (GPU) and compiled shaders in `assets/shaders`.*
-
-### Linux
-
-```sh
-# Install dependencies
-./vcpkg.sh linux
-
-# Build the project
-./build.sh linux
-
-# Run the main renderer
-./run.sh linux
-```
-
-### macOS
-
-```sh
-# Install dependencies
-./vcpkg.sh macos
-
-# Build the project
-./build.sh macos
-
-# Run the main renderer
-./run.sh macos
-```
-
-### Android (on Windows)
-
-```bat
-rem Install dependencies
-vcpkg.bat android
-
-rem Build the project
-build.bat android
-
-rem Run the main renderer
-run.bat android
-```
-
-The `run.bat`/`run.sh` scripts can be used to run different executables by using the `--target` option. For example, to run the editor on Windows:
-
-```bat
-run.bat windows --target gkNextEditor.exe
-```
-
-## Development Conventions
-
-*   **Language Preference:** All future interactions should be conducted in Chinese (中文).
-*   **Coding Style:** The project uses a `.clang-format` file to enforce a consistent coding style.
-*   **Testing:** 
-    *   Tests are located in `src/Tests`.
-    *   Use `Catch2` framework.
-    *   Ensure tests handle resource paths correctly (usually project root).
-    *   Mock dependencies where possible to avoid full engine initialization overhead/failures in CI.
-*   **Contributions:** Contributions are welcome. Please open an issue or pull request on GitHub.
-*   **Documentation:** The `doc` directory contains additional documentation, including `Thoughts.md`, which contains notes and ideas about the project.
-*   **Agent Guide:** The `AGENT_GUIDE` directory contains guidelines for AI agents working on the project.
+关于 Android、特定预设 (Presets) 或运行测试的详细命令，请参考 `AGENT_GUIDE/quick-commands.md`。

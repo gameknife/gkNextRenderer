@@ -238,8 +238,9 @@ public:
     ~TaskThread()
     {
         complete_->wait();
-        thread_->detach();
         terminate_->set();
+        thread_->join();
+        //thread_->detach();
     }
 
     bool IsIdle()
@@ -276,15 +277,8 @@ public:
         //SPDLOG_INFO("low parallel thread count: {}", lowThreadCount);
     }
 
-    ~TaskCoordinator()
-    {
-        //SPDLOG_INFO("TaskCoordinator request shutting down, wait for TaskThread. remain: {}", threads_.size());
-        for (auto& thread : threads_)
-        {
-            thread.reset();
-        }
-        puts("TaskCoordinator shut down.");
-    }
+    ~TaskCoordinator();
+   
 
     void MarkTaskComplete(const ResTask& task)
     {
@@ -351,6 +345,11 @@ public:
             instance_.reset(new TaskCoordinator());
         }
         return instance_.get();
+    }
+    
+    static void DestroyInstance()
+    {
+        instance_.reset(nullptr);
     }
 
 private:

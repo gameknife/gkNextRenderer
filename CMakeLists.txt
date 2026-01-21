@@ -25,6 +25,11 @@ if (GK_ENABLE_PHYSIC)
     set(WITH_PHYSIC ON CACHE BOOL "Enable Physics" FORCE)
 endif()
 
+option(GK_ENABLE_AUDIO "Enable Audio support" ON)
+if (GK_ENABLE_AUDIO)
+    set(WITH_AUDIO ON CACHE BOOL "Enable Audio" FORCE)
+endif()
+
 option(GK_ENABLE_OIDN "Enable OpenImageDenoise support" OFF)
 if (APPLE)
     message(STATUS "OIDN is not supported on macOS. Disabling.")

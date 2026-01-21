@@ -9,11 +9,13 @@
 #include <meshoptimizer.h>
 #include <glm/detail/type_half.hpp>
 #include "Runtime/NextPhysics.h"
-#include <Jolt/Core/Reference.h>
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 
 #include "Node.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include <spdlog/spdlog.h>
 
@@ -82,7 +84,27 @@ namespace Assets
         hdrSHBuffer_.reset();
         hdrSHBufferMemory_.reset();
 
+        skinWeightBuffer_.reset();
+        skinWeightBufferMemory_.reset();
+        skinJointBuffer_.reset();
+        skinJointBufferMemory_.reset();
+
         cpuShadowMap_.reset();
+    }
+
+    void Scene::PostLoad(const std::vector<Skeleton>& skeletons)
+    {
+        for (auto& node : nodes_)
+        {
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
+            {
+                auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
+                comp->AddAnimations(tracks_);
+                comp->PlayAnimation("Default");
+                node->AddComponent(comp);
+            }
+        }
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
@@ -104,7 +126,16 @@ namespace Assets
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
         {
             if (node == nullptr) return;
-            node->SetMobility(Node::ENodeMobility::Kinematic);
+            if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+            {
+                phys->SetMobility(Node::ENodeMobility::Kinematic);
+            }
+            else
+            {
+                auto newPhys = std::make_shared<Runtime::PhysicsComponent>();
+                newPhys->SetMobility(Node::ENodeMobility::Kinematic);
+                node->AddComponent(newPhys);
+            }
             for (auto& child : node->Children())
             {
                 SetKinematicRecursive(child.get());
@@ -122,10 +153,11 @@ namespace Assets
         sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
         for (auto& node : nodes_)
         {
-            if (node->IsVisible() && node->GetModel() != -1)
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (render && render->IsVisible() && render->GetModelId() != -1)
             {
-                glm::vec3 localaabbMin = models_[node->GetModel()].GetLocalAABBMin();
-                glm::vec3 localaabbMax = models_[node->GetModel()].GetLocalAABBMax();
+                glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
+                glm::vec3 localaabbMax = models_[render->GetModelId()].GetLocalAABBMax();
 
                 auto& worldMtx = node->WorldTransform();
 
@@ -155,7 +187,6 @@ namespace Assets
         }
         
         // static mesh to jolt mesh shape
-#if WITH_PHYSIC
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
             cachedMeshShapes_.clear();
@@ -163,49 +194,70 @@ namespace Assets
             {
                 if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
-                    cachedMeshShapes_.push_back( JPH::RefConst<JPH::MeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
+                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
                 }
                 else
                 {
-                    cachedMeshShapes_.push_back( JPH::RefConst<JPH::MeshShapeSettings>(nullptr)  );
+                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(nullptr)  );
                 }
             }
 
             for (auto& node : nodes_)
             {
+                auto render = node->GetComponent<Runtime::RenderComponent>();
                 // bind the mesh shape to the node
-                if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
+                if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
                 {
-                    JPH::EMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
-                    JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
-                    if ( cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0)
+                    auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                    Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
+                    
+                    if (mobility != Node::ENodeMobility::Dynamic)
                     {
-                        glm::vec3 worldScale = node->WorldScale();
-                        if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
-                        {
-                            JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                            node->BindPhysicsBody(id);
+                        NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                        NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                            physicsEngine->SetBodyActive(id, node->IsVisible());
+                        bool validShape = false;
+#if WITH_PHYSIC
+                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+#endif
+
+                        if ( validShape )
+                        {
+                            glm::vec3 worldScale = node->WorldScale();
+                            if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                            {
+                                NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                                
+                                if (!phys)
+                                {
+                                    phys = std::make_shared<Runtime::PhysicsComponent>();
+                                    phys->SetMobility(mobility);
+                                    node->AddComponent(phys);
+                                }
+                                phys->BindPhysicsBody(id);
+
+                                physicsEngine->SetBodyActive(id, render->IsVisible());
+                            }
                         }
                     }
                 }
             }
             
             // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
-            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), JPH::EMotionType::Static);
-             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), JPH::EMotionType::Static);
-            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), JPH::EMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
+             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
+            // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
         }
-#endif      
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
         std::vector<glm::detail::hdata> simpleVertices;
         std::vector<uint32_t> indices;
+        std::vector<glm::vec4> allWeights;
+        std::vector<glm::uvec4> allJoints;
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
 
@@ -225,6 +277,19 @@ namespace Assets
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.y));
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
+            }
+            
+            const auto& weights = model.CPUWeights();
+            const auto& joints = model.CPUJoints();
+            if (!weights.empty() && weights.size() == model.CPUVertices().size())
+            {
+                allWeights.insert(allWeights.end(), weights.begin(), weights.end());
+                allJoints.insert(allJoints.end(), joints.begin(), joints.end());
+            }
+            else
+            {
+                allWeights.resize(allWeights.size() + model.CPUVertices().size(), glm::vec4(0));
+                allJoints.resize(allJoints.size() + model.CPUVertices().size(), glm::uvec4(0));
             }
             
             const std::vector<Vertex>& localVertices = model.CPUVertices();
@@ -305,6 +370,8 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_, skinWeightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_, skinJointBufferMemory_);
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
@@ -328,17 +395,37 @@ namespace Assets
         nodes_.push_back(node);
         if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
         {
+            auto render = node->GetComponent<Runtime::RenderComponent>();
              // bind the mesh shape to the node
-            if (node->GetMobility() != Node::ENodeMobility::Dynamic && node->GetModel() < cachedMeshShapes_.size() && cachedMeshShapes_[node->GetModel()])// && node->GetParent() == nullptr)
+            if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                JPH::EMotionType motionType = node->GetMobility() == Node::ENodeMobility::Static ? JPH::EMotionType::Static : JPH::EMotionType::Kinematic;
-                JPH::ObjectLayer layer = node->GetMobility() == Node::ENodeMobility::Static ? Layers::NON_MOVING : Layers::MOVING;
-                if ( cachedMeshShapes_[node->GetModel()].GetPtr() && cachedMeshShapes_[node->GetModel()]->mIndexedTriangles.size() > 0)
-                {
-                    JPH::BodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[node->GetModel()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);\
-                    node->BindPhysicsBody(id);
+                auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
-                    physicsEngine->SetBodyActive(id, node->IsVisible());
+                if (mobility != Node::ENodeMobility::Dynamic)
+                {
+                    NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                    NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                    bool validShape = false;
+#if WITH_PHYSIC
+                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+#endif
+
+                    if ( validShape )
+                    {
+                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                        
+                        if (!phys)
+                        {
+                            phys = std::make_shared<Runtime::PhysicsComponent>();
+                            phys->SetMobility(mobility);
+                            node->AddComponent(phys);
+                        }
+                        phys->BindPhysicsBody(id);
+
+                        physicsEngine->SetBodyActive(id, render->IsVisible());
+                    }
                 }
             }
         }
@@ -364,6 +451,12 @@ namespace Assets
         gpuScene_.GPUDrivenStats = gpuDrivenStatsBuffer_->GetDeviceAddress();
         gpuScene_.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
 
+        gpuScene_.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
+        gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
+        gpuScene_.SkinnedVertices = skinnedVerticesAddr_;
+        gpuScene_.SkinnedVerticesSimple = skinnedVerticesSimpleAddr_;
+        gpuScene_.JointMatrices = jointMatricesAddr_;
+
         gpuScene_.SwapChainIndex = imageIndex;
 
         return gpuScene_;
@@ -387,6 +480,19 @@ namespace Assets
     {
         if ( NextEngine::GetInstance()->GetUserSettings().TickAnimation)
         {
+            for (auto& node : nodes_)
+            {
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                {
+                    skinnedMesh->Update(deltaSeconds);
+                    if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
+                    {
+                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+                    }
+                    MarkDirty();
+                }
+            }
+
             float durationMax = 0;
 
             for (auto& track : tracks_)
@@ -427,10 +533,14 @@ namespace Assets
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
                         if (!n) return;
-                        JPH::BodyID bodyID = n->GetPhysicsBody();
-                        if (!bodyID.IsInvalid())
+                        auto phys = n->GetComponent<Runtime::PhysicsComponent>();
+                        if (phys)
                         {
-                            NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            NextBodyID bodyID = phys->GetPhysicsBody();
+                            if (!bodyID.IsInvalid())
+                            {
+                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                            }
                         }
 
                         for (auto& child : n->Children())
@@ -447,6 +557,48 @@ namespace Assets
                         overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1), glm::vec3(0.0f, 1.0f, 0.0f));
                     }
                 }
+            }
+        }
+
+        if (NextEngine::GetInstance()->GetUserSettings().DebugDraw_BoundingBox)
+        {
+            for (auto& node : nodes_)
+            {
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (!render || !render->IsVisible() || !render->IsDrawable())
+                {
+                    continue;
+                }
+
+                const Model* model = GetModel(render->GetModelId());
+                if (!model)
+                {
+                    continue;
+                }
+
+                glm::vec3 localaabbMin = model->GetLocalAABBMin();
+                glm::vec3 localaabbMax = model->GetLocalAABBMax();
+
+                const auto& worldMtx = node->WorldTransform();
+                glm::vec3 corners[8];
+                corners[0] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[1] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[2] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[3] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[4] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[5] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[6] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMax.z, 1.0f));
+                corners[7] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMax.z, 1.0f));
+
+                glm::vec3 worldAABBMin = corners[0];
+                glm::vec3 worldAABBMax = corners[0];
+                for (int i = 1; i < 8; ++i)
+                {
+                    worldAABBMin = glm::min(worldAABBMin, corners[i]);
+                    worldAABBMax = glm::max(worldAABBMax, corners[i]);
+                }
+
+                NextEngineHelper::DrawAuxBox(worldAABBMin, worldAABBMax, glm::vec4(0.2f, 0.8f, 1.0f, 1.0f), 1.5f);
             }
         }
 
@@ -527,10 +679,12 @@ namespace Assets
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
                     
+                    uint32_t currentJointOffset = 0;
                     for (auto& node : nodes_)
                     {
                         // record all
-                        if (node->IsDrawable())
+                        auto render = node->GetComponent<Runtime::RenderComponent>();
+                        if (render && render->IsDrawable())
                         {
                             glm::mat4 combined;
                             if (node->TickVelocity(combined))
@@ -539,15 +693,23 @@ namespace Assets
                                 //MarkDirty();
                             }
 
-                            auto model = GetModel(node->GetModel());
+                            auto model = GetModel(render->GetModelId());
                             if (model)
                             {
+                                uint32_t nodeJointOffset = 0;
+                                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                                {
+                                    nodeJointOffset = currentJointOffset;
+                                    currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
+                                }
+
                                 for ( uint32_t section = 0; section < model->SectionCount(); ++section)
                                 {
                                     NodeProxy proxy = node->GetNodeProxy();
                                     proxy.combinedPrevTS = combined;
-                                    proxy.modelId = node->GetModel() * 10 + section;
+                                    proxy.modelId = render->GetModelId() * 10 + section;
                                     proxy.nort = section == 0 ? 0 : 1;
+                                    proxy.jointMatrixOffset = nodeJointOffset;
                                     nodeProxys.push_back(proxy);
                                     indirectDrawBatchCount_++;
                                 }        
@@ -628,5 +790,12 @@ namespace Assets
             requestOverrideModelView = false;
             outMatrix = overrideModelView;
         }
+    }
+
+    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices)
+    {
+        skinnedVerticesAddr_ = skinnedVertices;
+        skinnedVerticesSimpleAddr_ = skinnedVerticesSimple;
+        jointMatricesAddr_ = jointMatrices;
     }
 }

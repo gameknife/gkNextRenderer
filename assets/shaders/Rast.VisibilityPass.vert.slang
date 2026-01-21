@@ -12,7 +12,14 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     VertexOutput output;
     uint absouluteInstanceIdx = instanceIndex + instanceBase;
     NodeProxy proxy = Bindless.GetGpuscene().Nodes[absouluteInstanceIdx];
-    half4 Position = Bindless.GetGpuscene().VerticesSimple[Bindless.GetGpuscene().Reorders[vertexIndex]];
+
+    half4* currentVerticesSimple = Bindless.GetGpuscene().VerticesSimple;
+    if (proxy.skinId != 0xFFFFFFFF)
+    {
+        currentVerticesSimple = Bindless.GetGpuscene().SkinnedVerticesSimple;
+    }
+
+    half4 Position = currentVerticesSimple[Bindless.GetGpuscene().Reorders[vertexIndex]];
     output.position = mul(mul(Bindless.GetGpuscene().Camera[0].ViewProjection, proxy.worldTS), float4(Position.xyz, 1.0));
 
     uint instanceIdx = absouluteInstanceIdx + 1;

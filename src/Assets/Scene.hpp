@@ -8,8 +8,9 @@
 
 #include "CPUAccelerationStructure.h"
 #include "Model.hpp"
+#include "Skeleton.hpp"
 #include "Runtime/NextPhysics.h"
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include "Runtime/NextPhysicsTypes.h"
 
 namespace Vulkan
 {
@@ -42,6 +43,8 @@ namespace Assets
 		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
 		~Scene();
 
+		void PostLoad(const std::vector<Skeleton>& skeletons);
+
 		void Reload(std::vector<std::shared_ptr<Node>>& nodes,
 			std::vector<Model>& models,
 			std::vector<FMaterial>& materials,
@@ -54,6 +57,7 @@ namespace Assets
 
 		const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
 		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
+		const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<FMaterial>& Materials() { return materials_; }
 		const std::vector<ModelData>& Offsets() const { return offsets_; }
@@ -114,11 +118,16 @@ namespace Assets
 
 		void AddNode(std::shared_ptr<Node> node);
 
+		void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices);
+
 		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
 		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
 		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
 		Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
+
+		Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
+		Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
 
 		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 
@@ -174,6 +183,12 @@ namespace Assets
 		std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
 
+		std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;
+
+		std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
+		std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
+
 		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
 		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
@@ -209,6 +224,10 @@ namespace Assets
 
 		glm::vec3 sceneAABBMin_ {FLT_MAX, FLT_MAX, FLT_MAX};
 		glm::vec3 sceneAABBMax_ {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-		std::vector<JPH::RefConst<JPH::MeshShapeSettings> > cachedMeshShapes_;
+		std::vector<NextRefConst<NextMeshShapeSettings> > cachedMeshShapes_;
+
+		VkDeviceAddress skinnedVerticesAddr_ = 0;
+		VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
+		VkDeviceAddress jointMatricesAddr_ = 0;
 	};
 }

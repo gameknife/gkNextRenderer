@@ -5,6 +5,9 @@
 #include "Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Scene.hpp"
+#include "Assets/Node.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
@@ -106,11 +109,6 @@ namespace Vulkan::RayTracing
             CreateTopLevelStructures(commandBuffer);
         });
 
-        //topScratchBuffer_.reset();
-        //topScratchBufferMemory_.reset();
-        bottomScratchBuffer_.reset();
-        bottomScratchBufferMemory_.reset();
-
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
         SPDLOG_INFO("- built acceleration structures in {:.2f}ms", elapsed * 1000.f);
@@ -208,6 +206,33 @@ namespace Vulkan::RayTracing
         }
 
         VulkanBaseRenderer::PreRender(commandBuffer, imageIndex);
+
+        if (bottomScratchBuffer_)
+        {
+            SCOPED_GPU_TIMER("BLAS Update");
+            auto& scene = GetScene();
+            VkDeviceSize scratchOffset = 0;
+            for (size_t modelIdx = 0; modelIdx < scene.Models().size(); ++modelIdx)
+            {
+                bool hasSkin = false;
+                for (const auto& node : scene.Nodes())
+                {
+                    auto render = node->GetComponent<Runtime::RenderComponent>();
+                    if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
+                    {
+                        hasSkin = true;
+                        break;
+                    }
+                }
+
+                if (hasSkin)
+                {
+                    bottomAs_[modelIdx].Update(commandBuffer, *bottomScratchBuffer_, scratchOffset);
+                }
+                scratchOffset += bottomAs_[modelIdx].BuildSizes().buildScratchSize;
+            }
+            AccelerationStructure::InsertMemoryBarrier(commandBuffer);
+        }
     }
 
     void RayTraceBaseRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -271,6 +296,8 @@ namespace Vulkan::RayTracing
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
 
+        UpdateSkinningBuffers();
+
         // Bottom level acceleration structure
         // Triangles via vertex buffers. Procedurals via AABBs.
         uint32_t vertexOffset = 0;
@@ -283,12 +310,31 @@ namespace Vulkan::RayTracing
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
         }
         
-        for (auto& model : scene.Models())
+        for (size_t modelIdx = 0; modelIdx < scene.Models().size(); ++modelIdx)
         {
+            auto& model = scene.Models()[modelIdx];
+            bool hasSkin = false;
+            for (const auto& node : scene.Nodes())
+            {
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
+                {
+                    hasSkin = true;
+                    break;
+                }
+            }
+
             const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
             const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
             BottomLevelGeometry geometries;
-            geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true);
+
+            VkDeviceAddress vertexAddr = 0;
+            if (hasSkin && skinnedSimpleVertexBuffer_)
+            {
+                vertexAddr = skinnedSimpleVertexBuffer_->GetDeviceAddress();
+            }
+
+            geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true, vertexAddr);
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
             vertexOffset += vertexCount * sizeof(short) * 4;

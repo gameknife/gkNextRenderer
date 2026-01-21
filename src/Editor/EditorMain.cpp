@@ -4,6 +4,7 @@
 
 #include "EditorInterface.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 
 #include "Editor/EditorCommand.hpp"
 #include "Editor/EditorInterface.hpp"
@@ -124,13 +125,13 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
-        GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
         GetEngine().RayCastGPU(org, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hitted)
             {
                 GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-                GetEngine().DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30);
+                NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30);
                 // selection
                 GetEngine().GetScene().SetSelectedId(result.InstanceId);
             }

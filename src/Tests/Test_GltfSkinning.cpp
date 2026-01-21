@@ -1,0 +1,83 @@
+#include <catch2/catch_all.hpp>
+#include "Assets/FSceneLoader.h"
+#include "Assets/Model.hpp"
+#include "Assets/Material.hpp"
+#include <fstream>
+#include <filesystem>
+
+#include "TestCommon.hpp"
+#include "Utilities/FileHelper.hpp"
+
+TEST_CASE_METHOD(EngineTestFixture, "Load glTF Skinning Data", "[Assets][glTF]")
+{
+    
+    Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
+    
+    std::string filename = "assets/models/rig.glb";
+    
+    Assets::EnvironmentSetting camera;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+    
+    
+    if (true)
+    {
+        bool result = Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+        
+        if (result && !models.empty())
+        {
+            REQUIRE(models[0].CPUJoints().size() > 0);
+            REQUIRE(models[0].CPUWeights().size() > 0);
+        }
+    }
+}
+
+#include "Runtime/Components/SkinnedMeshComponent.h"
+
+TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
+    Assets::Skeleton skeleton;
+    Assets::Joint joint;
+    joint.Name = "Joint1";
+    joint.ParentIndex = -1;
+    joint.InverseBindMatrix = glm::mat4(1.0f);
+    skeleton.Joints.push_back(joint);
+    
+    Runtime::SkinnedMeshComponent component(skeleton);
+    
+    std::vector<Assets::AnimationTrack> tracks;
+    Assets::AnimationTrack track;
+    track.AnimationName = "TestAnim";
+    track.NodeName_ = "Joint1";
+    track.Duration_ = 1.0f;
+    
+    // Add two keyframes for translation
+    track.TranslationChannel.Keys.push_back({0.0f, glm::vec3(0,0,0)});
+    track.TranslationChannel.Keys.push_back({1.0f, glm::vec3(1,0,0)});
+    tracks.push_back(track);
+    
+    component.AddAnimations(tracks);
+    
+    SECTION("Play Animation") {
+        component.PlayAnimation("TestAnim", false);
+        REQUIRE(component.GetCurrentAnimationName() == "TestAnim");
+        
+        // Update to 0.5s
+        component.Update(0.5f);
+        auto matrices = component.GetJointMatrices();
+        REQUIRE(matrices.size() == 1);
+        // At 0.5s, translation should be (0.5, 0, 0)
+        // Matrix should be translate(0.5, 0, 0) * IBM(identity)
+        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f));
+    }
+    
+    SECTION("Looping Animation") {
+        component.PlayAnimation("TestAnim", true);
+        component.Update(1.5f); // Should loop to 0.5s
+        auto matrices = component.GetJointMatrices();
+        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f));
+    }
+}

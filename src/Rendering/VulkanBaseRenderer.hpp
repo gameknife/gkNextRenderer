@@ -172,6 +172,21 @@ namespace Vulkan
 		std::vector<std::unique_ptr<RenderImage> > bindlessStorageImages_;
 		uint32_t tempStorageImageCreated_ {};
 
+		void UpdateSkinningBuffers();
+
+		std::unique_ptr<Buffer> skinnedVertexBuffer_;
+		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
+
+		std::unique_ptr<Buffer> skinnedSimpleVertexBuffer_;
+		std::unique_ptr<DeviceMemory> skinnedSimpleVertexBufferMemory_;
+
+		std::unique_ptr<Buffer> jointMatricesBuffer_;
+		std::unique_ptr<DeviceMemory> jointMatricesBufferMemory_;
+
+		uint32_t currentSkinnedVertexBufferSize_{};
+		uint32_t currentSkinnedSimpleVertexBufferSize_{};
+		uint32_t currentJointMatrixBufferSize_{};
+
 #if WITH_OIDN
 		std::unique_ptr<RenderImage> rtDenoise0_;
 		std::unique_ptr<RenderImage> rtDenoise1_;
@@ -187,7 +202,6 @@ namespace Vulkan
 
 	private:
 		void RecreateSwapChain();
-
 		void UpdateUniformBuffer(uint32_t imageIndex);
 
 		const VkPresentModeKHR presentMode_;
@@ -212,6 +226,10 @@ namespace Vulkan
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline_;
 		
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> skinningPipeline_;
+
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
 		//std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
@@ -224,9 +242,6 @@ namespace Vulkan
 		std::vector<class Semaphore> renderFinishedSemaphores_;
 		std::vector<class Fence> inFlightFences_;
 
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
-		
 		std::unique_ptr<Image> screenShotImage_;
 		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
 		std::unique_ptr<ImageView> screenShotImageView_;

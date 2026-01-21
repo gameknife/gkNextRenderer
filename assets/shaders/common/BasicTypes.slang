@@ -90,11 +90,15 @@ public struct ALIGN_16 NodeProxy
 {
     public uint instanceId;
     public uint modelId;
-    public uint visible;
-    public uint nort;
+    public uint skinId;
+    public uint jointMatrixOffset;
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
     public uint matId[16];
+    public uint visible;
+    public uint nort;
+    public uint reserved1;
+    public uint reserved2;
 };
 
 public struct ALIGN_16 ModelData
@@ -261,7 +265,7 @@ public struct ALIGN_16 GPUVertex
 #ifdef __cplusplus
 // still 144bytes, need to shrink into 128 bytes to make full compatible with vulkan
 // some static address can be pack together
-public struct ALIGN_8 GPUScene
+public struct ALIGN_16 GPUScene
 {
     uint64_t Camera;
     uint64_t Nodes;
@@ -287,10 +291,19 @@ public struct ALIGN_8 GPUScene
     uint64_t GPUDrivenStats;
     uint64_t TLAS;
 
-    uint SwapChainIndex;
-    uint custom_data_0;
-    uint custom_data_1;
-    uint custom_data_2;
+    uint64_t SkinWeights;
+    uint64_t SkinJoints;
+
+    uint64_t SkinnedVertices;
+    uint64_t JointMatrices;
+
+    uint64_t SkinnedVerticesSimple;
+    uint64_t Reserved;
+
+    uint32_t SwapChainIndex;
+    uint32_t custom_data_0;
+    uint32_t custom_data_1;
+    uint32_t custom_data_2;
 };
 
 #else
@@ -324,6 +337,16 @@ public struct ALIGN_8 GPUScene
    
     public GPUDrivenStat *GPUDrivenStats;
     public uint64_t TLAS;
+
+    public float4 *SkinWeights;
+    public uint4 *SkinJoints;
+
+    public GPUVertex *SkinnedVertices;
+    public float4x4 *JointMatrices;
+
+    public half4 *SkinnedVerticesSimple;
+    public half4 *Reserved;
+
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
 	}
@@ -422,6 +445,32 @@ public struct ALIGN_8 GPUScene
         get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
     }
 
+    uint64_t2 SkinWeights_SkinJoints_Address;
+    public property float4* SkinWeights
+    {
+        get { return (float4*)SkinWeights_SkinJoints_Address.x; }
+    }
+    public property uint4* SkinJoints
+    {
+        get { return (uint4*)SkinWeights_SkinJoints_Address.y; }
+    }
+
+    uint64_t2 SkinnedVertices_JointMatrices_Address;
+    public property GPUVertex* SkinnedVertices
+    {
+        get { return (GPUVertex*)SkinnedVertices_JointMatrices_Address.x; }
+    }
+    public property float4x4* JointMatrices
+    {
+        get { return (float4x4*)SkinnedVertices_JointMatrices_Address.y; }
+    }
+    
+    uint64_t2 SkinnedVerticesSimple_Reserved_Address;
+    public property half4* SkinnedVerticesSimple
+    {
+        get { return (half4*)SkinnedVerticesSimple_Reserved_Address.x; }
+    }
+
     public RaytracingAccelerationStructure GetTLAS() {
 #ifdef PLATFORM_ANDROID
         return BindedTLAS;
@@ -430,10 +479,10 @@ public struct ALIGN_8 GPUScene
 #endif
 	}
 
-    public uint SwapChainIndex;
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
+    public uint32_t SwapChainIndex;
+    public uint32_t custom_data_0;
+    public uint32_t custom_data_1;
+    public uint32_t custom_data_2;
 };
 #ifdef PLATFORM_ANDROID
 [[vk::binding(0, 1)]] RaytracingAccelerationStructure BindedTLAS;

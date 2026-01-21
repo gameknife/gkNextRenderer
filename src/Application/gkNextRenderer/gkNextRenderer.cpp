@@ -7,12 +7,16 @@
 
 #include "Assets/FProcModel.h"
 #include "Assets/Node.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Runtime/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 extern float GAndroidMagicScale;
 
@@ -238,13 +242,13 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 		auto mousePos = GetEngine().GetMousePos();
 		glm::vec3 org;
 		glm::vec3 dir;
-		GetEngine().GetScreenToWorldRay(mousePos, org, dir);
+        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
 		GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
 		{
 			if (result.Hitted)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-				GetEngine().DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+                NextEngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
 			}
 			return true;
 		});
@@ -274,15 +278,21 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
 	glm::vec3 shotDir = normalize((farTarget - center));
 	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), modelId_,
-															   instanceId, false);
+	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), instanceId);
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-	newNode->SetMaterial( { newMatId } );
-	newNode->SetVisible(true);
-	newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, JPH::EMotionType::Dynamic);
-	newNode->BindPhysicsBody(id);
+	
+	auto renderComp = std::make_shared<Runtime::RenderComponent>();
+	renderComp->SetModelId(modelId_);
+	renderComp->SetMaterial({newMatId});
+	renderComp->SetVisible(true);
+	newNode->AddComponent(renderComp);
+	
+	auto phys = std::make_shared<Runtime::PhysicsComponent>();
+	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
+	phys->BindPhysicsBody(id);
+	newNode->AddComponent(phys);
 
 	GetEngine().GetScene().AddNode(newNode);
 	GetEngine().GetScene().MarkDirty();
@@ -297,15 +307,21 @@ void NextRendererGameInstance::CreateBoxAndPush()
     glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 200.f;
     glm::vec3 shotDir = normalize((farTarget - center));
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), boxModelId_,
-                                                               instanceId, false);
+    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), instanceId);
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-    newNode->SetMaterial( { newMatId } );
-    newNode->SetVisible(true);
-    newNode->SetMobility(Assets::Node::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, JPH::EMotionType::Dynamic);
-    newNode->BindPhysicsBody(id);
+    
+    auto renderComp = std::make_shared<Runtime::RenderComponent>();
+    renderComp->SetModelId(boxModelId_);
+    renderComp->SetMaterial({newMatId});
+    renderComp->SetVisible(true);
+    newNode->AddComponent(renderComp);
+    
+    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
+    phys->BindPhysicsBody(id);
+    newNode->AddComponent(phys);
 
     GetEngine().GetScene().AddNode(newNode);
     GetEngine().GetScene().MarkDirty();
@@ -495,6 +511,54 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::NewLine();
 		}
 
+		if( ImGui::CollapsingHeader(LOCTEXT("Animation"), ImGuiTreeNodeFlags_None) )
+		{
+			ImGui::Checkbox(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
+			ImGui::Checkbox(LOCTEXT("Show Debug Skeleton"), &userSetting.ShowDebugSkeleton);
+            
+            ImGui::Separator();
+            for (auto& node : GetEngine().GetScene().Nodes())
+            {
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                {
+                    ImGui::PushID(node->GetName().c_str());
+                    ImGui::Text("%s", node->GetName().c_str());
+                    auto animNames = skinnedMesh->GetAnimationNames();
+                    if (!animNames.empty())
+                    {
+                        std::string current = skinnedMesh->GetCurrentAnimationName();
+                        int selectedAnim = -1;
+                        for(int i=0; i<static_cast<int>(animNames.size()); ++i) {
+                            if(animNames[i] == current) {
+                                selectedAnim = i;
+                                break;
+                            }
+                        }
+
+                        std::vector<const char*> animPtrs;
+                        for (const auto& name : animNames) animPtrs.push_back(name.c_str());
+                        
+                        if (ImGui::Combo("##AnimList", &selectedAnim, animPtrs.data(), static_cast<int>(animPtrs.size())))
+                        {
+                            skinnedMesh->PlayAnimation(animNames[selectedAnim]);
+                        }
+                        
+                        float speed = skinnedMesh->GetPlaySpeed();
+                        if (ImGui::SliderFloat("Speed", &speed, -2.0f, 2.0f, "%.2f"))
+                        {
+                            skinnedMesh->SetPlaySpeed(speed);
+                        }
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("No animations");
+                    }
+                    ImGui::PopID();
+                }
+            }
+			ImGui::NewLine();
+		}
+
 		if( ImGui::CollapsingHeader(LOCTEXT("Misc"), ImGuiTreeNodeFlags_None) )
 		{
 			ImGui::Text("%s", LOCTEXT("Profiler"));
@@ -503,6 +567,7 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &userSetting.ShowVisualDebug);
 			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &userSetting.DebugDraw_Lighting);
+			ImGui::Checkbox(LOCTEXT("DebugDraw_BoundingBox"), &userSetting.DebugDraw_BoundingBox);
 			ImGui::Checkbox(LOCTEXT("DisableSpatialReuse"), &userSetting.DisableSpatialReuse);
 			
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);

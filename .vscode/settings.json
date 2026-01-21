@@ -1,6 +1,9 @@
 {
     "VSCodeCounter.exclude": [
         "**/.gitignore",
+        "**/.vcpkg",
+        "**/out",
+        "**/.vcpkg_bincache",
         "**/.vscode/**",
         "**/node_modules/**",
         "**/src/ThirdParty/**",

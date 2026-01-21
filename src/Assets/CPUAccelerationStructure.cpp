@@ -2,6 +2,7 @@
 #include "Runtime/TaskCoordinator.hpp"
 #include "Vulkan/DeviceMemory.hpp"
 #include "Assets/Node.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Assets/Scene.hpp"
@@ -243,10 +244,12 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 
     for (auto& node : scene.Nodes())
     {
-        uint32_t modelId = node->GetModel();
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render) continue;
+        uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
-        if (!node->IsVisible()) continue;
-        if (!node->IsRayCastVisible()) continue;
+        if (!render->IsVisible()) continue;
+        if (!render->IsRayCastVisible()) continue;
 
         node->RecalcTransform(true);
         mat4 worldTS = node->WorldTransform();
@@ -259,9 +262,10 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
         info.nodeId = node->GetInstanceId();
-        for ( int i = 0; i < node->Materials().size(); ++i )
+        auto& mats = render->Materials();
+        for ( int i = 0; i < mats.size(); ++i )
         {
-            uint32_t matId = node->Materials()[i];
+            uint32_t matId = mats[i];
             FMaterial& mat = scene.Materials()[matId];
             info.matIdxs[i] = matId;
             

@@ -6,6 +6,7 @@
 #include "Vulkan/DepthBuffer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Fence.hpp"
+#include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/PipelineLayout.hpp"
@@ -24,6 +25,9 @@
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Texture.hpp"
+#include "Assets/Node.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Utilities/Exception.hpp"
 #include <array>
@@ -316,6 +320,7 @@ namespace Vulkan
         StreamlineWrapper::Shutdown();
         device_->WaitIdle();
         gpuTimer_.reset();
+        globalTexturePool_.reset();
     }
 
     Assets::Scene& VulkanBaseRenderer::GetScene()
@@ -590,6 +595,7 @@ namespace Vulkan
         bufferClearPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
         softAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv"));
         gpuCullPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.GpuCull.comp.slang.spv"));
+        skinningPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.Skinning.comp.slang.spv"));
         visualDebuggerPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
         visibilityPipeline_.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
@@ -644,6 +650,15 @@ namespace Vulkan
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
         gpuCullPipeline_.reset();
+        skinningPipeline_.reset();
+
+        skinnedVertexBuffer_.reset();
+        skinnedVertexBufferMemory_.reset();
+        skinnedSimpleVertexBuffer_.reset();
+        skinnedSimpleVertexBufferMemory_.reset();
+        jointMatricesBuffer_.reset();
+        jointMatricesBufferMemory_.reset();
+
         simpleComposePipeline_.reset();
         visualDebuggerPipeline_.reset();
         uniformBuffers_.clear();
@@ -694,9 +709,130 @@ namespace Vulkan
         });
     }
 
+    void VulkanBaseRenderer::UpdateSkinningBuffers()
+    {
+        auto& scene = GetScene();
+        uint32_t vertCount = scene.GetVerticeCount();
+        if (vertCount == 0) return;
+
+        int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        int rtxFlags = supportRayTracing_ ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
+
+        size_t requiredVertexSize = vertCount * sizeof(Assets::GPUVertex);
+        if (!skinnedVertexBuffer_ || currentSkinnedVertexBufferSize_ < requiredVertexSize)
+        {
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(*commandPool_, "SkinnedVertices", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredVertexSize, skinnedVertexBuffer_, skinnedVertexBufferMemory_);
+            currentSkinnedVertexBufferSize_ = (uint32_t)requiredVertexSize;
+        }
+
+        size_t requiredSimpleVertexSize = vertCount * sizeof(short) * 4;
+        if (!skinnedSimpleVertexBuffer_ || currentSkinnedSimpleVertexBufferSize_ < requiredSimpleVertexSize)
+        {
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(*commandPool_, "SkinnedVerticesSimple", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredSimpleVertexSize, skinnedSimpleVertexBuffer_, skinnedSimpleVertexBufferMemory_);
+            currentSkinnedSimpleVertexBufferSize_ = (uint32_t)requiredSimpleVertexSize;
+        }
+
+        uint32_t totalJoints = 0;
+        for (auto& node : scene.Nodes())
+        {
+            if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+            {
+                totalJoints += (uint32_t)skinnedMesh->GetJointMatrices().size();
+            }
+        }
+
+        if (totalJoints > 0)
+        {
+            size_t requiredJointSize = totalJoints * sizeof(glm::mat4);
+            if (!jointMatricesBuffer_ || currentJointMatrixBufferSize_ < requiredJointSize)
+            {
+                Vulkan::BufferUtil::CreateDeviceBufferLocal(*commandPool_, "JointMatrices", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, requiredJointSize, jointMatricesBuffer_, jointMatricesBufferMemory_);
+                currentJointMatrixBufferSize_ = (uint32_t)requiredJointSize;
+            }
+
+            // Map and upload
+            glm::mat4* data = (glm::mat4*)jointMatricesBufferMemory_->Map(0, requiredJointSize);
+            uint32_t offset = 0;
+            for (auto& node : scene.Nodes())
+            {
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                {
+                    const auto& matrices = skinnedMesh->GetJointMatrices();
+                    std::memcpy(data + offset, matrices.data(), matrices.size() * sizeof(glm::mat4));
+                    offset += (uint32_t)matrices.size();
+                }
+            }
+            jointMatricesBufferMemory_->Unmap();
+        }
+    }
+
     void VulkanBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
+
+        if (true)
+        {
+            SCOPED_GPU_TIMER("skinning pass");
+            auto& scene = GetScene();
+
+            if (skinnedVertexBuffer_) {
+                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), skinnedSimpleVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
+            } else {
+                scene.SetSkinningBuffers(0, 0, 0);
+            }
+
+            skinningPipeline_->BindPipeline(commandBuffer, scene, imageIndex);
+
+            Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
+            if (skinnedVertexBuffer_)
+            {
+                uint32_t proxyIdx = 0;
+                for (auto& node : scene.Nodes())
+                {
+                    auto render = node->GetComponent<Runtime::RenderComponent>();
+                    if (render && render->IsDrawable())
+                    {
+                        auto modelIdx = render->GetModelId();
+                        auto model = scene.GetModel(modelIdx);
+
+                        if (node->GetComponent<Runtime::SkinnedMeshComponent>() && model)
+                        {
+                            uint32_t vertexOffset = scene.Offsets()[modelIdx * 10].vertexOffset;
+                            uint32_t vertexCount = model->NumberOfVertices();
+
+                            gpuScene.custom_data_0 = proxyIdx;
+                            gpuScene.custom_data_1 = vertexOffset;
+                            gpuScene.custom_data_2 = vertexCount;
+
+                            VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
+                            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                                               0, sizeof(Assets::GPUScene), &gpuScene);
+
+                            uint32_t groupCount = (vertexCount + 63) / 64;
+                            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+                        }
+
+                        proxyIdx += (uint32_t)scene.GetModel(modelIdx)->SectionCount();
+                    }
+                }
+
+                // Memory Barrier for SkinnedVertices (Compute Write -> Shader/RT Read)
+                VkBufferMemoryBarrier skinnedBufferBarrier = {};
+                skinnedBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                skinnedBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                skinnedBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                skinnedBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                skinnedBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                skinnedBufferBarrier.buffer = skinnedVertexBuffer_->Handle();
+                skinnedBufferBarrier.offset = 0;
+                skinnedBufferBarrier.size = VK_WHOLE_SIZE;
+
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
+            }
+        }
+
         {
             SCOPED_GPU_TIMER("gpu cull");
 
@@ -1423,7 +1559,8 @@ namespace Vulkan
                 Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
                 gpuScene.custom_data_0 = offsetInCubes;
                     
-                vkCmdPushConstants(commandBuffer, softAmbientCubeGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                VkPipelineLayout layout = softAmbientCubeGenPipeline_->PipelineLayout().Handle();
+                vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                    0, sizeof(Assets::GPUScene), &gpuScene);
                 
                 vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
