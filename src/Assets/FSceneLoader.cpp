@@ -430,241 +430,85 @@ namespace Assets
         }
         
         
-                        // Load skeletons
-        
-        
-                        for (const auto& skin : model.skins)
-        
-        
-                        {
-        
-        
-                             Assets::Skeleton skeleton;
-        
-        
-                             skeleton.Name = skin.name;
-        
-        
-                             skeleton.RootJointIndex = -1; // TODO: find root? usually 0 or logic derived
-        
-        
-                             
-        
-        
-                             std::vector<glm::mat4> ibms;
-        
-        
-                             if (skin.inverseBindMatrices != -1)
-        
-        
-                             {
-        
-        
-                                 const auto& accessor = model.accessors[skin.inverseBindMatrices];
-        
-        
-                                 const auto& bufferView = model.bufferViews[accessor.bufferView];
-        
-        
-                                 const auto& buffer = model.buffers[bufferView.buffer];
-        
-        
-                                 int stride = accessor.ByteStride(bufferView);
-        
-        
-                                 
-        
-        
-                                 ibms.resize(accessor.count);
-        
-        
-                                 const unsigned char* dataPtr = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
-        
-        
-                                 
-        
-        
-                                 for(size_t i=0; i<accessor.count; ++i)
-        
-        
-                                 {
-        
-        
-                                     const float* m = reinterpret_cast<const float*>(dataPtr + i * stride);
-        
-        
-                                     ibms[i] = glm::make_mat4(m);
-        
-        
-                                 }
-        
-        
-                             }
-        
-        
-                    
-        
-        
-                             std::map<int, int> nodeToJointIndex;
-        
-        
-                             for(size_t i=0; i<skin.joints.size(); ++i)
-        
-        
-                             {
-        
-        
-                                 nodeToJointIndex[skin.joints[i]] = static_cast<int>(i);
-        
-        
-                             }
-        
-        
-                    
-        
-        
-                             for (size_t i = 0; i < skin.joints.size(); ++i)
-        
-        
-                             {
-        
-        
-                                 int nodeIdx = skin.joints[i];
-        
-        
-                                 auto& node = model.nodes[nodeIdx];
-        
-        
-                                 
-        
-        
-                                 Assets::Joint joint;
-        
-        
-                                 joint.Name = node.name;
-        
-        
-                                 if (i < ibms.size())
-        
-        
-                                 {
-        
-        
-                                     joint.InverseBindMatrix = ibms[i];
-        
-        
-                                 }
-        
-        
-                                 
-        
-        
-                                 if (!node.matrix.empty())
-        
-        
-                                 {
-        
-        
-                                     glm::dmat4 dmat = glm::make_mat4(node.matrix.data());
-        
-        
-                                     glm::mat4 mat = glm::mat4(dmat);
-        
-        
-                                     glm::vec3 skew;
-        
-        
-                                     glm::vec4 perspective;
-        
-        
-                                     glm::decompose(mat, joint.Scale, joint.Rotation, joint.Translation, skew, perspective);
-        
-        
-                                 }
-        
-        
-                                 else
-        
-        
-                                 {
-        
-        
-                                    joint.Translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-        
-        
-                                    joint.Scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-        
-        
-                                    joint.Rotation = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(static_cast<float>(node.rotation[3]), static_cast<float>(node.rotation[0]), static_cast<float>(node.rotation[1]), static_cast<float>(node.rotation[2]));
-        
-        
-                                 }
-        
-        
-                                 
-        
-        
-                                 skeleton.Joints.push_back(joint);
-        
-        
-                             }
-        
-        
-                    
-        
-        
-                             // Hierarchy
-        
-        
-                             for(size_t i=0; i<skin.joints.size(); ++i)
-        
-        
-                             {
-        
-        
-                                 int nodeIdx = skin.joints[i];
-        
-        
-                                 auto& node = model.nodes[nodeIdx];
-        
-        
-                                 for (int child : node.children)
-        
-        
-                                 {
-        
-        
-                                     if (nodeToJointIndex.find(child) != nodeToJointIndex.end())
-        
-        
-                                     {
-        
-        
-                                         int childIdx = nodeToJointIndex[child];
-        
-        
-                                         skeleton.Joints[childIdx].ParentIndex = static_cast<int>(i);
-        
-        
-                                         skeleton.Joints[i].Children.push_back(childIdx);
-        
-        
-                                     }
-        
-        
-                                 }
-        
-        
-                             }
-        
-        
-                             
-        
-        
-                             skeletons.push_back(skeleton);
-        
-        
-                        }
+        // Load skeletons
+        for (const auto& skin : model.skins)
+        {
+            Assets::Skeleton skeleton;
+            skeleton.Name = skin.name;
+            skeleton.RootJointIndex = 0;
+            
+            std::vector<glm::mat4> ibms;
+            if (skin.inverseBindMatrices != -1)
+            {
+                const auto& accessor = model.accessors[skin.inverseBindMatrices];
+                const auto& bufferView = model.bufferViews[accessor.bufferView];
+                const auto& buffer = model.buffers[bufferView.buffer];
+                int stride = accessor.ByteStride(bufferView);
+                
+                ibms.resize(accessor.count);
+                const unsigned char* dataPtr = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+                
+                for(size_t i=0; i<accessor.count; ++i)
+                {
+                    const float* m = reinterpret_cast<const float*>(dataPtr + i * stride);
+                    ibms[i] = glm::make_mat4(m);
+                }
+            }
+
+            std::map<int, int> nodeToJointIndex;
+            for(size_t i=0; i<skin.joints.size(); ++i)
+            {
+                nodeToJointIndex[skin.joints[i]] = static_cast<int>(i);
+            }
+
+            for (size_t i = 0; i < skin.joints.size(); ++i)
+            {
+                int nodeIdx = skin.joints[i];
+                auto& node = model.nodes[nodeIdx];
+                
+                Assets::Joint joint;
+                joint.Name = node.name;
+                if (i < ibms.size())
+                {
+                    joint.InverseBindMatrix = ibms[i];
+                }
+                
+                if (!node.matrix.empty())
+                {
+                    glm::dmat4 dmat = glm::make_mat4(node.matrix.data());
+                    glm::mat4 mat = glm::mat4(dmat);
+                    glm::vec3 skew;
+                    glm::vec4 perspective;
+                    glm::decompose(mat, joint.Scale, joint.Rotation, joint.Translation, skew, perspective);
+                }
+                else
+                {
+                    joint.Translation = node.translation.empty() ? glm::vec3(0) : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+                    joint.Scale = node.scale.empty() ? glm::vec3(1) : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+                    joint.Rotation = node.rotation.empty() ? glm::quat(1, 0, 0, 0) : glm::quat(static_cast<float>(node.rotation[3]), static_cast<float>(node.rotation[0]), static_cast<float>(node.rotation[1]), static_cast<float>(node.rotation[2]));
+                }
+                
+                skeleton.Joints.push_back(joint);
+            }
+
+            // Hierarchy
+            for(size_t i=0; i<skin.joints.size(); ++i)
+            {
+                int nodeIdx = skin.joints[i];
+                auto& node = model.nodes[nodeIdx];
+                for (int child : node.children)
+                {
+                    if (nodeToJointIndex.find(child) != nodeToJointIndex.end())
+                    {
+                        int childIdx = nodeToJointIndex[child];
+                        skeleton.Joints[childIdx].ParentIndex = static_cast<int>(i);
+                        skeleton.Joints[i].Children.push_back(childIdx);
+                    }
+                }
+            }
+            
+            skeletons.push_back(skeleton);
+        }
         
         
                 

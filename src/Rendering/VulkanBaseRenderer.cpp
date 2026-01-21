@@ -829,7 +829,7 @@ namespace Vulkan
                 skinnedBufferBarrier.size = VK_WHOLE_SIZE;
 
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
+                                     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
             }
         }
 

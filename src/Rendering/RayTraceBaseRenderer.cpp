@@ -109,11 +109,6 @@ namespace Vulkan::RayTracing
             CreateTopLevelStructures(commandBuffer);
         });
 
-        //topScratchBuffer_.reset();
-        //topScratchBufferMemory_.reset();
-        //bottomScratchBuffer_.reset();
-        //bottomScratchBufferMemory_.reset();
-
         const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
             std::chrono::high_resolution_clock::now() - timer).count();
         SPDLOG_INFO("- built acceleration structures in {:.2f}ms", elapsed * 1000.f);

@@ -80,47 +80,6 @@ namespace Vulkan::PipelineCommon
 						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
 	}
     
-    struct GPUScene1
-	{
-	    uint64_t Camera;
-	    uint64_t Nodes;
-
-	    uint64_t Reorders;
-	    uint64_t VerticesSimple;
-
-	    uint64_t Vertices;
-	    uint64_t Indices;
-
-	    uint64_t Materials;
-	    uint64_t Offsets;
-
-	    uint64_t Cubes;
-	    uint64_t Voxels;
-    
-	    uint64_t Pages;
-	    uint64_t HDRSHs;
-
-	    uint64_t Lights;
-	    uint64_t IndirectDrawCommands;
-
-	    uint64_t GPUDrivenStats;
-	    uint64_t TLAS;
-
-	    uint64_t SkinWeights;
-	    uint64_t SkinJoints;
-
-	    uint64_t SkinnedVertices;
-	    uint64_t JointMatrices;
-
-	    uint64_t SkinnedVerticesSimple;
-	    uint64_t Reserved;
-
-	    uint32_t SwapChainIndex;
-	    uint32_t custom_data_0;
-	    uint32_t custom_data_1;
-	    uint32_t custom_data_2;
-	};
-    
 	ZeroBindPipeline::ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile):PipelineBase(swapChain)
 	{
 		// Create descriptor pool/sets.
