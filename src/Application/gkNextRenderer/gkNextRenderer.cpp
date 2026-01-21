@@ -567,6 +567,7 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Checkbox(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
 			ImGui::Checkbox(LOCTEXT("DebugDraw"), &userSetting.ShowVisualDebug);
 			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &userSetting.DebugDraw_Lighting);
+			ImGui::Checkbox(LOCTEXT("DebugDraw_BoundingBox"), &userSetting.DebugDraw_BoundingBox);
 			ImGui::Checkbox(LOCTEXT("DisableSpatialReuse"), &userSetting.DisableSpatialReuse);
 			
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);

@@ -141,8 +141,8 @@ namespace Assets
         const std::vector<glm::uvec4>& CPUJoints() const { return joints_; }
         std::vector<glm::uvec4>& CPUJoints() { return joints_; }
         
-        glm::vec3 GetLocalAABBMin() {return local_aabb_min;}
-        glm::vec3 GetLocalAABBMax() {return local_aabb_max;}
+        glm::vec3 GetLocalAABBMin() const {return local_aabb_min;}
+        glm::vec3 GetLocalAABBMax() const {return local_aabb_max;}
 
         uint32_t NumberOfVertices() const { return verticeCount; }
         uint32_t NumberOfIndices() const { return indiceCount; }

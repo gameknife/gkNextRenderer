@@ -21,6 +21,7 @@ struct UserSettings final
 	bool FastGather = false;
 	bool FastInterpole = false;
 	bool DebugDraw_Lighting = false;
+	bool DebugDraw_BoundingBox = false;
 	bool DisableSpatialReuse = false;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;

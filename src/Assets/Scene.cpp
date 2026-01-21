@@ -14,6 +14,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include <spdlog/spdlog.h>
@@ -556,6 +557,48 @@ namespace Assets
                         overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1), glm::vec3(0.0f, 1.0f, 0.0f));
                     }
                 }
+            }
+        }
+
+        if (NextEngine::GetInstance()->GetUserSettings().DebugDraw_BoundingBox)
+        {
+            for (auto& node : nodes_)
+            {
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (!render || !render->IsVisible() || !render->IsDrawable())
+                {
+                    continue;
+                }
+
+                const Model* model = GetModel(render->GetModelId());
+                if (!model)
+                {
+                    continue;
+                }
+
+                glm::vec3 localaabbMin = model->GetLocalAABBMin();
+                glm::vec3 localaabbMax = model->GetLocalAABBMax();
+
+                const auto& worldMtx = node->WorldTransform();
+                glm::vec3 corners[8];
+                corners[0] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[1] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMin.z, 1.0f));
+                corners[2] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[3] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMin.z, 1.0f));
+                corners[4] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[5] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMin.y, localaabbMax.z, 1.0f));
+                corners[6] = glm::vec3(worldMtx * glm::vec4(localaabbMin.x, localaabbMax.y, localaabbMax.z, 1.0f));
+                corners[7] = glm::vec3(worldMtx * glm::vec4(localaabbMax.x, localaabbMax.y, localaabbMax.z, 1.0f));
+
+                glm::vec3 worldAABBMin = corners[0];
+                glm::vec3 worldAABBMax = corners[0];
+                for (int i = 1; i < 8; ++i)
+                {
+                    worldAABBMin = glm::min(worldAABBMin, corners[i]);
+                    worldAABBMax = glm::max(worldAABBMax, corners[i]);
+                }
+
+                NextEngineHelper::DrawAuxBox(worldAABBMin, worldAABBMax, glm::vec4(0.2f, 0.8f, 1.0f, 1.0f), 1.5f);
             }
         }
 
