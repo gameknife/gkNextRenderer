@@ -14,15 +14,49 @@
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_MANIFEST_MODE": "ON",
-        "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
-        "WITH_OIDN": "OFF",
-        "WITH_AVIF": "OFF",
-        "WITH_SUPERLUMINAL": "OFF",
-        "WITH_STREAMLINE": "OFF",
-        "WITH_PHYSIC": "ON",
-        "WITH_QUICKJS": "OFF",
-        "WITH_OZZ": "OFF",
-        "WITH_KTX2": "ON"
+        "VCPKG_INSTALL_OPTIONS": "--no-print-usage"
+      }
+    },
+    {
+      "name": "features-minimal",
+      "hidden": true,
+      "cacheVariables": {
+        "GK_ENABLE_AVIF": "OFF",
+        "GK_ENABLE_DLSS": "OFF",
+        "GK_ENABLE_KTX2": "ON",
+        "GK_ENABLE_PHYSIC": "OFF",
+        "GK_ENABLE_AUDIO": "OFF",
+        "GK_ENABLE_OIDN": "OFF",
+        "GK_EMBED_DEBUG_INFO": "OFF",
+        "GK_ENABLE_UNITY_BUILD": "ON"
+      }
+    },
+    {
+      "name": "features-default",
+      "hidden": true,
+      "cacheVariables": {
+        "GK_ENABLE_AVIF": "OFF",
+        "GK_ENABLE_DLSS": "OFF",
+        "GK_ENABLE_KTX2": "ON",
+        "GK_ENABLE_PHYSIC": "ON",
+        "GK_ENABLE_AUDIO": "ON",
+        "GK_ENABLE_OIDN": "OFF",
+        "GK_EMBED_DEBUG_INFO": "OFF",
+        "GK_ENABLE_UNITY_BUILD": "ON"
+      }
+    },
+    {
+      "name": "features-full",
+      "hidden": true,
+      "cacheVariables": {
+        "GK_ENABLE_AVIF": "ON",
+        "GK_ENABLE_DLSS": "ON",
+        "GK_ENABLE_KTX2": "ON",
+        "GK_ENABLE_PHYSIC": "ON",
+        "GK_ENABLE_AUDIO": "ON",
+        "GK_ENABLE_OIDN": "ON",
+        "GK_EMBED_DEBUG_INFO": "ON",
+        "GK_ENABLE_UNITY_BUILD": "ON"
       }
     },
     {
@@ -43,11 +77,28 @@
     {
       "name": "windows-dev",
       "inherits": "windows-base",
-      "displayName": "Windows Dev (RelWithDebInfo)",
-      "description": "Default Windows configuration for development",
+      "hidden": true,
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
+    },
+    {
+      "name": "default-windows-dev",
+      "inherits": ["windows-dev", "features-default"],
+      "displayName": "Default Windows Dev",
+      "description": "Default Windows configuration for development"
+    },
+    {
+      "name": "minimal-windows-dev",
+      "inherits": ["windows-dev", "features-minimal"],
+      "displayName": "Minimal Windows Dev",
+      "description": "Minimal Windows configuration for development"
+    },
+    {
+      "name": "full-windows-dev",
+      "inherits": ["windows-dev", "features-full"],
+      "displayName": "Full Windows Dev",
+      "description": "Full-featured Windows configuration for development"
     },
     {
       "name": "linux-base",
@@ -67,37 +118,22 @@
     {
       "name": "linux-release",
       "inherits": "linux-base",
-      "displayName": "Linux Release"
+      "hidden": true
     },
     {
-      "name": "android-linux-debug",
-      "inherits": "base",
-      "displayName": "Android on Linux Debug",
-      "description": "Debug configuration for Android builds on Linux host",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-android",
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
+      "name": "default-linux-release",
+      "inherits": ["linux-release", "features-default"],
+      "displayName": "Default Linux Release"
     },
     {
-      "name": "android-linux-release",
-      "inherits": "base",
-      "displayName": "Android on Linux Release",
-      "description": "Release configuration for Android builds on Linux host",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-android",
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "name": "minimal-linux-release",
+      "inherits": ["linux-release", "features-minimal"],
+      "displayName": "Minimal Linux Release"
+    },
+    {
+      "name": "full-linux-release",
+      "inherits": ["linux-release", "features-full"],
+      "displayName": "Full Linux Release"
     },
     {
       "name": "macos-base",
@@ -114,81 +150,74 @@
       }
     },
     {
-      "name": "macos-arm64",
+      "name": "macos-arm64-base",
       "inherits": "macos-base",
-      "displayName": "macOS ARM64",
+      "hidden": true,
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-osx"
       }
     },
     {
-      "name": "macos-x64",
-      "inherits": "macos-base",
-      "displayName": "macOS x64",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-osx"
-      }
+      "name": "default-macos-arm64",
+      "inherits": ["macos-arm64-base", "features-default"],
+      "displayName": "Default macOS ARM64"
     },
     {
-      "name": "ios-release",
-      "inherits": "base",
-      "displayName": "iOS Release",
-      "description": "Release configuration for iOS builds on macOS host",
-      "generator": "Xcode",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      },
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_SYSTEM_NAME": "iOS",
-        "GK_IOS_SKIP_CODE_SIGN": "ON",
-        "MOLTENVK_ROOT": "${sourceDir}/external/MoltenVK/ios"
-      }
+      "name": "minimal-macos-arm64",
+      "inherits": ["macos-arm64-base", "features-minimal"],
+      "displayName": "Minimal macOS ARM64"
     },
     {
-      "name": "mingw",
-      "inherits": "base",
-      "generator": "Ninja",
-      "displayName": "MinGW Release",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "name": "full-macos-arm64",
+      "inherits": ["macos-arm64-base", "features-full"],
+      "displayName": "Full macOS ARM64"
     }
   ],
   "buildPresets": [
     {
-      "name": "windows-dev",
-      "configurePreset": "windows-dev",
+      "name": "default-windows",
+      "configurePreset": "default-windows-dev",
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "linux-release",
-      "configurePreset": "linux-release",
-      "configuration": "Release"
-    },
-    {
-      "name": "macos-arm64",
-      "configurePreset": "macos-arm64",
+      "name": "minimal-windows",
+      "configurePreset": "minimal-windows-dev",
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "macos-x64",
-      "configurePreset": "macos-x64",
+      "name": "full-windows",
+      "configurePreset": "full-windows-dev",
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "mingw",
-      "configurePreset": "mingw",
-      "configuration": "Release"
+      "name": "default-linux",
+      "configurePreset": "default-linux-release",
+      "configuration": "RelWithDebInfo"
     },
     {
-      "name": "ios-release",
-      "configurePreset": "ios-release",
-      "configuration": "Release"
+      "name": "minimal-linux",
+      "configurePreset": "minimal-linux-release",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "full-linux",
+      "configurePreset": "full-linux-release",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "default-macos-arm64",
+      "configurePreset": "default-macos-arm64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "minimal-macos-arm64",
+      "configurePreset": "minimal-macos-arm64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "full-macos-arm64",
+      "configurePreset": "full-macos-arm64",
+      "configuration": "RelWithDebInfo"
     }
   ]
 }
