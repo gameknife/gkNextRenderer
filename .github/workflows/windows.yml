@@ -52,7 +52,7 @@ jobs:
     - name: Compile gkNextRenderer
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        build.bat --preset windows-dev
+        build.bat --preset default-windows-dev
       shell: cmd
 
     - name: Save vcpkg to cache

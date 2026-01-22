@@ -1,6 +1,6 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-option(WITH_STREAMLINE "Enable Nvidia Streamline" OFF)
+
 
 # directory naming
 file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
@@ -354,15 +354,20 @@ endforeach()
 # Test Target
 if ( NOT ANDROID )
 find_package(Catch2 3 REQUIRED)
-add_executable(gkNextUnitTests 
+set(UNIT_TEST_SOURCES
 	Tests/TestCommon.cpp
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_RenderComponent.cpp
-	Tests/Test_PhysicsComponent.cpp
 )
+
+if (GK_ENABLE_PHYSIC)
+	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
+endif()
+
+add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 target_include_directories(gkNextUnitTests PRIVATE .)
 

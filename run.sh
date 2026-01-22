@@ -1,11 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+log()  { printf "${GREEN}[run] %s${NC}\n" "$*"; }
+print_err() { printf "${RED}[run] Error: %s${NC}\n" "$*" >&2; }
+
+list_presets_and_exit() {
+    print_err "$1"
+    log "Available configure presets (build them first with build.sh):"
+    cmake --list-presets=configure | sed 's/^/  /'
+    exit 1
+}
+
 print_usage() {
     cat <<'USAGE'
 Usage: ./run.sh [options] [-- extra args]
   --target NAME          Executable to launch (default: gkNextRenderer)
-  --preset NAME          CMake Preset name (default: auto-detected)
+  --preset NAME          CMake Preset name [REQUIRED]
   --bin-dir PATH         absolute/relative bin directory override
   --present-mode VALUE   append --present-mode=VALUE
   --scene PATH           append --load-scene=PATH
@@ -19,28 +34,8 @@ USAGE
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# Auto-detect default preset
-case "$(uname -s)" in
-    Darwin*)
-        if [[ "$(uname -m)" == "arm64" ]]; then
-            default_preset="macos-arm64"
-        else
-            default_preset="macos-x64"
-        fi
-        ;;
-    Linux*)
-        default_preset="linux-release"
-        ;;
-    MINGW*|MSYS*)
-        default_preset="mingw" 
-        ;;
-    *)
-        default_preset="unknown"
-        ;;
-esac
-
 target="gkNextRenderer"
-preset="$default_preset"
+preset=""
 bin_dir=""
 preset_overridden=0
 bin_overridden=0
@@ -68,6 +63,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -z "$preset" && -z "$bin_dir" ]]; then
+    list_presets_and_exit "No preset specified. You must explicitly specify a preset using --preset <name>."
+fi
+
 run_android() {
     local android_dir="$script_dir/android"
     [[ -d "$android_dir" ]] || { echo "Android project directory not found: $android_dir" >&2; exit 1; }
@@ -90,49 +89,20 @@ run_android() {
 run_native() {
     local resolved_bin="$bin_dir"
     
-    # Priority 1: Explicit --bin-dir (already handled by assignment)
-    
+    # Priority 1: Explicit --bin-dir
+    if [[ $bin_overridden -eq 1 ]]; then
+        resolved_bin="$bin_dir"
     # Priority 2: New CMake Preset location (out/build/<preset>/bin)
-    if [[ -z "$resolved_bin" ]]; then
+    else
         local preset_path="$script_dir/out/build/$preset/bin"
         if [[ -d "$preset_path" ]]; then
             resolved_bin="$preset_path"
         fi
     fi
-
-    # Priority 3: Old Build Location Fallback (before smart search)
-    if [[ -z "$resolved_bin" ]]; then
-       # Map preset names to old platform names
-       local old_plat="unknown"
-       case "$preset" in
-           macos-arm64|macos-x64) old_plat="macos" ;;
-           linux-*) old_plat="linux" ;;
-           windows-*) old_plat="windows" ;;
-           mingw) old_plat="mingw" ;;
-       esac
-       
-       local old_path="$script_dir/build/$old_plat/bin"
-       if [[ -d "$old_path" ]]; then
-            resolved_bin="$old_path"
-       fi
-    fi
     
-    # Priority 4: Smart Search (try all presets)
-    if [[ -z "$resolved_bin" && $bin_overridden -eq 0 && $preset_overridden -eq 0 ]]; then
-        # Try finding any valid build output in new preset locations
-        for fallback in macos-arm64 macos-x64 linux-release windows-dev; do
-            local candidate="$script_dir/out/build/$fallback/bin"
-            if [[ -d "$candidate" ]]; then
-                resolved_bin="$candidate"
-                preset="$fallback"
-                break
-            fi
-        done
-    fi
-
     if [[ -z "$resolved_bin" || ! -d "$resolved_bin" ]]; then
-        echo "Bin directory not found. Have you built the project?" >&2
-        echo "Expected: out/build/$preset/bin" >&2
+        echo "Bin directory not found. Have you built the project for preset '$preset'?" >&2
+        echo "Expected to find: $script_dir/out/build/$preset/bin" >&2
         exit 1
     fi
 
@@ -143,14 +113,13 @@ run_native() {
     fi
 
     local exe="$resolved_bin/$target"
-    # Try finding without extension, then with extension (if needed)
+    if [[ ! -x "$exe" && -x "$exe.exe" ]]; then
+        exe="$exe.exe"
+    fi
+
     if [[ ! -x "$exe" ]]; then
-         if [[ -x "$exe.exe" ]]; then
-             exe="$exe.exe"
-         else
-            echo "Executable not found: $exe" >&2
-            exit 1
-         fi
+        echo "Executable not found or not executable: $exe" >&2
+        exit 1
     fi
 
     local cmd=("./$(basename "$exe")")

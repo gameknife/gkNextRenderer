@@ -34,7 +34,7 @@ jobs:
         java-version: '21'
     - uses: actions/checkout@v4
     - name: Compile vcpkg dependencies
-      run: ./vcpkg_android.sh
+      run: ./vcpkg.sh android
     - name: Install Vulkan SDK
       run: |
         wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
@@ -44,8 +44,7 @@ jobs:
     - name: Compile gkNextRenderer
       run: |
         echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-        ./build_android.sh
-        ./build_android.sh
+        ./build.sh --android
     - name: Create zip file
       run: |
         zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/release/app-release.apk ./deploy_android.bat
@@ -78,12 +77,12 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-        ./vcpkg_linux.sh
+        ./vcpkg.sh linux
     - name: Compile gkNextRenderer
-      run: ./build_linux.sh
+      run: ./build.sh --preset default-linux-release
     - name: Create zip file
       run: |
-        cd build/linux
+        cd out/build/default-linux-release
         zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
@@ -91,7 +90,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./build/linux/gknextrenderer_linux64_${{ github.ref_name }}.zip
+        asset_path: ./out/build/default-linux-release/gknextrenderer_linux64_${{ github.ref_name }}.zip
         asset_name: gknextrenderer_linux64_${{ github.ref_name }}.zip
         asset_content_type: application/zip
   windows-build:
@@ -111,7 +110,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        vcpkg_windows.bat
+        vcpkg.bat
       shell: cmd
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -119,12 +118,12 @@ jobs:
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        build_windows.bat
+        build.bat --preset default-windows-dev
       shell: cmd
     - name: Create zip file
       run: |
-        cd build/windows
-        Copy-Item -Path ..\..\package\*.bat -Destination .
+        cd out/build/default-windows-dev
+        Copy-Item -Path ..\..\..\package\*.bat -Destination .
         zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures ./*.bat
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
@@ -132,6 +131,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./build/windows/gknextrenderer_win64_${{ github.ref_name }}.zip
+        asset_path: ./out/build/default-windows-dev/gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_content_type: application/zip

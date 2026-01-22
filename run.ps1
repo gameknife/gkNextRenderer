@@ -10,7 +10,7 @@ $ProjectRoot = $ScriptDir
 
 # Default values
 $Target = "gkNextRenderer.exe"
-$Preset = "windows-dev"
+$Preset = $null
 $BinDir = $null
 $PresentMode = @()
 $Scene = @()
@@ -58,7 +58,7 @@ while ($i -lt $AllArgs.Count) {
             Write-Host "Usage: run.bat [options]"
             Write-Host "Options:"
             Write-Host "  --target NAME         Executable to launch (default: gkNextRenderer.exe)"
-            Write-Host "  --preset NAME         CMake Preset name (default: windows-dev)"
+            Write-Host "  --preset NAME         CMake Preset name [REQUIRED]"
             Write-Host "  --bin-dir PATH        Explicit bin directory"
             Write-Host "  --present-mode VALUE  Append --present-mode=VALUE"
             Write-Host "  --scene PATH          Append --load-scene=PATH"
@@ -91,6 +91,14 @@ while ($i -lt $AllArgs.Count) {
     if ($Key -eq "--") { break }
     
     $i++
+}
+
+if ([string]::IsNullOrWhiteSpace($Preset) -and [string]::IsNullOrWhiteSpace($BinDir) -and ($Preset -ne "android")) {
+    Write-Host "[run] Error: No preset specified." -ForegroundColor Red
+    Write-Host "You must explicitly specify a preset using --preset <name>."
+    Write-Host "[run] Available configure presets (build them first with build.bat):" -ForegroundColor Cyan
+    cmake --list-presets=configure
+    exit 1
 }
 
 # ... (Rest of logic remains same, just ensure variables are used correctly)
@@ -148,31 +156,8 @@ if ([string]::IsNullOrWhiteSpace($ResolvedBin)) {
     }
 }
 
-# Priority 3: Fallback to old location
 if ([string]::IsNullOrWhiteSpace($ResolvedBin)) {
-    $OldPlat = "windows"
-    if ($Preset -eq "mingw") { $OldPlat = "mingw" }
-    $CheckPath = Join-Path $ProjectRoot "build/$OldPlat/bin"
-    if (Test-Path $CheckPath) {
-        $ResolvedBin = $CheckPath
-    }
-}
-
-# Priority 4: Smart Search
-if ([string]::IsNullOrWhiteSpace($ResolvedBin) -and -not $BinOverridden -and -not $PresetOverridden) {
-    $Candidates = @("windows-dev", "windows-release", "mingw")
-    foreach ($Cand in $Candidates) {
-        $CheckPath = Join-Path $ProjectRoot "out/build/$Cand/bin"
-        if (Test-Path $CheckPath) {
-            $ResolvedBin = $CheckPath
-            $Preset = $Cand
-            break
-        }
-    }
-}
-
-if ([string]::IsNullOrWhiteSpace($ResolvedBin)) {
-    Write-Error "Bin directory not found. Have you built the project?"
+    Write-Error "Bin directory not found. Have you built the project for preset '$Preset'?"
     Write-Error "Expected: out/build/$Preset/bin"
     exit 1
 }
