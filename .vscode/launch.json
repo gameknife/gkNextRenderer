@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CMake Debug (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [],
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "env": {
+                "PATH": "${env:PATH}:${command:cmake.launchTargetDirectory}",
+                "CLICOLOR_FORCE": "1",
+                "FORCE_COLOR": "1"
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}

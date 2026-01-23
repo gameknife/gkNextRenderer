@@ -22,9 +22,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR"
 
-export VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
-export VCPKG_BINARY_SOURCES="clear;files,$PROJECT_ROOT/.vcpkg_bincache,readwrite"
-
 # Timing
 TOTAL_START=$(date +%s)
 
