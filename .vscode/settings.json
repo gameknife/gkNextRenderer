@@ -142,5 +142,6 @@
     "cmake.buildDirectory": "${workspaceFolder}/build/windows-vscode",
     "files.exclude": {
         "build": true,
-    }
+    },
+    "C_Cpp.default.compilerPath": "cl.exe"
 }
