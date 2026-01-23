@@ -31,19 +31,12 @@ namespace Vulkan::RayTracing
 	
 	public:
 
-		PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender): LogicRendererBase(baseRender) {}
 		virtual ~PathTracingRenderer();
 
-		void SetPhysicalDeviceImpl(VkPhysicalDevice physicalDevice,
-			std::vector<const char*>& requiredExtensions,
-			VkPhysicalDeviceFeatures& deviceFeatures,
-			void* nextDeviceFeatures);// override;
-		
-		void OnDeviceSet() override;
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		void BeforeNextFrame() override;
 	
 	private:
 		// individual textures

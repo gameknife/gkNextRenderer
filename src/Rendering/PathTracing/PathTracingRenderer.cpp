@@ -15,26 +15,9 @@
 
 namespace Vulkan::RayTracing
 {
-    PathTracingRenderer::PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender)
-    {
-    }
-
     PathTracingRenderer::~PathTracingRenderer()
     {
         PathTracingRenderer::DeleteSwapChain();
-    }
-
-    void PathTracingRenderer::SetPhysicalDeviceImpl(
-        VkPhysicalDevice physicalDevice,
-        std::vector<const char*>& requiredExtensions,
-        VkPhysicalDeviceFeatures& deviceFeatures,
-        void* nextDeviceFeatures)
-    {
-
-    }
-
-    void PathTracingRenderer::OnDeviceSet()
-    {
     }
 
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
@@ -128,13 +111,6 @@ namespace Vulkan::RayTracing
             vkCmdCopyImage(commandBuffer, baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, baseRender_.GetStorageImage(prevSingleAlbedoId_)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         
             baseRender_.CaptureOIDN(commandBuffer);
-        }
-    }
-
-    void PathTracingRenderer::BeforeNextFrame()
-    {
-        {
-            SCOPED_CPU_TIMER("OIDN");
         }
     }
 }

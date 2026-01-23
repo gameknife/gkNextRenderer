@@ -15,6 +15,10 @@
     "files.exclude": {
         "out": true
     },
+    "files.associations": {
+        "*.cpp": "cpp",
+        "*.hpp": "cpp"
+    },
     "cmake.debugConfig": {
         "name": "CMake Debug (LLDB)"
     },

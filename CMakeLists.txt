@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(gkNextRenderer)
+project(gkNextRenderer LANGUAGES CXX C)
 
 include(cmake/SetupPlatform.cmake)
 include(cmake/ProjectOptions.cmake)
