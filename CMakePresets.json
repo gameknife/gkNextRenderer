@@ -5,11 +5,15 @@
         "minor": 20,
         "patch": 0
     },
-    "configurePresets": [{
+    "configurePresets": [        {
             "name": "base",
             "hidden": true,
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "installDir": "${sourceDir}/out/install/${presetName}",
+            "environment": {
+                "VCPKG_ROOT": "${sourceDir}/.vcpkg",
+                "VCPKG_BINARY_SOURCES": "clear;files,${sourceDir}/.vcpkg_bincache,readwrite"
+            },
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_MANIFEST_MODE": "ON",
