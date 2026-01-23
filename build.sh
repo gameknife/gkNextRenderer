@@ -7,15 +7,15 @@
 #   ./build.sh [options] [-- <cmake_args>...]
 #
 # Options:
-#   --preset <name>  CMake configure preset (e.g., default-linux-release) [REQUIRED]
+#   --preset <name>  CMake configure preset (e.g., default-linux) [REQUIRED]
 #   --clean          Clean build directory before building.
 #   --android        Switch to Android Gradle build.
 #   --help, -h       Show this help message.
 #
 # Examples:
-#   ./build.sh --preset full-linux-release
-#   ./build.sh --preset default-linux-release -- -DGK_ENABLE_AVIF=ON
-#   ./build.sh --preset default-linux-release --clean
+#   ./build.sh --preset full-linux
+#   ./build.sh --preset default-linux -- -DGK_ENABLE_AVIF=ON
+#   ./build.sh --preset default-linux --clean
 # ==============================================================================
 # ### HELP_END ###
 
@@ -47,8 +47,8 @@ detect_default_preset() {
     case "$(uname -s)" in
         Darwin*) 
             if [ "$(uname -m)" = "arm64" ]; then echo "default-macos-arm64"; else echo "default-macos-x64"; fi ;;
-        Linux*) echo "default-linux-release" ;; 
-        MINGW*|MSYS*) echo "default-windows-dev" ;;
+        Linux*) echo "default-linux" ;; 
+        MINGW*|MSYS*) echo "default-windows" ;;
         *) echo "unknown" ;; 
     esac
 }
@@ -148,7 +148,7 @@ cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
 config_time=$(( $(date +%s) - config_start ))
 
 # Derive build preset name from configure preset name
-# e.g., "default-linux-release" -> "default-linux"
+# e.g., "default-linux" -> "default-linux" (most presets now match directly)
 BUILD_PRESET=$(echo "$CONFIGURE_PRESET" | sed -E 's/-(release|dev|debug|arm64|x64)$//' | sed -E 's/-(base)$//')
 
 

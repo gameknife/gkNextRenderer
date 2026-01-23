@@ -74,8 +74,8 @@ while ($i -lt $AllArgs.Count) {
             Write-Host "  -h, --help       Show this help"
             Write-Host ""
             Write-Host "Examples:"
-            Write-Host "  build.ps1 --preset default-windows-dev"
-            Write-Host "  build.ps1 --preset full-windows-dev -- -DGK_ENABLE_AVIF=ON"
+            Write-Host "  build.ps1 --preset default-windows"
+            Write-Host "  build.ps1 --preset full-windows -- -DGK_ENABLE_AVIF=ON"
             exit 0
         }
         "^--$" {
@@ -149,7 +149,7 @@ function Build-Native {
     }
 
     Write-Log "Configuring preset: $Preset with extra args: $($ExtraArgs -join ' ')"
-    $configResult = cmake --preset $Preset $ExtraArgs
+    cmake --preset $Preset $ExtraArgs
     if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed." }
 
     Write-Log "Building preset: $Preset"
@@ -164,7 +164,7 @@ function Build-Native {
         }
     }
     
-    $buildResult = cmake --build --preset $Preset $buildSpecificArgs
+    cmake --build --preset $Preset $buildSpecificArgs
     if ($LASTEXITCODE -ne 0) { throw "CMake build failed." }
 }
 

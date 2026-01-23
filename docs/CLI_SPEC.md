@@ -19,7 +19,7 @@
 ### 选项
 | 选项 | 描述 | 默认值 |
 |--------|-------------|---------|
-| `--preset <name>` | 使用的 CMake Preset。 | 基于操作系统自动检测 (例如 `macos-arm64`, `linux-release`, `windows-dev`) |
+| `--preset <name>` | 使用的 CMake Preset。 | 基于操作系统自动检测 (例如 `default-macos-arm64`, `default-linux`, `default-windows`) |
 | `--config <type>` | 构建配置 (Debug, Release)。如果适用（多配置生成器），将覆盖 preset 的默认值。 | `Debug` (如果 preset 未指定) |
 | `--clean` | 构建前删除构建目录。 | `false` |
 | `--target <name>` | 构建特定目标而不是 `all`。 | `all` |

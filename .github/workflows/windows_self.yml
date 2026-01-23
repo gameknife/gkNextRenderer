@@ -34,6 +34,6 @@ jobs:
 
     - name: Compile gkNextRenderer
       run: |
-        build.bat --preset default-windows-dev
+        build.bat --preset default-windows
       shell: cmd
 

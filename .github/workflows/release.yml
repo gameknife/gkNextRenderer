@@ -79,10 +79,10 @@ jobs:
         echo "BUILDVER(${{ github.ref_name }})" > src/build.version
         ./vcpkg.sh linux
     - name: Compile gkNextRenderer
-      run: ./build.sh --preset default-linux-release
+      run: ./build.sh --preset default-linux
     - name: Create zip file
       run: |
-        cd out/build/default-linux-release
+        cd out/build/default-linux
         zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
@@ -90,7 +90,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./out/build/default-linux-release/gknextrenderer_linux64_${{ github.ref_name }}.zip
+        asset_path: ./out/build/default-linux/gknextrenderer_linux64_${{ github.ref_name }}.zip
         asset_name: gknextrenderer_linux64_${{ github.ref_name }}.zip
         asset_content_type: application/zip
   windows-build:
@@ -118,11 +118,11 @@ jobs:
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
         echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        build.bat --preset default-windows-dev
+        build.bat --preset default-windows
       shell: cmd
     - name: Create zip file
       run: |
-        cd out/build/default-windows-dev
+        cd out/build/default-windows
         Copy-Item -Path ..\..\..\package\*.bat -Destination .
         zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures ./*.bat
     - name: Upload Release Asset
@@ -131,6 +131,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./out/build/default-windows-dev/gknextrenderer_win64_${{ github.ref_name }}.zip
+        asset_path: ./out/build/default-windows/gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
         asset_content_type: application/zip

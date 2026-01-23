@@ -68,16 +68,16 @@ Linux (example: Ubuntu):
 ``` shell
 sudo apt install build-essential ninja-build curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
 ./vcpkg.sh
-./build.sh --preset linux-release
-./run.sh --preset linux-release
+./build.sh --preset default-linux
+./run.sh --preset default-linux
 ```
 
 macOS:
 ``` shell
 brew install molten-vk glslang ninja
 ./vcpkg.sh
-./build.sh --preset macos-arm64
-./run.sh --preset macos-arm64
+./build.sh --preset default-macos-arm64
+./run.sh --preset default-macos-arm64
 ```
 
 Android (on Windows):
