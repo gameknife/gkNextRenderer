@@ -62,5 +62,6 @@ private:
 namespace NextLayers {
     static constexpr NextObjectLayer NON_MOVING = 0;
     static constexpr NextObjectLayer MOVING = 1;
-    static constexpr NextObjectLayer NUM_LAYERS = 2;
+    static constexpr NextObjectLayer HIDDEN = 2;
+    static constexpr NextObjectLayer NUM_LAYERS = 3;
 }

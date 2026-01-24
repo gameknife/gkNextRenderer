@@ -89,7 +89,9 @@ public:
 		case NextLayers::NON_MOVING:
 			return inObject2 == NextLayers::MOVING; // Non moving only collides with moving
 		case NextLayers::MOVING:
-			return true; // Moving collides with everything
+			return inObject2 != NextLayers::HIDDEN; // Moving collides with everything
+		case NextLayers::HIDDEN:
+            return false; // Triggers only collide with moving
 		default:
 			JPH_ASSERT(false);
 			return false;
@@ -106,7 +108,8 @@ namespace BroadPhaseLayers
 {
 	static constexpr BroadPhaseLayer nonMoving(0);
 	static constexpr BroadPhaseLayer moving(1);
-	static constexpr uint numLayers(2);
+    static constexpr BroadPhaseLayer hidden(2);
+	static constexpr uint numLayers(3);
 };
 
 // BroadPhaseLayerInterface implementation
@@ -119,6 +122,7 @@ public:
 		// Create a mapping table from object to broad phase layer
 		mObjectToBroadPhase_[NextLayers::NON_MOVING] = BroadPhaseLayers::nonMoving;
 		mObjectToBroadPhase_[NextLayers::MOVING] = BroadPhaseLayers::moving;
+		mObjectToBroadPhase_[NextLayers::HIDDEN] = BroadPhaseLayers::hidden;
 	}
 
 	virtual uint					GetNumBroadPhaseLayers() const override
@@ -139,6 +143,7 @@ public:
 		{
 		case (BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:	return "NON_MOVING";
 		case (BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:		return "MOVING";
+		case (BroadPhaseLayer::Type)BroadPhaseLayers::HIDDEN:		return "HIDDEN";
 		default:													JPH_ASSERT(false); return "INVALID";
 		}
 	}
@@ -159,7 +164,9 @@ public:
 		case NextLayers::NON_MOVING:
 			return inLayer2 == BroadPhaseLayers::moving;
 		case NextLayers::MOVING:
-			return true;
+			return inLayer2 != BroadPhaseLayers::hidden;
+		case NextLayers::HIDDEN:
+            return false;
 		default:
 			JPH_ASSERT(false);
 			return false;
@@ -249,7 +256,7 @@ struct FNextPhysicsContext
 
 	~FNextPhysicsContext()
 	{
-
+	    
 	}
 	// We need a temp allocator for temporary allocations during the physics update. We're
 	// pre-allocating 10 MB to avoid having to do allocations during the physics update.
@@ -578,6 +585,15 @@ FNextPhysicsBody* NextPhysics::GetBody(NextBodyID bodyID)
 	return nullptr;
 }
 
+void NextPhysics::RemoveBody(NextBodyID bodyID)
+{
+#if WITH_PHYSIC
+    BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+    bodyInterface.RemoveBody(bodyID);
+    bodies_.erase(bodyID);
+#endif
+}
+
 void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
 {
 #if WITH_PHYSIC
@@ -586,13 +602,13 @@ void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     bool isAdded = bodyInterface.IsAdded(bodyID);
 
-    if (active && !isAdded)
+    if (active && isAdded)
     {
-        bodyInterface.AddBody(bodyID, EActivation::Activate);
+        bodyInterface.SetObjectLayer(bodyID, NextLayers::NON_MOVING);
     }
     else if (!active && isAdded)
     {
-        bodyInterface.RemoveBody(bodyID);
+        bodyInterface.SetObjectLayer(bodyID, NextLayers::HIDDEN);
     }
 #endif
 }
