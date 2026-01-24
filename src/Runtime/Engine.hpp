@@ -215,9 +215,6 @@ private:
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
-	// need remove
-	uint32_t rendererType = 0;
-
 	// settings, may move into scene
 	mutable UserSettings userSettings_{};
 	mutable ShowFlags showFlags_{};

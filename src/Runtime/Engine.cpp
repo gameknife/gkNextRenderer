@@ -139,25 +139,6 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.PaperWhiteNit = 600.f;
     
-    userSettings.RequestRayCast = false;
-
-    userSettings.DenoiseSigma = 2.0f;
-    userSettings.DenoiseSigmaLum = 3.0f;
-    userSettings.DenoiseSigmaNormal = 0.005f;
-    userSettings.DenoiseSize = 5;
-
-    userSettings.FastGather = false;
-
-    userSettings.SuperResolution = options.SuperResolution;
-    userSettings.DLSS = options.DLSS;
-    userSettings.DLSSRR = options.DLSSRR;
-    
-#if ANDROID || IOS
-    userSettings.NumberOfSamples = 1;
-    userSettings.Denoiser = false;
-    userSettings.FastGather = true;
-#endif
-
     return userSettings;
 }
 
@@ -235,7 +216,6 @@ void NextEngine::Start()
 #endif
 
     renderer_.reset( NextRenderer::CreateRenderer(GOption->RendererType, window_.get(), static_cast<VkPresentModeKHR>(GOption->PresentMode), shouldEnableValidation) );
-    rendererType = GOption->RendererType;
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
@@ -307,10 +287,10 @@ bool NextEngine::Tick(bool forcingDelta)
     // make sure the output is flushed
     std::cout << std::flush;
     
-    if(rendererType != userSettings_.RendererType)
+    // Hot change renderer
+    if(renderer_->CurrentLogicRendererType() != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
     {
-        rendererType = userSettings_.RendererType;
-        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(userSettings_.RendererType));
     }
     
     // delta time calc
@@ -655,8 +635,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                                       extent.width / static_cast<float>(extent.height), renderCam.NearPlane, renderCam.FarPlane);
     
     ubo.FastGather = userSettings_.FastGather;
-    ubo.FastInterpole = userSettings_.FastInterpole;
-    	ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
+    ubo.SelectedId = scene_->GetSelectedId();
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
@@ -735,7 +714,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         scene_->MarkEnvDirty();
     }
 
-    	ubo.ShowHeatmap = showFlags_.ShowVisualDebug;    ubo.HeatmapScale = userSettings_.HeatmapScale;
+    ubo.ShowHeatmap = showFlags_.ShowVisualDebug;    ubo.HeatmapScale = userSettings_.HeatmapScale;
+    ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();

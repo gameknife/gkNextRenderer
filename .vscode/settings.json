@@ -13,7 +13,12 @@
         "**/src/Application/**"
     ],
     "files.exclude": {
-        "out": true
+        "out": true,
+        ".vcpkg": true,
+        ".vcpkg_bincache": true,
+        ".VSCodeCounter": true,
+        ".idea": true,
+        ".claude": true
     },
     "files.associations": {
         "*.cpp": "cpp",

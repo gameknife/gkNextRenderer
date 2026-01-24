@@ -52,7 +52,7 @@
             "name": "features-full",
             "hidden": true,
             "cacheVariables": {
-                "GK_ENABLE_AVIF": "ON",
+                "GK_ENABLE_AVIF": "OFF",
                 "GK_ENABLE_DLSS": "ON",
                 "GK_ENABLE_KTX2": "ON",
                 "GK_ENABLE_PHYSIC": "ON",
