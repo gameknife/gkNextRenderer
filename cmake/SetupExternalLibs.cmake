@@ -91,13 +91,13 @@ endif()
 if(WITH_QUICKJS)
     message(STATUS "Preparing TypeScript Compiler...")
 
-    if(WIN32)
+    if(CMAKE_HOST_WIN32)
         set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-windows-amd64.exe")
         set(TSC_FILENAME "tsc.exe")
-    elseif(APPLE)
+    elseif(CMAKE_HOST_APPLE)
         set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64")
         set(TSC_FILENAME "tsc")
-    elseif(UNIX AND NOT APPLE) # Linux
+    elseif(CMAKE_HOST_UNIX) # Linux
         set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-linux-amd64")
         set(TSC_FILENAME "tsc")
     endif()
@@ -111,8 +111,8 @@ if(WITH_QUICKJS)
 
     set(TSC_EXECUTABLE "${tsc_SOURCE_DIR}/${TSC_FILENAME}")
     
-    # On non-Windows, we need to ensure the file is executable
-    if(NOT WIN32)
+    # On non-Windows host, we need to ensure the file is executable
+    if(NOT CMAKE_HOST_WIN32)
         file(CHMOD "${TSC_EXECUTABLE}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     endif()
 
