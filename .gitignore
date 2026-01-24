@@ -22,8 +22,7 @@
 [Ll]og/
 .vcpkg/
 .vcpkg_bincache/
-external/MoltenVK/
-external/slang*/
+external/
 build/
 build-*/
 **/vcpkg_installed/
