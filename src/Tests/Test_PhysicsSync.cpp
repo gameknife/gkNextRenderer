@@ -46,6 +46,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
             // Ball should rest on floor (approx Y = 0.5)
             CHECK(bodyInfo->position.y > -0.5f); 
             CHECK(bodyInfo->position.y < 1.0f);
+            physics->RemoveBody(ballBodyId);
         }
 
         // SCENARIO 2: Body Inactive (No Collision)
@@ -62,6 +63,9 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
             REQUIRE(bodyInfo != nullptr);
             // Ball should fall through the invisible floor
             CHECK(bodyInfo->position.y < -1.0f);
+            physics->RemoveBody(ballBodyId);
         }
+        
+        physics->RemoveBody(bodyId);
     }
 }
