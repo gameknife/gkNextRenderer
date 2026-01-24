@@ -31,6 +31,8 @@ namespace Runtime
         const Assets::Skeleton& GetSkeleton() const { return skeleton_; }
         std::vector<std::string> GetAnimationNames() const;
         std::string GetCurrentAnimationName() const { return currentState_.Playing ? currentState_.Name : ""; }
+        
+        bool IsPlaying() const { return currentState_.Playing; }
 
     private:
         void UpdateJoints();

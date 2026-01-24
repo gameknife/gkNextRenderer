@@ -7,8 +7,6 @@
 
 #include "glm/ext.hpp"
 
-#include <unordered_map>
-#include <typeindex>
 #include <vector>
 #include <memory>
 #include <type_traits>
@@ -20,6 +18,7 @@ namespace Assets
     class Node : public std::enable_shared_from_this<Node>
     {
     public:
+        // Use enum from PhysicsComponent to maintain compatibility, but eventually we should use Assets::ENodeMobility directly
         using ENodeMobility = Runtime::ENodeMobility;
         
         static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId = 0);
@@ -42,6 +41,9 @@ namespace Assets
         
         const std::string& GetName() const {return name_; }
 
+        // Render properties moved to RenderComponent
+        // Physics properties moved to PhysicsComponent
+
         uint32_t GetInstanceId() const { return instanceId_; }
         bool TickVelocity(glm::mat4& combinedTS);
 
@@ -61,14 +63,23 @@ namespace Assets
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
             
+            // Remove existing component of same type
+            for (auto it = components_.begin(); it != components_.end(); )
+            {
+                if (std::dynamic_pointer_cast<T>(*it))
+                {
+                    it = components_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            
             if (component)
             {
                 component->SetOwner(this);
-                components_[std::type_index(typeid(T))] = component;
-            }
-            else
-            {
-                components_.erase(std::type_index(typeid(T)));
+                components_.push_back(component);
             }
         }
 
@@ -77,10 +88,13 @@ namespace Assets
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
             
-            auto it = components_.find(std::type_index(typeid(T)));
-            if (it != components_.end())
+            for (const auto& comp : components_)
             {
-                return std::static_pointer_cast<T>(it->second);
+                auto casted = std::dynamic_pointer_cast<T>(comp);
+                if (casted)
+                {
+                    return casted;
+                }
             }
             return nullptr;
         }
@@ -92,15 +106,26 @@ namespace Assets
         mutable glm::quat rotation_;
         mutable glm::vec3 scaling_;
 
+        // glm::vec3 physicsOffset_ = glm::vec3(0.0f); // Moved
         glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
-
+        // uint32_t modelId_; // Moved
+        // int32_t skinIndex_ = -1; // Moved
+        // std::shared_ptr<Runtime::SkinnedMeshComponent> skinnedMesh_; // Moved
         uint32_t instanceId_;
+        // bool visible_; // Moved
+        // bool rayCastVisible_; // Moved
 
         std::shared_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
+        // std::array<uint32_t, 16> materialIdx_; // Moved
+        // NextBodyID physicsBodyTemp_; // Moved
+        // ENodeMobility mobility_; // Moved
 
-        std::unordered_map<std::type_index, std::shared_ptr<Component>> components_;
+        std::vector<std::shared_ptr<Component>> components_;
+        
+        // Helper to avoid allocating PhysicsComponent if not needed immediately during migration? 
+        // No, let's alloc on demand
     };
 }

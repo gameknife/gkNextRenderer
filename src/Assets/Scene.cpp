@@ -489,7 +489,18 @@ namespace Assets
                     {
                         skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
                     }
-                    MarkDirty();
+                    
+                    if (skinnedMesh->IsPlaying())
+                    {
+                        MarkDirty();
+                        if ( auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+                        {
+                            if ( renderComponent->GetModelId() != -1 )
+                            {
+                                NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(renderComponent->GetModelId());
+                            }
+                        }
+                    }
                 }
             }
 

@@ -788,32 +788,25 @@ namespace Vulkan
             if (skinnedVertexBuffer_)
             {
                 uint32_t proxyIdx = 0;
-                for (auto& node : scene.Nodes())
+                for ( size_t i = 0; i < skinModelUpdateRequests_.size(); i++ )
                 {
-                    auto render = node->GetComponent<Runtime::RenderComponent>();
-                    if (render && render->IsDrawable())
+                    uint32_t modelId = skinModelUpdateRequests_[i];
+                    if (modelId != -1)
                     {
-                        auto modelIdx = render->GetModelId();
-                        auto model = scene.GetModel(modelIdx);
+                       auto model = scene.GetModel(modelId);
+                        uint32_t vertexOffset = scene.Offsets()[modelId * 10].vertexOffset;
+                        uint32_t vertexCount = model->NumberOfVertices();
 
-                        if (node->GetComponent<Runtime::SkinnedMeshComponent>() && model)
-                        {
-                            uint32_t vertexOffset = scene.Offsets()[modelIdx * 10].vertexOffset;
-                            uint32_t vertexCount = model->NumberOfVertices();
+                        gpuScene.custom_data_0 = proxyIdx;
+                        gpuScene.custom_data_1 = vertexOffset;
+                        gpuScene.custom_data_2 = vertexCount;
 
-                            gpuScene.custom_data_0 = proxyIdx;
-                            gpuScene.custom_data_1 = vertexOffset;
-                            gpuScene.custom_data_2 = vertexCount;
+                        VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
+                        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                                           0, sizeof(Assets::GPUScene), &gpuScene);
 
-                            VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
-                            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                               0, sizeof(Assets::GPUScene), &gpuScene);
-
-                            uint32_t groupCount = (vertexCount + 63) / 64;
-                            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-                        }
-
-                        proxyIdx += (uint32_t)scene.GetModel(modelIdx)->SectionCount();
+                        uint32_t groupCount = (vertexCount + 63) / 64;
+                        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
                     }
                 }
 
@@ -1013,6 +1006,7 @@ namespace Vulkan
                 {
                     SCOPED_GPU_TIMER("[pre-render]");
                     PreRender(commandBuffer, currentImageIndex_);
+                    skinModelUpdateRequests_.clear();
                 }
 
                 {

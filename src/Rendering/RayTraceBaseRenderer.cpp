@@ -210,26 +210,15 @@ namespace Vulkan::RayTracing
         if (bottomScratchBuffer_)
         {
             SCOPED_GPU_TIMER("BLAS Update");
-            auto& scene = GetScene();
             VkDeviceSize scratchOffset = 0;
-            for (size_t modelIdx = 0; modelIdx < scene.Models().size(); ++modelIdx)
+            for ( size_t i = 0; i < skinModelUpdateRequests_.size(); i++)
             {
-                bool hasSkin = false;
-                for (const auto& node : scene.Nodes())
+                int32_t modelId = skinModelUpdateRequests_[i];
+                if (modelId != -1)
                 {
-                    auto render = node->GetComponent<Runtime::RenderComponent>();
-                    if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
-                    {
-                        hasSkin = true;
-                        break;
-                    }
+                    bottomAs_[modelId].Update(commandBuffer, *bottomScratchBuffer_, scratchOffset);
                 }
-
-                if (hasSkin)
-                {
-                    bottomAs_[modelIdx].Update(commandBuffer, *bottomScratchBuffer_, scratchOffset);
-                }
-                scratchOffset += bottomAs_[modelIdx].BuildSizes().buildScratchSize;
+                scratchOffset += bottomAs_[modelId].BuildSizes().buildScratchSize;
             }
             AccelerationStructure::InsertMemoryBarrier(commandBuffer);
         }

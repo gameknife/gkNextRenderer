@@ -120,11 +120,13 @@ namespace Vulkan
 		virtual void AfterUpdateScene() {}
 
 		virtual void OnPreLoadScene() {}
-		virtual void OnPostLoadScene() {}
+		virtual void OnPostLoadScene() { skinModelUpdateRequests_.clear(); }
 
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		
 		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	    
+	    void RequestSkinUpdate(uint32_t modelId) { skinModelUpdateRequests_.push_back(modelId); }
 
 		bool VisualDebug() const {return visualDebug_;}
 		
@@ -173,6 +175,8 @@ namespace Vulkan
 		uint32_t tempStorageImageCreated_ {};
 
 		void UpdateSkinningBuffers();
+	    
+	    std::vector<uint32_t> skinModelUpdateRequests_;
 
 		std::unique_ptr<Buffer> skinnedVertexBuffer_;
 		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
