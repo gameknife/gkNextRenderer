@@ -54,6 +54,21 @@ file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/
 file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
 file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
 
+# unit test files
+set(UNIT_TEST_SOURCES
+	Tests/TestCommon.cpp
+	Tests/Test_PhysicsSync.cpp
+	Tests/Test_GpuTimerLogic.cpp
+	Tests/Test_GltfSkinning.cpp
+	Tests/Test_ComponentSystem.cpp
+	Tests/Test_RenderComponent.cpp
+)
+
+if (GK_ENABLE_PHYSIC)
+	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
+endif()
+
+
 # libray and app
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
@@ -116,6 +131,8 @@ add_executable(MagicaLego
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
+find_package(Catch2 3 REQUIRED)
+add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -154,6 +171,7 @@ gkNextMotionBenchmark
 gkNextEditor
 Packager
 MagicaLego 
+gkNextUnitTests
 )
 endif()
 
@@ -353,37 +371,11 @@ endforeach()
 
 # Test Target
 if ( NOT ANDROID )
-find_package(Catch2 3 REQUIRED)
-set(UNIT_TEST_SOURCES
-	Tests/TestCommon.cpp
-	Tests/Test_PhysicsSync.cpp
-	Tests/Test_GpuTimerLogic.cpp
-	Tests/Test_GltfSkinning.cpp
-	Tests/Test_ComponentSystem.cpp
-	Tests/Test_RenderComponent.cpp
-)
-
-if (GK_ENABLE_PHYSIC)
-	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
-endif()
-
-add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
-target_include_directories(gkNextUnitTests PRIVATE .)
-
-if ( WITH_STREAMLINE )
-	target_link_directories(gkNextUnitTests PRIVATE ThirdParty/streamline/lib/x64)
-endif()
-
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 
-if ( WITH_OIDN )
-target_compile_definitions(gkNextUnitTests PUBLIC WITH_OIDN=1)
-target_include_directories(gkNextUnitTests PRIVATE ../src/ThirdParty/oidn/include/)
-target_link_directories(gkNextUnitTests PRIVATE ../src/ThirdParty/oidn/lib/)
-target_link_libraries(gkNextUnitTests PRIVATE OpenImageDenoise )
-endif()
+
 
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 
