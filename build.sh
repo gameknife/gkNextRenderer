@@ -63,18 +63,6 @@ ensure_vcpkg() {
     fi
 }
 
-ensure_tsc() {
-    local tsc_bin="$PROJECT_ROOT/tools/tsc/tsc"
-    if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* ]]; then
-        tsc_bin="$tsc_bin.exe"
-    fi
-
-    if [ ! -f "$tsc_bin" ]; then
-        log "Fetching TypeScript Compiler (TSC)..."
-        "$PROJECT_ROOT/tools/fetch_tsc.sh"
-    fi
-}
-
 show_help() {
     sed -n '/### HELP_START ###/,/### HELP_END ###/p' "$0" | \
     grep -v '### HELP_START ###' | grep -v '### HELP_END ###' | \
@@ -119,7 +107,6 @@ done
 
 # Android Build
 if [ "$TARGET_ANDROID" -eq 1 ]; then
-    ensure_tsc
     log "Building for Android..."
     cd "$PROJECT_ROOT/android"
     ./gradlew build
@@ -132,7 +119,6 @@ if [ -z "$CONFIGURE_PRESET" ]; then
 fi
 
 ensure_vcpkg
-ensure_tsc
 
 if [ "$CLEAN" -eq 1 ]; then
     log "Cleaning build for preset: $CONFIGURE_PRESET..."

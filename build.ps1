@@ -121,14 +121,6 @@ function Ensure-Vcpkg {
     }
 }
 
-function Ensure-TSC {
-    $TscTarget = Join-Path $ProjectRoot "tools/tsc/tsc.exe"
-    if (-not (Test-Path $TscTarget)) {
-        Write-Log "TSC compiler not found. Fetching..."
-        & (Join-Path $ProjectRoot "tools/fetch_tsc.bat")
-    }
-}
-
 # --- Main Build Logic ---
 
 function Build-Native {
@@ -138,7 +130,6 @@ function Build-Native {
     )
 
     Ensure-Vcpkg
-    Ensure-TSC
 
     if ($Clean) {
         $BuildDir = Join-Path $ProjectRoot "out/build/$Preset"
@@ -170,7 +161,6 @@ function Build-Native {
 
 function Build-Android {
     Write-Log "Building for Android..."
-    Ensure-TSC
     
     Push-Location (Join-Path $ProjectRoot "android")
     try {
