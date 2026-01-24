@@ -40,7 +40,13 @@ if (GK_ENABLE_OIDN)
     set(WITH_OIDN ON CACHE BOOL "Enable OIDN" FORCE)
 endif()
 
+option(GK_ENABLE_QUICKJS "Enable QuickJS support" ON)
+if (GK_ENABLE_QUICKJS)
+    set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
+endif()
+
 include(cmake/SetupDependencies.cmake)
+include(cmake/SetupExternalLibs.cmake)
 
 set(MAIN_PROJECT "gkNextRenderer")
 add_subdirectory(assets)

@@ -15,7 +15,6 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/miniaudio/*.h"
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
-	"ThirdParty/streamline/*.h"
 	"ThirdParty/ozz/*.h"
 	)
 file(GLOB_RECURSE src_files_customimgui
@@ -237,8 +236,8 @@ foreach(target IN LISTS AllTargets)
 
 		if ( WITH_STREAMLINE )
 			target_compile_definitions(${target} PUBLIC WITH_STREAMLINE=1)
-			target_include_directories(${target} PRIVATE ThirdParty/streamline/include)
-			target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
+			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
 	else()
@@ -247,7 +246,7 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE gkNextEngine)
 		endif()
 		if ( WITH_STREAMLINE ) 
-		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
 	endif()
@@ -281,8 +280,8 @@ foreach(target IN LISTS AllTargets)
 
 	if ( WITH_OIDN )
 		target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
-		target_include_directories(${target} PRIVATE ../src/ThirdParty/oidn/include/)
-		target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
+		target_include_directories(${target} PRIVATE ${OIDN_INCLUDE_DIR})
+		target_link_directories(${target} PRIVATE ${OIDN_LIB_DIR})
 		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
@@ -340,19 +339,17 @@ foreach(target IN LISTS AllTargets)
 
 	# copy the tsc to bin
 	if ( ${target} STREQUAL gkNextEngine )
-	if (MSVC)
-	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	elseif(UNIX)
-	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	if ( WITH_QUICKJS AND EXISTS "${TSC_EXECUTABLE}" )
+		file(COPY "${TSC_EXECUTABLE}" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
 	if ( WITH_STREAMLINE )
-		file(GLOB SL_BINS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/streamline/bin/*")
+		file(GLOB SL_BINS "${STREAMLINE_BIN_DIR}/*")
 		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
 	if ( WITH_OIDN )
-		file(GLOB OIDN_BINS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/oidn/bin/*")
+		file(GLOB OIDN_BINS "${OIDN_BIN_DIR}/*")
 		file(COPY ${OIDN_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 	endif()

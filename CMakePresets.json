@@ -30,6 +30,7 @@
                 "GK_ENABLE_PHYSIC": "OFF",
                 "GK_ENABLE_AUDIO": "OFF",
                 "GK_ENABLE_OIDN": "OFF",
+                "GK_ENABLE_QUICKJS": "OFF",
                 "GK_EMBED_DEBUG_INFO": "OFF",
                 "GK_ENABLE_UNITY_BUILD": "ON"
             }
@@ -44,6 +45,7 @@
                 "GK_ENABLE_PHYSIC": "ON",
                 "GK_ENABLE_AUDIO": "ON",
                 "GK_ENABLE_OIDN": "OFF",
+                "GK_ENABLE_QUICKJS": "OFF",
                 "GK_EMBED_DEBUG_INFO": "OFF",
                 "GK_ENABLE_UNITY_BUILD": "ON"
             }
@@ -58,6 +60,7 @@
                 "GK_ENABLE_PHYSIC": "ON",
                 "GK_ENABLE_AUDIO": "ON",
                 "GK_ENABLE_OIDN": "ON",
+                "GK_ENABLE_QUICKJS": "ON",
                 "GK_EMBED_DEBUG_INFO": "ON",
                 "GK_ENABLE_UNITY_BUILD": "ON"
             }

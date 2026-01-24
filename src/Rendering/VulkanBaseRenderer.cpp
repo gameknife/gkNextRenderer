@@ -43,11 +43,11 @@
 #include <utility>
 
 #if WITH_STREAMLINE
-#include "ThirdParty/streamline/include/sl.h"
-#include "ThirdParty/streamline/include/sl_consts.h"
-#include "ThirdParty/streamline/include/sl_dlss.h"
-#include "ThirdParty/streamline/include/sl_dlss_d.h"
-#include "ThirdParty/streamline/include/sl_helpers_vk.h"
+#include <sl.h>
+#include <sl_consts.h>
+#include <sl_dlss.h>
+#include <sl_dlss_d.h>
+#include <sl_helpers_vk.h>
 #endif
 
 #if WITH_STREAMLINE
