@@ -20,8 +20,6 @@ struct UserSettings final
 	bool TAA {};
 	bool FastGather = false;
 	bool FastInterpole = false;
-	bool DebugDraw_Lighting = false;
-	bool DebugDraw_BoundingBox = false;
 	bool DisableSpatialReuse = false;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;
@@ -33,7 +31,6 @@ struct UserSettings final
 	int CameraIdx;
 
 	// Profiler
-	bool ShowVisualDebug;
 	float HeatmapScale;
 
 	// UI
@@ -53,8 +50,6 @@ struct UserSettings final
 
 	float PaperWhiteNit;
 
-	bool ShowEdge;
-	bool ShowDebugSkeleton = false;
 	bool TickPhysics = true;
 	bool TickAnimation = true;
     float SceneEpsilonScale = 1.0f;

@@ -485,8 +485,7 @@ namespace Assets
                 if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                 {
                     skinnedMesh->Update(deltaSeconds);
-                    if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
-                    {
+                    		if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)                    {
                         skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
                     }
                     
@@ -571,8 +570,7 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetUserSettings().DebugDraw_BoundingBox)
-        {
+        	if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)        {
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();

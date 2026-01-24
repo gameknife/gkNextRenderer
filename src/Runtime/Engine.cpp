@@ -130,9 +130,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
 
-    userSettings.ShowVisualDebug = false;
     userSettings.HeatmapScale = 1.0f;
-    userSettings.DebugDraw_BoundingBox = false;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Temporal;
@@ -147,8 +145,6 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.DenoiseSigmaLum = 3.0f;
     userSettings.DenoiseSigmaNormal = 0.005f;
     userSettings.DenoiseSize = 5;
-
-    userSettings.ShowEdge = false;
 
     userSettings.FastGather = false;
 
@@ -660,8 +656,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     
     ubo.FastGather = userSettings_.FastGather;
     ubo.FastInterpole = userSettings_.FastInterpole;
-    ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
-    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
+    	ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
@@ -740,8 +735,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         scene_->MarkEnvDirty();
     }
 
-    ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
-    ubo.HeatmapScale = userSettings_.HeatmapScale;
+    	ubo.ShowHeatmap = showFlags_.ShowVisualDebug;    ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
@@ -759,15 +753,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSize = 0;
 #endif
     
-    ubo.ShowEdge = userSettings_.ShowEdge;
-
+    	ubo.ShowEdge = showFlags_.ShowEdge;
     ubo.ProgressiveRender = progressiveRendering_;
     ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
-    renderer_->visualDebug_ = userSettings_.ShowVisualDebug;
-    
+    	renderer_->visualDebug_ = showFlags_.ShowVisualDebug;    
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 

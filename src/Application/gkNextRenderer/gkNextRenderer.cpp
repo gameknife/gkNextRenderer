@@ -514,7 +514,7 @@ void NextRendererGameInstance::DrawSettings()
 		if( ImGui::CollapsingHeader(LOCTEXT("Animation"), ImGuiTreeNodeFlags_None) )
 		{
 			ImGui::Checkbox(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
-			ImGui::Checkbox(LOCTEXT("Show Debug Skeleton"), &userSetting.ShowDebugSkeleton);
+			ImGui::Checkbox(LOCTEXT("Show Debug Skeleton"), &GetEngine().GetShowFlags().ShowDebugSkeleton);
             
             ImGui::Separator();
             for (auto& node : GetEngine().GetScene().Nodes())
@@ -563,11 +563,11 @@ void NextRendererGameInstance::DrawSettings()
 		{
 			ImGui::Text("%s", LOCTEXT("Profiler"));
 			ImGui::Separator();
-			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetRenderer().showWireframe_);
+			ImGui::Checkbox(LOCTEXT("ShowWireframe"), &GetEngine().GetShowFlags().ShowWireframe);
 			ImGui::Checkbox(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
-			ImGui::Checkbox(LOCTEXT("DebugDraw"), &userSetting.ShowVisualDebug);
-			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &userSetting.DebugDraw_Lighting);
-			ImGui::Checkbox(LOCTEXT("DebugDraw_BoundingBox"), &userSetting.DebugDraw_BoundingBox);
+			ImGui::Checkbox(LOCTEXT("DebugDraw"), &GetEngine().GetShowFlags().ShowVisualDebug);
+			ImGui::Checkbox(LOCTEXT("DebugDraw_Lighting"), &GetEngine().GetShowFlags().DebugDraw_Lighting);
+			ImGui::Checkbox(LOCTEXT("DebugDraw_BoundingBox"), &GetEngine().GetShowFlags().DebugDraw_BoundingBox);
 			ImGui::Checkbox(LOCTEXT("DisableSpatialReuse"), &userSetting.DisableSpatialReuse);
 			
 			ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
@@ -665,6 +665,24 @@ void NextRendererGameInstance::DrawTitleBar()
         });
     }
     BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
+	ImGui::SameLine();
+	if (ImGui::Button(ICON_FA_EYE, ImVec2(TitlebarSize, TitlebarSize)))
+	{
+		ImGui::OpenPopup("RendererShowFlags");
+	}
+	BUTTON_TOOLTIP(LOCTEXT("Show Flags"))
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
+    if (ImGui::BeginPopup("RendererShowFlags"))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
+        auto& showFlags = GetEngine().GetShowFlags();
+        Utilities::UI::DrawShowFlagsCommon(showFlags);
+        
+        ImGui::PopStyleVar();
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar();
 	ImGui::SameLine();
 	if (ImGui::Button(ICON_FA_LIST_CHECK, ImVec2(TitlebarSize, TitlebarSize)))
 	{

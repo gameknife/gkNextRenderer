@@ -67,6 +67,10 @@ ImVec4 utils::RainbowCol()
 
 void utils::DrawGrid()
 {
+    if (!NextEngine::GetInstance()->GetShowFlags().ShowGrid)
+    {
+        return;
+    }
     for (float i = ImGui::GetWindowPos().y; i < ImGui::GetWindowSize().x * 4.0f;)
     {
         ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f, i),ImVec2(ImGui::GetMainViewport()->Size.x, i),IM_COL32(88, 88, 88, 50));

@@ -1,11 +1,32 @@
 #pragma once
 #include <imgui.h>
 #include <string>
+#include <fmt/format.h>
+#include <ThirdParty/fontawesome/IconsFontAwesome6.h>
+#include "Runtime/ShowFlags.hpp"
 
 namespace Utilities
 {
     namespace UI
     {
+        inline void DrawShowFlagItem(const char* name, bool& flag) {
+            if (ImGui::MenuItem(fmt::format("{} {}", flag ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE, name).c_str(), NULL, false)) {
+                flag = !flag;
+            }
+        }
+
+        inline void DrawShowFlagsCommon(ShowFlags& showFlags) {
+            DrawShowFlagItem("Grid", showFlags.ShowGrid);
+            ImGui::Separator();
+            DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);
+            DrawShowFlagItem("Bounding Box", showFlags.DebugDraw_BoundingBox);
+            DrawShowFlagItem("Visual Debug", showFlags.ShowVisualDebug);
+            DrawShowFlagItem("Edge", showFlags.ShowEdge);
+            DrawShowFlagItem("Skeleton", showFlags.ShowDebugSkeleton);
+            ImGui::Separator();
+            DrawShowFlagItem("Wireframe", showFlags.ShowWireframe);
+        }
+
         inline void TextCentered(std::string text)
         {
             auto windowWidth = ImGui::GetContentRegionAvail().x;

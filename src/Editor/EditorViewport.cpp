@@ -6,6 +6,7 @@
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
+#include <fmt/format.h>
 
 const float toolIconWidth = 32.0f;
 
@@ -55,21 +56,24 @@ void Editor::GUI::ShowViewport(ImGuiID id)
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
     
     ImGui::Dummy(ImVec2(node->Size.x - 170 - (toolIconWidth + 16) * 3, 0)); 
-    ImGui::SameLine(); if (ImGui::Button(ICON_FA_LINE, ImVec2(toolIconWidth, toolIconWidth)) )
+    ImGui::SameLine(); 
+    if (ImGui::Button(ICON_FA_EYE, ImVec2(toolIconWidth, toolIconWidth)))
     {
-        engine->GetUserSettings().DebugDraw_Lighting = !engine->GetUserSettings().DebugDraw_Lighting;
+        ImGui::OpenPopup("ViewportShowFlags");
     }
-    BUTTON_TOOLTIP(LOCTEXT("Toggle Lighting"))
-    ImGui::SameLine(); if ( ImGui::Button(ICON_FA_SOAP, ImVec2(toolIconWidth, toolIconWidth)))
+    BUTTON_TOOLTIP(LOCTEXT("Show Flags"))
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
+    if (ImGui::BeginPopup("ViewportShowFlags"))
     {
-        engine->GetUserSettings().ShowVisualDebug = !engine->GetUserSettings().ShowVisualDebug;
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
+        auto& showFlags = engine->GetShowFlags();
+        Utilities::UI::DrawShowFlagsCommon(showFlags);
+        
+        ImGui::PopStyleVar();
+        ImGui::EndPopup();
     }
-    BUTTON_TOOLTIP(LOCTEXT("Toggle VisualDebug"))
-    ImGui::SameLine(); if ( ImGui::Button(ICON_FA_DRAW_POLYGON, ImVec2(toolIconWidth, toolIconWidth)))
-    {
-        engine->GetRenderer().showWireframe_ = !engine->GetRenderer().showWireframe_;
-    }
-    BUTTON_TOOLTIP(LOCTEXT("Toggle Wireframe"))
+    ImGui::PopStyleVar();
        
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
