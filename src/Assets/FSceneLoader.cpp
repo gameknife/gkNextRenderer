@@ -553,12 +553,26 @@ namespace Assets
                                           : glm::vec3(mat.emissiveFactor[0], mat.emissiveFactor[1],
                                                       mat.emissiveFactor[2]);
             glm::vec3 diffuseColor = mat.pbrMetallicRoughness.baseColorFactor.empty()
-                                         ? glm::vec3(1)
-                                         : glm::vec3(mat.pbrMetallicRoughness.baseColorFactor[0],
-                                                     mat.pbrMetallicRoughness.baseColorFactor[1],
-                                                     mat.pbrMetallicRoughness.baseColorFactor[2]);
+                                          ? glm::vec3(1)
+                                          : glm::vec3(mat.pbrMetallicRoughness.baseColorFactor[0],
+                                                      mat.pbrMetallicRoughness.baseColorFactor[1],
+                                                      mat.pbrMetallicRoughness.baseColorFactor[2]);
 
             m.Diffuse = glm::vec4(sqrt(diffuseColor), 1.0);
+
+            float emissiveStrength = 1.0f;
+            auto emissiveExtension = mat.extensions.find("KHR_materials_emissive_strength");
+            if (emissiveExtension != mat.extensions.end())
+            {
+                emissiveStrength = static_cast<float>(emissiveExtension->second.Get("emissiveStrength").GetNumberAsDouble());
+            }
+
+            bool isPureEmissiveMaterial = (glm::length(emissiveColor) > 0.001f) && (mat.emissiveTexture.index == -1);
+            if (isPureEmissiveMaterial)
+            {
+                m.MaterialModel = Material::Enum::DiffuseLight;
+                m.Diffuse = glm::vec4(emissiveColor * emissiveStrength, 1.0f);
+            }
 
             if (m.MRATextureId != -1)
             {
@@ -598,22 +612,9 @@ namespace Assets
                 m.RefractionIndex2 = mat.extras.Get("ior2").GetNumberAsDouble();
             }
 
-            auto emissive = mat.extensions.find("KHR_materials_emissive_strength");
-            // TODO: may impl per pixel mat type
-            if (emissive != mat.extensions.end())
+            if (mat.emissiveTexture.index != -1)
             {
-                float power = static_cast<float>(emissive->second.Get("emissiveStrength").GetNumberAsDouble());
-                if (mat.emissiveTexture.index != -1)
-                {
-                    m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
-                }
-            }
-            else if (glm::length(emissiveColor) > 0.0f)
-            {
-                if (mat.emissiveTexture.index != -1)
-                {
-                    m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
-                }
+                m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
             }
 
             materials.push_back( { m, mat.name } );
