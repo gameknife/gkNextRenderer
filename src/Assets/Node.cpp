@@ -180,9 +180,6 @@ namespace Assets
     {
         RecalcLocalTransform();
         RecalcTransform();
-        
-        // Always set prevTransform to current to avoid huge velocity on first frame
-        // If "replace" logic was needed, it should be handled by caller setting prevTransform manually or specific init method
         prevTransform_ = transform_;
     }
 }

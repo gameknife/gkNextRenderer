@@ -159,13 +159,13 @@ Before marking any task complete, verify:
 ### Daily Development
 ```bash
 # Build the project
-.\build.bat windows-dev
+.\build.bat --preset default-windows
 
 # Run the main renderer
 .\run.bat
 
 # Run tests
-.\out\build\windows-dev\bin\gkNextUnitTests.exe
+.\out\build\default-windows\bin\gkNextUnitTests.exe
 ```
 
 ### Before Committing
@@ -173,7 +173,7 @@ Before marking any task complete, verify:
 # Format code
 # (Assuming clang-format is used as per conventions)
 # Run full build and tests
-.\build.bat windows-dev && .\out\build\windows-dev\bin\gkNextUnitTests.exe
+.\build.bat --preset default-windows && .\out\build\default-windows\bin\gkNextUnitTests.exe
 ```
 
 ## Testing Requirements

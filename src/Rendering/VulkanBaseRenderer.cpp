@@ -43,11 +43,11 @@
 #include <utility>
 
 #if WITH_STREAMLINE
-#include "ThirdParty/streamline/include/sl.h"
-#include "ThirdParty/streamline/include/sl_consts.h"
-#include "ThirdParty/streamline/include/sl_dlss.h"
-#include "ThirdParty/streamline/include/sl_dlss_d.h"
-#include "ThirdParty/streamline/include/sl_helpers_vk.h"
+#include <sl.h>
+#include <sl_consts.h>
+#include <sl_dlss.h>
+#include <sl_dlss_d.h>
+#include <sl_helpers_vk.h>
 #endif
 
 #if WITH_STREAMLINE
@@ -587,8 +587,8 @@ namespace Vulkan
         CreateRenderImages();
 
         // 最简单的fallback pipeline, 也用作 wireframe pipeline
-        // wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
-        // wireframeFramebuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(), wireframePipeline_->RenderPass()));
+        wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        wireframeFramebuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(), wireframePipeline_->RenderPass()));
 
         // 公用Pipeline
         simpleComposePipeline_.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
@@ -645,8 +645,8 @@ namespace Vulkan
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
         commandBuffers_.reset();
-        //wireframePipeline_.reset();
-        //wireframeFramebuffer_.reset();
+        wireframePipeline_.reset();
+        wireframeFramebuffer_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
         gpuCullPipeline_.reset();
@@ -788,32 +788,25 @@ namespace Vulkan
             if (skinnedVertexBuffer_)
             {
                 uint32_t proxyIdx = 0;
-                for (auto& node : scene.Nodes())
+                for ( size_t i = 0; i < skinModelUpdateRequests_.size(); i++ )
                 {
-                    auto render = node->GetComponent<Runtime::RenderComponent>();
-                    if (render && render->IsDrawable())
+                    uint32_t modelId = skinModelUpdateRequests_[i];
+                    if (modelId != -1)
                     {
-                        auto modelIdx = render->GetModelId();
-                        auto model = scene.GetModel(modelIdx);
+                       auto model = scene.GetModel(modelId);
+                        uint32_t vertexOffset = scene.Offsets()[modelId * 10].vertexOffset;
+                        uint32_t vertexCount = model->NumberOfVertices();
 
-                        if (node->GetComponent<Runtime::SkinnedMeshComponent>() && model)
-                        {
-                            uint32_t vertexOffset = scene.Offsets()[modelIdx * 10].vertexOffset;
-                            uint32_t vertexCount = model->NumberOfVertices();
+                        gpuScene.custom_data_0 = proxyIdx;
+                        gpuScene.custom_data_1 = vertexOffset;
+                        gpuScene.custom_data_2 = vertexCount;
 
-                            gpuScene.custom_data_0 = proxyIdx;
-                            gpuScene.custom_data_1 = vertexOffset;
-                            gpuScene.custom_data_2 = vertexCount;
+                        VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
+                        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                                           0, sizeof(Assets::GPUScene), &gpuScene);
 
-                            VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
-                            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                               0, sizeof(Assets::GPUScene), &gpuScene);
-
-                            uint32_t groupCount = (vertexCount + 63) / 64;
-                            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-                        }
-
-                        proxyIdx += (uint32_t)scene.GetModel(modelIdx)->SectionCount();
+                        uint32_t groupCount = (vertexCount + 63) / 64;
+                        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
                     }
                 }
 
@@ -1013,6 +1006,7 @@ namespace Vulkan
                 {
                     SCOPED_GPU_TIMER("[pre-render]");
                     PreRender(commandBuffer, currentImageIndex_);
+                    skinModelUpdateRequests_.clear();
                 }
 
                 {
@@ -1433,46 +1427,45 @@ namespace Vulkan
                 logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
             }
 
-            if (showWireframe_)
-            {
-                // SCOPED_GPU_TIMER("wireframe");
-                //
-                // VkRenderPassBeginInfo renderPassInfo = {};
-                // renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                // renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
-                // renderPassInfo.framebuffer = wireframeFramebuffer_->Handle();
-                // renderPassInfo.renderArea.offset = {0, 0};
-                // renderPassInfo.renderArea.extent = swapChain_->RenderExtent();
-                //
-                // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-                // {
-                //     auto& scene = GetScene();
-                //
-                //     VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
-                //     VkBuffer vertexBuffers[] = {scene.SimpleVertexBuffer().Handle()};
-                //     const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
-                //     VkDeviceSize offsets[] = {0};
-                //
-                //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
-                //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                //                             wireframePipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                //     vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                //     
-                //     // drawcall one by one, old school pipeline only
-                //     for (const auto& node : scene.GetNodeProxys())
-                //     {
-                //         auto& offset = scene.Offsets()[node.modelId];
-                //         const auto indexCount = static_cast<uint32_t>(offset.indexCount);
-                //         if (indexCount == 0) continue;
-                //
-                //         glm::mat4 worldMatrix = node.worldTS;
-                //         vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
-                //                            VK_SHADER_STAGE_VERTEX_BIT,0, sizeof(glm::mat4), &worldMatrix);
-                //         vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, static_cast<int>(offset.vertexOffset), 0);
-                //     }
-                // }
-                // vkCmdEndRenderPass(commandBuffer);
+            	if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)            {
+                SCOPED_GPU_TIMER("wireframe");
+                
+                VkRenderPassBeginInfo renderPassInfo = {};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
+                renderPassInfo.framebuffer = wireframeFramebuffer_->Handle();
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = swapChain_->RenderExtent();
+                
+                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+                {
+                    auto& scene = GetScene();
+                
+                    VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
+                    VkBuffer vertexBuffers[] = {scene.SimpleVertexBuffer().Handle()};
+                    const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
+                    VkDeviceSize offsets[] = {0};
+                
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            wireframePipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                    
+                    // drawcall one by one, old school pipeline only
+                    for (const auto& node : scene.GetNodeProxys())
+                    {
+                        auto& offset = scene.Offsets()[node.modelId];
+                        const auto indexCount = static_cast<uint32_t>(offset.indexCount);
+                        if (indexCount == 0) continue;
+                
+                        glm::mat4 worldMatrix = node.worldTS;
+                        vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
+                                           VK_SHADER_STAGE_VERTEX_BIT,0, sizeof(glm::mat4), &worldMatrix);
+                        vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, static_cast<int>(offset.vertexOffset), 0);
+                    }
+                }
+                vkCmdEndRenderPass(commandBuffer);
             }
             
             {

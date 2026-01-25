@@ -34,6 +34,7 @@ public:
 	bool HardwareQuery{};
 	bool Validation{};
 	bool FastExit{true};
+	bool AgentValidation{};
 	std::string locale{};
 
 	// Renderer options.

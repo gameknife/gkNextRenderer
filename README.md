@@ -74,8 +74,8 @@ Linux（示例：Ubuntu）：
 # 无需前置安装
 sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool
 ./vcpkg.sh
-./build.sh --preset linux-release
-./run.sh --preset linux-release
+./build.sh --preset default-linux
+./run.sh --preset default-linux
 ```
 
 macOS：
@@ -83,8 +83,8 @@ macOS：
 # 无需前置安装
 brew install molten-vk glslang ninja
 ./vcpkg.sh
-./build.sh --preset macos-arm64
-./run.sh --preset macos-arm64
+./build.sh --preset default-macos-arm64
+./run.sh --preset default-macos-arm64
 ```
 
 Android（在 Windows）：

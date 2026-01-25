@@ -3,6 +3,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "SceneList.hpp"
 #include "UserSettings.hpp"
+#include "ShowFlags.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
 #include "Vulkan/FrameBuffer.hpp"
@@ -125,6 +126,7 @@ public:
 	Assets::Scene& GetScene() { return *scene_; }
 	Assets::Scene* GetScenePtr() { return scene_.get(); }
 	UserSettings& GetUserSettings() { return userSettings_; }
+	ShowFlags& GetShowFlags() { return showFlags_; }
 
 	float GetTime() const { return static_cast<float>(time_); }
 	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
@@ -213,11 +215,9 @@ private:
 	std::unique_ptr<Vulkan::Window> window_;
 	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
-	// need remove
-	uint32_t rendererType = 0;
-
 	// settings, may move into scene
 	mutable UserSettings userSettings_{};
+	mutable ShowFlags showFlags_{};
 	mutable Assets::UniformBufferObject prevUBO_ {};
 
 	// scene, maybe multiple at a time

@@ -482,14 +482,25 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
-                {
-                    skinnedMesh->Update(deltaSeconds);
-                    if (NextEngine::GetInstance()->GetUserSettings().ShowDebugSkeleton)
+				if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+				{
+					skinnedMesh->Update(deltaSeconds);
+					if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
+					{
+						skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+					}
+                    
+                    if (skinnedMesh->IsPlaying())
                     {
-                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+                        MarkDirty();
+                        if ( auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+                        {
+                            if ( renderComponent->GetModelId() != -1 )
+                            {
+                                NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(renderComponent->GetModelId());
+                            }
+                        }
                     }
-                    MarkDirty();
                 }
             }
 
@@ -560,8 +571,8 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetUserSettings().DebugDraw_BoundingBox)
-        {
+		if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
+		{
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();

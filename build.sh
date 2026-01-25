@@ -1,24 +1,31 @@
 #!/bin/bash
 set -euo pipefail
-
+# ### HELP_START ###
 # ==============================================================================
-# gkNextRenderer Build Script (Linux/macOS)
-# Wraps CMake Presets for a standard build workflow.
+# gkNextRenderer Build Script v2.1 (Linux/macOS)
+# Wraps CMake Presets for a streamlined build workflow.
+#
+# Usage:
+#   ./build.sh [options] [-- <cmake_args>...]
+#
+# Options:
+#   --preset <name>  CMake configure preset (e.g., default-linux) [REQUIRED]
+#   --clean          Clean build directory before building.
+#   --android        Switch to Android Gradle build.
+#   --help, -h       Show this help message.
+#
+# Examples:
+#   ./build.sh --preset full-linux
+#   ./build.sh --preset default-linux -- -DGK_ENABLE_AVIF=ON
+#   ./build.sh --preset default-linux --clean
 # ==============================================================================
+# ### HELP_END ###
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR"
 
-export VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
-export VCPKG_BINARY_SOURCES="clear;files,$PROJECT_ROOT/.vcpkg_bincache,readwrite"
-
 # Timing
 TOTAL_START=$(date +%s)
-CONFIG_TIME=0
-BUILD_TIME=0
-
-SYSTEM_CPU="Unknown"
-SYSTEM_MEM="Unknown"
 
 # Colors
 GREEN='\033[0;32m'
@@ -29,188 +36,79 @@ NC='\033[0m' # No Color
 log()  { printf "${GREEN}[build] %s${NC}\n" "$*"; }
 warn() { printf "${YELLOW}[build] Warning: %s${NC}\n" "$*" >&2; }
 err()  { printf "${RED}[build] Error: %s${NC}\n" "$*" >&2; exit 1; }
+print_err() { printf "${RED}[build] Error: %s${NC}\n" "$*" >&2; }
 
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
 
-detect_platform() {
+detect_default_preset() {
     case "$(uname -s)" in
         Darwin*) 
-            if [ "$(uname -m)" = "arm64" ]; then echo "macos-arm64"; else echo "macos-x64"; fi ;;
-        Linux*) echo "linux-release" ;; 
-        MINGW*|MSYS*) echo "mingw" ;;
+            if [ "$(uname -m)" = "arm64" ]; then echo "default-macos-arm64"; else echo "default-macos-x64"; fi ;;
+        Linux*) echo "default-linux" ;; 
+        MINGW*|MSYS*) echo "default-windows" ;;
         *) echo "unknown" ;; 
     esac
 }
 
 ensure_vcpkg() {
-    local vcpkg_cmake="$PROJECT_ROOT/.vcpkg/scripts/buildsystems/vcpkg.cmake"
-    if [ ! -f "$vcpkg_cmake" ]; then
+    if [ ! -f "$PROJECT_ROOT/.vcpkg/scripts/buildsystems/vcpkg.cmake" ]; then
         log "vcpkg toolchain not found. Bootstrapping..."
-        "$PROJECT_ROOT/vcpkg.sh" "$(detect_platform | cut -d- -f1)"
-    fi
-}
-
-ensure_tsc() {
-    local tsc_bin="$PROJECT_ROOT/tools/tsc/tsc"
-    if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* ]]; then
-        tsc_bin="$tsc_bin.exe"
-    fi
-
-    if [ ! -f "$tsc_bin" ]; then
-        log "Fetching TypeScript Compiler (TSC)..."
-        "$PROJECT_ROOT/tools/fetch_tsc.sh"
-    fi
-}
-
-ensure_linux_deps() {
-    # Check for slangc on Linux
-    if [[ "$(uname -s)" == "Linux"* ]]; then
-        if ! command -v slangc &> /dev/null && [ ! -f "$PROJECT_ROOT/external/slang/bin/slangc" ]; then
-            # Basic check, existing script had complex logic, simplifying to trust the fetch script
-             if [ -f "$PROJECT_ROOT/tools/fetch_slang_linux.sh" ]; then
-                 log "Ensuring Slang compiler..."
-                 "$PROJECT_ROOT/tools/fetch_slang_linux.sh"
-             fi
-        fi
-    fi
-}
-
-ensure_ios_deps() {
-    local ios_lib="$PROJECT_ROOT/external/MoltenVK/ios/lib/libMoltenVK.a"
-    if [ ! -f "$ios_lib" ]; then
-        log "Fetching MoltenVK for iOS..."
-        "$PROJECT_ROOT/tools/fetch_moltenvk.sh" ios
-    fi
-}
-
-ensure_oidn() {
-    local oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.so"
-    if [[ "$(uname -s)" == "Darwin"* ]]; then
-        oidn_lib="$PROJECT_ROOT/src/ThirdParty/oidn/lib/libOpenImageDenoise.dylib"
-    fi
-    
-    if [ ! -f "$oidn_lib" ]; then
-        log "OIDN binaries not found. Fetching..."
-        if [ -f "$PROJECT_ROOT/tools/fetch_oidn.sh" ]; then
-             "$PROJECT_ROOT/tools/fetch_oidn.sh"
+        local platform
+        platform=$(detect_default_preset)
+        if [[ "$platform" == *"macos"* ]]; then
+            "$PROJECT_ROOT/vcpkg.sh" "macos"
         else
-             warn "tools/fetch_oidn.sh not found. OIDN support might fail."
+            "$PROJECT_ROOT/vcpkg.sh" "$(echo "$platform" | cut -d- -f2)"
         fi
     fi
 }
 
-ensure_streamline() {
-    local sl_lib="$PROJECT_ROOT/src/ThirdParty/streamline/lib/x64/sl.interposer.lib"
-    
-    if [ ! -f "$sl_lib" ]; then
-        log "Streamline SDK not found. Fetching..."
-        if [ -f "$PROJECT_ROOT/tools/fetch_streamline.bat" ]; then
-             # Call the bat file as it's Windows-only anyway
-             cmd.exe /c "$(cygpath -w "$PROJECT_ROOT/tools/fetch_streamline.bat")"
-        else
-             warn "tools/fetch_streamline.bat not found. DLSS support might fail."
-        fi
-    fi
+show_help() {
+    sed -n '/### HELP_START ###/,/### HELP_END ###/p' "$0" | \
+    grep -v '### HELP_START ###' | grep -v '### HELP_END ###' | \
+    cut -c3- # Remove leading '# '
+    exit 0
 }
 
-show_system_info() {
-    local cpu_model=""
-    local mem_size=""
-
-    if [[ "$(uname -s)" == "Darwin"* ]]; then
-        cpu_model=$(sysctl -n machdep.cpu.brand_string)
-        mem_size=$(sysctl -n hw.memsize)
-        mem_size=$((mem_size / 1024 / 1024 / 1024))
-        mem_size="${mem_size}GB"
-    elif [[ "$(uname -s)" == "Linux"* ]]; then
-        if [ -f /proc/cpuinfo ]; then
-            cpu_model=$(grep -m1 'model name' /proc/cpuinfo | sed 's/model name\s*:\s*//')
-        fi
-        if [ -f /proc/meminfo ]; then
-            local mem_kb=$(grep -m1 'MemTotal' /proc/meminfo | awk '{print $2}')
-            local mem_gb=$((mem_kb / 1024 / 1024))
-            mem_size="${mem_gb}GB"
-        fi
-    fi
-    
-    # Fallback for MinGW/MSYS
-    if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* ]]; then
-         # Try to use wmic if available, otherwise skip
-         if command -v wmic &> /dev/null; then
-             cpu_model=$(wmic cpu get name | sed -n '2p' | tr -d '\r')
-             local mem_bytes=$(wmic ComputerSystem get TotalPhysicalMemory | sed -n '2p' | tr -d '\r')
-             local mem_gb=$((mem_bytes / 1024 / 1024 / 1024))
-             mem_size="${mem_gb}GB"
-         fi
-    fi
-
-    if [ -n "$cpu_model" ]; then
-        SYSTEM_CPU="$cpu_model"
-        SYSTEM_MEM="$mem_size"
-    fi
+list_presets_and_exit() {
+    print_err "$1"
+    log "Available configure presets:"
+    cmake --list-presets=configure | sed 's/^/  /'
+    exit 1
 }
 
 # ==============================================================================
 # Main Logic
 # ==============================================================================
 
-show_system_info
-
-PRESET=""
-CONFIG=""
-TARGET=""
+CONFIGURE_PRESET=""
 CLEAN=0
 TARGET_ANDROID=0
-AVIF=0
-DLSS=0
-OIDN=0
+declare -a CMAKE_ARGS=()
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --clean) CLEAN=1; shift ;;
         --android) TARGET_ANDROID=1; shift ;;
-        --avif) AVIF=1; shift ;;
-        --dlss) DLSS=1; shift ;;
-        --oidn) OIDN=1; shift ;;
-        --preset) PRESET="$2"; shift 2 ;;
-        --preset=*) PRESET="${1#*=}"; shift ;;
-        --config) CONFIG="$2"; shift 2 ;;
-        --config=*) CONFIG="${1#*=}"; shift ;;
-        --target) TARGET="$2"; shift 2 ;;
-        --target=*) TARGET="${1#*=}"; shift ;;
-        --help|-h)
-            echo "Usage: ./build.sh [options]"
-            echo "Options:"
-            echo "  --preset <name>  CMake preset to use"
-            echo "  --config <type>  Build configuration (Debug, Release, etc.)"
-            echo "  --target <name>  Specific target to build"
-            echo "  --clean          Clean build directory before building"
-            echo "  --android        Build for Android"
-            echo "  --avif           Enable AVIF support"
-            echo "  --dlss           Enable DLSS support"
-            echo "  --oidn           Enable OIDN support"
-            echo "  -h, --help       Show this help"
-            exit 0
-            ;;
-        *)
-            # Allow positional argument for preset for backward compatibility
-            if [[ "$1" != -* ]] && [ -z "$PRESET" ]; then
-                PRESET="$1"
-                shift
-            else
-                warn "Unknown argument: $1"
-                shift
+        --preset) 
+            if [[ -z "$2" || "$2" == --* ]]; then
+                list_presets_and_exit "--preset option requires a value."
             fi
+            CONFIGURE_PRESET="$2"
+            shift 2
             ;;
+        --preset=*) CONFIGURE_PRESET="${1#*=}"; shift ;;
+        --help|-h) show_help ;;
+        --) shift; CMAKE_ARGS+=("$@"); break ;;
+        *) CMAKE_ARGS+=("$1"); shift ;;
     esac
 done
 
 # Android Build
 if [ "$TARGET_ANDROID" -eq 1 ]; then
-    ensure_tsc
     log "Building for Android..."
     cd "$PROJECT_ROOT/android"
     ./gradlew build
@@ -218,92 +116,76 @@ if [ "$TARGET_ANDROID" -eq 1 ]; then
 fi
 
 # Native Build
-if [ -z "$PRESET" ]; then
-    PRESET=$(detect_platform)
-    log "Auto-detected preset: $PRESET"
+if [ -z "$CONFIGURE_PRESET" ]; then
+    list_presets_and_exit "No preset specified. You must explicitly specify a preset."
 fi
 
 ensure_vcpkg
-ensure_tsc
-ensure_linux_deps
-
-# Special handling for iOS/MoltenVK if user manually selected an ios preset (future proofing)
-if [[ "$PRESET" == *"ios"* ]]; then
-    ensure_ios_deps
-fi
 
 if [ "$CLEAN" -eq 1 ]; then
-    log "Cleaning build for preset: $PRESET..."
-    # Removing the build directory defined in CMakePresets.json
-    rm -rf "$PROJECT_ROOT/out/build/$PRESET"
+    log "Cleaning build for preset: $CONFIGURE_PRESET..."
+    rm -rf "$PROJECT_ROOT/out/build/$CONFIGURE_PRESET"
 fi
 
-log "Configuring preset: $PRESET"
-CMAKE_CONFIGURE_ARGS=("--preset" "$PRESET")
-if [ "$AVIF" -eq 1 ]; then
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=ON" "-DVCPKG_MANIFEST_FEATURES=avif")
+if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+    log "Configuring preset: $CONFIGURE_PRESET"
 else
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_AVIF=OFF" "-DVCPKG_MANIFEST_FEATURES=")
+    log "Configuring preset: $CONFIGURE_PRESET with extra args: ${CMAKE_ARGS[*]}"
 fi
-
-if [ "$DLSS" -eq 1 ]; then
-    # Check if we are on Windows (MINGW/MSYS)
-    IS_WINDOWS=0
-    case "$(uname -s)" in
-        MINGW*|MSYS*) IS_WINDOWS=1 ;;
-    esac
-
-    if [ "$IS_WINDOWS" -eq 1 ]; then
-        ensure_streamline
-        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=ON")
-    else
-        warn "DLSS/Streamline is currently only supported on Windows. Disabling."
-        CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
-    fi
+config_start=$(date +%s)
+if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+    cmake --preset "$CONFIGURE_PRESET"
 else
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_DLSS=OFF")
+    cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
+fi
+config_time=$(( $(date +%s) - config_start ))
+
+# Derive build preset name from configure preset name
+# In current CMakePresets.json, build presets map 1:1 to configure presets
+BUILD_PRESET="$CONFIGURE_PRESET"
+
+
+log "Building with preset: $BUILD_PRESET"
+build_start=$(date +%s)
+# Pass only build-specific args to the build command
+declare -a build_args=()
+is_target_next=0
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+    for arg in "${CMAKE_ARGS[@]}"; do
+        if [ $is_target_next -eq 1 ]; then
+            build_args+=("$arg")
+            is_target_next=0
+            continue
+        fi
+        if [[ "$arg" == "--target" ]]; then
+            build_args+=("$arg")
+            is_target_next=1
+        elif [[ "$arg" == --* ]]; then
+            # Heuristic: pass common build tool arguments
+            if [[ "$arg" == "--config" || "$arg" == "-j" || "$arg" == "--verbose" ]]; then
+                 build_args+=("$arg")
+                 # if the arg is like --config=Release
+                 if [[ "$arg" != *=* ]]; then
+                    is_target_next=1
+                 fi
+            fi
+        fi
+    done
 fi
 
-if [ "$OIDN" -eq 1 ]; then
-    ensure_oidn
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=ON")
+if [ ${#build_args[@]} -eq 0 ]; then
+    cmake --build --preset "$BUILD_PRESET"
 else
-    CMAKE_CONFIGURE_ARGS+=("-DGK_ENABLE_OIDN=OFF")
+    cmake --build --preset "$BUILD_PRESET" "${build_args[@]}"
 fi
+build_time=$(( $(date +%s) - build_start ))
 
-start_time=$(date +%s)
-cmake "${CMAKE_CONFIGURE_ARGS[@]}"
-end_time=$(date +%s)
-CONFIG_TIME=$((end_time - start_time))
-
-log "Building preset: $PRESET"
-CMAKE_BUILD_ARGS=("--build" "--preset" "$PRESET")
-
-if [ -n "$CONFIG" ]; then
-    CMAKE_BUILD_ARGS+=("--config" "$CONFIG")
-fi
-
-if [ -n "$TARGET" ]; then
-    CMAKE_BUILD_ARGS+=("--target" "$TARGET")
-fi
-
-start_time=$(date +%s)
-cmake "${CMAKE_BUILD_ARGS[@]}"
-end_time=$(date +%s)
-BUILD_TIME=$((end_time - start_time))
-
-TOTAL_END=$(date +%s)
-TOTAL_TIME=$((TOTAL_END - TOTAL_START))
+TOTAL_TIME=$(( $(date +%s) - TOTAL_START ))
 
 log "--------------------------------------------------"
-log "Build Statistics:"
-log "  System:      $SYSTEM_CPU, $SYSTEM_MEM RAM"
-log "  Preset:      $PRESET"
-if [ "$CONFIG_TIME" -gt 0 ]; then
-    log "  Configure:   ${CONFIG_TIME}s"
-fi
-if [ "$BUILD_TIME" -gt 0 ]; then
-    log "  Build:       ${BUILD_TIME}s"
-fi
+log "Build Finished!"
+log "  Preset:      $CONFIGURE_PRESET"
+log "  Configure:   ${config_time}s"
+log "  Build:       ${build_time}s"
 log "  Total:       ${TOTAL_TIME}s"
 log "--------------------------------------------------"

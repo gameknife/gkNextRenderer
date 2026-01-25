@@ -51,6 +51,18 @@
 
 ENGINE_API Options* GOption = nullptr;
 
+namespace
+{
+    Vulkan::ERendererType ResolveRendererType(Vulkan::ERendererType requestedType, bool supportsRayTracing)
+    {
+        if (!supportsRayTracing && requestedType == Vulkan::ERT_PathTracing)
+        {
+            return Vulkan::ERT_ModernDeferred;
+        }
+        return requestedType;
+    }
+}
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -86,7 +98,7 @@ namespace NextRenderer
             renderer->RegisterLogicRenderer(type);
         }
 
-        auto requestedType = static_cast<Vulkan::ERendererType>(rendererType);
+        auto requestedType = ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer);
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -130,9 +142,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
 
-    userSettings.ShowVisualDebug = false;
     userSettings.HeatmapScale = 1.0f;
-    userSettings.DebugDraw_BoundingBox = false;
 
     userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = options.Temporal;
@@ -141,27 +151,6 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.PaperWhiteNit = 600.f;
     
-    userSettings.RequestRayCast = false;
-
-    userSettings.DenoiseSigma = 2.0f;
-    userSettings.DenoiseSigmaLum = 3.0f;
-    userSettings.DenoiseSigmaNormal = 0.005f;
-    userSettings.DenoiseSize = 5;
-
-    userSettings.ShowEdge = false;
-
-    userSettings.FastGather = false;
-
-    userSettings.SuperResolution = options.SuperResolution;
-    userSettings.DLSS = options.DLSS;
-    userSettings.DLSSRR = options.DLSSRR;
-    
-#if ANDROID || IOS
-    userSettings.NumberOfSamples = 1;
-    userSettings.Denoiser = false;
-    userSettings.FastGather = true;
-#endif
-
     return userSettings;
 }
 
@@ -239,7 +228,7 @@ void NextEngine::Start()
 #endif
 
     renderer_.reset( NextRenderer::CreateRenderer(GOption->RendererType, window_.get(), static_cast<VkPresentModeKHR>(GOption->PresentMode), shouldEnableValidation) );
-    rendererType = GOption->RendererType;
+    userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
@@ -311,10 +300,16 @@ bool NextEngine::Tick(bool forcingDelta)
     // make sure the output is flushed
     std::cout << std::flush;
     
-    if(rendererType != userSettings_.RendererType)
+    // Hot change renderer
+    auto requestedRendererType = ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType), renderer_->SupportsRayTracing());
+    if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
     {
-        rendererType = userSettings_.RendererType;
-        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(rendererType));
+        userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
+    }
+
+    if (renderer_->CurrentLogicRendererType() != requestedRendererType)
+    {
+        renderer_->SwitchLogicRenderer(requestedRendererType);
     }
     
     // delta time calc
@@ -659,9 +654,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                                       extent.width / static_cast<float>(extent.height), renderCam.NearPlane, renderCam.FarPlane);
     
     ubo.FastGather = userSettings_.FastGather;
-    ubo.FastInterpole = userSettings_.FastInterpole;
-    ubo.DebugDraw_Lighting = userSettings_.DebugDraw_Lighting;
-    ubo.DisableSpatialReuse = userSettings_.DisableSpatialReuse;
+    ubo.SelectedId = scene_->GetSelectedId();
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
@@ -740,8 +733,9 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         scene_->MarkEnvDirty();
     }
 
-    ubo.ShowHeatmap = userSettings_.ShowVisualDebug;
-    ubo.HeatmapScale = userSettings_.HeatmapScale;
+	ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
+	ubo.HeatmapScale = userSettings_.HeatmapScale;
+    ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
@@ -759,15 +753,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSize = 0;
 #endif
     
-    ubo.ShowEdge = userSettings_.ShowEdge;
-
+	ubo.ShowEdge = showFlags_.ShowEdge;
     ubo.ProgressiveRender = progressiveRendering_;
     ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
-    renderer_->visualDebug_ = userSettings_.ShowVisualDebug;
-    
+	renderer_->visualDebug_ = showFlags_.ShowVisualDebug;
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 

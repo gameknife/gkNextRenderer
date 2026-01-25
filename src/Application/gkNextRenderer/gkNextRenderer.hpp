@@ -41,6 +41,7 @@ public:
 private:
     void DrawSettings();
     void DrawTitleBar();
+    void RequestScreenshot(bool openFolder, const std::string& tag);
     NextEngine* engine_;
 
     ModelViewController modelViewController_;
@@ -51,4 +52,5 @@ private:
     struct ImFont* bigFont_ {};
 
     bool isTakingScreenshot_ = false;
+    bool agentValidationCaptured_ = false;
 };

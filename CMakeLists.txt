@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.26)
 
-project(gkNextRenderer)
+project(gkNextRenderer LANGUAGES CXX C)
 
 include(cmake/SetupPlatform.cmake)
 include(cmake/ProjectOptions.cmake)
@@ -11,6 +11,13 @@ if (GK_ENABLE_AVIF)
 endif()
 
 option(GK_ENABLE_DLSS "Enable DLSS support" OFF)
+if (NOT WIN32)
+    if (GK_ENABLE_DLSS)
+        message(STATUS "DLSS (Streamline) is only supported on Windows. Disabling.")
+    endif()
+    set(GK_ENABLE_DLSS OFF CACHE BOOL "Enable DLSS support" FORCE)
+endif()
+
 if (GK_ENABLE_DLSS)
     set(WITH_STREAMLINE ON CACHE BOOL "Enable Nvidia Streamline" FORCE)
 endif()
@@ -40,6 +47,12 @@ if (GK_ENABLE_OIDN)
     set(WITH_OIDN ON CACHE BOOL "Enable OIDN" FORCE)
 endif()
 
+option(GK_ENABLE_QUICKJS "Enable QuickJS support" ON)
+if (GK_ENABLE_QUICKJS)
+    set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
+endif()
+
+include(cmake/SetupExternalLibs.cmake)
 include(cmake/SetupDependencies.cmake)
 
 set(MAIN_PROJECT "gkNextRenderer")

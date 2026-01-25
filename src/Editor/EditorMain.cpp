@@ -66,7 +66,7 @@ void EditorGameInstance::OnInit()
         return true;
     });
 
-    GetEngine().GetUserSettings().ShowEdge = true;
+    GetEngine().GetShowFlags().ShowEdge = true;
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)

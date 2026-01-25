@@ -19,21 +19,15 @@ struct UserSettings final
 	int AdaptiveSteps;
 	bool TAA {};
 	bool FastGather = false;
-	bool FastInterpole = false;
-	bool DebugDraw_Lighting = false;
-	bool DebugDraw_BoundingBox = false;
-	bool DisableSpatialReuse = false;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;
 	bool DLSSRR = false;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera
-	bool RequestRayCast;
 	int CameraIdx;
 
 	// Profiler
-	bool ShowVisualDebug;
 	float HeatmapScale;
 
 	// UI
@@ -53,8 +47,6 @@ struct UserSettings final
 
 	float PaperWhiteNit;
 
-	bool ShowEdge;
-	bool ShowDebugSkeleton = false;
 	bool TickPhysics = true;
 	bool TickAnimation = true;
     float SceneEpsilonScale = 1.0f;

@@ -200,7 +200,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     }
 
     // select edge showing
-    GetEngine().GetUserSettings().ShowEdge = currentMode_ == ELegoMode::ELM_Select && lastSelectLocation_ != invalidPos;
+    GetEngine().GetShowFlags().ShowEdge = currentMode_ == ELegoMode::ELM_Select && lastSelectLocation_ != invalidPos;
 
     
     // camera center lerping
