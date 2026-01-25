@@ -62,6 +62,31 @@ Run a single test or tag (Catch2 filter):
 - List tests: `./gkNextUnitTests --list-tests`
 - List tags: `./gkNextUnitTests --list-tags`
 
+Visual Tests (gkNextVisualTest):
+Automated visual testing for rendering validation. Loads scenes from a JSON config,
+renders each for a configurable number of frames, captures screenshots, and generates
+a Markdown report. Suitable for CI integration.
+
+- Config file: `assets/configs/visual_test.json`
+- Run (from bin directory):
+  - Windows: `cd out/build/default-windows/bin && ./gkNextVisualTest.exe`
+  - macOS: `cd out/build/default-macos-arm64/bin && ./gkNextVisualTest`
+  - Linux: `cd out/build/default-linux/bin && ./gkNextVisualTest`
+- Output: `screenshots/visual_test/` (screenshots + `visual_test_report.md`)
+
+Config format (visual_test.json):
+```json
+{
+    "version": 1,
+    "outputDir": "screenshots/visual_test",
+    "defaultFramesToWait": 120,
+    "scenes": [
+        { "path": "assets/models/playground.glb", "frames": 120 },
+        { "path": "assets/models/livingroom.glb", "frames": 150 }
+    ]
+}
+```
+
 Lint / static analysis:
 - clang-tidy config: `.clang-tidy` (naming + include cleaner)
 - Create compile database (if not already):
