@@ -11,6 +11,13 @@ if (GK_ENABLE_AVIF)
 endif()
 
 option(GK_ENABLE_DLSS "Enable DLSS support" OFF)
+if (NOT WIN32)
+    if (GK_ENABLE_DLSS)
+        message(STATUS "DLSS (Streamline) is only supported on Windows. Disabling.")
+    endif()
+    set(GK_ENABLE_DLSS OFF CACHE BOOL "Enable DLSS support" FORCE)
+endif()
+
 if (GK_ENABLE_DLSS)
     set(WITH_STREAMLINE ON CACHE BOOL "Enable Nvidia Streamline" FORCE)
 endif()
