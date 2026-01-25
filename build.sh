@@ -86,7 +86,7 @@ list_presets_and_exit() {
 CONFIGURE_PRESET=""
 CLEAN=0
 TARGET_ANDROID=0
-CMAKE_ARGS=()
+declare -a CMAKE_ARGS=()
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -127,9 +127,17 @@ if [ "$CLEAN" -eq 1 ]; then
     rm -rf "$PROJECT_ROOT/out/build/$CONFIGURE_PRESET"
 fi
 
-log "Configuring preset: $CONFIGURE_PRESET with extra args: ${CMAKE_ARGS[*]}"
+if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+    log "Configuring preset: $CONFIGURE_PRESET"
+else
+    log "Configuring preset: $CONFIGURE_PRESET with extra args: ${CMAKE_ARGS[*]}"
+fi
 config_start=$(date +%s)
-cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
+if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+    cmake --preset "$CONFIGURE_PRESET"
+else
+    cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
+fi
 config_time=$(( $(date +%s) - config_start ))
 
 # Derive build preset name from configure preset name
@@ -140,30 +148,36 @@ BUILD_PRESET="$CONFIGURE_PRESET"
 log "Building with preset: $BUILD_PRESET"
 build_start=$(date +%s)
 # Pass only build-specific args to the build command
-build_args=()
+declare -a build_args=()
 is_target_next=0
-for arg in "${CMAKE_ARGS[@]}"; do
-    if [ $is_target_next -eq 1 ]; then
-        build_args+=("$arg")
-        is_target_next=0
-        continue
-    fi
-    if [[ "$arg" == "--target" ]]; then
-        build_args+=("$arg")
-        is_target_next=1
-    elif [[ "$arg" == --* ]]; then
-        # Heuristic: pass common build tool arguments
-        if [[ "$arg" == "--config" || "$arg" == "-j" || "$arg" == "--verbose" ]]; then
-             build_args+=("$arg")
-             # if the arg is like --config=Release
-             if [[ "$arg" != *=* ]]; then
-                is_target_next=1
-             fi
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+    for arg in "${CMAKE_ARGS[@]}"; do
+        if [ $is_target_next -eq 1 ]; then
+            build_args+=("$arg")
+            is_target_next=0
+            continue
         fi
-    fi
-done
+        if [[ "$arg" == "--target" ]]; then
+            build_args+=("$arg")
+            is_target_next=1
+        elif [[ "$arg" == --* ]]; then
+            # Heuristic: pass common build tool arguments
+            if [[ "$arg" == "--config" || "$arg" == "-j" || "$arg" == "--verbose" ]]; then
+                 build_args+=("$arg")
+                 # if the arg is like --config=Release
+                 if [[ "$arg" != *=* ]]; then
+                    is_target_next=1
+                 fi
+            fi
+        fi
+    done
+fi
 
-cmake --build --preset "$BUILD_PRESET" "${build_args[@]}"
+if [ ${#build_args[@]} -eq 0 ]; then
+    cmake --build --preset "$BUILD_PRESET"
+else
+    cmake --build --preset "$BUILD_PRESET" "${build_args[@]}"
+fi
 build_time=$(( $(date +%s) - build_start ))
 
 TOTAL_TIME=$(( $(date +%s) - TOTAL_START ))

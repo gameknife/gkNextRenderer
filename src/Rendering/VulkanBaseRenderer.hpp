@@ -95,6 +95,7 @@ namespace Vulkan
 		Assets::Scene& GetScene();
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+		bool SupportsRayTracing() const { return supportRayTracing_; }
 
 		int FrameCount() const {return frameCount_;}
 

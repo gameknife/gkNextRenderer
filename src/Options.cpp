@@ -38,6 +38,7 @@ Options::Options(const int argc, const char* argv[])
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
 		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
+		("agent-validation", "Enable agent validation actions (auto screenshot).", cxxopts::value<bool>(AgentValidation)->default_value("false"))
 
 		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
 		("test-gltf-filter", "Filter for glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""))

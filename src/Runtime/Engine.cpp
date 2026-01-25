@@ -51,6 +51,18 @@
 
 ENGINE_API Options* GOption = nullptr;
 
+namespace
+{
+    Vulkan::ERendererType ResolveRendererType(Vulkan::ERendererType requestedType, bool supportsRayTracing)
+    {
+        if (!supportsRayTracing && requestedType == Vulkan::ERT_PathTracing)
+        {
+            return Vulkan::ERT_ModernDeferred;
+        }
+        return requestedType;
+    }
+}
+
 namespace NextRenderer
 {
     std::string GetBuildVersion()
@@ -86,7 +98,7 @@ namespace NextRenderer
             renderer->RegisterLogicRenderer(type);
         }
 
-        auto requestedType = static_cast<Vulkan::ERendererType>(rendererType);
+        auto requestedType = ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer);
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -216,6 +228,7 @@ void NextEngine::Start()
 #endif
 
     renderer_.reset( NextRenderer::CreateRenderer(GOption->RendererType, window_.get(), static_cast<VkPresentModeKHR>(GOption->PresentMode), shouldEnableValidation) );
+    userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
     
     renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
     renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
@@ -288,9 +301,15 @@ bool NextEngine::Tick(bool forcingDelta)
     std::cout << std::flush;
     
     // Hot change renderer
-    if(renderer_->CurrentLogicRendererType() != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
+    auto requestedRendererType = ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType), renderer_->SupportsRayTracing());
+    if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
     {
-        renderer_->SwitchLogicRenderer(static_cast<Vulkan::ERendererType>(userSettings_.RendererType));
+        userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
+    }
+
+    if (renderer_->CurrentLogicRendererType() != requestedRendererType)
+    {
+        renderer_->SwitchLogicRenderer(requestedRendererType);
     }
     
     // delta time calc

@@ -106,7 +106,7 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
     boxModelId_ = static_cast<uint32_t>(models.size() - 1);
 
 	matIds_.clear();
-	
+
 	MatPreparedForAdd.push_back({Assets::Material::Lambertian(glm::vec3(1,1,1))});
 	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
 	MatPreparedForAdd.push_back({Assets::Material::Metallic(glm::vec3(0.5,0.5,0.5), 0.4f)});
@@ -132,6 +132,12 @@ void NextRendererGameInstance::OnPreConfigUI()
 
 bool NextRendererGameInstance::OnRenderUI()
 {
+	if (GOption->AgentValidation && !agentValidationCaptured_ && GetEngine().GetTotalFrames() >= 120)
+	{
+		RequestScreenshot(false, "agent_validation");
+		agentValidationCaptured_ = true;
+	}
+
 	if (isTakingScreenshot_)
 	{
 		return true;
@@ -186,6 +192,36 @@ void NextRendererGameInstance::OnInitUI()
 		const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
 		bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 24, nullptr, glyphRange);
 	}
+}
+
+void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::string& tag)
+{
+	if (isTakingScreenshot_)
+	{
+		return;
+	}
+
+	std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+	Utilities::FileHelper::EnsureDirectoryExists(folderPath);
+
+	auto now = std::chrono::system_clock::now();
+	std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
+	std::tm* tm_ptr = std::localtime(&in_time_t);
+	std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
+	std::string suffix = tag.empty() ? "" : "_" + tag;
+	std::string filename = (std::filesystem::path(folderPath) / (timestamp + suffix)).string();
+
+	isTakingScreenshot_ = true;
+
+	GetEngine().AddTimerTask(0.2, [this, filename, folderPath, openFolder]() {
+		ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
+		if (openFolder)
+		{
+			NextRenderer::OSCommand(folderPath.c_str());
+		}
+		isTakingScreenshot_ = false;
+		return true;
+	});
 }
 
 bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
@@ -365,12 +401,51 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			std::vector<const char*> renderers {"PathTracing", "SoftTracing", "SoftModern", "VoxelTracing"};
+			struct RendererOption
+			{
+				const char* label;
+				Vulkan::ERendererType type;
+			};
+			const RendererOption kRendererOptions[] = {
+				{"SoftTracing", Vulkan::ERT_ModernDeferred},
+				{"SoftModern", Vulkan::ERT_LegacyDeferred},
+				{"VoxelTracing", Vulkan::ERT_VoxelTracing},
+				{"PathTracing", Vulkan::ERT_PathTracing},
+			};
+			const bool supportsRayTracing = GetEngine().GetRenderer().SupportsRayTracing();
+			const int rendererOptionCount = supportsRayTracing
+				? static_cast<int>(std::size(kRendererOptions))
+				: static_cast<int>(std::size(kRendererOptions)) - 1;
+
+			int currentRendererIndex = 0;
+			bool rendererFound = false;
+			for (int index = 0; index < rendererOptionCount; ++index)
+			{
+				if (kRendererOptions[index].type == static_cast<Vulkan::ERendererType>(userSetting.RendererType))
+				{
+					currentRendererIndex = index;
+					rendererFound = true;
+					break;
+				}
+			}
+			if (!rendererFound)
+			{
+				userSetting.RendererType = static_cast<int32_t>(kRendererOptions[0].type);
+			}
 			
 			ImGui::Text("%s", LOCTEXT("Renderer"));
 			
 			ImGui::PushItemWidth(-1);
-			ImGui::Combo("##RendererList", &userSetting.RendererType, renderers.data(), static_cast<int>(renderers.size()));
+			auto renderersGetter = [](void* data, int index, const char** outText)
+			{
+				const auto* options = static_cast<const RendererOption*>(data);
+				*outText = options[index].label;
+				return true;
+			};
+			if (ImGui::Combo("##RendererList", &currentRendererIndex, renderersGetter, const_cast<RendererOption*>(kRendererOptions), rendererOptionCount))
+			{
+				userSetting.RendererType = static_cast<int32_t>(kRendererOptions[currentRendererIndex].type);
+			}
 			ImGui::PopItemWidth();
 			ImGui::NewLine();
 		}
@@ -645,23 +720,7 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_CAMERA, ImVec2(TitlebarSize, TitlebarSize)))
     {
-        std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-        Utilities::FileHelper::EnsureDirectoryExists(folderPath);
-
-        auto now = std::chrono::system_clock::now();
-        std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
-        std::tm* tm_ptr = std::localtime(&in_time_t);
-        std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
-        std::string filename = (std::filesystem::path(folderPath) / timestamp).string();
-
-        isTakingScreenshot_ = true;
-
-        GetEngine().AddTimerTask(0.2, [this, filename, folderPath]() {
-            ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
-            NextRenderer::OSCommand(folderPath.c_str());
-            isTakingScreenshot_ = false;
-            return true;
-        });
+		RequestScreenshot(true, "");
     }
     BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
 	ImGui::SameLine();
