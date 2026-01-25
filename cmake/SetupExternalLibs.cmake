@@ -109,6 +109,12 @@ if(WITH_QUICKJS)
     )
     FetchContent_MakeAvailable(tsc)
 
+    # Rename the downloaded file to the expected TSC_FILENAME
+    get_filename_component(TSC_DOWNLOADED_NAME "${TSC_URL}" NAME)
+    if(EXISTS "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}")
+        file(RENAME "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}" "${tsc_SOURCE_DIR}/${TSC_FILENAME}")
+    endif()
+
     set(TSC_EXECUTABLE "${tsc_SOURCE_DIR}/${TSC_FILENAME}")
     
     # On non-Windows host, we need to ensure the file is executable
