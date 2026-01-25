@@ -52,6 +52,7 @@ file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
 file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
 file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
+file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*")
 
 # unit test files
 set(UNIT_TEST_SOURCES
@@ -119,6 +120,10 @@ add_executable(gkNextMotionBenchmark
 	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
+add_executable(gkNextVisualTest
+	${src_files_gkvisualtest}
+	DesktopMain.cpp
+)
 add_executable(gkNextEditor
 	${src_files_editor}
 	DesktopMain.cpp
@@ -167,6 +172,7 @@ gkNextEngine
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
+gkNextVisualTest
 gkNextEditor
 Packager
 MagicaLego 
