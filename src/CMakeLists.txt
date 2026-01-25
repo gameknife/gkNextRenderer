@@ -1,6 +1,6 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-option(WITH_STREAMLINE "Enable Nvidia Streamline" OFF)
+
 
 # directory naming
 file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
@@ -15,7 +15,6 @@ file(GLOB_RECURSE src_files_thirdparty
 	"ThirdParty/miniaudio/*.h"
 	"ThirdParty/lzav/*.h"
 	"ThirdParty/tinybvh/*.h"
-	"ThirdParty/streamline/*.h"
 	"ThirdParty/ozz/*.h"
 	)
 file(GLOB_RECURSE src_files_customimgui
@@ -53,6 +52,22 @@ file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
 file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
 file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
+file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*")
+
+# unit test files
+set(UNIT_TEST_SOURCES
+	Tests/TestCommon.cpp
+	Tests/Test_PhysicsSync.cpp
+	Tests/Test_GpuTimerLogic.cpp
+	Tests/Test_GltfSkinning.cpp
+	Tests/Test_ComponentSystem.cpp
+	Tests/Test_RenderComponent.cpp
+)
+
+if (GK_ENABLE_PHYSIC)
+	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
+endif()
+
 
 # libray and app
 if ( ANDROID )
@@ -105,6 +120,10 @@ add_executable(gkNextMotionBenchmark
 	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
+add_executable(gkNextVisualTest
+	${src_files_gkvisualtest}
+	DesktopMain.cpp
+)
 add_executable(gkNextEditor
 	${src_files_editor}
 	DesktopMain.cpp
@@ -116,6 +135,8 @@ add_executable(MagicaLego
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
+find_package(Catch2 3 REQUIRED)
+add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -151,9 +172,11 @@ gkNextEngine
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
+gkNextVisualTest
 gkNextEditor
 Packager
 MagicaLego 
+gkNextUnitTests
 )
 endif()
 
@@ -201,7 +224,8 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
 		find_package(WebP CONFIG REQUIRED)
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PUBLIC spdlog::spdlog)
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -219,8 +243,8 @@ foreach(target IN LISTS AllTargets)
 
 		if ( WITH_STREAMLINE )
 			target_compile_definitions(${target} PUBLIC WITH_STREAMLINE=1)
-			target_include_directories(${target} PRIVATE ThirdParty/streamline/include)
-			target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
+			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
 	else()
@@ -229,7 +253,7 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE gkNextEngine)
 		endif()
 		if ( WITH_STREAMLINE ) 
-		target_link_directories(${target} PRIVATE ThirdParty/streamline/lib/x64)
+		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
 	endif()
@@ -263,8 +287,8 @@ foreach(target IN LISTS AllTargets)
 
 	if ( WITH_OIDN )
 		target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
-		target_include_directories(${target} PRIVATE ../src/ThirdParty/oidn/include/)
-		target_link_directories(${target} PRIVATE ../src/ThirdParty/oidn/lib/)
+		target_include_directories(${target} PRIVATE ${OIDN_INCLUDE_DIR})
+		target_link_directories(${target} PRIVATE ${OIDN_LIB_DIR})
 		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
@@ -322,19 +346,17 @@ foreach(target IN LISTS AllTargets)
 
 	# copy the tsc to bin
 	if ( ${target} STREQUAL gkNextEngine )
-	if (MSVC)
-	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	elseif(UNIX)
-	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc/tsc DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+	if ( WITH_QUICKJS AND EXISTS "${TSC_EXECUTABLE}" )
+		file(COPY "${TSC_EXECUTABLE}" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
 	if ( WITH_STREAMLINE )
-		file(GLOB SL_BINS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/streamline/bin/*")
+		file(GLOB SL_BINS "${STREAMLINE_BIN_DIR}/*")
 		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
 	if ( WITH_OIDN )
-		file(GLOB OIDN_BINS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/oidn/bin/*")
+		file(GLOB OIDN_BINS "${OIDN_BIN_DIR}/*")
 		file(COPY ${OIDN_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 	endif()
@@ -352,33 +374,12 @@ foreach(target IN LISTS AllTargets)
 endforeach()
 
 # Test Target
-if ( NOT ANDROID )
-find_package(Catch2 3 REQUIRED)
-add_executable(gkNextUnitTests 
-	Tests/TestCommon.cpp
-	Tests/Test_PhysicsSync.cpp
-	Tests/Test_GpuTimerLogic.cpp
-	Tests/Test_GltfSkinning.cpp
-	Tests/Test_ComponentSystem.cpp
-	Tests/Test_RenderComponent.cpp
-	Tests/Test_PhysicsComponent.cpp
-)
+if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
-target_include_directories(gkNextUnitTests PRIVATE .)
-
-if ( WITH_STREAMLINE )
-	target_link_directories(gkNextUnitTests PRIVATE ThirdParty/streamline/lib/x64)
-endif()
-
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 
-if ( WITH_OIDN )
-target_compile_definitions(gkNextUnitTests PUBLIC WITH_OIDN=1)
-target_include_directories(gkNextUnitTests PRIVATE ../src/ThirdParty/oidn/include/)
-target_link_directories(gkNextUnitTests PRIVATE ../src/ThirdParty/oidn/lib/)
-target_link_libraries(gkNextUnitTests PRIVATE OpenImageDenoise )
-endif()
+
 
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
 

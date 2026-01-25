@@ -13,12 +13,12 @@
 ### 1. 构建 (Build)
 ```bash
 # Windows
-./build.bat windows-dev
-./build.bat windows-dev --clean  # 清理重编
+./build.bat --preset default-windows
+./build.bat --preset default-windows --clean  # 清理重编
 
 # macOS / Linux
-./build.sh macos-arm64
-./build.sh linux-release
+./build.sh --preset default-macos-arm64
+./build.sh --preset default-linux
 
 # Android
 ./build.bat --android
@@ -29,25 +29,25 @@
 
 ```bash
 # Windows
-cd out/build/windows-dev/bin && ./gkNextUnitTests.exe
+cd out/build/default-windows/bin && ./gkNextUnitTests.exe
 
 # macOS
-cd out/build/macos-arm64/bin && ./gkNextUnitTests
+cd out/build/default-macos-arm64/bin && ./gkNextUnitTests
 
 # Linux
-cd out/build/linux-release/bin && ./gkNextUnitTests
+cd out/build/default-linux/bin && ./gkNextUnitTests
 ```
 
 ### 3. 运行主程序 (Run)
 ```bash
 # Windows (开发模式)
-./run.bat windows-dev
+./run.bat --preset default-windows
 
 # 指定 Target
-./run.bat windows-dev --target gkNextEditor.exe
+./run.bat --preset default-windows --target gkNextEditor.exe
 
 # macOS/Linux
-./run.sh macos-arm64
+./run.sh --preset default-macos-arm64
 ```
 
 ### 4. 依赖管理 (Vcpkg)
