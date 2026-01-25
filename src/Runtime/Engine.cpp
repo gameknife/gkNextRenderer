@@ -714,7 +714,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         scene_->MarkEnvDirty();
     }
 
-    ubo.ShowHeatmap = showFlags_.ShowVisualDebug;    ubo.HeatmapScale = userSettings_.HeatmapScale;
+	ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
+	ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
@@ -733,13 +734,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSize = 0;
 #endif
     
-    	ubo.ShowEdge = showFlags_.ShowEdge;
+	ubo.ShowEdge = showFlags_.ShowEdge;
     ubo.ProgressiveRender = progressiveRendering_;
     ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
-    	renderer_->visualDebug_ = showFlags_.ShowVisualDebug;    
+	renderer_->visualDebug_ = showFlags_.ShowVisualDebug;
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 

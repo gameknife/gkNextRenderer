@@ -482,12 +482,13 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
-                {
-                    skinnedMesh->Update(deltaSeconds);
-                    		if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)                    {
-                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
-                    }
+				if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+				{
+					skinnedMesh->Update(deltaSeconds);
+					if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
+					{
+						skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+					}
                     
                     if (skinnedMesh->IsPlaying())
                     {
@@ -570,7 +571,8 @@ namespace Assets
             }
         }
 
-        	if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)        {
+		if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
+		{
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();

@@ -28,5 +28,9 @@ if (UNIX AND !ANDROID)
 	target_compile_options(gk_project_options INTERFACE "-fvisibility=hidden")
 endif ()
 
+if (APPLE)
+    target_link_options(gk_project_options INTERFACE "-Wl,-no_warn_duplicate_libraries")
+endif()
+
 # LTCG
 # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
