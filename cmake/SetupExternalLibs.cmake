@@ -124,3 +124,30 @@ if(WITH_QUICKJS)
 
     message(STATUS "TSC Executable: ${TSC_EXECUTABLE}")
 endif()
+
+# --- MoltenVK (iOS only) ---
+if(IOS)
+    message(STATUS "Preparing MoltenVK for iOS...")
+    set(MVK_VERSION "v1.4.0")
+    FetchContent_Declare(
+        moltenvk
+        URL "https://github.com/KhronosGroup/MoltenVK/releases/download/${MVK_VERSION}/MoltenVK-ios.tar"
+    )
+    FetchContent_MakeAvailable(moltenvk)
+
+    # The tarball structure usually contains a top-level MoltenVK folder.
+    # We need to locate the static library for iOS arm64.
+    set(MVK_SOURCE_PATH "${moltenvk_SOURCE_DIR}/MoltenVK/static/MoltenVK.xcframework/ios-arm64")
+    
+    # Check if the path exists (tar structure usually matches this path)
+    if(EXISTS "${MVK_SOURCE_PATH}/libMoltenVK.a")
+        # SetupDependencies.cmake expects ${MOLTENVK_ROOT}/lib/libMoltenVK.a
+        file(MAKE_DIRECTORY "${moltenvk_SOURCE_DIR}/lib")
+        configure_file("${MVK_SOURCE_PATH}/libMoltenVK.a" "${moltenvk_SOURCE_DIR}/lib/libMoltenVK.a" COPYONLY)
+        
+        set(MOLTENVK_ROOT "${moltenvk_SOURCE_DIR}")
+        message(STATUS "MoltenVK Root: ${MOLTENVK_ROOT}")
+    else()
+        message(WARNING "Could not locate libMoltenVK.a in expected path: ${MVK_SOURCE_PATH}")
+    endif()
+endif()

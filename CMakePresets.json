@@ -162,6 +162,37 @@
             "name": "full-macos-arm64",
             "inherits": ["macos-arm64-base", "features-full"],
             "displayName": "Full macOS ARM64"
+        },
+        {
+            "name": "ios-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Xcode",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "VCPKG_TARGET_TRIPLET": "arm64-ios",
+                "GK_IOS_SKIP_CODE_SIGN": "ON"
+            }
+        },
+        {
+            "name": "default-ios",
+            "inherits": ["ios-base", "features-default"],
+            "displayName": "Default iOS"
+        },
+        {
+            "name": "minimal-ios",
+            "inherits": ["ios-base", "features-minimal"],
+            "displayName": "Minimal iOS"
+        },
+        {
+            "name": "full-ios",
+            "inherits": ["ios-base", "features-full"],
+            "displayName": "Full iOS"
         }
     ],
     "buildPresets": [{
@@ -207,6 +238,21 @@
         {
             "name": "full-macos-arm64",
             "configurePreset": "full-macos-arm64",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "default-ios",
+            "configurePreset": "default-ios",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "minimal-ios",
+            "configurePreset": "minimal-ios",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "full-ios",
+            "configurePreset": "full-ios",
             "configuration": "RelWithDebInfo"
         }
     ]
