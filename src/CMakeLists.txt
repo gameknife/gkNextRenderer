@@ -224,7 +224,8 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 		endif()
 		find_package(WebP CONFIG REQUIRED)
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PUBLIC spdlog::spdlog)
 		
 		# handle moltenvk for iOS
 		if ( IOS )
