@@ -52,8 +52,8 @@ if (GK_ENABLE_QUICKJS)
     set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
 endif()
 
-include(cmake/SetupDependencies.cmake)
 include(cmake/SetupExternalLibs.cmake)
+include(cmake/SetupDependencies.cmake)
 
 set(MAIN_PROJECT "gkNextRenderer")
 add_subdirectory(assets)

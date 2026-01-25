@@ -131,8 +131,8 @@ cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
 config_time=$(( $(date +%s) - config_start ))
 
 # Derive build preset name from configure preset name
-# e.g., "default-linux" -> "default-linux" (most presets now match directly)
-BUILD_PRESET=$(echo "$CONFIGURE_PRESET" | sed -E 's/-(release|dev|debug|arm64|x64)$//' | sed -E 's/-(base)$//')
+# In current CMakePresets.json, build presets map 1:1 to configure presets
+BUILD_PRESET="$CONFIGURE_PRESET"
 
 
 log "Building with preset: $BUILD_PRESET"

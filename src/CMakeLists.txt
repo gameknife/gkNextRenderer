@@ -367,7 +367,7 @@ foreach(target IN LISTS AllTargets)
 endforeach()
 
 # Test Target
-if ( NOT ANDROID )
+if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
