@@ -1,3 +1,5 @@
+#!/bin/bash
+set -euo pipefail
 # ### HELP_START ###
 # ==============================================================================
 # gkNextRenderer Build Script v2.1 (Linux/macOS)
