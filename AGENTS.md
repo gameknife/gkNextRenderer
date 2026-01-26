@@ -39,8 +39,8 @@ Build (Android):
 - macOS/Linux: `./build.sh --android`
 
 Optional build flags (via CMake args):
-- Example: `./build.sh --preset default-linux -- -DGK_ENABLE_AVIF=ON`
-- Windows example: `./build.bat --preset default-windows -- -DGK_ENABLE_AVIF=ON`
+- Example: `./build.sh --preset default-linux -- -DENABLE_AVIF=ON`
+- Windows example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
 
 Run (native):
 - `./run.sh --preset <preset>`

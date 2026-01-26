@@ -24,42 +24,42 @@
             "name": "features-minimal",
             "hidden": true,
             "cacheVariables": {
-                "GK_ENABLE_AVIF": "OFF",
-                "GK_ENABLE_DLSS": "OFF",
-                "GK_ENABLE_KTX2": "ON",
-                "GK_ENABLE_PHYSIC": "OFF",
-                "GK_ENABLE_AUDIO": "OFF",
-                "GK_ENABLE_OIDN": "OFF",
-                "GK_ENABLE_QUICKJS": "OFF",
-                "GK_ENABLE_UNITY_BUILD": "ON"
+                "ENABLE_AVIF": "OFF",
+                "ENABLE_DLSS": "OFF",
+                "ENABLE_KTX2": "ON",
+                "ENABLE_PHYSIC": "OFF",
+                "ENABLE_AUDIO": "OFF",
+                "ENABLE_OIDN": "OFF",
+                "ENABLE_QUICKJS": "OFF",
+                "ENABLE_UNITY_BUILD": "ON"
             }
         },
         {
             "name": "features-default",
             "hidden": true,
             "cacheVariables": {
-                "GK_ENABLE_AVIF": "OFF",
-                "GK_ENABLE_DLSS": "OFF",
-                "GK_ENABLE_KTX2": "ON",
-                "GK_ENABLE_PHYSIC": "ON",
-                "GK_ENABLE_AUDIO": "ON",
-                "GK_ENABLE_OIDN": "OFF",
-                "GK_ENABLE_QUICKJS": "OFF",
-                "GK_ENABLE_UNITY_BUILD": "ON"
+                "ENABLE_AVIF": "OFF",
+                "ENABLE_DLSS": "OFF",
+                "ENABLE_KTX2": "ON",
+                "ENABLE_PHYSIC": "ON",
+                "ENABLE_AUDIO": "ON",
+                "ENABLE_OIDN": "OFF",
+                "ENABLE_QUICKJS": "OFF",
+                "ENABLE_UNITY_BUILD": "ON"
             }
         },
         {
             "name": "features-full",
             "hidden": true,
             "cacheVariables": {
-                "GK_ENABLE_AVIF": "OFF",
-                "GK_ENABLE_DLSS": "ON",
-                "GK_ENABLE_KTX2": "ON",
-                "GK_ENABLE_PHYSIC": "ON",
-                "GK_ENABLE_AUDIO": "ON",
-                "GK_ENABLE_OIDN": "ON",
-                "GK_ENABLE_QUICKJS": "ON",
-                "GK_ENABLE_UNITY_BUILD": "ON"
+                "ENABLE_AVIF": "OFF",
+                "ENABLE_DLSS": "ON",
+                "ENABLE_KTX2": "ON",
+                "ENABLE_PHYSIC": "ON",
+                "ENABLE_AUDIO": "ON",
+                "ENABLE_OIDN": "ON",
+                "ENABLE_QUICKJS": "ON",
+                "ENABLE_UNITY_BUILD": "ON"
             }
         },
         {
@@ -176,7 +176,7 @@
             "cacheVariables": {
                 "CMAKE_SYSTEM_NAME": "iOS",
                 "VCPKG_TARGET_TRIPLET": "arm64-ios",
-                "GK_IOS_SKIP_CODE_SIGN": "ON"
+                "IOS_SKIP_CODE_SIGN": "ON"
             }
         },
         {

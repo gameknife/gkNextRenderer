@@ -13,13 +13,13 @@ else()
     set(CMAKE_OSX_ARCHITECTURES "arm64")
 endif()
 
-option(GK_IOS_SKIP_CODE_SIGN "Disable iOS code signing (useful for CI xcodebuild)" OFF)
+option(IOS_SKIP_CODE_SIGN "Disable iOS code signing (useful for CI xcodebuild)" OFF)
 
 # Set iOS bundle identifier if building for iOS
 if (IOS)
     set(MACOSX_BUNDLE_DISPLAY_NAME ${PROJECT_NAME})
     set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.tzy.gknext")
-    if (GK_IOS_SKIP_CODE_SIGN)
+    if (IOS_SKIP_CODE_SIGN)
         set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual")
         set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
         set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
