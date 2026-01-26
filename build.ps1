@@ -6,12 +6,16 @@
 .DESCRIPTION
     Standardizes the build process using CMake Presets.
     Allows pass-through arguments to CMake.
+    Supports incremental configuration (skips configure if already configured).
 
 .PARAMETER Preset
     The CMake preset to use. Required.
 
 .PARAMETER Clean
     Clean the build directory before building.
+
+.PARAMETER Reconfigure
+    Force CMake reconfiguration even if already configured.
 
 .PARAMETER Android
     Switch to the Android Gradle build.
@@ -21,7 +25,8 @@
 
 .EXAMPLE
     .\build.ps1 --preset full-windows-dev
-    .\build.ps1 --preset default-windows-dev -- -DGK_ENABLE_AVIF=ON
+    .\build.ps1 --preset default-windows-dev -- -DENABLE_AVIF=ON
+    .\build.ps1 --preset default-windows --reconfigure
     .\build.ps1 --clean
     .\build.ps1 --android
 #>
@@ -39,6 +44,7 @@ $ProjectRoot = $ScriptDir
 # --- Defaults ---
 $Preset = $null
 $Clean = $false
+$Reconfigure = $false
 $Android = $false
 $CMakeArgs = @()
 
@@ -62,6 +68,9 @@ while ($i -lt $AllArgs.Count) {
         "^--clean$" {
             $Clean = $true
         }
+        "^--reconfigure$" {
+            $Reconfigure = $true
+        }
         "^--android$" {
             $Android = $true
         }
@@ -70,12 +79,14 @@ while ($i -lt $AllArgs.Count) {
             Write-Host "Options:"
             Write-Host "  --preset <name>  CMake preset to use [REQUIRED]"
             Write-Host "  --clean          Clean build directory before building"
+            Write-Host "  --reconfigure    Force CMake reconfiguration"
             Write-Host "  --android        Build for Android"
             Write-Host "  -h, --help       Show this help"
             Write-Host ""
             Write-Host "Examples:"
             Write-Host "  build.ps1 --preset default-windows"
-            Write-Host "  build.ps1 --preset full-windows -- -DGK_ENABLE_AVIF=ON"
+            Write-Host "  build.ps1 --preset full-windows -- -DENABLE_AVIF=ON"
+            Write-Host "  build.ps1 --preset default-windows --reconfigure"
             exit 0
         }
         "^--$" {
@@ -126,22 +137,38 @@ function Ensure-Vcpkg {
 function Build-Native {
     param (
         [string]$Preset,
-        [string[]]$ExtraArgs
+        [string[]]$ExtraArgs,
+        [bool]$ForceReconfigure = $false
     )
 
     Ensure-Vcpkg
 
+    $BuildDir = Join-Path $ProjectRoot "out/build/$Preset"
+    $CacheFile = Join-Path $BuildDir "CMakeCache.txt"
+
     if ($Clean) {
-        $BuildDir = Join-Path $ProjectRoot "out/build/$Preset"
         if (Test-Path $BuildDir) {
             Write-Log "Cleaning build for preset: $Preset..."
             Remove-Item -Path $BuildDir -Recurse -Force
         }
     }
 
-    Write-Log "Configuring preset: $Preset with extra args: $($ExtraArgs -join ' ')"
-    cmake --preset $Preset $ExtraArgs
-    if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed." }
+    # Check if reconfiguration is needed
+    $NeedsConfigure = $ForceReconfigure -or $Clean -or (-not (Test-Path $CacheFile))
+
+    # Check if any -D arguments are passed (requires reconfigure)
+    $HasDefineArgs = $ExtraArgs | Where-Object { $_ -match "^-D" }
+    if ($HasDefineArgs) {
+        $NeedsConfigure = $true
+    }
+
+    if ($NeedsConfigure) {
+        Write-Log "Configuring preset: $Preset with extra args: $($ExtraArgs -join ' ')"
+        cmake --preset $Preset $ExtraArgs
+        if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed." }
+    } else {
+        Write-Log "Skipping configure (already configured). Use --reconfigure to force."
+    }
 
     Write-Log "Building preset: $Preset"
     # Filter for args that are relevant to the build command
@@ -181,7 +208,7 @@ try {
     if ($Android) {
         Build-Android
     } else {
-        Build-Native -Preset $Preset -ExtraArgs $CMakeArgs
+        Build-Native -Preset $Preset -ExtraArgs $CMakeArgs -ForceReconfigure $Reconfigure
     }
     
     $Global:StopWatch.Stop()

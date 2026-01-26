@@ -222,7 +222,7 @@
   ```
 - ✅ **生成 compile_commands.json**（禁用 Unity Build）：
   ```bash
-  ./build.sh <platform> -DGK_ENABLE_UNITY_BUILD=OFF
+  ./build.sh <platform> -DENABLE_UNITY_BUILD=OFF
   ```
 - ✅ **性能分析使用 Superluminal/Tracy**（不影响默认构建）
 - ✅ **提交前检查工作区**：`git status` 确认无遗漏文件

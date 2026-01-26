@@ -21,8 +21,8 @@ jobs:
   build:
 
     runs-on: ubuntu-22.04
-    env: 
-      SDK_VERSION: 1.4.309
+    env:
+      SDK_VERSION: 1.4.313
     steps:
     - uses: actions/setup-java@v4
       with:
