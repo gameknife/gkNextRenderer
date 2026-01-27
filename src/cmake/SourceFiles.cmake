@@ -39,6 +39,8 @@ file(GLOB_RECURSE src_files_thirdparty
     "ThirdParty/miniaudio/*.h"
     "ThirdParty/lzav/*.h"
     "ThirdParty/tinybvh/*.h"
+    "ThirdParty/ImGuizmo/*.cpp"
+    "ThirdParty/ImGuizmo/*.h"
     "ThirdParty/ozz/*.h"
 )
 

@@ -98,7 +98,10 @@ void EditorGameInstance::OnInitUI()
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
-    modelViewController_.OnKey(event);
+    if (!gizmoController_.IsShowing())
+    {
+        modelViewController_.OnKey(event);
+    }
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
         switch (event.key.key)
@@ -113,13 +116,23 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition(xpos, ypos);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnCursorPosition(xpos, ypos);
+    }
     return true;
 }
 
 bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 {
-    modelViewController_.OnMouseButton(event);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnMouseButton(event);
+    }
+    else
+    {
+        return true;
+    }
     if (event.button.button == SDL_BUTTON_LEFT && event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         auto mousePos = GetEngine().GetMousePos();
@@ -149,6 +162,14 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 
 bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 {
-    modelViewController_.OnScroll(xoffset, yoffset);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnScroll(xoffset, yoffset);
+    }
     return true;
+}
+
+void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)
+{
+    gizmoController_.Draw(*engine_, viewportPos, viewportSize);
 }

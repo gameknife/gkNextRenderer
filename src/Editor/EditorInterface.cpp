@@ -34,6 +34,7 @@
 #include "Vulkan/RenderImage.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "Common/CoreMinimal.hpp"
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
@@ -228,6 +229,8 @@ void EditorInterface::Render()
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(Utilities::Math::floorToInt(node->Pos.x - viewport->Pos.x), Utilities::Math::floorToInt(node->Pos.y - viewport->Pos.y), Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 	//editor_->GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(0, 0, Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+
+	editor_->DrawGizmo(glm::vec2(node->Pos.x, node->Pos.y), glm::vec2(node->Size.x, node->Size.y));
 
 	firstRun = false;
 	GUserInterface = nullptr;

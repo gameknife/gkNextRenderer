@@ -17,6 +17,7 @@
 #include "Runtime/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Vulkan/SwapChain.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -147,6 +148,17 @@ bool NextRendererGameInstance::OnRenderUI()
 
 	DrawTitleBar();
 	DrawSettings();
+
+	if (ImGui::GetCurrentContext() != nullptr)
+	{
+		auto& swapChain = GetEngine().GetRenderer().SwapChain();
+		const auto offset = swapChain.OutputOffset();
+		const auto extent = swapChain.OutputExtent();
+		const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
+		gizmoController_.Draw(*engine_,
+			glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
+			glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
+	}
 	if (GOption->ReferenceMode)
 	{
 		ImGuiIO& io = ImGui::GetIO();
@@ -233,14 +245,19 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
 
 bool NextRendererGameInstance::OnKey(SDL_Event& event)
 {
-    modelViewController_.OnKey(event);
+    if (!gizmoController_.IsShowing())
+    {
+        modelViewController_.OnKey(event);
+    }
 
 	if (event.key.type == SDL_EVENT_KEY_DOWN)
 	{
 		switch (event.key.key)
 		{
-		case SDLK_ESCAPE: GetEngine().GetScene().SetSelectedId(-1); return true;
-			break;
+		case SDLK_ESCAPE:
+			GetEngine().GetScene().SetSelectedId(-1);
+			GetEngine().GetShowFlags().ShowEdge = false;
+			return true;
 		case SDLK_F1: GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings; return true;
 			break;
 		case SDLK_F2: GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay; return true;
@@ -265,13 +282,23 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 
 bool NextRendererGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition(  xpos,  ypos);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnCursorPosition(xpos, ypos);
+    }
     return true;
 }
 
 bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 {
-    modelViewController_.OnMouseButton(event);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnMouseButton(event);
+    }
+    else
+    {
+        return true;
+    }
 
 	if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT)
 	{
@@ -284,7 +311,14 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 			if (result.Hitted)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-                NextEngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+				NextEngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+				GetEngine().GetScene().SetSelectedId(result.InstanceId);
+				GetEngine().GetShowFlags().ShowEdge = true;
+			}
+			else
+			{
+				GetEngine().GetScene().SetSelectedId(-1);
+				GetEngine().GetShowFlags().ShowEdge = false;
 			}
 			return true;
 		});
@@ -296,7 +330,10 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 
 bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 {
-	modelViewController_.OnScroll( xoffset,  yoffset);
+	if (!gizmoController_.IsInteracting())
+	{
+		modelViewController_.OnScroll(xoffset, yoffset);
+	}
 	return true;
 }
 

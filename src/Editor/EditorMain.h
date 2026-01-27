@@ -2,6 +2,7 @@
 
 #include "EditorGUI.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/GizmoController.hpp"
 #include "Runtime/ModelViewController.hpp"
 
 class EditorInterface;
@@ -37,12 +38,14 @@ public:
     
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }
+    void DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize);
 
 private:
     NextEngine* engine_;
 
     std::unique_ptr<EditorInterface> editorUserInterface_;
     ModelViewController modelViewController_;
+    GizmoController gizmoController_;
 };
 
 inline bool EditorGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
