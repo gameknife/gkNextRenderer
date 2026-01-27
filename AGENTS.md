@@ -174,3 +174,4 @@ Notes for Agents
 - Prefer scripted workflows (`build.sh`, `build.ps1`, `run.sh`) over manual CMake.
 - If you add a new dependency, update `vcpkg.json` accordingly.
 - If unsure about a preset name, use `cmake --list-presets=configure`.
+- When creating commits, add an AI co-author line matching the model you used (e.g., `Co-authored-by: gpt-5.2-codex <gpt-5.2-codex@openai.com>`).
