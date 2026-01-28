@@ -5,6 +5,8 @@
 #include "EditorInterface.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/NextEngineHelper.h"
+#include "Assets/Node.h"
+#include "Runtime/Components/RenderComponent.h"
 
 #include "Editor/EditorCommand.hpp"
 #include "Editor/EditorInterface.hpp"
@@ -108,16 +110,40 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
         {
         case SDLK_ESCAPE: GetEngine().GetScene().SetSelectedId(-1);
             break;
-        default: break;
+                case SDLK_F:
+                    {
+                        glm::vec3 focusCenter;
+                        float radius;
+                        if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))
+                        {
+                            modelViewController_.Focus(focusCenter, radius);
+                        }
+                    }
+                    break;
+                default: break;
+                }
+            }
+            return true;
         }
-    }
-    return true;
-}
-
-bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
-{
-    if (!gizmoController_.IsInteracting())
-    {
+        
+        bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
+        {
+            // Update Controller Context
+            bool alt = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+            modelViewController_.SetAltPressed(alt);
+            
+            glm::vec3 center;
+            float radius;
+            if (GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
+            {
+                modelViewController_.SetOrbitTarget(center);
+            }
+            else
+            {
+                modelViewController_.SetOrbitTarget(std::nullopt);
+            }
+        
+            if (!gizmoController_.IsInteracting())    {
         modelViewController_.OnCursorPosition(xpos, ypos);
     }
     return true;

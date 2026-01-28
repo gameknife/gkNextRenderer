@@ -84,6 +84,7 @@ namespace Assets
 		
 		uint32_t GetSelectedId() const { return selectedId_; }
 		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
+		bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
 
 		void Tick(float DeltaSeconds);
 		void UpdateAllMaterials();

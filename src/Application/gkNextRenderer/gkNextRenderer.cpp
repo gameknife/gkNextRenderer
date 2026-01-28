@@ -258,6 +258,16 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 			GetEngine().GetScene().SetSelectedId(-1);
 			GetEngine().GetShowFlags().ShowEdge = false;
 			return true;
+        case SDLK_F:
+            {
+                glm::vec3 focusCenter;
+                float radius;
+                if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))
+                {
+                    modelViewController_.Focus(focusCenter, radius);
+                }
+            }
+            break;
 		case SDLK_F1: GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings; return true;
 			break;
 		case SDLK_F2: GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay; return true;
@@ -282,6 +292,21 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 
 bool NextRendererGameInstance::OnCursorPosition(double xpos, double ypos)
 {
+    // Update Controller Context
+    bool alt = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+    modelViewController_.SetAltPressed(alt);
+    
+    glm::vec3 center;
+    float radius;
+    if (GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
+    {
+        modelViewController_.SetOrbitTarget(center);
+    }
+    else
+    {
+        modelViewController_.SetOrbitTarget(std::nullopt);
+    }
+
     if (!gizmoController_.IsInteracting())
     {
         modelViewController_.OnCursorPosition(xpos, ypos);

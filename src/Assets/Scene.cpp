@@ -762,6 +762,47 @@ namespace Assets
         return nullptr;
     }
 
+    bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const
+    {
+        if (selectedId_ == static_cast<uint32_t>(-1))
+        {
+            return false;
+        }
+
+        const Node* foundNode = nullptr;
+        for (const auto& node : nodes_)
+        {
+            if (node->GetInstanceId() == selectedId_)
+            {
+                foundNode = node.get();
+                break;
+            }
+        }
+
+        if (!foundNode) return false;
+
+        center = glm::vec3(foundNode->WorldTransform()[3]);
+        
+        auto renderComp = foundNode->GetComponent<Runtime::RenderComponent>();
+        if (renderComp)
+        {
+            const auto* model = GetModel(renderComp->GetModelId());
+            if (model)
+            {
+                glm::vec3 localCenter = (model->GetLocalAABBMax() + model->GetLocalAABBMin()) * 0.5f;
+                center = glm::vec3(foundNode->WorldTransform() * glm::vec4(localCenter, 1.0f));
+
+                glm::vec3 extent = (model->GetLocalAABBMax() - model->GetLocalAABBMin()) * foundNode->WorldScale();
+                radius = glm::length(extent) * 0.5f;
+                return true;
+            }
+        }
+        
+        // Fallback for non-render nodes (default small radius)
+        radius = 1.0f;
+        return true;
+    }
+
     const Model* Scene::GetModel(uint32_t id) const
     {
         if (id < models_.size())

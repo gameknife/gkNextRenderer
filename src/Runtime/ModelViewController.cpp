@@ -46,6 +46,9 @@ glm::mat4 ModelViewController::ModelView() const
 
 bool ModelViewController::OnKey(SDL_Event& event)
 {
+    // Any manual input cancels focus animation
+    if (isFocusing_) isFocusing_ = false;
+
     switch (event.key.key)
     {
     case SDLK_S: cameraMovingBackward_ = event.key.type != SDL_EVENT_KEY_UP; cameraMovingSpeed_ = {1.0f, 1.0f};
@@ -75,6 +78,14 @@ bool ModelViewController::OnGamepadInput(const int16_t leftStickX, const int16_t
     const double stickThreshold = 0.7; // 摇杆阈值
     bool inputDetected = false;
     
+    // Any manual input cancels focus animation
+    if (std::abs(leftStickX) > deadZone || std::abs(leftStickY) > deadZone || 
+        std::abs(rightStickX) > deadZone || std::abs(rightStickY) > deadZone ||
+        leftTrigger > deadZone || rightTrigger > deadZone)
+    {
+        isFocusing_ = false;
+    }
+
     // 左摇杆控制前后左右移动
     if (std::abs(leftStickX) > deadZone) {
         cameraMovingRightJoystick_ = leftStickX > 0;
@@ -141,17 +152,26 @@ bool ModelViewController::OnCursorPosition(const double xpos, const double ypos)
     const auto deltaX = static_cast<float>(xpos - mousePosX_) * mouseSensitive_;
     const auto deltaY = static_cast<float>(ypos - mousePosY_) * mouseSensitive_;
 
-    if (mouseLeftPressed_)
-    {
-        cameraRotXAbs_ += deltaX;
-        cameraRotYAbs_ += deltaY;
-    }
-
+    // Mouse Right Button Handling
     if (mouseRightPressed_)
     {
-        rawModelRotX_ += deltaX * 500.0;
-        rawModelRotY_ += deltaY * 500.0;
+        // Cancel focus on manual rotation
+        isFocusing_ = false;
+
+        if (altPressed_ && orbitTarget_.has_value())
+        {
+            // Orbit Mode
+            Orbit(deltaX, deltaY);
+        }
+        else
+        {
+            // Free Look Mode (was on Left Button)
+            cameraRotXAbs_ += deltaX;
+            cameraRotYAbs_ += deltaY;
+        }
     }
+
+    // Mouse Left Button is now ignored for camera control.
 
     mousePosX_ = xpos;
     mousePosY_ = ypos;
@@ -164,10 +184,7 @@ bool ModelViewController::OnMouseButton(SDL_Event& event)
     if (event.button.button == SDL_BUTTON_LEFT)
     {
         mouseLeftPressed_ = event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
-        if (mouseLeftPressed_)
-        {
-            resetMousePos_ = true;
-        }
+        // Left button does not trigger camera reset or movement anymore
     }
     
     if (event.button.button == SDL_BUTTON_RIGHT)
@@ -179,6 +196,79 @@ bool ModelViewController::OnMouseButton(SDL_Event& event)
         }
     }
     return true;
+}
+
+void ModelViewController::Focus(const glm::vec3& focusPoint, float radius)
+{
+    // Move camera to look at the object from a fixed distance based on radius
+    
+    // Calculate distance to fit the object
+    // half_size = distance * tan(fov/2)
+    // distance = half_size / tan(fov/2)
+    
+    float fovRad = glm::radians(fieldOfView_);
+    float dist = radius / glm::sin(fovRad * 0.5f);
+    
+    // Add a little margin
+    dist *= 1.1f;
+    
+    // Preserve current viewing angle:
+    // Move the camera to a position such that it looks at 'focusPoint'
+    // with the SAME orientation it currently has.
+    // This means moving along the backward vector of the camera.
+    
+    glm::vec3 fwd = GetForward(); 
+    glm::vec3 currentPos = glm::vec3(position_);
+    
+    // Target position is simply back from the focus point along the forward vector
+    glm::vec3 targetPos = focusPoint - fwd * dist;
+
+    // Setup interpolation
+    isFocusing_ = true;
+    focusTimer_ = 0.0f;
+    
+    focusStartPos_ = currentPos;
+    focusTargetPos_ = targetPos;
+    
+    focusStartRot_ = glm::quat_cast(orientation_);
+    focusTargetRot_ = focusStartRot_; // Keep rotation constant
+}
+
+void ModelViewController::Orbit(float deltaX, float deltaY)
+{
+    if (!orbitTarget_.has_value()) return;
+
+    glm::vec3 target = orbitTarget_.value();
+    glm::vec3 camPos = glm::vec3(position_);
+    
+    // Calculate Rotation Matrices
+    // Yaw (World Y)
+    // Drag Right (deltaX > 0) -> Rotate Camera Left (CW around Y) -> Negative Angle
+    glm::mat4 yaw = glm::rotate(glm::mat4(1.0f), -deltaX * 5.0f, glm::vec3(0, 1, 0));
+    
+    // Pitch (Camera Right)
+    // Drag Down (deltaY > 0) -> Rotate Camera Up (CW around Right?) 
+    // Right(1,0,0). Z(0,0,1). Y(0,1,0).
+    // +90 around X: Z -> -Y (Down). 
+    // -90 around X: Z -> Y (Up).
+    // So Negative Angle for Drag Down.
+    glm::mat4 pitch = glm::rotate(glm::mat4(1.0f), -deltaY * 5.0f, glm::vec3(GetRight()));
+    
+    glm::mat4 R = yaw * pitch;
+
+    // Update Position
+    // R rotates the Arm vector in World Space
+    glm::vec3 arm = glm::vec3(position_) - target;
+    position_ = glm::vec4(target + glm::vec3(R * glm::vec4(arm, 0.0f)), 1.0f);
+
+    // Update Orientation
+    // The Camera Frame must also rotate by R in World Space to maintain relative alignment.
+    // C2W_new = R * C2W_old
+    // W2C_new = inv(C2W_new) = inv(R * C2W_old) = W2C_old * inv(R)
+    // Since R is a rotation matrix, inv(R) == transpose(R)
+    orientation_ = orientation_ * glm::transpose(R);
+    
+    UpdateVectors();
 }
 
 bool ModelViewController::OnTouch(bool down, double xpos, double ypos)
@@ -200,6 +290,28 @@ void ModelViewController::OnScroll(double xoffset, double yoffset)
 
 bool ModelViewController::UpdateCamera(const double speed, const double timeDelta)
 {
+    if (isFocusing_)
+    {
+        focusTimer_ += static_cast<float>(timeDelta);
+        float t = glm::clamp(focusTimer_ / focusDuration_, 0.0f, 1.0f);
+        
+        // Smooth step
+        t = t * t * (3.0f - 2.0f * t);
+        
+        position_ = glm::vec4(glm::mix(focusStartPos_, focusTargetPos_, t), 1.0f);
+        glm::quat currentRot = glm::slerp(focusStartRot_, focusTargetRot_, t);
+        orientation_ = glm::mat4(glm::mat3(currentRot));
+        
+        UpdateVectors();
+        
+        if (t >= 1.0f)
+        {
+            isFocusing_ = false;
+        }
+        
+        return true;
+    }
+
     const auto d = static_cast<float>(speed * timeDelta);
 
     if (cameraMovingLeft_ || cameraMovingLeftJoystick_) MoveRight(-d * cameraMovingSpeed_.x);

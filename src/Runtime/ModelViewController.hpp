@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Utilities/Glm.hpp"
+#include <optional>
 
 namespace Assets
 {
@@ -36,6 +37,10 @@ public:
 		modelRotY_ = y;
 	}
 
+    void SetOrbitTarget(std::optional<glm::vec3> target) { orbitTarget_ = target; }
+    void SetAltPressed(bool pressed) { altPressed_ = pressed; }
+    void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
+
 	glm::vec3 GetRight();
 	glm::vec3 GetUp();
 	glm::vec3 GetForward();
@@ -47,6 +52,7 @@ private:
 	void MoveRight(float d);
 	void MoveUp(float d);
 	void Rotate(float y, float x);
+    void Orbit(float x, float y);
 	void UpdateVectors();
 
 	// Matrices and vectors.
@@ -57,7 +63,20 @@ private:
 	glm::vec4 up_{ 0, 1, 0, 0 };
 	glm::vec4 forward_{ 0, 0, -1, 0 };
 
+    // Orbit control
+    std::optional<glm::vec3> orbitTarget_;
+    bool altPressed_{};
+
 	// Control states.
+    bool isFocusing_{};
+    float focusTimer_{};
+    const float focusDuration_ = 0.5f;
+    
+    glm::vec3 focusStartPos_{};
+    glm::vec3 focusTargetPos_{};
+    glm::quat focusStartRot_{};
+    glm::quat focusTargetRot_{};
+
 	bool cameraMovingLeft_{};
 	bool cameraMovingRight_{};
 	bool cameraMovingBackward_{};
