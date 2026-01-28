@@ -37,16 +37,4 @@
 *   **代码风格:** 强制执行 `.clang-format`。详见 `AGENT_GUIDE/coding-standards.md`。
 *   **测试规范:** 测试代码位于 `src/Tests`。**关键限制：** 运行单元测试时，工作目录必须设置为二进制文件所在的同级目录。
 
-## 快速开始
-
-```bash
-# 安装依赖
-./vcpkg.bat    # Windows
-./vcpkg.sh     # macOS/Linux
-
-# 构建项目 (自动检测平台)
-./build.bat    # Windows
-./build.sh     # macOS/Linux
-```
-
 关于 Android、特定预设 (Presets) 或运行测试的详细命令，请参考 `AGENT_GUIDE/quick-commands.md`。
