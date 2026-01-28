@@ -11,6 +11,7 @@
 #include "Vulkan/Instance.hpp"
 #include "ScreenShot.hpp"
 #include "QuickJSEngine.hpp"
+#include "Runtime/Command/DeleteNodeCommand.hpp"
 
 #include <iostream>
 #include <fmt/format.h>
@@ -876,10 +877,82 @@ void NextEngine::OnKey(SDL_Event& event)
         return;
     }
 
+    if (event.type == SDL_EVENT_KEY_DOWN)
+    {
+        const SDL_Keymod modifiers = SDL_GetModState();
+        const bool hasCtrlOrCmd = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+        if (hasCtrlOrCmd)
+        {
+            const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
+            if (event.key.key == SDLK_Z)
+            {
+                if (hasShift)
+                {
+                    if (commandSystem_.Redo())
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    if (commandSystem_.Undo())
+                    {
+                        return;
+                    }
+                }
+            }
+            else if (event.key.key == SDLK_Y)
+            {
+                if (commandSystem_.Redo())
+                {
+                    return;
+                }
+            }
+        }
+
+        if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
+        {
+            const uint32_t selectedId = GetScene().GetSelectedId();
+            if (selectedId != static_cast<uint32_t>(-1))
+            {
+                auto command = std::make_unique<DeleteNodeCommand>(GetScene(), selectedId);
+                if (ExecuteCommand(std::move(command)))
+                {
+                    return;
+                }
+            }
+        }
+    }
+
     if( gameInstance_->OnKey(event) )
     {
         return;
     }
+}
+
+bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)
+{
+    return commandSystem_.ExecuteCommand(std::move(command));
+}
+
+bool NextEngine::UndoCommand()
+{
+    return commandSystem_.Undo();
+}
+
+bool NextEngine::RedoCommand()
+{
+    return commandSystem_.Redo();
+}
+
+bool NextEngine::CanUndo() const
+{
+    return commandSystem_.CanUndo();
+}
+
+bool NextEngine::CanRedo() const
+{
+    return commandSystem_.CanRedo();
 }
 
 void NextEngine::OnTouch(bool down, double xpos, double ypos)

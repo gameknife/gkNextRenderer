@@ -131,6 +131,16 @@ namespace Assets
         RecalcTransform();
     }
 
+    void Node::ClearParent()
+    {
+        if (parent_)
+        {
+            parent_->RemoveChild(shared_from_this());
+            parent_.reset();
+            RecalcTransform();
+        }
+    }
+
     void Node::AddChild(std::shared_ptr<Node> child)
     {
         children_.insert(child);

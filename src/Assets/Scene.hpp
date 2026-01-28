@@ -119,6 +119,17 @@ namespace Assets
 		void MarkEnvDirty();
 
 		void AddNode(std::shared_ptr<Node> node);
+		std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
+		std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
+		uint32_t GenerateInstanceId() const;
+
+		struct RemovedNodeEntry
+		{
+			std::shared_ptr<Node> node;
+			size_t index;
+		};
+		std::vector<RemovedNodeEntry> RemoveNodeHierarchy(uint32_t id, std::shared_ptr<Node>& outParent);
+		void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent, const std::shared_ptr<Node>& root);
 
 		void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices);
 

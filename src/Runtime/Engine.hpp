@@ -11,6 +11,7 @@
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Options.hpp"
 #include "Utilities/FileHelper.hpp"
+#include "Runtime/Command/CommandSystem.hpp"
 
 class NextPhysics;
 class QuickJSEngine;
@@ -167,6 +168,15 @@ public:
 	// scene loading
 	void RequestLoadScene(std::string sceneFileName);
 
+	// command system
+	bool ExecuteCommand(std::unique_ptr<ICommand> command);
+	bool UndoCommand();
+	bool RedoCommand();
+	bool CanUndo() const;
+	bool CanRedo() const;
+	CommandSystem& GetCommandSystem() { return commandSystem_; }
+	const CommandSystem& GetCommandSystem() const { return commandSystem_; }
+
 	Vulkan::Window& GetWindow() const {return *window_;}
 	
 	class UserInterface* GetUserInterface() {return userInterface_.get();}
@@ -256,6 +266,8 @@ private:
 	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
 	std::unique_ptr<QuickJSEngine> quickJSEngine_;
+
+	CommandSystem commandSystem_{};
     
 	// engine status
 	NextRenderer::EApplicationStatus status_{};

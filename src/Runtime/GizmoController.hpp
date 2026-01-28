@@ -3,6 +3,7 @@
 #include "Common/CoreMinimal.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 class NextEngine;
 struct ImGuiIO;
@@ -27,4 +28,9 @@ private:
     bool isOver_ = false;
     bool isShowing_ = false;
     bool wasUsing_ = false;
+    bool dragActive_ = false;
+    uint32_t dragInstanceId_ = 0;
+    glm::vec3 dragStartTranslation_ {};
+    glm::quat dragStartRotation_ {};
+    glm::vec3 dragStartScale_ {1.0f, 1.0f, 1.0f};
 };

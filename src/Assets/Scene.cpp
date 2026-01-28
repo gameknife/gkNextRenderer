@@ -20,6 +20,7 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include <spdlog/spdlog.h>
+#include <algorithm>
 
 namespace Assets
 {
@@ -399,10 +400,10 @@ namespace Assets
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
         nodes_.push_back(node);
-        if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
+        if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
-             // bind the mesh shape to the node
+            // bind the mesh shape to the node
             if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
                 auto phys = node->GetComponent<Runtime::PhysicsComponent>();
@@ -418,10 +419,10 @@ namespace Assets
                     if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
 #endif
 
-                    if ( validShape )
+                    if (validShape)
                     {
                         NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
-                        
+
                         if (!phys)
                         {
                             phys = std::make_shared<Runtime::PhysicsComponent>();
@@ -434,6 +435,118 @@ namespace Assets
                     }
                 }
             }
+        }
+    }
+
+    std::shared_ptr<Node> Scene::RemoveNodeByInstanceId(uint32_t id)
+    {
+        for (auto it = nodes_.begin(); it != nodes_.end(); ++it)
+        {
+            if ((*it)->GetInstanceId() == id)
+            {
+                auto node = *it;
+                node->ClearParent();
+                nodes_.erase(it);
+                return node;
+            }
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<Node> Scene::GetNodeSharedByInstanceId(uint32_t id) const
+    {
+        for (const auto& node : nodes_)
+        {
+            if (node->GetInstanceId() == id)
+            {
+                return node;
+            }
+        }
+        return nullptr;
+    }
+
+    uint32_t Scene::GenerateInstanceId() const
+    {
+        uint32_t maxId = 0;
+        for (const auto& node : nodes_)
+        {
+            maxId = std::max(maxId, node->GetInstanceId());
+        }
+        return nodes_.empty() ? 0 : maxId + 1;
+    }
+
+    namespace
+    {
+        void CollectNodeHierarchy(const std::shared_ptr<Node>& node, std::vector<std::shared_ptr<Node>>& outNodes)
+        {
+            if (!node)
+            {
+                return;
+            }
+            outNodes.push_back(node);
+            for (const auto& child : node->Children())
+            {
+                CollectNodeHierarchy(child, outNodes);
+            }
+        }
+    }
+
+    std::vector<Scene::RemovedNodeEntry> Scene::RemoveNodeHierarchy(uint32_t id, std::shared_ptr<Node>& outParent)
+    {
+        std::vector<RemovedNodeEntry> removedEntries;
+        auto root = GetNodeSharedByInstanceId(id);
+        if (!root)
+        {
+            outParent = nullptr;
+            return removedEntries;
+        }
+
+        outParent = nullptr;
+        if (Node* parent = root->GetParent())
+        {
+            outParent = GetNodeSharedByInstanceId(parent->GetInstanceId());
+            root->ClearParent();
+        }
+
+        std::vector<std::shared_ptr<Node>> nodesToRemove;
+        CollectNodeHierarchy(root, nodesToRemove);
+
+        std::unordered_set<uint32_t> removeIds;
+        removeIds.reserve(nodesToRemove.size());
+        for (const auto& node : nodesToRemove)
+        {
+            removeIds.insert(node->GetInstanceId());
+        }
+
+        removedEntries.reserve(nodesToRemove.size());
+        for (size_t index = 0; index < nodes_.size(); ++index)
+        {
+            const auto& node = nodes_[index];
+            if (removeIds.find(node->GetInstanceId()) != removeIds.end())
+            {
+                removedEntries.push_back({node, index});
+            }
+        }
+
+        nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(), [&removeIds](const std::shared_ptr<Node>& node)
+        {
+            return removeIds.find(node->GetInstanceId()) != removeIds.end();
+        }), nodes_.end());
+
+        return removedEntries;
+    }
+
+    void Scene::RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent, const std::shared_ptr<Node>& root)
+    {
+        for (auto it = entries.rbegin(); it != entries.rend(); ++it)
+        {
+            const size_t index = std::min(it->index, nodes_.size());
+            nodes_.insert(nodes_.begin() + index, it->node);
+        }
+
+        if (parent && root)
+        {
+            root->SetParent(parent);
         }
     }
 
