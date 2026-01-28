@@ -3,6 +3,8 @@
 #include "EditorGUI.h"
 #include "Runtime/Engine.hpp"
 #include "Utilities/ImGui.hpp"
+#include "Assets/Scene.hpp"
+#include <spdlog/spdlog.h>
 
 void Editor::GUI::ShowMenubar()
 {
@@ -31,6 +33,23 @@ void Editor::GUI::ShowMenubar()
         /// menu-file
         if (ImGui::BeginMenu("File"))
         {
+            if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S"))
+            {
+                // TODO: Add file dialog for save path selection
+                std::string filename = "saved_scene.glb";
+                bool success = NextEngine::GetInstance()->GetScene().Save(filename);
+                if (success)
+                {
+                    SPDLOG_INFO("Scene saved successfully: {}", filename);
+                }
+                else
+                {
+                    SPDLOG_ERROR("Failed to save scene: {}", filename);
+                }
+            }
+
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Exit"))
             {
                 state = false;

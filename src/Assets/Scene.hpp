@@ -60,6 +60,7 @@ namespace Assets
 		const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
 		const std::vector<Model>& Models() const { return models_; }
 		std::vector<FMaterial>& Materials() { return materials_; }
+		const std::vector<FMaterial>& Materials() const { return materials_; }
 		const std::vector<ModelData>& Offsets() const { return offsets_; }
 		const std::vector<LightObject>& Lights() const { return lights_; }
 		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
@@ -135,7 +136,12 @@ namespace Assets
 		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
 		FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
-		
+
+		// Scene saving功能
+		bool Save(const std::string& filename) const;
+		bool SaveAsGLB(const std::string& filename) const;
+		bool SaveAsGLTF(const std::string& filename) const;
+
 	private:
 		std::vector<FMaterial> materials_;
 		std::vector<Material> gpuMaterials_;
@@ -230,5 +236,6 @@ namespace Assets
 		VkDeviceAddress skinnedVerticesAddr_ = 0;
 		VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
 		VkDeviceAddress jointMatricesAddr_ = 0;
+
 	};
 }

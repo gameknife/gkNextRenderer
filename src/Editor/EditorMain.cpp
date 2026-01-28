@@ -36,6 +36,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     options.ForceSDR = true;
     options.NoDenoiser = true;
     options.SuperResolution = 2;
+    options.KeepCPUMeshData = true;  // 编辑器模式保留CPU网格数据用于场景保存
 }
 
 void EditorGameInstance::OnInit()

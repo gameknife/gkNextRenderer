@@ -186,10 +186,14 @@ foreach(target IN LISTS AllTargets)
 		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 12)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
-		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities")
 		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
 		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+
+		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
+		set_source_files_properties(Assets/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Assets/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})

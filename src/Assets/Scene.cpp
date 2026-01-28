@@ -4,6 +4,8 @@
 #include "Options.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Assets/TextureImage.hpp"
+#include "FSceneSaver.h"
+#include <tiny_gltf.h>
 #include <chrono>
 #include <unordered_set>
 #include <meshoptimizer.h>
@@ -352,7 +354,11 @@ namespace Assets
 
             model.SetSectionCount(processSection);
 
-            model.FreeMemory();
+            // 在编辑器模式下保留CPU网格数据用于场景保存功能
+            if (!GOption->KeepCPUMeshData)
+            {
+                model.FreeMemory();
+            }
         }
         
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -849,5 +855,33 @@ namespace Assets
         skinnedVerticesAddr_ = skinnedVertices;
         skinnedVerticesSimpleAddr_ = skinnedVerticesSimple;
         jointMatricesAddr_ = jointMatrices;
+    }
+
+    bool Scene::Save(const std::string& filename) const
+    {
+        // 根据文件扩展名选择保存格式
+        if (filename.ends_with(".glb") || filename.ends_with(".GLB"))
+        {
+            return SaveAsGLB(filename);
+        }
+        else if (filename.ends_with(".gltf") || filename.ends_with(".GLTF"))
+        {
+            return SaveAsGLTF(filename);
+        }
+        else
+        {
+            SPDLOG_ERROR("Unsupported file extension. Use .glb or .gltf");
+            return false;
+        }
+    }
+
+    bool Scene::SaveAsGLB(const std::string& filename) const
+    {
+        return FSceneSaver::SaveGLBScene(filename, *this);
+    }
+
+    bool Scene::SaveAsGLTF(const std::string& filename) const
+    {
+        return FSceneSaver::SaveGLTFScene(filename, *this);
     }
 }

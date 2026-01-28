@@ -291,7 +291,7 @@ namespace Assets
         mikktspaceContext.m_pUserData = m;
         genTangSpaceDefault(&mikktspaceContext);
     }
-    
+    DISABLE_OPTIMIZATION
     bool FSceneLoader::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
@@ -531,9 +531,11 @@ namespace Assets
             
             m.DiffuseTextureId = lambdaGetTexture( mat.pbrMetallicRoughness.baseColorTexture.index );
             m.MRATextureId = lambdaGetTexture(mat.pbrMetallicRoughness.metallicRoughnessTexture.index); // metallic in B, roughness in G
-            
+
             m.NormalTextureId = lambdaGetTexture(mat.normalTexture.index);
             m.NormalTextureScale = static_cast<float>(mat.normalTexture.scale);
+
+            m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
 
             if (mat.occlusionTexture.index != -1 && mat.occlusionTexture.index != mat.pbrMetallicRoughness.metallicRoughnessTexture.index)
             {
@@ -617,7 +619,11 @@ namespace Assets
                 m.EmissiveTextureId = lambdaGetTexture(mat.emissiveTexture.index);
             }
 
-            materials.push_back( { m, mat.name } );
+            FMaterial fmat;
+            fmat.gpuMaterial_ = m;
+            fmat.name_ = mat.name;
+
+            materials.push_back(fmat);
         }
 
         // export whole scene into a big buffer, with vertice indices materials
@@ -1007,7 +1013,7 @@ namespace Assets
         //printf("model.cameras: %d\n", i);
         return true;
     }
-
+    ENABLE_OPTIMIZATION
     Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models)
     {
         //auto center camera by scene bounds
