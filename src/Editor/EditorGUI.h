@@ -66,7 +66,7 @@ namespace Editor
         bool                    meshBrowser                = true;
         void                    ShowMeshBrowser();
         
-        void                    DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclick_action);
+        void                    DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclick_action, std::function<void()> contextMenuAction = nullptr);
 
         bool                    ed_material                = false;                // Material Editor
         Assets::FMaterial*       selected_material          = nullptr;              // Material Selected

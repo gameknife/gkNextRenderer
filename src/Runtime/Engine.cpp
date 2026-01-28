@@ -1068,34 +1068,44 @@ void NextEngine::RequestLoadScene(std::string sceneFileName)
     });
 }
 
-void NextEngine::LoadScene(std::string sceneFileName)
+void NextEngine::RequestLoadSceneAdd(std::string sceneFileName)
+{
+    AddTickedTask([this, sceneFileName](double deltaSeconds)->bool
+    {
+        if ( status_ != NextRenderer::EApplicationStatus::Running )
+        {
+            return false;
+        }
+        
+        LoadSceneAdd(sceneFileName);
+        return true;
+    });
+}
+
+void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad)
 {
     // wait all task finish
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
-    scene_->CleanUp();
-    
     status_ = NextRenderer::EApplicationStatus::Loading;
     
-    std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
-    std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
-    std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
-    std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
-    std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
-    std::shared_ptr< std::vector<Assets::Skeleton> > skeletons = std::make_shared< std::vector<Assets::Skeleton> >();
-    std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
+    SceneLoadContext ctx;
+    ctx.models = std::make_shared< std::vector<Assets::Model> >();
+    ctx.nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
+    ctx.materials = std::make_shared< std::vector<Assets::FMaterial> >();
+    ctx.lights = std::make_shared< std::vector<Assets::LightObject> >();
+    ctx.tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
+    ctx.skeletons = std::make_shared< std::vector<Assets::Skeleton> >();
+    ctx.cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
-    physicsEngine_->OnSceneDestroyed();
-    Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
-    
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
+    TaskCoordinator::GetInstance()->AddTask( [ctx, sceneFileName](ResTask& task)
     {
         SceneTaskContext taskContext {};
         const auto timer = std::chrono::high_resolution_clock::now();
 
-        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks, *skeletons);
+        taskContext.success = SceneList::LoadScene( sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
 
         taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
 
@@ -1103,43 +1113,23 @@ void NextEngine::LoadScene(std::string sceneFileName)
         std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
         task.SetContext( taskContext );
     },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
+    [this, ctx, sceneFileName, onGpuLoad](ResTask& task) mutable
     {
         SceneTaskContext taskContext {};
         task.GetContext( taskContext );
         if (taskContext.success )
         {
             SPDLOG_INFO("{}", taskContext.outputInfo.data());
-            const auto timer = std::chrono::high_resolution_clock::now();
-            scene_->GetEnvSettings().Reset();
-            scene_->SetEnvSettings(*cameraState);
-
-            gameInstance_->OnSceneUnloaded();
-            physicsEngine_->OnSceneStarted();
-
+            
             renderer_->Device().WaitIdle();
             renderer_->DeleteSwapChain();
-            renderer_->OnPreLoadScene();
-
-            gameInstance_->BeforeSceneRebuild(*nodes, *models, *materials, *lights, *tracks);
-            scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
-            scene_->PostLoad(*skeletons);
-            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-            renderer_->SetScene(scene_);
-                    
-            userSettings_.CameraIdx = 0;
-            assert(!scene_->GetEnvSettings().cameras.empty());
-            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+            
+            // Execute the specific GPU load logic
+            onGpuLoad(ctx);
 
             totalFrames_ = 0;
-                    
             renderer_->OnPostLoadScene();
             renderer_->CreateSwapChain();
-
-            gameInstance_->OnSceneLoaded();
-
-            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
         }
         else
         {
@@ -1149,6 +1139,62 @@ void NextEngine::LoadScene(std::string sceneFileName)
         status_ = NextRenderer::EApplicationStatus::Running;
     },
     1);
+}
+
+void NextEngine::LoadScene(std::string sceneFileName)
+{
+    scene_->CleanUp();
+    physicsEngine_->OnSceneDestroyed();
+    Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
+
+    LaunchLoadSceneTask(sceneFileName, [this, sceneFileName](SceneLoadContext& ctx)
+    {
+        const auto timer = std::chrono::high_resolution_clock::now();
+        scene_->GetEnvSettings().Reset();
+        scene_->SetEnvSettings(*ctx.cameraState);
+
+        gameInstance_->OnSceneUnloaded();
+        physicsEngine_->OnSceneStarted();
+
+        renderer_->OnPreLoadScene();
+
+        gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+        scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+        scene_->PostLoad(*ctx.skeletons);
+        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+        renderer_->SetScene(scene_);
+                
+        userSettings_.CameraIdx = 0;
+        assert(!scene_->GetEnvSettings().cameras.empty());
+        scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+
+        gameInstance_->OnSceneLoaded();
+
+        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+        SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
+    });
+}
+
+void NextEngine::LoadSceneAdd(std::string sceneFileName)
+{
+    LaunchLoadSceneTask(sceneFileName, [this, sceneFileName](SceneLoadContext& ctx)
+    {
+        const auto timer = std::chrono::high_resolution_clock::now();
+        
+        renderer_->OnPreLoadScene();
+
+        gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+        
+        std::string name = std::filesystem::path(sceneFileName).stem().string();
+        scene_->Append(name, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
+        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+        renderer_->SetScene(scene_);
+                
+        // gameInstance_->OnSceneLoaded(); // Maybe trigger this too?
+
+        float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+        SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
+    });
 }
 
 void NextEngine::InitPhysics()

@@ -50,6 +50,12 @@ namespace Assets
 			std::vector<FMaterial>& materials,
 			std::vector<LightObject>& lights,
 			std::vector<AnimationTrack>& tracks);
+		void Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
+			std::vector<Model>& models,
+			std::vector<FMaterial>& materials,
+			std::vector<LightObject>& lights,
+			std::vector<AnimationTrack>& tracks,
+			const std::vector<Skeleton>& skeletons);
 		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
 			bool supportRayTracing);
 	    void CleanUp();

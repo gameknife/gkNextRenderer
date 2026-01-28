@@ -62,6 +62,11 @@ void EditorGameInstance::OnInit()
         GetEngine().RequestLoadScene(args);
         return true;
     });
+    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadSceneAdd, [this](std::string& args)-> bool
+    {
+        GetEngine().RequestLoadSceneAdd(args);
+        return true;
+    });
     EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)-> bool
     {
         //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());

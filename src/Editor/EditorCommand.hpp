@@ -10,6 +10,7 @@ enum class EEditorCommand {
     ECmdSystem_RequestMaximum,
 
     ECmdIO_LoadScene,
+    ECmdIO_LoadSceneAdd,
     ECmdIO_LoadHDRI,
 };
 

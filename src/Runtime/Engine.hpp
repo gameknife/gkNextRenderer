@@ -167,6 +167,7 @@ public:
 
 	// scene loading
 	void RequestLoadScene(std::string sceneFileName);
+	void RequestLoadSceneAdd(std::string sceneFileName);
 
 	// command system
 	bool ExecuteCommand(std::unique_ptr<ICommand> command);
@@ -217,7 +218,21 @@ protected:
     void TickGamepadInput();
 	
 private:
+        struct SceneLoadContext
+        {
+            std::shared_ptr< std::vector<Assets::Model> > models;
+            std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes;
+            std::shared_ptr< std::vector<Assets::FMaterial> > materials;
+            std::shared_ptr< std::vector<Assets::LightObject> > lights;
+            std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks;
+            std::shared_ptr< std::vector<Assets::Skeleton> > skeletons;
+            std::shared_ptr< Assets::EnvironmentSetting > cameraState;
+        };
+
+        void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
+
         void LoadScene(std::string sceneFileName);
+        void LoadSceneAdd(std::string sceneFileName);
 
         void InitPhysics();
 

@@ -10,7 +10,7 @@
 const int iconSize = 96;
 const int iconPadding = 20;
 
-void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclickAction)
+void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, const std::string& name, const char* icon, ImU32 color, std::function<void ()> doubleclickAction, std::function<void()> contextMenuAction)
 {
     ImGui::BeginGroup();
     ImGui::PushFont(bigIcon_); // use the font awesome font
@@ -57,6 +57,15 @@ void Editor::GUI::DrawGeneralContentBrowser(bool iconOrTex, uint32_t globalId, c
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + iconPadding);
     ImGui::EndGroup();
+
+    if (contextMenuAction)
+    {
+        if (ImGui::BeginPopupContextItem((name + "_context").c_str()))
+        {
+            contextMenuAction();
+            ImGui::EndPopup();
+        }
+    }
 }
 
 void Editor::GUI::ShowMeshBrowser()
@@ -247,6 +256,20 @@ void Editor::GUI::ShowContentBrowser()
                     else if (ext == ".hdr")
                     {
                         EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadHDRI, abspath);
+                    }
+                }
+            },
+            [&]()
+            {
+                if (ext == ".glb")
+                {
+                    if (ImGui::MenuItem("Open Scene"))
+                    {
+                        EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadScene, abspath);
+                    }
+                    if (ImGui::MenuItem("Add To Scene"))
+                    {
+                        EditorCommand::ExecuteCommand(EEditorCommand::ECmdIO_LoadSceneAdd, abspath);
                     }
                 }
             });

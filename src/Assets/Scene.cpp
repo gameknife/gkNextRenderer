@@ -120,6 +120,83 @@ namespace Assets
         tracks_ = std::move(tracks);
     }
 
+    void Scene::Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
+        std::vector<FMaterial>& materials, std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
+        const std::vector<Skeleton>& skeletons)
+    {
+        uint32_t modelOffset = static_cast<uint32_t>(models_.size());
+        uint32_t materialOffset = static_cast<uint32_t>(materials_.size());
+        
+        // Ensure unique root node name
+        std::string uniqueName = sceneName;
+        int counter = 1;
+        while (GetNode(uniqueName) != nullptr)
+        {
+            uniqueName = fmt::format("{}_{}", sceneName, counter++);
+        }
+
+        // Create a root node for the appended scene
+        uint32_t currentMaxId = GenerateInstanceId();
+        auto rootNode = Node::CreateNode(uniqueName, glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), currentMaxId++);
+
+        // Update IDs for all new nodes (assuming nodes is a flat list of all new nodes)
+        for (auto& node : nodes)
+        {
+            node->SetInstanceId(currentMaxId++);
+            
+            // Update RenderComponent
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (render)
+            {
+                if (render->GetModelId() != -1)
+                {
+                    render->SetModelId(render->GetModelId() + modelOffset);
+                }
+                auto& mats = render->Materials();
+                for (auto& matId : mats)
+                {
+                     matId += materialOffset; 
+                }
+                
+                // Handle Skeletons
+                if (render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
+                {
+                    auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
+                    comp->AddAnimations(tracks);
+                    comp->PlayAnimation("Default");
+                    node->AddComponent(comp);
+                }
+            }
+            
+            // Reparent roots (nodes that don't have a parent in the new scene hierarchy)
+            if (node->GetParent() == nullptr)
+            {
+                node->SetParent(rootNode);
+            }
+        }
+
+        // Merge vectors
+        // models_.insert(models_.end(), models.begin(), models.end());
+        models_.reserve(models_.size() + models.size());
+        for (auto& model : models)
+        {
+            models_.push_back(std::move(model));
+        }
+
+        materials_.insert(materials_.end(), materials.begin(), materials.end());
+        lights_.insert(lights_.end(), lights.begin(), lights.end());
+        tracks_.insert(tracks_.end(), tracks.begin(), tracks.end());
+        
+        // Add new nodes to scene nodes
+        nodes_.insert(nodes_.end(), nodes.begin(), nodes.end());
+        
+        // Add root node to scene
+        nodes_.push_back(rootNode);
+
+        // Mark dirty
+        MarkDirty();
+    }
+
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         // Rebuild the cpu bvh

@@ -41,6 +41,7 @@ namespace Assets
         const std::string& GetName() const {return name_; }
 
         uint32_t GetInstanceId() const { return instanceId_; }
+        void SetInstanceId(uint32_t id) { instanceId_ = id; }
         bool TickVelocity(glm::mat4& combinedTS);
 
         void SetParent(std::shared_ptr<Node> parent);
