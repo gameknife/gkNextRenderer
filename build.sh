@@ -142,12 +142,14 @@ if [ "$RECONFIGURE" -eq 1 ] || [ "$CLEAN" -eq 1 ] || [ ! -f "$CACHE_FILE" ]; the
 fi
 
 # Check if any -D arguments are passed (requires reconfigure)
-for arg in "${CMAKE_ARGS[@]}"; do
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+    for arg in "${CMAKE_ARGS[@]}"; do
     if [[ "$arg" == -D* ]]; then
         NEEDS_CONFIGURE=1
         break
     fi
-done
+    done
+fi
 
 config_time=0
 if [ "$NEEDS_CONFIGURE" -eq 1 ]; then
