@@ -1,10 +1,18 @@
 #include "Editor/EditorUi.hpp"
 
+#include "Editor/EditorDragDrop.hpp"
+
+#include "Assets/Node.h"
 #include "Assets/Scene.hpp"
+#include "Editor/EditorActionDispatcher.hpp"
+#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/NextEngineHelper.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
+
+#include <string>
 
 namespace Editor
 {
@@ -26,6 +34,100 @@ namespace Editor
         if (size.x <= 0.0f || size.y <= 0.0f)
         {
             return;
+        }
+
+        if (ui.viewportOnMainViewport && ImGui::GetDragDropPayload() != nullptr)
+        {
+            ImGui::SetNextWindowPos(pos);
+            ImGui::SetNextWindowSize(size);
+            ImGui::SetNextWindowViewport(viewport->ID);
+            ImGui::SetNextWindowBgAlpha(0.0f);
+
+            ImGuiWindowFlags dropFlags = 0 | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollWithMouse;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::Begin("ViewportDropTarget", nullptr, dropFlags);
+            ImGui::PopStyleVar();
+
+            ImGui::InvisibleButton("ViewportDropTargetBtn", size);
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kEditorDragDropPayload))
+                {
+                    if (payload->DataSize == sizeof(EditorDragDropPayload))
+                    {
+                        const auto* data = static_cast<const EditorDragDropPayload*>(payload->Data);
+                        if (data->type == EEditorDragPayloadType::Scene)
+                        {
+                            std::string path = data->path;
+                            const bool hasScene = !ctx.scene.Nodes().empty();
+                            if (!hasScene)
+                            {
+                                ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, path);
+                            }
+                            else
+                            {
+                                glm::dvec2 mousePos = ctx.engine.GetMousePos();
+                                glm::vec3 origin;
+                                glm::vec3 dir;
+                                NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
+
+                                NextEngine* engine = &ctx.engine;
+                                engine->RayCastGPU(origin, dir,
+                                                   [engine, path](Assets::RayCastResult result) mutable
+                                                   {
+                                                       NextEngine::SceneAppendOptions options{};
+                                                       if (result.Hitted)
+                                                       {
+                                                           options.placeOnHit = true;
+                                                           options.hitPosition = result.HitPoint;
+                                                       }
+                                                       engine->RequestLoadSceneAdd(path, options);
+                                                       return true;
+                                                   });
+                            }
+                        }
+                        else if (data->type == EEditorDragPayloadType::Material)
+                        {
+                            const uint32_t materialId = data->materialId;
+                            glm::dvec2 mousePos = ctx.engine.GetMousePos();
+                            glm::vec3 origin;
+                            glm::vec3 dir;
+                            NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
+
+                            Assets::Scene* scene = &ctx.scene;
+                            ctx.engine.RayCastGPU(origin, dir,
+                                                  [scene, materialId](Assets::RayCastResult result)
+                                                  {
+                                                      if (result.Hitted)
+                                                      {
+                                                          Assets::Node* node =
+                                                              scene->GetNodeByInstanceId(result.InstanceId);
+                                                          if (node)
+                                                          {
+                                                              auto render =
+                                                                  node->GetComponent<Runtime::RenderComponent>();
+                                                              if (render && render->IsDrawable())
+                                                              {
+                                                                  auto& mats = render->Materials();
+                                                                  for (auto& mat : mats)
+                                                                  {
+                                                                      mat = materialId;
+                                                                  }
+                                                                  scene->MarkDirty();
+                                                              }
+                                                          }
+                                                      }
+                                                      return true;
+                                                  });
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            ImGui::End();
         }
 
         constexpr float padding = 5.0f;

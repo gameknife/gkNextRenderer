@@ -1,52 +1,66 @@
 #include "Scene.hpp"
+#include <chrono>
+#include <glm/detail/type_half.hpp>
+#include <meshoptimizer.h>
+#include <tiny_gltf.h>
+#include <unordered_set>
+#include "Assets/TextureImage.hpp"
 #include "Common/CoreMinimal.hpp"
+#include "FSceneSaver.h"
 #include "Model.hpp"
 #include "Options.hpp"
-#include "Vulkan/BufferUtil.hpp"
-#include "Assets/TextureImage.hpp"
-#include "FSceneSaver.h"
-#include <tiny_gltf.h>
-#include <chrono>
-#include <unordered_set>
-#include <meshoptimizer.h>
-#include <glm/detail/type_half.hpp>
 #include "Runtime/NextPhysics.h"
+#include "Scene.hpp"
+#include "Vulkan/BufferUtil.hpp"
 
 #include "Node.h"
-#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/NextEngineHelper.h"
-#include "Runtime/Components/SkinnedMeshComponent.h"
 
-#include <spdlog/spdlog.h>
 #include <algorithm>
+#include <spdlog/spdlog.h>
 
 namespace Assets
 {
-    Scene::Scene(Vulkan::CommandPool& commandPool,
-                 bool supportRayTracing)
+    Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
-        int flags =  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "VoxelDatas", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData), farAmbientCubeBuffer_,
-                                                    farAmbientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "PageIndex", flags,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_,
-            pageIndexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "VoxelDatas", flags,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
+            farAmbientCubeBuffer_, farAmbientCubeBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "PageIndex", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_, pageIndexBufferMemory_);
 
-        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "GPUDrivenStats", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat), gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_ );
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "GPUDrivenStats", flags,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat),
+            gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_);
 
-        Vulkan::BufferUtil::CreateDeviceBufferLocal( commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(SphericalHarmonics) * 100, hdrSHBuffer_, hdrSHBufferMemory_ );
-        
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(SphericalHarmonics) * 100, hdrSHBuffer_, hdrSHBufferMemory_);
+
         // gpu local buffers
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
-                                            indirectDrawBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube), ambientCubeBuffer_,
-                                            ambientCubeBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
+            indirectDrawBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
+            ambientCubeBuffer_, ambientCubeBufferMemory_);
 
         // shadow maps
-        cpuShadowMap_.reset(new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
-        cpuShadowMap_->Image().TransitionImageLayout( commandPool, VK_IMAGE_LAYOUT_GENERAL);
+        cpuShadowMap_.reset(
+            new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+        cpuShadowMap_->Image().TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
         cpuShadowMap_->SetDebugName("Shadowmap");
 
         RebuildMeshBuffer(commandPool, supportRayTracing);
@@ -110,7 +124,8 @@ namespace Assets
         }
     }
 
-    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models, std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
+    void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
+                       std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
@@ -120,13 +135,14 @@ namespace Assets
         tracks_ = std::move(tracks);
     }
 
-    void Scene::Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
-        std::vector<FMaterial>& materials, std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
-        const std::vector<Skeleton>& skeletons)
+    std::shared_ptr<Node> Scene::Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
+                                        std::vector<Model>& models, std::vector<FMaterial>& materials,
+                                        std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
+                                        const std::vector<Skeleton>& skeletons)
     {
         uint32_t modelOffset = static_cast<uint32_t>(models_.size());
         uint32_t materialOffset = static_cast<uint32_t>(materials_.size());
-        
+
         // Ensure unique root node name
         std::string uniqueName = sceneName;
         int counter = 1;
@@ -137,13 +153,13 @@ namespace Assets
 
         // Create a root node for the appended scene
         uint32_t currentMaxId = GenerateInstanceId();
-        auto rootNode = Node::CreateNode(uniqueName, glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), currentMaxId++);
+        auto rootNode = Node::CreateNode(uniqueName, glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), currentMaxId++);
 
         // Update IDs for all new nodes (assuming nodes is a flat list of all new nodes)
         for (auto& node : nodes)
         {
             node->SetInstanceId(currentMaxId++);
-            
+
             // Update RenderComponent
             auto render = node->GetComponent<Runtime::RenderComponent>();
             if (render)
@@ -155,9 +171,9 @@ namespace Assets
                 auto& mats = render->Materials();
                 for (auto& matId : mats)
                 {
-                     matId += materialOffset; 
+                    matId += materialOffset;
                 }
-                
+
                 // Handle Skeletons
                 if (render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
                 {
@@ -167,7 +183,7 @@ namespace Assets
                     node->AddComponent(comp);
                 }
             }
-            
+
             // Reparent roots (nodes that don't have a parent in the new scene hierarchy)
             if (node->GetParent() == nullptr)
             {
@@ -186,15 +202,17 @@ namespace Assets
         materials_.insert(materials_.end(), materials.begin(), materials.end());
         lights_.insert(lights_.end(), lights.begin(), lights.end());
         tracks_.insert(tracks_.end(), tracks.begin(), tracks.end());
-        
+
         // Add new nodes to scene nodes
         nodes_.insert(nodes_.end(), nodes.begin(), nodes.end());
-        
+
         // Add root node to scene
         nodes_.push_back(rootNode);
 
         // Mark dirty
         MarkDirty();
+
+        return rootNode;
     }
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
@@ -205,7 +223,8 @@ namespace Assets
         // force static flag
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
         {
-            if (node == nullptr) return;
+            if (node == nullptr)
+                return;
             if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
             {
                 phys->SetMobility(Node::ENodeMobility::Kinematic);
@@ -222,15 +241,15 @@ namespace Assets
             }
         };
 
-        for ( auto& track : tracks_ )
+        for (auto& track : tracks_)
         {
             Node* node = GetNode(track.NodeName_);
             SetKinematicRecursive(node);
         }
-        
+
         // calculate the scene aabb
-        sceneAABBMin_ = { FLT_MAX, FLT_MAX, FLT_MAX };
-        sceneAABBMax_ = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        sceneAABBMin_ = {FLT_MAX, FLT_MAX, FLT_MAX};
+        sceneAABBMax_ = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
         for (auto& node : nodes_)
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
@@ -265,20 +284,21 @@ namespace Assets
                 sceneAABBMax_ = glm::max(sceneAABBMax_, worldAABBMax);
             }
         }
-        
+
         // static mesh to jolt mesh shape
-        if ( NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine() )
+        if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
             cachedMeshShapes_.clear();
             for (auto& model : models_)
             {
                 if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
-                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model))  );
+                    cachedMeshShapes_.push_back(
+                        NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model)));
                 }
                 else
                 {
-                    cachedMeshShapes_.push_back( NextRefConst<NextMeshShapeSettings>(nullptr)  );
+                    cachedMeshShapes_.push_back(NextRefConst<NextMeshShapeSettings>(nullptr));
                 }
             }
 
@@ -286,28 +306,36 @@ namespace Assets
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();
                 // bind the mesh shape to the node
-                if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
+                if (render && render->GetModelId() < cachedMeshShapes_.size() &&
+                    cachedMeshShapes_[render->GetModelId()])
                 {
                     auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                     Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
-                    
+
                     if (mobility != Node::ENodeMobility::Dynamic)
                     {
-                        NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                        NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                        NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static
+                                                                                            : NextMotionType::Kinematic;
+                        NextObjectLayer layer =
+                            mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
                         bool validShape = false;
 #if WITH_PHYSIC
-                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
+                            cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
+                            validShape = true;
 #endif
 
-                        if ( validShape )
+                        if (validShape)
                         {
                             glm::vec3 worldScale = node->WorldScale();
-                            if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 && glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
+                            if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 &&
+                                glm::abs(worldScale.y) > 0.001 && glm::abs(worldScale.z) > 0.001)
                             {
-                                NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
-                                
+                                NextBodyID id = physicsEngine->CreateMeshBody(
+                                    cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(),
+                                    node->WorldRotation(), node->WorldScale(), motionType, layer);
+
                                 if (!phys)
                                 {
                                     phys = std::make_shared<Runtime::PhysicsComponent>();
@@ -322,11 +350,11 @@ namespace Assets
                     }
                 }
             }
-            
+
             // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
-             physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,1,0), NextMotionType::Static);
+            physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0, 1, 0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
@@ -348,7 +376,7 @@ namespace Assets
             const auto indexOffset = static_cast<uint32_t>(indices.size());
             const auto vertexOffset = static_cast<uint32_t>(vertices.size());
             const auto reorderOffset = static_cast<uint32_t>(reorders.size());
-            
+
             // cpu vertex to gpu vertex
             for (auto& vertex : model.CPUVertices())
             {
@@ -358,7 +386,7 @@ namespace Assets
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
                 simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
             }
-            
+
             const auto& weights = model.CPUWeights();
             const auto& joints = model.CPUJoints();
             if (!weights.empty() && weights.size() == model.CPUVertices().size())
@@ -371,51 +399,55 @@ namespace Assets
                 allWeights.resize(allWeights.size() + model.CPUVertices().size(), glm::vec4(0));
                 allJoints.resize(allJoints.size() + model.CPUVertices().size(), glm::uvec4(0));
             }
-            
+
             const std::vector<Vertex>& localVertices = model.CPUVertices();
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
-            
+
             std::vector<std::vector<uint32_t>> slicedIndices;
             constexpr uint32_t maxIndicesPerSlice = 65535 * 3;
-            
+
             // 将localIndices分片，每片最多65535*3个索引
-            for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice) {
+            for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice)
+            {
                 size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
                 slicedIndices.emplace_back(localIndices.begin() + i, localIndices.begin() + endIndex);
             }
 
             int emptySection = 10 - int(slicedIndices.size());
-            int processSection = std::min( int(slicedIndices.size()), 10);
+            int processSection = std::min(int(slicedIndices.size()), 10);
 
-            for ( int slice = 0; slice < processSection; ++slice )
+            for (int slice = 0; slice < processSection; ++slice)
             {
                 const auto localIndexOffset = static_cast<uint32_t>(indices.size());
                 const auto localReorderOffset = static_cast<uint32_t>(reorders.size());
-                
+
                 const auto& localIndiceCount = slicedIndices[slice];
                 uint32_t realSize = uint32_t(localIndiceCount.size());
-                offsets_.push_back({localIndexOffset, realSize, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, localReorderOffset, 0});
+                offsets_.push_back({localIndexOffset, realSize, vertexOffset, model.NumberOfVertices(),
+                                    vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0,
+                                    localReorderOffset, 0});
 
                 std::vector<uint32_t> provoke(localIndiceCount.size());
                 std::vector<uint32_t> reorder(localVertices.size() + localIndiceCount.size() / 3);
                 std::vector<uint32_t> primIndices(localIndiceCount.size());
-            
+
                 if (localIndiceCount.size() > 0)
                 {
-                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndiceCount[0], realSize, localVertices.size()));
+                    reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &localIndiceCount[0],
+                                                                        realSize, localVertices.size()));
                 }
-            
-                for ( size_t i = 0; i < provoke.size(); ++i )
+
+                for (size_t i = 0; i < provoke.size(); ++i)
                 {
                     primIndices[i] += reorder[provoke[i]];
                 }
-            
+
                 // reorder is absolute vertex index
-                for ( size_t i = 0; i < reorder.size(); ++i )
+                for (size_t i = 0; i < reorder.size(); ++i)
                 {
                     reorder[i] += vertexOffset;
                 }
-            
+
                 indices.insert(indices.end(), provoke.begin(), provoke.end());
                 reorders.insert(reorders.end(), reorder.begin(), reorder.end());
                 primitiveIndices.insert(primitiveIndices.end(), primIndices.begin(), primIndices.end());
@@ -425,9 +457,11 @@ namespace Assets
             {
                 SPDLOG_WARN("more than 10 sections in model");
             }
-            for ( int slice = 0; slice < emptySection; ++slice )
+            for (int slice = 0; slice < emptySection; ++slice)
             {
-                offsets_.push_back({indexOffset, 0, vertexOffset, model.NumberOfVertices(), vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0, reorderOffset, 0});
+                offsets_.push_back({indexOffset, 0, vertexOffset, model.NumberOfVertices(),
+                                    vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0,
+                                    reorderOffset, 0});
             }
 
             model.SetSectionCount(processSection);
@@ -438,24 +472,39 @@ namespace Assets
                 model.FreeMemory();
             }
         }
-        
+
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
         // this two buffer may change violate, reverse to MAX_NODES and  MAX_MATERIALS
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Nodes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(NodeProxy) * Assets::MAX_NODES, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(commandPool, "Materials", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,sizeof(Material) * Assets::MAX_MATERIALS, materialBuffer_, materialBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "Nodes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(NodeProxy) * Assets::MAX_NODES, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "Materials", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(Material) * Assets::MAX_MATERIALS, materialBuffer_, materialBufferMemory_);
 
         // this buffer now, no support extended
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices, vertexBuffer_, vertexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SimpleVertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, simpleVertices, simpleVertexBuffer_, simpleVertexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags, indices, indexBuffer_, indexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_, reorderBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices, primAddressBuffer_, primAddressBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_, offsetBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices",
+                                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices,
+                                               vertexBuffer_, vertexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SimpleVertices",
+                                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, simpleVertices,
+                                               simpleVertexBuffer_, simpleVertexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags,
+                                               indices, indexBuffer_, indexBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_,
+                                               reorderBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "PrimAddress",
+                                               VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rtxFlags | flags, primitiveIndices,
+                                               primAddressBuffer_, primAddressBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_,
+                                               offsetBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_, skinWeightBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_, skinJointBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_,
+                                               skinWeightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_,
+                                               skinJointBufferMemory_);
 
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
@@ -469,10 +518,7 @@ namespace Assets
         cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
     }
 
-    void Scene::CleanUp()
-    {
-        cpuAccelerationStructure_.ClearAllTasks();
-    }
+    void Scene::CleanUp() { cpuAccelerationStructure_.ClearAllTasks(); }
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
@@ -488,17 +534,23 @@ namespace Assets
 
                 if (mobility != Node::ENodeMobility::Dynamic)
                 {
-                    NextMotionType motionType = mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                    NextObjectLayer layer = mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                    NextMotionType motionType =
+                        mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                    NextObjectLayer layer =
+                        mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
                     bool validShape = false;
 #if WITH_PHYSIC
-                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() && cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0) validShape = true;
+                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
+                        cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
+                        validShape = true;
 #endif
 
                     if (validShape)
                     {
-                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(), node->WorldRotation(), node->WorldScale(), motionType, layer);
+                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()],
+                                                                      node->WorldTranslation(), node->WorldRotation(),
+                                                                      node->WorldScale(), motionType, layer);
 
                         if (!phys)
                         {
@@ -566,7 +618,7 @@ namespace Assets
                 CollectNodeHierarchy(child, outNodes);
             }
         }
-    }
+    } // namespace
 
     std::vector<Scene::RemovedNodeEntry> Scene::RemoveNodeHierarchy(uint32_t id, std::shared_ptr<Node>& outParent)
     {
@@ -606,14 +658,14 @@ namespace Assets
         }
 
         nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(), [&removeIds](const std::shared_ptr<Node>& node)
-        {
-            return removeIds.find(node->GetInstanceId()) != removeIds.end();
-        }), nodes_.end());
+                                    { return removeIds.find(node->GetInstanceId()) != removeIds.end(); }),
+                     nodes_.end());
 
         return removedEntries;
     }
 
-    void Scene::RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent, const std::shared_ptr<Node>& root)
+    void Scene::RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent,
+                             const std::shared_ptr<Node>& root)
     {
         for (auto it = entries.rbegin(); it != entries.rend(); ++it)
         {
@@ -630,7 +682,8 @@ namespace Assets
     const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex) const
     {
         // all gpu device address
-        gpuScene_.Camera = NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
+        gpuScene_.Camera =
+            NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
         gpuScene_.Nodes = nodeMatrixBuffer_->GetDeviceAddress();
         gpuScene_.Materials = materialBuffer_->GetDeviceAddress();
         gpuScene_.Offsets = offsetBuffer_->GetDeviceAddress();
@@ -668,32 +721,33 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        //cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
-        //cpuAccelerationStructure_.GenShadowMap(*this);
+        // cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
+        // cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     void Scene::Tick(float deltaSeconds)
     {
-        if ( NextEngine::GetInstance()->GetUserSettings().TickAnimation)
+        if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
         {
             for (auto& node : nodes_)
             {
-				if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
-				{
-					skinnedMesh->Update(deltaSeconds);
-					if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
-					{
-						skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
-					}
-                    
+                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                {
+                    skinnedMesh->Update(deltaSeconds);
+                    if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
+                    {
+                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+                    }
+
                     if (skinnedMesh->IsPlaying())
                     {
                         MarkDirty();
-                        if ( auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+                        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
                         {
-                            if ( renderComponent->GetModelId() != -1 )
+                            if (renderComponent->GetModelId() != -1)
                             {
-                                NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(renderComponent->GetModelId());
+                                NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(
+                                    renderComponent->GetModelId());
                             }
                         }
                     }
@@ -704,19 +758,21 @@ namespace Assets
 
             for (auto& track : tracks_)
             {
-                if (!track.Playing()) continue;
+                if (!track.Playing())
+                    continue;
                 durationMax = glm::max(durationMax, track.Duration_);
             }
 
             for (auto& track : tracks_)
             {
-                if (!track.Playing()) continue;
+                if (!track.Playing())
+                    continue;
                 track.Time_ += deltaSeconds * track.PlaySpeed_;
                 if (track.Time_ > durationMax)
                 {
                     track.PlaySpeed_ = -1.0f;
                 }
-                if ( track.Time_ < 0.0f )
+                if (track.Time_ < 0.0f)
                 {
                     track.PlaySpeed_ = 1.0f;
                 }
@@ -739,14 +795,16 @@ namespace Assets
                     // to physicSys
                     std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                     {
-                        if (!n) return;
+                        if (!n)
+                            return;
                         auto phys = n->GetComponent<Runtime::PhysicsComponent>();
                         if (phys)
                         {
                             NextBodyID bodyID = phys->GetPhysicsBody();
                             if (!bodyID.IsInvalid())
                             {
-                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(
+                                    bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
                             }
                         }
 
@@ -761,14 +819,15 @@ namespace Assets
                     if (node->GetName() == "Shot.BlueCar")
                     {
                         requestOverrideModelView = true;
-                        overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1), glm::vec3(0.0f, 1.0f, 0.0f));
+                        overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1),
+                                                          glm::vec3(0.0f, 1.0f, 0.0f));
                     }
                 }
             }
         }
 
-		if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
-		{
+        if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
+        {
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();
@@ -809,7 +868,7 @@ namespace Assets
             }
         }
 
-        if ( NextEngine::GetInstance()->GetTotalFrames() % 10 == 0 )
+        if (NextEngine::GetInstance()->GetTotalFrames() % 10 == 0)
         {
             // if (sceneDirtyForCpuAS_)
             // {
@@ -818,14 +877,16 @@ namespace Assets
             //         sceneDirtyForCpuAS_ = false;
             //     }
             // }
-            
-            cpuAccelerationStructure_.Tick(*this,  ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get() );
+
+            cpuAccelerationStructure_.Tick(*this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(),
+                                           pageIndexBufferMemory_.get());
         }
     }
 
     void Scene::UpdateAllMaterials()
     {
-        if (materials_.empty()) return;
+        if (materials_.empty())
+            return;
 
         gpuMaterials_.clear();
         for (auto& material : materials_)
@@ -833,16 +894,17 @@ namespace Assets
             gpuMaterials_.push_back(material.gpuMaterial_);
         }
 
-        Material* data = reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
+        Material* data =
+            reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         materialBufferMemory_->Unmap();
 
         NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
-        
+
     bool Scene::UpdateNodes()
     {
-        GPUDrivenStat zero {};
+        GPUDrivenStat zero{};
         // read back gpu driven stats
         const auto data = gpuDrivenStatsBuffer_Memory_->Map(0, sizeof(Assets::GPUDrivenStat));
         // download
@@ -858,7 +920,7 @@ namespace Assets
             materialDirty_ = false;
             UpdateAllMaterials();
         }
-        
+
         return UpdateNodesGpuDriven();
     }
 
@@ -867,7 +929,8 @@ namespace Assets
         auto& shData = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
         if (shData.size() > 0)
         {
-            SphericalHarmonics* data = reinterpret_cast<SphericalHarmonics*>(hdrSHBufferMemory_->Map(0, sizeof(SphericalHarmonics) * shData.size()));
+            SphericalHarmonics* data = reinterpret_cast<SphericalHarmonics*>(
+                hdrSHBufferMemory_->Map(0, sizeof(SphericalHarmonics) * shData.size()));
             std::memcpy(data, shData.data(), shData.size() * sizeof(SphericalHarmonics));
             hdrSHBufferMemory_->Unmap();
         }
@@ -878,14 +941,15 @@ namespace Assets
         if (nodes_.size() > 0)
         {
             // do always, no flicker now
-            //if (sceneDirty_)
+            // if (sceneDirty_)
             {
                 sceneDirty_ = false;
                 {
-                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes",
+                                                    PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
-                    
+
                     uint32_t currentJointOffset = 0;
                     for (auto& node : nodes_)
                     {
@@ -897,7 +961,7 @@ namespace Assets
                             if (node->TickVelocity(combined))
                             {
                                 sceneDirty_ = true;
-                                //MarkDirty();
+                                // MarkDirty();
                             }
 
                             auto model = GetModel(render->GetModelId());
@@ -910,7 +974,7 @@ namespace Assets
                                     currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
                                 }
 
-                                for ( uint32_t section = 0; section < model->SectionCount(); ++section)
+                                for (uint32_t section = 0; section < model->SectionCount(); ++section)
                                 {
                                     NodeProxy proxy = node->GetNodeProxy();
                                     proxy.combinedPrevTS = combined;
@@ -919,12 +983,13 @@ namespace Assets
                                     proxy.jointMatrixOffset = nodeJointOffset;
                                     nodeProxys.push_back(proxy);
                                     indirectDrawBatchCount_++;
-                                }        
+                                }
                             }
                         }
                     }
-                    
-                    NodeProxy* data = reinterpret_cast<NodeProxy*>(nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+
+                    NodeProxy* data = reinterpret_cast<NodeProxy*>(
+                        nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     nodeMatrixBufferMemory_->Unmap();
                 }
@@ -975,10 +1040,11 @@ namespace Assets
             }
         }
 
-        if (!foundNode) return false;
+        if (!foundNode)
+            return false;
 
         center = glm::vec3(foundNode->WorldTransform()[3]);
-        
+
         auto renderComp = foundNode->GetComponent<Runtime::RenderComponent>();
         if (renderComp)
         {
@@ -993,7 +1059,7 @@ namespace Assets
                 return true;
             }
         }
-        
+
         // Fallback for non-render nodes (default small radius)
         radius = 1.0f;
         return true;
@@ -1040,7 +1106,8 @@ namespace Assets
         }
     }
 
-    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices)
+    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple,
+                                   VkDeviceAddress jointMatrices)
     {
         skinnedVerticesAddr_ = skinnedVertices;
         skinnedVerticesSimpleAddr_ = skinnedVerticesSimple;
@@ -1065,13 +1132,7 @@ namespace Assets
         }
     }
 
-    bool Scene::SaveAsGLB(const std::string& filename) const
-    {
-        return FSceneSaver::SaveGLBScene(filename, *this);
-    }
+    bool Scene::SaveAsGLB(const std::string& filename) const { return FSceneSaver::SaveGLBScene(filename, *this); }
 
-    bool Scene::SaveAsGLTF(const std::string& filename) const
-    {
-        return FSceneSaver::SaveGLTFScene(filename, *this);
-    }
-}
+    bool Scene::SaveAsGLTF(const std::string& filename) const { return FSceneSaver::SaveGLTFScene(filename, *this); }
+} // namespace Assets

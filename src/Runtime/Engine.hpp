@@ -1,17 +1,17 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "SceneList.hpp"
-#include "UserSettings.hpp"
-#include "ShowFlags.hpp"
-#include "Assets/UniformBuffer.hpp"
 #include "Assets/Model.hpp"
+#include "Assets/UniformBuffer.hpp"
+#include "Common/CoreMinimal.hpp"
+#include "Options.hpp"
+#include "Rendering/VulkanBaseRenderer.hpp"
+#include "Runtime/Command/CommandSystem.hpp"
+#include "SceneList.hpp"
+#include "ShowFlags.hpp"
+#include "UserSettings.hpp"
+#include "Utilities/FileHelper.hpp"
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/Window.hpp"
-#include "Rendering/VulkanBaseRenderer.hpp"
-#include "Options.hpp"
-#include "Utilities/FileHelper.hpp"
-#include "Runtime/Command/CommandSystem.hpp"
 
 class NextPhysics;
 class QuickJSEngine;
@@ -23,267 +23,288 @@ class NextAnimation;
 class NextGameInstanceBase
 {
 public:
-	NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextEngine* engine){}
-	virtual ~NextGameInstanceBase() {}
-	virtual void OnInit() =0;
-	virtual void OnTick(double deltaSeconds) =0;
-	virtual void OnDestroy() =0;
-	virtual bool OnRenderUI() =0;
-	virtual void OnPreConfigUI() {}
-	virtual void OnInitUI() {}
-	virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
+    NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) {}
+    virtual ~NextGameInstanceBase() {}
+    virtual void OnInit() = 0;
+    virtual void OnTick(double deltaSeconds) = 0;
+    virtual void OnDestroy() = 0;
+    virtual bool OnRenderUI() = 0;
+    virtual void OnPreConfigUI() {}
+    virtual void OnInitUI() {}
+    virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
 
-	// camera
-	virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const {return false;}
+    // camera
+    virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const { return false; }
 
-	// scene
-	virtual void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
-					   std::vector<Assets::AnimationTrack>& tracks) {}
-	virtual void OnSceneLoaded() {}
-	virtual void OnSceneUnloaded() {}
+    // scene
+    virtual void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                    std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                                    std::vector<Assets::LightObject>& lights,
+                                    std::vector<Assets::AnimationTrack>& tracks)
+    {
+    }
+    virtual void OnSceneLoaded() {}
+    virtual void OnSceneUnloaded() {}
 
-	// input
-	virtual bool OnKey(SDL_Event& event) {return false;}
-	virtual bool OnCursorPosition(double xpos, double ypos) {return false;}
-	virtual bool OnMouseButton(SDL_Event& event) {return false;}
-	virtual bool OnScroll(double xoffset, double yoffset) {return false;}
-	virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
-						int16_t rightStickX, int16_t rightStickY,
-						int16_t leftTrigger, int16_t rightTrigger) {return false;}
+    // input
+    virtual bool OnKey(SDL_Event& event) { return false; }
+    virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
+    virtual bool OnMouseButton(SDL_Event& event) { return false; }
+    virtual bool OnScroll(double xoffset, double yoffset) { return false; }
+    virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
+                                int16_t leftTrigger, int16_t rightTrigger)
+    {
+        return false;
+    }
 };
 
 class NextGameInstanceVoid : public NextGameInstanceBase
 {
 public:
-	NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config,options,engine){}
-	~NextGameInstanceVoid() override = default;
-	
-	void OnInit() override {}
-	void OnTick(double deltaSeconds) override {}
-	void OnDestroy() override {}
-	bool OnRenderUI() override {return false;}
+    NextGameInstanceVoid(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+        NextGameInstanceBase(config, options, engine)
+    {
+    }
+    ~NextGameInstanceVoid() override = default;
+
+    void OnInit() override {}
+    void OnTick(double deltaSeconds) override {}
+    void OnDestroy() override {}
+    bool OnRenderUI() override { return false; }
 };
 
-extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
+                                                                NextEngine* engine);
 
 namespace NextRenderer
 {
-	enum class EApplicationStatus
-	{
-		Starting,
-		Running,
-		Loading,
-		AsyncPreparing,
-	};
-	std::string GetBuildVersion();
-	Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers);
-}
+    enum class EApplicationStatus
+    {
+        Starting,
+        Running,
+        Loading,
+        AsyncPreparing,
+    };
+    std::string GetBuildVersion();
+    Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
+                                               const VkPresentModeKHR presentMode, const bool enableValidationLayers);
+} // namespace NextRenderer
 
-typedef std::function<bool (double DeltaSeconds)> TickedTask;
-typedef std::function<bool ()> DelayedTask;
+typedef std::function<bool(double DeltaSeconds)> TickedTask;
+typedef std::function<bool()> DelayedTask;
 
 struct FDelayTaskContext
 {
-	double triggerTime;
-	double loopTime;
-	DelayedTask task;
+    double triggerTime;
+    double loopTime;
+    DelayedTask task;
 };
 
 class NextComponent : std::enable_shared_from_this<NextComponent>
 {
 public:
-	NextComponent() = default;
-	std::string name_;
-	int id_;
+    NextComponent() = default;
+    std::string name_;
+    int id_;
 };
 
 class NextActor
 {
 public:
-	std::vector<NextComponent*> components;
+    std::vector<NextComponent*> components;
 };
 
 class NextEngine final
 {
 public:
-	VULKAN_NON_COPIABLE(NextEngine)
+    VULKAN_NON_COPIABLE(NextEngine)
 
-	NextEngine(Options& options, void* userdata = nullptr);
-	~NextEngine();
+    NextEngine(Options& options, void* userdata = nullptr);
+    ~NextEngine();
 
-	static NextEngine* instance_;
-	static NextEngine* GetInstance() { return instance_; }
+    static NextEngine* instance_;
+    static NextEngine* GetInstance() { return instance_; }
 
-	Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
+    Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
 
-	void Start();
-	bool HandleEvent(SDL_Event& event);
-	bool Tick(bool forcingDelta = false);
-	void End();
-	
-	void OnTouch(bool down, double xpos, double ypos);
-	void OnTouchMove(double xpos, double ypos);
+    void Start();
+    bool HandleEvent(SDL_Event& event);
+    bool Tick(bool forcingDelta = false);
+    void End();
 
-	Assets::Scene& GetScene() { return *scene_; }
-	Assets::Scene* GetScenePtr() { return scene_.get(); }
-	UserSettings& GetUserSettings() { return userSettings_; }
-	ShowFlags& GetShowFlags() { return showFlags_; }
+    void OnTouch(bool down, double xpos, double ypos);
+    void OnTouchMove(double xpos, double ypos);
 
-	float GetTime() const { return static_cast<float>(time_); }
-	float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
-	float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
+    Assets::Scene& GetScene() { return *scene_; }
+    Assets::Scene* GetScenePtr() { return scene_.get(); }
+    UserSettings& GetUserSettings() { return userSettings_; }
+    ShowFlags& GetShowFlags() { return showFlags_; }
+
+    float GetTime() const { return static_cast<float>(time_); }
+    float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
+    float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
     float GetFrameRate() const { return frameRate_; }
-	uint32_t GetTotalFrames() const { return totalFrames_; }
-	uint32_t GetTestNumber() const { return 20; }
+    uint32_t GetTotalFrames() const { return totalFrames_; }
+    uint32_t GetTestNumber() const { return 20; }
 
-	void RegisterJSCallback(std::function<void(double)> callback);
+    void RegisterJSCallback(std::function<void(double)> callback);
 
-	// remove till return true
-	void AddTickedTask( TickedTask task ) { tickedTasks_.push_back(task); }
-	void AddTimerTask( double delay, DelayedTask task );
+    // remove till return true
+    void AddTickedTask(TickedTask task) { tickedTasks_.push_back(task); }
+    void AddTimerTask(double delay, DelayedTask task);
 
-	// sound
-	void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
-	void PauseSound(const std::string& soundName, bool pause);
-	bool IsSoundPlaying(const std::string& soundName);
+    // sound
+    void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
+    void PauseSound(const std::string& soundName, bool pause);
+    bool IsSoundPlaying(const std::string& soundName);
 
-	// screen shot
-	void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
+    // screen shot
+    void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
 
-	// pak
-	Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
+    // pak
+    Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
 
-	// cursor pos
-	glm::dvec2 GetMousePos();
+    // cursor pos
+    glm::dvec2 GetMousePos();
 
-	// life cycle
-	void RequestClose();
-	void RequestMinimize();
-	bool IsMaximumed();
-	void ToggleMaximize();
+    // life cycle
+    void RequestClose();
+    void RequestMinimize();
+    bool IsMaximumed();
+    void ToggleMaximize();
 
-	// capture
-	void RequestScreenShot(std::string filename);
+    // capture
+    void RequestScreenShot(std::string filename);
 
-	// scene loading
-	void RequestLoadScene(std::string sceneFileName);
-	void RequestLoadSceneAdd(std::string sceneFileName);
+    // scene loading
+    void RequestLoadScene(std::string sceneFileName);
+    void RequestLoadSceneAdd(std::string sceneFileName);
 
-	// command system
-	bool ExecuteCommand(std::unique_ptr<ICommand> command);
-	bool UndoCommand();
-	bool RedoCommand();
-	bool CanUndo() const;
-	bool CanRedo() const;
-	CommandSystem& GetCommandSystem() { return commandSystem_; }
-	const CommandSystem& GetCommandSystem() const { return commandSystem_; }
+    struct SceneAppendOptions
+    {
+        bool placeOnHit = false;
+        glm::vec3 hitPosition{0.0f, 0.0f, 0.0f};
+    };
 
-	Vulkan::Window& GetWindow() const {return *window_;}
-	
-	class UserInterface* GetUserInterface() {return userInterface_.get();}
+    void RequestLoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options);
 
-	// monitor info
-	glm::ivec2 GetMonitorSize() const;
+    // command system
+    bool ExecuteCommand(std::unique_ptr<ICommand> command);
+    bool UndoCommand();
+    bool RedoCommand();
+    bool CanUndo() const;
+    bool CanRedo() const;
+    CommandSystem& GetCommandSystem() { return commandSystem_; }
+    const CommandSystem& GetCommandSystem() const { return commandSystem_; }
 
-	// gpu raycast
-	void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir, std::function<bool (Assets::RayCastResult rayResult)> callback );
+    Vulkan::Window& GetWindow() const { return *window_; }
 
-	void SetProgressiveRendering(bool enable, bool directly);
-	bool IsProgressiveRendering() const { return progressiveRendering_; }
+    class UserInterface* GetUserInterface() { return userInterface_.get(); }
 
-	NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
+    // monitor info
+    glm::ivec2 GetMonitorSize() const;
 
-	NextPhysics* GetPhysicsEngine() { return physicsEngine_.get(); }
+    // gpu raycast
+    void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
+                    std::function<bool(Assets::RayCastResult rayResult)> callback);
 
-	Assets::UniformBufferObject& GetUniformBufferObject() { return prevUBO_; }
+    void SetProgressiveRendering(bool enable, bool directly);
+    bool IsProgressiveRendering() const { return progressiveRendering_; }
 
-	VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
-	VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
-	
+    NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
+
+    NextPhysics* GetPhysicsEngine() { return physicsEngine_.get(); }
+
+    Assets::UniformBufferObject& GetUniformBufferObject() { return prevUBO_; }
+
+    VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
+    VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
+
 protected:
-	Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
-	void OnRendererDeviceSet();
-	void OnRendererCreateSwapChain();
-	void OnRendererDeleteSwapChain();
-	void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void OnRendererBeforeNextFrame();
+    Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
+    void OnRendererDeviceSet();
+    void OnRendererCreateSwapChain();
+    void OnRendererDeleteSwapChain();
+    void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void OnRendererBeforeNextFrame();
 
-	const Assets::Scene& GetScene() const { return *scene_; }
-	
-	void OnKey(SDL_Event& event);
-	void OnCursorPosition(double xpos, double ypos);
-	void OnMouseButton(SDL_Event& event);
-	void OnScroll(double xoffset, double yoffset);
-	void OnDropFile(const char* path);
+    const Assets::Scene& GetScene() const { return *scene_; }
+
+    void OnKey(SDL_Event& event);
+    void OnCursorPosition(double xpos, double ypos);
+    void OnMouseButton(SDL_Event& event);
+    void OnScroll(double xoffset, double yoffset);
+    void OnDropFile(const char* path);
     void TickGamepadInput();
-	
+
 private:
-        struct SceneLoadContext
-        {
-            std::shared_ptr< std::vector<Assets::Model> > models;
-            std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes;
-            std::shared_ptr< std::vector<Assets::FMaterial> > materials;
-            std::shared_ptr< std::vector<Assets::LightObject> > lights;
-            std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks;
-            std::shared_ptr< std::vector<Assets::Skeleton> > skeletons;
-            std::shared_ptr< Assets::EnvironmentSetting > cameraState;
-        };
+    struct SceneLoadContext
+    {
+        std::shared_ptr<std::vector<Assets::Model>> models;
+        std::shared_ptr<std::vector<std::shared_ptr<Assets::Node>>> nodes;
+        std::shared_ptr<std::vector<Assets::FMaterial>> materials;
+        std::shared_ptr<std::vector<Assets::LightObject>> lights;
+        std::shared_ptr<std::vector<Assets::AnimationTrack>> tracks;
+        std::shared_ptr<std::vector<Assets::Skeleton>> skeletons;
+        std::shared_ptr<Assets::EnvironmentSetting> cameraState;
+    };
 
-        void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
+    void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
 
-        void LoadScene(std::string sceneFileName);
-        void LoadSceneAdd(std::string sceneFileName);
+    void LoadScene(std::string sceneFileName);
+    void LoadSceneAdd(std::string sceneFileName);
+    void LoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options);
 
-        void InitPhysics();
+    void InitPhysics();
 
-	// engine stuff
-	std::unique_ptr<Vulkan::Window> window_;
-	std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
+    // engine stuff
+    std::unique_ptr<Vulkan::Window> window_;
+    std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
 
-	// settings, may move into scene
-	mutable UserSettings userSettings_{};
-	mutable ShowFlags showFlags_{};
-	mutable Assets::UniformBufferObject prevUBO_ {};
+    // settings, may move into scene
+    mutable UserSettings userSettings_{};
+    mutable ShowFlags showFlags_{};
+    mutable Assets::UniformBufferObject prevUBO_{};
 
-	// scene, maybe multiple at a time
-	std::shared_ptr<Assets::Scene> scene_;
+    // scene, maybe multiple at a time
+    std::shared_ptr<Assets::Scene> scene_;
 
-	// timing
-	uint32_t totalFrames_{};
-	double time_{};
-	double deltaSeconds_{};
-	double smoothedDeltaSeconds_{};
+    // timing
+    uint32_t totalFrames_{};
+    double time_{};
+    double deltaSeconds_{};
+    double smoothedDeltaSeconds_{};
     float frameRate_{};
     double lastFrameTime_{};
-	bool progressiveRendering_{};
-	uint32_t progressivePreFrames_{};
+    bool progressiveRendering_{};
+    uint32_t progressivePreFrames_{};
 
-	// game instance
-	std::unique_ptr<NextGameInstanceBase> gameInstance_;
+    // game instance
+    std::unique_ptr<NextGameInstanceBase> gameInstance_;
 
-	// tasks
-	std::vector<TickedTask> tickedTasks_;
-	std::vector<FDelayTaskContext> delayedTasks_;
+    // tasks
+    std::vector<TickedTask> tickedTasks_;
+    std::vector<FDelayTaskContext> delayedTasks_;
 
-	// internal ui
-	std::unique_ptr<class UserInterface> userInterface_;
+    // internal ui
+    std::unique_ptr<class UserInterface> userInterface_;
 
-	// audio
-	std::unique_ptr<NextAudio> audioEngine_;
-    
-	// physics
-	std::unique_ptr<NextPhysics> physicsEngine_;
+    // audio
+    std::unique_ptr<NextAudio> audioEngine_;
 
-	// animation
-	std::unique_ptr<NextAnimation> animationEngine_;
+    // physics
+    std::unique_ptr<NextPhysics> physicsEngine_;
 
-	// package
-	std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
+    // animation
+    std::unique_ptr<NextAnimation> animationEngine_;
 
-	std::unique_ptr<QuickJSEngine> quickJSEngine_;
+    // package
+    std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
-	CommandSystem commandSystem_{};
-    
-	// engine status
-	NextRenderer::EApplicationStatus status_{};
+    std::unique_ptr<QuickJSEngine> quickJSEngine_;
+
+    CommandSystem commandSystem_{};
+
+    // engine status
+    NextRenderer::EApplicationStatus status_{};
 };

@@ -1,258 +1,253 @@
 #pragma once
-#include "Common/CoreMinimal.hpp"
-#include "Vulkan/Vulkan.hpp"
+#include <glm/vec2.hpp>
 #include <memory>
 #include <string>
 #include <vector>
-#include <glm/vec2.hpp>
+#include "Common/CoreMinimal.hpp"
+#include "Vulkan/Vulkan.hpp"
 
 #include "CPUAccelerationStructure.h"
 #include "Model.hpp"
-#include "Skeleton.hpp"
 #include "Runtime/NextPhysics.h"
 #include "Runtime/NextPhysicsTypes.h"
+#include "Skeleton.hpp"
 
 namespace Vulkan
 {
-	class Buffer;
-	class CommandPool;
-	class DeviceMemory;
-	class Image;
-	class RenderImage;
-	class DescriptorSetManager;
-}
+    class Buffer;
+    class CommandPool;
+    class DeviceMemory;
+    class Image;
+    class RenderImage;
+    class DescriptorSetManager;
+} // namespace Vulkan
 
 namespace Assets
 {
-	class Node;
-	class Model;
-	class Texture;
-	class TextureImage;
-	struct Material;
-	struct LightObject;
+    class Node;
+    class Model;
+    class Texture;
+    class TextureImage;
+    struct Material;
+    struct LightObject;
 
-	class Scene final
-	{
-	public:
+    class Scene final
+    {
+    public:
+        Scene(const Scene&) = delete;
+        Scene(Scene&&) = delete;
+        Scene& operator=(const Scene&) = delete;
+        Scene& operator=(Scene&&) = delete;
 
-		Scene(const Scene&) = delete;
-		Scene(Scene&&) = delete;
-		Scene& operator = (const Scene&) = delete;
-		Scene& operator = (Scene&&) = delete;
+        Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        ~Scene();
 
-		Scene(Vulkan::CommandPool& commandPool,	bool supportRayTracing);
-		~Scene();
+        void PostLoad(const std::vector<Skeleton>& skeletons);
 
-		void PostLoad(const std::vector<Skeleton>& skeletons);
+        void Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
+                    std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
+                    std::vector<AnimationTrack>& tracks);
+        std::shared_ptr<Node> Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
+                                     std::vector<Model>& models, std::vector<FMaterial>& materials,
+                                     std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
+                                     const std::vector<Skeleton>& skeletons);
+        void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        void CleanUp();
+        // void RebuildBVH();
 
-		void Reload(std::vector<std::shared_ptr<Node>>& nodes,
-			std::vector<Model>& models,
-			std::vector<FMaterial>& materials,
-			std::vector<LightObject>& lights,
-			std::vector<AnimationTrack>& tracks);
-		void Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
-			std::vector<Model>& models,
-			std::vector<FMaterial>& materials,
-			std::vector<LightObject>& lights,
-			std::vector<AnimationTrack>& tracks,
-			const std::vector<Skeleton>& skeletons);
-		void RebuildMeshBuffer(Vulkan::CommandPool& commandPool,
-			bool supportRayTracing);
-	    void CleanUp();
-		//void RebuildBVH();
+        const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
+        std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
+        const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
+        const std::vector<Model>& Models() const { return models_; }
+        std::vector<FMaterial>& Materials() { return materials_; }
+        const std::vector<FMaterial>& Materials() const { return materials_; }
+        const std::vector<ModelData>& Offsets() const { return offsets_; }
+        const std::vector<LightObject>& Lights() const { return lights_; }
+        const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
+        const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
+        const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
+        const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
+        const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
+        const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
+        const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
+        const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+        const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
+        const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
+        const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
+        const bool HasSun() const { return envSettings_.HasSun; }
 
-		const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
-		std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
-		const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
-		const std::vector<Model>& Models() const { return models_; }
-		std::vector<FMaterial>& Materials() { return materials_; }
-		const std::vector<FMaterial>& Materials() const { return materials_; }
-		const std::vector<ModelData>& Offsets() const { return offsets_; }
-		const std::vector<LightObject>& Lights() const { return lights_; }
-		const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
-		const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
-		const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
-		const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
-		const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
-		const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
-		const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
-		const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
-		const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
-		const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
-		const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
-		const bool HasSun() const { return envSettings_.HasSun; }
+        const uint32_t GetLightCount() const { return lightCount_; }
+        const uint32_t GetIndicesCount() const { return indicesCount_; }
+        const uint32_t GetVerticeCount() const { return verticeCount_; }
+        const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
 
-		const uint32_t GetLightCount() const {return lightCount_;}
-		const uint32_t GetIndicesCount() const {return indicesCount_;}
-		const uint32_t GetVerticeCount() const {return verticeCount_;}
-		const uint32_t GetIndirectDrawBatchCount() const {return indirectDrawBatchCount_;}
+        const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
 
-		const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
-		
-		uint32_t GetSelectedId() const { return selectedId_; }
-		void SetSelectedId( uint32_t id ) const { selectedId_ = id; }
-		bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
+        uint32_t GetSelectedId() const { return selectedId_; }
+        void SetSelectedId(uint32_t id) const { selectedId_ = id; }
+        bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
 
-		void Tick(float DeltaSeconds);
-		void UpdateAllMaterials();
-		bool UpdateNodes();
-		void UpdateHDRSH();
-		bool UpdateNodesGpuDriven();
+        void Tick(float DeltaSeconds);
+        void UpdateAllMaterials();
+        bool UpdateNodes();
+        void UpdateHDRSH();
+        bool UpdateNodesGpuDriven();
 
-		Node* GetNode(std::string name);
-		Node* GetNodeByInstanceId(uint32_t id);
-		const Model* GetModel(uint32_t id) const;
-		const FMaterial* GetMaterial(uint32_t id) const;
-		const uint32_t AddMaterial(const FMaterial& material);
+        Node* GetNode(std::string name);
+        Node* GetNodeByInstanceId(uint32_t id);
+        const Model* GetModel(uint32_t id) const;
+        const FMaterial* GetMaterial(uint32_t id) const;
+        const uint32_t AddMaterial(const FMaterial& material);
 
-		void MarkDirty();
-		
-		std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
+        void MarkDirty();
 
-		void OverrideModelView(glm::mat4& OutMatrix);
+        std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 
-		const std::vector<Assets::Camera>& GetCameras() const { return envSettings_.cameras; }
-		const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
-		
-		Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
-		void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
+        void OverrideModelView(glm::mat4& OutMatrix);
 
-		Camera& GetRenderCamera() { return renderCamera_; }
-		void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
+        const std::vector<Assets::Camera>& GetCameras() const { return envSettings_.cameras; }
+        const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
 
-		void PlayAllTracks();
+        Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
+        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
 
-		void MarkEnvDirty();
+        Camera& GetRenderCamera() { return renderCamera_; }
+        void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 
-		void AddNode(std::shared_ptr<Node> node);
-		std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
-		std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
-		uint32_t GenerateInstanceId() const;
+        void PlayAllTracks();
 
-		struct RemovedNodeEntry
-		{
-			std::shared_ptr<Node> node;
-			size_t index;
-		};
-		std::vector<RemovedNodeEntry> RemoveNodeHierarchy(uint32_t id, std::shared_ptr<Node>& outParent);
-		void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent, const std::shared_ptr<Node>& root);
+        void MarkEnvDirty();
 
-		void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple, VkDeviceAddress jointMatrices);
+        void AddNode(std::shared_ptr<Node> node);
+        std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
+        std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
+        uint32_t GenerateInstanceId() const;
 
-		//Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
+        struct RemovedNodeEntry
+        {
+            std::shared_ptr<Node> node;
+            size_t index;
+        };
+        std::vector<RemovedNodeEntry> RemoveNodeHierarchy(uint32_t id, std::shared_ptr<Node>& outParent);
+        void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent,
+                          const std::shared_ptr<Node>& root);
 
-		Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
-		Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
-		Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
+        void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple,
+                                VkDeviceAddress jointMatrices);
 
-		Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
-		Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
+        // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-		Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
+        Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
+        Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
+        Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
 
-		TextureImage& ShadowMap() const { return *cpuShadowMap_; }
+        Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
+        Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
 
-		FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+        Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
 
-		// Scene saving功能
-		bool Save(const std::string& filename) const;
-		bool SaveAsGLB(const std::string& filename) const;
-		bool SaveAsGLTF(const std::string& filename) const;
+        TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
-	private:
-		std::vector<FMaterial> materials_;
-		std::vector<Material> gpuMaterials_;
-		std::vector<Model> models_;
-		std::vector<std::shared_ptr<Node>> nodes_;
-		std::vector<LightObject> lights_;
-		std::vector<AnimationTrack> tracks_;
-		std::vector<ModelData> offsets_;
+        FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
 
-		std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
+        // Scene saving功能
+        bool Save(const std::string& filename) const;
+        bool SaveAsGLB(const std::string& filename) const;
+        bool SaveAsGLTF(const std::string& filename) const;
 
-		std::unique_ptr<Vulkan::Buffer> simpleVertexBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> simpleVertexBufferMemory_;
+    private:
+        std::vector<FMaterial> materials_;
+        std::vector<Material> gpuMaterials_;
+        std::vector<Model> models_;
+        std::vector<std::shared_ptr<Node>> nodes_;
+        std::vector<LightObject> lights_;
+        std::vector<AnimationTrack> tracks_;
+        std::vector<ModelData> offsets_;
 
-		std::unique_ptr<Vulkan::Buffer> indexBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> reorderBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> reorderBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> simpleVertexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> simpleVertexBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> primAddressBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> primAddressBufferMemory_;
-		
-		std::unique_ptr<Vulkan::Buffer> materialBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> materialBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> indexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> reorderBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> reorderBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> lightBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> primAddressBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> primAddressBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
-		
-		std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> materialBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> materialBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
-		
-		std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> lightBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
 
-		std::unique_ptr<Vulkan::Buffer> gpuDrivenStatsBuffer_;
-		std::unique_ptr<Vulkan::DeviceMemory> gpuDrivenStatsBuffer_Memory_;
+        std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
 
-		std::unique_ptr<TextureImage> cpuShadowMap_;
+        std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
 
-		uint32_t lightCount_ {};
-		uint32_t indicesCount_ {};
-		uint32_t verticeCount_ {};
-		uint32_t indirectDrawBatchCount_ {};
+        std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;
 
-		mutable uint32_t selectedId_ = -1;
+        std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
 
-		bool sceneDirtyForCpuAS_ = false;
-		bool sceneDirty_ = true;
-		bool materialDirty_ = true;
-		
-		std::vector<NodeProxy> nodeProxys;
-		std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
+        std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
 
-		glm::mat4 overrideModelView;
-		bool requestOverrideModelView = false;
-		
-		Assets::EnvironmentSetting envSettings_;
-		Camera renderCamera_;
+        std::unique_ptr<Vulkan::Buffer> gpuDrivenStatsBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> gpuDrivenStatsBuffer_Memory_;
 
-		FCPUAccelerationStructure cpuAccelerationStructure_;
+        std::unique_ptr<TextureImage> cpuShadowMap_;
 
-		Assets::GPUDrivenStat gpuDrivenStat_;
-		mutable Assets::GPUScene gpuScene_;
+        uint32_t lightCount_{};
+        uint32_t indicesCount_{};
+        uint32_t verticeCount_{};
+        uint32_t indirectDrawBatchCount_{};
 
-		glm::vec3 sceneAABBMin_ {FLT_MAX, FLT_MAX, FLT_MAX};
-		glm::vec3 sceneAABBMax_ {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-		std::vector<NextRefConst<NextMeshShapeSettings> > cachedMeshShapes_;
+        mutable uint32_t selectedId_ = -1;
 
-		VkDeviceAddress skinnedVerticesAddr_ = 0;
-		VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
-		VkDeviceAddress jointMatricesAddr_ = 0;
+        bool sceneDirtyForCpuAS_ = false;
+        bool sceneDirty_ = true;
+        bool materialDirty_ = true;
 
-	};
-}
+        std::vector<NodeProxy> nodeProxys;
+        std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
+
+        glm::mat4 overrideModelView;
+        bool requestOverrideModelView = false;
+
+        Assets::EnvironmentSetting envSettings_;
+        Camera renderCamera_;
+
+        FCPUAccelerationStructure cpuAccelerationStructure_;
+
+        Assets::GPUDrivenStat gpuDrivenStat_;
+        mutable Assets::GPUScene gpuScene_;
+
+        glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
+        glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        std::vector<NextRefConst<NextMeshShapeSettings>> cachedMeshShapes_;
+
+        VkDeviceAddress skinnedVerticesAddr_ = 0;
+        VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
+        VkDeviceAddress jointMatricesAddr_ = 0;
+    };
+} // namespace Assets
