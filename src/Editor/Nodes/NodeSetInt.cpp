@@ -1,13 +1,9 @@
 #include "NodeSetInt.hpp"
 
-#include <imgui_impl_vulkan.h>
 #include <vulkan/vulkan_core.h>
 
+#include "Editor/EditorContext.hpp"
 #include "Runtime/UserInterface.hpp"
-#include "Assets/Texture.hpp"
-#include "Assets/TextureImage.hpp"
-#include "Editor/EditorInterface.hpp"
-#include "Vulkan/ImageView.hpp"
 
 namespace Nodes
 {
@@ -16,7 +12,7 @@ namespace Nodes
     {
         if (name == "")
         {
-            setTitle("Set float");
+            setTitle("Set int");
         }
         else
         {
@@ -26,9 +22,7 @@ namespace Nodes
         value = initValue;
 
         setStyle(ImFlow::NodeStyle::green());
-        addOUT<int>("Out")
-            ->behaviour([this]()
-                        { return value; });
+        addOUT<int>("Out")->behaviour([this]() { return value; });
     }
 
     void NodeSetInt::draw()
@@ -41,7 +35,7 @@ namespace Nodes
     {
         if (name == "")
         {
-            setTitle("Set float");
+            setTitle("Set texture");
         }
         else
         {
@@ -49,25 +43,33 @@ namespace Nodes
         }
 
         textureId = initTextureId;
-        
+
         //
 
         setStyle(ImFlow::NodeStyle::green());
-        addOUT<int>("Out")
-            ->behaviour([this]()
-                        { return textureId; });
+        addOUT<int>("Out")->behaviour([this]() { return textureId; });
     }
 
-    NodeSetTexture::~NodeSetTexture()
-    {
-    }
+    NodeSetTexture::~NodeSetTexture() {}
 
     void NodeSetTexture::draw()
     {
-        //ImGui::SetNextItemWidth(100.f);
-        if(textureId != -1 && GUserInterface)
+        // ImGui::SetNextItemWidth(100.f);
+        if (textureId == -1)
         {
-            ImGui::Image( (ImTextureID)(intptr_t)GUserInterface->RequestImTextureId(textureId), ImVec2(128, 128));
+            return;
+        }
+
+        EditorContext* ctx = static_cast<EditorContext*>(ImGui::GetIO().UserData);
+        if (ctx == nullptr)
+        {
+            return;
+        }
+
+        VkDescriptorSet tex = ctx->ui.RequestImTextureId(static_cast<uint32_t>(textureId));
+        if (tex != VK_NULL_HANDLE)
+        {
+            ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(128, 128));
         }
     }
-}
+} // namespace Nodes

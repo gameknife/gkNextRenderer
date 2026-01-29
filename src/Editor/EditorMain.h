@@ -1,6 +1,6 @@
 #pragma once
 
-#include "EditorGUI.h"
+#include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/GizmoController.hpp"
 #include "Runtime/ModelViewController.hpp"
@@ -9,7 +9,7 @@ class EditorInterface;
 
 namespace Assets
 {
-    class Scene;    
+    class Scene;
 }
 
 class EditorGameInstance : public NextGameInstanceBase
@@ -35,13 +35,17 @@ public:
     bool OnScroll(double xoffset, double yoffset) override;
 
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
-    
+
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }
+    EditorActionDispatcher& Actions() { return actions_; }
+    const EditorActionDispatcher& Actions() const { return actions_; }
     void DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize);
 
 private:
     NextEngine* engine_;
+
+    EditorActionDispatcher actions_{};
 
     std::unique_ptr<EditorInterface> editorUserInterface_;
     ModelViewController modelViewController_;
