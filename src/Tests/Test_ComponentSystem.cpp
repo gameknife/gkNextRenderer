@@ -1,6 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include "Assets/Node.h"
 #include "Assets/Component.h"
+#include <entt/meta/meta.hpp>
+#include <entt/meta/resolve.hpp>
 #include <memory>
 
 // Define a concrete component for testing
@@ -8,6 +10,9 @@ class TestComponent : public Assets::Component {
 public:
     TestComponent() = default;
     int value = 0;
+    
+    std::string_view GetTypeName() const override { return "TestComponent"; }
+    entt::meta_type GetMetaType() const override { return entt::resolve<TestComponent>(); }
 };
 
 TEST_CASE("Component System Basics", "[Unit][Component]") {

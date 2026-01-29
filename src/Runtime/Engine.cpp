@@ -41,6 +41,7 @@
 #include "build.version"
 
 #include "Common/CoreMinimal.hpp"
+#include "Reflection/ReflectionRegistry.h"
 
 // spdlog logging
 #include <spdlog/spdlog.h>
@@ -174,6 +175,9 @@ NextEngine::NextEngine(Options& options, void* userdata)
 #endif
 
     instance_ = this;
+    
+    // Initialize reflection system first
+    Reflection::RegisterAllReflection();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 

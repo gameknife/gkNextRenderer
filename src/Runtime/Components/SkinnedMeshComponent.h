@@ -4,6 +4,7 @@
 #include "Assets/Animation.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Component.h"
+#include "Runtime/Reflection/ReflectionMacros.h"
 #include <map>
 #include <vector>
 #include <string>
@@ -13,6 +14,8 @@ namespace Runtime
     class SkinnedMeshComponent : public Assets::Component
     {
     public:
+        REFLECT_COMPONENT(SkinnedMeshComponent)
+        
         SkinnedMeshComponent(const Assets::Skeleton& skeleton);
         
         void Update(float deltaTime);
@@ -33,6 +36,7 @@ namespace Runtime
         std::string GetCurrentAnimationName() const { return currentState_.Playing ? currentState_.Name : ""; }
         
         bool IsPlaying() const { return currentState_.Playing; }
+        bool GetIsPlaying() const { return currentState_.Playing; }
 
     private:
         void UpdateJoints();

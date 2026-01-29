@@ -1,9 +1,11 @@
 #include "SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/NextEngineHelper.h"
+#include "Runtime/Reflection/PropertyMeta.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <functional>
+#include <entt/meta/factory.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -11,6 +13,28 @@
 
 namespace Runtime
 {
+    void SkinnedMeshComponent::RegisterReflection()
+    {
+        using namespace entt::literals;
+        using namespace Reflection;
+        
+        entt::meta_factory<SkinnedMeshComponent>()
+            .type("SkinnedMeshComponent"_hs)
+            // PlaySpeed property - editable (use string literal for name)
+            .data<&SkinnedMeshComponent::SetPlaySpeed, &SkinnedMeshComponent::GetPlaySpeed>("PlaySpeed")
+                .custom<PropertyMeta>(PropertyPresets::Range("Play Speed", "Animation", 0.0f, 10.0f, "Animation playback speed multiplier"))
+            // IsPlaying property - read-only
+            .data<nullptr, &SkinnedMeshComponent::GetIsPlaying>("IsPlaying")
+                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Is Playing", "Animation", "Whether an animation is currently playing"))
+            // CurrentAnimationName - read-only (use PlayAnimation to change)
+            .data<nullptr, &SkinnedMeshComponent::GetCurrentAnimationName>("CurrentAnimation")
+                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Current Animation", "Animation", "Name of the currently playing animation"))
+            // Methods for JS
+            .func<&SkinnedMeshComponent::PlayAnimation>("PlayAnimation"_hs)
+            .func<&SkinnedMeshComponent::StopAnimation>("StopAnimation"_hs)
+            .func<&SkinnedMeshComponent::GetAnimationNames>("GetAnimationNames"_hs);
+    }
+
     SkinnedMeshComponent::SkinnedMeshComponent(const Assets::Skeleton& skeleton)
         : skeleton_(skeleton)
     {

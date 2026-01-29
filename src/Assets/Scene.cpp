@@ -253,7 +253,7 @@ namespace Assets
         for (auto& node : nodes_)
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->IsVisible() && render->GetModelId() != -1)
+            if (render && render->GetVisible() && render->GetModelId() != -1)
             {
                 glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
                 glm::vec3 localaabbMax = models_[render->GetModelId()].GetLocalAABBMax();
@@ -344,7 +344,7 @@ namespace Assets
                                 }
                                 phys->BindPhysicsBody(id);
 
-                                physicsEngine->SetBodyActive(id, render->IsVisible());
+                                physicsEngine->SetBodyActive(id, render->GetVisible());
                             }
                         }
                     }
@@ -560,7 +560,7 @@ namespace Assets
                         }
                         phys->BindPhysicsBody(id);
 
-                        physicsEngine->SetBodyActive(id, render->IsVisible());
+                        physicsEngine->SetBodyActive(id, render->GetVisible());
                     }
                 }
             }
@@ -831,7 +831,7 @@ namespace Assets
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();
-                if (!render || !render->IsVisible() || !render->IsDrawable())
+                if (!render || !render->GetVisible() || !render->IsDrawable())
                 {
                     continue;
                 }

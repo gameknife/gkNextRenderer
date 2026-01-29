@@ -97,6 +97,15 @@ namespace Assets
             return nullptr;
         }
 
+        /**
+         * Get all components attached to this node.
+         * Useful for reflection-based iteration.
+         */
+        const std::vector<std::shared_ptr<Component>>& GetComponents() const
+        {
+            return components_;
+        }
+
     private:
         std::string name_;
 

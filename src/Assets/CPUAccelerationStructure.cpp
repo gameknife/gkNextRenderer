@@ -248,8 +248,8 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         if (!render) continue;
         uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
-        if (!render->IsVisible()) continue;
-        if (!render->IsRayCastVisible()) continue;
+        if (!render->GetVisible()) continue;
+        if (!render->GetRayCastVisible()) continue;
 
         node->RecalcTransform(true);
         mat4 worldTS = node->WorldTransform();

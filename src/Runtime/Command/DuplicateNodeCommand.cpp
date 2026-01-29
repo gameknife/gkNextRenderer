@@ -21,8 +21,8 @@ namespace
             auto newRender = std::make_shared<Runtime::RenderComponent>();
             newRender->SetModelId(render->GetModelId());
             newRender->SetMaterial(render->Materials());
-            newRender->SetVisible(render->IsVisible());
-            newRender->SetRayCastVisible(render->IsRayCastVisible());
+            newRender->SetVisible(render->GetVisible());
+            newRender->SetRayCastVisible(render->GetRayCastVisible());
             newRender->SetSkinIndex(render->GetSkinIndex());
             clone->AddComponent(newRender);
         }

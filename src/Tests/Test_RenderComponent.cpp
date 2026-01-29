@@ -23,8 +23,8 @@ TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
         auto retrieved = node->GetComponent<Runtime::RenderComponent>();
         REQUIRE(retrieved != nullptr);
         CHECK(retrieved->GetModelId() == 123);
-        CHECK(retrieved->IsVisible() == true);
-        CHECK(retrieved->IsRayCastVisible() == false);
+        CHECK(retrieved->GetVisible() == true);
+        CHECK(retrieved->GetRayCastVisible() == false);
         CHECK(retrieved->Materials()[0] == 7);
     }
 }

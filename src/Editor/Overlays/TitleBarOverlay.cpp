@@ -71,6 +71,28 @@ namespace Editor
 
             if (ImGui::BeginMenu("Edit"))
             {
+                // Undo/Redo
+                bool canUndo = ui.commandHistory.CanUndo();
+                bool canRedo = ui.commandHistory.CanRedo();
+                
+                std::string undoLabel = canUndo 
+                    ? fmt::format("Undo {}", ui.commandHistory.GetUndoDescription())
+                    : "Undo";
+                std::string redoLabel = canRedo 
+                    ? fmt::format("Redo {}", ui.commandHistory.GetRedoDescription())
+                    : "Redo";
+                
+                if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
+                {
+                    ui.commandHistory.Undo();
+                }
+                if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo))
+                {
+                    ui.commandHistory.Redo();
+                }
+                
+                ImGui::Separator();
+                
                 if (ImGui::BeginMenu("Layout"))
                 {
                     ImGui::MenuItem("Reset");

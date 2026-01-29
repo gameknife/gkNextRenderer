@@ -242,6 +242,23 @@ void EditorInterface::Render()
     ImGui::GetIO().UserData = &ctx;
 
     uiState_.selected_obj_id = ctx.scene.GetSelectedId();
+    
+    // Handle global keyboard shortcuts
+    auto& io = ImGui::GetIO();
+    if (!io.WantTextInput)
+    {
+        // Undo: Ctrl+Z
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !io.KeyShift)
+        {
+            uiState_.commandHistory.Undo();
+        }
+        // Redo: Ctrl+Y or Ctrl+Shift+Z
+        if ((io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) ||
+            (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)))
+        {
+            uiState_.commandHistory.Redo();
+        }
+    }
 
     ImGuiID id = DockSpaceUI();
     ToolbarUI();

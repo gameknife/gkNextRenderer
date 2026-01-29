@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Editor/Commands/CommandHistory.h"
 
 #include <imgui.h>
 
@@ -60,5 +61,8 @@ namespace Editor
         // Fonts
         ImFont* fontIcon = nullptr;
         ImFont* bigIcon = nullptr;
+        
+        // Command history for undo/redo
+        CommandHistory commandHistory;
     };
 } // namespace Editor

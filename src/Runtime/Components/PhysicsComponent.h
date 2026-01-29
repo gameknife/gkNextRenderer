@@ -1,5 +1,6 @@
 #pragma once
 #include "Assets/Component.h"
+#include "Runtime/Reflection/ReflectionMacros.h"
 #include "Runtime/NextPhysics.h"
 #include <glm/glm.hpp>
 
@@ -15,6 +16,8 @@ namespace Runtime
     class PhysicsComponent : public Assets::Component
     {
     public:
+        REFLECT_COMPONENT(PhysicsComponent)
+        
         PhysicsComponent() = default;
 
         void BindPhysicsBody(NextBodyID bodyId) { physicsBodyTemp_ = bodyId; }
@@ -24,7 +27,7 @@ namespace Runtime
         ENodeMobility GetMobility() const { return mobility_; }
 
         void SetPhysicsOffset(const glm::vec3& offset) { physicsOffset_ = offset; }
-        const glm::vec3& GetPhysicsOffset() const { return physicsOffset_; }
+        glm::vec3 GetPhysicsOffset() const { return physicsOffset_; }
 
     private:
         NextBodyID physicsBodyTemp_;

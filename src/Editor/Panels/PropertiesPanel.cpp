@@ -1,8 +1,11 @@
 #include "Editor/EditorUi.hpp"
+#include "Editor/Panels/PropertyWidgets.h"
 
 #include "Assets/Node.h"
 #include "Assets/Scene.hpp"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
@@ -128,6 +131,25 @@ namespace Editor
                         ui.ed_material = true;
                         OpenMaterialEditor(ctx, ui);
                     }
+                }
+            }
+            
+            // Draw component properties using reflection
+            ImGui::NewLine();
+            ImGui::Text(ICON_FA_PUZZLE_PIECE " Components");
+            ImGui::Separator();
+            
+            const auto& components = selectedObj->GetComponents();
+            for (const auto& component : components)
+            {
+                if (!component) continue;
+                
+                std::string headerName = std::string(component->GetTypeName());
+                if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    ImGui::Indent();
+                    PropertyWidgets::DrawComponentProperties(component.get(), &ui.commandHistory);
+                    ImGui::Unindent();
                 }
             }
         }

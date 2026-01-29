@@ -161,7 +161,7 @@ namespace Assets
         if (renderComp)
         {
             proxy.modelId = renderComp->GetModelId();
-            proxy.visible = renderComp->IsVisible() ? 1 : 0;
+            proxy.visible = renderComp->GetVisible() ? 1 : 0;
             const auto& mats = renderComp->Materials();
             for ( int i = 0; i < 16; i++ )
             {
