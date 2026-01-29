@@ -26,6 +26,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/Math.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
