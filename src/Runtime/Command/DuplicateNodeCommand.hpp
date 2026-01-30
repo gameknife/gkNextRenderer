@@ -1,9 +1,12 @@
 #pragma once
 
+#pragma once
+
 #include "Common/CoreMinimal.hpp"
-#include "Runtime/Command/CommandSystem.hpp"
+#include "Runtime/Command/ICommand.hpp"
 
 #include <memory>
+#include <string>
 
 namespace Assets
 {
@@ -17,9 +20,8 @@ public:
     DuplicateNodeCommand(Assets::Scene& scene, uint32_t sourceInstanceId);
 
     bool Execute() override;
-    void Undo() override;
-    void Redo() override;
-    const char* Name() const override { return "DuplicateNode"; }
+    bool Undo() override;
+    std::string GetDescription() const override { return "Duplicate Node"; }
 
     uint32_t GetNewInstanceId() const { return newInstanceId_; }
 

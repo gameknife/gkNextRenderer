@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-#include "Editor/Commands/CommandHistory.h"
+#include "Runtime/Command/CommandHistory.hpp"
 
 #include <imgui.h>
 
@@ -25,6 +25,7 @@ namespace Editor
         // Panels
         bool sidebar = true;
         bool properties = true;
+        bool commandHistoryPanel = false;
         bool viewport = true;
         bool contentBrowser = true;
         bool materialBrowser = true;
@@ -62,7 +63,5 @@ namespace Editor
         ImFont* fontIcon = nullptr;
         ImFont* bigIcon = nullptr;
         
-        // Command history for undo/redo
-        CommandHistory commandHistory;
     };
 } // namespace Editor

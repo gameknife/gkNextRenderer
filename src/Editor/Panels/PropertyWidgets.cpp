@@ -1,5 +1,5 @@
 #include "PropertyWidgets.h"
-#include "Editor/Commands/PropertyCommand.h"
+#include "Runtime/Command/PropertyCommand.hpp"
 #include "Runtime/Reflection/ReflectionMacros.h"
 
 #include <imgui_stdlib.h>

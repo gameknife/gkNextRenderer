@@ -19,14 +19,10 @@ bool TransformNodeCommand::Execute()
     return true;
 }
 
-void TransformNodeCommand::Undo()
+bool TransformNodeCommand::Undo()
 {
     Apply(before_);
-}
-
-void TransformNodeCommand::Redo()
-{
-    Apply(after_);
+    return true;
 }
 
 bool TransformNodeCommand::IsDifferent(const TransformSnapshot& before, const TransformSnapshot& after)

@@ -896,14 +896,14 @@ void NextEngine::OnKey(SDL_Event& event)
             {
                 if (hasShift)
                 {
-                    if (commandSystem_.Redo())
+                    if (commandHistory_.Redo())
                     {
                         return;
                     }
                 }
                 else
                 {
-                    if (commandSystem_.Undo())
+                    if (commandHistory_.Undo())
                     {
                         return;
                     }
@@ -911,7 +911,7 @@ void NextEngine::OnKey(SDL_Event& event)
             }
             else if (event.key.key == SDLK_Y)
             {
-                if (commandSystem_.Redo())
+                if (commandHistory_.Redo())
                 {
                     return;
                 }
@@ -940,16 +940,16 @@ void NextEngine::OnKey(SDL_Event& event)
 
 bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)
 {
-    return commandSystem_.ExecuteCommand(std::move(command));
+    return commandHistory_.Execute(std::move(command));
 }
 
-bool NextEngine::UndoCommand() { return commandSystem_.Undo(); }
+bool NextEngine::UndoCommand() { return commandHistory_.Undo(); }
 
-bool NextEngine::RedoCommand() { return commandSystem_.Redo(); }
+bool NextEngine::RedoCommand() { return commandHistory_.Redo(); }
 
-bool NextEngine::CanUndo() const { return commandSystem_.CanUndo(); }
+bool NextEngine::CanUndo() const { return commandHistory_.CanUndo(); }
 
-bool NextEngine::CanRedo() const { return commandSystem_.CanRedo(); }
+bool NextEngine::CanRedo() const { return commandHistory_.CanRedo(); }
 
 void NextEngine::OnTouch(bool down, double xpos, double ypos)
 {

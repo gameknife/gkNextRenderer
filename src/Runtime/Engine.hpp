@@ -5,7 +5,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
-#include "Runtime/Command/CommandSystem.hpp"
+#include "Runtime/Command/CommandHistory.hpp"
 #include "SceneList.hpp"
 #include "ShowFlags.hpp"
 #include "UserSettings.hpp"
@@ -194,8 +194,11 @@ public:
     bool RedoCommand();
     bool CanUndo() const;
     bool CanRedo() const;
-    CommandSystem& GetCommandSystem() { return commandSystem_; }
-    const CommandSystem& GetCommandSystem() const { return commandSystem_; }
+    CommandHistory& GetCommandHistory() { return commandHistory_; }
+    const CommandHistory& GetCommandHistory() const { return commandHistory_; }
+
+    CommandHistory& GetCommandSystem() { return commandHistory_; }
+    const CommandHistory& GetCommandSystem() const { return commandHistory_; }
 
     Vulkan::Window& GetWindow() const { return *window_; }
 
@@ -303,7 +306,7 @@ private:
 
     std::unique_ptr<QuickJSEngine> quickJSEngine_;
 
-    CommandSystem commandSystem_{};
+    CommandHistory commandHistory_{};
 
     // engine status
     NextRenderer::EApplicationStatus status_{};

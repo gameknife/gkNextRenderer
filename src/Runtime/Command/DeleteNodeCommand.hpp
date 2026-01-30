@@ -1,10 +1,13 @@
 #pragma once
 
+#pragma once
+
 #include "Common/CoreMinimal.hpp"
-#include "Runtime/Command/CommandSystem.hpp"
+#include "Runtime/Command/ICommand.hpp"
 #include "Assets/Scene.hpp"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 class DeleteNodeCommand final : public ICommand
@@ -13,9 +16,8 @@ public:
     DeleteNodeCommand(Assets::Scene& scene, uint32_t instanceId);
 
     bool Execute() override;
-    void Undo() override;
-    void Redo() override;
-    const char* Name() const override { return "DeleteNode"; }
+    bool Undo() override;
+    std::string GetDescription() const override { return "Delete Node"; }
 
 private:
     Assets::Scene* scene_ = nullptr;

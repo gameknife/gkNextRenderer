@@ -3,7 +3,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Reflection/PropertyTypes.h"
 #include "Runtime/Reflection/PropertyAccessor.h"
-#include "Editor/Commands/CommandHistory.h"
+#include "Runtime/Command/CommandHistory.hpp"
 #include "Assets/Component.h"
 
 #include <imgui.h>
@@ -17,9 +17,6 @@
 
 namespace Editor
 {
-    // Forward declaration
-    class CommandHistory;
-    
     /**
      * Utility class for rendering property editor widgets based on reflection.
      * Automatically selects appropriate ImGui widgets based on property type.

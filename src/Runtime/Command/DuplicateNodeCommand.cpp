@@ -83,33 +83,16 @@ bool DuplicateNodeCommand::Execute()
     return true;
 }
 
-void DuplicateNodeCommand::Undo()
+bool DuplicateNodeCommand::Undo()
 {
     if (!scene_ || !newNode_)
     {
-        return;
+        return false;
     }
 
     scene_->RemoveNodeByInstanceId(newInstanceId_);
     scene_->SetSelectedId(previousSelectedId_);
     scene_->MarkDirty();
     scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
-}
-
-void DuplicateNodeCommand::Redo()
-{
-    if (!scene_ || !newNode_)
-    {
-        return;
-    }
-
-    if (parent_)
-    {
-        newNode_->SetParent(parent_);
-    }
-
-    scene_->AddNode(newNode_);
-    scene_->SetSelectedId(newInstanceId_);
-    scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
+    return true;
 }

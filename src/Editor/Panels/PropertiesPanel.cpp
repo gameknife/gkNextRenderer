@@ -6,6 +6,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Engine.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
@@ -148,7 +149,7 @@ namespace Editor
                 if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     ImGui::Indent();
-                    PropertyWidgets::DrawComponentProperties(component.get(), &ui.commandHistory);
+                    PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory());
                     ImGui::Unindent();
                 }
             }

@@ -19,6 +19,7 @@ namespace Editor
     void DrawMaterialBrowserPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawTextureBrowserPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawMeshBrowserPanel(EditorContext& ctx, EditorUiState& ui);
+    void DrawCommandHistoryPanel(EditorContext& ctx, EditorUiState& ui);
 
     // Viewport overlay widgets (stats/tools)
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui);

@@ -8,6 +8,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Runtime/Engine.hpp"
+
 namespace Editor
 {
     namespace
@@ -72,23 +74,24 @@ namespace Editor
             if (ImGui::BeginMenu("Edit"))
             {
                 // Undo/Redo
-                bool canUndo = ui.commandHistory.CanUndo();
-                bool canRedo = ui.commandHistory.CanRedo();
+                CommandHistory& history = ctx.engine.GetCommandHistory();
+                bool canUndo = history.CanUndo();
+                bool canRedo = history.CanRedo();
                 
                 std::string undoLabel = canUndo 
-                    ? fmt::format("Undo {}", ui.commandHistory.GetUndoDescription())
+                    ? fmt::format("Undo {}", history.GetUndoDescription())
                     : "Undo";
                 std::string redoLabel = canRedo 
-                    ? fmt::format("Redo {}", ui.commandHistory.GetRedoDescription())
+                    ? fmt::format("Redo {}", history.GetRedoDescription())
                     : "Redo";
                 
                 if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
                 {
-                    ui.commandHistory.Undo();
+                    history.Undo();
                 }
                 if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo))
                 {
-                    ui.commandHistory.Redo();
+                    history.Redo();
                 }
                 
                 ImGui::Separator();
@@ -118,6 +121,7 @@ namespace Editor
                 ImGui::MenuItem("Metrics", nullptr, &ui.child_metrics);
                 ImGui::MenuItem("Stack Tool", nullptr, &ui.child_stack);
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
+                ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
                 ImGui::EndMenu();
             }

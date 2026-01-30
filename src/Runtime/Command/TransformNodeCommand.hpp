@@ -1,10 +1,13 @@
 #pragma once
 
+#pragma once
+
 #include "Common/CoreMinimal.hpp"
-#include "Runtime/Command/CommandSystem.hpp"
+#include "Runtime/Command/ICommand.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <string>
 
 namespace Assets
 {
@@ -24,9 +27,8 @@ public:
     TransformNodeCommand(Assets::Scene& scene, uint32_t instanceId, const TransformSnapshot& before, const TransformSnapshot& after);
 
     bool Execute() override;
-    void Undo() override;
-    void Redo() override;
-    const char* Name() const override { return "TransformNode"; }
+    bool Undo() override;
+    std::string GetDescription() const override { return "Transform Node"; }
 
     static bool IsDifferent(const TransformSnapshot& before, const TransformSnapshot& after);
 
