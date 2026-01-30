@@ -14,7 +14,7 @@
 
 namespace
 {
-    constexpr float kToolbarOffsetY = 48.0f;
+    constexpr float kToolbarEdgePadding = 5.0f;
 }
 
 void GizmoController::EnsureDefaults()
@@ -63,7 +63,12 @@ void GizmoController::DrawToolbar()
 {
     EnsureDefaults();
 
-    ImGui::SetNextWindowBgAlpha(0.65f);
+    constexpr float kToolbarPadX = 8.0f;
+    constexpr float kToolbarPadY = 6.0f;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kToolbarPadX, kToolbarPadY));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
     ImGui::Begin("GizmoToolbar", nullptr,
         ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_AlwaysAutoResize |
@@ -88,6 +93,8 @@ void GizmoController::DrawToolbar()
     }
 
     ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
 }
 
 void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize)
@@ -119,9 +126,11 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     HandleShortcuts(io);
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 toolbarPos(viewportPos.x + viewportSize.x * 0.5f, viewportPos.y + kToolbarOffsetY);
+    const ImVec2 toolbarPos(viewportPos.x + viewportSize.x * 0.5f,
+                            viewportPos.y + viewportSize.y - kToolbarEdgePadding);
     ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::SetNextWindowPos(toolbarPos, ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowPos(toolbarPos, ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.5f);
     DrawToolbar();
 
     const auto& ubo = engine.GetUniformBufferObject();

@@ -47,8 +47,10 @@ namespace Editor
                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollWithMouse;
 
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
             ImGui::Begin("ViewportDropTarget", nullptr, dropFlags);
+            ImGui::PopStyleVar();
             ImGui::PopStyleVar();
 
             ImGui::InvisibleButton("ViewportDropTargetBtn", size);
@@ -131,14 +133,17 @@ namespace Editor
         }
 
         constexpr float padding = 5.0f;
-        const float statW = std::max(60.0f, std::min(160.0f, size.x - padding * 2.0f));
-        const float statH = std::max(60.0f, std::min(140.0f, size.y - padding * 2.0f));
+        constexpr float statPadX = 8.0f;
+        constexpr float statPadY = 6.0f;
+        const float statW = 240.0f;
+        const float statH = ImGui::GetFrameHeight() + statPadY * 2.0f;
 
         ImGui::SetNextWindowPos(pos + ImVec2(padding, padding));
         ImGui::SetNextWindowSize(ImVec2(statW, statH));
         ImGui::SetNextWindowViewport(viewport->ID);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(statPadX, statPadY));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
 
         ImGuiWindowFlags windowFlags = 0 | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
@@ -149,21 +154,36 @@ namespace Editor
 
         const double smoothDelta = ctx.engine.GetSmoothDeltaSeconds();
         const double frameRate = smoothDelta > 0.0 ? (1.0 / smoothDelta) : 0.0;
-        ImGui::Text("Realtime Statistics:");
-        ImGui::Text("Frame rate: %.0f fps", frameRate);
-        ImGui::Text("Progressive: %d", ctx.engine.IsProgressiveRendering());
+        const ImGuiIO& io = ImGui::GetIO();
 
-        auto& gpuDrivenStat = ctx.scene.GetGpuDrivenStat();
-        const uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
-        const uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
-        ImGui::Text("Tris: %s/%s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str(),
-                    Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
-        ImGui::Text("Draw: %s/%s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str(),
-                    Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
+        auto DrawBoolDot = [](const char* label, bool value)
+        {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const float radius = 4.0f;
+            const float spacing = 6.0f;
+            const ImVec2 cursor = ImGui::GetCursorScreenPos();
+            const float centerY = cursor.y + ImGui::GetFrameHeight() * 0.5f;
+            const ImU32 color = value ? IM_COL32(80, 220, 120, 255) : IM_COL32(220, 80, 80, 255);
+            drawList->AddCircleFilled(ImVec2(cursor.x + radius, centerY), radius, color);
+            ImGui::Dummy(ImVec2(radius * 2.0f + spacing, ImGui::GetFrameHeight()));
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::TextUnformatted(label);
+        };
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("FPS %.0f", frameRate);
+        ImGui::SameLine();
+        DrawBoolDot("Mouse", io.WantCaptureMouse);
+        ImGui::SameLine();
+        DrawBoolDot("Key", io.WantCaptureKeyboard);
+        ImGui::SameLine();
+        DrawBoolDot("Text", io.WantTextInput);
 
         ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
 
-        const float toolH = kToolIconWidth + 8.0f;
+        const float toolH = kToolIconWidth;
         float toolW = kToolIconWidth + 16.0f;
         toolW = std::max(60.0f, std::min(toolW, size.x - padding * 2.0f));
 
@@ -171,8 +191,11 @@ namespace Editor
         ImGui::SetNextWindowSize(ImVec2(toolW, toolH));
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
         ImGui::Begin("ViewportTool", nullptr, windowFlags);
+
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -200,8 +223,7 @@ namespace Editor
 
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();
-
-        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
         ImGui::PopStyleVar();
 
         ImGui::End();

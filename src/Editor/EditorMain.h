@@ -5,6 +5,9 @@
 #include "Runtime/GizmoController.hpp"
 #include "Runtime/ModelViewController.hpp"
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 class EditorInterface;
 
 namespace Assets
