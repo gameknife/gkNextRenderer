@@ -119,6 +119,8 @@ class NextEngine final
 public:
     VULKAN_NON_COPIABLE(NextEngine)
 
+    static void RegisterReflection();
+
     NextEngine(Options& options, void* userdata = nullptr);
     ~NextEngine();
 

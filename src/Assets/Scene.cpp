@@ -22,9 +22,47 @@
 
 #include <algorithm>
 #include <spdlog/spdlog.h>
+#include <entt/meta/factory.hpp>
 
 namespace Assets
 {
+    void Scene::RegisterReflection()
+    {
+        using namespace entt::literals;
+
+        entt::meta_factory<Assets::Scene>()
+            .type("Scene"_hs)
+            .func<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
+            .func<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent")
+            .func<&Assets::Scene::GetNodeById>("GetNodeById");
+    }
+
+    int32_t Scene::FindNodeIdWithComponent(const std::string& componentType) const
+    {
+        for (const auto& node : nodes_)
+        {
+            if (!node)
+            {
+                continue;
+            }
+
+            for (const auto& component : node->GetComponents())
+            {
+                if (component && component->GetTypeName() == componentType)
+                {
+                    return static_cast<int32_t>(node->GetInstanceId());
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    Node* Scene::GetNodeById(uint32_t nodeId)
+    {
+        return GetNodeByInstanceId(nodeId);
+    }
+
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;

@@ -4,12 +4,54 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Runtime/Engine.hpp"
+#include "Runtime/Reflection/PropertyMeta.h"
+#include <entt/meta/factory.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/norm.hpp>
 
 namespace Assets
 {
+    void Node::RegisterReflection()
+    {
+        using namespace entt::literals;
+        using namespace Reflection;
+
+        entt::meta_factory<Node>()
+            .type("Node"_hs)
+            .data<nullptr, &Node::GetName>("Name")
+                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Name", "Transform", "Node name"))
+            .data<nullptr, &Node::GetInstanceId>("InstanceId")
+                .custom<PropertyMeta>(PropertyPresets::ReadOnly("InstanceId", "Transform", "Node instance id"))
+            .data<&Node::SetTranslation, &Node::Translation>("Translation")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Translation", "Transform", "Local translation"))
+            .data<&Node::SetRotation, &Node::Rotation>("Rotation")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Rotation", "Transform", "Local rotation"))
+            .data<&Node::SetScale, &Node::Scale>("Scale")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Scale", "Transform", "Local scale"))
+            .func<&Node::GetName>("GetName")
+            .func<&Node::GetInstanceId>("GetInstanceId")
+            .func<&Node::GetComponentByTypeName>("GetComponent");
+    }
+
+    Component* Node::GetComponentByTypeName(const std::string& componentType) const
+    {
+        for (const auto& component : components_)
+        {
+            if (!component)
+            {
+                continue;
+            }
+
+            if (component->GetTypeName() == componentType)
+            {
+                return component.get();
+            }
+        }
+
+        return nullptr;
+    }
+
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId)
     {
         return std::make_shared<Node>(name, translation, rotation, scale, instanceId);

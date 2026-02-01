@@ -196,12 +196,42 @@ namespace
         return true;
     }
 
-    void Println(qjs::rest<std::string> args)
+    std::string JoinArgs(const qjs::rest<std::string>& args, size_t startIndex)
     {
-        for (auto const& arg : args)
+        std::string result;
+        for (size_t index = startIndex; index < args.size(); ++index)
         {
-            SPDLOG_INFO("{}", arg);
+            if (!result.empty())
+            {
+                result += " ";
+            }
+            result += args[index];
         }
+        return result;
+    }
+
+    spdlog::level::level_enum ParseLogLevel(const std::string& value)
+    {
+        if (value == "trace") return spdlog::level::trace;
+        if (value == "debug") return spdlog::level::debug;
+        if (value == "info") return spdlog::level::info;
+        if (value == "warn") return spdlog::level::warn;
+        if (value == "warning") return spdlog::level::warn;
+        if (value == "error") return spdlog::level::err;
+        if (value == "critical") return spdlog::level::critical;
+        return spdlog::level::info;
+    }
+
+    void Spdlog(qjs::rest<std::string> args)
+    {
+        if (args.empty())
+        {
+            return;
+        }
+
+        const spdlog::level::level_enum level = ParseLogLevel(args[0]);
+        const std::string message = JoinArgs(args, 1);
+        spdlog::log(level, "{}", message);
     }
 
     NextEngine* GetEngine()
@@ -209,33 +239,33 @@ namespace
         return NextEngine::GetInstance();
     }
 
-    Assets::Component* FindComponentByTypeName(Assets::Scene& scene, uint32_t nodeId, const std::string& componentType)
+    Assets::Component* FindComponentByTypeName(uint32_t nodeId, const std::string& componentType)
     {
-        auto* node = scene.GetNodeByInstanceId(nodeId);
+        auto* node = FindNodeById(nodeId);
         if (!node)
         {
             return nullptr;
         }
 
-        for (const auto& component : node->GetComponents())
-        {
-            if (!component)
-            {
-                continue;
-            }
-
-            if (component->GetTypeName() == componentType)
-            {
-                return component.get();
-            }
-        }
-
-        return nullptr;
+        return node->GetComponentByTypeName(componentType);
     }
 
-    Assets::Node* FindNodeById(Assets::Scene& scene, uint32_t nodeId)
+    Assets::Node* FindNodeById(uint32_t nodeId)
     {
-        return scene.GetNodeByInstanceId(nodeId);
+        auto* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return nullptr;
+        }
+
+        auto* scene = engine->GetScenePtr();
+        if (!scene)
+        {
+            return nullptr;
+        }
+
+        const auto node = scene->GetNodeSharedByInstanceId(nodeId);
+        return node ? node.get() : nullptr;
     }
 
     JSValue ComponentPropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
@@ -280,7 +310,7 @@ namespace
             return JS_UNDEFINED;
         }
 
-        Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
+        Assets::Component* component = FindComponentByTypeName(nodeId, componentType);
         if (!component)
         {
             JS_FreeCString(ctx, componentType);
@@ -346,7 +376,7 @@ namespace
             return JS_UNDEFINED;
         }
 
-        Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
+        Assets::Component* component = FindComponentByTypeName(nodeId, componentType);
         if (!component)
         {
             JS_FreeCString(ctx, componentType);
@@ -417,7 +447,7 @@ namespace
             return JS_UNDEFINED;
         }
 
-        Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
+        Assets::Component* component = FindComponentByTypeName(nodeId, componentType);
         if (!component)
         {
             JS_FreeCString(ctx, componentType);
@@ -524,25 +554,280 @@ namespace
         return obj;
     }
 
-    int32_t FindNodeIdWithComponent(Assets::Scene& scene, const std::string& componentType)
+    JSValue NodePropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
+                               int magic, JSValueConst* data)
     {
-        for (const auto& node : scene.Nodes())
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        (void)magic;
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, data[0]);
+
+        const char* propertyName = JS_ToCString(ctx, data[1]);
+        if (!propertyName)
         {
-            if (!node)
+            return JS_UNDEFINED;
+        }
+
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            JS_FreeCString(ctx, propertyName);
+            return JS_UNDEFINED;
+        }
+
+        entt::meta_type metaType = entt::resolve<Assets::Node>();
+        entt::meta_any value = Reflection::PropertyAccessor::GetPropertyValue(metaType, node, propertyName);
+        JS_FreeCString(ctx, propertyName);
+
+        if (!value)
+        {
+            return JS_UNDEFINED;
+        }
+
+        return Reflection::QuickJSTypeConverter::ToJSValue(ctx, value);
+    }
+
+    JSValue NodePropertySetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
+                               int magic, JSValueConst* data)
+    {
+        (void)thisVal;
+        (void)magic;
+
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, data[0]);
+
+        const char* propertyName = JS_ToCString(ctx, data[1]);
+        if (!propertyName)
+        {
+            return JS_UNDEFINED;
+        }
+
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            JS_FreeCString(ctx, propertyName);
+            return JS_UNDEFINED;
+        }
+
+        entt::meta_type metaType = entt::resolve<Assets::Node>();
+        auto dataEntry = metaType.data(entt::hashed_string::value(propertyName));
+        if (!dataEntry)
+        {
+            JS_FreeCString(ctx, propertyName);
+            return JS_UNDEFINED;
+        }
+
+        entt::meta_type valueType = dataEntry.type();
+        entt::meta_any converted = Reflection::QuickJSTypeConverter::FromJSValue(ctx, argv[0], valueType);
+        JS_FreeCString(ctx, propertyName);
+
+        if (!converted)
+        {
+            return JS_UNDEFINED;
+        }
+
+        Reflection::PropertyAccessor::SetPropertyValue(metaType, node, dataEntry.name(), converted);
+        return JS_UNDEFINED;
+    }
+
+    JSValue NodeMethodInvoker(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
+                              int magic, JSValueConst* data)
+    {
+        (void)thisVal;
+        (void)magic;
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, data[0]);
+
+        const char* functionName = JS_ToCString(ctx, data[1]);
+        if (!functionName)
+        {
+            return JS_UNDEFINED;
+        }
+
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            JS_FreeCString(ctx, functionName);
+            return JS_UNDEFINED;
+        }
+
+        entt::meta_type metaType = entt::resolve<Assets::Node>();
+        auto function = metaType.func(entt::hashed_string::value(functionName));
+        JS_FreeCString(ctx, functionName);
+
+        if (!function)
+        {
+            return JS_UNDEFINED;
+        }
+
+        if (function.arity() != static_cast<entt::meta_func::size_type>(argc))
+        {
+            JS_ThrowTypeError(ctx, "Invalid argument count");
+            return JS_EXCEPTION;
+        }
+
+        entt::meta_any instanceAny = metaType.from_void(node);
+        entt::meta_any result;
+        if (argc == 0)
+        {
+            result = function.invoke(instanceAny);
+        }
+        else
+        {
+            std::vector<entt::meta_any> args;
+            args.reserve(static_cast<size_t>(argc));
+            for (int idx = 0; idx < argc; ++idx)
+            {
+                entt::meta_type argType = function.arg(static_cast<entt::meta_func::size_type>(idx));
+                args.emplace_back(Reflection::QuickJSTypeConverter::FromJSValue(ctx, argv[idx], argType));
+            }
+
+            result = function.invoke(instanceAny, args.data(), args.size());
+        }
+
+        if (!result)
+        {
+            return JS_UNDEFINED;
+        }
+
+        return Reflection::QuickJSTypeConverter::ToJSValue(ctx, result);
+    }
+
+    JSValue NodeGetComponent(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
+                             int magic, JSValueConst* data)
+    {
+        (void)thisVal;
+        (void)magic;
+
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, data[0]);
+
+        const char* componentType = JS_ToCString(ctx, argv[0]);
+        if (!componentType)
+        {
+            return JS_UNDEFINED;
+        }
+
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            JS_FreeCString(ctx, componentType);
+            return JS_UNDEFINED;
+        }
+
+        Assets::Component* component = node->GetComponentByTypeName(componentType);
+        JSValue result = CreateComponentObject(ctx, component, nodeId, componentType);
+        JS_FreeCString(ctx, componentType);
+        return result;
+    }
+
+    JSValue CreateNodeObject(JSContext* ctx, uint32_t nodeId)
+    {
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            return JS_UNDEFINED;
+        }
+
+        entt::meta_type metaType = entt::resolve<Assets::Node>();
+        JSValue obj = JS_NewObject(ctx);
+
+        auto properties = Reflection::PropertyAccessor::GetProperties(metaType);
+        for (const auto& prop : properties)
+        {
+            if (!prop.meta.IsJSExposed())
             {
                 continue;
             }
 
-            for (const auto& component : node->GetComponents())
+            JSValue data[2];
+            data[0] = JS_NewUint32(ctx, nodeId);
+            data[1] = JS_NewString(ctx, prop.name.c_str());
+
+            JSValue getter = JS_NewCFunctionData(ctx, NodePropertyGetter, 0, 0, 2, data);
+            JSValue setter = JS_UNDEFINED;
+            if (!prop.meta.IsReadOnly())
             {
-                if (component && component->GetTypeName() == componentType)
-                {
-                    return static_cast<int32_t>(node->GetInstanceId());
-                }
+                setter = JS_NewCFunctionData(ctx, NodePropertySetter, 1, 0, 2, data);
             }
+
+            JSAtom propAtom = JS_NewAtom(ctx, prop.name.c_str());
+            JS_DefinePropertyGetSet(ctx, obj, propAtom, getter, setter,
+                                    JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+            JS_FreeAtom(ctx, propAtom);
         }
 
-        return -1;
+        JSValue componentData[1];
+        componentData[0] = JS_NewUint32(ctx, nodeId);
+        JS_SetPropertyStr(ctx, obj, "GetComponent",
+                          JS_NewCFunctionData(ctx, NodeGetComponent, 1, 0, 1, componentData));
+
+        for (auto&& [id, func] : metaType.func())
+        {
+            const char* funcName = func.name();
+            if (!funcName)
+            {
+                continue;
+            }
+
+            if (std::strcmp(funcName, "GetComponent") == 0)
+            {
+                continue;
+            }
+
+            JSValue data[2];
+            data[0] = JS_NewUint32(ctx, nodeId);
+            data[1] = JS_NewString(ctx, funcName);
+
+            JSValue jsFunc = JS_NewCFunctionData(ctx, NodeMethodInvoker, func.arity(), 0, 2, data);
+            JS_SetPropertyStr(ctx, obj, funcName, jsFunc);
+        }
+
+        return obj;
+    }
+
+    JSValue SceneGetNodeById(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, argv[0]);
+        return CreateNodeObject(ctx, nodeId);
+    }
+    
+
+    void BindScenePrototype(JSContext* ctx)
+    {
+        JSValue proto = JS_GetClassProto(ctx, qjs::js_traits<std::shared_ptr<Assets::Scene>>::QJSClassId);
+        if (!JS_IsObject(proto))
+        {
+            JS_FreeValue(ctx, proto);
+            return;
+        }
+
+        JS_SetPropertyStr(ctx, proto, "GetNodeById",
+                          JS_NewCFunction(ctx, SceneGetNodeById, "GetNodeById", 1));
+
+        JS_FreeValue(ctx, proto);
     }
 
     std::string BuildTypeScriptDefinitions()
@@ -553,36 +838,24 @@ namespace
         result += "export interface Vec4 { x: number; y: number; z: number; w: number; }\n";
         result += "export interface Quat { x: number; y: number; z: number; w: number; }\n\n";
 
-        result += "export class NextEngine {\n";
-        result += "    GetTotalFrames(): number;\n";
-        result += "    GetTestNumber(): number;\n";
-        result += "    RegisterJSCallback(callback: (param: number) => void): void;\n";
-        result += "    GetScenePtr(): Scene;\n";
-        result += "}\n\n";
-
         result += "export class NextComponent {\n";
         result += "    name_: string;\n";
         result += "    id_: number;\n";
         result += "}\n\n";
 
-        result += "export class Scene {\n";
-        result += "    GetIndicesCount(): number;\n";
-        result += "}\n\n";
+        result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<NextEngine>("NextEngine");
+        result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Node>("Node");
+        result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Scene>("Scene");
 
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::RenderComponent>("RenderComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::PhysicsComponent>("PhysicsComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::SkinnedMeshComponent>("SkinnedMeshComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateEnumTypeScriptDef<Runtime::ENodeMobility>("ENodeMobility");
 
-        result += "\nexport function println(...args: any[]): void;\n";
-        result += "export function GetEngine(): NextEngine;\n";
-        result += "export function FindNodeIdWithComponent(componentType: string): number;\n";
-        result += "export function GetNodeName(nodeId: number): string;\n";
-        result += "export function GetNodeTranslation(nodeId: number): Vec3;\n";
-        result += "export function GetComponent(nodeId: number, componentType: string): any;\n";
-        result += "export function GetComponentProperty(nodeId: number, componentType: string, propertyName: string): any;\n";
-        result += "export function SetComponentProperty(nodeId: number, componentType: string, propertyName: string, value: any): boolean;\n";
-        result += "export function CallComponentFunction(nodeId: number, componentType: string, functionName: string, ...args: any[]): any;\n";
+        result += "\nexport namespace Global {\n";
+        result += "    function spdlog(level: string, ...args: any[]): void;\n";
+        result += "    function GetEngine(): NextEngine;\n";
+        result += "}\n";
 
         return result;
     }
@@ -646,8 +919,10 @@ void QuickJSEngine::ResetContextAndLoadScript()
     try
     {
         auto& module = context_->addModule("Engine");
-        module.function<&Println>("println");
-        module.function<&GetEngine>("GetEngine");
+        auto globalNamespace = context_->newObject();
+        globalNamespace.add<&Spdlog>("spdlog");
+        globalNamespace.add<&GetEngine>("GetEngine");
+        module.add("Global", std::move(globalNamespace));
 
         module.class_<NextEngine>("NextEngine")
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
@@ -655,222 +930,15 @@ void QuickJSEngine::ResetContextAndLoadScript()
                 .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
                 .fun<&NextEngine::GetScenePtr>("GetScenePtr");
         module.class_<Assets::Scene>("Scene")
-                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount");
+                .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
+                .fun<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent");
         module.class_<NextComponent>("NextComponent")
                 .constructor<>()
                 .fun<&NextComponent::name_>("name_")
                 .fun<&NextComponent::id_>("id_");
 
         qjs::Context* jsContext = context_.get();
-        module.function("FindNodeIdWithComponent", [](const std::string& componentType) -> int32_t {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return -1;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return -1;
-            }
-
-            return FindNodeIdWithComponent(*scene, componentType);
-        });
-
-        module.function("GetNodeName", [](uint32_t nodeId) -> std::string {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return {};
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return {};
-            }
-
-            auto* node = FindNodeById(*scene, nodeId);
-            if (!node)
-            {
-                return {};
-            }
-
-            return node->GetName();
-        });
-
-        module.function("GetNodeTranslation", [jsContext](uint32_t nodeId) -> JSValue {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return JS_UNDEFINED;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return JS_UNDEFINED;
-            }
-
-            auto* node = FindNodeById(*scene, nodeId);
-            if (!node)
-            {
-                return JS_UNDEFINED;
-            }
-
-            const glm::vec3 translation = node->Translation();
-            JSValue obj = JS_NewObject(jsContext->ctx);
-            JS_SetPropertyStr(jsContext->ctx, obj, "x", JS_NewFloat64(jsContext->ctx, translation.x));
-            JS_SetPropertyStr(jsContext->ctx, obj, "y", JS_NewFloat64(jsContext->ctx, translation.y));
-            JS_SetPropertyStr(jsContext->ctx, obj, "z", JS_NewFloat64(jsContext->ctx, translation.z));
-            return obj;
-        });
-
-        module.function("GetComponent", [jsContext](uint32_t nodeId, const std::string& componentType) -> JSValue {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return JS_UNDEFINED;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return JS_UNDEFINED;
-            }
-
-            Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
-            if (!component)
-            {
-                return JS_UNDEFINED;
-            }
-
-            return CreateComponentObject(jsContext->ctx, component, nodeId, componentType);
-        });
-
-        module.function("GetComponentProperty", [jsContext](uint32_t nodeId, const std::string& componentType,
-                                                           const std::string& propertyName) -> JSValue {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return JS_UNDEFINED;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return JS_UNDEFINED;
-            }
-
-            Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
-            if (!component)
-            {
-                SPDLOG_WARN("Component '{}' not found on node {}", componentType, nodeId);
-                return JS_UNDEFINED;
-            }
-
-            entt::meta_type metaType = component->GetMetaType();
-            entt::meta_any value = Reflection::PropertyAccessor::GetPropertyValue(metaType, component, propertyName);
-            if (!value)
-            {
-                SPDLOG_WARN("Property '{}' not found on component '{}'", propertyName, componentType);
-                return JS_UNDEFINED;
-            }
-
-            return Reflection::QuickJSTypeConverter::ToJSValue(jsContext->ctx, value);
-        });
-
-        module.function("SetComponentProperty", [jsContext](uint32_t nodeId, const std::string& componentType,
-                                                           const std::string& propertyName, qjs::Value value) -> bool {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return false;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return false;
-            }
-
-            Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
-            if (!component)
-            {
-                SPDLOG_WARN("Component '{}' not found on node {}", componentType, nodeId);
-                return false;
-            }
-
-            entt::meta_type metaType = component->GetMetaType();
-            auto data = metaType.data(entt::hashed_string::value(propertyName.c_str()));
-            if (!data)
-            {
-                SPDLOG_WARN("Property '{}' not found on component '{}'", propertyName, componentType);
-                return false;
-            }
-
-            entt::meta_type valueType = data.type();
-            if (!Reflection::QuickJSTypeConverter::IsTypeSupported(valueType))
-            {
-                SPDLOG_WARN("Property '{}' on component '{}' is not supported for JS conversion", propertyName, componentType);
-                return false;
-            }
-            entt::meta_any converted = Reflection::QuickJSTypeConverter::FromJSValue(jsContext->ctx, value.v, valueType);
-            if (!converted)
-            {
-                SPDLOG_WARN("Failed to convert value for property '{}' on component '{}'", propertyName, componentType);
-                return false;
-            }
-
-            return Reflection::PropertyAccessor::SetPropertyValue(metaType, component, propertyName, converted);
-        });
-
-        module.function("CallComponentFunction", [jsContext](uint32_t nodeId, const std::string& componentType,
-                                                            const std::string& functionName, qjs::rest<qjs::Value> args) -> JSValue {
-            auto* engine = NextEngine::GetInstance();
-            if (!engine)
-            {
-                return JS_UNDEFINED;
-            }
-
-            auto* scene = engine->GetScenePtr();
-            if (!scene)
-            {
-                return JS_UNDEFINED;
-            }
-
-            Assets::Component* component = FindComponentByTypeName(*scene, nodeId, componentType);
-            if (!component)
-            {
-                SPDLOG_WARN("Component '{}' not found on node {}", componentType, nodeId);
-                return JS_UNDEFINED;
-            }
-
-            entt::meta_type metaType = component->GetMetaType();
-            auto function = metaType.func(entt::hashed_string::value(functionName.c_str()));
-            if (!function)
-            {
-                SPDLOG_WARN("Function '{}' not found on component '{}'", functionName, componentType);
-                return JS_UNDEFINED;
-            }
-
-            if (function.arity() != 0 || !args.empty())
-            {
-                SPDLOG_WARN("Function '{}' on component '{}' expects {} args, but {} provided", functionName,
-                            componentType, function.arity(), args.size());
-                return JS_UNDEFINED;
-            }
-
-            entt::meta_any instanceAny = metaType.from_void(component);
-            entt::meta_any result = function.invoke(instanceAny);
-            if (!result)
-            {
-                return JS_UNDEFINED;
-            }
-
-            return Reflection::QuickJSTypeConverter::ToJSValue(jsContext->ctx, result);
-        });
+        BindScenePrototype(jsContext->ctx);
 
         std::vector<uint8_t> scriptBuffer;
         if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer))

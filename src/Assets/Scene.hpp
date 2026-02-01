@@ -34,6 +34,7 @@ namespace Assets
     class Scene final
     {
     public:
+        static void RegisterReflection();
         Scene(const Scene&) = delete;
         Scene(Scene&&) = delete;
         Scene& operator=(const Scene&) = delete;
@@ -80,6 +81,9 @@ namespace Assets
         const uint32_t GetIndicesCount() const { return indicesCount_; }
         const uint32_t GetVerticeCount() const { return verticeCount_; }
         const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
+
+        int32_t FindNodeIdWithComponent(const std::string& componentType) const;
+        Node* GetNodeById(uint32_t nodeId);
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
 

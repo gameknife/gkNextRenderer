@@ -18,6 +18,7 @@ namespace Assets
     class Node : public std::enable_shared_from_this<Node>
     {
     public:
+        static void RegisterReflection();
         using ENodeMobility = Runtime::ENodeMobility;
         
         static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId = 0);
@@ -39,6 +40,8 @@ namespace Assets
         glm::vec3 WorldScale() const;
         
         const std::string& GetName() const {return name_; }
+
+        Component* GetComponentByTypeName(const std::string& componentType) const;
 
         uint32_t GetInstanceId() const { return instanceId_; }
         void SetInstanceId(uint32_t id) { instanceId_ = id; }

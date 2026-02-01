@@ -34,6 +34,8 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+#include <entt/meta/factory.hpp>
+
 #define BUILDVER(X) std::string buildver(#X);
 #include "NextAnimation.h"
 #include "NextPhysics.h"
@@ -52,6 +54,18 @@
 #endif
 
 ENGINE_API Options* GOption = nullptr;
+
+void NextEngine::RegisterReflection()
+{
+    using namespace entt::literals;
+
+    entt::meta_factory<NextEngine>()
+        .type("NextEngine"_hs)
+        .func<&NextEngine::GetTotalFrames>("GetTotalFrames")
+        .func<&NextEngine::GetTestNumber>("GetTestNumber")
+        .func<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
+        .func<&NextEngine::GetScenePtr>("GetScenePtr");
+}
 
 namespace
 {

@@ -3,6 +3,9 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Engine.hpp"
+#include "Assets/Scene.hpp"
+#include "Assets/Node.h"
 
 namespace Reflection
 {
@@ -25,6 +28,10 @@ namespace Reflection
         Runtime::RenderComponent::RegisterReflection();
         Runtime::PhysicsComponent::RegisterReflection();
         Runtime::SkinnedMeshComponent::RegisterReflection();
+        Assets::Node::RegisterReflection();
+        
+        NextEngine::RegisterReflection();
+        Assets::Scene::RegisterReflection();
         
         sReflectionInitialized = true;
     }

@@ -27,6 +27,11 @@ namespace Reflection
                 return "void";
             }
 
+            if (metaType.is_pointer())
+            {
+                metaType = metaType.remove_pointer();
+            }
+
             const PropertyType type = PropertyAccessor::DeducePropertyType(metaType);
             if (type == PropertyType::Array)
             {
@@ -39,6 +44,15 @@ namespace Reflection
             if (metaType.is_enum())
             {
                 return "string";
+            }
+
+            if (type == PropertyType::Unknown)
+            {
+                const char* name = metaType.name();
+                if (name && *name)
+                {
+                    return name;
+                }
             }
 
             return QuickJSTypeConverter::ToTypeScriptType(type);
