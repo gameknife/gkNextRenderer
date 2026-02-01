@@ -108,7 +108,6 @@ Language and formatting:
 - C++20 and C11; prefer modern C++ (RAII, smart pointers, range-based for).
 - Indentation: 4 spaces, no tabs.
 - Braces: Allman style (opening brace on the next line).
-- Line length: keep under 120 columns where practical.
 
 Naming (enforced by `.clang-tidy`):
 - Types (class/struct/enum/typedef/namespace): PascalCase.
