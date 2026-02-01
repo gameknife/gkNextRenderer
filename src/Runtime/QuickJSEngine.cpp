@@ -239,17 +239,6 @@ namespace
         return NextEngine::GetInstance();
     }
 
-    Assets::Component* FindComponentByTypeName(uint32_t nodeId, const std::string& componentType)
-    {
-        auto* node = FindNodeById(nodeId);
-        if (!node)
-        {
-            return nullptr;
-        }
-
-        return node->GetComponentByTypeName(componentType);
-    }
-
     Assets::Node* FindNodeById(uint32_t nodeId)
     {
         auto* engine = NextEngine::GetInstance();
@@ -266,6 +255,17 @@ namespace
 
         const auto node = scene->GetNodeSharedByInstanceId(nodeId);
         return node ? node.get() : nullptr;
+    }
+    
+    Assets::Component* FindComponentByTypeName(uint32_t nodeId, const std::string& componentType)
+    {
+        auto* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            return nullptr;
+        }
+
+        return node->GetComponentByTypeName(componentType);
     }
 
     JSValue ComponentPropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
