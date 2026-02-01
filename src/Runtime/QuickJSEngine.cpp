@@ -255,7 +255,12 @@ void QuickJSEngine::CompileTypeScriptSources()
 #if WIN32
         commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
 #else
-        commands.emplace_back(fmt::format("./tsc -p \"{}\"", projectDir.string()));
+        const fs::path localTsc = fs::current_path() / "tsc";
+        if (fs::exists(localTsc, ec))
+        {
+            commands.emplace_back(fmt::format("\"{}\" -p \"{}\"", localTsc.string(), projectDir.string()));
+        }
+        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
 #endif
 
         for (const std::string& command : commands)

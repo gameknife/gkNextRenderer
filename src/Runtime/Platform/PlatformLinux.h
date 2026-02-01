@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdlib>
+#include <string>
+
 namespace NextRenderer
 {
     inline void PlatformInit()
@@ -21,8 +24,7 @@ namespace NextRenderer
 
     inline void OSProcess(const char* exe)
     {
-        //int result = system(exe);
-        //(void)result;
+        int result = std::system(exe);
+        (void)result;
     }
 }
-
