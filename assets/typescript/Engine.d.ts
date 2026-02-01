@@ -26,19 +26,20 @@ export class RenderComponent {
     readonly SkinIndex: number;
     Materials: number[];
     ToggleVisible(): boolean;
+    ToggleRayCastVisible(): boolean;
 }
-
 export class PhysicsComponent {
     Mobility: string;
     PhysicsOffset: Vec3;
 }
-
 export class SkinnedMeshComponent {
     PlaySpeed: number;
     readonly IsPlaying: boolean;
     readonly CurrentAnimation: string;
+    PlayAnimation(arg0: string, arg1: boolean): void;
+    StopAnimation(): void;
+    GetAnimationNames(): string[];
 }
-
 export type ENodeMobility = "Static" | "Dynamic" | "Kinematic";
 
 export function println(...args: any[]): void;

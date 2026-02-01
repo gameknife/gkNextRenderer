@@ -178,6 +178,7 @@ foreach(target IN LISTS AllTargets)
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
+		target_compile_definitions(${target} PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 		
 		# Enable Unity Build for gkNextEngine unless explicitly disabled (Android disabled by default)
 		# Group files for Unity Build optimization
