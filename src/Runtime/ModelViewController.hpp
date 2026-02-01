@@ -1,14 +1,32 @@
 #pragma once
 
+#include "FocusAnimation.hpp"
 #include "Utilities/Glm.hpp"
 #include <optional>
 
 namespace Assets
 {
- struct Camera;
+    struct Camera;
 }
 
 union SDL_Event;
+
+struct MovementInput
+{
+    float forward = 0.0f;   // [-1, 1]
+    float right = 0.0f;     // [-1, 1]
+    float up = 0.0f;        // [-1, 1]
+
+    bool IsActive() const
+    {
+        return forward != 0.0f || right != 0.0f || up != 0.0f;
+    }
+
+    void Reset()
+    {
+        forward = right = up = 0.0f;
+    }
+};
 
 class ModelViewController final
 {
@@ -41,10 +59,10 @@ public:
     void SetAltPressed(bool pressed) { altPressed_ = pressed; }
     void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
 
-	glm::vec3 GetRight();
-	glm::vec3 GetUp();
-	glm::vec3 GetForward();
-	glm::vec3 GetPosition();
+	glm::vec3 GetRight() const;
+	glm::vec3 GetUp() const;
+	glm::vec3 GetForward() const;
+	glm::vec3 GetPosition() const;
 
 private:
 
@@ -67,31 +85,12 @@ private:
     std::optional<glm::vec3> orbitTarget_;
     bool altPressed_{};
 
-	// Control states.
-    bool isFocusing_{};
-    float focusTimer_{};
-    const float focusDuration_ = 0.5f;
-    
-    glm::vec3 focusStartPos_{};
-    glm::vec3 focusTargetPos_{};
-    glm::quat focusStartRot_{};
-    glm::quat focusTargetRot_{};
+	// Focus animation
+    FocusAnimation focusAnimation_;
 
-	bool cameraMovingLeft_{};
-	bool cameraMovingRight_{};
-	bool cameraMovingBackward_{};
-	bool cameraMovingForward_{};
-	bool cameraMovingDown_{};
-	bool cameraMovingUp_{};
-    
-    bool cameraMovingLeftJoystick_{};
-    bool cameraMovingRightJoystick_{};
-    bool cameraMovingBackwardJoystick_{};
-    bool cameraMovingForwardJoystick_{};
-    bool cameraMovingDownJoystick_{};
-    bool cameraMovingUpJoystick_{};
-    
-    glm::vec2 cameraMovingSpeed_{};
+    // Movement input (replaces 12 bools)
+    MovementInput keyboardInput_;
+    MovementInput gamepadInput_;
 
 	// with smooth movement
 	double cameraRotX_{};

@@ -82,6 +82,22 @@ void EditorGameInstance::OnInit()
                                 return true;
                             });
 
+    actions_.RegisterAction(EEditorAction::Camera_FocusSelected,
+                            [this](EditorContext& ctx, std::string_view args) -> bool
+                            {
+                                glm::vec3 center;
+                                float radius;
+                                bool found = args.empty()
+                                    ? ctx.scene.GetSelectedNodeBounds(center, radius)
+                                    : ctx.scene.GetNodeBounds(static_cast<uint32_t>(std::stoul(std::string(args))), center, radius);
+
+                                if (found)
+                                {
+                                    modelViewController_.Focus(center, radius);
+                                }
+                                return found;
+                            });
+
     GetEngine().GetShowFlags().ShowEdge = true;
 }
 
@@ -105,10 +121,9 @@ void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
-    if (!gizmoController_.IsShowing())
-    {
-        modelViewController_.OnKey(event);
-    }
+    // WASDQE camera movement (only active when right mouse is pressed)
+    modelViewController_.OnKey(event);
+
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
         switch (event.key.key)
@@ -118,6 +133,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             break;
         case SDLK_F:
             {
+                // Focus on selected node (F key shortcut)
                 glm::vec3 focusCenter;
                 float radius;
                 if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))

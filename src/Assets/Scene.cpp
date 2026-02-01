@@ -1023,9 +1023,9 @@ namespace Assets
         return nullptr;
     }
 
-    bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const
+    bool Scene::GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const
     {
-        if (selectedId_ == static_cast<uint32_t>(-1))
+        if (nodeId == static_cast<uint32_t>(-1))
         {
             return false;
         }
@@ -1033,7 +1033,7 @@ namespace Assets
         const Node* foundNode = nullptr;
         for (const auto& node : nodes_)
         {
-            if (node->GetInstanceId() == selectedId_)
+            if (node->GetInstanceId() == nodeId)
             {
                 foundNode = node.get();
                 break;
@@ -1063,6 +1063,11 @@ namespace Assets
         // Fallback for non-render nodes (default small radius)
         radius = 1.0f;
         return true;
+    }
+
+    bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const
+    {
+        return GetNodeBounds(selectedId_, center, radius);
     }
 
     const Model* Scene::GetModel(uint32_t id) const

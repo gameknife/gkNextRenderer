@@ -36,6 +36,12 @@ void GizmoController::HandleShortcuts(const ImGuiIO& io)
         return;
     }
 
+    // Don't handle gizmo shortcuts when right mouse is pressed (camera movement mode)
+    if (io.MouseDown[1])
+    {
+        return;
+    }
+
     if (ImGui::IsKeyPressed(ImGuiKey_W))
     {
         operation_ = static_cast<int>(ImGuizmo::TRANSLATE);

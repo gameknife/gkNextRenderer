@@ -245,10 +245,8 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
 
 bool NextRendererGameInstance::OnKey(SDL_Event& event)
 {
-    if (!gizmoController_.IsShowing())
-    {
-        modelViewController_.OnKey(event);
-    }
+    // WASDQE camera movement (only active when right mouse is pressed)
+    modelViewController_.OnKey(event);
 
 	if (event.key.type == SDL_EVENT_KEY_DOWN)
 	{

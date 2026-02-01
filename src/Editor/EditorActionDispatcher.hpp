@@ -17,6 +17,8 @@ enum class EEditorAction
     IO_LoadScene,
     IO_LoadSceneAdd,
     IO_LoadHDRI,
+
+    Camera_FocusSelected,
 };
 
 class EditorActionDispatcher final

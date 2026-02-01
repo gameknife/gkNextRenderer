@@ -13,13 +13,16 @@ namespace Editor
 {
     namespace
     {
-        void DrawNode(Assets::Scene& scene, Assets::Node& node)
+        void DrawNode(EditorContext& ctx, Assets::Node& node)
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
 
-            const bool selected = scene.GetSelectedId() == node.GetInstanceId();
-            ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding | (selected ? ImGuiTreeNodeFlags_Selected : 0) |
+            const bool selected = ctx.scene.GetSelectedId() == node.GetInstanceId();
+            ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
+                ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
+                ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
+                (selected ? ImGuiTreeNodeFlags_Selected : 0) |
                 (node.Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
 
             ImGui::PushID(static_cast<int>(node.GetInstanceId()));
@@ -33,16 +36,25 @@ namespace Editor
 
             ImGui::PopStyleColor();
 
-            if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+            // Single click to select
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
             {
-                scene.SetSelectedId(node.GetInstanceId());
+                ctx.scene.SetSelectedId(node.GetInstanceId());
+            }
+
+            // Double-click to focus camera on the node
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            {
+                ctx.scene.SetSelectedId(node.GetInstanceId());
+                ctx.actions.Dispatch(ctx, EEditorAction::Camera_FocusSelected,
+                                     std::to_string(node.GetInstanceId()));
             }
 
             if (opened)
             {
                 for (auto& child : node.Children())
                 {
-                    DrawNode(scene, *child);
+                    DrawNode(ctx, *child);
                 }
                 ImGui::TreePop();
             }
@@ -79,7 +91,7 @@ namespace Editor
                         continue;
                     }
 
-                    DrawNode(ctx.scene, *node);
+                    DrawNode(ctx, *node);
 
                     if (limit-- <= 0)
                     {
