@@ -3,28 +3,30 @@ import * as NE from "./Engine";
 let hasRun = false;
 
 function tryRunTest(): boolean {
-    const nodeId = NE.FindNodeIdWithComponent("RenderComponent");
+    const scene = NE.Global.GetEngine().GetScenePtr();
+    const nodeId = scene.FindNodeIdWithComponent("RenderComponent");
     if (nodeId < 0) {
         return false;
     }
 
-    const nodeName = NE.GetNodeName(nodeId);
-    const translation = NE.GetNodeTranslation(nodeId) as NE.Vec3;
-    const render = NE.GetComponent(nodeId, "RenderComponent") as NE.RenderComponent;
+    const node = scene.GetNodeById(nodeId) as NE.Node;
+    const nodeName = node.Name;
+    const translation = node.Translation as NE.Vec3;
+    const render = node.GetComponent("RenderComponent") as NE.RenderComponent;
     if (!render) {
         return false;
     }
 
-    NE.println(`[test.ts] ${nodeName} pos=(${translation.x}, ${translation.y}, ${translation.z}) visible=${render.Visible}`);
+    NE.Global.spdlog("info", `[test.ts] ${nodeName} pos=(${translation.x}, ${translation.y}, ${translation.z}) visible=${render.Visible}`);
 
     render.Visible = !render.Visible;
     const toggled = render.ToggleVisible();
-    NE.println(`[test.ts] ToggleVisible() => ${toggled} visible=${render.Visible}`);
+    NE.Global.spdlog("info", `[test.ts] ToggleVisible() => ${toggled} visible=${render.Visible}`);
 
     return true;
 }
 
-NE.GetEngine().RegisterJSCallback((_delta: number) => {
+NE.Global.GetEngine().RegisterJSCallback((_delta: number) => {
     if (hasRun) {
         return;
     }
