@@ -29,6 +29,12 @@ namespace Runtime
 
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool GetRayCastVisible() const { return rayCastVisible_; }
+
+        bool ToggleVisible()
+        {
+            visible_ = !visible_;
+            return visible_;
+        }
         
         bool IsDrawable() const { return modelId_ != static_cast<uint32_t>(-1); }
 

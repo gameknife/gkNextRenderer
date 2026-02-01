@@ -1,17 +1,34 @@
 import * as NE from "./Engine";
-class ScriptComponent extends NE.NextComponent {
-    constructor() {
-        super();
-        this.name_ = "ScriptComponent";
-        this.id_ = 1;
+
+let hasRun = false;
+
+function tryRunTest(): boolean {
+    const nodeId = NE.FindNodeIdWithComponent("RenderComponent");
+    if (nodeId < 0) {
+        return false;
     }
-    get_info() {
-        let frame = NE.GetEngine().GetTestNumber();
-        return `[test.ts] ${this.name_} ${this.id_} at ${frame}`;
+
+    const nodeName = NE.GetNodeName(nodeId);
+    const translation = NE.GetNodeTranslation(nodeId) as NE.Vec3;
+    const render = NE.GetComponent(nodeId, "RenderComponent") as NE.RenderComponent;
+    if (!render) {
+        return false;
     }
+
+    NE.println(`[test.ts] ${nodeName} pos=(${translation.x}, ${translation.y}, ${translation.z}) visible=${render.Visible}`);
+
+    render.Visible = !render.Visible;
+    const toggled = render.ToggleVisible();
+    NE.println(`[test.ts] ToggleVisible() => ${toggled} visible=${render.Visible}`);
+    return true;
 }
 
-let testComponent = new ScriptComponent();
-NE.println(testComponent.get_info());
-//NE.println("Hello World from typescript");
-//NE.println("Frame: ", frame);
+NE.GetEngine().RegisterJSCallback((_delta: number) => {
+    if (hasRun) {
+        return;
+    }
+
+    if (tryRunTest()) {
+        hasRun = true;
+    }
+});

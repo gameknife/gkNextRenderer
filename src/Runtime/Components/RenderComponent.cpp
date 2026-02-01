@@ -25,6 +25,8 @@ namespace Runtime
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("Skin Index", "Animation", "Skinning data index for skeletal animation"))
             // Materials array - editable (array of material indices)
             .data<&RenderComponent::SetMaterials, &RenderComponent::GetMaterials>("Materials")
-                .custom<PropertyMeta>(PropertyPresets::Editable("Materials", "Rendering", "Material indices for each submesh"));
+                .custom<PropertyMeta>(PropertyPresets::Editable("Materials", "Rendering", "Material indices for each submesh"))
+            // Methods for JS
+            .func<&RenderComponent::ToggleVisible>("ToggleVisible");
     }
 }

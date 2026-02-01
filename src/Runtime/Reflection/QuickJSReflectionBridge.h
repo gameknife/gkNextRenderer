@@ -99,20 +99,17 @@ namespace Reflection
             bool first = true;
             for (auto&& [id, data] : metaType.data())
             {
-                auto nameProp = data.prop(kPropertyNameKey);
-                if (nameProp)
+                const char* name = data.name();
+                if (name)
                 {
-                    if (auto* name = nameProp.value().try_cast<const char*>())
+                    if (!first)
                     {
-                        if (!first)
-                        {
-                            result += " | ";
-                        }
-                        result += "\"";
-                        result += *name;
-                        result += "\"";
-                        first = false;
+                        result += " | ";
                     }
+                    result += "\"";
+                    result += name;
+                    result += "\"";
+                    first = false;
                 }
             }
             
