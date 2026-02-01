@@ -31,7 +31,7 @@ namespace NextRenderer
         );
     }
 
-    inline void OSProcess(const char* commandline)
+    inline int OSProcess(const char* commandline)
     {
         STARTUPINFOA si;
         PROCESS_INFORMATION pi;
@@ -52,11 +52,15 @@ namespace NextRenderer
             &pi
         ))
         {
-            return;
+            return -1;
         }
         
         WaitForSingleObject(pi.hProcess, INFINITE);
+        DWORD exitCode = 0;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
+
+        return static_cast<int>(exitCode);
     }
 }

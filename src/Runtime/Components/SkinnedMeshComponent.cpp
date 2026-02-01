@@ -30,9 +30,9 @@ namespace Runtime
             .data<nullptr, &SkinnedMeshComponent::GetCurrentAnimationName>("CurrentAnimation")
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("Current Animation", "Animation", "Name of the currently playing animation"))
             // Methods for JS
-            .func<&SkinnedMeshComponent::PlayAnimation>("PlayAnimation"_hs)
-            .func<&SkinnedMeshComponent::StopAnimation>("StopAnimation"_hs)
-            .func<&SkinnedMeshComponent::GetAnimationNames>("GetAnimationNames"_hs);
+            .func<&SkinnedMeshComponent::PlayAnimation>("PlayAnimation")
+            .func<&SkinnedMeshComponent::StopAnimation>("StopAnimation")
+            .func<&SkinnedMeshComponent::GetAnimationNames>("GetAnimationNames");
     }
 
     SkinnedMeshComponent::SkinnedMeshComponent(const Assets::Skeleton& skeleton)

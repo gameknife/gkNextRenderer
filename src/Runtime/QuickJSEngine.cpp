@@ -16,6 +16,7 @@
 #include <spdlog/stopwatch.h>
 #include <fstream>
 #include <entt/core/hashed_string.hpp>
+#include <cstdlib>
 
 #if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
@@ -24,6 +25,13 @@
 namespace
 {
 #if WITH_QUICKJS
+    struct TypeScriptPaths
+    {
+        std::filesystem::path tsconfigPath;
+        std::filesystem::path projectDir;
+        std::filesystem::path outputDir;
+    };
+
     bool HasExtension(const std::filesystem::path& path, std::initializer_list<const char*> extensions)
     {
         const std::string extension = path.extension().string();
@@ -119,21 +127,73 @@ namespace
         return hasTimestamp;
     }
 
-    bool HasNewerTypeScriptSources(const std::filesystem::path& projectDir, const std::filesystem::path& outputDir)
+    bool GetLatestTypeScriptTimestamp(const std::filesystem::path& projectDir,
+        const std::filesystem::path& tsconfigPath,
+        std::filesystem::file_time_type& outTimestamp)
     {
-        std::filesystem::file_time_type latestSource{};
-        if (!FindLatestTimestamp(projectDir, { ".ts", ".tsx" }, latestSource))
+        outTimestamp = std::filesystem::file_time_type{};
+        if (!FindLatestTimestamp(projectDir, { ".ts", ".d.ts" }, outTimestamp))
         {
             return false;
         }
 
-        std::filesystem::file_time_type latestOutput{};
-        if (!FindLatestTimestamp(outputDir, { ".js", ".mjs" }, latestOutput))
+        std::error_code ec;
+        if (!tsconfigPath.empty() && std::filesystem::exists(tsconfigPath, ec))
         {
-            return true;
+            auto tsconfigTime = std::filesystem::last_write_time(tsconfigPath, ec);
+            if (!ec && tsconfigTime > outTimestamp)
+            {
+                outTimestamp = tsconfigTime;
+            }
         }
 
-        return latestSource > latestOutput;
+        return true;
+    }
+
+    TypeScriptPaths ResolveTypeScriptPaths()
+    {
+        namespace fs = std::filesystem;
+
+        TypeScriptPaths paths;
+        paths.outputDir = fs::absolute(fs::path(Utilities::FileHelper::GetPlatformFilePath("assets/scripts")));
+
+        fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("assets/typescript/tsconfig.json"));
+#if defined(GK_NEXT_SOURCE_DIR)
+        const fs::path sourceRoot = fs::path(GK_NEXT_SOURCE_DIR);
+        const fs::path sourceTsconfig = sourceRoot / "assets/typescript/tsconfig.json";
+        if (fs::exists(sourceTsconfig))
+        {
+            tsconfigPath = sourceTsconfig;
+        }
+#endif
+
+        paths.tsconfigPath = tsconfigPath;
+        paths.projectDir = tsconfigPath.parent_path();
+        return paths;
+    }
+
+    bool HasNewerTypeScriptSources(const std::filesystem::path& projectDir,
+        const std::filesystem::path& outputDir,
+        const std::filesystem::path& tsconfigPath,
+        std::filesystem::file_time_type& outLatestSource)
+    {
+        if (!GetLatestTypeScriptTimestamp(projectDir, tsconfigPath, outLatestSource))
+        {
+            return false;
+        }
+
+        const std::filesystem::path stampPath = outputDir / ".tsc.stamp";
+        std::error_code ec;
+        if (std::filesystem::exists(stampPath, ec))
+        {
+            auto stampTime = std::filesystem::last_write_time(stampPath, ec);
+            if (!ec && stampTime >= outLatestSource)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     void Println(qjs::rest<std::string> args)
@@ -509,19 +569,7 @@ namespace
         result += "    GetIndicesCount(): number;\n";
         result += "}\n\n";
 
-        std::string renderDef = Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::RenderComponent>("RenderComponent");
-        const std::string renderMethod = "    ToggleVisible(): boolean;\n";
-        const std::string renderClassEnd = "}\n";
-        const size_t insertPos = renderDef.rfind(renderClassEnd);
-        if (insertPos != std::string::npos)
-        {
-            renderDef.insert(insertPos, renderMethod);
-        }
-        else
-        {
-            renderDef += renderMethod;
-        }
-        result += renderDef;
+        result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::RenderComponent>("RenderComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::PhysicsComponent>("PhysicsComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::SkinnedMeshComponent>("SkinnedMeshComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateEnumTypeScriptDef<Runtime::ENodeMobility>("ENodeMobility");
@@ -580,13 +628,23 @@ QuickJSEngine::~QuickJSEngine() = default;
 void QuickJSEngine::Initialize()
 {
 #if WITH_QUICKJS
+    CompileTypeScriptSources();
+    ResetContextAndLoadScript();
+#endif
+}
+
+#if WITH_QUICKJS
+void QuickJSEngine::ResetContextAndLoadScript()
+{
+    tickCallback_ = nullptr;
+    context_.reset();
+    runtime_.reset();
+
     runtime_ = std::make_unique<qjs::Runtime>();
     context_ = std::make_unique<qjs::Context>(*runtime_);
 
     try
     {
-        CompileTypeScriptSources();
-
         auto& module = context_->addModule("Engine");
         module.function<&Println>("println");
         module.function<&GetEngine>("GetEngine");
@@ -600,8 +658,8 @@ void QuickJSEngine::Initialize()
                 .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount");
         module.class_<NextComponent>("NextComponent")
                 .constructor<>()
-                .fun<&NextComponent::name_> ("name_")
-                .fun<&NextComponent::id_> ("id_");
+                .fun<&NextComponent::name_>("name_")
+                .fun<&NextComponent::id_>("id_");
 
         qjs::Context* jsContext = context_.get();
         module.function("FindNodeIdWithComponent", [](const std::string& componentType) -> int32_t {
@@ -829,8 +887,8 @@ void QuickJSEngine::Initialize()
             std::cerr << static_cast<std::string>(exc["stack"]) << std::endl;
         }
     }
-#endif
 }
+#endif
 
 void QuickJSEngine::Tick(double deltaSeconds)
 {
@@ -839,6 +897,8 @@ void QuickJSEngine::Tick(double deltaSeconds)
     {
         tickCallback_(deltaSeconds);
     }
+
+    TickHotReload(deltaSeconds);
 #else
     (void)deltaSeconds;
 #endif
@@ -854,17 +914,70 @@ void QuickJSEngine::RegisterTickCallback(std::function<void(double)> callback)
 }
 
 #if WITH_QUICKJS
-void QuickJSEngine::CompileTypeScriptSources()
+void QuickJSEngine::TickHotReload(double deltaSeconds)
+{
+#if ANDROID
+    (void)deltaSeconds;
+    return;
+#else
+    constexpr double hotReloadIntervalSeconds = 0.5;
+    hotReloadElapsed_ += deltaSeconds;
+    if (hotReloadElapsed_ < hotReloadIntervalSeconds)
+    {
+        return;
+    }
+
+    hotReloadElapsed_ = 0.0;
+    if (CompileTypeScriptSources())
+    {
+        SPDLOG_INFO("TypeScript outputs updated. Reloading QuickJS context.");
+        ResetContextAndLoadScript();
+    }
+#endif
+}
+
+bool QuickJSEngine::EnsureTscAvailable(const std::filesystem::path& localTsc)
+{
+    if (tscChecked_)
+    {
+        return tscAvailable_;
+    }
+
+    tscChecked_ = true;
+    if (!localTsc.empty() && std::filesystem::exists(localTsc))
+    {
+        tscAvailable_ = true;
+        return true;
+    }
+
+#if WIN32
+    int result = std::system("where tsc >nul 2>&1");
+    tscAvailable_ = (result == 0);
+#else
+    int result = std::system("command -v tsc >/dev/null 2>&1");
+    tscAvailable_ = (result == 0);
+#endif
+
+    if (!tscAvailable_)
+    {
+        SPDLOG_WARN("TypeScript compiler not found; hot reload disabled.");
+    }
+
+    return tscAvailable_;
+}
+
+bool QuickJSEngine::CompileTypeScriptSources()
 {
     namespace fs = std::filesystem;
 
     try
     {
-        const fs::path tsconfigPath = fs::path(Utilities::FileHelper::GetNormalizedFilePath("assets/typescript/tsconfig.json"));
+        const TypeScriptPaths paths = ResolveTypeScriptPaths();
+        const fs::path tsconfigPath = paths.tsconfigPath;
         if (tsconfigPath.empty())
         {
             SPDLOG_DEBUG("TypeScript tsconfig not found; skipping compilation.");
-            return;
+            return false;
         }
 
         UpdateTypeScriptDefinitions(tsconfigPath);
@@ -873,17 +986,22 @@ void QuickJSEngine::CompileTypeScriptSources()
         if (!fs::exists(tsconfigPath, ec))
         {
             SPDLOG_DEBUG("TypeScript tsconfig missing at {}", tsconfigPath.string());
-            return;
+            return false;
         }
 
-        const fs::path projectDir = tsconfigPath.parent_path();
-        const fs::path outputDir = fs::absolute(projectDir / "../../assets/scripts");
+        const fs::path projectDir = paths.projectDir;
+        const fs::path outputDir = paths.outputDir;
+        if (outputDir.empty())
+        {
+            SPDLOG_WARN("TypeScript output directory is not available.");
+            return false;
+        }
 
         const bool forceCompile = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
-        if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir))
+        std::filesystem::file_time_type latestSource{};
+        if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir, tsconfigPath, latestSource))
         {
-            SPDLOG_INFO("TypeScript outputs are up to date; skipping compilation.");
-            return;
+            return false;
         }
 
         if (!fs::exists(outputDir, ec))
@@ -895,16 +1013,26 @@ void QuickJSEngine::CompileTypeScriptSources()
             }
         }
 
+        if (forceCompile)
+        {
+            GetLatestTypeScriptTimestamp(projectDir, tsconfigPath, latestSource);
+        }
+
+        const fs::path localTsc = fs::current_path() / "tsc";
+        if (!EnsureTscAvailable(localTsc))
+        {
+            return false;
+        }
+
         std::vector<std::string> commands;
 #if WIN32
-        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
+        commands.emplace_back(fmt::format("tsc -p \"{}\" --outDir \"{}\"", tsconfigPath.string(), outputDir.string()));
 #else
-        const fs::path localTsc = fs::current_path() / "tsc";
         if (fs::exists(localTsc, ec))
         {
-            commands.emplace_back(fmt::format("\"{}\" -p \"{}\"", localTsc.string(), projectDir.string()));
+            commands.emplace_back(fmt::format("\"{}\" -p \"{}\" --outDir \"{}\"", localTsc.string(), tsconfigPath.string(), outputDir.string()));
         }
-        commands.emplace_back(fmt::format("tsc -p \"{}\"", projectDir.string()));
+        commands.emplace_back(fmt::format("tsc -p \"{}\" --outDir \"{}\"", tsconfigPath.string(), outputDir.string()));
 #endif
 
         for (const std::string& command : commands)
@@ -916,9 +1044,20 @@ void QuickJSEngine::CompileTypeScriptSources()
 
             SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
             spdlog::stopwatch stopwatch;
-            NextRenderer::OSProcess(command.c_str());
+            int result = NextRenderer::OSProcess(command.c_str());
             SPDLOG_INFO("---- Compiling TypeScript in {}", stopwatch.elapsed_ms());
-            return;
+            if (result == 0)
+            {
+                const fs::path stampPath = outputDir / ".tsc.stamp";
+                std::ofstream writer(stampPath, std::ios::binary | std::ios::trunc);
+                if (!writer)
+                {
+                    SPDLOG_WARN("Failed to update TypeScript stamp at {}", stampPath.string());
+                }
+                return true;
+            }
+
+            SPDLOG_WARN("TypeScript compile command failed with code {}", result);
         }
 
         SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
@@ -927,5 +1066,7 @@ void QuickJSEngine::CompileTypeScriptSources()
     {
         SPDLOG_WARN("Exception while compiling TypeScript sources: {}", e.what());
     }
+
+    return false;
 }
 #endif

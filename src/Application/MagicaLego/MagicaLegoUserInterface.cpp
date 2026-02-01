@@ -635,7 +635,8 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
             waiting_ = false;
             PopLayout();
             // sleep os for a while
-            NextRenderer::OSProcess(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
+            int result = NextRenderer::OSProcess(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
+            (void)result;
             // delete all *.jpg using std::filesystem
             std::filesystem::remove_all(localTempPath);
 

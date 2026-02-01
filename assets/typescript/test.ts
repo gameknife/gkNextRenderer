@@ -20,6 +20,7 @@ function tryRunTest(): boolean {
     render.Visible = !render.Visible;
     const toggled = render.ToggleVisible();
     NE.println(`[test.ts] ToggleVisible() => ${toggled} visible=${render.Visible}`);
+
     return true;
 }
 

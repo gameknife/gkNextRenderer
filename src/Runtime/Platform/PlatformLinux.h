@@ -22,9 +22,8 @@ namespace NextRenderer
         //system(commandline.c_str());
     }
 
-    inline void OSProcess(const char* exe)
+    inline int OSProcess(const char* exe)
     {
-        int result = std::system(exe);
-        (void)result;
+        return std::system(exe);
     }
 }

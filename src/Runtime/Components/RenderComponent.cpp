@@ -27,6 +27,7 @@ namespace Runtime
             .data<&RenderComponent::SetMaterials, &RenderComponent::GetMaterials>("Materials")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Materials", "Rendering", "Material indices for each submesh"))
             // Methods for JS
-            .func<&RenderComponent::ToggleVisible>("ToggleVisible");
+            .func<&RenderComponent::ToggleVisible>("ToggleVisible")
+            .func<&RenderComponent::ToggleRayCastVisible>("ToggleRayCastVisible");
     }
 }

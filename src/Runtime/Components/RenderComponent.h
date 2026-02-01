@@ -35,6 +35,12 @@ namespace Runtime
             visible_ = !visible_;
             return visible_;
         }
+
+        bool ToggleRayCastVisible()
+        {
+            rayCastVisible_ = !rayCastVisible_;
+            return rayCastVisible_;
+        }
         
         bool IsDrawable() const { return modelId_ != static_cast<uint32_t>(-1); }
 

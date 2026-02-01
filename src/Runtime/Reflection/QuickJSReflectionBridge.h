@@ -15,6 +15,35 @@ namespace Reflection
     class QuickJSReflectionBridge
     {
     public:
+        static std::string ToTypeScriptType(entt::meta_type metaType)
+        {
+            if (!metaType)
+            {
+                return "any";
+            }
+
+            if (metaType == entt::resolve<void>())
+            {
+                return "void";
+            }
+
+            const PropertyType type = PropertyAccessor::DeducePropertyType(metaType);
+            if (type == PropertyType::Array)
+            {
+                auto [elementType, elementEnumTypeId] = PropertyAccessor::GetArrayElementType(metaType);
+                (void)elementEnumTypeId;
+                std::string elementTypeName = QuickJSTypeConverter::ToTypeScriptType(elementType);
+                return elementTypeName + "[]";
+            }
+
+            if (metaType.is_enum())
+            {
+                return "string";
+            }
+
+            return QuickJSTypeConverter::ToTypeScriptType(type);
+        }
+
         // Automatically bind a component class to QuickJS using reflection
         template<typename ComponentT>
         static void AutoBindComponent(qjs::Context::Module& module, const char* jsClassName)
@@ -75,6 +104,37 @@ namespace Reflection
                 result += prop.name;
                 result += ": ";
                 result += tsType;
+                result += ";\n";
+            }
+
+            for (auto&& [id, func] : metaType.func())
+            {
+                const char* funcName = func.name();
+                if (!funcName)
+                {
+                    continue;
+                }
+
+                result += "    ";
+                result += funcName;
+                result += "(";
+
+                const auto argCount = func.arity();
+                for (std::size_t argIndex = 0; argIndex < argCount; ++argIndex)
+                {
+                    if (argIndex > 0)
+                    {
+                        result += ", ";
+                    }
+
+                    result += "arg";
+                    result += std::to_string(argIndex);
+                    result += ": ";
+                    result += ToTypeScriptType(func.arg(argIndex));
+                }
+
+                result += "): ";
+                result += ToTypeScriptType(func.ret());
                 result += ";\n";
             }
             
