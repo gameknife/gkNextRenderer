@@ -868,15 +868,15 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetTotalFrames() % 10 == 0)
+        if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
-            // if (sceneDirtyForCpuAS_)
-            // {
-            //     if ( cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true) )
-            //     {
-            //         sceneDirtyForCpuAS_ = false;
-            //     }
-            // }
+            if (sceneDirtyForCpuAS_)
+            {
+                if (cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true))
+                {
+                    sceneDirtyForCpuAS_ = false;
+                }
+            }
 
             cpuAccelerationStructure_.Tick(*this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(),
                                            pageIndexBufferMemory_.get());

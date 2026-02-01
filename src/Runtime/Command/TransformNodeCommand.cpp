@@ -54,5 +54,4 @@ void TransformNodeCommand::Apply(const TransformSnapshot& snapshot)
     node->SetScale(snapshot.scale);
     node->RecalcTransform(true);
     scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
 }
