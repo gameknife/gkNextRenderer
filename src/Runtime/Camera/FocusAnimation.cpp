@@ -1,4 +1,4 @@
-#include "FocusAnimation.hpp"
+#include "Runtime/Camera/FocusAnimation.hpp"
 
 void FocusAnimation::Start(glm::vec3 startPos, glm::quat startRot,
                            glm::vec3 targetPos, glm::quat targetRot)

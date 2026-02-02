@@ -10,7 +10,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/NextEngineHelper.h"
+#include "Runtime/Camera/NextEngineHelper.h"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"

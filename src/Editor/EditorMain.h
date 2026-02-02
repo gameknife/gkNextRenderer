@@ -3,7 +3,7 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/GizmoController.hpp"
-#include "Runtime/ModelViewController.hpp"
+#include "Runtime/Camera/ModelViewController.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

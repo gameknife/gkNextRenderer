@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FocusAnimation.hpp"
+#include "Runtime/Camera/FocusAnimation.hpp"
 #include "Utilities/Glm.hpp"
 #include <optional>
 

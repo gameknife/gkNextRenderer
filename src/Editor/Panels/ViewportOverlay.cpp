@@ -7,7 +7,7 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/NextEngineHelper.h"
+#include "Runtime/Camera/NextEngineHelper.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
