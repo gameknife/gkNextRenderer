@@ -1665,7 +1665,7 @@ namespace Vulkan
         size_t SrcImageW8 = 4 * 2 * extent.width;
         size_t SrcImage8 = 4 * 2;
 
-#if __linux__ || __APPLE__
+#if __linux__ || __APPLE__ || __MINGW32__
         oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), SrcImageSize);
         oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD,rtDenoise1_->GetExternalHandle(), SrcImageSize);
         oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), SrcImageSize);

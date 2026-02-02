@@ -57,7 +57,7 @@
                 "ENABLE_KTX2": "ON",
                 "ENABLE_PHYSIC": "ON",
                 "ENABLE_AUDIO": "ON",
-                "ENABLE_OIDN": "ON",
+                "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "ON",
                 "ENABLE_UNITY_BUILD": "ON"
             }
@@ -139,6 +139,39 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "name": "mingw-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Ninja",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "default-mingw",
+            "inherits": ["mingw-base", "features-default"],
+            "displayName": "Default MinGW",
+            "description": "Default MinGW configuration for development"
+        },
+        {
+            "name": "minimal-mingw",
+            "inherits": ["mingw-base", "features-minimal"],
+            "displayName": "Minimal MinGW",
+            "description": "Minimal MinGW configuration for development"
+        },
+        {
+            "name": "full-mingw",
+            "inherits": ["mingw-base", "features-full"],
+            "displayName": "Full MinGW",
+            "description": "Full MinGW configuration for development"
         },
         {
             "name": "macos-arm64-base",
@@ -253,6 +286,21 @@
         {
             "name": "full-ios",
             "configurePreset": "full-ios",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "default-mingw",
+            "configurePreset": "default-mingw",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "minimal-mingw",
+            "configurePreset": "minimal-mingw",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "full-mingw",
+            "configurePreset": "full-mingw",
             "configuration": "RelWithDebInfo"
         }
     ]

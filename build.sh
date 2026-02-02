@@ -21,6 +21,7 @@ set -euo pipefail
 #   ./build.sh --preset default-linux -- -DENABLE_AVIF=ON
 #   ./build.sh --preset default-linux --clean
 #   ./build.sh --preset default-linux --reconfigure
+#   ./build.sh --preset default-mingw
 # ==============================================================================
 # ### HELP_END ###
 
@@ -50,7 +51,7 @@ detect_default_preset() {
         Darwin*) 
             if [ "$(uname -m)" = "arm64" ]; then echo "default-macos-arm64"; else echo "default-macos-x64"; fi ;;
         Linux*) echo "default-linux" ;; 
-        MINGW*|MSYS*) echo "default-windows" ;;
+        MINGW*|MSYS*) echo "default-mingw" ;;
         *) echo "unknown" ;; 
     esac
 }
@@ -62,6 +63,8 @@ ensure_vcpkg() {
         platform=$(detect_default_preset)
         if [[ "$platform" == *"macos"* ]]; then
             "$PROJECT_ROOT/vcpkg.sh" "macos"
+        elif [[ "$platform" == "default-mingw" ]]; then
+            "$PROJECT_ROOT/vcpkg.sh"
         else
             "$PROJECT_ROOT/vcpkg.sh" "$(echo "$platform" | cut -d- -f2)"
         fi

@@ -11,6 +11,7 @@ endif ()
 if (MINGW)
     target_link_options(gk_project_options INTERFACE "-municode")
     target_compile_definitions(gk_project_options INTERFACE MINGW=1)
+    target_compile_options(gk_project_options INTERFACE "-Wno-deprecated-declarations")
 endif()
 
 if (MSVC)

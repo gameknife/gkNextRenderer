@@ -99,7 +99,11 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     
     if (GOption->FastExit)
     {
+#if __MINGW32__
+        std::exit(0);
+#else
         std::quick_exit(0);
+#endif
     }
 
     GTestRunner.reset();
