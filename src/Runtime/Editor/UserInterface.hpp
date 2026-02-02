@@ -2,8 +2,8 @@
 #include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include "Vulkan/Vulkan.hpp"
-#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include <vector>
 #include <memory>
 #include <string>

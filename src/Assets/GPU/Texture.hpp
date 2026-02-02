@@ -1,16 +1,14 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-#include "Vulkan/Vulkan.hpp"
-#include "Vulkan/Sampler.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "Assets/GPU/UniformBuffer.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 
 namespace Vulkan {
 	class CommandPool;

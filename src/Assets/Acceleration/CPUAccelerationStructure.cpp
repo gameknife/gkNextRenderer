@@ -1,6 +1,6 @@
 #include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"
-#include "Vulkan/DeviceMemory.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Assets/GPU/TextureImage.hpp"

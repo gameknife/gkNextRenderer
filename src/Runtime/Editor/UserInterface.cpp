@@ -4,14 +4,13 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Utilities/Exception.hpp"
-#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
-#include "Vulkan/RenderPass.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
-#include "Vulkan/Surface.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
+#include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
+#include "Vulkan/WindowSurface.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>
@@ -37,7 +36,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/ImageView.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 extern float GAndroidMagicScale;
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;

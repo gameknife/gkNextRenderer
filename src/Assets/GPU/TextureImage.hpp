@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan/Image.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include <memory>
 #include <string>
 #include <vector>

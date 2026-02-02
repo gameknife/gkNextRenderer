@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 
 namespace Vulkan
 {

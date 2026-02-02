@@ -2,8 +2,8 @@
 #include "Runtime/Engine.hpp"
 #include "Utilities/Math.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
-#include "Vulkan/RenderImage.hpp"
+#include "Vulkan/WindowSurface.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 namespace Vulkan::LegacyDeferred {
 
