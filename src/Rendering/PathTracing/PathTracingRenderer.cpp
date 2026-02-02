@@ -1,7 +1,7 @@
 #include "PathTracingRenderer.hpp"
 #include "Vulkan/BufferUtil.hpp"
 #include "Vulkan/GpuResources.hpp"
-#include "Vulkan/ImageMemoryBarrier.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 #include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Utilities/Math.hpp"

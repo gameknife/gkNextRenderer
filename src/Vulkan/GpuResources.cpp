@@ -1,7 +1,7 @@
 #include "GpuResources.hpp"
 #include "Device.hpp"
 #include "CommandExecution.hpp"
-#include "ImageMemoryBarrier.hpp"
+#include "DebugUtilities.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 

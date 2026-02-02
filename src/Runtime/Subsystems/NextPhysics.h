@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 #include "Runtime/Subsystems/NextPhysicsTypes.h"
 
 struct FNextPhysicsContext;

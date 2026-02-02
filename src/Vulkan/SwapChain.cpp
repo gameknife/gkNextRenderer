@@ -1,6 +1,6 @@
 #include "SwapChain.hpp"
 #include "Device.hpp"
-#include "Enumerate.hpp"
+#include "DebugUtilities.hpp"
 #include "GpuResources.hpp"
 #include "Instance.hpp"
 #include "WindowSurface.hpp"
@@ -9,7 +9,7 @@
 #include <limits>
 #include <spdlog/spdlog.h>
 
-#include "ImageMemoryBarrier.hpp"
+#include "DebugUtilities.hpp"
 
 float GAndroidMagicScale = 1.0f;
 

@@ -1,6 +1,6 @@
 #include "Instance.hpp"
-#include "Enumerate.hpp"
-#include "Version.hpp"
+#include "DebugUtilities.hpp"
+#include "DebugUtilities.hpp"
 #include "WindowSurface.hpp"
 #include "Utilities/Exception.hpp"
 #include <algorithm>

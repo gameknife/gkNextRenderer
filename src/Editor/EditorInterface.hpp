@@ -2,7 +2,7 @@
 #include <imgui.h>
 
 #include "Editor/Core/EditorUiState.hpp"
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 
 #include <memory>
 

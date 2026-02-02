@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan.hpp"
+#include "DebugUtilities.hpp"
 #include <vector>
 #include <functional>
 

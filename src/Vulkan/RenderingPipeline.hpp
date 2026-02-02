@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan.hpp"
+#include "DebugUtilities.hpp"
 #include "Device.hpp"
 #include "SwapChain.hpp"
 #include "DescriptorSystem.hpp"

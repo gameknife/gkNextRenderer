@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include "Common/CoreMinimal.hpp"
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 
 #include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Assets/Core/Model.hpp"

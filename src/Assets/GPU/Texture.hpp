@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 #include "Vulkan/MemoryAndShader.hpp"
 #include <memory>
 #include <string>

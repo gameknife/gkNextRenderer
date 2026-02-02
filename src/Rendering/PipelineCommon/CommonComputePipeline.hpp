@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 #include "Vulkan/GpuResources.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 
