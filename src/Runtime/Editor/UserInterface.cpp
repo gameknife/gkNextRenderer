@@ -4,7 +4,7 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Utilities/Exception.hpp"
-#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"

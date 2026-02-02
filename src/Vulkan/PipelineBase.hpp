@@ -4,8 +4,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 
 namespace Vulkan
 {

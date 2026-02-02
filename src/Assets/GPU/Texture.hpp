@@ -8,9 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include "Assets/GPU/UniformBuffer.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 
 namespace Vulkan {
 	class CommandPool;

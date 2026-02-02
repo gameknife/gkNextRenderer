@@ -3,9 +3,7 @@
 #include "Runtime/Engine.hpp"
 
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
