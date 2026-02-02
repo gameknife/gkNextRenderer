@@ -1,7 +1,7 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "UniformBuffer.hpp"
-#include "Runtime/NextPhysics.h"
+#include "Runtime/Subsystems/NextPhysics.h"
 #include "Component.h"
 #include "Runtime/Components/PhysicsComponent.h"
 

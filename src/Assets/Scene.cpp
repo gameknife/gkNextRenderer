@@ -9,7 +9,7 @@
 #include "FSceneSaver.h"
 #include "Model.hpp"
 #include "Options.hpp"
-#include "Runtime/NextPhysics.h"
+#include "Runtime/Subsystems/NextPhysics.h"
 #include "Scene.hpp"
 #include "Vulkan/BufferUtil.hpp"
 

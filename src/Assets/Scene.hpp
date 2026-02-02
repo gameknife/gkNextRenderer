@@ -8,8 +8,8 @@
 
 #include "CPUAccelerationStructure.h"
 #include "Model.hpp"
-#include "Runtime/NextPhysics.h"
-#include "Runtime/NextPhysicsTypes.h"
+#include "Runtime/Subsystems/NextPhysics.h"
+#include "Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Skeleton.hpp"
 
 namespace Vulkan

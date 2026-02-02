@@ -1,4 +1,4 @@
-#include "QuickJSEngine.hpp"
+#include "Runtime/Subsystems/QuickJSEngine.hpp"
 
 #include "Engine.hpp"
 #include "Assets/Scene.hpp"

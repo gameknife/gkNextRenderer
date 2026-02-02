@@ -3,7 +3,7 @@
 #include "Assets/Scene.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "QuickJSEngine.hpp"
+#include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Command/DeleteNodeCommand.hpp"
 #include "Runtime/Editor/ScreenShot.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
@@ -25,7 +25,7 @@
 #include <system_error>
 #include <vector>
 
-#include "NextAudio.h"
+#include "Runtime/Subsystems/NextAudio.h"
 #include "Options.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
 #include "Runtime/Utilities/TaskCoordinator.hpp"
@@ -37,9 +37,9 @@
 #include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
-#include "NextAnimation.h"
-#include "NextPhysics.h"
-#include "Platform/PlatformCommon.h"
+#include "Runtime/Subsystems/NextAnimation.h"
+#include "Runtime/Subsystems/NextPhysics.h"
+#include "Runtime/Platform/PlatformCommon.h"
 #include "build.version"
 
 #include "Common/CoreMinimal.hpp"
