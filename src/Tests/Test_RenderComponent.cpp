@@ -1,5 +1,5 @@
 #include <catch2/catch_all.hpp>
-#include "Assets/Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include <memory>
 #include <array>
