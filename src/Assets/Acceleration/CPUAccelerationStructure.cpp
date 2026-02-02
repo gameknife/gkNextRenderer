@@ -3,7 +3,7 @@
 #include "Vulkan/DeviceMemory.hpp"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
-#include "Assets/TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Assets/Scene.hpp"
 

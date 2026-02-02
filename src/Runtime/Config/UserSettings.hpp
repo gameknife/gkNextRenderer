@@ -1,5 +1,5 @@
 #pragma once
-#include "Assets/UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 
 #include "Assets/Model.hpp"
 

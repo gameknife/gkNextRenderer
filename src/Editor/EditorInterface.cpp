@@ -14,7 +14,7 @@
 #include "Editor/EditorUi.hpp"
 
 #include "Assets/Scene.hpp"
-#include "Assets/TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Common/CoreMinimal.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"

@@ -29,7 +29,7 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 
-#include "Assets/TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"

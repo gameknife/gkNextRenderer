@@ -13,7 +13,7 @@
 #include "Vulkan/RenderPass.hpp"
 
 #include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include "Assets/Data/Vertex.hpp"
 
 namespace Vulkan::PipelineCommon

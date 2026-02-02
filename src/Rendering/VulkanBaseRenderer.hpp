@@ -3,7 +3,7 @@
 #include "Vulkan/FrameBuffer.hpp"
 #include "Vulkan/VulkanGpuTimer.hpp"
 #include "Vulkan/Image.hpp"
-#include "Assets/UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include "Assets/Scene.hpp"
 #include <vector>
 #include <memory>

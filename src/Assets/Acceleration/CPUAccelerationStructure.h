@@ -1,6 +1,6 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
-#include "Assets/UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <functional>

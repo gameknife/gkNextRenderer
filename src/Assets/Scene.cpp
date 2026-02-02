@@ -4,7 +4,7 @@
 #include <meshoptimizer.h>
 #include <tiny_gltf.h>
 #include <unordered_set>
-#include "Assets/TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Common/CoreMinimal.hpp"
 #include "Savers/FSceneSaver.h"
 #include "Model.hpp"

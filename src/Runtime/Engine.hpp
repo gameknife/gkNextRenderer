@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Assets/Model.hpp"
-#include "Assets/UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include "Common/CoreMinimal.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"

@@ -1,7 +1,7 @@
 #include "PipelineLayout.hpp"
 #include "DescriptorSetLayout.hpp"
 #include "Device.hpp"
-#include "Assets/Texture.hpp"
+#include "Assets/GPU/Texture.hpp"
 
 namespace Vulkan {
 	

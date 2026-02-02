@@ -1,11 +1,11 @@
-#include "Texture.hpp"
+#include "Assets/GPU/Texture.hpp"
 #include "Utilities/StbImage.hpp"
 #include "Utilities/Exception.hpp"
 #include "Common/CoreMinimal.hpp"
 
 #include "Options.hpp"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"
-#include "TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"

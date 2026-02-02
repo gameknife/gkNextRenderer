@@ -1,4 +1,4 @@
-#include "UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include <cstring>

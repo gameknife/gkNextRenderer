@@ -1,5 +1,5 @@
-#include "TextureImage.hpp"
-#include "Texture.hpp"
+#include "Assets/GPU/TextureImage.hpp"
+#include "Assets/GPU/Texture.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/ImageView.hpp"

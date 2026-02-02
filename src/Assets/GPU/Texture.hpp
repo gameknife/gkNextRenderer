@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "UniformBuffer.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/DescriptorSetManager.hpp"
 #include "Vulkan/DescriptorSets.hpp"

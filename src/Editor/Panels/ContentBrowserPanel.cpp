@@ -3,7 +3,7 @@
 #include "Editor/EditorDragDrop.hpp"
 
 #include "Assets/Scene.hpp"
-#include "Assets/TextureImage.hpp"
+#include "Assets/GPU/TextureImage.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"

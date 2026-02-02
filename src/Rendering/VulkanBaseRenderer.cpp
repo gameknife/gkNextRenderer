@@ -23,8 +23,8 @@
 #include "Vulkan/Version.hpp"
 
 #include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Assets/Texture.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
+#include "Assets/GPU/Texture.hpp"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
