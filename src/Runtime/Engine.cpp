@@ -7,7 +7,7 @@
 #include "Runtime/Command/DeleteNodeCommand.hpp"
 #include "ScreenShot.hpp"
 #include "UserInterface.hpp"
-#include "UserSettings.hpp"
+#include "Runtime/Config/UserSettings.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"

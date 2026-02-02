@@ -3,7 +3,7 @@
 #include <string>
 #include <fmt/format.h>
 #include <ThirdParty/fontawesome/IconsFontAwesome6.h>
-#include "Runtime/ShowFlags.hpp"
+#include "Runtime/Config/ShowFlags.hpp"
 
 namespace Utilities
 {

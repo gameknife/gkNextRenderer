@@ -12,7 +12,7 @@ export class NextEngine {
     GetTotalFrames(): number;
     GetTestNumber(): number;
     RegisterJSCallback(arg0: any): void;
-    GetScenePtr(): Scene;
+    GetScenePtr(): any;
 }
 export class Node {
     readonly Name: string;
@@ -27,7 +27,7 @@ export class Node {
 export class Scene {
     GetIndicesCount(): number;
     FindNodeIdWithComponent(arg0: string): number;
-    GetNodeById(arg0: number): Node;
+    GetNodeById(arg0: number): any;
 }
 export class RenderComponent {
     Visible: boolean;
