@@ -1,7 +1,7 @@
 #include "Utilities/Exception.hpp"
 #include "Options.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/GltfTestRunner.hpp"
+#include "Runtime/Scene/GltfTestRunner.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 
 #if WIN32

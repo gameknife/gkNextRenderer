@@ -6,7 +6,7 @@
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Runtime/Command/CommandHistory.hpp"
-#include "SceneList.hpp"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Utilities/FileHelper.hpp"
