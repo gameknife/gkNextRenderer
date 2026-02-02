@@ -1,6 +1,6 @@
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 
-#include "Engine.hpp"
+#include "Runtime/Engine.hpp"
 #include "Assets/Scene.hpp"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -10,7 +10,7 @@
 #include "Runtime/Reflection/QuickJSReflectionBridge.h"
 #include "Runtime/Reflection/QuickJSTypeConverter.h"
 #include "Utilities/FileHelper.hpp"
-#include "Platform/PlatformCommon.h"
+#include "Runtime/Platform/PlatformCommon.h"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
