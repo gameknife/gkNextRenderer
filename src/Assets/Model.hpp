@@ -1,5 +1,5 @@
 #pragma once
-#include "Data/Vertex.hpp"
+#include "Assets/Data/Vertex.hpp"
 #include "Texture.hpp"
 #include "UniformBuffer.hpp"
 #include <glm/ext.hpp>

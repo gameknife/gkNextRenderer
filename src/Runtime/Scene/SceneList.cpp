@@ -12,8 +12,8 @@
 #include <filesystem>
 #include <algorithm>
 
-#include "Assets/FProcModel.h"
-#include "Assets/FSceneLoader.h"
+#include "Assets/Loaders/FProcModel.h"
+#include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"

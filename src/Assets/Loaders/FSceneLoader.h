@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Model.hpp"
-#include "Data/Skeleton.hpp"
+#include "Assets/Model.hpp"
+#include "Assets/Data/Skeleton.hpp"
 
 namespace Assets
 {

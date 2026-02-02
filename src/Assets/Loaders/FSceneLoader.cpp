@@ -1,4 +1,4 @@
-#include "FSceneLoader.h"
+#include "Assets/Loaders/FSceneLoader.h"
 #include "Common/CoreMinimal.hpp"
 #include <cfloat>
 
@@ -20,11 +20,13 @@
 
 #define TINYGLTF_NO_STB_IMAGE
 //#define TINYGLTF_NO_STB_IMAGE_WRITE
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
 #include <tiny_gltf.h>
 
-#include "Data/Material.hpp"
-#include "Node.h"
+#include "Assets/Data/Material.hpp"
+#include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Utilities/FileHelper.hpp"
 

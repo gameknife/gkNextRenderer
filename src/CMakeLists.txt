@@ -193,8 +193,8 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 
 		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
-		set_source_files_properties(Assets/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Assets/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})

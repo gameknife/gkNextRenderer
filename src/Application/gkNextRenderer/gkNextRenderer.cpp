@@ -5,7 +5,7 @@
 
 #include <array>
 
-#include "Assets/FProcModel.h"
+#include "Assets/Loaders/FProcModel.h"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"

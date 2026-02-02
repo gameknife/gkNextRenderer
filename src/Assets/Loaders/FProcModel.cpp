@@ -1,5 +1,5 @@
-#include "FProcModel.h"
-#include "Data/Material.hpp"
+#include "Assets/Loaders/FProcModel.h"
+#include "Assets/Data/Material.hpp"
 
 #define _USE_MATH_DEFINES
 #include <math.h>

@@ -1,14 +1,14 @@
 #include "Common/CoreMinimal.hpp"
-#include "FSceneSaver.h"
+#include "Assets/Savers/FSceneSaver.h"
 
 #include <tiny_gltf.h>
 #include <spdlog/spdlog.h>
 #include <map>
 
-#include "Scene.hpp"
-#include "Node.h"
-#include "Model.hpp"
-#include "Data/Material.hpp"
+#include "Assets/Scene.hpp"
+#include "Assets/Node.h"
+#include "Assets/Model.hpp"
+#include "Assets/Data/Material.hpp"
 #include "Runtime/Components/RenderComponent.h"
 
 // Dummy image loader for TinyGLTF (we don't load images when saving)

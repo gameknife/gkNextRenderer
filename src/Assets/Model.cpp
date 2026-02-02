@@ -1,6 +1,6 @@
 #include "Model.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "FSceneLoader.h"
+#include "Loaders/FSceneLoader.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
