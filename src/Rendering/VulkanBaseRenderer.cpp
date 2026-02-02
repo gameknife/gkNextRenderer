@@ -1,7 +1,7 @@
 #include "VulkanBaseRenderer.hpp"
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/CommandPool.hpp"
-#include "Vulkan/CommandBuffers.hpp"
+#include "Vulkan/CommandExecution.hpp"
+#include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/DebugUtilsMessenger.hpp"
 #include "Vulkan/DepthBuffer.hpp"
 #include "Vulkan/Device.hpp"
@@ -16,7 +16,7 @@
 #include "Vulkan/Enumerate.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
 #include "Vulkan/RenderImage.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
+#include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/Strings.hpp"
 #include "Vulkan/Version.hpp"
 

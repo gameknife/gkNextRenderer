@@ -5,7 +5,7 @@
 #include "Image.hpp"
 #include "ImageMemoryBarrier.hpp"
 #include "ImageView.hpp"
-#include "SingleTimeCommands.hpp"
+#include "CommandExecution.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 

@@ -8,7 +8,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
+#include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
