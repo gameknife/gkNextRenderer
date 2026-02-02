@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
-#include "Runtime/NextPhysics.h"
+#include "Runtime/Subsystems/NextPhysics.h"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 

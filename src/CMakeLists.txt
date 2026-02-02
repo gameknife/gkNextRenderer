@@ -19,7 +19,7 @@ else()
 endif()
 
 if (IOS)
-    set_source_files_properties(Runtime/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
 
 # unit test files
