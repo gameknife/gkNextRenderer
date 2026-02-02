@@ -1,5 +1,5 @@
 #include "CPUAccelerationStructure.h"
-#include "Runtime/TaskCoordinator.hpp"
+#include "Runtime/Utilities/TaskCoordinator.hpp"
 #include "Vulkan/DeviceMemory.hpp"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"

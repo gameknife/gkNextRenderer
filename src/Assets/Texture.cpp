@@ -4,7 +4,7 @@
 #include "Common/CoreMinimal.hpp"
 
 #include "Options.hpp"
-#include "Runtime/TaskCoordinator.hpp"
+#include "Runtime/Utilities/TaskCoordinator.hpp"
 #include "TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
