@@ -23,7 +23,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
 
-#include "Material.hpp"
+#include "Data/Material.hpp"
 #include "Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Utilities/FileHelper.hpp"

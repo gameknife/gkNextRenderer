@@ -8,7 +8,7 @@
 #include "Scene.hpp"
 #include "Node.h"
 #include "Model.hpp"
-#include "Material.hpp"
+#include "Data/Material.hpp"
 #include "Runtime/Components/RenderComponent.h"
 
 // Dummy image loader for TinyGLTF (we don't load images when saving)

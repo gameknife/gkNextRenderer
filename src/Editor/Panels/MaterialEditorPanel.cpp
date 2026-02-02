@@ -1,6 +1,6 @@
 #include "Editor/EditorUi.hpp"
 
-#include "Assets/Material.hpp"
+#include "Assets/Data/Material.hpp"
 #include "Assets/Scene.hpp"
 #include "Editor/Nodes/NodeMaterial.hpp"
 #include "Editor/Nodes/NodeSetFloat.hpp"

@@ -10,7 +10,7 @@
 #include "Model.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Subsystems/NextPhysicsTypes.h"
-#include "Skeleton.hpp"
+#include "Data/Skeleton.hpp"
 
 namespace Vulkan
 {

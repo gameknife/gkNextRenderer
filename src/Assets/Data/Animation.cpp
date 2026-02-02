@@ -1,4 +1,4 @@
-#include "Animation.hpp"
+#include "Assets/Data/Animation.hpp"
 
 #if WITH_OZZ
 #include "ozz/animation/runtime/animation.h"

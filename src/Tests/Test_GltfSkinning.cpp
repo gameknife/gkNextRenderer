@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 #include "Assets/FSceneLoader.h"
 #include "Assets/Model.hpp"
-#include "Assets/Material.hpp"
+#include "Assets/Data/Material.hpp"
 #include <fstream>
 #include <filesystem>
 

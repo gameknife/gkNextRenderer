@@ -1,7 +1,7 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
-#include "Assets/Skeleton.hpp"
-#include "Assets/Animation.hpp"
+#include "Assets/Data/Skeleton.hpp"
+#include "Assets/Data/Animation.hpp"
 #include "Assets/Model.hpp"
 #include "Assets/Component.h"
 #include "Runtime/Reflection/ReflectionMacros.h"

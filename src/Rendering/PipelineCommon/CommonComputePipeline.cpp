@@ -14,7 +14,7 @@
 
 #include "Assets/Scene.hpp"
 #include "Assets/UniformBuffer.hpp"
-#include "Assets/Vertex.hpp"
+#include "Assets/Data/Vertex.hpp"
 
 namespace Vulkan::PipelineCommon
 {

@@ -1,7 +1,7 @@
 #include "BottomLevelGeometry.hpp"
 #include "DeviceProcedures.hpp"
 #include "Assets/Scene.hpp"
-#include "Assets/Vertex.hpp"
+#include "Assets/Data/Vertex.hpp"
 #include "Vulkan/Buffer.hpp"
 
 namespace Vulkan::RayTracing {
