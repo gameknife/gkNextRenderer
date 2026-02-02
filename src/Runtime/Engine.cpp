@@ -12,7 +12,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
+#include "Vulkan/WindowSurface.hpp"
 
 #include <algorithm>
 #include <cstdlib>

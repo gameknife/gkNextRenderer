@@ -3,8 +3,7 @@
 #include "Enumerate.hpp"
 #include "ImageView.hpp"
 #include "Instance.hpp"
-#include "Surface.hpp"
-#include "Window.hpp"
+#include "WindowSurface.hpp"
 #include "Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>

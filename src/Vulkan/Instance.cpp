@@ -1,7 +1,7 @@
 #include "Instance.hpp"
 #include "Enumerate.hpp"
 #include "Version.hpp"
-#include "Window.hpp"
+#include "WindowSurface.hpp"
 #include "Utilities/Exception.hpp"
 #include <algorithm>
 #include <cstring>

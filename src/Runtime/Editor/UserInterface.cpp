@@ -9,9 +9,8 @@
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SingleTimeCommands.hpp"
-#include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
+#include "Vulkan/WindowSurface.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>

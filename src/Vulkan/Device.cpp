@@ -1,7 +1,7 @@
 #include "Device.hpp"
 #include "Enumerate.hpp"
 #include "Instance.hpp"
-#include "Surface.hpp"
+#include "WindowSurface.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
