@@ -1,11 +1,11 @@
 #include "PathTracingRenderer.hpp"
 #include "Vulkan/BufferUtil.hpp"
-#include "Vulkan/Image.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/ImageMemoryBarrier.hpp"
 #include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/RenderImage.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
 #include <chrono>

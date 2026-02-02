@@ -7,7 +7,7 @@
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
-#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/WindowSurface.hpp"
@@ -36,7 +36,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
-#include "Vulkan/ImageView.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 extern float GAndroidMagicScale;
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;

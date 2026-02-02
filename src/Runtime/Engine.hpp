@@ -10,7 +10,7 @@
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Utilities/FileHelper.hpp"
-#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
 class NextPhysics;

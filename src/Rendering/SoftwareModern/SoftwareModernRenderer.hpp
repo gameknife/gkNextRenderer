@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
 

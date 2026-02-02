@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Buffer.hpp"
+#include "GpuResources.hpp"
 #include "CommandExecution.hpp"
 #include "Device.hpp"
-#include "DeviceMemory.hpp"
+#include "MemoryAndShader.hpp"
 #include <cstring>
 #include <memory>
 #include <string>

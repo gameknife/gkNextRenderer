@@ -1,7 +1,7 @@
 #include "SwapChain.hpp"
 #include "Device.hpp"
 #include "Enumerate.hpp"
-#include "ImageView.hpp"
+#include "GpuResources.hpp"
 #include "Instance.hpp"
 #include "WindowSurface.hpp"
 #include "Utilities/Exception.hpp"

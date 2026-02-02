@@ -1,6 +1,7 @@
-#include "DeviceMemory.hpp"
+#include "MemoryAndShader.hpp"
 #include "Device.hpp"
 #include "Utilities/Exception.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #ifdef VK_USE_PLATFORM_WIN32_KHR
 #	include <aclapi.h>
@@ -77,10 +78,14 @@ WinSecurityAttributes::~WinSecurityAttributes()
 #endif
 
 namespace Vulkan {
-	
+
+// ============================================================================
+// DeviceMemory
+// ============================================================================
+
 DeviceMemory::DeviceMemory(
-	const class Device& device, 
-	const size_t size, 
+	const class Device& device,
+	const size_t size,
 	const uint32_t memoryTypeBits,
 	const VkMemoryAllocateFlags allocateFLags,
 	const VkMemoryPropertyFlags propertyFlags,
@@ -91,7 +96,7 @@ DeviceMemory::DeviceMemory(
 	flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
 	flagsInfo.pNext = nullptr;
 	flagsInfo.flags = allocateFLags;
-	
+
 	VkMemoryAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.pNext = &flagsInfo;
@@ -122,7 +127,7 @@ DeviceMemory::DeviceMemory(
 		allocInfo.pNext = &exportMemoryAllocateInfo;
 	}
 #endif
-	
+
 	Check(vkAllocateMemory(device.Handle(), &allocInfo, nullptr, &memory_),
 		"allocate memory");
 }
@@ -171,6 +176,94 @@ uint32_t DeviceMemory::FindMemoryType(const uint32_t typeFilter, const VkMemoryP
 	}
 
 	Throw(std::runtime_error("failed to find suitable memory type"));
+}
+
+// ============================================================================
+// Sampler
+// ============================================================================
+
+Sampler::Sampler(const class Device& device, const SamplerConfig& config) :
+	device_(device)
+{
+	VkSamplerCreateInfo samplerInfo = {};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = config.MagFilter;
+	samplerInfo.minFilter = config.MinFilter;
+	samplerInfo.addressModeU = config.AddressModeU;
+	samplerInfo.addressModeV = config.AddressModeV;
+	samplerInfo.addressModeW = config.AddressModeW;
+	samplerInfo.anisotropyEnable = config.AnisotropyEnable;
+	samplerInfo.maxAnisotropy = config.MaxAnisotropy;
+	samplerInfo.borderColor = config.BorderColor;
+	samplerInfo.unnormalizedCoordinates = config.UnnormalizedCoordinates;
+	samplerInfo.compareEnable = config.CompareEnable;
+	samplerInfo.compareOp = config.CompareOp;
+	samplerInfo.mipmapMode = config.MipmapMode;
+	samplerInfo.mipLodBias = config.MipLodBias;
+	samplerInfo.minLod = config.MinLod;
+	samplerInfo.maxLod = config.MaxLod;
+
+	if (vkCreateSampler(device.Handle(), &samplerInfo, nullptr, &sampler_) != VK_SUCCESS)
+	{
+		Throw(std::runtime_error("failed to create sampler"));
+	}
+}
+
+Sampler::~Sampler()
+{
+	if (sampler_ != nullptr)
+	{
+		vkDestroySampler(device_.Handle(), sampler_, nullptr);
+		sampler_ = nullptr;
+	}
+}
+
+// ============================================================================
+// ShaderModule
+// ============================================================================
+
+ShaderModule::ShaderModule(const class Device& device, const std::string& filename) :
+	ShaderModule(device, ReadFile(filename))
+{
+}
+
+ShaderModule::ShaderModule(const class Device& device, const std::vector<uint8_t>& code) :
+	device_(device)
+{
+	VkShaderModuleCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	Check(vkCreateShaderModule(device.Handle(), &createInfo, nullptr, &shaderModule_),
+		"create shader module");
+}
+
+ShaderModule::~ShaderModule()
+{
+	if (shaderModule_ != nullptr)
+	{
+		vkDestroyShaderModule(device_.Handle(), shaderModule_, nullptr);
+		shaderModule_ = nullptr;
+	}
+}
+
+VkPipelineShaderStageCreateInfo ShaderModule::CreateShaderStage(VkShaderStageFlagBits stage) const
+{
+	VkPipelineShaderStageCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	createInfo.stage = stage;
+	createInfo.module = shaderModule_;
+	createInfo.pName = "main";
+
+	return createInfo;
+}
+
+std::vector<uint8_t> ShaderModule::ReadFile(const std::string& filename)
+{
+	std::vector<uint8_t> buffer;
+	Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, buffer);
+	return buffer;
 }
 
 }

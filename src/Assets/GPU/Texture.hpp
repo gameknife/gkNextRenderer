@@ -2,7 +2,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
-#include "Vulkan/Sampler.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>

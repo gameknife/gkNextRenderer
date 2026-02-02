@@ -9,7 +9,7 @@
 #include "Runtime/Engine.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/ImageView.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "ThirdParty/lzav/lzav.h"
 

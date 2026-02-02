@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Vulkan/Vulkan.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/PipelineBase.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 
 #include <memory>
 #include <vector>

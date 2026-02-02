@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Vulkan.hpp"
-#include "DeviceMemory.hpp"
-#include "Sampler.hpp"
+#include "MemoryAndShader.hpp"
+#include "MemoryAndShader.hpp"
 #include <memory>
 
 #if WIN32 && !defined(__MINGW32__)

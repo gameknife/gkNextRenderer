@@ -1,9 +1,9 @@
 #include "Assets/GPU/TextureImage.hpp"
 #include "Assets/GPU/Texture.hpp"
-#include "Vulkan/Buffer.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/CommandExecution.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include <cstring>
 
 #include "Vulkan/CommandExecution.hpp"

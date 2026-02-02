@@ -3,7 +3,7 @@
 #include "Utilities/Math.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/WindowSurface.hpp"
-#include "Vulkan/RenderImage.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 namespace Vulkan::LegacyDeferred {
 

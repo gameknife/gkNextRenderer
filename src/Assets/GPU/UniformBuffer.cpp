@@ -1,5 +1,5 @@
 #include "Assets/GPU/UniformBuffer.hpp"
-#include "Vulkan/Buffer.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/CommandExecution.hpp"
 #include <cstring>
 

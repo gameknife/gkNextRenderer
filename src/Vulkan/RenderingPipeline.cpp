@@ -1,8 +1,8 @@
 #include "RenderingPipeline.hpp"
-#include "DepthBuffer.hpp"
+#include "GpuResources.hpp"
 #include "Device.hpp"
 #include "SwapChain.hpp"
-#include "ImageView.hpp"
+#include "GpuResources.hpp"
 #include "DescriptorSystem.hpp"
 #include "Assets/GPU/Texture.hpp"
 #include <array>

@@ -1,6 +1,6 @@
 #include "BottomLevelAccelerationStructure.hpp"
 #include "DeviceProcedures.hpp"
-#include "Vulkan/Buffer.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 namespace Vulkan::RayTracing {
 

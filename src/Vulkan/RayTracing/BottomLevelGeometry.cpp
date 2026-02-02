@@ -2,7 +2,7 @@
 #include "DeviceProcedures.hpp"
 #include "Assets/Core/Scene.hpp"
 #include "Assets/Data/Vertex.hpp"
-#include "Vulkan/Buffer.hpp"
+#include "Vulkan/GpuResources.hpp"
 
 namespace Vulkan::RayTracing {
 
