@@ -1,3 +1,5 @@
+#define GLM_ENABLE_EXPERIMENTAL
+#include <imgui.h>
 #include "Runtime/Editor/GizmoController.hpp"
 
 #include "Assets/Node.h"
@@ -6,8 +8,6 @@
 #include "Runtime/Command/TransformNodeCommand.hpp"
 #include "Runtime/Command/DuplicateNodeCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
-
-#include <imgui.h>
 #include <memory>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
