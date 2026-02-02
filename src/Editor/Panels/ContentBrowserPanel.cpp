@@ -2,7 +2,7 @@
 
 #include "Editor/EditorDragDrop.hpp"
 
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include "Assets/GPU/TextureImage.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Editor/UserInterface.hpp"

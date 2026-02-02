@@ -5,9 +5,9 @@
 #include <spdlog/spdlog.h>
 #include <map>
 
-#include "Assets/Scene.hpp"
-#include "Assets/Node.h"
-#include "Assets/Model.hpp"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Model.hpp"
 #include "Assets/Data/Material.hpp"
 #include "Runtime/Components/RenderComponent.h"
 

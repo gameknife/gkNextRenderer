@@ -4,7 +4,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Command/ICommand.hpp"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 
 #include <memory>
 #include <string>

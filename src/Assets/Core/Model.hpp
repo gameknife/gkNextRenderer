@@ -1,7 +1,7 @@
 #pragma once
 #include "Assets/Data/Vertex.hpp"
-#include "GPU/Texture.hpp"
-#include "GPU/UniformBuffer.hpp"
+#include "Assets/GPU/Texture.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
 #include <glm/ext.hpp>
 
 struct FNextPhysicsBody;

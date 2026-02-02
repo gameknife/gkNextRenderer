@@ -12,7 +12,7 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/RenderPass.hpp"
 
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
 #include "Assets/Data/Vertex.hpp"
 

@@ -4,7 +4,7 @@
 #include "Runtime/Reflection/PropertyTypes.h"
 #include "Runtime/Reflection/PropertyAccessor.h"
 #include "Runtime/Command/CommandHistory.hpp"
-#include "Assets/Component.h"
+#include "Assets/Core/Component.h"
 
 #include <imgui.h>
 #include <string>

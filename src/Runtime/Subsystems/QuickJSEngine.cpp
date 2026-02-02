@@ -1,8 +1,8 @@
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 
 #include "Runtime/Engine.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/Node.h"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"

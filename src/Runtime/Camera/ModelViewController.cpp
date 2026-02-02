@@ -1,5 +1,5 @@
 #include "Runtime/Camera/ModelViewController.hpp"
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 #include "Vulkan/Vulkan.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 

@@ -2,8 +2,8 @@
 
 #include "Editor/EditorDragDrop.hpp"
 
-#include "Assets/Node.h"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"

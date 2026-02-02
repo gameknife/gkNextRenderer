@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
-#include "Assets/Node.h"
-#include "Assets/Component.h"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Component.h"
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
 #include <memory>

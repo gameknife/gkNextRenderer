@@ -29,7 +29,7 @@
 #include <glm/ext.hpp>
 
 #include "Runtime/Engine.hpp"
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 
 #if WITH_PHYSIC
 

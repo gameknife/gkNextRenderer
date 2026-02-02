@@ -1,4 +1,4 @@
-#include "Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"

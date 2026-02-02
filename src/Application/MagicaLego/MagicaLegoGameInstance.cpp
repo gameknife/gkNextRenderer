@@ -1,6 +1,6 @@
 #include "MagicaLegoGameInstance.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/Node.h"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Utilities/FileHelper.hpp"

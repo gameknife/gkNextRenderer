@@ -1,11 +1,11 @@
 #include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Vulkan/DeviceMemory.hpp"
-#include "Assets/Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Assets/GPU/TextureImage.hpp"
 #include "Runtime/Engine.hpp"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 
 #include <chrono>
 #include <xxhash.h>

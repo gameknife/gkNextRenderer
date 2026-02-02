@@ -1,5 +1,5 @@
 #pragma once
-#include "Assets/Component.h"
+#include "Assets/Core/Component.h"
 #include "Runtime/Reflection/ReflectionMacros.h"
 #include <array>
 #include <cstdint>

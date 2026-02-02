@@ -2,8 +2,8 @@
 #include <imgui.h>
 #include "Runtime/Editor/GizmoController.hpp"
 
-#include "Assets/Node.h"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Command/TransformNodeCommand.hpp"
 #include "Runtime/Command/DuplicateNodeCommand.hpp"

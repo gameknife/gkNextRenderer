@@ -1,6 +1,6 @@
 #include "EditorMain.h"
 #include <Runtime/Platform/PlatformCommon.h>
-#include "Assets/Node.h"
+#include "Assets/Core/Node.h"
 #include "EditorInterface.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"

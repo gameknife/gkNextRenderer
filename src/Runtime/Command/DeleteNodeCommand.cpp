@@ -1,7 +1,7 @@
 #include "Runtime/Command/DeleteNodeCommand.hpp"
 
-#include "Assets/Node.h"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
 
 DeleteNodeCommand::DeleteNodeCommand(Assets::Scene& scene, uint32_t instanceId)
     : scene_(&scene)

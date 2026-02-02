@@ -5,8 +5,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Command/ICommand.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
-#include "Assets/Component.h"
-#include "Assets/Node.h"
+#include "Assets/Core/Component.h"
+#include "Assets/Core/Node.h"
 
 #include <entt/meta/meta.hpp>
 #include <functional>

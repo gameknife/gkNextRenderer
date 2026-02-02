@@ -26,7 +26,7 @@
 #include <tiny_gltf.h>
 
 #include "Assets/Data/Material.hpp"
-#include "Assets/Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Utilities/FileHelper.hpp"
 

@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 #include "Assets/Loaders/FSceneLoader.h"
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 #include "Assets/Data/Material.hpp"
 #include <fstream>
 #include <filesystem>

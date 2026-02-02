@@ -1,5 +1,5 @@
 #pragma once
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 
 namespace Assets
 {

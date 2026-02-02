@@ -3,8 +3,8 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorUtils.h"
 
-#include "Assets/Node.h"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
 #include "Runtime/Components/RenderComponent.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"

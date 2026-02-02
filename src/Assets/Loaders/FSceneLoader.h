@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 #include "Assets/Data/Skeleton.hpp"
 
 namespace Assets

@@ -2,7 +2,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Assets/Data/Material.hpp"
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 
 #include "Runtime/Engine.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
@@ -14,7 +14,7 @@
 
 #include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FSceneLoader.h"
-#include "Assets/Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Assets/Data/Skeleton.hpp"

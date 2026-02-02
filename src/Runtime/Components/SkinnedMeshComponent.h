@@ -2,8 +2,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Assets/Data/Skeleton.hpp"
 #include "Assets/Data/Animation.hpp"
-#include "Assets/Model.hpp"
-#include "Assets/Component.h"
+#include "Assets/Core/Model.hpp"
+#include "Assets/Core/Component.h"
 #include "Runtime/Reflection/ReflectionMacros.h"
 #include <map>
 #include <vector>

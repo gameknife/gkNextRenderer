@@ -1,7 +1,7 @@
 #include "Runtime/Command/DuplicateNodeCommand.hpp"
 
-#include "Assets/Node.h"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 

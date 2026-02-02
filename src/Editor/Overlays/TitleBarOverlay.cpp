@@ -1,6 +1,6 @@
 #include "Editor/EditorUi.hpp"
 
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 

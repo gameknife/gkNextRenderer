@@ -4,7 +4,7 @@
 #include "Vulkan/VulkanGpuTimer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>

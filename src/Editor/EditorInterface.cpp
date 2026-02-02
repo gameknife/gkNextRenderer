@@ -13,7 +13,7 @@
 #include <fmt/format.h>
 #include "Editor/EditorUi.hpp"
 
-#include "Assets/Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include "Assets/GPU/TextureImage.hpp"
 #include "Common/CoreMinimal.hpp"
 #include "Editor/EditorActionDispatcher.hpp"

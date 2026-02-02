@@ -1,7 +1,7 @@
 #pragma once
 #include "Assets/GPU/UniformBuffer.hpp"
 
-#include "Assets/Model.hpp"
+#include "Assets/Core/Model.hpp"
 
 struct UserSettings final
 {

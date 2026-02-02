@@ -1,4 +1,4 @@
-#include "Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include <chrono>
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
@@ -6,14 +6,14 @@
 #include <unordered_set>
 #include "Assets/GPU/TextureImage.hpp"
 #include "Common/CoreMinimal.hpp"
-#include "Savers/FSceneSaver.h"
-#include "Model.hpp"
+#include "Assets/Savers/FSceneSaver.h"
+#include "Assets/Core/Model.hpp"
 #include "Options.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
-#include "Scene.hpp"
+#include "Assets/Core/Scene.hpp"
 #include "Vulkan/BufferUtil.hpp"
 
-#include "Node.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"

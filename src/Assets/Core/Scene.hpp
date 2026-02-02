@@ -6,8 +6,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
 
-#include "Acceleration/CPUAccelerationStructure.h"
-#include "Model.hpp"
+#include "Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Assets/Core/Model.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Assets/Data/Skeleton.hpp"
