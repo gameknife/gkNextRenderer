@@ -1,6 +1,6 @@
 #include "SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Camera/NextEngineHelper.h"
+#include "Runtime/Utilities/NextEngineHelper.h"
 #include "Runtime/Reflection/PropertyMeta.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>

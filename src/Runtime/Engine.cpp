@@ -1,11 +1,12 @@
 #include "Engine.hpp"
 #include "Assets/Model.hpp"
+#include "Assets/Node.h"
 #include "Assets/Scene.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/UniformBuffer.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Command/DeleteNodeCommand.hpp"
-#include "Runtime/Editor/ScreenShot.hpp"
+#include "Runtime/ScreenShot.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Vulkan/Device.hpp"
@@ -28,7 +29,7 @@
 #include "Runtime/Subsystems/NextAudio.h"
 #include "Options.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
-#include "Runtime/Utilities/TaskCoordinator.hpp"
+#include "Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Utilities/Localization.hpp"
 
 #define _USE_MATH_DEFINES

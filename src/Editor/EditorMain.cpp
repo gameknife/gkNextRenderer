@@ -4,7 +4,7 @@
 #include "EditorInterface.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Camera/NextEngineHelper.h"
+#include "Runtime/Utilities/NextEngineHelper.h"
 
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"

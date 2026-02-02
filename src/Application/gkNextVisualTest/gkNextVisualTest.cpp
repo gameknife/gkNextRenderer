@@ -1,6 +1,6 @@
 #include "gkNextVisualTest.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Editor/ScreenShot.hpp"
+#include "Runtime/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/Device.hpp"
 

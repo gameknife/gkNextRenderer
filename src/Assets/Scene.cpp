@@ -18,7 +18,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Camera/NextEngineHelper.h"
+#include "Runtime/Utilities/NextEngineHelper.h"
 
 #include <algorithm>
 #include <spdlog/spdlog.h>
