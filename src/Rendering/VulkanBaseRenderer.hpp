@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Vulkan/FrameBuffer.hpp"
-#include "Vulkan/VulkanGpuTimer.hpp"
+#include "Vulkan/SyncAndTiming.hpp"
 #include "Vulkan/Image.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
 #include "Assets/Core/Scene.hpp"
