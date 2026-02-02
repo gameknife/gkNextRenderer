@@ -103,8 +103,12 @@ add_executable(MagicaLego
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
+
+if( NOT MINGW )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
+endif()
+
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -133,6 +137,17 @@ elseif( IOS )
 set(AllTargets
 gkNextEngine
 gkNextRenderer
+)
+elseif( MINGW )
+set(AllTargets
+gkNextEngine
+gkNextRenderer
+gkNextStillBenchmark
+gkNextMotionBenchmark
+gkNextVisualTest
+gkNextEditor
+Packager
+MagicaLego 
 )
 else()
 set(AllTargets 
@@ -306,7 +321,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if (UNIX AND NOT APPLE AND NOT ANDROID)
+	if ( (UNIX OR MINGW) AND NOT APPLE AND NOT ANDROID)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
@@ -347,7 +362,7 @@ foreach(target IN LISTS AllTargets)
 endforeach()
 
 # Test Target
-if ( NOT ANDROID AND NOT IOS )
+if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
