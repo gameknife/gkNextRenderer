@@ -6,7 +6,7 @@
 #include <functional>
 #include <queue>
 
-#include "Data/Material.hpp"
+#include "Assets/Data/Material.hpp"
 
 namespace std {
     template <>

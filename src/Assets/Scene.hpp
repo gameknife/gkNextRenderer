@@ -6,7 +6,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "Vulkan/Vulkan.hpp"
 
-#include "CPUAccelerationStructure.h"
+#include "Acceleration/CPUAccelerationStructure.h"
 #include "Model.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Subsystems/NextPhysicsTypes.h"

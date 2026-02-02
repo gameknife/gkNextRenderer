@@ -1,9 +1,9 @@
-#include "CPUAccelerationStructure.h"
+#include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Vulkan/DeviceMemory.hpp"
 #include "Assets/Node.h"
 #include "Runtime/Components/RenderComponent.h"
-#include "TextureImage.hpp"
+#include "Assets/TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Assets/Scene.hpp"
 
