@@ -1,4 +1,4 @@
-#include "Runtime/GizmoController.hpp"
+#include "Runtime/Editor/GizmoController.hpp"
 
 #include "Assets/Node.h"
 #include "Assets/Scene.hpp"

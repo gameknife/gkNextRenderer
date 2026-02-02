@@ -14,7 +14,7 @@
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
-#include "Runtime/ScreenShot.hpp"
+#include "Runtime/Editor/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Vulkan/SwapChain.hpp"

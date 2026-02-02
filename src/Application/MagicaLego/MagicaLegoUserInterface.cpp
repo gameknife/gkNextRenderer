@@ -8,7 +8,7 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoGameInstance.hpp"
-#include "Runtime/UserInterface.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Localization.hpp"

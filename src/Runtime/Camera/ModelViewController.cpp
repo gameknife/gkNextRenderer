@@ -1,7 +1,7 @@
 #include "Runtime/Camera/ModelViewController.hpp"
 #include "Assets/Model.hpp"
 #include "Vulkan/Vulkan.hpp"
-#include "Platform/PlatformCommon.h"
+#include "Runtime/Platform/PlatformCommon.h"
 
 void ModelViewController::Reset(const Assets::Camera& renderCamera)
 {

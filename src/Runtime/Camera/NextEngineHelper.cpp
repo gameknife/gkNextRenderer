@@ -1,7 +1,7 @@
 #include "Runtime/Camera/NextEngineHelper.h"
 
-#include "Engine.hpp"
-#include "UserInterface.hpp"
+#include "Runtime/Engine.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 #include "Vulkan/SwapChain.hpp"
 
 namespace

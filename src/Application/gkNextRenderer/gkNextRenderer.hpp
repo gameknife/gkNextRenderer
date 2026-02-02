@@ -1,7 +1,7 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/GizmoController.hpp"
+#include "Runtime/Editor/GizmoController.hpp"
 #include "Runtime/Camera/ModelViewController.hpp"
 
 class NextRendererGameInstance : public NextGameInstanceBase

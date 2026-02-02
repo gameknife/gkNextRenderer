@@ -15,7 +15,7 @@
 #include "Runtime/Engine.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/Device.hpp"
-#include "Runtime/ScreenShot.hpp"
+#include "Runtime/Editor/ScreenShot.hpp"
 
 //#include <spdlog/spdlog.h>
 

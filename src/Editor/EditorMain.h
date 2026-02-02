@@ -2,7 +2,7 @@
 
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/GizmoController.hpp"
+#include "Runtime/Editor/GizmoController.hpp"
 #include "Runtime/Camera/ModelViewController.hpp"
 
 #include <glm/glm.hpp>
