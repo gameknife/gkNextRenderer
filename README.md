@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 Windows（Visual Studio 2022）：
 ``` bat
 rem windows前置安装: 
-rem 确保安装3.31版本的cmake，不要安装4.x版本的cmake
+rem 确保安装3.26+版本的cmake
 rem 确保安装Visual Studio 2022并选择c++工作负载
 rem 确保安装VulkanSDK 1.4.313.2
 rem 由于vcpkg部分tar包解压有乱码，请确保打开windows语言设置中的[使用Unicode UTF-8提供全球语言支持]
