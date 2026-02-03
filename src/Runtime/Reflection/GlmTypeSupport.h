@@ -1,4 +1,5 @@
 #pragma once
+#include "Common/CoreMinimal.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/meta/factory.hpp>

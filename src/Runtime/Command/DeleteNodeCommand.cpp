@@ -31,7 +31,6 @@ bool DeleteNodeCommand::Execute()
 
     scene_->SetSelectedId(static_cast<uint32_t>(-1));
     scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
     return true;
 }
 
@@ -45,6 +44,5 @@ bool DeleteNodeCommand::Undo()
     scene_->RestoreNodes(removedEntries_, parent_, root_);
     scene_->SetSelectedId(previousSelectedId_);
     scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
     return true;
 }

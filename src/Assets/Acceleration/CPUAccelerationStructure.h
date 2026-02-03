@@ -96,8 +96,7 @@ class FCPUAccelerationStructure
 public:
     void InitBVH(Assets::Scene& scene);
 
-    void UpdateBVH(Assets::Scene& scene);
-
+    
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
     
     bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
@@ -112,6 +111,8 @@ public:
     void ClearAllTasks();
 
 private:
+    void UpdateBVH(Assets::Scene& scene);
+    
     std::vector<FCPUBLASContext> bvhBLASContexts;
     std::vector<tinybvh::BLASInstance> bvhInstanceList;
     std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;

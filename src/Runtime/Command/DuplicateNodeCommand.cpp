@@ -79,7 +79,6 @@ bool DuplicateNodeCommand::Execute()
     scene_->AddNode(newNode_);
     scene_->SetSelectedId(newInstanceId_);
     scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
     return true;
 }
 
@@ -93,6 +92,5 @@ bool DuplicateNodeCommand::Undo()
     scene_->RemoveNodeByInstanceId(newInstanceId_);
     scene_->SetSelectedId(previousSelectedId_);
     scene_->MarkDirty();
-    scene_->GetCPUAccelerationStructure().UpdateBVH(*scene_);
     return true;
 }

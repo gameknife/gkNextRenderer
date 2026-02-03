@@ -66,7 +66,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.ForceSDR = true;
     options.RendererType = 0;
     options.locale = "zhCN";
-    options.SuperResolution = 4;
+    options.SuperResolution = 0;
+    options.DLSS = true;
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);
@@ -785,7 +786,6 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
     }
 
     GetEngine().GetScene().MarkDirty();
-    GetEngine().GetScene().GetCPUAccelerationStructure().UpdateBVH(GetEngine().GetScene());
 }
 
 void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)

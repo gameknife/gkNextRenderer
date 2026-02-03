@@ -167,6 +167,8 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.Denoiser = !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
+    
+    userSettings.SuperResolution = options.SuperResolution;
 
     return userSettings;
 }
