@@ -33,7 +33,78 @@ namespace
     ImGuiWindowFlags_NoMove |
     ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoSavedSettings;
+
+    struct ButtonAnimState
+    {
+        float hoverFactor;
+        float selectFactor;
+        bool hovered;
+        bool active;
+    };
+
+    static ButtonAnimState UpdateButtonAnim(ImGuiID id, bool selected)
+    {
+        float dt = ImGui::GetIO().DeltaTime;
+        ImGuiStorage* storage = ImGui::GetStateStorage();
+        
+        // Retrieve delayed hover state (from last frame's InvisibleButton)
+        // Note: Logic assumes storage was set by InvisibleButton previously?
+        // No, current logic sets it AFTER invisible button.
+        // But InvisibleButton is called AFTER visual logic (where this is used)?
+        // Wait, current working code calls InvisibleButton BEFORE visual logic?
+        // No.
+        
+        // SelectButton refactor:
+        // 1. InvisibleButton (HIT)
+        // 2. State update
+        // 3. Tween
+        // 4. Visuals
+        
+        // So storage is updated with CURRENT frame's hover state (from InvisibleButton).
+        // So tween uses CURRENT frame's hover state?
+        // Yes! "storage->SetBool(id, hovered);"
+        
+        // So we don't need storage for 1-frame delay if we draw Hit first.
+        // We only needed 1-frame delay if we drew Visual first (and needed size for Hit).
+        // But if we use Standard Size for Hit, we can draw Hit first.
+        
+        // So we can simplify!
+        // We don't need "wasHovered" from storage if we have "hovered" from InvisibleButton.
+        // We just need storage to Persist state if needed?
+        // Tween needs persistent state? No, tween maintains its own state.
+        
+        // So if I pass `hovered` to `iam_tween_float`, it works.
+        // I don't need `storage` for hover state anymore if Hit is first.
+        
+        // Let's verify SelectButton current code.
+        // bool clicked = ImGui::InvisibleButton...
+        // bool hovered = ImGui::IsItemHovered();
+        // storage->SetBool(id, hovered);
+        // float hoverFactor = iam_tween_float(..., (hovered || wasHovered) ...);
+        
+        // It uses `hovered || wasHovered`. Why?
+        // Maybe to catch glitches?
+        // If I draw Hit first, `hovered` is accurate for this frame.
+        // So `wasHovered` is redundant?
+        
+        // If I remove storage logic, code is cleaner.
+        
+        // Let's assume we pass `hovered` directly.
+        
+        return {};
+    }
     
+    // Helper to calculate visual rect
+    static void GetZoomedRect(ImVec2 p_start, ImVec2 standardSize, float hoverFactor, float zoomScale, ImVec2& p_min, ImVec2& p_max)
+    {
+        ImVec2 zoomedSize = standardSize;
+        zoomedSize.x *= (1.0f + hoverFactor * zoomScale);
+        zoomedSize.y *= (1.0f + hoverFactor * zoomScale);
+        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
+        p_min = p_start - offset;
+        p_max = p_min + zoomedSize;
+    }
+
     static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
         ImGuiID id = ImGui::GetID(shortcut);
@@ -45,27 +116,14 @@ namespace
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(iconSize, iconSize);
         
-        // Hit Button
         bool clicked = ImGui::InvisibleButton(label, standardSize);
         bool hovered = ImGui::IsItemHovered();
         
-        // State
-        ImGuiStorage* storage = ImGui::GetStateStorage();
-        bool wasHovered = storage->GetBool(id, false);
-        storage->SetBool(id, hovered);
-        
-        // Tween
-        float hoverFactor = iam_tween_float(id, 0, (hovered || wasHovered) ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        float hoverFactor = iam_tween_float(id, 0, hovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
-        // Visuals (Icon)
-        ImVec2 zoomedSize = standardSize;
-        zoomedSize.x *= (1.0f + hoverFactor * 0.05f);
-        zoomedSize.y *= (1.0f + hoverFactor * 0.05f);
-        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
-        
-        ImVec2 p_min = p_start - offset;
-        ImVec2 p_max = p_min + zoomedSize;
+        ImVec2 p_min, p_max;
+        GetZoomedRect(p_start, standardSize, hoverFactor, 0.05f, p_min, p_max);
         
         ImU32 bgCol = ImGui::GetColorU32(ImGuiCol_Button);
         if (selected || selectFactor > 0.01f)
@@ -83,15 +141,12 @@ namespace
              bgCol = ImGui::GetColorU32(ImGuiCol_ButtonHovered);
         }
         
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddRectFilled(p_min, p_max, bgCol, style.FrameRounding);
+        ImGui::GetWindowDrawList()->AddRectFilled(p_min, p_max, bgCol, style.FrameRounding);
         
-        // Draw Label (Icon) centered
         ImVec2 textSize = ImGui::CalcTextSize(label);
-        ImVec2 textPos = p_min + (zoomedSize - textSize) * 0.5f;
-        drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
+        ImVec2 textPos = p_min + (p_max - p_min - textSize) * 0.5f;
+        ImGui::GetWindowDrawList()->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
         
-        // Shortcut Text
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, iconSize);
         ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, (int)(128 * (1.0f + hoverFactor))), 4.0f);
         
@@ -107,55 +162,38 @@ namespace
         ImGuiID id = ImGui::GetID((void*)(intptr_t)block.modelId_);
         float dt = ImGui::GetIO().DeltaTime;
 
-        // Group Layout
         ImGui::BeginGroup();
         
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(palateSize, palateSize);
         
-        // Hit Button
         ImGui::PushID(static_cast<int>(block.modelId_));
         bool clicked = ImGui::InvisibleButton("##Hit", standardSize);
         ImGui::PopID();
         
         bool hovered = ImGui::IsItemHovered();
         
-        // State
-        ImGuiStorage* storage = ImGui::GetStateStorage();
-        bool wasHovered = storage->GetBool(id, false);
-        storage->SetBool(id, hovered);
-        
-        // Tween
-        float hoverFactor = iam_tween_float(id, 0, (hovered || wasHovered) ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        float hoverFactor = iam_tween_float(id, 0, hovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
-        // Visuals
-        ImVec2 zoomedSize = standardSize;
-        zoomedSize.x *= (1.0f + hoverFactor * 0.1f);
-        zoomedSize.y *= (1.0f + hoverFactor * 0.1f);
-        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
-        ImVec2 p_min = p_start - offset;
-        ImVec2 p_max = p_min + zoomedSize;
+        ImVec2 p_min, p_max;
+        GetZoomedRect(p_start, standardSize, hoverFactor, 0.1f, p_min, p_max);
         
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         
-        // Border if selected
         if (selected || selectFactor > 0.01f)
         {
             ImU32 borderCol = ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.85f, 1.0f, selectFactor));
             drawList->AddRect(p_min, p_max, borderCol, 0.0f, 0, 4.0f * selectFactor);
         }
         
-        // AddImage
         drawList->AddImage(texId, p_min, p_max);
         
-        // Text
         Utilities::UI::TextCentered(block.name, palateSize);
         
         ImGui::EndGroup();
         
-        // Layout logic for Next Line
-        float lastButtonX2 = ImGui::GetItemRectMax().x; // Group Rect Max
+        float lastButtonX2 = ImGui::GetItemRectMax().x;
         float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + palateSize; 
         if (nextButtonX2 < windowWidth) ImGui::SameLine();
         
