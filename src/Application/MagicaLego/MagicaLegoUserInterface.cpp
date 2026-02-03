@@ -4,8 +4,10 @@
 #include <fmt/chrono.h>
 #include <im_anim.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <spdlog/spdlog.h>
+#include <cstring>
 #include <utility>
 
 #include "MagicaLegoGameInstance.hpp"
@@ -34,64 +36,9 @@ namespace
     ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoSavedSettings;
 
-    struct ButtonAnimState
+    static ImGuiID MakeAnimId(const char* label)
     {
-        float hoverFactor;
-        float selectFactor;
-        bool hovered;
-        bool active;
-    };
-
-    static ButtonAnimState UpdateButtonAnim(ImGuiID id, bool selected)
-    {
-        float dt = ImGui::GetIO().DeltaTime;
-        ImGuiStorage* storage = ImGui::GetStateStorage();
-        
-        // Retrieve delayed hover state (from last frame's InvisibleButton)
-        // Note: Logic assumes storage was set by InvisibleButton previously?
-        // No, current logic sets it AFTER invisible button.
-        // But InvisibleButton is called AFTER visual logic (where this is used)?
-        // Wait, current working code calls InvisibleButton BEFORE visual logic?
-        // No.
-        
-        // SelectButton refactor:
-        // 1. InvisibleButton (HIT)
-        // 2. State update
-        // 3. Tween
-        // 4. Visuals
-        
-        // So storage is updated with CURRENT frame's hover state (from InvisibleButton).
-        // So tween uses CURRENT frame's hover state?
-        // Yes! "storage->SetBool(id, hovered);"
-        
-        // So we don't need storage for 1-frame delay if we draw Hit first.
-        // We only needed 1-frame delay if we drew Visual first (and needed size for Hit).
-        // But if we use Standard Size for Hit, we can draw Hit first.
-        
-        // So we can simplify!
-        // We don't need "wasHovered" from storage if we have "hovered" from InvisibleButton.
-        // We just need storage to Persist state if needed?
-        // Tween needs persistent state? No, tween maintains its own state.
-        
-        // So if I pass `hovered` to `iam_tween_float`, it works.
-        // I don't need `storage` for hover state anymore if Hit is first.
-        
-        // Let's verify SelectButton current code.
-        // bool clicked = ImGui::InvisibleButton...
-        // bool hovered = ImGui::IsItemHovered();
-        // storage->SetBool(id, hovered);
-        // float hoverFactor = iam_tween_float(..., (hovered || wasHovered) ...);
-        
-        // It uses `hovered || wasHovered`. Why?
-        // Maybe to catch glitches?
-        // If I draw Hit first, `hovered` is accurate for this frame.
-        // So `wasHovered` is redundant?
-        
-        // If I remove storage logic, code is cleaner.
-        
-        // Let's assume we pass `hovered` directly.
-        
-        return {};
+        return ImHashStr(label, std::strlen(label), 0);
     }
     
     // Helper to calculate visual rect
@@ -107,7 +54,8 @@ namespace
 
     static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
-        ImGuiID id = ImGui::GetID(shortcut);
+        ImGui::PushID(shortcut);
+        ImGuiID id = ImGui::GetID("Anim");
         float dt = ImGui::GetIO().DeltaTime;
         ImGuiStyle& style = ImGui::GetStyle();
 
@@ -116,8 +64,10 @@ namespace
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(iconSize, iconSize);
         
-        bool clicked = ImGui::InvisibleButton(label, standardSize);
+        bool clicked = ImGui::InvisibleButton("##Hit", standardSize);
         bool hovered = ImGui::IsItemHovered();
+        BUTTON_TOOLTIP( LOCTEXT(tooltip) )
+        ImGui::PopID();
         
         float hoverFactor = iam_tween_float(id, 0, hovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
@@ -151,8 +101,6 @@ namespace
         ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, (int)(128 * (1.0f + hoverFactor))), 4.0f);
         
         ImGui::EndGroup();
-        
-        BUTTON_TOOLTIP( LOCTEXT(tooltip) )
         return clicked;
     }
 
@@ -186,8 +134,8 @@ namespace
             ImU32 borderCol = ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.85f, 1.0f, selectFactor));
             drawList->AddRect(p_min, p_max, borderCol, 0.0f, 0, 4.0f * selectFactor);
         }
-        
-        drawList->AddImage(texId, p_min, p_max);
+
+        if(texId != 0) drawList->AddImage(texId, p_min, p_max);
         
         Utilities::UI::TextCentered(block.name, palateSize);
         
@@ -281,7 +229,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
 {
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = (uiStatus_ & EULUT_TitleBar) != 0;
-    float currentAnim = iam_tween_float(ImGui::GetID("TitleBarAlpha"), 0, isOpen ? 1.0f : 0.0f, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+    float currentAnim = iam_tween_float(MakeAnimId("MagicaLego.TitleBarAlpha"), 0, isOpen ? 1.0f : 0.0f, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAnim <= 0.0f && !isOpen) return;
 
@@ -445,6 +393,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     if (ImGui::Button(ICON_FA_QUESTION, ImVec2(titlebarSize, titlebarSize)))
     {
         showHelp_ = !showHelp_;
+        GetGameInstance()->SetCapturing(showHelp_ || capture_);
     }
     BUTTON_TOOLTIP(LOCTEXT("Show Help"))
 
@@ -573,7 +522,7 @@ void MagicaLegoUserInterface::DrawNotify()
 {
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = ImGui::IsPopupOpen("Notify");
-    float currentAnim = iam_tween_float(ImGui::GetID("NotifyAnim"), 0, isOpen ? 1.0f : 0.0f, 0.4f, {iam_ease_out_back, 1.5f}, iam_policy_crossfade, dt, 0.0f);
+    float currentAnim = iam_tween_float(MakeAnimId("MagicaLego.NotifyAnim"), 0, isOpen ? 1.0f : 0.0f, 0.4f, {iam_ease_out_back, 1.5f}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAnim <= 0.0f && !isOpen) return;
 
@@ -695,7 +644,7 @@ void MagicaLegoUserInterface::DrawHelp()
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
         showHelp_ = false;
-        GetGameInstance()->SetCapturing(false);
+        GetGameInstance()->SetCapturing(showHelp_ || capture_);
     }
 
     ImGui::End();
@@ -775,7 +724,6 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 void MagicaLegoUserInterface::ShowNotify(const std::string& text, std::function<void()> callback)
 {
     notify_ = true;
-    notifyTimer_ = 0;
     notifyText_ = text;
     notifyCallback_ = std::move(callback);
 }
@@ -804,7 +752,7 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = (uiStatus_ & EULUT_LayoutIndicator) != 0;
     float targetAlpha = isOpen ? 1.0f : 0.0f;
-    float currentAlpha = iam_tween_float(ImGui::GetID("MainToolBarAlpha"), 0, targetAlpha, 0.25f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+    float currentAlpha = iam_tween_float(MakeAnimId("MagicaLego.MainToolBarAlpha"), 0, targetAlpha, 0.25f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAlpha <= 0.0f && !isOpen) return;
 
@@ -850,7 +798,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = (uiStatus_ & EULUT_LeftBar) != 0;
     float targetAlpha = isOpen ? 1.0f : 0.0f;
-    float currentAlpha = iam_tween_float(ImGui::GetID("LeftBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+    float currentAlpha = iam_tween_float(MakeAnimId("MagicaLego.LeftBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAlpha <= 0.0f && !isOpen) return;
 
@@ -999,7 +947,7 @@ void MagicaLegoUserInterface::DrawRightBar()
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = (uiStatus_ & EULUT_RightBar) != 0;
     float targetAlpha = isOpen ? 1.0f : 0.0f;
-    float currentAlpha = iam_tween_float(ImGui::GetID("RightBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+    float currentAlpha = iam_tween_float(MakeAnimId("MagicaLego.RightBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAlpha <= 0.0f && !isOpen) return;
 
@@ -1063,7 +1011,7 @@ void MagicaLegoUserInterface::DrawTimeline()
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
     bool isOpen = (uiStatus_ & EULUT_Timeline) != 0;
     float targetAlpha = isOpen ? 1.0f : 0.0f;
-    float currentAlpha = iam_tween_float(ImGui::GetID("TimelineAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+    float currentAlpha = iam_tween_float(MakeAnimId("MagicaLego.TimelineAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
     if (currentAlpha <= 0.0f && !isOpen) return;
 

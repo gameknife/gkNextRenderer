@@ -67,7 +67,6 @@ private:
 	std::string waitingText_ {};
 
 	bool notify_ {};
-	float notifyTimer_ {};
 	std::string notifyText_ {};
 	std::function<void()> notifyCallback_ {};
 
@@ -79,6 +78,4 @@ private:
 
 	EIntroStep introStep_ = EIntroStep::EIS_Entry;
 
-	bool qualityMode_ {};
 };
-

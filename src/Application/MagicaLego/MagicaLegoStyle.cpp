@@ -1,3 +1,4 @@
+#include "Common/CoreMinimal.hpp"
 #include "MagicaLegoStyle.hpp"
 #include <imgui.h>
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "Common/CoreMinimal.hpp"
 #include <imgui.h>
 
 namespace MagicaLego::Style

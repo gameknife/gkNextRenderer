@@ -64,9 +64,9 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.Samples = 16;
     options.Temporal = 8;
     options.ForceSDR = true;
-    options.RendererType = 0;
+    options.RendererType = 1;
     options.locale = "zhCN";
-    options.SuperResolution = 0;
+    //options.SuperResolution = 0;
     //options.DLSS = true;
 
     // mode init
