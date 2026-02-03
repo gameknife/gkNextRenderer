@@ -59,7 +59,7 @@
                 "ENABLE_AUDIO": "ON",
                 "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "ON",
-                "ENABLE_UNITY_BUILD": "ON"
+                "ENABLE_UNITY_BUILD": "OFF"
             }
         },
         {
