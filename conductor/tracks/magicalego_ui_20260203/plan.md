@@ -39,4 +39,5 @@
 ## Phase 7: Critical Bug Fixes (ID Conflicts)
 - [x] Task: Fix LeftBar ID conflict by ensuring unique IDs for visual vs hit buttons. fe0f56d
 - [x] Task: Fix Blocks Manager selection bug by properly scoping IDs in MaterialButton. fe0f56d
-- [x] Task: Conductor - User Manual Verification 'Phase 7' (Protocol in workflow.md) [checkpoint: fe0f56d]
+- [x] Task: Refactor `SelectButton` and `MaterialButton` to use `InvisibleButton` for interaction and `DrawList` for visuals to resolve ActiveId conflict. b1a2b32
+- [x] Task: Conductor - User Manual Verification 'Phase 7' (Protocol in workflow.md) [checkpoint: b1a2b32]
