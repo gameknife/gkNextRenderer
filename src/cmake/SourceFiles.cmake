@@ -32,8 +32,6 @@ file(GLOB_RECURSE src_files_rendering
 
 # --- ThirdParty Libraries ---
 file(GLOB_RECURSE src_files_thirdparty
-    "ThirdParty/json11/*.cpp"
-    "ThirdParty/json11/*.hpp"
     "ThirdParty/mikktspace/*.c"
     "ThirdParty/mikktspace/*.h"
     "ThirdParty/miniaudio/*.h"
