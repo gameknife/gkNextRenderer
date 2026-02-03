@@ -1,23 +1,25 @@
 #include "BenchMark.hpp"
+#include "Common/CoreMinimal.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
-#include "Common/CoreMinimal.hpp"
 
-#include "curl/curl.h"
+#include <nlohmann/json.hpp>
 #include "cpp-base64/base64.cpp"
-#include "ThirdParty/json11/json11.hpp"
+#include "curl/curl.h"
 #include "stb_image_write.h"
+
+using json = nlohmann::json;
 
 #define _USE_MATH_DEFINES
 #include <filesystem>
 #include <math.h>
 
 #include "Runtime/Engine.hpp"
+#include "Runtime/ScreenShot.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/Device.hpp"
-#include "Runtime/ScreenShot.hpp"
 
-//#include <spdlog/spdlog.h>
+// #include <spdlog/spdlog.h>
 
 #if WITH_AVIF
 #include "avif/avif.h"
@@ -32,23 +34,20 @@ BenchMarker::BenchMarker()
     benchmarkCsvReportFile << fmt::format("#,scene,FPS\n");
 }
 
-BenchMarker::~BenchMarker()
-{
-    benchmarkCsvReportFile.close();
-}
+BenchMarker::~BenchMarker() { benchmarkCsvReportFile.close(); }
 
-void BenchMarker::OnSceneStart( double nowInSeconds )
+void BenchMarker::OnSceneStart(double nowInSeconds)
 {
     periodTotalFrames_ = 0;
     benchmarkTotalFrames_ = 0;
     sceneInitialTime_ = nowInSeconds;
 }
 
-bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* renderer )
+bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* renderer)
 {
     double prevTime = time_;
     time_ = nowInSeconds;
-       // Initialise scene benchmark timers
+    // Initialise scene benchmark timers
     if (periodTotalFrames_ == 0)
     {
         periodInitialTime_ = nowInSeconds;
@@ -60,10 +59,10 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
         const double prevTotalTime = prevTime - periodInitialTime_;
         const double totalTime = time_ - periodInitialTime_;
 
-        if (periodTotalFrames_ != 0 && static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime
-            / period))
+        if (periodTotalFrames_ != 0 &&
+            static_cast<uint64_t>(prevTotalTime / period) != static_cast<uint64_t>(totalTime / period))
         {
-            //SPDLOG_INFO("\t[Benchmarking] fps: {:.0f}", float(periodTotalFrames_) / float(totalTime));
+            // SPDLOG_INFO("\t[Benchmarking] fps: {:.0f}", float(periodTotalFrames_) / float(totalTime));
             periodInitialTime_ = time_;
             periodTotalFrames_ = 0;
         }
@@ -86,10 +85,11 @@ bool BenchMarker::OnTick( double nowInSeconds, Vulkan::VulkanBaseRenderer* rende
 void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::string& sceneName)
 {
     const double totalTime = time_ - sceneInitialTime_;
-    
+
     double fps = benchmarkTotalFrames_ / totalTime;
-    //SPDLOG_INFO("totalTime {:%H:%M:%S} fps {:.3f}", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
-    Report(renderer, static_cast<int>(floor(fps)), std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
+    // SPDLOG_INFO("totalTime {:%H:%M:%S} fps {:.3f}", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
+    Report(renderer, static_cast<int>(floor(fps)),
+           std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
 }
 
 inline const std::string VersionToString(const uint32_t version)
@@ -97,7 +97,8 @@ inline const std::string VersionToString(const uint32_t version)
     return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
 }
 
-void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const std::string& sceneName, bool uploadScreen, bool saveScreen)
+void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const std::string& sceneName, bool uploadScreen,
+                         bool saveScreen)
 {
     // report file
     benchmarkCsvReportFile << fmt::format("{},{},{}\n", benchUnit_++, sceneName, fps);
@@ -106,28 +107,26 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const st
     VkPhysicalDeviceProperties deviceProp1{};
     vkGetPhysicalDeviceProperties(renderer->Device().PhysicalDevice(), &deviceProp1);
 
-    std::string imgEncoded {};
+    std::string imgEncoded{};
     if (uploadScreen || saveScreen)
     {
         ScreenShot::SaveSwapChainToFile(renderer, sceneName, 0, 0, 0, 0);
     }
 
     // perf server upload
-    if( NextRenderer::GetBuildVersion() != "v0.0.0.0" )
+    if (NextRenderer::GetBuildVersion() != "v0.0.0.0")
     {
-        json11::Json myJson = json11::Json::object{
-            {"renderer", renderer->StaticClass()},
-            {"scene", sceneName},
-            {"gpu", std::string(deviceProp1.deviceName)},
-            {"driver", VersionToString(deviceProp1.driverVersion)},
-            {"fps", fps},
-            {"version", NextRenderer::GetBuildVersion()},
-            {"screenshot", imgEncoded}
-        };
+        json myJson = json{{"renderer", renderer->StaticClass()},
+                           {"scene", sceneName},
+                           {"gpu", std::string(deviceProp1.deviceName)},
+                           {"driver", VersionToString(deviceProp1.driverVersion)},
+                           {"fps", fps},
+                           {"version", NextRenderer::GetBuildVersion()},
+                           {"screenshot", imgEncoded}};
         std::string jsonStr = myJson.dump();
 
-        //SPDLOG_INFO("Sending benchmark to perf server...");
-        // upload from curl
+        // SPDLOG_INFO("Sending benchmark to perf server...");
+        //  upload from curl
         CURL* curl;
         CURLcode res;
         curl_global_init(CURL_GLOBAL_ALL);
@@ -143,12 +142,12 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const st
             curl_easy_setopt(curl, CURLOPT_URL, "http://gameknife.site:60010/rt_benchmark");
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonStr.c_str());
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
-        
+
             /* Perform the request, res gets the return code */
             res = curl_easy_perform(curl);
             /* Check for errors */
-            //if (res != CURLE_OK)
-                //SPDLOG_ERROR("curl_easy_perform() failed: {}", curl_easy_strerror(res));
+            // if (res != CURLE_OK)
+            // SPDLOG_ERROR("curl_easy_perform() failed: {}", curl_easy_strerror(res));
 
             /* always cleanup */
             curl_easy_cleanup(curl);
