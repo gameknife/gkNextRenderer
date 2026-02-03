@@ -30,6 +30,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_RenderComponent.cpp
+	Tests/Test_ImAnimIntegration.cpp
 )
 
 if (ENABLE_PHYSIC)
@@ -212,7 +213,7 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ImAnim ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
 		
 		# handle moltenvk for iOS
@@ -327,6 +328,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	if ( ${target} STREQUAL MagicaLego )
+	target_link_libraries(${target} PRIVATE ImAnim)
 	if (MSVC)
 	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
@@ -363,7 +365,7 @@ endforeach()
 
 # Test Target
 if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
-target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
+target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options ImAnim)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 

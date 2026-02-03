@@ -4,6 +4,36 @@ include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/external")
 set(FETCHCONTENT_QUIET FALSE)
 
+# --- ImAnim ---
+message(STATUS "Preparing ImAnim...")
+FetchContent_Declare(
+    imanim
+    GIT_REPOSITORY https://github.com/soufianekhiat/ImAnim.git
+    GIT_TAG        main
+)
+FetchContent_GetProperties(imanim)
+if(NOT imanim_POPULATED)
+    FetchContent_Populate(imanim)
+    
+    # Patch im_anim.cpp for ImGui 1.91.9 compatibility
+    # We need ImGuiStoragePair (global) + ImFont (standard)
+    # The pre-1.92 block uses ImFont but expects ImGuiStorage::ImGuiStoragePair.
+    # We patch it to use global ImGuiStoragePair.
+    set(TARGET_FILE "${imanim_SOURCE_DIR}/im_anim.cpp")
+    file(READ "${TARGET_FILE}" FILE_CONTENT)
+    string(REPLACE "ImGuiStorage::ImGuiStoragePair" "ImGuiStoragePair" FILE_CONTENT "${FILE_CONTENT}")
+    file(WRITE "${TARGET_FILE}" "${FILE_CONTENT}")
+endif()
+
+set(IMANIM_INCLUDE_DIR "${imanim_SOURCE_DIR}")
+set(IMANIM_SOURCES "${imanim_SOURCE_DIR}/im_anim.cpp")
+message(STATUS "ImAnim Include: ${IMANIM_INCLUDE_DIR}")
+
+add_library(ImAnim STATIC ${IMANIM_SOURCES})
+target_include_directories(ImAnim PUBLIC ${IMANIM_INCLUDE_DIR})
+find_package(imgui CONFIG REQUIRED)
+target_link_libraries(ImAnim PUBLIC imgui::imgui)
+
 # --- NVIDIA Streamline ---
 if(WITH_STREAMLINE)
     message(STATUS "Preparing NVIDIA Streamline SDK...")
