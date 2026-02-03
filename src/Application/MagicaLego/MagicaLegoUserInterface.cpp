@@ -710,17 +710,17 @@ void MagicaLegoUserInterface::PopLayout()
 
 void MagicaLegoUserInterface::DrawMainToolBar()
 {
+    const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
 
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, titlebarSize);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, titlebarSize + padding);
     constexpr ImVec2 posPivot = ImVec2(0.5f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(0, 0));
-    ImGui::SetNextWindowBgAlpha(0.2f);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    if (ImGui::Begin("MainToolBar", nullptr, panelFlags | ImGuiWindowFlags_NoBackground))
+    if (ImGui::Begin("MainToolBar", nullptr, panelFlags))
     {
         if (ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(buttonSize, buttonSize)))
         {
@@ -747,13 +747,14 @@ void MagicaLegoUserInterface::DrawMainToolBar()
 
 void MagicaLegoUserInterface::DrawLeftBar()
 {
-    constexpr ImVec2 pos = ImVec2(0, titlebarSize);
-    constexpr ImVec2 posPivot = ImVec2(0.0f, 0.0f);
+    const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    const ImVec2 pos = ImVec2(padding, titlebarSize + padding);
+    constexpr ImVec2 posPivot = ImVec2(0.0f, 0.0f);
+    
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(buildBarWidth, viewportSize.y - titlebarSize));
-    ImGui::SetNextWindowBgAlpha(0.9f);
-
+    ImGui::SetNextWindowSize(ImVec2(buildBarWidth, viewportSize.y - titlebarSize - padding * 2));
+    
     if (ImGui::Begin("Place & Dig", nullptr, panelFlags))
     {
         ImGui::SeparatorText(LOCTEXT("Mode"));
@@ -885,13 +886,13 @@ void MagicaLegoUserInterface::DrawLeftBar()
 
 void MagicaLegoUserInterface::DrawRightBar()
 {
+    const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x, titlebarSize);
+    const ImVec2 pos = ImVec2(viewportSize.x - padding, titlebarSize + padding);
     constexpr ImVec2 posPivot = ImVec2(1.0f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(sideBarWidth, viewportSize.y - titlebarSize));
-    ImGui::SetNextWindowBgAlpha(0.9f);
+    ImGui::SetNextWindowSize(ImVec2(sideBarWidth, viewportSize.y - titlebarSize - padding * 2));
 
     if (ImGui::Begin("Color Pallete", nullptr, panelFlags))
     {
@@ -939,15 +940,15 @@ void MagicaLegoUserInterface::DrawRightBar()
 
 void MagicaLegoUserInterface::DrawTimeline()
 {
+    const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - 20);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - padding);
     constexpr ImVec2 posPivot = ImVec2(0.5f, 1.0f);
-    const float width = viewportSize.x - sideBarWidth * 2 - 100;
+    const float width = viewportSize.x - (sideBarWidth + padding) * 2 - padding * 2;
     ImGuiStyle& style = ImGui::GetStyle();
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(width, 90));
-    ImGui::SetNextWindowBgAlpha(0.5f);
 
     if (ImGui::Begin("Timeline", nullptr, panelFlags))
     {
