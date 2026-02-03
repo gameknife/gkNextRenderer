@@ -30,3 +30,8 @@
 - [x] Task: Verify UI performance and ensure no frame rate regression due to transparency/animations. a65ddb3
 - [x] Task: Final code cleanup and documentation of new UI utilities. a65ddb3
 - [x] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md) [checkpoint: e827b7e]
+
+## Phase 6: Bug Fixes & Refinements
+- [x] Task: Fix button hover animation logic (delayed state) to prevent offset zooming. f107fdf
+- [x] Task: Investigate and fix phantom sidebar animations (verify uiStatus logic). f107fdf
+- [x] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md) [checkpoint: f107fdf]
