@@ -36,10 +36,13 @@ namespace
     
     static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
-        ImGuiID id = ImGui::GetID(label);
+        ImGuiID id = ImGui::GetID(shortcut);
         float dt = ImGui::GetIO().DeltaTime;
 
-        float hoverFactor = iam_tween_float(id, 0, ImGui::IsItemHovered() ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        ImGuiStorage* storage = ImGui::GetStateStorage();
+        bool wasHovered = storage->GetBool(id, false);
+
+        float hoverFactor = iam_tween_float(id, 0, wasHovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
         if (selected || selectFactor > 0.01f)
@@ -58,6 +61,8 @@ namespace
         size.y *= (1.0f + hoverFactor * 0.05f);
         
         bool result = ImGui::Button(label, size);
+        storage->SetBool(id, ImGui::IsItemHovered());
+
         BUTTON_TOOLTIP( LOCTEXT(tooltip) )
 
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, iconSize);
@@ -74,10 +79,13 @@ namespace
     static bool MaterialButton(const FBasicBlock& block, ImTextureID texId, float windowWidth, bool selected)
     {
         ImGuiStyle& style = ImGui::GetStyle();
-        ImGuiID id = ImGui::GetID(block.name);
+        ImGuiID id = ImGui::GetID((void*)(intptr_t)block.modelId_);
         float dt = ImGui::GetIO().DeltaTime;
 
-        float hoverFactor = iam_tween_float(id, 0, ImGui::IsItemHovered() ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        ImGuiStorage* storage = ImGui::GetStateStorage();
+        bool wasHovered = storage->GetBool(id, false);
+
+        float hoverFactor = iam_tween_float(id, 0, wasHovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
         if (selected || selectFactor > 0.01f)
@@ -100,6 +108,7 @@ namespace
 #else
         bool result = ImGui::ImageButton("##Block", texId, size);
 #endif
+        storage->SetBool(id, ImGui::IsItemHovered());
         
         ImGui::PopID();
         Utilities::UI::TextCentered(block.name, palateSize);
@@ -401,8 +410,8 @@ void MagicaLegoUserInterface::DrawOpening() const
 void MagicaLegoUserInterface::OnRenderUI()
 {
     iam_update_begin_frame();
-    static int frameCount = 0;
-    if (++frameCount % 600 == 0) iam_gc();
+    // static int frameCount = 0;
+    // if (++frameCount % 600 == 0) iam_gc();
 
     if (uiStatus_ & EULUT_TitleBar)
     {
