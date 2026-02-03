@@ -13,9 +13,9 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md) [checkpoint: 6f0af35]
 
 ## Phase 3: HUD-style Layout Implementation
-- [ ] Task: Modify `MagicaLegoUserInterface::DrawLeftBar`, `DrawRightBar`, and `DrawMainToolBar` to use floating window flags (`ImGuiWindowFlags_NoDocking`, `ImGuiWindowFlags_NoResize`, etc.).
-- [ ] Task: Position these HUD panels relative to the viewport corners/edges with appropriate padding.
-- [ ] Task: Update panels to use semi-transparent backgrounds and rounded corners to achieve the Glassmorphism effect.
+- [x] Task: Modify `MagicaLegoUserInterface::DrawLeftBar`, `DrawRightBar`, and `DrawMainToolBar` to use floating window flags (`ImGuiWindowFlags_NoDocking`, `ImGuiWindowFlags_NoResize`, etc.). 9196634
+- [x] Task: Position these HUD panels relative to the viewport corners/edges with appropriate padding. 9196634
+- [x] Task: Update panels to use semi-transparent backgrounds and rounded corners to achieve the Glassmorphism effect. 9196634
 - [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
 
 ## Phase 4: Animation & Interactivity (ImAnim)
