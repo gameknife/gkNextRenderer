@@ -51,7 +51,7 @@ The project uses CMake + Ninja, with dependencies managed by vcpkg. Ensure a rel
 Windows (Visual Studio 2022):
 ``` bat
 rem Windows prerequisites:
-rem Install CMake 3.31 (do not install CMake 4.x)
+rem Install CMake 3.26+
 rem Install Visual Studio 2022 with the C++ workload
 rem Install Vulkan SDK 1.4.313.2
 rem Enable "Use Unicode UTF-8 for worldwide language support" to avoid vcpkg tar extraction issues
