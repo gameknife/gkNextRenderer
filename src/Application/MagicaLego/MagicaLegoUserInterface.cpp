@@ -198,16 +198,25 @@ void MagicaLegoUserInterface::OnSceneLoaded()
 
 void MagicaLegoUserInterface::DrawTitleBar()
 {
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = (uiStatus_ & EULUT_TitleBar) != 0;
+    float currentAnim = iam_tween_float(ImGui::GetID("TitleBarAlpha"), 0, isOpen ? 1.0f : 0.0f, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAnim <= 0.0f && !isOpen) return;
+
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-    bgColor.w = 0.9f;
-    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(windowSize.x, titlebarSize), ImGui::ColorConvertFloat4ToU32(bgColor));
+    bgColor.w = currentAnim * 0.6f;
+    
+    float animOffset = (1.0f - currentAnim) * (titlebarSize + 10.0f);
+    
+    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, -animOffset), ImVec2(windowSize.x, titlebarSize - animOffset), ImGui::ColorConvertFloat4ToU32(bgColor));
 
     ImGui::PushFont(boldFont_);
 
     auto textSize = ImGui::CalcTextSize("MagicaLEGO");
-    ImGui::GetForegroundDrawList()->AddText(ImVec2((windowSize.x - textSize.x) * 0.5f, (titlebarSize - textSize.y) * 0.5f), IM_COL32(255, 255, 255, 255), "MagicaLEGO");
+    ImGui::GetForegroundDrawList()->AddText(ImVec2((windowSize.x - textSize.x) * 0.5f, (titlebarSize - textSize.y) * 0.5f - animOffset), IM_COL32(255, 255, 255, (int)(255 * currentAnim)), "MagicaLEGO");
 
     ImGui::PopFont();
 
@@ -217,10 +226,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
-    ImGui::SetNextWindowPos(ImVec2(windowSize.x - titlebarControlSize, 0), ImGuiCond_Always, ImVec2(0, 0));
+    ImGui::SetNextWindowPos(ImVec2(windowSize.x - titlebarControlSize, -animOffset), ImGuiCond_Always, ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(titlebarControlSize, titlebarSize));
+    ImGui::SetNextWindowBgAlpha(0.0f);
 
     ImGui::Begin("TitleBarRight", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, currentAnim);
 
     if (ImGui::Button(ICON_FA_MINUS, ImVec2(titlebarSize, titlebarSize)))
     {
@@ -236,12 +248,17 @@ void MagicaLegoUserInterface::DrawTitleBar()
     {
         GetGameInstance()->GetEngine().RequestClose();
     }
+    ImGui::PopStyleVar();
     ImGui::End();
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always, ImVec2(0, 0));
+    ImGui::SetNextWindowPos(ImVec2(0, -animOffset), ImGuiCond_Always, ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(titlebarSize * 18, titlebarSize));
+    ImGui::SetNextWindowBgAlpha(0.0f);
 
     ImGui::Begin("TitleBarLeft", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, currentAnim);
+    
     if (ImGui::Button(ICON_FA_GITHUB, ImVec2(titlebarSize, titlebarSize)))
     {
         NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
@@ -344,39 +361,13 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
     ImGui::Dummy(ImVec2(10, 10));
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_CIRCLE_QUESTION, ImVec2(titlebarSize, titlebarSize)))
+    if (ImGui::Button(ICON_FA_QUESTION, ImVec2(titlebarSize, titlebarSize)))
     {
-        if (!showHelp_)
-        {
-            showHelp_ = true;
-            GetGameInstance()->SetCapturing(true);
-        }
+        showHelp_ = !showHelp_;
     }
-    
-    BUTTON_TOOLTIP(LOCTEXT("Request Help"))
-    ImGui::SameLine();
-    ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, titlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
-    ImGui::Dummy(ImVec2(10, 10));
-    ImGui::SameLine();
-    float deltaSeconds = GetGameInstance()->GetEngine().GetSmoothDeltaSeconds();
-    int32_t samples = GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples;
-    if (ImGui::Button(samples > 1 ? ICON_FA_TRUCK : ICON_FA_TRUCK_FAST, ImVec2(titlebarSize, titlebarSize)))
-    {
-        if (samples > 1)
-        {
-            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 4;
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 32;
-        }
-        else
-        {
-            GetGameInstance()->GetEngine().GetUserSettings().NumberOfSamples = 16;
-            GetGameInstance()->GetEngine().GetUserSettings().TemporalFrames = 8;
-        }
-    }
-    BUTTON_TOOLTIP(LOCTEXT("Switch Render Quality"))
-    ImGui::SameLine();
-    ImGui::SetCursorPosY((titlebarSize - ImGui::GetTextLineHeight()) / 2);
-    ImGui::TextUnformatted(fmt::format("{:.0f}fps", 1.0f / deltaSeconds).c_str());
+    BUTTON_TOOLTIP(LOCTEXT("Show Help"))
+
+    ImGui::PopStyleVar();
     ImGui::End();
 
     ImGui::PopStyleColor();
@@ -420,13 +411,12 @@ void MagicaLegoUserInterface::OnRenderUI()
     // TotalSwitch
     DrawMainToolBar();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
     
     DrawLeftBar();
     DrawRightBar();
     
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(1);
 
     DrawTimeline();
     
