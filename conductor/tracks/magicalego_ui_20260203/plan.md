@@ -4,7 +4,7 @@
 - [x] Task: Integrate `ImAnim` library via `cmake/SetupExternalLibs.cmake` using `FetchContent`. 3320b5f
 - [x] Task: Update `CMakeLists.txt` to include `ImAnim` and link it to the `MagicaLego` target (or Engine if needed). 3320b5f
 - [x] Task: Verify `ImAnim` integration by including its header in a dummy test or `MagicaLegoUserInterface.cpp`. 3320b5f
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md) [checkpoint: 3af554f]
 
 ## Phase 2: Theme & Visual Foundations
 - [ ] Task: Define Lego-themed color palette and Glassmorphism style constants (e.g., `LegoYellow`, `GlassBackground`, `Rounding`).
