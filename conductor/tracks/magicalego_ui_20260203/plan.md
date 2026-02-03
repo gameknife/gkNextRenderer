@@ -34,4 +34,4 @@
 ## Phase 6: Bug Fixes & Refinements
 - [x] Task: Fix button hover animation logic (delayed state) to prevent offset zooming. f107fdf
 - [x] Task: Investigate and fix phantom sidebar animations (verify uiStatus logic). f107fdf
-- [x] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md) [checkpoint: f107fdf]
+- [x] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md) [checkpoint: f1371ed]
