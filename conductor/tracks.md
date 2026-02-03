@@ -8,8 +8,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 *Link: [./archive/gltf_skinning_20260117/](./archive/gltf_skinning_20260117/)*
 
----
-
-- [x] **Track: 美化MagicaLego的界面，使其更具游戏感和现代感** (072d94d)
-*Link: [./tracks/magicalego_ui_20260203/](./tracks/magicalego_ui_20260203/)*
-
