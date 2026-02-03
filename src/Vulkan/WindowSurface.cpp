@@ -47,7 +47,7 @@ float Window::ContentScale() const
 VkExtent2D Window::FramebufferSize() const
 {
     int width, height;
-    SDL_GetWindowSize(window_, &width, &height);
+    SDL_GetWindowSizeInPixels(window_, &width, &height);
     return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 }
 

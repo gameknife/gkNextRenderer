@@ -290,6 +290,13 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         {
             return true;
         }
+    case SDL_EVENT_WINDOW_RESIZED:
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+        if (renderer_)
+        {
+            renderer_->RequestRecreateSwapChain();
+        }
+        break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
