@@ -566,9 +566,9 @@ void MagicaLegoUserInterface::DrawHelp()
     ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0, 0), windowSize, IM_COL32(80, 80, 80, 200));
 
     {
-        auto textSize = ImGui::CalcTextSize(LOCTEXT("Use LMB to handle blocks, RMB to rotate"));
+        auto textSize = ImGui::CalcTextSize(LOCTEXT("LMB: Build/Rotate | RMB: Pan | Wheel: Zoom"));
         auto textPos = windowSize * 0.5f - textSize * 0.5f;
-        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), textPos, IM_COL32(255, 255, 255, 255), LOCTEXT("Use LMB to handle blocks, RMB to rotate"));
+        ImGui::GetForegroundDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize(), textPos, IM_COL32(255, 255, 255, 255), LOCTEXT("LMB: Build/Rotate | RMB: Pan | Wheel: Zoom"));
     }
 
     {
@@ -767,21 +767,6 @@ void MagicaLegoUserInterface::DrawLeftBar()
         if (SelectButton(ICON_FA_HAND_POINTER, "E", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Select, "Select a block to modify"))
         {
             GetGameInstance()->SetBuildMode(ELegoMode::ELM_Select);
-        }
-        ImGui::SeparatorText(LOCTEXT("Camera"));
-        if (SelectButton(ICON_FA_UP_DOWN_LEFT_RIGHT, "A", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Pan, "Switch camera to pan mode"))
-        {
-            GetGameInstance()->SetCameraMode(ECamMode::ECM_Pan);
-        }
-        ImGui::SameLine();
-        if (SelectButton(ICON_FA_CAMERA_ROTATE, "S", GetGameInstance()->GetCameraMode() == ECamMode::ECM_Orbit, "Switch camera to orbit mode"))
-        {
-            GetGameInstance()->SetCameraMode(ECamMode::ECM_Orbit);
-        }
-        ImGui::SameLine();
-        if (SelectButton(ICON_FA_CIRCLE_DOT, "D", GetGameInstance()->GetCameraMode() == ECamMode::ECM_AutoFocus, "Switch camera to auto focus mode"))
-        {
-            GetGameInstance()->SetCameraMode(ECamMode::ECM_AutoFocus);
         }
         ImGui::SeparatorText(LOCTEXT("Base"));
         if (SelectButton(ICON_FA_L, "1", GetGameInstance()->GetCurrentBasePlane() == EBasePlane::EBP_Big, "Switch base plane big"))

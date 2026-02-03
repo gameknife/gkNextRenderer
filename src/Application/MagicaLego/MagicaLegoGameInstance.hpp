@@ -14,13 +14,6 @@ enum class ELegoMode : uint8_t
     ELM_Select,
 };
 
-enum class ECamMode : uint8_t
-{
-    ECM_Pan,
-    ECM_Orbit,
-    ECM_AutoFocus,
-};
-
 enum class EBasePlane : uint8_t
 {
     EBP_Big,
@@ -143,9 +136,6 @@ public:
     ELegoMode GetBuildMode() const { return currentMode_; }
     void SetBuildMode(ELegoMode mode);
 
-    ECamMode GetCameraMode() const { return currentCamMode_; }
-    void SetCameraMode(ECamMode mode);
-
     // Library Access
     FBasicBlockLibrary& GetBasicNodeLibrary() { return BasicBlockTypeMap; }
 
@@ -203,9 +193,12 @@ protected:
 
     void CPURaycast();
 
+    void PerformLeftClickCheck();
+    void UpdateFocusToScreenCenter();
+    void UpdateMouseCursor();
+
 private:
     ELegoMode currentMode_{};
-    ECamMode currentCamMode_{};
     EBasePlane currentBaseSize_{};
     EOrientation currentOrientation_{};
 
@@ -241,6 +234,11 @@ private:
     float cameraArm_{};
     float cameraMultiplier_{};
     float cameraFOV_{};
+
+    bool isOrbitDragging_{};
+    glm::vec3 focusTarget_{};
+    bool mouseRightPressed_{};
+    bool isTracingObject_{};
 
     bool bMouseLeftDown_{};
     int lastDownFrameNum_{};

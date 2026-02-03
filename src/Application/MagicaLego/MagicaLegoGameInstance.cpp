@@ -67,11 +67,10 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     options.RendererType = 0;
     options.locale = "zhCN";
     options.SuperResolution = 0;
-    options.DLSS = true;
+    //options.DLSS = true;
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);
-    SetCameraMode(ECamMode::ECM_Orbit);
 
     // control init
     resetMouse_ = true;
@@ -79,6 +78,13 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     cameraRotY_ = 30;
     cameraArm_ = 5.0;
     cameraFOV_ = 12.f;
+
+    // camera focus init
+    focusTarget_ = glm::vec3(0, 0, 0);
+    cameraCenter_ = focusTarget_;
+    isOrbitDragging_ = false;
+    mouseRightPressed_ = false;
+    isTracingObject_ = false;
 
     // ui
     UserInterface_ = std::make_unique<MagicaLegoUserInterface>(this);
@@ -94,12 +100,18 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
+    // 如果正在 Orbit 拖拽，不执行建造操作
+    if (isOrbitDragging_)
+    {
+        return;
+    }
+
     glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.005f;
     glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
     glm::vec3 renderLocation = GetRenderLocationFromBlockLocation(blockLocation);
     uint32_t instanceId = rayResult.InstanceId;
     lastSelectIndex_ = instanceId;
-    
+
     if (!bMouseLeftDown_)
     {
         if (currentMode_ == ELegoMode::ELM_Place)
@@ -148,7 +160,6 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         break;
     case ELegoMode::ELM_Select:
         lastSelectLocation_ = node->GetName() == "blockInst" ? GetBlockLocationFromRenderLocation(glm::vec3((node->WorldTransform() * glm::vec4(0, 0.0475f, 0, 1)))) : invalidPos;
-        if (currentCamMode_ == ECamMode::ECM_AutoFocus && lastSelectLocation_ != invalidPos) cameraCenter_ = GetRenderLocationFromBlockLocation(lastSelectLocation_);
         GetEngine().GetScene().SetSelectedId(lastSelectIndex_);
         break;
     }
@@ -194,16 +205,15 @@ void MagicaLegoGameInstance::OnInit()
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 {
-    // raycast request
-    if (GetBuildMode() == ELegoMode::ELM_Place || bMouseLeftDown_)
-    {
-        CPURaycast();
-    }
+    // raycast request - 所有模式下都执行以实时更新鼠标状态
+    CPURaycast();
 
     // select edge showing
     GetEngine().GetShowFlags().ShowEdge = currentMode_ == ELegoMode::ELM_Select && lastSelectLocation_ != invalidPos;
 
-    
+    // update mouse cursor based on current state
+    UpdateMouseCursor();
+
     // camera center lerping
     const float speed = 0.025f;
     float t = 1.0f - glm::pow(1.0f - speed, float(deltaSeconds) * 60.0f);
@@ -221,6 +231,13 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         previewNode_->SetTranslation(currentBlockPosCurrent_);
         previewNode_->SetRotation(GetOrientationMatrix(currentOrientation_));
         previewNode_->RecalcTransform();
+
+        // 只在 Place 模式、trace 到物体且非绕物拖拽时显示预览块
+        if (auto render = previewNode_->GetComponent<Runtime::RenderComponent>())
+        {
+            bool shouldShow = (currentMode_ == ELegoMode::ELM_Place) && isTracingObject_ && !isOrbitDragging_;
+            render->SetVisible(shouldShow);
+        }
     }
     
     // draw if no capturing
@@ -247,11 +264,6 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
     currentMode_ = mode;
     lastSelectLocation_ = invalidPos;
     lastPlacedLocation_ = invalidPos;
-}
-
-void MagicaLegoGameInstance::SetCameraMode(ECamMode mode)
-{
-    currentCamMode_ = mode;
 }
 
 void MagicaLegoGameInstance::OnSceneLoaded()
@@ -351,12 +363,6 @@ bool MagicaLegoGameInstance::OnKey(SDL_Event& event)
             break;
         case SDLK_E: SetBuildMode(ELegoMode::ELM_Select);
             break;
-        case SDLK_A: SetCameraMode(ECamMode::ECM_Pan);
-            break;
-        case SDLK_S: SetCameraMode(ECamMode::ECM_Orbit);
-            break;
-        case SDLK_D: SetCameraMode(ECamMode::ECM_AutoFocus);
-            break;
         case SDLK_R: ChangeOrientation();
             break;
         case SDLK_1: SwitchBasePlane(EBasePlane::EBP_Big);
@@ -386,16 +392,19 @@ bool MagicaLegoGameInstance::OnCursorPosition(double xpos, double ypos)
 
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
 
-    if ((currentCamMode_ == ECamMode::ECM_Orbit) || (currentCamMode_ == ECamMode::ECM_AutoFocus))
+    if (isOrbitDragging_ && bMouseLeftDown_)
     {
         cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
         cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
+        cameraRotY_ = std::clamp(cameraRotY_, -89.0f, 89.0f);
     }
 
-    if (currentCamMode_ == ECamMode::ECM_Pan)
+    if (mouseRightPressed_)
     {
-        cameraCenter_ += panForward_ * static_cast<float>(delta.y) * cameraMultiplier_ * 0.01f;
-        cameraCenter_ += panLeft_ * static_cast<float>(delta.x) * cameraMultiplier_ * 0.01f;
+        glm::vec3 panDelta = panForward_ * static_cast<float>(delta.y) * cameraMultiplier_ * 0.01f;
+        panDelta += panLeft_ * static_cast<float>(delta.x) * cameraMultiplier_ * 0.01f;
+        cameraCenter_ += panDelta;
+        realCameraCenter_ += panDelta;
     }
 
     mousePos_ = glm::dvec2(xpos, ypos);
@@ -409,22 +418,24 @@ bool MagicaLegoGameInstance::OnMouseButton(SDL_Event& event)
     {
         bMouseLeftDown_ = true;
         lastDownFrameNum_ = GetEngine().GetRenderer().FrameCount();
+        PerformLeftClickCheck();
         return true;
     }
     else if (event.button.button == SDL_BUTTON_LEFT && event.type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
         bMouseLeftDown_ = false;
+        isOrbitDragging_ = false;
         oneLinePlacedInstance_.clear();
-        if (currentCamMode_ == ECamMode::ECM_AutoFocus && currentMode_ == ELegoMode::ELM_Place && lastPlacedLocation_ != invalidPos)
-            cameraCenter_ = GetRenderLocationFromBlockLocation(lastPlacedLocation_);
         return true;
     }
     else if (event.button.button == SDL_BUTTON_RIGHT && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
+        mouseRightPressed_ = true;
         cameraMultiplier_ = 0.1f;
     }
     else if (event.button.button == SDL_BUTTON_RIGHT && event.type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
+        mouseRightPressed_ = false;
         cameraMultiplier_ = 0.0f;
     }
     return true;
@@ -432,8 +443,9 @@ bool MagicaLegoGameInstance::OnMouseButton(SDL_Event& event)
 
 bool MagicaLegoGameInstance::OnScroll(double xoffset, double yoffset)
 {
-    cameraFOV_ -= static_cast<float>(yoffset);
-    cameraFOV_ = std::clamp(cameraFOV_, 1.0f, 30.0f);
+    const float scrollSpeed = 0.5f;
+    cameraArm_ -= static_cast<float>(yoffset) * scrollSpeed;
+    cameraArm_ = std::clamp(cameraArm_, 0.5f, 20.0f);
     return true;
 }
 
@@ -796,9 +808,6 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
     {
         auto& block = BlockRecords[i];
         tempBlocksDynamics[GetHashFromBlockLocation(block.location)] = block;
-
-        if (currentCamMode_ == ECamMode::ECM_AutoFocus)
-            cameraCenter_ = GetRenderLocationFromBlockLocation(block.location);
     }
     RebuildScene(tempBlocksDynamics, -1);
 }
@@ -811,10 +820,12 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
 void MagicaLegoGameInstance::CPURaycast()
 {
     glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
+    isTracingObject_ = false;
     GetEngine().RayCastGPU(cachedCameraPos_, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hitted)
             {
+                this->isTracingObject_ = true;
                 this->OnRayHitResponse(result);
             }
             return true;
@@ -934,4 +945,97 @@ void MagicaLegoGameInstance::GenerateThumbnail()
 
         return false;
     });
+}
+
+void MagicaLegoGameInstance::PerformLeftClickCheck()
+{
+    glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
+
+    bool hitObject = false;
+    GetEngine().RayCastGPU(cachedCameraPos_, dir, [&hitObject](Assets::RayCastResult result) -> bool
+    {
+        if (result.Hitted)
+        {
+            hitObject = true;
+        }
+        return true;
+    });
+
+    if (!hitObject)
+    {
+        isOrbitDragging_ = true;
+        cameraMultiplier_ = 0.1f;
+        UpdateFocusToScreenCenter();
+    }
+    else
+    {
+        isOrbitDragging_ = false;
+    }
+}
+
+void MagicaLegoGameInstance::UpdateFocusToScreenCenter()
+{
+    auto vkextent = GetEngine().GetRenderer().SwapChain().OutputExtent();
+    glm::vec2 screenCenter(vkextent.width * 0.5f, vkextent.height * 0.5f);
+
+    glm::vec3 centerDir = NextEngineHelper::ProjectScreenToWorld(screenCenter);
+
+    glm::vec3 newFocus = glm::vec3(0, 0, 0);
+    GetEngine().RayCastGPU(cachedCameraPos_, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
+    {
+        if (result.Hitted)
+        {
+            newFocus = glm::vec3(result.HitPoint);
+        }
+        return true;
+    });
+
+    focusTarget_ = newFocus;
+    cameraCenter_ = focusTarget_;
+}
+
+void MagicaLegoGameInstance::UpdateMouseCursor()
+{
+    SDL_SystemCursor cursorType;
+
+    // 优先级 1: 右键 Pan 模式
+    if (mouseRightPressed_)
+    {
+        cursorType = SDL_SYSTEM_CURSOR_MOVE;  // 四向箭头，表示移动
+    }
+    // 优先级 2: 左键拖拽绕物旋转
+    else if (isOrbitDragging_ && bMouseLeftDown_)
+    {
+        cursorType = SDL_SYSTEM_CURSOR_POINTER;  // 手型，表示拖拽旋转
+    }
+    // 优先级 3: trace 到背景，显示旋转图标
+    else if (!isTracingObject_)
+    {
+        cursorType = SDL_SYSTEM_CURSOR_POINTER;  // 手型，表示可以拖拽旋转
+    }
+    // 优先级 4: trace 到物体，根据当前模式显示图标
+    else
+    {
+        switch (currentMode_)
+        {
+        case ELegoMode::ELM_Dig:
+            cursorType = SDL_SYSTEM_CURSOR_NOT_ALLOWED;  // 禁止符号，表示删除
+            break;
+        case ELegoMode::ELM_Place:
+            cursorType = SDL_SYSTEM_CURSOR_CROSSHAIR;  // 十字线，表示放置
+            break;
+        case ELegoMode::ELM_Select:
+            cursorType = SDL_SYSTEM_CURSOR_POINTER;  // 手型，表示选择
+            break;
+        default:
+            cursorType = SDL_SYSTEM_CURSOR_DEFAULT;
+            break;
+        }
+    }
+
+    SDL_Cursor* cursor = SDL_CreateSystemCursor(cursorType);
+    if (cursor)
+    {
+        SDL_SetCursor(cursor);
+    }
 }
