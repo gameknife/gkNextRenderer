@@ -2,6 +2,7 @@
 
 #include "MagicaLegoStyle.hpp"
 #include <fmt/chrono.h>
+#include <im_anim.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 #include <spdlog/spdlog.h>
@@ -35,20 +36,35 @@ namespace
     
     static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
-        if (selected)
+        ImGuiID id = ImGui::GetID(label);
+        float dt = ImGui::GetIO().DeltaTime;
+
+        float hoverFactor = iam_tween_float(id, 0, ImGui::IsItemHovered() ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
+
+        if (selected || selectFactor > 0.01f)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.6f, 0.8f, 1));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.6f, 0.8f, 1));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.6f, 0.8f, 1));
+            ImVec4 col = ImVec4(0.4f, 0.6f, 0.8f, selectFactor);
+            ImGui::PushStyleColor(ImGuiCol_Button, col);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, col);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
         }
+        
         ImGui::BeginGroup();
-        bool result = ImGui::Button(label, ImVec2(iconSize, iconSize));
+        
+        // Scale effect via offset
+        ImVec2 size = ImVec2(iconSize, iconSize);
+        size.x *= (1.0f + hoverFactor * 0.05f);
+        size.y *= (1.0f + hoverFactor * 0.05f);
+        
+        bool result = ImGui::Button(label, size);
         BUTTON_TOOLTIP( LOCTEXT(tooltip) )
 
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, iconSize);
-        ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, 128), 4.0f);
+        ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, (int)(128 * (1.0f + hoverFactor))), 4.0f);
         ImGui::EndGroup();
-        if (selected)
+        
+        if (selected || selectFactor > 0.01f)
         {
             ImGui::PopStyleColor(3);
         }
@@ -58,22 +74,32 @@ namespace
     static bool MaterialButton(const FBasicBlock& block, ImTextureID texId, float windowWidth, bool selected)
     {
         ImGuiStyle& style = ImGui::GetStyle();
+        ImGuiID id = ImGui::GetID(block.name);
+        float dt = ImGui::GetIO().DeltaTime;
 
-        if (selected)
+        float hoverFactor = iam_tween_float(id, 0, ImGui::IsItemHovered() ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
+        float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
+
+        if (selected || selectFactor > 0.01f)
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 4);
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.6f, 0.85f, 1.0f, 1));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 4 * selectFactor);
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.6f, 0.85f, 1.0f, selectFactor));
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 
         ImGui::BeginGroup();
         ImGui::PushID(static_cast<int>(block.modelId_));
+        
+        ImVec2 size = ImVec2(palateSize, palateSize);
+        size.x *= (1.0f + hoverFactor * 0.1f);
+        size.y *= (1.0f + hoverFactor * 0.1f);
+
 #ifdef __APPLE__
-        bool result = ImGui::Button("##Block", ImVec2(palateSize, palateSize));
+        bool result = ImGui::Button("##Block", size);
 #else
-        bool result = ImGui::ImageButton("##Block", texId, ImVec2(palateSize, palateSize));
-        #endif
+        bool result = ImGui::ImageButton("##Block", texId, size);
+#endif
         
         ImGui::PopID();
         Utilities::UI::TextCentered(block.name, palateSize);
@@ -84,7 +110,7 @@ namespace
         if (nextButtonX2 < windowWidth) ImGui::SameLine();
         ImGui::PopStyleVar();
 
-        if (selected)
+        if (selected || selectFactor > 0.01f)
         {
             ImGui::PopStyleColor();
             ImGui::PopStyleVar();
@@ -383,39 +409,26 @@ void MagicaLegoUserInterface::DrawOpening() const
 
 void MagicaLegoUserInterface::OnRenderUI()
 {
+    iam_update_begin_frame();
+    static int frameCount = 0;
+    if (++frameCount % 600 == 0) iam_gc();
+
     if (uiStatus_ & EULUT_TitleBar)
     {
         DrawTitleBar();
     }
     // TotalSwitch
-    if (uiStatus_ & EULUT_LayoutIndicator)
-    {
-        DrawMainToolBar();
-    }
+    DrawMainToolBar();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
-    // if uiStatus_ bit 1 is set
-    if (uiStatus_ & EULUT_LeftBar)
-    {
-        DrawLeftBar();
-    }
-    // if uiStatus_ bit 2 is set
-    if (uiStatus_ & EULUT_RightBar)
-    {
-        DrawRightBar();
-    }
+    
+    DrawLeftBar();
+    DrawRightBar();
     
     ImGui::PopStyleVar(2);
 
-    if (uiStatus_ & EULUT_Timeline)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 18);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 18);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0);
-        DrawTimeline();
-        ImGui::PopStyleVar(3);
-    }
+    DrawTimeline();
     
     switch (introStep_)
     {
@@ -487,11 +500,18 @@ void MagicaLegoUserInterface::DrawWaiting()
 
 void MagicaLegoUserInterface::DrawNotify()
 {
-    notifyTimer_ += GetGameInstance()->GetEngine().GetDeltaSeconds();
-    notifyTimer_ = glm::clamp(notifyTimer_, 0.0f, 1.0f);
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = ImGui::IsPopupOpen("Notify");
+    float currentAnim = iam_tween_float(ImGui::GetID("NotifyAnim"), 0, isOpen ? 1.0f : 0.0f, 0.4f, {iam_ease_out_back, 1.5f}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAnim <= 0.0f && !isOpen) return;
 
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    ImGui::SetNextWindowPos(viewportSize - ImVec2(10, -(ImGui::GetTextLineHeight() * 3.f + 20.f) * (1.0f - notifyTimer_) + 5.0f), ImGuiCond_Always, ImVec2(1.f, 1.f));
+    float offsetY = (1.0f - currentAnim) * 150.0f;
+    
+    ImGui::SetNextWindowPos(viewportSize - ImVec2(20, 20 + offsetY), ImGuiCond_Always, ImVec2(1.f, 1.f));
+    ImGui::SetNextWindowBgAlpha(currentAnim * 0.9f);
+
     if (ImGui::BeginPopup("Notify", ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings))
     {
         ImGui::TextUnformatted(notifyText_.c_str());
@@ -710,14 +730,23 @@ void MagicaLegoUserInterface::PopLayout()
 
 void MagicaLegoUserInterface::DrawMainToolBar()
 {
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = (uiStatus_ & EULUT_LayoutIndicator) != 0;
+    float targetAlpha = isOpen ? 1.0f : 0.0f;
+    float currentAlpha = iam_tween_float(ImGui::GetID("MainToolBarAlpha"), 0, targetAlpha, 0.25f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAlpha <= 0.0f && !isOpen) return;
+
     const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
 
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, titlebarSize + padding);
+    const float animOffset = (1.0f - currentAlpha) * (titlebarSize + padding + 50.0f);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, titlebarSize + padding - animOffset);
     constexpr ImVec2 posPivot = ImVec2(0.5f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(0, 0));
+    ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     if (ImGui::Begin("MainToolBar", nullptr, panelFlags))
@@ -747,13 +776,23 @@ void MagicaLegoUserInterface::DrawMainToolBar()
 
 void MagicaLegoUserInterface::DrawLeftBar()
 {
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = (uiStatus_ & EULUT_LeftBar) != 0;
+    float targetAlpha = isOpen ? 1.0f : 0.0f;
+    float currentAlpha = iam_tween_float(ImGui::GetID("LeftBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAlpha <= 0.0f && !isOpen) return;
+
     const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(padding, titlebarSize + padding);
+    
+    const float animOffset = (1.0f - currentAlpha) * (buildBarWidth + padding + 50.0f);
+    const ImVec2 pos = ImVec2(padding - animOffset, titlebarSize + padding);
     constexpr ImVec2 posPivot = ImVec2(0.0f, 0.0f);
     
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(buildBarWidth, viewportSize.y - titlebarSize - padding * 2));
+    ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
     
     if (ImGui::Begin("Place & Dig", nullptr, panelFlags))
     {
@@ -886,13 +925,23 @@ void MagicaLegoUserInterface::DrawLeftBar()
 
 void MagicaLegoUserInterface::DrawRightBar()
 {
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = (uiStatus_ & EULUT_RightBar) != 0;
+    float targetAlpha = isOpen ? 1.0f : 0.0f;
+    float currentAlpha = iam_tween_float(ImGui::GetID("RightBarAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAlpha <= 0.0f && !isOpen) return;
+
     const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x - padding, titlebarSize + padding);
+    
+    const float animOffset = (1.0f - currentAlpha) * (sideBarWidth + padding + 50.0f);
+    const ImVec2 pos = ImVec2(viewportSize.x - padding + animOffset, titlebarSize + padding);
     constexpr ImVec2 posPivot = ImVec2(1.0f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(sideBarWidth, viewportSize.y - titlebarSize - padding * 2));
+    ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
     if (ImGui::Begin("Color Pallete", nullptr, panelFlags))
     {
@@ -940,15 +989,25 @@ void MagicaLegoUserInterface::DrawRightBar()
 
 void MagicaLegoUserInterface::DrawTimeline()
 {
+    float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
+    bool isOpen = (uiStatus_ & EULUT_Timeline) != 0;
+    float targetAlpha = isOpen ? 1.0f : 0.0f;
+    float currentAlpha = iam_tween_float(ImGui::GetID("TimelineAlpha"), 0, targetAlpha, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
+
+    if (currentAlpha <= 0.0f && !isOpen) return;
+
     const float padding = 20.0f;
     const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - padding);
+    
+    const float animOffset = (1.0f - currentAlpha) * (150.0f);
+    const ImVec2 pos = ImVec2(viewportSize.x * 0.5f, viewportSize.y - padding + animOffset);
     constexpr ImVec2 posPivot = ImVec2(0.5f, 1.0f);
     const float width = viewportSize.x - (sideBarWidth + padding) * 2 - padding * 2;
     ImGuiStyle& style = ImGui::GetStyle();
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
     ImGui::SetNextWindowSize(ImVec2(width, 90));
+    ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
     if (ImGui::Begin("Timeline", nullptr, panelFlags))
     {
