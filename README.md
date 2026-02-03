@@ -97,21 +97,6 @@ build.bat --android
 run.bat --preset android
 ```
 
-### 编译选项
-
-`build.bat` 与 `build.sh` 支持以下可选参数以开启特定功能：
-
-- `--avif`：开启 AVIF 纹理加载与截图支持。
-- `--dlss`：开启 NVIDIA DLSS 支持（仅限 Windows）。会自动下载并部署 Streamline SDK。
-- `--oidn`：开启 Intel OpenImageDenoise 降噪器支持。会自动下载并部署 OIDN 运行时库。
-
-示例：
-``` bat
-build.bat --oidn --dlss
-```
-
-更多用法与约定请见仓库脚本与 `.github/workflows`。
-
 ## 技术要点（概览）
 
 - 重要性采样（BRDF/Light），GGX VNDF
@@ -130,3 +115,7 @@ build.bat --oidn --dlss
 - 欢迎 Issue / PR
 - 思考与记录见 `doc/Thoughts.md`
 - 开发协作与命名规范：见 `AGENTS.md`
+
+## 第三方依赖
+
+[cpptrace](https://github.com/jeremy-rifkin/cpptrace), [cxxopts](https://github.com/jarro2783/cxxopts), [sdl3](https://github.com/libsdl-org/SDL), [glm](https://github.com/g-truc/glm), [imgui](https://github.com/ocornut/imgui), [stb](https://github.com/nothings/stb), [curl](https://github.com/curl/curl), [nlohmann-json](https://github.com/nlohmann/json), [tinygltf](https://github.com/syoyo/tinygltf), [draco](https://github.com/google/draco), [fmt](https://github.com/fmtlib/fmt), [meshoptimizer](https://github.com/zeux/meshoptimizer), [ktx](https://github.com/KhronosGroup/KTX-Software), [joltphysics](https://github.com/jrouwe/JoltPhysics), [xxhash](https://github.com/Cyan4973/xxHash), [spdlog](https://github.com/gabime/spdlog), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [catch2](https://github.com/catchorg/Catch2), [entt](https://github.com/skypjack/entt), [libwebp](https://github.com/webmproject/libwebp), [vulkan-loader](https://github.com/KhronosGroup/Vulkan-Loader), [libavif](https://github.com/AOMediaCodec/libavif)
