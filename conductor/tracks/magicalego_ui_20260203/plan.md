@@ -1,9 +1,9 @@
 # Implementation Plan: MagicaLego UI Modernization & Gamification
 
 ## Phase 1: Infrastructure & Dependencies
-- [~] Task: Integrate `ImAnim` library via `cmake/SetupExternalLibs.cmake` using `FetchContent`.
-- [ ] Task: Update `CMakeLists.txt` to include `ImAnim` and link it to the `MagicaLego` target (or Engine if needed).
-- [ ] Task: Verify `ImAnim` integration by including its header in a dummy test or `MagicaLegoUserInterface.cpp`.
+- [x] Task: Integrate `ImAnim` library via `cmake/SetupExternalLibs.cmake` using `FetchContent`. 3320b5f
+- [x] Task: Update `CMakeLists.txt` to include `ImAnim` and link it to the `MagicaLego` target (or Engine if needed). 3320b5f
+- [x] Task: Verify `ImAnim` integration by including its header in a dummy test or `MagicaLegoUserInterface.cpp`. 3320b5f
 - [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Theme & Visual Foundations
