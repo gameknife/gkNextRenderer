@@ -76,7 +76,8 @@ namespace
         
         // Layout/Hit Pass
         ImGui::BeginGroup();
-        bool result = ImGui::InvisibleButton(label, standardSize);
+        std::string hitLabel = std::string(label) + "##Hit";
+        bool result = ImGui::InvisibleButton(hitLabel.c_str(), standardSize);
         
         // Draw shortcut and rect (visuals that need to be on top?)
         // If we draw them here, they are on top of InvisibleButton?
@@ -127,6 +128,8 @@ namespace
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 
+        ImGui::PushID(static_cast<int>(block.modelId_)); // Scope everything
+
         // Visual Pass (Zoomed)
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(palateSize, palateSize);
@@ -136,13 +139,13 @@ namespace
         ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
 
         ImGui::SetCursorScreenPos(p_start - offset);
-        ImGui::PushID(static_cast<int>(block.modelId_));
+        // ImGui::PushID(static_cast<int>(block.modelId_)); // Already pushed
 #ifdef __APPLE__
         ImGui::Button("##BlockVisual", zoomedSize);
 #else
         ImGui::ImageButton("##BlockVisual", texId, zoomedSize);
 #endif
-        ImGui::PopID();
+        // ImGui::PopID();
         
         // Restore for Layout/Interaction Pass
         ImGui::SetCursorScreenPos(p_start);
@@ -159,6 +162,8 @@ namespace
         float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + palateSize; // Expected position if next button was on same line
         if (nextButtonX2 < windowWidth) ImGui::SameLine();
         ImGui::PopStyleVar();
+
+        ImGui::PopID(); // Pop Scope
 
         if (wasHovered) ImGui::PopStyleColor();
 
