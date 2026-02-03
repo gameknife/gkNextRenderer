@@ -31,6 +31,8 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp
+	Tests/Test_MagicaLegoStyle.cpp
+	Application/MagicaLego/MagicaLegoStyle.cpp
 )
 
 if (ENABLE_PHYSIC)
