@@ -38,6 +38,7 @@ namespace
     {
         ImGuiID id = ImGui::GetID(shortcut);
         float dt = ImGui::GetIO().DeltaTime;
+        ImGuiStyle& style = ImGui::GetStyle();
 
         ImGuiStorage* storage = ImGui::GetStateStorage();
         bool wasHovered = storage->GetBool(id, false);
@@ -53,21 +54,46 @@ namespace
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
         }
         
+        if (wasHovered)
+        {
+             ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonHovered]);
+        }
+        
+        // Visual Pass
+        ImVec2 p_start = ImGui::GetCursorScreenPos();
+        ImVec2 standardSize(iconSize, iconSize);
+        ImVec2 zoomedSize = standardSize;
+        zoomedSize.x *= (1.0f + hoverFactor * 0.05f);
+        zoomedSize.y *= (1.0f + hoverFactor * 0.05f);
+        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
+        
+        ImGui::SetCursorScreenPos(p_start - offset);
+        
+        ImGui::Button(label, zoomedSize); // Visual Only
+        
+        // Restore
+        ImGui::SetCursorScreenPos(p_start);
+        
+        // Layout/Hit Pass
         ImGui::BeginGroup();
+        bool result = ImGui::InvisibleButton(label, standardSize);
         
-        // Scale effect via offset
-        ImVec2 size = ImVec2(iconSize, iconSize);
-        size.x *= (1.0f + hoverFactor * 0.05f);
-        size.y *= (1.0f + hoverFactor * 0.05f);
+        // Draw shortcut and rect (visuals that need to be on top?)
+        // If we draw them here, they are on top of InvisibleButton?
+        // InvisibleButton is invisible.
+        // But Button(Visual) was drawn BEFORE.
+        // So shortcut drawn here is ON TOP of Button(Visual).
+        // Rect also.
         
-        bool result = ImGui::Button(label, size);
-        storage->SetBool(id, ImGui::IsItemHovered());
-
-        BUTTON_TOOLTIP( LOCTEXT(tooltip) )
-
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, iconSize);
         ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, (int)(128 * (1.0f + hoverFactor))), 4.0f);
         ImGui::EndGroup();
+        
+        storage->SetBool(id, ImGui::IsItemHovered());
+
+        BUTTON_TOOLTIP( LOCTEXT(tooltip) )
+        
+        if (wasHovered) ImGui::PopStyleColor();
         
         if (selected || selectFactor > 0.01f)
         {
@@ -93,31 +119,48 @@ namespace
             ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 4 * selectFactor);
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.6f, 0.85f, 1.0f, selectFactor));
         }
+        
+        if (wasHovered)
+        {
+             ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonHovered]);
+        }
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 
-        ImGui::BeginGroup();
-        ImGui::PushID(static_cast<int>(block.modelId_));
-        
-        ImVec2 size = ImVec2(palateSize, palateSize);
-        size.x *= (1.0f + hoverFactor * 0.1f);
-        size.y *= (1.0f + hoverFactor * 0.1f);
+        // Visual Pass (Zoomed)
+        ImVec2 p_start = ImGui::GetCursorScreenPos();
+        ImVec2 standardSize(palateSize, palateSize);
+        ImVec2 zoomedSize = standardSize;
+        zoomedSize.x *= (1.0f + hoverFactor * 0.1f);
+        zoomedSize.y *= (1.0f + hoverFactor * 0.1f);
+        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
 
+        ImGui::SetCursorScreenPos(p_start - offset);
+        ImGui::PushID(static_cast<int>(block.modelId_));
 #ifdef __APPLE__
-        bool result = ImGui::Button("##Block", size);
+        ImGui::Button("##BlockVisual", zoomedSize);
 #else
-        bool result = ImGui::ImageButton("##Block", texId, size);
+        ImGui::ImageButton("##BlockVisual", texId, zoomedSize);
 #endif
-        storage->SetBool(id, ImGui::IsItemHovered());
-        
         ImGui::PopID();
+        
+        // Restore for Layout/Interaction Pass
+        ImGui::SetCursorScreenPos(p_start);
+        
+        // Layout/Hit Pass
+        ImGui::BeginGroup();
+        bool result = ImGui::InvisibleButton("##BlockHit", standardSize);
         Utilities::UI::TextCentered(block.name, palateSize);
         ImGui::EndGroup();
+
+        storage->SetBool(id, ImGui::IsItemHovered()); // Group hover state
 
         float lastButtonX2 = ImGui::GetItemRectMax().x;
         float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + palateSize; // Expected position if next button was on same line
         if (nextButtonX2 < windowWidth) ImGui::SameLine();
         ImGui::PopStyleVar();
+
+        if (wasHovered) ImGui::PopStyleColor();
 
         if (selected || selectFactor > 0.01f)
         {
