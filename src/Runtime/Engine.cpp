@@ -169,6 +169,8 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.PaperWhiteNit = 600.f;
     
     userSettings.SuperResolution = options.SuperResolution;
+    userSettings.DLSS = options.DLSS;
+    userSettings.DLSSRR = options.DLSSRR;
 
     return userSettings;
 }
