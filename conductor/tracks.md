@@ -10,6 +10,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: 美化MagicaLego的界面，使其更具游戏感和现代感**
+- [x] **Track: 美化MagicaLego的界面，使其更具游戏感和现代感** (0f0ed08)
 *Link: [./tracks/magicalego_ui_20260203/](./tracks/magicalego_ui_20260203/)*
 
