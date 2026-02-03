@@ -244,7 +244,7 @@ void FSceneSaver::SerializeMeshes(tinygltf::Model& model, const Scene& scene)
         }
     }
 
-    for (size_t modelIdx = 0; modelIdx < models.size(); ++modelIdx)
+    for (uint32_t modelIdx = 0; modelIdx < models.size(); ++modelIdx)
     {
         const auto& assetModel = models[modelIdx];
         tinygltf::Mesh mesh;
