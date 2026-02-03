@@ -22,7 +22,7 @@ jobs:
 
     runs-on: macos-latest
     env:
-      SDK_VERSION: 1.4.313.2
+      SDK_VERSION: 1.4.313.0
     steps:
     - uses: actions/checkout@v4
     - name: Install Vulkan SDK

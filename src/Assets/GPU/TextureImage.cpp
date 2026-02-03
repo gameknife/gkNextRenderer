@@ -4,6 +4,7 @@
 #include "Vulkan/CommandExecution.hpp"
 #include "Vulkan/GpuResources.hpp"
 #include "Vulkan/MemoryAndShader.hpp"
+#include "Vulkan/Device.hpp"
 #include <cstring>
 
 #include "Vulkan/CommandExecution.hpp"

@@ -1,5 +1,5 @@
 #pragma once
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 #include "Assets/Data/Animation.hpp"
 
 class NextAnimation final

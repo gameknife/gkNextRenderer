@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-#include "Vulkan/Vulkan.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 
 #if WITH_AUDIO
 struct ma_engine;
