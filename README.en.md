@@ -50,7 +50,11 @@ The project uses CMake + Ninja, with dependencies managed by vcpkg. Ensure a rel
 
 Windows (Visual Studio 2022):
 ``` bat
-rem Make sure VS2022 with C++ workload is installed
+rem Windows prerequisites:
+rem Install CMake 3.31 (do not install CMake 4.x)
+rem Install Visual Studio 2022 with the C++ workload
+rem Install Vulkan SDK 1.4.313.2
+rem Enable "Use Unicode UTF-8 for worldwide language support" to avoid vcpkg tar extraction issues
 vcpkg.bat windows
 .\build.bat windows-dev
 .\run.bat
@@ -66,7 +70,7 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 
 Linux (example: Ubuntu):
 ``` shell
-sudo apt install build-essential ninja-build curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev
+sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool
 ./vcpkg.sh
 ./build.sh --preset default-linux
 ./run.sh --preset default-linux
@@ -90,21 +94,6 @@ build.bat --android
 run.bat --preset android
 ```
 
-### Build Options
-
-`build.bat` and `build.sh` support the following optional flags to enable specific features:
-
-- `--avif`: Enable AVIF texture loading and screenshot support.
-- `--dlss`: Enable NVIDIA DLSS support (Windows only). Automatically downloads and deploys the Streamline SDK.
-- `--oidn`: Enable Intel OpenImageDenoise support. Automatically downloads and deploys the OIDN runtime.
-
-Example:
-``` bat
-build.bat --oidn --dlss
-```
-
-See repository scripts and `.github/workflows` for more details.
-
 ## Technical Highlights (Overview)
 
 - Importance sampling (BRDF/Light), GGX VNDF
@@ -123,3 +112,7 @@ See repository scripts and `.github/workflows` for more details.
 - Issues and PRs are welcome
 - Notes and thoughts: `doc/Thoughts.md`
 - Collaboration and naming conventions: `AGENTS.md`
+
+## Third-Party Dependencies
+
+[cpptrace](https://github.com/jeremy-rifkin/cpptrace), [cxxopts](https://github.com/jarro2783/cxxopts), [sdl3](https://github.com/libsdl-org/SDL), [glm](https://github.com/g-truc/glm), [imgui](https://github.com/ocornut/imgui), [stb](https://github.com/nothings/stb), [curl](https://github.com/curl/curl), [nlohmann-json](https://github.com/nlohmann/json), [tinygltf](https://github.com/syoyo/tinygltf), [draco](https://github.com/google/draco), [fmt](https://github.com/fmtlib/fmt), [meshoptimizer](https://github.com/zeux/meshoptimizer), [ktx](https://github.com/KhronosGroup/KTX-Software), [joltphysics](https://github.com/jrouwe/JoltPhysics), [xxhash](https://github.com/Cyan4973/xxHash), [spdlog](https://github.com/gabime/spdlog), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [catch2](https://github.com/catchorg/Catch2), [entt](https://github.com/skypjack/entt), [libwebp](https://github.com/webmproject/libwebp), [vulkan-loader](https://github.com/KhronosGroup/Vulkan-Loader), [libavif](https://github.com/AOMediaCodec/libavif)
