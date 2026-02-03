@@ -1660,28 +1660,43 @@ namespace Vulkan
         rtDenoise1_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true, "denoise1"));
         rtAlbedo_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "albedocopy"));
         rtNormal_.reset(new RenderImage(Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, true, "normalcopy"));
-        
-        size_t SrcImageSize = extent.width * extent.height * 4 * 2;
-        size_t SrcImageW8 = 4 * 2 * extent.width;
-        size_t SrcImage8 = 4 * 2;
+
+        const auto getSubresourceLayout = [](const RenderImage& image)
+        {
+            VkImageSubresource subresource{};
+            subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresource.mipLevel = 0;
+            subresource.arrayLayer = 0;
+
+            VkSubresourceLayout layout{};
+            vkGetImageSubresourceLayout(image.GetImage().Device().Handle(), image.GetImage().Handle(), &subresource, &layout);
+            return layout;
+        };
+
+        const auto colorLayout = getSubresourceLayout(*rtDenoise0_);
+        const auto outLayout = getSubresourceLayout(*rtDenoise1_);
+        const auto albedoLayout = getSubresourceLayout(*rtAlbedo_);
+        const auto normalLayout = getSubresourceLayout(*rtNormal_);
+
+        const size_t pixelStride = 4 * 2;
 
 #if __linux__ || __APPLE__ || __MINGW32__
-        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), SrcImageSize);
-        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD,rtDenoise1_->GetExternalHandle(), SrcImageSize);
-        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), SrcImageSize);
-        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtNormal_->GetExternalHandle(), SrcImageSize);
+        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), colorLayout.size);
+        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise1_->GetExternalHandle(), outLayout.size);
+        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), albedoLayout.size);
+        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtNormal_->GetExternalHandle(), normalLayout.size);
 #else
-        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, SrcImageSize);
-        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, SrcImageSize);
-        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, SrcImageSize);
-        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, SrcImageSize);
+        oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise0_->GetExternalHandle(), nullptr, colorLayout.size);
+        oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtDenoise1_->GetExternalHandle(), nullptr, outLayout.size);
+        oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtAlbedo_->GetExternalHandle(), nullptr, albedoLayout.size);
+        oidn::BufferRef normalBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueWin32, rtNormal_->GetExternalHandle(), nullptr, normalLayout.size);
 #endif
         
         oidnFilter = oidnDevice.newFilter("RT"); // generic ray tracing filter
-        oidnFilter.setImage("color", colorBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // beauty
-        oidnFilter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
-        oidnFilter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // aux
-        oidnFilter.setImage("output", outBuf, oidn::Format::Half3, extent.width, extent.height, 0, SrcImage8, SrcImageW8); // denoised beauty
+        oidnFilter.setImage("color", colorBuf, oidn::Format::Half3, extent.width, extent.height, colorLayout.offset, pixelStride, colorLayout.rowPitch); // beauty
+        oidnFilter.setImage("albedo", albedoBuf, oidn::Format::Half3, extent.width, extent.height, albedoLayout.offset, pixelStride, albedoLayout.rowPitch); // aux
+        oidnFilter.setImage("normal", normalBuf, oidn::Format::Half3, extent.width, extent.height, normalLayout.offset, pixelStride, normalLayout.rowPitch); // aux
+        oidnFilter.setImage("output", outBuf, oidn::Format::Half3, extent.width, extent.height, outLayout.offset, pixelStride, outLayout.rowPitch); // denoised beauty
         oidnFilter.set("hdr", true); // beauty image is HDR
         oidnFilter.set("quality", oidn::Quality::Balanced);
         oidnFilter.set("cleanAux", true);
