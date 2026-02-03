@@ -293,7 +293,7 @@ namespace Assets
         mikktspaceContext.m_pUserData = m;
         genTangSpaceDefault(&mikktspaceContext);
     }
-    DISABLE_OPTIMIZATION
+
     bool FSceneLoader::LoadGLTFScene(const std::string& filename, Assets::EnvironmentSetting& cameraInit, std::vector< std::shared_ptr<Assets::Node> >& nodes,
                               std::vector<Assets::Model>& models,
                               std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
@@ -1015,7 +1015,7 @@ namespace Assets
         //printf("model.cameras: %d\n", i);
         return true;
     }
-    ENABLE_OPTIMIZATION
+
     Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models)
     {
         //auto center camera by scene bounds

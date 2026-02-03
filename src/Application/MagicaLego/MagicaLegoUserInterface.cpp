@@ -1,15 +1,16 @@
 #include "MagicaLegoUserInterface.hpp"
 
-#include <utility>
+#include <fmt/chrono.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
-#include <fmt/chrono.h>
+#include <spdlog/spdlog.h>
+#include <utility>
 
-#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Utilities/FileHelper.hpp"
 #include "MagicaLegoGameInstance.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "Utilities/FileHelper.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Localization.hpp"
 
@@ -636,7 +637,11 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
             PopLayout();
             // sleep os for a while
             int result = NextRenderer::OSProcess(fmt::format("ffmpeg -framerate 30 -i {}/video_%d.jpg -c:v libx264 -pix_fmt yuv420p {}.mp4", localTempPath, filename).c_str());
-            (void)result;
+            if (result != 0)
+            {
+                SPDLOG_ERROR("ffmpeg process failed with exit code {}", result);
+            }
+
             // delete all *.jpg using std::filesystem
             std::filesystem::remove_all(localTempPath);
 
