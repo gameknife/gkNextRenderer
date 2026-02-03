@@ -2,7 +2,7 @@
 #include "BottomLevelAccelerationStructure.hpp"
 #include "DeviceProcedures.hpp"
 #include "Utilities/Exception.hpp"
-#include "Vulkan/Buffer.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/Device.hpp"
 
 namespace Vulkan::RayTracing {

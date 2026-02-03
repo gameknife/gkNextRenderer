@@ -1,4 +1,4 @@
-#include "ScreenShot.hpp"
+#include "Runtime/ScreenShot.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Utilities/Exception.hpp"
 
@@ -7,7 +7,7 @@
 
 #define _USE_MATH_DEFINES
 #include <filesystem>
-#include "TaskCoordinator.hpp"
+#include "Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Vulkan/SwapChain.hpp"
 
 #if WITH_AVIF

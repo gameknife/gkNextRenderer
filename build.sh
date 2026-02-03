@@ -2,8 +2,9 @@
 set -euo pipefail
 # ### HELP_START ###
 # ==============================================================================
-# gkNextRenderer Build Script v2.1 (Linux/macOS)
+# gkNextRenderer Build Script v2.2 (Linux/macOS)
 # Wraps CMake Presets for a streamlined build workflow.
+# Supports incremental configuration (skips configure if already configured).
 #
 # Usage:
 #   ./build.sh [options] [-- <cmake_args>...]
@@ -11,13 +12,16 @@ set -euo pipefail
 # Options:
 #   --preset <name>  CMake configure preset (e.g., default-linux) [REQUIRED]
 #   --clean          Clean build directory before building.
+#   --reconfigure    Force CMake reconfiguration even if already configured.
 #   --android        Switch to Android Gradle build.
 #   --help, -h       Show this help message.
 #
 # Examples:
 #   ./build.sh --preset full-linux
-#   ./build.sh --preset default-linux -- -DGK_ENABLE_AVIF=ON
+#   ./build.sh --preset default-linux -- -DENABLE_AVIF=ON
 #   ./build.sh --preset default-linux --clean
+#   ./build.sh --preset default-linux --reconfigure
+#   ./build.sh --preset default-mingw
 # ==============================================================================
 # ### HELP_END ###
 
@@ -47,7 +51,7 @@ detect_default_preset() {
         Darwin*) 
             if [ "$(uname -m)" = "arm64" ]; then echo "default-macos-arm64"; else echo "default-macos-x64"; fi ;;
         Linux*) echo "default-linux" ;; 
-        MINGW*|MSYS*) echo "default-windows" ;;
+        MINGW*|MSYS*) echo "default-mingw" ;;
         *) echo "unknown" ;; 
     esac
 }
@@ -59,6 +63,8 @@ ensure_vcpkg() {
         platform=$(detect_default_preset)
         if [[ "$platform" == *"macos"* ]]; then
             "$PROJECT_ROOT/vcpkg.sh" "macos"
+        elif [[ "$platform" == "default-mingw" ]]; then
+            "$PROJECT_ROOT/vcpkg.sh"
         else
             "$PROJECT_ROOT/vcpkg.sh" "$(echo "$platform" | cut -d- -f2)"
         fi
@@ -85,6 +91,7 @@ list_presets_and_exit() {
 
 CONFIGURE_PRESET=""
 CLEAN=0
+RECONFIGURE=0
 TARGET_ANDROID=0
 declare -a CMAKE_ARGS=()
 
@@ -92,6 +99,7 @@ declare -a CMAKE_ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --clean) CLEAN=1; shift ;;
+        --reconfigure) RECONFIGURE=1; shift ;;
         --android) TARGET_ANDROID=1; shift ;;
         --preset) 
             if [[ -z "$2" || "$2" == --* ]]; then
@@ -122,23 +130,47 @@ fi
 
 ensure_vcpkg
 
+BUILD_DIR="$PROJECT_ROOT/out/build/$CONFIGURE_PRESET"
+CACHE_FILE="$BUILD_DIR/CMakeCache.txt"
+
 if [ "$CLEAN" -eq 1 ]; then
     log "Cleaning build for preset: $CONFIGURE_PRESET..."
-    rm -rf "$PROJECT_ROOT/out/build/$CONFIGURE_PRESET"
+    rm -rf "$BUILD_DIR"
 fi
 
-if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
-    log "Configuring preset: $CONFIGURE_PRESET"
-else
-    log "Configuring preset: $CONFIGURE_PRESET with extra args: ${CMAKE_ARGS[*]}"
+# Check if reconfiguration is needed
+NEEDS_CONFIGURE=0
+if [ "$RECONFIGURE" -eq 1 ] || [ "$CLEAN" -eq 1 ] || [ ! -f "$CACHE_FILE" ]; then
+    NEEDS_CONFIGURE=1
 fi
-config_start=$(date +%s)
-if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
-    cmake --preset "$CONFIGURE_PRESET"
-else
-    cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
+
+# Check if any -D arguments are passed (requires reconfigure)
+if [ ${#CMAKE_ARGS[@]} -gt 0 ]; then
+    for arg in "${CMAKE_ARGS[@]}"; do
+    if [[ "$arg" == -D* ]]; then
+        NEEDS_CONFIGURE=1
+        break
+    fi
+    done
 fi
-config_time=$(( $(date +%s) - config_start ))
+
+config_time=0
+if [ "$NEEDS_CONFIGURE" -eq 1 ]; then
+    if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+        log "Configuring preset: $CONFIGURE_PRESET"
+    else
+        log "Configuring preset: $CONFIGURE_PRESET with extra args: ${CMAKE_ARGS[*]}"
+    fi
+    config_start=$(date +%s)
+    if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+        cmake --preset "$CONFIGURE_PRESET"
+    else
+        cmake --preset "$CONFIGURE_PRESET" "${CMAKE_ARGS[@]}"
+    fi
+    config_time=$(( $(date +%s) - config_start ))
+else
+    log "Skipping configure (already configured). Use --reconfigure to force."
+fi
 
 # Derive build preset name from configure preset name
 # In current CMakePresets.json, build presets map 1:1 to configure presets

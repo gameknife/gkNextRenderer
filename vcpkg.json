@@ -46,6 +46,7 @@
     "spdlog",
     "cpp-base64",
     "catch2",
+    "entt",
     "libwebp",
     {
       "name": "vulkan-loader",

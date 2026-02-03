@@ -3,7 +3,7 @@
 #define NODES_SET_INT_H
 
 #include "../../ImNodeFlow/include/ImNodeFlow.h"
-#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 
 namespace Nodes
 {

@@ -1,0 +1,120 @@
+#pragma once
+
+#include "DebugUtilities.hpp"
+#include "Device.hpp"
+#include "SwapChain.hpp"
+#include "DescriptorSystem.hpp"
+#include <string>
+#include <vector>
+#include <memory>
+
+namespace Vulkan
+{
+	class DepthBuffer;
+	class ImageView;
+
+	// ============================================================================
+	// RenderPass
+	// ============================================================================
+
+	class RenderPass final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(RenderPass)
+
+		RenderPass(const SwapChain& swapChain, const class DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp);
+		RenderPass(const SwapChain& swapChain, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+		RenderPass(const SwapChain& swapChain, VkFormat format, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+		RenderPass(const SwapChain& swapChain, VkFormat format,  VkFormat format1,  VkFormat format2, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+		~RenderPass();
+
+		const class SwapChain& SwapChain() const { return swapChain_; }
+		const class DepthBuffer& DepthBuffer() const { return depthBuffer_; }
+
+		void SetDebugName(const std::string& name);
+	private:
+
+		const class SwapChain& swapChain_;
+		const class DepthBuffer& depthBuffer_;
+
+		VULKAN_HANDLE(VkRenderPass, renderPass_)
+	};
+
+	// ============================================================================
+	// FrameBuffer
+	// ============================================================================
+
+	class FrameBuffer final
+	{
+	public:
+
+		FrameBuffer(const FrameBuffer&) = delete;
+		FrameBuffer& operator = (const FrameBuffer&) = delete;
+		FrameBuffer& operator = (FrameBuffer&&) = delete;
+
+		explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const RenderPass& renderPass, bool withDS = true);
+		explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const ImageView& imageView1, const ImageView& imageView2,const RenderPass& renderPass);
+		FrameBuffer(FrameBuffer&& other) noexcept;
+		~FrameBuffer();
+
+	private:
+
+		const class Device& device_;
+		VULKAN_HANDLE(VkFramebuffer, framebuffer_)
+	};
+
+	// ============================================================================
+	// PipelineLayout
+	// ============================================================================
+
+	class PipelineLayout final
+	{
+	public:
+
+		VULKAN_NON_COPIABLE(PipelineLayout)
+
+		PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, uint32_t maxSets, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
+		PipelineLayout(const Device& device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
+		PipelineLayout(const Device& device, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
+		~PipelineLayout();
+
+		void BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const;
+	private:
+
+		const Device& device_;
+
+		VULKAN_HANDLE(VkPipelineLayout, pipelineLayout_)
+
+		std::vector<VkDescriptorSetLayout> cachedDescriptorSetLayouts_;
+		std::vector< std::vector<VkDescriptorSet> > cachedDescriptorSets_;
+	};
+
+	// ============================================================================
+	// PipelineBase
+	// ============================================================================
+
+	class PipelineBase
+	{
+	public:
+		PipelineBase(const Vulkan::SwapChain& swapChain):swapChain_(swapChain) {}
+		virtual ~PipelineBase()
+		{
+			if (pipeline_ != nullptr)
+			{
+				vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+				pipeline_ = nullptr;
+			}
+			pipelineLayout_.reset();
+			descriptorSetManager_.reset();
+		}
+		VkDescriptorSet DescriptorSet(uint32_t index) const {return descriptorSetManager_->DescriptorSets().Handle(index);}
+		const Vulkan::PipelineLayout& PipelineLayout() const { return *pipelineLayout_; }
+
+		VULKAN_HANDLE(VkPipeline, pipeline_)
+		const Vulkan::SwapChain& swapChain_;
+		std::unique_ptr<Vulkan::DescriptorSetManager> descriptorSetManager_;
+		std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
+	};
+
+}

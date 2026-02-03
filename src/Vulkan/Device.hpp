@@ -1,10 +1,9 @@
 #pragma once
 
 #include <memory>
-
-#include "DebugUtils.hpp"
-#include "Vulkan.hpp"
 #include <vector>
+
+#include "DebugUtilities.hpp"
 
 namespace Vulkan
 {

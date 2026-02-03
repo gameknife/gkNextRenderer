@@ -17,8 +17,9 @@ namespace NextRenderer
 
     }
 
-    inline void OSProcess(const char* exe)
+    inline int OSProcess(const char* exe)
     {
-
+        (void)exe;
+        return -1;
     }
 }

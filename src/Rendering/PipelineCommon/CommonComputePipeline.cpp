@@ -2,19 +2,17 @@
 
 #include "Runtime/Engine.hpp"
 
-#include "Vulkan/Buffer.hpp"
-#include "Vulkan/DescriptorSetManager.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSets.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 
-#include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Assets/Vertex.hpp"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
+#include "Assets/Data/Vertex.hpp"
 
 namespace Vulkan::PipelineCommon
 {

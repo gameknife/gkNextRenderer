@@ -1,7 +1,8 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/ModelViewController.hpp"
+#include "Runtime/Editor/GizmoController.hpp"
+#include "Runtime/Camera/ModelViewController.hpp"
 
 class NextRendererGameInstance : public NextGameInstanceBase
 {
@@ -45,6 +46,7 @@ private:
     NextEngine* engine_;
 
     ModelViewController modelViewController_;
+    GizmoController gizmoController_;
 
     uint32_t modelId_;
     uint32_t boxModelId_;

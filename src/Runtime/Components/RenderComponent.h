@@ -1,5 +1,6 @@
 #pragma once
-#include "Assets/Component.h"
+#include "Assets/Core/Component.h"
+#include "Runtime/Reflection/ReflectionMacros.h"
 #include <array>
 #include <cstdint>
 
@@ -8,6 +9,8 @@ namespace Runtime
     class RenderComponent : public Assets::Component
     {
     public:
+        REFLECT_COMPONENT(RenderComponent)
+        
         RenderComponent() = default;
 
         void SetModelId(uint32_t modelId) { modelId_ = modelId; }
@@ -16,14 +19,30 @@ namespace Runtime
         void SetMaterial(const std::array<uint32_t, 16>& materials) { materialIdx_ = materials; }
         std::array<uint32_t, 16>& Materials() { return materialIdx_; }
         const std::array<uint32_t, 16>& Materials() const { return materialIdx_; }
+        
+        // Getter/Setter for materials array (for reflection)
+        const std::array<uint32_t, 16>& GetMaterials() const { return materialIdx_; }
+        void SetMaterials(const std::array<uint32_t, 16>& materials) { materialIdx_ = materials; }
 
         void SetVisible(bool visible) { visible_ = visible; }
-        bool IsVisible() const { return visible_; }
+        bool GetVisible() const { return visible_; }
 
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
-        bool IsRayCastVisible() const { return rayCastVisible_; }
+        bool GetRayCastVisible() const { return rayCastVisible_; }
+
+        bool ToggleVisible()
+        {
+            visible_ = !visible_;
+            return visible_;
+        }
+
+        bool ToggleRayCastVisible()
+        {
+            rayCastVisible_ = !rayCastVisible_;
+            return rayCastVisible_;
+        }
         
-        bool IsDrawable() const { return modelId_ != -1; }
+        bool IsDrawable() const { return modelId_ != static_cast<uint32_t>(-1); }
 
         void SetSkinIndex(int32_t skinIndex) { skinIndex_ = skinIndex; }
         int32_t GetSkinIndex() const { return skinIndex_; }

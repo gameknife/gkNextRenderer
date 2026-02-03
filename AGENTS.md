@@ -39,8 +39,8 @@ Build (Android):
 - macOS/Linux: `./build.sh --android`
 
 Optional build flags (via CMake args):
-- Example: `./build.sh --preset default-linux -- -DGK_ENABLE_AVIF=ON`
-- Windows example: `./build.bat --preset default-windows -- -DGK_ENABLE_AVIF=ON`
+- Example: `./build.sh --preset default-linux -- -DENABLE_AVIF=ON`
+- Windows example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
 
 Run (native):
 - `./run.sh --preset <preset>`
@@ -108,7 +108,6 @@ Language and formatting:
 - C++20 and C11; prefer modern C++ (RAII, smart pointers, range-based for).
 - Indentation: 4 spaces, no tabs.
 - Braces: Allman style (opening brace on the next line).
-- Line length: keep under 120 columns where practical.
 
 Naming (enforced by `.clang-tidy`):
 - Types (class/struct/enum/typedef/namespace): PascalCase.
@@ -174,3 +173,4 @@ Notes for Agents
 - Prefer scripted workflows (`build.sh`, `build.ps1`, `run.sh`) over manual CMake.
 - If you add a new dependency, update `vcpkg.json` accordingly.
 - If unsure about a preset name, use `cmake --list-presets=configure`.
+- When creating commits, add an AI co-author line matching the model you used (e.g., `Co-authored-by: gpt-5.2-codex <gpt-5.2-codex@openai.com>`).

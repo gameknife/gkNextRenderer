@@ -1,20 +1,22 @@
 #include "EditorMain.h"
-#include <imgui_internal.h>
 #include <Runtime/Platform/PlatformCommon.h>
-
+#include "Assets/Core/Node.h"
 #include "EditorInterface.hpp"
+#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/NextEngineHelper.h"
+#include "Runtime/Utilities/NextEngineHelper.h"
 
-#include "Editor/EditorCommand.hpp"
-#include "Editor/EditorInterface.hpp"
+#include "Editor/EditorActionDispatcher.hpp"
+#include "Editor/EditorContext.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
+                                                         NextEngine* engine)
 {
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
 
-EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+    NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
 
@@ -34,56 +36,80 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     options.ForceSDR = true;
     options.NoDenoiser = true;
     options.SuperResolution = 2;
+    options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
 }
 
 void EditorGameInstance::OnInit()
 {
-    // EditorCommand, need Refactoring
-    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestExit, [this](std::string& args)-> bool
-    {
-        GetEngine().GetWindow().Close();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMaximum, [this](std::string& args)-> bool
-    {
-        GetEngine().GetWindow().Maximum();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdSystem_RequestMinimize, [this](std::string& args)-> bool
-    {
-        GetEngine().GetWindow().Minimize();
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadScene, [this](std::string& args)-> bool
-    {
-        GetEngine().RequestLoadScene(args);
-        return true;
-    });
-    EditorCommand::RegisterEdtiorCommand(EEditorCommand::ECmdIO_LoadHDRI, [this](std::string& args)-> bool
-    {
-        //Assets::GlobalTexturePool::UpdateHDRTexture(0, args.c_str(), Vulkan::SamplerConfig());
-        //GetEngine().GetUserSettings().SkyIdx = 0;
-        return true;
-    });
+    actions_.RegisterAction(EEditorAction::System_RequestExit,
+                            [](EditorContext& ctx, std::string_view /*args*/) -> bool
+                            {
+                                ctx.engine.RequestClose();
+                                return true;
+                            });
+    actions_.RegisterAction(EEditorAction::System_ToggleMaximize,
+                            [](EditorContext& ctx, std::string_view /*args*/) -> bool
+                            {
+                                ctx.engine.ToggleMaximize();
+                                return true;
+                            });
+    actions_.RegisterAction(EEditorAction::System_RequestMinimize,
+                            [](EditorContext& ctx, std::string_view /*args*/) -> bool
+                            {
+                                ctx.engine.RequestMinimize();
+                                return true;
+                            });
+
+    // Scene switching invalidates undo/redo history.
+    actions_.RegisterAction(EEditorAction::IO_LoadScene,
+                            [](EditorContext& ctx, std::string_view args) -> bool
+                            {
+                                ctx.engine.GetCommandSystem().Clear();
+                                ctx.engine.RequestLoadScene(std::string(args));
+                                return true;
+                            });
+    actions_.RegisterAction(EEditorAction::IO_LoadSceneAdd,
+                            [](EditorContext& ctx, std::string_view args) -> bool
+                            {
+                                ctx.engine.GetCommandSystem().Clear();
+                                ctx.engine.RequestLoadSceneAdd(std::string(args));
+                                return true;
+                            });
+    actions_.RegisterAction(EEditorAction::IO_LoadHDRI,
+                            [](EditorContext& /*ctx*/, std::string_view /*args*/) -> bool
+                            {
+                                // TODO: integrate HDRI changes with scene/env settings.
+                                return true;
+                            });
+
+    actions_.RegisterAction(EEditorAction::Camera_FocusSelected,
+                            [this](EditorContext& ctx, std::string_view args) -> bool
+                            {
+                                glm::vec3 center;
+                                float radius;
+                                bool found = args.empty()
+                                    ? ctx.scene.GetSelectedNodeBounds(center, radius)
+                                    : ctx.scene.GetNodeBounds(static_cast<uint32_t>(std::stoul(std::string(args))), center, radius);
+
+                                if (found)
+                                {
+                                    modelViewController_.Focus(center, radius);
+                                }
+                                return found;
+                            });
 
     GetEngine().GetShowFlags().ShowEdge = true;
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
-    GetEngine().SetProgressiveRendering(!moving, false);
+    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    //GetEngine().SetProgressiveRendering(!moving, false);
 }
 
-void EditorGameInstance::OnSceneLoaded()
-{
-    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
-}
+void EditorGameInstance::OnSceneLoaded() { modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera()); }
 
-void EditorGameInstance::OnPreConfigUI()
-{
-    editorUserInterface_->Config();
-}
+void EditorGameInstance::OnPreConfigUI() { editorUserInterface_->Config(); }
 
 bool EditorGameInstance::OnRenderUI()
 {
@@ -91,21 +117,33 @@ bool EditorGameInstance::OnRenderUI()
     return true;
 }
 
-void EditorGameInstance::OnInitUI()
-{
-    editorUserInterface_->Init();
-}
+void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
+    // WASDQE camera movement (only active when right mouse is pressed)
     modelViewController_.OnKey(event);
+
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
         switch (event.key.key)
         {
-        case SDLK_ESCAPE: GetEngine().GetScene().SetSelectedId(-1);
+        case SDLK_ESCAPE:
+            GetEngine().GetScene().SetSelectedId(-1);
             break;
-        default: break;
+        case SDLK_F:
+            {
+                // Focus on selected node (F key shortcut)
+                glm::vec3 focusCenter;
+                float radius;
+                if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))
+                {
+                    modelViewController_.Focus(focusCenter, radius);
+                }
+            }
+            break;
+        default:
+            break;
         }
     }
     return true;
@@ -113,35 +151,62 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    modelViewController_.OnCursorPosition(xpos, ypos);
+    // Update Controller Context
+    bool alt = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+    modelViewController_.SetAltPressed(alt);
+
+    glm::vec3 center;
+    float radius;
+    if (GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
+    {
+        modelViewController_.SetOrbitTarget(center);
+    }
+    else
+    {
+        modelViewController_.SetOrbitTarget(std::nullopt);
+    }
+
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnCursorPosition(xpos, ypos);
+    }
     return true;
 }
 
 bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 {
-    modelViewController_.OnMouseButton(event);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnMouseButton(event);
+    }
+    else
+    {
+        return true;
+    }
     if (event.button.button == SDL_BUTTON_LEFT && event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
         NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
-        GetEngine().RayCastGPU(org, dir, [this](Assets::RayCastResult result)
-        {
-            if (result.Hitted)
-            {
-                GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-                NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 30);
-                // selection
-                GetEngine().GetScene().SetSelectedId(result.InstanceId);
-            }
-            else
-            {
-                GetEngine().GetScene().SetSelectedId(-1);
-            }
-    
-            return true;
-        });
+        GetEngine().RayCastGPU(org, dir,
+                               [this](Assets::RayCastResult result)
+                               {
+                                   if (result.Hitted)
+                                   {
+                                       GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+                                       NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
+                                                                      30);
+                                       // selection
+                                       GetEngine().GetScene().SetSelectedId(result.InstanceId);
+                                   }
+                                   else
+                                   {
+                                       GetEngine().GetScene().SetSelectedId(-1);
+                                   }
+
+                                   return true;
+                               });
         return true;
     }
     return true;
@@ -149,6 +214,14 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 
 bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 {
-    modelViewController_.OnScroll(xoffset, yoffset);
+    if (!gizmoController_.IsInteracting())
+    {
+        modelViewController_.OnScroll(xoffset, yoffset);
+    }
     return true;
+}
+
+void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)
+{
+    gizmoController_.Draw(*engine_, viewportPos, viewportSize);
 }

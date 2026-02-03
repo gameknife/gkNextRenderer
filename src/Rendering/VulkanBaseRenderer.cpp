@@ -1,31 +1,29 @@
 #include "VulkanBaseRenderer.hpp"
-#include "Vulkan/Buffer.hpp"
-#include "Vulkan/CommandPool.hpp"
-#include "Vulkan/CommandBuffers.hpp"
-#include "Vulkan/DebugUtilsMessenger.hpp"
-#include "Vulkan/DepthBuffer.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Vulkan/CommandExecution.hpp"
+#include "Vulkan/CommandExecution.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/GpuResources.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/Fence.hpp"
+#include "Vulkan/SyncAndTiming.hpp"
 #include "Vulkan/BufferUtil.hpp"
-#include "Vulkan/FrameBuffer.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/Instance.hpp"
-#include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/RenderPass.hpp"
-#include "Vulkan/Semaphore.hpp"
-#include "Vulkan/Surface.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Window.hpp"
-#include "Vulkan/Enumerate.hpp"
-#include "Vulkan/ImageMemoryBarrier.hpp"
-#include "Vulkan/RenderImage.hpp"
-#include "Vulkan/SingleTimeCommands.hpp"
-#include "Vulkan/Strings.hpp"
-#include "Vulkan/Version.hpp"
+#include "Vulkan/WindowSurface.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Vulkan/CommandExecution.hpp"
+#include "Vulkan/DebugUtilities.hpp"
+#include "Vulkan/DebugUtilities.hpp"
 
-#include "Assets/Scene.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Assets/Texture.hpp"
-#include "Assets/Node.h"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
+#include "Assets/GPU/Texture.hpp"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 
@@ -1667,7 +1665,7 @@ namespace Vulkan
         size_t SrcImageW8 = 4 * 2 * extent.width;
         size_t SrcImage8 = 4 * 2;
 
-#if __linux__ || __APPLE__
+#if __linux__ || __APPLE__ || __MINGW32__
         oidn::BufferRef colorBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtDenoise0_->GetExternalHandle(), SrcImageSize);
         oidn::BufferRef outBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD,rtDenoise1_->GetExternalHandle(), SrcImageSize);
         oidn::BufferRef albedoBuf = oidnDevice.newBuffer(oidn::ExternalMemoryTypeFlag::OpaqueFD, rtAlbedo_->GetExternalHandle(), SrcImageSize);

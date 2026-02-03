@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
-#include "Runtime/NextPhysics.h"
-#include "Assets/Node.h"
+#include "Runtime/Subsystems/NextPhysics.h"
+#include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 
 // Note: TestCommon.hpp provides EngineTestFixture and the necessary CreateGameInstance implementation

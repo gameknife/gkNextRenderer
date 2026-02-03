@@ -1,45 +1,50 @@
 #include "Engine.hpp"
-#include "UserInterface.hpp"
-#include "UserSettings.hpp"
-#include "Assets/Model.hpp"
-#include "Assets/Scene.hpp"
-#include "Assets/Texture.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Vulkan/Window.hpp"
-#include "Vulkan/SwapChain.hpp"
+#include "Assets/Core/Model.hpp"
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
+#include "Assets/GPU/Texture.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
+#include "Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Runtime/Command/DeleteNodeCommand.hpp"
+#include "Runtime/ScreenShot.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
+#include "Runtime/Config/UserSettings.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
-#include "ScreenShot.hpp"
-#include "QuickJSEngine.hpp"
+#include "Vulkan/SwapChain.hpp"
+#include "Vulkan/WindowSurface.hpp"
 
-#include <iostream>
-#include <fmt/format.h>
-#include <fmt/chrono.h>
-#include <filesystem>
-#include <cstdlib>
-#include <optional>
 #include <algorithm>
-#include <system_error>
+#include <cstdlib>
+#include <filesystem>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
 #include <initializer_list>
-#include <vector>
+#include <iostream>
 #include <memory>
+#include <optional>
+#include <system_error>
+#include <vector>
 
+#include "Runtime/Subsystems/NextAudio.h"
 #include "Options.hpp"
-#include "TaskCoordinator.hpp"
-#include "Utilities/Localization.hpp"
 #include "Rendering/RayTraceBaseRenderer.hpp"
-#include "NextAudio.h"
+#include "Runtime/Subsystems/TaskCoordinator.hpp"
+#include "Utilities/Localization.hpp"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+#include <entt/meta/factory.hpp>
+
 #define BUILDVER(X) std::string buildver(#X);
+#include "Runtime/Subsystems/NextAnimation.h"
+#include "Runtime/Subsystems/NextPhysics.h"
+#include "Runtime/Platform/PlatformCommon.h"
 #include "build.version"
-#include "NextAnimation.h"
-#include "NextPhysics.h"
-#include "Platform/PlatformCommon.h"
 
 #include "Common/CoreMinimal.hpp"
+#include "Reflection/ReflectionRegistry.h"
 
 // spdlog logging
 #include <spdlog/spdlog.h>
@@ -51,6 +56,18 @@
 
 ENGINE_API Options* GOption = nullptr;
 
+void NextEngine::RegisterReflection()
+{
+    using namespace entt::literals;
+
+    entt::meta_factory<NextEngine>()
+        .type("NextEngine"_hs)
+        .func<&NextEngine::GetTotalFrames>("GetTotalFrames")
+        .func<&NextEngine::GetTestNumber>("GetTestNumber")
+        .func<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
+        .func<&NextEngine::GetScenePtr>("GetScenePtr");
+}
+
 namespace
 {
     Vulkan::ERendererType ResolveRendererType(Vulkan::ERendererType requestedType, bool supportsRayTracing)
@@ -61,16 +78,14 @@ namespace
         }
         return requestedType;
     }
-}
+} // namespace
 
 namespace NextRenderer
 {
-    std::string GetBuildVersion()
-    {
-        return buildver;
-    }
+    std::string GetBuildVersion() { return buildver; }
 
-    Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window, const VkPresentModeKHR presentMode, const bool enableValidationLayers)
+    Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
+                                               const VkPresentModeKHR presentMode, const bool enableValidationLayers)
     {
         std::vector<const char*> validationLayers;
         if (enableValidationLayers)
@@ -85,7 +100,8 @@ namespace NextRenderer
         Vulkan::VulkanBaseRenderer* renderer = nullptr;
         if (useRayTracingRenderer)
         {
-            renderer = new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
+            renderer =
+                new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
             supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
         }
         else
@@ -98,17 +114,18 @@ namespace NextRenderer
             renderer->RegisterLogicRenderer(type);
         }
 
-        auto requestedType = ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer);
+        auto requestedType =
+            ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer);
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
         }
-        
+
         renderer->SwitchLogicRenderer(requestedType);
         return renderer;
     }
 
-}
+} // namespace NextRenderer
 
 namespace
 {
@@ -118,17 +135,17 @@ namespace
         float elapsed;
         std::array<char, 256> outputInfo;
     };
-}
+} // namespace
 
 UserSettings CreateUserSettings(const Options& options)
 {
     SceneList::ScanScenes();
-    
+
     UserSettings userSettings{};
 
     userSettings.RendererType = options.RendererType;
     userSettings.SceneIndex = 0;
-        
+
     userSettings.NumberOfSamples = options.Samples;
     userSettings.NumberOfBounces = options.Bounces;
     userSettings.MaxNumberOfBounces = options.MaxBounces;
@@ -150,7 +167,7 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.Denoiser = !options.NoDenoiser;
 
     userSettings.PaperWhiteNit = 600.f;
-    
+
     return userSettings;
 }
 
@@ -161,18 +178,21 @@ NextEngine::NextEngine(Options& options, void* userdata)
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::debug);
     spdlog::flush_every(std::chrono::seconds(1));
-    
+
     SPDLOG_INFO("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;
-    
+
 #if ANDROID
     std::string tag = "gknext";
     auto android_logger = spdlog::android_logger_mt("android", tag);
     android_logger->critical("Use \"adb shell logcat\" to view this message.");
     spdlog::set_default_logger(android_logger);
 #endif
-    
+
     instance_ = this;
+    
+    // Initialize reflection system first
+    Reflection::RegisterAllReflection();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -180,26 +200,23 @@ NextEngine::NextEngine(Options& options, void* userdata)
 
     Vulkan::Window::InitGLFW();
     // Create Window
-    Vulkan::WindowConfig windowConfig
-    {
-        "gkNextRenderer " + NextRenderer::GetBuildVersion(),
-        options.Width,
-        options.Height,
-        options.Fullscreen,
-        options.Fullscreen,
-        !options.Fullscreen,
-        options.SaveFile,
-        userdata,
-        options.ForceSDR
-    };
+    Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
+                                      options.Width,
+                                      options.Height,
+                                      options.Fullscreen,
+                                      options.Fullscreen,
+                                      !options.Fullscreen,
+                                      options.SaveFile,
+                                      userdata,
+                                      options.ForceSDR};
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
-    window_.reset( new Vulkan::Window(windowConfig));
+    window_.reset(new Vulkan::Window(windowConfig));
     quickJSEngine_ = std::make_unique<QuickJSEngine>();
-    
+
     // Initialize Localization
     Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
-    
+
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
@@ -217,44 +234,49 @@ NextEngine::~NextEngine()
 void NextEngine::Start()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
-    
+
     SPDLOG_INFO("---- Next Engine Starting...");
     spdlog::stopwatch stopwatch;
-    
+
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
 #ifndef NDEBUG
     shouldEnableValidation = true;
 #endif
 
-    renderer_.reset( NextRenderer::CreateRenderer(GOption->RendererType, window_.get(), static_cast<VkPresentModeKHR>(GOption->PresentMode), shouldEnableValidation) );
+    renderer_.reset(NextRenderer::CreateRenderer(GOption->RendererType, window_.get(),
+                                                 static_cast<VkPresentModeKHR>(GOption->PresentMode),
+                                                 shouldEnableValidation));
     userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
-    
-    renderer_->DelegateOnDeviceSet = [this]()->void{OnRendererDeviceSet();};
-    renderer_->DelegateCreateSwapChain = [this]()->void{OnRendererCreateSwapChain();};
-    renderer_->DelegateDeleteSwapChain = [this]()->void{OnRendererDeleteSwapChain();};
-    renderer_->DelegateBeforeNextTick = [this]()->void{OnRendererBeforeNextFrame();};
-    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend)->Assets::UniformBufferObject{ return GetUniformBufferObject(offset, extend);};
-    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex)->void{OnRendererPostRender(commandBuffer, imageIndex);};
-    
+
+    renderer_->DelegateOnDeviceSet = [this]() -> void { OnRendererDeviceSet(); };
+    renderer_->DelegateCreateSwapChain = [this]() -> void { OnRendererCreateSwapChain(); };
+    renderer_->DelegateDeleteSwapChain = [this]() -> void { OnRendererDeleteSwapChain(); };
+    renderer_->DelegateBeforeNextTick = [this]() -> void { OnRendererBeforeNextFrame(); };
+    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset,
+                                                       VkExtent2D extend) -> Assets::UniformBufferObject
+    { return GetUniformBufferObject(offset, extend); };
+    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
+    { OnRendererPostRender(commandBuffer, imageIndex); };
+
     renderer_->Start();
 
     physicsEngine_.reset(new NextPhysics());
     physicsEngine_->Start();
-    
+
     animationEngine_ = std::make_unique<NextAnimation>();
     animationEngine_->Start();
 
     audioEngine_ = std::make_unique<NextAudio>();
     audioEngine_->Start();
-    
+
     if (quickJSEngine_)
     {
         quickJSEngine_->Initialize();
     }
 
     gameInstance_->OnInit();
-    
+
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
 
@@ -262,7 +284,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 {
     userInterface_->HandleEvent(&event);
 
-    switch ( event.type )
+    switch (event.type)
     {
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         {
@@ -296,12 +318,13 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
-    
+
     // make sure the output is flushed
     std::cout << std::flush;
-    
+
     // Hot change renderer
-    auto requestedRendererType = ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType), renderer_->SupportsRayTracing());
+    auto requestedRendererType = ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType),
+                                                     renderer_->SupportsRayTracing());
     if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
     {
         userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
@@ -311,27 +334,30 @@ bool NextEngine::Tick(bool forcingDelta)
     {
         renderer_->SwitchLogicRenderer(requestedRendererType);
     }
-    
+
     // delta time calc
     const auto prevTime = time_;
     time_ = GetWindow().GetTime();
     deltaSeconds_ = time_ - prevTime;
-    if (forcingDelta) deltaSeconds_ = 1.0 / 30.0;
+    if (forcingDelta)
+        deltaSeconds_ = 1.0 / 30.0;
     float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
     smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
-    
+
     // Scene Update
-    if(scene_)
+    if (scene_)
     {
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
         scene_->Tick(static_cast<float>(deltaSeconds_));
     }
 
 #if WITH_PHYSIC
-    if (userSettings_.TickPhysics && physicsEngine_) physicsEngine_->Tick(deltaSeconds_);
+    if (userSettings_.TickPhysics && physicsEngine_)
+        physicsEngine_->Tick(deltaSeconds_);
 #endif
-    
-    if (userSettings_.TickAnimation && animationEngine_) animationEngine_->Tick(deltaSeconds_); //pause dev, wait next
+
+    if (userSettings_.TickAnimation && animationEngine_)
+        animationEngine_->Tick(deltaSeconds_); // pause dev, wait next
 
     if (quickJSEngine_)
     {
@@ -349,9 +375,9 @@ bool NextEngine::Tick(bool forcingDelta)
         PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickTasks", "");
 
         // iterate the tickedTasks_, if return true, remove it
-        for( auto it = tickedTasks_.begin(); it != tickedTasks_.end(); )
+        for (auto it = tickedTasks_.begin(); it != tickedTasks_.end();)
         {
-            if( (*it)(deltaSeconds_) )
+            if ((*it)(deltaSeconds_))
             {
                 it = tickedTasks_.erase(it);
             }
@@ -361,18 +387,18 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
     }
-   
+
 
     // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
-    for( auto it = delayedTasks_.begin(); it != delayedTasks_.end(); )
+    for (auto it = delayedTasks_.begin(); it != delayedTasks_.end();)
     {
-        if( time_ > it->triggerTime )
+        if (time_ > it->triggerTime)
         {
             // update the next trigger time
             it->triggerTime = time_ + it->loopTime;
 
             // execute
-            if( it->task() )
+            if (it->task())
             {
                 it = delayedTasks_.erase(it);
             }
@@ -442,10 +468,7 @@ void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
     }
 }
 
-void NextEngine::AddTimerTask(double delay, DelayedTask task)
-{
-    delayedTasks_.push_back( { time_ + delay, delay, task} );
-}
+void NextEngine::AddTimerTask(double delay, DelayedTask task) { delayedTasks_.push_back({time_ + delay, delay, task}); }
 
 void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
 {
@@ -481,24 +504,15 @@ void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int w
 glm::dvec2 NextEngine::GetMousePos()
 {
     float fx{}, fy{};
-    SDL_GetMouseState(&fx,&fy);
-    return glm::dvec2(fx,fy);
+    SDL_GetMouseState(&fx, &fy);
+    return glm::dvec2(fx, fy);
 }
 
-void NextEngine::RequestClose()
-{
-    window_->Close();
-}
+void NextEngine::RequestClose() { window_->Close(); }
 
-void NextEngine::RequestMinimize()
-{
-    window_->Minimize();
-}
+void NextEngine::RequestMinimize() { window_->Minimize(); }
 
-bool NextEngine::IsMaximumed()
-{
-    return window_->IsMaximumed();
-}
+bool NextEngine::IsMaximumed() { return window_->IsMaximumed(); }
 
 void NextEngine::ToggleMaximize()
 {
@@ -515,12 +529,14 @@ void NextEngine::ToggleMaximize()
 void NextEngine::RequestScreenShot(std::string filename)
 {
     auto time = std::time(nullptr);
-    std::string screenshotFilename = filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
+    std::string screenshotFilename =
+        filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
     SaveScreenShot(screenshotFilename, 0, 0, 0, 0);
 }
 
 // 生成一个随机抖动偏移
-glm::vec2 GenerateJitter(float screenWidth, float screenHeight) {
+glm::vec2 GenerateJitter(float screenWidth, float screenHeight)
+{
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(-0.5f, 0.5f);
@@ -532,7 +548,8 @@ glm::vec2 GenerateJitter(float screenWidth, float screenHeight) {
 }
 
 // 创建抖动矩阵
-glm::mat4 CreateJitterMatrix(float jitterX, float jitterY) {
+glm::mat4 CreateJitterMatrix(float jitterX, float jitterY)
+{
     glm::mat4 jitterMatrix = glm::mat4(1.0f);
     jitterMatrix[3][0] = jitterX;
     jitterMatrix[3][1] = jitterY;
@@ -540,17 +557,20 @@ glm::mat4 CreateJitterMatrix(float jitterX, float jitterY) {
 }
 
 // 调制投影矩阵
-glm::mat4 RandomJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+glm::mat4 RandomJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight)
+{
     glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
     glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
     return jitterMatrix * projectionMatrix;
 }
 
 // 生成Halton序列的单一维度
-float HaltonSequence(int index, int base) {
+float HaltonSequence(int index, int base)
+{
     float f = 1.0f;
     float result = 0.0f;
-    while (index > 0) {
+    while (index > 0)
+    {
         f = f / base;
         result = result + f * (index % base);
         index = index / base;
@@ -559,17 +579,20 @@ float HaltonSequence(int index, int base) {
 }
 
 // 生成2D Halton序列
-std::vector<glm::vec2> GenerateHaltonSequence(int count) {
+std::vector<glm::vec2> GenerateHaltonSequence(int count)
+{
     std::vector<glm::vec2> sequence;
-    for (int i = 0; i < count; ++i) {
-        float x = HaltonSequence(i + 1, 2);  // 基数2
-        float y = HaltonSequence(i + 1, 3);  // 基数3
+    for (int i = 0; i < count; ++i)
+    {
+        float x = HaltonSequence(i + 1, 2); // 基数2
+        float y = HaltonSequence(i + 1, 3); // 基数3
         sequence.push_back(glm::vec2(x, y));
     }
     return sequence;
 }
 
-glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight) {
+glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float screenWidth, float screenHeight)
+{
     glm::vec2 jitter = GenerateJitter(screenWidth, screenHeight);
     glm::mat4 jitterMatrix = CreateJitterMatrix(jitter.x, jitter.y);
     return jitterMatrix * projectionMatrix;
@@ -577,7 +600,7 @@ glm::mat4 HaltonJitterProjectionMatrix(const glm::mat4& projectionMatrix, float 
 
 glm::ivec2 NextEngine::GetMonitorSize() const
 {
-    glm::ivec2 size{1920,1080};
+    glm::ivec2 size{1920, 1080};
 
     SDL_Rect rect;
     SDL_DisplayID id = SDL_GetPrimaryDisplay();
@@ -589,7 +612,7 @@ glm::ivec2 NextEngine::GetMonitorSize() const
 }
 
 void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
-    std::function<bool(Assets::RayCastResult rayResult)> callback)
+                            std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
     // CPU Raycast in scene
     Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
@@ -603,7 +626,7 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
         progressiveRendering_ = enable;
         return;
     }
-    
+
     if (enable)
     {
         if (progressivePreFrames_ == 0)
@@ -620,10 +643,11 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
 
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
 {
-    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender = dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
+    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender =
+        dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
     if (rtRender)
     {
-        return rtRender->TLAS()[0].GetDeviceAddress();   
+        return rtRender->TLAS()[0].GetDeviceAddress();
     }
 
     return -1;
@@ -631,10 +655,11 @@ VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
 
 VkAccelerationStructureKHR NextEngine::TryGetGPUAccelerationStructureHandle() const
 {
-    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender = dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
+    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender =
+        dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
     if (rtRender)
     {
-        return rtRender->TLAS()[0].Handle();   
+        return rtRender->TLAS()[0].Handle();
     }
 
     return nullptr;
@@ -648,17 +673,18 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     Assets::Camera renderCam = scene_->GetRenderCamera();
     gameInstance_->OverrideRenderCamera(renderCam);
     ubo.ModelView = renderCam.ModelView;
-    
+
     scene_->OverrideModelView(ubo.ModelView);
-    ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
-                                      extent.width / static_cast<float>(extent.height), renderCam.NearPlane, renderCam.FarPlane);
-    
+    ubo.Projection =
+        glm::perspective(glm::radians(renderCam.FieldOfView), extent.width / static_cast<float>(extent.height),
+                         renderCam.NearPlane, renderCam.FarPlane);
+
     ubo.FastGather = userSettings_.FastGather;
     ubo.SelectedId = scene_->GetSelectedId();
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
-    glm::mat4x4 projectionUnJit = ubo.Projection;    
+    glm::mat4x4 projectionUnJit = ubo.Projection;
     // handle android vulkan pre rotation
 #if ANDROID
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
@@ -676,8 +702,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     if (userSettings_.TAA || userSettings_.DLSS)
     {
         std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f,0.5f);
-        
+        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f, 0.5f);
+
         ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
         ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
 
@@ -687,7 +713,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     {
         ubo.Jitter = glm::vec4(0, 0, 0, 0);
     }
-    
+
     // Inverting Y for Vulkan, https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
     ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
     ubo.ProjectionInverse = glm::inverse(ubo.Projection);
@@ -695,11 +721,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ViewProjectionUnJit = projectionUnJit * ubo.ModelView;
     ubo.ProjectionUnJit = projectionUnJit;
     ubo.ProjectionInverseUnJit = glm::inverse(projectionUnJit);
-    
+
     ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
     ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;
-    
-    ubo.ViewportRect = glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y, renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
+
+    ubo.ViewportRect =
+        glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y,
+                  renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
 
     ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
 
@@ -720,26 +748,26 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
     ubo.TAA = userSettings_.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4( scene_->GetEnvSettings().SunDirection(), 0.0f );
-    ubo.SunColor = glm::vec4(1,1,1, 0) * scene_->GetEnvSettings().SunIntensity;
+    ubo.SunDirection = glm::vec4(scene_->GetEnvSettings().SunDirection(), 0.0f);
+    ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
-    ubo.HasSun =scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
-    
+    ubo.HasSun = scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
+
     if (ubo.HasSun != prevUBO_.HasSun || ubo.SunDirection != prevUBO_.SunDirection)
     {
         scene_->MarkEnvDirty();
     }
 
-	ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
-	ubo.HeatmapScale = userSettings_.HeatmapScale;
+    ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
+    ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
-    
+
     ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
 
@@ -748,18 +776,18 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
 
     ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
-    
+
 #if WITH_OIDN
     ubo.BFSize = 0;
 #endif
-    
-	ubo.ShowEdge = showFlags_.ShowEdge;
+
+    ubo.ShowEdge = showFlags_.ShowEdge;
     ubo.ProgressiveRender = progressiveRendering_;
     ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;
-	renderer_->visualDebug_ = showFlags_.ShowVisualDebug;
+    renderer_->visualDebug_ = showFlags_.ShowVisualDebug;
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 
@@ -771,14 +799,14 @@ void NextEngine::OnRendererDeviceSet()
     // global textures
     // texture id 0: dynamic hdri sky
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
-    
-    
+
+
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
 
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
-    
+
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
 
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
@@ -788,13 +816,14 @@ void NextEngine::OnRendererDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
 
     // texture id 11 - 99: system texture
-    //Assets::GlobalTexturePool::LoadTexture("assets/textures/white.png", true);
+    // Assets::GlobalTexturePool::LoadTexture("assets/textures/white.png", true);
 
 
     // fill to 100, id > 100, general textures
 
-    //if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(), Vulkan::SamplerConfig());
-        
+    // if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(),
+    // Vulkan::SamplerConfig());
+
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
@@ -804,23 +833,18 @@ void NextEngine::OnRendererDeviceSet()
 
 void NextEngine::OnRendererCreateSwapChain()
 {
-    if(userInterface_.get() == nullptr)
+    if (userInterface_.get() == nullptr)
     {
-        userInterface_.reset(new UserInterface(this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(),
-                                   userSettings_, [this]()->void
-                                   {
-                                       gameInstance_->OnPreConfigUI();
-                                   },
-                                   [this]()->void{
-            gameInstance_->OnInitUI();
-        }));
+        userInterface_.reset(new UserInterface(
+            this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), userSettings_,
+            [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
 
 void NextEngine::OnRendererDeleteSwapChain()
 {
-    if(userInterface_.get() != nullptr)
+    if (userInterface_.get() != nullptr)
     {
         userInterface_->OnDestroySurface();
     }
@@ -830,28 +854,28 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 {
     static double lastTimestamp = 0.0;
     double now = GetWindow().GetTime();
-    
+
     // Record delta time between calls to Render.
-    if(totalFrames_ % 30 == 0)
+    if (totalFrames_ % 30 == 0)
     {
         const auto timeDelta = now - lastFrameTime_;
         lastFrameTime_ = now;
         frameRate_ = static_cast<float>(30 / timeDelta);
     }
-    
+
     // Render the UI
     Statistics stats = {};
-    
+
     stats.FrameTime = static_cast<float>((now - lastTimestamp) * 1000.0);
     lastTimestamp = now;
-    
+
     stats.Stats["gpu"] = renderer_->Device().DeviceProperties().deviceName;
-    
+
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.RenderSize = renderer_->SwapChain().RenderExtent();
     stats.FrameRate = frameRate_;
     stats.RenderTime = GetTime();
-    
+
     stats.TotalFrames = totalFrames_;
     stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
     stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
@@ -860,9 +884,9 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     stats.ComputePassCount = 0;
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
-    //Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
+    // Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
     userInterface_->PreRender();
-    if( !gameInstance_->OnRenderUI() )
+    if (!gameInstance_->OnRenderUI())
     {
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
     }
@@ -876,34 +900,88 @@ void NextEngine::OnKey(SDL_Event& event)
         return;
     }
 
-    if( gameInstance_->OnKey(event) )
+    if (event.type == SDL_EVENT_KEY_DOWN)
+    {
+        const SDL_Keymod modifiers = SDL_GetModState();
+        const bool hasCtrlOrCmd = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+        if (hasCtrlOrCmd)
+        {
+            const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
+            if (event.key.key == SDLK_Z)
+            {
+                if (hasShift)
+                {
+                    if (commandHistory_.Redo())
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    if (commandHistory_.Undo())
+                    {
+                        return;
+                    }
+                }
+            }
+            else if (event.key.key == SDLK_Y)
+            {
+                if (commandHistory_.Redo())
+                {
+                    return;
+                }
+            }
+        }
+
+        if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
+        {
+            const uint32_t selectedId = GetScene().GetSelectedId();
+            if (selectedId != static_cast<uint32_t>(-1))
+            {
+                auto command = std::make_unique<DeleteNodeCommand>(GetScene(), selectedId);
+                if (ExecuteCommand(std::move(command)))
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    if (gameInstance_->OnKey(event))
     {
         return;
     }
 }
+
+bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)
+{
+    return commandHistory_.Execute(std::move(command));
+}
+
+bool NextEngine::UndoCommand() { return commandHistory_.Undo(); }
+
+bool NextEngine::RedoCommand() { return commandHistory_.Redo(); }
+
+bool NextEngine::CanUndo() const { return commandHistory_.CanUndo(); }
+
+bool NextEngine::CanRedo() const { return commandHistory_.CanRedo(); }
 
 void NextEngine::OnTouch(bool down, double xpos, double ypos)
 {
-    //OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
+    // OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
 }
 
-void NextEngine::OnTouchMove(double xpos, double ypos)
-{
-    OnCursorPosition(xpos, ypos);
-}
+void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, ypos); }
 
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
-    if (!renderer_->HasSwapChain() ||
-        userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse() ||
-        window_->IsCapturingMouse()
-        )
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
+        userInterface_->WantsToCaptureMouse() || window_->IsCapturingMouse())
     {
         return;
     }
-    
-    if(gameInstance_->OnCursorPosition(xpos, ypos))
+
+    if (gameInstance_->OnCursorPosition(xpos, ypos))
     {
         return;
     }
@@ -911,13 +989,12 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 
 void NextEngine::OnMouseButton(SDL_Event& event)
 {
-    if (!renderer_->HasSwapChain() ||
-        userInterface_->WantsToCaptureMouse())
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse())
     {
         return;
     }
 
-    if(gameInstance_->OnMouseButton(event))
+    if (gameInstance_->OnMouseButton(event))
     {
         return;
     }
@@ -925,8 +1002,7 @@ void NextEngine::OnMouseButton(SDL_Event& event)
 
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
-    if (!renderer_->HasSwapChain() ||
-        userInterface_->WantsToCaptureMouse())
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse())
     {
         return;
     }
@@ -943,15 +1019,15 @@ void NextEngine::OnDropFile(const char* dropPath)
 
     if (ext == "glb" || ext == "gltf")
     {
-        //userSettings_.SceneIndex = SceneList::AddExternalScene(path);
+        // userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         RequestLoadScene(path);
     }
 
-    if( ext == "hdr")
+    if (ext == "hdr")
     {
         uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
         scene_->GetEnvSettings().SkyIdx = newTextureId;
-        //userSettings_. = 0;
+        // userSettings_. = 0;
     }
 }
 void NextEngine::TickGamepadInput()
@@ -963,122 +1039,196 @@ void NextEngine::TickGamepadInput()
     {
         SDL_Gamepad* masterGamepad = SDL_GetGamepadFromID(*gamepads);
 
-        gameInstance_->OnGamepadInput(
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTX),
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTY),
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTX),
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTY),
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
-        SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
-        );
+        gameInstance_->OnGamepadInput(SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTX),
+                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTY),
+                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTX),
+                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTY),
+                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
+                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
     }
 
     SDL_free(gamepads);
 }
 
-void NextEngine::OnRendererBeforeNextFrame()
-{
-    TaskCoordinator::GetInstance()->Tick();
-}
+void NextEngine::OnRendererBeforeNextFrame() { TaskCoordinator::GetInstance()->Tick(); }
 
 void NextEngine::RequestLoadScene(std::string sceneFileName)
 {
-    AddTickedTask([this, sceneFileName](double deltaSeconds)->bool
-    {
-        if ( status_ != NextRenderer::EApplicationStatus::Running )
+    AddTickedTask(
+        [this, sceneFileName](double deltaSeconds) -> bool
         {
-            return false;
-        }
-        
-        LoadScene(sceneFileName);
-        return true;
-    });
+            if (status_ != NextRenderer::EApplicationStatus::Running)
+            {
+                return false;
+            }
+
+            LoadScene(sceneFileName);
+            return true;
+        });
 }
 
-void NextEngine::LoadScene(std::string sceneFileName)
+void NextEngine::RequestLoadSceneAdd(std::string sceneFileName)
+{
+    SceneAppendOptions options{};
+    RequestLoadSceneAdd(std::move(sceneFileName), options);
+}
+
+void NextEngine::RequestLoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options)
+{
+    AddTickedTask(
+        [this, sceneFileName, options](double deltaSeconds) -> bool
+        {
+            if (status_ != NextRenderer::EApplicationStatus::Running)
+            {
+                return false;
+            }
+
+            LoadSceneAdd(sceneFileName, options);
+            return true;
+        });
+}
+
+void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad)
 {
     // wait all task finish
     TaskCoordinator::GetInstance()->CancelAllParralledTasks();
     TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-    
-    scene_->CleanUp();
-    
-    status_ = NextRenderer::EApplicationStatus::Loading;
-    
-    std::shared_ptr< std::vector<Assets::Model> > models = std::make_shared< std::vector<Assets::Model> >();
-    std::shared_ptr< std::vector< std::shared_ptr<Assets::Node> > > nodes = std::make_shared< std::vector< std::shared_ptr<Assets::Node> > >();
-    std::shared_ptr< std::vector<Assets::FMaterial> > materials = std::make_shared< std::vector<Assets::FMaterial> >();
-    std::shared_ptr< std::vector<Assets::LightObject> > lights = std::make_shared< std::vector<Assets::LightObject> >();
-    std::shared_ptr< std::vector<Assets::AnimationTrack> > tracks = std::make_shared< std::vector<Assets::AnimationTrack> >();
-    std::shared_ptr< std::vector<Assets::Skeleton> > skeletons = std::make_shared< std::vector<Assets::Skeleton> >();
-    std::shared_ptr< Assets::EnvironmentSetting > cameraState = std::make_shared< Assets::EnvironmentSetting >();
 
+    status_ = NextRenderer::EApplicationStatus::Loading;
+
+    SceneLoadContext ctx;
+    ctx.models = std::make_shared<std::vector<Assets::Model>>();
+    ctx.nodes = std::make_shared<std::vector<std::shared_ptr<Assets::Node>>>();
+    ctx.materials = std::make_shared<std::vector<Assets::FMaterial>>();
+    ctx.lights = std::make_shared<std::vector<Assets::LightObject>>();
+    ctx.tracks = std::make_shared<std::vector<Assets::AnimationTrack>>();
+    ctx.skeletons = std::make_shared<std::vector<Assets::Skeleton>>();
+    ctx.cameraState = std::make_shared<Assets::EnvironmentSetting>();
+
+    // dispatch in thread task and reset in main thread
+    TaskCoordinator::GetInstance()->AddTask(
+        [ctx, sceneFileName](ResTask& task)
+        {
+            SceneTaskContext taskContext{};
+            const auto timer = std::chrono::high_resolution_clock::now();
+
+            taskContext.success = SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
+                                                       *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
+
+            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                                      std::chrono::high_resolution_clock::now() - timer)
+                                      .count();
+
+            std::string info =
+                fmt::format("parsed scene [{}] on cpu in {:.2f}ms",
+                            std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
+            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+            task.SetContext(taskContext);
+        },
+        [this, ctx, sceneFileName, onGpuLoad](ResTask& task) mutable
+        {
+            SceneTaskContext taskContext{};
+            task.GetContext(taskContext);
+            if (taskContext.success)
+            {
+                SPDLOG_INFO("{}", taskContext.outputInfo.data());
+
+                renderer_->Device().WaitIdle();
+                renderer_->DeleteSwapChain();
+
+                // Execute the specific GPU load logic
+                onGpuLoad(ctx);
+
+                totalFrames_ = 0;
+                renderer_->OnPostLoadScene();
+                renderer_->CreateSwapChain();
+            }
+            else
+            {
+                SPDLOG_ERROR("failed to load scene [{}]", std::filesystem::path(sceneFileName).filename().string());
+            }
+
+            status_ = NextRenderer::EApplicationStatus::Running;
+        },
+        1);
+}
+
+void NextEngine::LoadScene(std::string sceneFileName)
+{
+    scene_->CleanUp();
     physicsEngine_->OnSceneDestroyed();
     Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
-    
-    // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask( [cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
-    {
-        SceneTaskContext taskContext {};
-        const auto timer = std::chrono::high_resolution_clock::now();
-        
-        taskContext.success = SceneList::LoadScene( sceneFileName, *cameraState, *nodes, *models, *materials, *lights, *tracks, *skeletons);
 
-        taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
+    LaunchLoadSceneTask(sceneFileName,
+                        [this, sceneFileName](SceneLoadContext& ctx)
+                        {
+                            const auto timer = std::chrono::high_resolution_clock::now();
+                            scene_->GetEnvSettings().Reset();
+                            scene_->SetEnvSettings(*ctx.cameraState);
 
-        std::string info = fmt::format("parsed scene [{}] on cpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
-        std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
-        task.SetContext( taskContext );
-    },
-    [this, cameraState, sceneFileName, models, nodes, materials, lights, tracks, skeletons](ResTask& task)
-    {
-        SceneTaskContext taskContext {};
-        task.GetContext( taskContext );
-        if (taskContext.success )
+                            gameInstance_->OnSceneUnloaded();
+                            physicsEngine_->OnSceneStarted();
+
+                            renderer_->OnPreLoadScene();
+
+                            gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights,
+                                                              *ctx.tracks);
+                            scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+                            scene_->PostLoad(*ctx.skeletons);
+                            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                            renderer_->SetScene(scene_);
+
+                            userSettings_.CameraIdx = 0;
+                            assert(!scene_->GetEnvSettings().cameras.empty());
+                            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+
+                            gameInstance_->OnSceneLoaded();
+
+                            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                                                std::chrono::high_resolution_clock::now() - timer)
+                                                .count();
+                            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
+                                        std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
+                        });
+}
+
+void NextEngine::LoadSceneAdd(std::string sceneFileName)
+{
+    SceneAppendOptions options{};
+    LoadSceneAdd(std::move(sceneFileName), options);
+}
+
+void NextEngine::LoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options)
+{
+    LaunchLoadSceneTask(
+        sceneFileName,
+        [this, sceneFileName, options](SceneLoadContext& ctx)
         {
-            SPDLOG_INFO("{}", taskContext.outputInfo.data());
             const auto timer = std::chrono::high_resolution_clock::now();
-            scene_->GetEnvSettings().Reset();
-            scene_->SetEnvSettings(*cameraState);
 
-            gameInstance_->OnSceneUnloaded();
-            physicsEngine_->OnSceneStarted();
-
-            renderer_->Device().WaitIdle();
-            renderer_->DeleteSwapChain();
             renderer_->OnPreLoadScene();
 
-            gameInstance_->BeforeSceneRebuild(*nodes, *models, *materials, *lights, *tracks);
-            scene_->Reload(*nodes, *models, *materials, *lights, *tracks);
-            scene_->PostLoad(*skeletons);
+            gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+
+            std::string name = std::filesystem::path(sceneFileName).stem().string();
+            std::shared_ptr<Assets::Node> rootNode =
+                scene_->Append(name, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
+            if (options.placeOnHit && rootNode)
+            {
+                rootNode->SetTranslation(options.hitPosition);
+                rootNode->RecalcTransform(true);
+            }
             scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
             renderer_->SetScene(scene_);
-                    
-            userSettings_.CameraIdx = 0;
-            assert(!scene_->GetEnvSettings().cameras.empty());
-            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
 
-            totalFrames_ = 0;
-                    
-            renderer_->OnPostLoadScene();
-            renderer_->CreateSwapChain();
+            // gameInstance_->OnSceneLoaded(); // Maybe trigger this too?
 
-            gameInstance_->OnSceneLoaded();
-
-            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(std::chrono::high_resolution_clock::now() - timer).count();
-            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms", std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
-        }
-        else
-        {
-            SPDLOG_ERROR("failed to load scene [{}]", std::filesystem::path(sceneFileName).filename().string());
-        }
-
-        status_ = NextRenderer::EApplicationStatus::Running;
-    },
-    1);
+            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                                std::chrono::high_resolution_clock::now() - timer)
+                                .count();
+            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
+                        std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
+        });
 }
 
-void NextEngine::InitPhysics()
-{
-    
-}
+void NextEngine::InitPhysics() {}

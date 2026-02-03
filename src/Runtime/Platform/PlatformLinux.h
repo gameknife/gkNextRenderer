@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdlib>
+#include <string>
+
 namespace NextRenderer
 {
     inline void PlatformInit()
@@ -12,17 +15,19 @@ namespace NextRenderer
 
     }
 
+    inline int OSProcess(const char* exe)
+    {
+#if IOS || ANDROID
+        return 1;
+#else
+        return std::system(exe);
+#endif
+    }
+
     inline void OSCommand(const char* command)
     {
         std::string commandline{"xdg-open "};
         commandline += command;
-        //system(commandline.c_str());
-    }
-
-    inline void OSProcess(const char* exe)
-    {
-        //int result = system(exe);
-        //(void)result;
+        OSProcess(commandline.c_str());
     }
 }
-

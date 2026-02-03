@@ -1,58 +1,26 @@
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+# Include explicit source file lists (replaces GLOB_RECURSE for better incremental builds)
+include(cmake/SourceFiles.cmake)
 
-
-# directory naming
-file(GLOB_RECURSE src_files_assets "Assets/*.cpp" "Assets/*.hpp" "Assets/*.h" "../assets/shaders/common/*.h")
-file(GLOB_RECURSE src_files_utilities "Utilities/*.cpp" "Utilities/*.hpp" "Utilities/*.h")
-file(GLOB_RECURSE src_files_vulkan "Vulkan/*.cpp" "Vulkan/*.hpp")
-file(GLOB_RECURSE src_files_rendering "Rendering/*.cpp" "Rendering/*.hpp")
-file(GLOB_RECURSE src_files_thirdparty 
-	"ThirdParty/json11/*.cpp" 
-	"ThirdParty/json11/*.hpp" 
-	"ThirdParty/mikktspace/*.c" 
-	"ThirdParty/mikktspace/*.h"
-	"ThirdParty/miniaudio/*.h"
-	"ThirdParty/lzav/*.h"
-	"ThirdParty/tinybvh/*.h"
-	"ThirdParty/ozz/*.h"
-	)
-file(GLOB_RECURSE src_files_customimgui
-	"ThirdParty/imgui-custom/*.cpp"
-	"ThirdParty/imgui-custom/*.h"
-	)
+# Disable warnings for third-party code
 if (MSVC)
-set_source_files_properties(
-  ${src_files_thirdparty}
-  PROPERTIES
-  COMPILE_FLAGS "/W0"
-) 
+    set_source_files_properties(
+        ${src_files_thirdparty}
+        PROPERTIES
+        COMPILE_FLAGS "/W0"
+    )
 else()
-set_source_files_properties(
-  ${src_files_thirdparty}
-  PROPERTIES
-  COMPILE_FLAGS "-w"
-) 
+    set_source_files_properties(
+        ${src_files_thirdparty}
+        PROPERTIES
+        COMPILE_FLAGS "-w"
+    )
 endif()
-file(GLOB_RECURSE src_files_engine
-	"Common/*.hpp"
-	"Runtime/*.h"
-	"Runtime/*.hpp"
-	"Runtime/*.cpp"
-	"Options.cpp"
-	"Options.hpp"
-)
 
 if (IOS)
-    set_source_files_properties(Runtime/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
-file(GLOB_RECURSE src_files_editor "Editor/*")
-file(GLOB_RECURSE src_files_magicalego "Application/MagicaLego/*.cpp" "MagicaLego/*.hpp")
-file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
-file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
-file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
-file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
-file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*")
 
 # unit test files
 set(UNIT_TEST_SOURCES
@@ -64,7 +32,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_RenderComponent.cpp
 )
 
-if (GK_ENABLE_PHYSIC)
+if (ENABLE_PHYSIC)
 	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 endif()
 
@@ -135,8 +103,12 @@ add_executable(MagicaLego
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
+
+if( NOT MINGW )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
+endif()
+
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -166,6 +138,17 @@ set(AllTargets
 gkNextEngine
 gkNextRenderer
 )
+elseif( MINGW )
+set(AllTargets
+gkNextEngine
+gkNextRenderer
+gkNextStillBenchmark
+gkNextMotionBenchmark
+gkNextVisualTest
+gkNextEditor
+Packager
+MagicaLego 
+)
 else()
 set(AllTargets 
 gkNextEngine
@@ -180,8 +163,8 @@ gkNextUnitTests
 )
 endif()
 
-# 是否启用 Unity Build（默认开启以维持原有行为，可在配置时通过 -DGK_ENABLE_UNITY_BUILD=OFF 关闭）
-option(GK_ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
+# Unity Build option (default ON, can be disabled with -DENABLE_UNITY_BUILD=OFF)
+option(ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
 
 # common setup
 foreach(target IN LISTS AllTargets)
@@ -210,18 +193,23 @@ foreach(target IN LISTS AllTargets)
 	# link engine
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
+		target_compile_definitions(${target} PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 		
-		# 若未显式关闭则为 gkNextEngine 启用 Unity Build（Android 默认仍禁用以保持行为）
+		# Enable Unity Build for gkNextEngine unless explicitly disabled (Android disabled by default)
 		# Group files for Unity Build optimization
-		if ( GK_ENABLE_UNITY_BUILD AND NOT ANDROID ) 
+		if ( ENABLE_UNITY_BUILD AND NOT ANDROID )
 		set_target_properties(${target} PROPERTIES UNITY_BUILD ON)
-		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 6)
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE 12)
 
 		set_source_files_properties(${src_files_assets} PROPERTIES UNITY_GROUP "assets")
-		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities") 
+		set_source_files_properties(${src_files_utilities} PROPERTIES UNITY_GROUP "utilities")
 		set_source_files_properties(${src_files_engine} PROPERTIES UNITY_GROUP "engine")
 		set_source_files_properties(${src_files_vulkan} PROPERTIES UNITY_GROUP "vulkan")
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
+
+		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
+		set_source_files_properties(Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
@@ -333,7 +321,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if (UNIX AND NOT APPLE AND NOT ANDROID)
+	if ( (UNIX OR MINGW) AND NOT APPLE AND NOT ANDROID)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
@@ -374,7 +362,7 @@ foreach(target IN LISTS AllTargets)
 endforeach()
 
 # Test Target
-if ( NOT ANDROID AND NOT IOS )
+if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
 target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()

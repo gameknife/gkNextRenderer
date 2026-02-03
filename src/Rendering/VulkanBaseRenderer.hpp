@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Vulkan/FrameBuffer.hpp"
-#include "Vulkan/VulkanGpuTimer.hpp"
-#include "Vulkan/Image.hpp"
-#include "Assets/UniformBuffer.hpp"
-#include "Assets/Scene.hpp"
+#include "Vulkan/RenderingPipeline.hpp"
+#include "Vulkan/SyncAndTiming.hpp"
+#include "Vulkan/GpuResources.hpp"
+#include "Assets/GPU/UniformBuffer.hpp"
+#include "Assets/Core/Scene.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
