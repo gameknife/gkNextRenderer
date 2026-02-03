@@ -21,8 +21,8 @@ jobs:
   build:
 
     runs-on: macos-latest
-    env: 
-      SDK_VERSION: 1.4.313.1
+    env:
+      SDK_VERSION: 1.4.313.0
     steps:
     - uses: actions/checkout@v4
     - name: Install Vulkan SDK
@@ -32,7 +32,7 @@ jobs:
 
     - name: Download and setup slangc
       run: |
-        curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-1.4.313.0/slang-vulkan-sdk-1.4.313.0-macos-aarch64.zip -o slang.zip
+        curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-${SDK_VERSION}/slang-vulkan-sdk-${SDK_VERSION}-macos-aarch64.zip -o slang.zip
         mkdir -p slang
         unzip slang.zip -d slang
         echo "$PWD/slang/bin" >> $GITHUB_PATH

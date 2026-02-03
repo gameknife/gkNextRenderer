@@ -63,18 +63,16 @@
   void RenderFrame() {  // ✅
       // ...
   }
-  
+
   void RenderFrame()    // ❌
   {
       // ...
   }
   ```
-- 每行最大长度：建议 120 字符
 - 使用现代 C++ 特性：智能指针、range-based for、auto（适度）
 
 **审查建议:**
 - [ ] 检查缩进一致性（4 空格）
-- [ ] 避免过长行（超过 120 字符建议换行）
 - [ ] 优先使用 STL 容器和算法，避免重复造轮子
 
 ---
@@ -222,7 +220,7 @@
   ```
 - ✅ **生成 compile_commands.json**（禁用 Unity Build）：
   ```bash
-  ./build.sh <platform> -DGK_ENABLE_UNITY_BUILD=OFF
+  ./build.sh <platform> -DENABLE_UNITY_BUILD=OFF
   ```
 - ✅ **性能分析使用 Superluminal/Tracy**（不影响默认构建）
 - ✅ **提交前检查工作区**：`git status` 确认无遗漏文件

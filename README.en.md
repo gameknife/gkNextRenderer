@@ -60,8 +60,8 @@ Windows (MSYS2 MinGW):
 ``` shell
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
 ./vcpkg.sh
-./build.sh --preset mingw
-./run.sh --preset mingw
+./build.sh --preset default-mingw
+./run.sh --preset default-mingw
 ```
 
 Linux (example: Ubuntu):
