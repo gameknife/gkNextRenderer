@@ -10,7 +10,7 @@
 - [x] Task: Define Lego-themed color palette and Glassmorphism style constants (e.g., `LegoYellow`, `GlassBackground`, `Rounding`). 8a7d2db
 - [x] Task: Implement a helper function or update `UserInterface` to apply the new ImGui style (Colors, Rounding, ChildBorderSize). 8a7d2db
 - [x] Task: Integrate modern icons (ensure FontAwesome 6 is fully utilized) and a modern sans-serif font. 8a7d2db
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md) [checkpoint: 6f0af35]
 
 ## Phase 3: HUD-style Layout Implementation
 - [ ] Task: Modify `MagicaLegoUserInterface::DrawLeftBar`, `DrawRightBar`, and `DrawMainToolBar` to use floating window flags (`ImGuiWindowFlags_NoDocking`, `ImGuiWindowFlags_NoResize`, etc.).
