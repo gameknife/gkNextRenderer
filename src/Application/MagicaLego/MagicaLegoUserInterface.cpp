@@ -1,5 +1,6 @@
 #include "MagicaLegoUserInterface.hpp"
 
+#include "MagicaLegoStyle.hpp"
 #include <fmt/chrono.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -101,6 +102,8 @@ MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameIns
 
 void MagicaLegoUserInterface::OnInitUI()
 {
+    MagicaLego::Style::ApplyStyle();
+
     std::vector<uint8_t> tmpData;
     
     if (bigFont_ == nullptr)
