@@ -19,10 +19,10 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md) [checkpoint: b2ff0ef]
 
 ## Phase 4: Animation & Interactivity (ImAnim)
-- [ ] Task: Implement entrance/exit animations for HUD panels using `ImAnim` (e.g., sliding from off-screen).
-- [ ] Task: Add hover and click feedback animations to buttons and interactive controls.
-- [ ] Task: Implement smooth transitions for HUD elements when switching editor modes (Selection/Move/Rotate).
-- [ ] Task: Animate the notification system (`DrawNotify`).
+- [x] Task: Implement entrance/exit animations for HUD panels using `ImAnim` (e.g., sliding from off-screen). 5a9cdc8
+- [x] Task: Add hover and click feedback animations to buttons and interactive controls. 5a9cdc8
+- [x] Task: Implement smooth transitions for HUD elements when switching editor modes (Selection/Move/Rotate). 5a9cdc8
+- [x] Task: Animate the notification system (`DrawNotify`). 5a9cdc8
 - [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
 
 ## Phase 5: Polishing & Performance
