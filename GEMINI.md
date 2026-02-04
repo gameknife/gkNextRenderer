@@ -1,69 +1,211 @@
-# Gemini 代码助手上下文 (Gemini Code Assistant Context)
+# GEMINI.md
 
-本文档为 Gemini 代码助手提供 `gkNextRenderer` 项目的核心上下文。
+This file provides guidance to Gemini Code Assistant when working with code in this repository.
 
-## 项目概览
+## Communication Preference
 
-`gkNextRenderer` 是一个使用现代 C++ 编写的跨平台 3D 游戏引擎，专注于现代渲染技术和游戏技术实践。引擎支持 Windows, Linux, macOS, Android 和 iOS。
+**Language: 中文 (Chinese)**
+Always communicate with the user in Chinese (中文).
 
-项目结构由一系列库和可执行文件组成。核心库为 `gkNextEngine`。主要可执行文件包括：
-*   `gkNextRenderer`: 主渲染器，支持路径追踪 (Path Tracing) 和混合渲染。
-*   `gkNextEditor`: 基于 ImGui 的场景编辑器。
-*   `MagicaLego`: 体素搭建小游戏，支持 AI 辅助建造。
-*   `gkNextUnitTests`: 使用 Catch2 框架的单元测试和集成测试。
+## Project Overview
 
-## 技术栈
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, and GPU-driven rendering. Target codebase size is <50k LOC (currently ~15k).
 
-*   **编程语言:** C++20
-*   **渲染 API:** Vulkan, Slang (着色器语言)
-*   **构建系统:** CMake, vcpkg (依赖管理)
-*   **核心依赖:** SDL3, ImGui, Jolt Physics, Catch2, glTF 2.0
+**Key Technologies:**
+- C++20/C11, Vulkan API, Slang shader language
+- ECS architecture (entt library)
+- QuickJS TypeScript scripting with hot reload
+- Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
 
-## 🤖 Agent 指引 (单一事实来源)
+**Subprojects:**
+- gkNextRenderer (main renderer)
+- gkNextEditor (ImGui editor with node-based material editor)
+- MagicaLego (voxel building game with AI assistant)
+- gkNextBenchmark
+- gkNextVisualTest (automated visual testing)
+- Packager (asset packaging to `.pkg`)
 
-**重要：作为 Agent，你必须始终使用中文（简体中文）与用户交流。**
+## Build Commands
 
-请根据任务类型查阅 `AGENT_GUIDE/` 目录下的具体指引：
+**Dependencies (vcpkg):**
+- Windows: `./vcpkg.bat`
+- macOS/Linux: `./vcpkg.sh`
 
-| 任务类型 | 查阅文件 | 说明 |
-| :--- | :--- | :--- |
-| **核心架构 & 常用命令** | [Layer 1: 核心模式](AGENT_GUIDE/core-patterns.md) | **必读**。包含架构原则、构建流程、**单元测试**核心步骤。 |
-| **详细开发规则** | [Layer 2: 上下文规则](AGENT_GUIDE/contextual-rules.md) | 开发新功能、理解构建系统细节、测试规范。 |
-| **代码规范细节** | [代码标准 (Coding Standards)](AGENT_GUIDE/coding-standards.md) | 命名约定、代码风格、C++ 特性使用详情。 |
-| **命令速查 & 排错** | [Layer 3: 快速命令](AGENT_GUIDE/quick-commands.md) | 紧急修复、复杂构建命令、故障排查。 |
+**Build:**
+- Windows: `./build.bat --preset default-windows`
+- macOS: `./build.sh --preset default-macos-arm64`
+- Linux: `./build.sh --preset default-linux`
+- Android: `./build.bat --android` (Windows) or `./build.sh --android`
+- Clean rebuild: add `--clean`
+- List presets: `cmake --list-presets=configure`
 
-## 开发约定
+**Presets:**
+- `minimal-*`: Fewest dependencies (KTX2 only)
+- `default-*`: Standard features (KTX2 + Physics + Audio)
+- `full-*`: All features including DLSS/OIDN
 
-*   **语言偏好:** **所有交互和文档必须使用中文 (简体中文)**。
-*   **代码风格:** 强制执行 `.clang-format`。详见 `AGENT_GUIDE/coding-standards.md`。
-*   **测试规范:** 测试代码位于 `src/Tests`。**关键限制：** 运行单元测试时，工作目录必须设置为二进制文件所在的同级目录。
+**Optional Features (via build flags or CMake args):**
+- `--avif`: AVIF texture loading and screenshots
+- `--dlss`: NVIDIA DLSS support (Windows only, downloads Streamline SDK)
+- `--oidn`: Intel OpenImageDenoise support (not on macOS, auto-downloads runtime)
+- Example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
 
-关于 Android、特定预设 (Presets) 或运行测试的详细命令，请参考 `AGENT_GUIDE/quick-commands.md`。
+**Build output:** `out/build/<preset>/bin/`
 
-## MagicaLego 子项目
+## Run Commands
 
-MagicaLego 是一个体素搭建小游戏，集成了 Gemini AI 辅助建造功能。
+- Windows: `./run.bat --preset <preset>`
+- macOS/Linux: `./run.sh --preset <preset>`
+- Specific target: `./run.sh --preset default-macos-arm64 --target gkNextEditor`
+- Android: `./run.sh --preset android`
 
-### 核心功能
-- 基于网格的乐高方块搭建（放置/挖掘/选择）
-- mlscript 脚本系统（变量、循环、相对坐标）
-- AI 助手（自然语言描述 → 自动生成脚本）
-- 时间轴回放、截图、录屏
+**Runtime success indicator:** Log shows `uploaded scene [...] to gpu`
 
-### 关键文件
-| 文件 | 说明 |
-|-----|------|
-| `MagicaLegoGameInstance.cpp` | 核心游戏逻辑 |
-| `MagicaLegoUserInterface.cpp` | UI 渲染（使用区域注释组织） |
-| `MagicaLegoCommands.cpp` | 命令系统（place, dig, move, turn 等） |
-| `MagicaLegoAIService.cpp` | Gemini API 集成 |
-| `MagicaLegoConstants.hpp` | 集中常量定义（Grid, UI, Anim, AI） |
-| `MagicaLegoUIHelpers.hpp` | 可复用 UI 辅助函数 |
+## Testing
 
-### 代码组织最佳实践
-1. **常量集中管理**: 所有魔法数字放入 `Constants.hpp`
-2. **辅助函数提取**: 可复用代码放入 `UIHelpers.hpp`
-3. **区域注释**: 大文件使用 `// ============ Section ============` 分隔
-4. **异步 AI**: 使用回调避免阻塞 UI 线程
+**CRITICAL: Tests must be run from the bin directory (CWD must be `bin`).**
 
-详细文档参见 `AGENT_GUIDE/MagicaLego.md`。
+```bash
+# Unit tests (Catch2)
+cd out/build/<preset>/bin && ./gkNextUnitTests
+
+# Run specific test by name or tag
+cd out/build/<preset>/bin && ./gkNextUnitTests "RenderComponent Usage"
+cd out/build/<preset>/bin && ./gkNextUnitTests "[Unit][RenderComponent]"
+
+# List available tests/tags
+cd out/build/<preset>/bin && ./gkNextUnitTests --list-tests
+cd out/build/<preset>/bin && ./gkNextUnitTests --list-tags
+
+# Visual tests (renders scenes, generates screenshots + report)
+cd out/build/<preset>/bin && ./gkNextVisualTest
+```
+
+**Visual Test Config:** `assets/configs/visual_test.json` defines scenes, frame counts, output directory.
+
+## Linting
+
+**Static Analysis:**
+- Config: `.clang-tidy` (naming + include cleaner)
+- Generate compile database: `./build.sh --preset <preset> -- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+- Run clang-tidy: `python3 tools/clang-tools/run-clang-tidy.py -p out/build/<preset>`
+- Run naming checks: `BUILD_DIR=out/build/<preset> tools/clang-tools/run-naming.sh`
+
+## Code Style (Summary)
+
+**Naming (enforced by .clang-tidy):**
+- Types/functions: PascalCase (e.g., `class RenderContext`, `void RenderFrame()`)
+- Variables/parameters: camelCase (e.g., `int frameCounter`)
+- Private members: camelCase_ (trailing underscore, e.g., `VkDevice device_`)
+- Global variables: PascalCase (e.g., `GOption`)
+- Constants/constexpr: camelCase (e.g., `constexpr int maxFrames`)
+- Macros: UPPER_CASE (e.g., `VK_CHECK_RESULT`)
+
+**Formatting:**
+- Indentation: 4 spaces, no tabs
+- Braces: Allman style (opening brace on new line)
+- First include: `Common/CoreMinimal.hpp` (includes std, fmt, spdlog, platform detection)
+- Platform abstraction: Use `PlatformCommon.h`, not direct platform headers; use `#if ANDROID` not `#ifdef`
+
+**Shaders:**
+- Use Slang (`.vert.slang`, `.frag.slang`, `.rgen.slang`, `.comp.slang`)
+- Uses ray query API, not ray pipeline
+- Avoid hard-coded constants; use uniforms/push constants
+
+**Vulkan:**
+- Always check VkResult with `VK_CHECK_RESULT`
+- RAII for resource cleanup (pair allocations with destructors)
+- Prefer `std::unique_ptr`/`std::shared_ptr` over raw owning pointers
+
+## Architecture Overview
+
+```
+src/
+├── Runtime/           # Core engine runtime
+│   ├── Platform/      # Platform abstraction (via PlatformCommon.h)
+│   ├── Components/    # ECS components (entt)
+│   ├── Reflection/    # Property reflection (entt::meta) for editor + JS bindings
+│   └── Command/       # Command history system (undo/redo)
+├── Vulkan/            # Vulkan backend
+│   └── RayTracing/    # Hardware ray tracing
+├── Rendering/         # Render pipelines
+│   ├── PathTracing/   # Full path tracing
+│   ├── SoftwareTracing/  # Software ray tracing
+│   ├── SoftwareModern/   # Modern rasterization + software GI
+│   └── PipelineCommon/   # Shared pipeline utilities
+├── Editor/            # ImGui editor
+│   ├── Panels/        # Property panel (auto-generated from reflection)
+│   ├── Nodes/         # Node-based material editor
+│   └── Commands/      # Editor command system (undo/redo)
+├── Assets/            # Asset loading (glTF, textures, etc.)
+├── Tests/             # Catch2 unit tests
+├── Application/       # App entry points
+│   ├── gkNextRenderer/
+│   ├── gkNextEditor/
+│   ├── MagicaLego/
+│   ├── gkNextBenchmark/
+│   ├── gkNextVisualTest/
+│   └── Packager/
+└── ThirdParty/        # Third-party code (DO NOT MODIFY)
+
+assets/
+├── shaders/           # Slang shaders (.slang)
+├── configs/           # Runtime config (visual_test.json, ai_config.json)
+├── models/            # glTF scenes
+└── typescript/        # TypeScript definitions for QuickJS scripting
+```
+
+## Key Architectural Patterns
+
+**Reflection System (entt::meta):**
+- Provides auto-generated editor UI via PropertyPanel
+- Exposes component properties to QuickJS JavaScript bindings
+- Supports undo/redo for property modifications
+- See `AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
+- Register components using `REFLECT_COMPONENT` macro in component's .cpp file
+- TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
+
+**QuickJS Scripting:**
+- Hot reload support (modify `.js` files at runtime)
+- Components reflected via `entt::meta` are auto-exposed to JavaScript
+- Global namespace: `Global.GetEngine()`, `Global.spdlog()`
+- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`
+
+**Component System:**
+- ECS via entt library
+- All components inherit from `Assets::Component`
+- Must implement `GetMetaType()` for reflection support
+- Common components: RenderComponent, PhysicsComponent, SkinnedMeshComponent
+
+**Resource Management:**
+- Vulkan objects use RAII (destroyed in destructors)
+- Always pair allocations with deterministic cleanup
+- No silent failures in init/resource loading paths
+
+## Repository Hygiene
+
+- DO NOT modify third-party code in `ThirdParty/` or `external/`
+- DO NOT commit build artifacts (`out/`, object files)
+- DO NOT hard-code absolute paths or add secrets/keys
+- When adding dependencies, update `vcpkg.json`
+
+## Verification After Changes
+
+1. **Build:** Run build script for target preset
+2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
+3. **Test:** Run unit tests if touching core systems
+4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
+
+## Key References
+
+- **CLAUDE.md** - Claude Code specific guidance
+- **AGENTS.md** - General AI assistant guidance (GitHub Copilot, Cursor, etc.)
+- **AGENT_GUIDE/** - Layered documentation:
+  - `core-patterns.md` - Essential patterns and commands (Layer 1)
+  - `contextual-rules.md` - Context-specific rules (Layer 2)
+  - `coding-standards.md` - Detailed code review guidelines
+  - `quick-commands.md` - Command reference (Layer 3)
+  - `ReflectionSystem.md` - Reflection system documentation
+  - `MagicaLego.md` - MagicaLego subproject notes
+- **README.en.md** - Project overview and quick start
+- **.clang-tidy** - Naming conventions (source of truth)

@@ -1,201 +1,211 @@
-# gkNextRenderer Agent Guide
+# AGENTS.md
 
-This document is for agentic coding assistants working in this repo.
-It consolidates build/test commands and the local coding standards.
+This file provides guidance to AI coding assistants (GitHub Copilot, Cursor, etc.) when working with code in this repository.
 
-Sources used to derive this guide:
-- `AGENT_GUIDE/core-patterns.md`
-- `AGENT_GUIDE/contextual-rules.md`
-- `AGENT_GUIDE/coding-standards.md`
-- `AGENT_GUIDE/quick-commands.md`
-- `README.md`, `README.en.md`
-- `.clang-tidy`
-- `build.sh`, `build.ps1`, `run.sh`
+## Communication Preference
 
-No Cursor rules or Copilot rules were found in:
-- `.cursor/rules/`
-- `.cursorrules`
-- `.github/copilot-instructions.md`
+**Language: 中文 (Chinese)**
+Always communicate with the user in Chinese (中文).
 
---------------------------------------------------------------------------------
-Build, Run, Lint, Test
---------------------------------------------------------------------------------
+## Project Overview
 
-List available CMake presets:
-- `cmake --list-presets=configure`
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, and GPU-driven rendering. Target codebase size is <50k LOC (currently ~15k).
 
-Dependencies (vcpkg):
+**Key Technologies:**
+- C++20/C11, Vulkan API, Slang shader language
+- ECS architecture (entt library)
+- QuickJS TypeScript scripting with hot reload
+- Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
+
+**Subprojects:**
+- gkNextRenderer (main renderer)
+- gkNextEditor (ImGui editor with node-based material editor)
+- MagicaLego (voxel building game with AI assistant)
+- gkNextBenchmark
+- gkNextVisualTest (automated visual testing)
+- Packager (asset packaging to `.pkg`)
+
+## Build Commands
+
+**Dependencies (vcpkg):**
 - Windows: `./vcpkg.bat`
 - macOS/Linux: `./vcpkg.sh`
 
-Build (native):
+**Build:**
 - Windows: `./build.bat --preset default-windows`
 - macOS: `./build.sh --preset default-macos-arm64`
 - Linux: `./build.sh --preset default-linux`
+- Android: `./build.bat --android` (Windows) or `./build.sh --android`
 - Clean rebuild: add `--clean`
+- List presets: `cmake --list-presets=configure`
 
-Build (Android):
-- Windows: `./build.bat --android`
-- macOS/Linux: `./build.sh --android`
+**Presets:**
+- `minimal-*`: Fewest dependencies (KTX2 only)
+- `default-*`: Standard features (KTX2 + Physics + Audio)
+- `full-*`: All features including DLSS/OIDN
 
-Optional build flags (via CMake args):
-- Example: `./build.sh --preset default-linux -- -DENABLE_AVIF=ON`
-- Windows example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
+**Optional Features (via build flags or CMake args):**
+- `--avif`: AVIF texture loading and screenshots
+- `--dlss`: NVIDIA DLSS support (Windows only, downloads Streamline SDK)
+- `--oidn`: Intel OpenImageDenoise support (not on macOS, auto-downloads runtime)
+- Example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
 
-Run (native):
-- `./run.sh --preset <preset>`
+**Build output:** `out/build/<preset>/bin/`
+
+## Run Commands
+
 - Windows: `./run.bat --preset <preset>`
-- Example target: `./run.sh --preset default-macos-arm64 --target gkNextEditor`
+- macOS/Linux: `./run.sh --preset <preset>`
+- Specific target: `./run.sh --preset default-macos-arm64 --target gkNextEditor`
+- Android: `./run.sh --preset android`
 
-Run (Android):
-- `./run.sh --preset android`
+**Runtime success indicator:** Log shows `uploaded scene [...] to gpu`
 
-Tests (Catch2):
-IMPORTANT: run tests from the bin directory (CWD must be `bin`).
-- Windows: `cd out/build/default-windows/bin && ./gkNextUnitTests.exe`
-- macOS: `cd out/build/default-macos-arm64/bin && ./gkNextUnitTests`
-- Linux: `cd out/build/default-linux/bin && ./gkNextUnitTests`
+## Testing
 
-Run a single test or tag (Catch2 filter):
-- `cd out/build/<preset>/bin && ./gkNextUnitTests "RenderComponent Usage"`
-- `cd out/build/<preset>/bin && ./gkNextUnitTests "[Unit][RenderComponent]"`
-- List tests: `./gkNextUnitTests --list-tests`
-- List tags: `./gkNextUnitTests --list-tags`
+**CRITICAL: Tests must be run from the bin directory (CWD must be `bin`).**
 
-Visual Tests (gkNextVisualTest):
-Automated visual testing for rendering validation. Loads scenes from a JSON config,
-renders each for a configurable number of frames, captures screenshots, and generates
-a Markdown report. Suitable for CI integration.
+```bash
+# Unit tests (Catch2)
+cd out/build/<preset>/bin && ./gkNextUnitTests
 
-- Config file: `assets/configs/visual_test.json`
-- Run (from bin directory):
-  - Windows: `cd out/build/default-windows/bin && ./gkNextVisualTest.exe`
-  - macOS: `cd out/build/default-macos-arm64/bin && ./gkNextVisualTest`
-  - Linux: `cd out/build/default-linux/bin && ./gkNextVisualTest`
-- Output: `screenshots/visual_test/` (screenshots + `visual_test_report.md`)
+# Run specific test by name or tag
+cd out/build/<preset>/bin && ./gkNextUnitTests "RenderComponent Usage"
+cd out/build/<preset>/bin && ./gkNextUnitTests "[Unit][RenderComponent]"
 
-Config format (visual_test.json):
-```json
-{
-    "version": 1,
-    "outputDir": "screenshots/visual_test",
-    "defaultFramesToWait": 120,
-    "scenes": [
-        { "path": "assets/models/playground.glb", "frames": 120 },
-        { "path": "assets/models/livingroom.glb", "frames": 150 }
-    ]
-}
+# List available tests/tags
+cd out/build/<preset>/bin && ./gkNextUnitTests --list-tests
+cd out/build/<preset>/bin && ./gkNextUnitTests --list-tags
+
+# Visual tests (renders scenes, generates screenshots + report)
+cd out/build/<preset>/bin && ./gkNextVisualTest
 ```
 
-Lint / static analysis:
-- clang-tidy config: `.clang-tidy` (naming + include cleaner)
-- Create compile database (if not already):
-  - `./build.sh --preset <preset> -- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
-- Run clang-tidy (all files):
-  - `python3 tools/clang-tools/run-clang-tidy.py -p out/build/<preset>`
-- Run naming checks helper:
-  - `BUILD_DIR=out/build/<preset> tools/clang-tools/run-naming.sh`
+**Visual Test Config:** `assets/configs/visual_test.json` defines scenes, frame counts, output directory.
 
-Build output locations:
-- Desktop: `out/build/<preset>/bin/`
-- Android: `android/app/build/outputs/apk/`
+## Linting
 
---------------------------------------------------------------------------------
-Code Style and Architecture Rules
---------------------------------------------------------------------------------
+**Static Analysis:**
+- Config: `.clang-tidy` (naming + include cleaner)
+- Generate compile database: `./build.sh --preset <preset> -- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+- Run clang-tidy: `python3 tools/clang-tools/run-clang-tidy.py -p out/build/<preset>`
+- Run naming checks: `BUILD_DIR=out/build/<preset> tools/clang-tools/run-naming.sh`
 
-Language and formatting:
-- C++20 and C11; prefer modern C++ (RAII, smart pointers, range-based for).
-- Indentation: 4 spaces, no tabs.
-- Braces: Allman style (opening brace on the next line).
+## Code Style (Summary)
 
-Naming (enforced by `.clang-tidy`):
-- Types (class/struct/enum/typedef/namespace): PascalCase.
-- Functions and methods: PascalCase.
-- Variables/parameters/static locals: camelCase.
-- Private members: camelCase with trailing underscore (e.g., `device_`).
-- Global variables: PascalCase (e.g., `GOption`).
-- Constants/constexpr: camelCase (e.g., `maxFrames`).
-- Macros: UPPER_CASE (leading underscore macros allowed, e.g., `_USE_MATH_DEFINES`).
+**Naming (enforced by .clang-tidy):**
+- Types/functions: PascalCase (e.g., `class RenderContext`, `void RenderFrame()`)
+- Variables/parameters: camelCase (e.g., `int frameCounter`)
+- Private members: camelCase_ (trailing underscore, e.g., `VkDevice device_`)
+- Global variables: PascalCase (e.g., `GOption`)
+- Constants/constexpr: camelCase (e.g., `constexpr int maxFrames`)
+- Macros: UPPER_CASE (e.g., `VK_CHECK_RESULT`)
 
-Includes and headers:
-- New files should include `Common/CoreMinimal.hpp` first.
-- Avoid including platform headers directly; use `PlatformCommon.h`.
-- Avoid redundant standard headers if `CoreMinimal.hpp` already provides them.
-- Keep includes minimal and avoid cyclic dependencies.
+**Formatting:**
+- Indentation: 4 spaces, no tabs
+- Braces: Allman style (opening brace on new line)
+- First include: `Common/CoreMinimal.hpp` (includes std, fmt, spdlog, platform detection)
+- Platform abstraction: Use `PlatformCommon.h`, not direct platform headers; use `#if ANDROID` not `#ifdef`
 
-Platform rules:
-- Use `PlatformCommon.h` for platform abstractions.
-- Use `#if ANDROID` instead of `#ifdef ANDROID`.
-- Guard platform-specific code with the correct platform macro.
-- Use cross-platform paths (`std::filesystem` or engine wrappers).
+**Shaders:**
+- Use Slang (`.vert.slang`, `.frag.slang`, `.rgen.slang`, `.comp.slang`)
+- Uses ray query API, not ray pipeline
+- Avoid hard-coded constants; use uniforms/push constants
 
-Error handling and logging:
-- Always check Vulkan `VkResult` (use `VK_CHECK_RESULT`).
-- Handle failure paths: log with context (file, function, reason) and clean up.
-- Avoid silent failures in init/resource loading paths.
+**Vulkan:**
+- Always check VkResult with `VK_CHECK_RESULT`
+- RAII for resource cleanup (pair allocations with destructors)
+- Prefer `std::unique_ptr`/`std::shared_ptr` over raw owning pointers
 
-Resources and memory:
-- Follow RAII; pair allocations with deterministic cleanup.
-- Vulkan objects must be destroyed in destructors or explicit cleanup routines.
-- Prefer `std::unique_ptr`/`std::shared_ptr` over raw owning pointers.
+## Architecture Overview
 
-Shaders:
-- Use Slang for shaders.
-- Use consistent extensions: `.vert.slang`, `.frag.slang`, `.rgen.slang`, etc.
-- Avoid hard-coded constants; use uniforms/push constants.
+```
+src/
+├── Runtime/           # Core engine runtime
+│   ├── Platform/      # Platform abstraction (via PlatformCommon.h)
+│   ├── Components/    # ECS components (entt)
+│   ├── Reflection/    # Property reflection (entt::meta) for editor + JS bindings
+│   └── Command/       # Command history system (undo/redo)
+├── Vulkan/            # Vulkan backend
+│   └── RayTracing/    # Hardware ray tracing
+├── Rendering/         # Render pipelines
+│   ├── PathTracing/   # Full path tracing
+│   ├── SoftwareTracing/  # Software ray tracing
+│   ├── SoftwareModern/   # Modern rasterization + software GI
+│   └── PipelineCommon/   # Shared pipeline utilities
+├── Editor/            # ImGui editor
+│   ├── Panels/        # Property panel (auto-generated from reflection)
+│   ├── Nodes/         # Node-based material editor
+│   └── Commands/      # Editor command system (undo/redo)
+├── Assets/            # Asset loading (glTF, textures, etc.)
+├── Tests/             # Catch2 unit tests
+├── Application/       # App entry points
+│   ├── gkNextRenderer/
+│   ├── gkNextEditor/
+│   ├── MagicaLego/
+│   ├── gkNextBenchmark/
+│   ├── gkNextVisualTest/
+│   └── Packager/
+└── ThirdParty/        # Third-party code (DO NOT MODIFY)
 
-Testing and verification expectations:
-- After code changes, ensure the project builds for the target preset.
-- Important rendering changes should be visually validated in `gkNextRenderer`.
-- Runtime success indicator: log contains `uploaded scene [...] to gpu`.
+assets/
+├── shaders/           # Slang shaders (.slang)
+├── configs/           # Runtime config (visual_test.json, ai_config.json)
+├── models/            # glTF scenes
+└── typescript/        # TypeScript definitions for QuickJS scripting
+```
 
-Repository hygiene:
-- Do not modify third-party code in `ThirdParty/` or `external/`.
-- Do not commit build artifacts (`out/`, object files).
-- Do not hard-code absolute paths or add secrets/keys.
+## Key Architectural Patterns
 
---------------------------------------------------------------------------------
-Project Layout (quick map)
---------------------------------------------------------------------------------
+**Reflection System (entt::meta):**
+- Provides auto-generated editor UI via PropertyPanel
+- Exposes component properties to QuickJS JavaScript bindings
+- Supports undo/redo for property modifications
+- See `AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
+- Register components using `REFLECT_COMPONENT` macro in component's .cpp file
+- TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
 
-- `src/Runtime/` core runtime code
-- `src/Runtime/Platform/` platform-specific code (via `PlatformCommon.h`)
-- `src/Vulkan/` Vulkan backend
-- `src/Application/` application entry points
-  - `gkNextRenderer/` main renderer
-  - `gkNextEditor/` scene editor
-  - `MagicaLego/` voxel building game (see below)
-- `src/Tests/` Catch2 tests
-- `assets/` shaders, scenes, runtime data
+**QuickJS Scripting:**
+- Hot reload support (modify `.js` files at runtime)
+- Components reflected via `entt::meta` are auto-exposed to JavaScript
+- Global namespace: `Global.GetEngine()`, `Global.spdlog()`
+- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`
 
---------------------------------------------------------------------------------
-MagicaLego Subproject
---------------------------------------------------------------------------------
+**Component System:**
+- ECS via entt library
+- All components inherit from `Assets::Component`
+- Must implement `GetMetaType()` for reflection support
+- Common components: RenderComponent, PhysicsComponent, SkinnedMeshComponent
 
-MagicaLego is a voxel building game with AI-assisted construction.
+**Resource Management:**
+- Vulkan objects use RAII (destroyed in destructors)
+- Always pair allocations with deterministic cleanup
+- No silent failures in init/resource loading paths
 
-Key files:
-- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp` - core logic
-- `src/Application/MagicaLego/MagicaLegoUserInterface.cpp` - UI rendering
-- `src/Application/MagicaLego/MagicaLegoCommands.cpp` - command system
-- `src/Application/MagicaLego/MagicaLegoAIService.cpp` - Gemini AI integration
-- `src/Application/MagicaLego/MagicaLegoConstants.hpp` - centralized constants
+## Repository Hygiene
 
-Code organization patterns:
-- Constants centralized in `MagicaLegoConstants.hpp` (Grid, UI, Anim, AI namespaces)
-- UI helpers extracted to `MagicaLegoUIHelpers.hpp`
-- Large files use section comments: `// ============ Section Name ============`
-- Async AI calls use callbacks to avoid blocking UI
+- DO NOT modify third-party code in `ThirdParty/` or `external/`
+- DO NOT commit build artifacts (`out/`, object files)
+- DO NOT hard-code absolute paths or add secrets/keys
+- When adding dependencies, update `vcpkg.json`
 
-For detailed documentation, see `AGENT_GUIDE/MagicaLego.md`.
+## Verification After Changes
 
---------------------------------------------------------------------------------
-Notes for Agents
---------------------------------------------------------------------------------
+1. **Build:** Run build script for target preset
+2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
+3. **Test:** Run unit tests if touching core systems
+4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
 
-- Follow the naming rules strictly; `.clang-tidy` is the source of truth.
-- Prefer scripted workflows (`build.sh`, `build.ps1`, `run.sh`) over manual CMake.
-- If you add a new dependency, update `vcpkg.json` accordingly.
-- If unsure about a preset name, use `cmake --list-presets=configure`.
-- When creating commits, add an AI co-author line matching the model you used (e.g., `Co-authored-by: gpt-5.2-codex <gpt-5.2-codex@openai.com>`).
+## Key References
+
+- **CLAUDE.md** - Claude Code specific guidance
+- **GEMINI.md** - Gemini Code Assistant specific guidance
+- **AGENT_GUIDE/** - Layered documentation:
+  - `core-patterns.md` - Essential patterns and commands (Layer 1)
+  - `contextual-rules.md` - Context-specific rules (Layer 2)
+  - `coding-standards.md` - Detailed code review guidelines
+  - `quick-commands.md` - Command reference (Layer 3)
+  - `ReflectionSystem.md` - Reflection system documentation
+  - `MagicaLego.md` - MagicaLego subproject notes
+- **README.en.md** - Project overview and quick start
+- **.clang-tidy** - Naming conventions (source of truth)
