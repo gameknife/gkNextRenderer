@@ -9,6 +9,7 @@
 项目结构由一系列库和可执行文件组成。核心库为 `gkNextEngine`。主要可执行文件包括：
 *   `gkNextRenderer`: 主渲染器，支持路径追踪 (Path Tracing) 和混合渲染。
 *   `gkNextEditor`: 基于 ImGui 的场景编辑器。
+*   `MagicaLego`: 体素搭建小游戏，支持 AI 辅助建造。
 *   `gkNextUnitTests`: 使用 Catch2 框架的单元测试和集成测试。
 
 ## 技术栈
@@ -38,3 +39,31 @@
 *   **测试规范:** 测试代码位于 `src/Tests`。**关键限制：** 运行单元测试时，工作目录必须设置为二进制文件所在的同级目录。
 
 关于 Android、特定预设 (Presets) 或运行测试的详细命令，请参考 `AGENT_GUIDE/quick-commands.md`。
+
+## MagicaLego 子项目
+
+MagicaLego 是一个体素搭建小游戏，集成了 Gemini AI 辅助建造功能。
+
+### 核心功能
+- 基于网格的乐高方块搭建（放置/挖掘/选择）
+- mlscript 脚本系统（变量、循环、相对坐标）
+- AI 助手（自然语言描述 → 自动生成脚本）
+- 时间轴回放、截图、录屏
+
+### 关键文件
+| 文件 | 说明 |
+|-----|------|
+| `MagicaLegoGameInstance.cpp` | 核心游戏逻辑 |
+| `MagicaLegoUserInterface.cpp` | UI 渲染（使用区域注释组织） |
+| `MagicaLegoCommands.cpp` | 命令系统（place, dig, move, turn 等） |
+| `MagicaLegoAIService.cpp` | Gemini API 集成 |
+| `MagicaLegoConstants.hpp` | 集中常量定义（Grid, UI, Anim, AI） |
+| `MagicaLegoUIHelpers.hpp` | 可复用 UI 辅助函数 |
+
+### 代码组织最佳实践
+1. **常量集中管理**: 所有魔法数字放入 `Constants.hpp`
+2. **辅助函数提取**: 可复用代码放入 `UIHelpers.hpp`
+3. **区域注释**: 大文件使用 `// ============ Section ============` 分隔
+4. **异步 AI**: 使用回调避免阻塞 UI 线程
+
+详细文档参见 `AGENT_GUIDE/MagicaLego.md`。
