@@ -9,6 +9,7 @@ namespace MagicaLego
         void SetVariable(const std::string& name, int value);
         bool GetVariable(const std::string& name, int& outValue) const;
         std::string SubstituteVariables(const std::string& line) const;
+        int EvaluateExpression(const std::string& expr) const;
 
     private:
         std::unordered_map<std::string, int> variables_;
@@ -35,6 +36,7 @@ namespace MagicaLego
             int depth = 0);
 
         std::string TrimLine(const std::string& line) const;
+        std::string RemoveInlineComment(const std::string& line) const;
         bool ParseRepeatHeader(const std::string& line, FScriptContext& context,
             int& outCount, std::string& outIterator, std::string& error) const;
         bool ParseVarDeclaration(const std::string& line, FScriptContext& context,

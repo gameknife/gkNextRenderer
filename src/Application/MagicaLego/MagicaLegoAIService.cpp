@@ -124,17 +124,36 @@ Colors are referenced by index: #0, #1, #2, etc.
 
         prompt += R"(
 ## Script Syntax
-- Comments: # text
+- Full line comments: # text
+- Inline comments: command # comment
 - Variables: var name = value
-- Loops: repeat count as i ... end
+- Loops: repeat count as i ... end (i goes from 0 to count-1)
 - Variable reference: $varName
+- Expressions: $(varName + number) or $(varName - number)
+
+## Examples
+```mlscript
+# Build a 3x3 floor
+repeat 3 as x
+    repeat 3 as z
+        place Plate1x1/#1 $(x - 1) 0 $(z - 1)
+    end
+end
+
+# Build a wall
+repeat 5 as i
+    place Block1x1/#0 $i 0 0  # bottom row
+    place Block1x1/#0 $i 1 0  # top row
+end
+```
 
 ## Rules
-1. Output ONLY mlscript code, no explanations
+1. Output ONLY mlscript code, no explanations or markdown
 2. Use loops to reduce repetitive code
-3. y=0 is ground level
+3. y=0 is ground level, y increases upward
 4. Coordinate origin (0,0,0) is at center
-5. Orientations: north, east, south, west
+5. Loop iterator starts from 0, use $(i - offset) to center
+6. Orientations: north, east, south, west
 
 User request: )";
 

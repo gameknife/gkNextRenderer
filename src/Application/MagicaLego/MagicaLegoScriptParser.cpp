@@ -24,43 +24,134 @@ namespace MagicaLego
         return false;
     }
 
+    int FScriptContext::EvaluateExpression(const std::string& expr) const
+    {
+        std::string trimmed = expr;
+        // Trim whitespace
+        auto start = trimmed.find_first_not_of(" \t");
+        auto end = trimmed.find_last_not_of(" \t");
+        if (start == std::string::npos)
+        {
+            return 0;
+        }
+        trimmed = trimmed.substr(start, end - start + 1);
+
+        // Try to find + or - operator (not at start for negative numbers)
+        size_t opPos = std::string::npos;
+        char op = 0;
+
+        // Look for + or - that's not at the start
+        for (size_t i = 1; i < trimmed.size(); ++i)
+        {
+            if (trimmed[i] == '+' || trimmed[i] == '-')
+            {
+                // Make sure it's not part of a number (e.g., "1e-5")
+                opPos = i;
+                op = trimmed[i];
+                break;
+            }
+        }
+
+        if (opPos != std::string::npos)
+        {
+            // Split into left and right parts
+            std::string leftStr = trimmed.substr(0, opPos);
+            std::string rightStr = trimmed.substr(opPos + 1);
+
+            int leftVal = EvaluateExpression(leftStr);
+            int rightVal = EvaluateExpression(rightStr);
+
+            return (op == '+') ? (leftVal + rightVal) : (leftVal - rightVal);
+        }
+
+        // No operator found, evaluate as single value
+        // Check if it's a variable reference
+        if (!trimmed.empty() && (std::isalpha(trimmed[0]) || trimmed[0] == '_'))
+        {
+            int value = 0;
+            if (GetVariable(trimmed, value))
+            {
+                return value;
+            }
+            // Unknown variable, return 0
+            return 0;
+        }
+
+        // Try to parse as integer
+        try
+        {
+            return std::stoi(trimmed);
+        }
+        catch (...)
+        {
+            return 0;
+        }
+    }
+
     std::string FScriptContext::SubstituteVariables(const std::string& line) const
     {
         std::string result = line;
-
-        // Find all $varName patterns and replace with values
-        std::regex varPattern(R"(\$([a-zA-Z_][a-zA-Z0-9_]*))");
-        std::smatch match;
-        std::string::const_iterator searchStart = result.cbegin();
-
         std::string processed;
-        size_t lastPos = 0;
+        size_t i = 0;
 
-        while (std::regex_search(searchStart, result.cend(), match, varPattern))
+        while (i < result.size())
         {
-            // Append text before match
-            size_t matchPos = match.position() + (searchStart - result.cbegin());
-            processed += result.substr(lastPos, matchPos - lastPos);
-
-            // Get variable name and value
-            std::string varName = match[1].str();
-            int value = 0;
-            if (GetVariable(varName, value))
+            if (result[i] == '$')
             {
-                processed += std::to_string(value);
-            }
-            else
-            {
-                // Keep original if variable not found
-                processed += match[0].str();
+                // Check for $(expression) syntax
+                if (i + 1 < result.size() && result[i + 1] == '(')
+                {
+                    // Find matching closing parenthesis
+                    size_t start = i + 2;
+                    size_t depth = 1;
+                    size_t j = start;
+                    while (j < result.size() && depth > 0)
+                    {
+                        if (result[j] == '(') depth++;
+                        else if (result[j] == ')') depth--;
+                        j++;
+                    }
+
+                    if (depth == 0)
+                    {
+                        // Extract expression and evaluate
+                        std::string expr = result.substr(start, j - start - 1);
+                        int value = EvaluateExpression(expr);
+                        processed += std::to_string(value);
+                        i = j;
+                        continue;
+                    }
+                }
+
+                // Check for $varName syntax
+                if (i + 1 < result.size() && (std::isalpha(result[i + 1]) || result[i + 1] == '_'))
+                {
+                    size_t start = i + 1;
+                    size_t j = start;
+                    while (j < result.size() && (std::isalnum(result[j]) || result[j] == '_'))
+                    {
+                        j++;
+                    }
+
+                    std::string varName = result.substr(start, j - start);
+                    int value = 0;
+                    if (GetVariable(varName, value))
+                    {
+                        processed += std::to_string(value);
+                    }
+                    else
+                    {
+                        // Keep original if variable not found
+                        processed += result.substr(i, j - i);
+                    }
+                    i = j;
+                    continue;
+                }
             }
 
-            lastPos = matchPos + match[0].length();
-            searchStart = match.suffix().first;
+            processed += result[i];
+            i++;
         }
-
-        // Append remaining text
-        processed += result.substr(lastPos);
 
         return processed;
     }
@@ -76,6 +167,39 @@ namespace MagicaLego
         }
         auto end = line.find_last_not_of(" \t\r\n");
         return line.substr(start, end - start + 1);
+    }
+
+    std::string FScriptParser::RemoveInlineComment(const std::string& line) const
+    {
+        // Find # that's preceded by whitespace (indicates a comment)
+        // Skip # that's part of color specification like "Block1x1/#0"
+        size_t pos = 0;
+        while (pos < line.size())
+        {
+            size_t hashPos = line.find('#', pos);
+            if (hashPos == std::string::npos)
+            {
+                return line;
+            }
+
+            // Check if # is preceded by whitespace (then it's a comment)
+            if (hashPos > 0 && (line[hashPos - 1] == ' ' || line[hashPos - 1] == '\t'))
+            {
+                // This is an inline comment
+                std::string result = line.substr(0, hashPos);
+                auto end = result.find_last_not_of(" \t");
+                if (end == std::string::npos)
+                {
+                    return "";
+                }
+                return result.substr(0, end + 1);
+            }
+
+            // Not a comment, continue searching
+            pos = hashPos + 1;
+        }
+
+        return line;
     }
 
     bool FScriptParser::ParseVarDeclaration(const std::string& line, FScriptContext& context,
@@ -173,8 +297,16 @@ namespace MagicaLego
         {
             std::string trimmed = TrimLine(lines[index]);
 
-            // Skip empty lines and comments
+            // Skip empty lines and full-line comments
             if (trimmed.empty() || trimmed[0] == '#')
+            {
+                index++;
+                continue;
+            }
+
+            // Remove inline comments (e.g., "command # comment")
+            trimmed = RemoveInlineComment(trimmed);
+            if (trimmed.empty())
             {
                 index++;
                 continue;
