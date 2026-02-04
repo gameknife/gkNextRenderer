@@ -190,7 +190,7 @@ User request: )";
             })},
             {"generationConfig", {
                 {"temperature", 0.7},
-                {"maxOutputTokens", 2048}
+                {"maxOutputTokens", 8192}
             }}
         };
 
@@ -211,7 +211,7 @@ User request: )";
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
 
         CURLcode res = curl_easy_perform(curl);
 
