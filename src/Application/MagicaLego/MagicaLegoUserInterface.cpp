@@ -1,6 +1,7 @@
 #include "MagicaLegoUserInterface.hpp"
 
 #include "MagicaLegoStyle.hpp"
+#include "MagicaLegoConstants.hpp"
 #include <fmt/chrono.h>
 #include <im_anim.h>
 #include <imgui.h>
@@ -21,15 +22,17 @@
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Localization.hpp"
 
-namespace 
+namespace
 {
-    constexpr float titlebarSize = 40;
-    constexpr float titlebarControlSize = titlebarSize * 3;
-    constexpr float iconSize = 64;
-    constexpr float palateSize = 46;
-    constexpr float buttonSize = 36;
-    constexpr float buildBarWidth = 240;
-    constexpr float sideBarWidth = 300;
+    using namespace MagicaLego;
+
+    constexpr float titlebarSize = UI::TitleBarHeight;
+    constexpr float titlebarControlSize = UI::TitleBarControlWidth;
+    constexpr float iconSize = UI::IconSize;
+    constexpr float paletteSize = UI::PaletteSize;  // Fixed spelling: palate -> palette
+    constexpr float buttonSize = UI::ButtonSize;
+    constexpr float buildBarWidth = UI::BuildBarWidth;
+    constexpr float sideBarWidth = UI::SideBarWidth;
     constexpr float shortcutSize = 10;
 
     constexpr int panelFlags =
@@ -116,7 +119,7 @@ namespace
         ImGui::BeginGroup();
         
         ImVec2 p_start = ImGui::GetCursorScreenPos();
-        ImVec2 standardSize(palateSize, palateSize);
+        ImVec2 standardSize(paletteSize, paletteSize);
         
         ImGui::PushID(static_cast<int>(block.modelId_));
         bool clicked = ImGui::InvisibleButton("##Hit", standardSize);
@@ -140,12 +143,12 @@ namespace
 
         if(texId != 0) drawList->AddImage(texId, p_min, p_max);
         
-        Utilities::UI::TextCentered(block.name, palateSize);
+        Utilities::UI::TextCentered(block.name, paletteSize);
         
         ImGui::EndGroup();
         
         float lastButtonX2 = ImGui::GetItemRectMax().x;
-        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + palateSize; 
+        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + paletteSize; 
         if (nextButtonX2 < windowWidth) ImGui::SameLine();
         
         return clicked;
@@ -1311,6 +1314,15 @@ void MagicaLegoUserInterface::DrawAISection()
         auto response = aiService_->GetPendingResult();
         aiGenerating_ = false;
 
+        // Calculate elapsed time
+        float elapsed = static_cast<float>(ImGui::GetTime()) - aiGenerateStartTime_;
+        int totalSeconds = static_cast<int>(elapsed);
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        std::string timeStr = minutes > 0
+            ? fmt::format("{}m {}s", minutes, seconds)
+            : fmt::format("{:.1f}s", elapsed);
+
         if (response.success)
         {
             // Validate and fix the script first
@@ -1319,7 +1331,7 @@ void MagicaLegoUserInterface::DrawAISection()
             // Save the fixed script for display
             lastGeneratedScript_ = validation.fixedScript;
 
-            consoleOutput_.push_back("> [AI] Generated script:");
+            consoleOutput_.push_back(fmt::format("> [AI] Generated script (took {}):", timeStr));
 
             // Show script content in console
             std::istringstream scriptStream(response.script);
@@ -1354,40 +1366,68 @@ void MagicaLegoUserInterface::DrawAISection()
         }
         else
         {
-            consoleOutput_.push_back(fmt::format("> [AI] Error: {}", response.message));
+            consoleOutput_.push_back(fmt::format("> [AI] Error (after {}): {}", timeStr, response.message));
             scrollToBottom_ = true;
         }
     }
 
-    // Status indicator
+    // Status indicator with animation
     if (aiService_)
     {
         auto status = aiService_->GetStatus();
         ImVec4 statusColor;
-        const char* statusIcon;
+        std::string statusText;
+
+        float time = static_cast<float>(ImGui::GetTime());
 
         switch (status)
         {
         case MagicaLego::EAIStatus::NotConfigured:
             statusColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
-            statusIcon = ICON_FA_TRIANGLE_EXCLAMATION;
+            statusText = fmt::format("{} {}", ICON_FA_TRIANGLE_EXCLAMATION, aiService_->GetStatusMessage());
             break;
         case MagicaLego::EAIStatus::Ready:
             statusColor = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
-            statusIcon = ICON_FA_ROBOT;
+            statusText = fmt::format("{} {}", ICON_FA_ROBOT, aiService_->GetStatusMessage());
             break;
         case MagicaLego::EAIStatus::Generating:
-            statusColor = ImVec4(0.4f, 0.8f, 1.0f, 1.0f);
-            statusIcon = ICON_FA_SPINNER;
+            {
+                // Pulsing color effect
+                float pulse = (std::sin(time * 4.0f) + 1.0f) * 0.5f;
+                statusColor = ImVec4(0.3f + pulse * 0.2f, 0.7f + pulse * 0.3f, 1.0f, 1.0f);
+
+                // Calculate elapsed time
+                float elapsed = time - aiGenerateStartTime_;
+                int seconds = static_cast<int>(elapsed);
+                int minutes = seconds / 60;
+                seconds = seconds % 60;
+
+                std::string timeStr;
+                if (minutes > 0)
+                {
+                    timeStr = fmt::format("{}m {}s", minutes, seconds);
+                }
+                else
+                {
+                    timeStr = fmt::format("{}s", seconds);
+                }
+
+                // Animated dots
+                int dotCount = (static_cast<int>(time * 2) % 4);
+                std::string dots(dotCount, '.');
+                dots.resize(3, ' ');
+
+                statusText = fmt::format("{} Thinking{} [{}]", ICON_FA_BRAIN, dots, timeStr);
+            }
             break;
         case MagicaLego::EAIStatus::Error:
             statusColor = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
-            statusIcon = ICON_FA_CIRCLE_XMARK;
+            statusText = fmt::format("{} {}", ICON_FA_CIRCLE_XMARK, aiService_->GetStatusMessage());
             break;
         }
 
         ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
-        ImGui::Text("%s %s", statusIcon, aiService_->GetStatusMessage().c_str());
+        ImGui::Text("%s", statusText.c_str());
         ImGui::PopStyleColor();
     }
     else
@@ -1416,20 +1456,54 @@ void MagicaLegoUserInterface::DrawAISection()
         executeGenerate = true;
     }
 
+    // Build on existing toggle
+    int blockCount = GetGameInstance()->GetPlacedBlockCount();
+    if (blockCount > 0)
+    {
+        ImGui::Checkbox(fmt::format(ICON_FA_LAYER_GROUP " {} ({} blocks)",
+            LOCTEXT("Build on existing"), blockCount).c_str(), &aiBuildOnExisting_);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip(LOCTEXT("Include current scene context in AI prompt"));
+        }
+    }
+    else
+    {
+        aiBuildOnExisting_ = false;
+        ImGui::BeginDisabled();
+        ImGui::Checkbox(fmt::format(ICON_FA_LAYER_GROUP " {}", LOCTEXT("Build on existing")).c_str(), &aiBuildOnExisting_);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip(LOCTEXT("Place some blocks first to enable this option"));
+        }
+    }
+
     std::string generateLabel = aiGenerating_
         ? (std::string(ICON_FA_SPINNER) + " " + LOCTEXT("Generating..."))
-        : (std::string(ICON_FA_ROBOT) + " " + LOCTEXT("Generate"));
+        : (aiBuildOnExisting_
+            ? (std::string(ICON_FA_WAND_MAGIC_SPARKLES) + " " + LOCTEXT("Enhance"))
+            : (std::string(ICON_FA_ROBOT) + " " + LOCTEXT("Generate")));
 
     if (ImGui::Button(generateLabel.c_str(), ImVec2(-FLT_MIN, 0)) || executeGenerate)
     {
         if (!aiInput_.empty() && canGenerate)
         {
             aiGenerating_ = true;
-            consoleOutput_.push_back(fmt::format("> [AI] Request: {}", aiInput_));
-            scrollToBottom_ = true;
+            aiGenerateStartTime_ = static_cast<float>(ImGui::GetTime());  // Start timer
 
-            std::string prompt = aiInput_;
-            aiService_->GenerateScriptAsync(prompt, nullptr);
+            if (aiBuildOnExisting_)
+            {
+                consoleOutput_.push_back(fmt::format("> [AI] Enhance request: {}", aiInput_));
+                consoleOutput_.push_back(fmt::format("> [AI] Including {} existing blocks as context", blockCount));
+                aiService_->GenerateScriptWithContextAsync(aiInput_, nullptr);
+            }
+            else
+            {
+                consoleOutput_.push_back(fmt::format("> [AI] Request: {}", aiInput_));
+                aiService_->GenerateScriptAsync(aiInput_, nullptr);
+            }
+            scrollToBottom_ = true;
         }
     }
 
@@ -1438,7 +1512,9 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::EndDisabled();
     }
 
-    BUTTON_TOOLTIP(LOCTEXT("Use AI to generate building script from natural language (Ctrl+Enter)"))
+    BUTTON_TOOLTIP(aiBuildOnExisting_
+        ? LOCTEXT("AI will enhance your existing build based on the description (Ctrl+Enter)")
+        : LOCTEXT("AI will generate a new build from scratch (Ctrl+Enter)"))
 
     // Show last generated script in a collapsible section
     if (!lastGeneratedScript_.empty())
@@ -1499,6 +1575,12 @@ void MagicaLegoUserInterface::DrawConsoleWindow()
                 ImGui::EndTabItem();
             }
 
+            if (ImGui::BeginTabItem(ICON_FA_PALETTE " Colors"))
+            {
+                DrawColorVocabulary();
+                ImGui::EndTabItem();
+            }
+
             if (ImGui::BeginTabItem(ICON_FA_TERMINAL " Console"))
             {
                 DrawConsole();
@@ -1509,4 +1591,106 @@ void MagicaLegoUserInterface::DrawConsoleWindow()
         }
     }
     ImGui::End();
+}
+
+void MagicaLegoUserInterface::DrawColorVocabulary()
+{
+    ImGui::Dummy(ImVec2(0, 5));
+
+    if (!aiService_)
+    {
+        ImGui::TextDisabled("AI service unavailable");
+        return;
+    }
+
+    auto semantics = aiService_->GetColorSemantics();
+    if (semantics.empty())
+    {
+        ImGui::TextDisabled("No colors loaded");
+        return;
+    }
+
+    ImGui::TextWrapped(LOCTEXT("Color vocabulary helps AI understand natural language descriptions. "
+                               "Use these semantic names when describing scenes."));
+    ImGui::Dummy(ImVec2(0, 5));
+    ImGui::Separator();
+
+    // Group by category
+    std::map<std::string, std::vector<MagicaLego::FColorSemantic>> byCategory;
+    for (const auto& sem : semantics)
+    {
+        byCategory[sem.category].push_back(sem);
+    }
+
+    // Category display order and icons
+    const std::vector<std::tuple<std::string, const char*, const char*>> categoryInfo = {
+        {"nature", ICON_FA_TREE, "Nature"},
+        {"neutral", ICON_FA_CUBE, "Neutral"},
+        {"building", ICON_FA_BUILDING, "Building"},
+        {"accent", ICON_FA_STAR, "Accent"}
+    };
+
+    // Calculate available height for scrolling region
+    float availableHeight = ImGui::GetContentRegionAvail().y;
+
+    if (ImGui::BeginChild("##ColorVocabScroll", ImVec2(0, availableHeight), false))
+    {
+        for (const auto& [catKey, catIcon, catName] : categoryInfo)
+        {
+            auto it = byCategory.find(catKey);
+            if (it == byCategory.end() || it->second.empty())
+                continue;
+
+            // Category header
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.3f, 1.0f));
+            if (ImGui::CollapsingHeader(fmt::format("{} {} ({})", catIcon, catName, it->second.size()).c_str(),
+                                        ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::PopStyleColor();
+
+                // Table for colors
+                if (ImGui::BeginTable("##ColorTable", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV))
+                {
+                    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Code", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                    ImGui::TableSetupColumn("Suggested Use", ImGuiTableColumnFlags_WidthStretch);
+
+                    for (const auto& sem : it->second)
+                    {
+                        ImGui::TableNextRow();
+
+                        // Color name
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%s", sem.colorName.c_str());
+
+                        // Color code (copyable)
+                        ImGui::TableNextColumn();
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.8f, 1.0f, 1.0f));
+                        if (ImGui::Selectable(sem.colorCode.c_str(), false, ImGuiSelectableFlags_None))
+                        {
+                            ImGui::SetClipboardText(sem.colorCode.c_str());
+                        }
+                        ImGui::PopStyleColor();
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("Click to copy");
+                        }
+
+                        // Suggested use
+                        ImGui::TableNextColumn();
+                        ImGui::TextWrapped("%s", sem.suggestedUse.c_str());
+                    }
+
+                    ImGui::EndTable();
+                }
+            }
+            else
+            {
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::Dummy(ImVec2(0, 5));
+        }
+    }
+    ImGui::EndChild();
 }

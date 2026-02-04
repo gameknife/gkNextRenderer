@@ -1,5 +1,6 @@
 #include "MagicaLegoAIService.hpp"
 #include "MagicaLegoGameInstance.hpp"
+#include "MagicaLegoConstants.hpp"
 #include "Utilities/FileHelper.hpp"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -14,6 +15,33 @@ namespace
     {
         static_cast<std::string*>(userp)->append(static_cast<char*>(contents), size * nmemb);
         return size * nmemb;
+    }
+
+    // Convert RGB to HSL for color analysis
+    void RgbToHsl(float r, float g, float b, float& h, float& s, float& l)
+    {
+        float maxC = std::max({r, g, b});
+        float minC = std::min({r, g, b});
+        l = (maxC + minC) / 2.0f;
+
+        if (maxC == minC)
+        {
+            h = s = 0.0f;
+        }
+        else
+        {
+            float d = maxC - minC;
+            s = l > 0.5f ? d / (2.0f - maxC - minC) : d / (maxC + minC);
+
+            if (maxC == r)
+                h = (g - b) / d + (g < b ? 6.0f : 0.0f);
+            else if (maxC == g)
+                h = (b - r) / d + 2.0f;
+            else
+                h = (r - g) / d + 4.0f;
+
+            h /= 6.0f;
+        }
     }
 }
 
@@ -80,6 +108,240 @@ namespace MagicaLego
         }
     }
 
+    FColorSemantic FAIService::AnalyzeColor(const std::string& colorCode, glm::vec4 rgba)
+    {
+        FColorSemantic result;
+        result.colorCode = colorCode;
+
+        float h, s, l;
+        RgbToHsl(rgba.r, rgba.g, rgba.b, h, s, l);
+
+        // Convert hue to degrees for easier reasoning
+        float hueDeg = h * 360.0f;
+
+        // Determine color name and category based on HSL
+        if (l < 0.15f)
+        {
+            result.colorName = "black";
+            result.category = "neutral";
+            result.suggestedUse = "outlines, shadows, details";
+        }
+        else if (l > 0.85f)
+        {
+            result.colorName = "white";
+            result.category = "neutral";
+            result.suggestedUse = "snow, clouds, highlights";
+        }
+        else if (s < 0.15f)
+        {
+            // Grayscale
+            if (l < 0.4f)
+            {
+                result.colorName = "dark gray";
+                result.category = "neutral";
+                result.suggestedUse = "stone, metal, concrete";
+            }
+            else if (l < 0.7f)
+            {
+                result.colorName = "gray";
+                result.category = "neutral";
+                result.suggestedUse = "stone, pavement, metal";
+            }
+            else
+            {
+                result.colorName = "light gray";
+                result.category = "neutral";
+                result.suggestedUse = "clouds, light stone";
+            }
+        }
+        else
+        {
+            // Chromatic colors - analyze by hue
+            if (hueDeg < 15 || hueDeg >= 345)
+            {
+                result.colorName = l < 0.4f ? "dark red" : (l > 0.7f ? "pink" : "red");
+                result.category = "accent";
+                result.suggestedUse = "flowers, fruit, roofs, decoration";
+            }
+            else if (hueDeg < 45)
+            {
+                if (s < 0.5f && l < 0.5f)
+                {
+                    result.colorName = "brown";
+                    result.category = "nature";
+                    result.suggestedUse = "tree trunk, wood, earth, dirt";
+                }
+                else
+                {
+                    result.colorName = l < 0.5f ? "dark orange" : "orange";
+                    result.category = "accent";
+                    result.suggestedUse = "fruit, autumn leaves, decoration";
+                }
+            }
+            else if (hueDeg < 70)
+            {
+                if (s < 0.5f && l < 0.5f)
+                {
+                    result.colorName = "tan/beige";
+                    result.category = "nature";
+                    result.suggestedUse = "sand, wood, path";
+                }
+                else
+                {
+                    result.colorName = l < 0.5f ? "dark yellow" : "yellow";
+                    result.category = "accent";
+                    result.suggestedUse = "flowers, sun, gold, decoration";
+                }
+            }
+            else if (hueDeg < 160)
+            {
+                // Green range
+                if (l < 0.35f)
+                {
+                    result.colorName = "dark green";
+                    result.category = "nature";
+                    result.suggestedUse = "tree leaves, bushes, forest";
+                }
+                else if (l > 0.6f)
+                {
+                    result.colorName = "light green";
+                    result.category = "nature";
+                    result.suggestedUse = "grass, young leaves, spring foliage";
+                }
+                else
+                {
+                    result.colorName = "green";
+                    result.category = "nature";
+                    result.suggestedUse = "grass, leaves, foliage, plants";
+                }
+            }
+            else if (hueDeg < 200)
+            {
+                result.colorName = "cyan/teal";
+                result.category = "accent";
+                result.suggestedUse = "water, ice, decoration";
+            }
+            else if (hueDeg < 260)
+            {
+                if (l > 0.6f)
+                {
+                    result.colorName = "light blue";
+                    result.category = "nature";
+                    result.suggestedUse = "sky, water, windows";
+                }
+                else
+                {
+                    result.colorName = l < 0.4f ? "dark blue" : "blue";
+                    result.category = "building";
+                    result.suggestedUse = "water, windows, decoration";
+                }
+            }
+            else if (hueDeg < 300)
+            {
+                result.colorName = l < 0.5f ? "purple" : "violet";
+                result.category = "accent";
+                result.suggestedUse = "flowers, magic, decoration";
+            }
+            else
+            {
+                result.colorName = l < 0.5f ? "magenta" : "pink";
+                result.category = "accent";
+                result.suggestedUse = "flowers, decoration";
+            }
+        }
+
+        return result;
+    }
+
+    std::string FAIService::BuildColorVocabulary()
+    {
+        if (!gameInstance_)
+        {
+            return "";
+        }
+
+        std::string vocabulary = R"(
+## Color Vocabulary (Natural Language → Color Codes)
+Use these semantic descriptions to choose appropriate colors:
+
+)";
+
+        // Collect all colors with their semantic info
+        std::map<std::string, std::vector<FColorSemantic>> byCategory;
+
+        auto& library = gameInstance_->GetBasicNodeLibrary();
+        for (const auto& [typeName, blocks] : library)
+        {
+            for (const auto& block : blocks)
+            {
+                auto semantic = AnalyzeColor(block.name, block.color);
+                byCategory[semantic.category].push_back(semantic);
+            }
+            break; // Only need colors from one type (they're shared)
+        }
+
+        // Output by category
+        const std::vector<std::pair<std::string, std::string>> categoryOrder = {
+            {"nature", "### Nature Colors (grass, trees, earth)"},
+            {"neutral", "### Neutral Colors (stone, metal, concrete)"},
+            {"building", "### Building Colors (walls, roofs)"},
+            {"accent", "### Accent Colors (flowers, fruit, decoration)"}
+        };
+
+        for (const auto& [cat, header] : categoryOrder)
+        {
+            auto it = byCategory.find(cat);
+            if (it == byCategory.end() || it->second.empty())
+                continue;
+
+            vocabulary += header + "\n";
+            for (const auto& sem : it->second)
+            {
+                vocabulary += fmt::format("- **{}** ({}): {}\n",
+                    sem.colorName, sem.colorCode, sem.suggestedUse);
+            }
+            vocabulary += "\n";
+        }
+
+        vocabulary += R"(**Usage Example:**
+- "grass" → use Flat1x1 or Plate1x1 with a green color from Nature Colors
+- "tree trunk" → use Block1x1 with brown from Nature Colors
+- "red fruit" → use Button1x1 with red from Accent Colors
+- "stone wall" → use Block1x1 with gray from Neutral Colors
+
+)";
+
+        return vocabulary;
+    }
+
+    std::vector<FColorSemantic> FAIService::GetColorSemantics()
+    {
+        std::vector<FColorSemantic> result;
+
+        if (!gameInstance_)
+        {
+            return result;
+        }
+
+        auto& library = gameInstance_->GetBasicNodeLibrary();
+        for (const auto& [typeName, blocks] : library)
+        {
+            for (const auto& block : blocks)
+            {
+                result.push_back(AnalyzeColor(block.name, block.color));
+            }
+            break; // Only need colors from one type (they're shared)
+        }
+
+        // Sort by category then by color name
+        std::sort(result.begin(), result.end(), [](const FColorSemantic& a, const FColorSemantic& b) {
+            if (a.category != b.category) return a.category < b.category;
+            return a.colorName < b.colorName;
+        });
+
+        return result;
+    }
+
     std::string FAIService::BuildSystemPrompt()
     {
         std::string prompt = R"(You are a MagicaLego building assistant. You control a virtual cursor to place blocks. Generate mlscript scripts based on user descriptions.
@@ -143,55 +405,19 @@ namespace MagicaLego
 
         prompt += R"(
 ## Block Height Properties (IMPORTANT for layering)
-- **Flat types** (Flat1x1, Plate1x1, Plate2x2, Button1x1): These are thin/flat blocks that can be COVERED by other blocks at the same position
-- **Full height types** (Block1x1, Cylinder1x1, Slope1x2, Corner2x2): These are taller blocks that cover flat blocks
+- **Flat types** (Flat1x1, Plate1x1, Plate2x2, Button1x1): Thin/flat blocks that can be COVERED by other blocks
+- **Full height types** (Block1x1, Cylinder1x1, Slope1x2, Corner2x2): Taller blocks that cover flat blocks
 
-**PLACEMENT ORDER RULE:**
-When placing blocks at the same (x, y, z) position, ALWAYS place flat/thin blocks FIRST, then place full-height blocks.
-Example: To put a Block on top of a Plate at position (0,0,0):
-1. First: place Plate1x1/#0 0 0 0
-2. Then: place Block1x1/#1 0 0 0
-This ensures correct visual layering (Block covers the Plate).
-
-## Block Height Properties (IMPORTANT for layering)
-- **Flat types** (Flat1x1, Plate1x1, Plate2x2, Button1x1): These are thin/flat blocks that can be COVERED by
-other blocks at the same position
-- **Full height types** (Block1x1, Cylinder1x1, Slope1x2, Corner2x2): These are taller blocks that cover flat
-blocks
-
-**PLACEMENT ORDER RULE:**
-When placing blocks at the same (x, y, z) position, ALWAYS place flat/thin blocks FIRST, then place
-full-height blocks.
-Example: To put a Block on top of a Plate at position (0,0,0):
-1. First: place Plate1x1/#0 0 0 0
-2. Then: place Block1x1/#1 0 0 0
-This ensures correct visual layering (Block covers the Plate).
-
-## Available Colors (STRICT - use ONLY these exact values)
+**PLACEMENT ORDER RULE:** When placing at same position, place flat blocks FIRST, then full-height blocks.
 )";
 
-        // Add actual color values from game instance
-        if (gameInstance_)
-        {
-            auto types = gameInstance_->GetAllBlockTypes();
-            if (!types.empty())
-            {
-                auto colors = gameInstance_->GetAllBlockColors(types[0]);
-
-                prompt += fmt::format("**ONLY {} colors exist. You MUST use one of these exact values:**\n", colors.size());
-                for (const auto& color : colors)
-                {
-                    prompt += fmt::format("{}, ", color);
-                }
-                prompt += "\n\n";
-            }
-        }
+        // Add color vocabulary (semantic descriptions)
+        prompt += BuildColorVocabulary();
 
         prompt += R"(**CRITICAL COLOR RULES:**
-- ONLY use color values from the list above (copy them exactly)
-- DO NOT use any color value not in the list
-- DO NOT invent or guess color values
-- If unsure, use the first color from the list
+- ONLY use color codes shown above (e.g., #119, #28, #192)
+- Choose colors based on their semantic description (e.g., "brown" for tree trunks)
+- DO NOT invent color codes not in the vocabulary
 )";
 
         prompt += R"(
@@ -284,6 +510,37 @@ User request: )";
         return prompt;
     }
 
+    std::string FAIService::BuildContextPrompt(const std::string& userPrompt)
+    {
+        std::string contextPrompt;
+
+        // Get current scene description
+        if (gameInstance_)
+        {
+            std::string sceneDesc = gameInstance_->GetCurrentSceneDescription();
+
+            contextPrompt = R"(
+## CURRENT SCENE CONTEXT
+The user has already built something. Your task is to ADD to or MODIFY the existing scene based on their request.
+DO NOT rebuild what already exists unless specifically asked to replace it.
+
+)";
+            contextPrompt += sceneDesc;
+            contextPrompt += R"(
+
+## YOUR TASK
+Based on the existing scene above, generate ADDITIONAL script to fulfill the user's request.
+- Use coordinates that don't overlap with existing blocks (unless replacing)
+- Consider the existing bounding box when placing new elements
+- Maintain visual consistency with what's already built
+
+)";
+        }
+
+        contextPrompt += userPrompt;
+        return contextPrompt;
+    }
+
     FAIResponse FAIService::CallGeminiAPI(const std::string& userPrompt)
     {
         if (!configured_)
@@ -305,7 +562,7 @@ User request: )";
             })},
             {"generationConfig", {
                 {"temperature", 0.7},
-                {"maxOutputTokens", 819200}
+                {"maxOutputTokens", AI::MaxOutputTokens}
             }}
         };
 
@@ -326,7 +583,7 @@ User request: )";
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AI::RequestTimeoutSeconds);
 
         CURLcode res = curl_easy_perform(curl);
 
@@ -445,6 +702,64 @@ User request: )";
         std::thread([this, prompt, callback]()
         {
             auto response = CallGeminiAPI(prompt);
+
+            {
+                std::lock_guard<std::mutex> lock(resultMutex_);
+                pendingResult_ = response;
+                hasPendingResult_ = true;
+            }
+
+            if (response.success)
+            {
+                status_ = EAIStatus::Ready;
+                statusMessage_ = "Ready";
+            }
+            else
+            {
+                status_ = EAIStatus::Error;
+                statusMessage_ = response.message;
+            }
+
+            if (callback)
+            {
+                callback(response);
+            }
+        }).detach();
+    }
+
+    FAIResponse FAIService::GenerateScriptWithContext(const std::string& prompt)
+    {
+        status_ = EAIStatus::Generating;
+        statusMessage_ = "Generating with context...";
+
+        // Build prompt with scene context
+        std::string contextPrompt = BuildContextPrompt(prompt);
+        auto response = CallGeminiAPI(contextPrompt);
+
+        if (response.success)
+        {
+            status_ = EAIStatus::Ready;
+            statusMessage_ = "Ready";
+        }
+        else
+        {
+            status_ = EAIStatus::Error;
+            statusMessage_ = response.message;
+        }
+
+        return response;
+    }
+
+    void FAIService::GenerateScriptWithContextAsync(const std::string& prompt,
+                                                    std::function<void(FAIResponse)> callback)
+    {
+        status_ = EAIStatus::Generating;
+        statusMessage_ = "Generating with context...";
+
+        std::thread([this, prompt, callback]()
+        {
+            std::string contextPrompt = BuildContextPrompt(prompt);
+            auto response = CallGeminiAPI(contextPrompt);
 
             {
                 std::lock_guard<std::mutex> lock(resultMutex_);

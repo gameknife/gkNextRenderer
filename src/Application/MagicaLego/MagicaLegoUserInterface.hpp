@@ -59,6 +59,7 @@ private:
 	void DrawConsole();
 	void DrawScriptLoadPopup();
 	void DrawAISection();
+	void DrawColorVocabulary();
 
 	void RecordTimeline(bool autoRotate);
 
@@ -103,7 +104,9 @@ private:
 	std::unique_ptr<MagicaLego::FAIService> aiService_;
 	std::string aiInput_;
 	bool aiGenerating_ = false;
+	bool aiBuildOnExisting_ = false;  // Toggle for context-aware generation
 	std::string lastGeneratedScript_;
+	float aiGenerateStartTime_ = 0.0f;  // Timer for AI generation
 
 	// Console Window
 	bool showConsoleWindow_ = false;

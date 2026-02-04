@@ -2,6 +2,7 @@
 #include "Common/CoreMinimal.hpp"
 #include <atomic>
 #include <mutex>
+#include <glm/glm.hpp>
 
 class MagicaLegoGameInstance;
 
@@ -39,6 +40,15 @@ namespace MagicaLego
         Error
     };
 
+    // Color semantic description for vocabulary
+    struct FColorSemantic
+    {
+        std::string colorCode;      // e.g., "#119"
+        std::string colorName;      // e.g., "grass green"
+        std::string category;       // e.g., "nature", "building", "accent"
+        std::string suggestedUse;   // e.g., "grass, foliage, leaves"
+    };
+
     class FAIService
     {
     public:
@@ -53,16 +63,30 @@ namespace MagicaLego
         // Synchronous API call (blocks until response)
         FAIResponse GenerateScript(const std::string& prompt);
 
+        // Generate with existing scene context
+        FAIResponse GenerateScriptWithContext(const std::string& prompt);
+
         // Async wrapper using callback
         void GenerateScriptAsync(const std::string& prompt,
                                  std::function<void(FAIResponse)> callback);
+
+        // Async with context
+        void GenerateScriptWithContextAsync(const std::string& prompt,
+                                            std::function<void(FAIResponse)> callback);
 
         // Check and get async result
         bool HasPendingResult() const { return hasPendingResult_; }
         FAIResponse GetPendingResult();
 
+        // Get color vocabulary for display
+        std::string GetColorVocabulary() { return BuildColorVocabulary(); }
+        std::vector<FColorSemantic> GetColorSemantics();
+
     private:
         std::string BuildSystemPrompt();
+        std::string BuildContextPrompt(const std::string& userPrompt);
+        std::string BuildColorVocabulary();
+        FColorSemantic AnalyzeColor(const std::string& colorCode, glm::vec4 rgba);
         FAIResponse CallGeminiAPI(const std::string& userPrompt);
         std::string ExtractScriptFromResponse(const std::string& responseText);
 

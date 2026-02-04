@@ -6,53 +6,52 @@
 namespace MagicaLego
 {
     // ==================== Direction Helpers ====================
+    // Orientations form a cyclic group: North(0) -> East(1) -> South(2) -> West(3) -> North(0)
+
+    namespace DirectionTable
+    {
+        // Direction vectors: North=-Z, East=+X, South=+Z, West=-X
+        constexpr glm::i16vec3 Vectors[] = {{0, 0, -1}, {1, 0, 0}, {0, 0, 1}, {-1, 0, 0}};
+
+        // Turn mappings using cyclic arithmetic
+        constexpr EOrientation TurnRightMap[] = {
+            EOrientation::EO_East,   // North -> East
+            EOrientation::EO_South,  // East -> South
+            EOrientation::EO_West,   // South -> West
+            EOrientation::EO_North   // West -> North
+        };
+        constexpr EOrientation TurnLeftMap[] = {
+            EOrientation::EO_West,   // North -> West
+            EOrientation::EO_North,  // East -> North
+            EOrientation::EO_East,   // South -> East
+            EOrientation::EO_South   // West -> South
+        };
+        constexpr EOrientation TurnAroundMap[] = {
+            EOrientation::EO_South,  // North -> South
+            EOrientation::EO_West,   // East -> West
+            EOrientation::EO_North,  // South -> North
+            EOrientation::EO_East    // West -> East
+        };
+    }
 
     inline glm::i16vec3 GetDirectionVector(EOrientation dir)
     {
-        switch (dir)
-        {
-        case EOrientation::EO_North: return {0, 0, -1};   // -Z
-        case EOrientation::EO_East:  return {1, 0, 0};    // +X
-        case EOrientation::EO_South: return {0, 0, 1};    // +Z
-        case EOrientation::EO_West:  return {-1, 0, 0};   // -X
-        }
-        return {0, 0, 0};
+        return DirectionTable::Vectors[static_cast<int>(dir)];
     }
 
     inline EOrientation TurnLeft(EOrientation dir)
     {
-        switch (dir)
-        {
-        case EOrientation::EO_North: return EOrientation::EO_West;
-        case EOrientation::EO_West:  return EOrientation::EO_South;
-        case EOrientation::EO_South: return EOrientation::EO_East;
-        case EOrientation::EO_East:  return EOrientation::EO_North;
-        }
-        return dir;
+        return DirectionTable::TurnLeftMap[static_cast<int>(dir)];
     }
 
     inline EOrientation TurnRight(EOrientation dir)
     {
-        switch (dir)
-        {
-        case EOrientation::EO_North: return EOrientation::EO_East;
-        case EOrientation::EO_East:  return EOrientation::EO_South;
-        case EOrientation::EO_South: return EOrientation::EO_West;
-        case EOrientation::EO_West:  return EOrientation::EO_North;
-        }
-        return dir;
+        return DirectionTable::TurnRightMap[static_cast<int>(dir)];
     }
 
     inline EOrientation TurnAround(EOrientation dir)
     {
-        switch (dir)
-        {
-        case EOrientation::EO_North: return EOrientation::EO_South;
-        case EOrientation::EO_East:  return EOrientation::EO_West;
-        case EOrientation::EO_South: return EOrientation::EO_North;
-        case EOrientation::EO_West:  return EOrientation::EO_East;
-        }
-        return dir;
+        return DirectionTable::TurnAroundMap[static_cast<int>(dir)];
     }
 
     // ==================== FCursor ====================

@@ -169,6 +169,10 @@ public:
     std::vector<std::string> GetAllBlockTypes() const;
     std::vector<std::string> GetAllBlockColors(const std::string& type) const;
 
+    // Scene description for AI context
+    std::string GetCurrentSceneDescription() const;
+    int GetPlacedBlockCount() const { return static_cast<int>(BlocksDynamics.size()); }
+
     // Base
     void SwitchBasePlane(EBasePlane Type);
     EBasePlane GetCurrentBasePlane() const { return currentBaseSize_; }

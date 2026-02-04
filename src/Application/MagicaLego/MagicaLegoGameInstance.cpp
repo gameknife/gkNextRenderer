@@ -1,5 +1,6 @@
 #include "MagicaLegoGameInstance.hpp"
 #include "MagicaLegoCommands.hpp"
+#include "MagicaLegoConstants.hpp"
 #include "Assets/Core/Scene.hpp"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -20,20 +21,22 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 glm::vec3 GetRenderLocationFromBlockLocation(glm::i16vec3 blockLocation)
 {
-    glm::vec3 newLocation;
-    newLocation.x = static_cast<float>(blockLocation.x) * 0.08f;
-    newLocation.y = static_cast<float>(blockLocation.y) * 0.095f;
-    newLocation.z = static_cast<float>(blockLocation.z) * 0.08f;
-    return newLocation;
+    using namespace MagicaLego::Grid;
+    return glm::vec3(
+        static_cast<float>(blockLocation.x) * UnitX,
+        static_cast<float>(blockLocation.y) * UnitY,
+        static_cast<float>(blockLocation.z) * UnitZ
+    );
 }
 
 glm::i16vec3 GetBlockLocationFromRenderLocation(glm::vec3 renderLocation)
 {
-    glm::i16vec3 newLocation;
-    newLocation.x = static_cast<int16_t>(round(renderLocation.x / 0.08f));
-    newLocation.y = static_cast<int16_t>(round((renderLocation.y - 0.0475f) / 0.095f));
-    newLocation.z = static_cast<int16_t>(round(renderLocation.z / 0.08f));
-    return newLocation;
+    using namespace MagicaLego::Grid;
+    return glm::i16vec3(
+        static_cast<int16_t>(round(renderLocation.x / UnitX)),
+        static_cast<int16_t>(round((renderLocation.y - HeightOffset) / UnitY)),
+        static_cast<int16_t>(round(renderLocation.z / UnitZ))
+    );
 }
 
 uint32_t GetHashFromBlockLocation(const glm::i16vec3& blockLocation)
@@ -1089,6 +1092,78 @@ MagicaLego::FCursor& MagicaLegoGameInstance::GetCursor()
 const MagicaLego::FCursor& MagicaLegoGameInstance::GetCursor() const
 {
     return *cursor_;
+}
+
+std::string MagicaLegoGameInstance::GetCurrentSceneDescription() const
+{
+    if (BlocksDynamics.empty())
+    {
+        return "The scene is empty. No blocks have been placed yet.";
+    }
+
+    std::string description;
+    description += fmt::format("Current scene has {} blocks:\n", BlocksDynamics.size());
+
+    // Calculate bounding box
+    glm::i16vec3 minPos{INT16_MAX, INT16_MAX, INT16_MAX};
+    glm::i16vec3 maxPos{INT16_MIN, INT16_MIN, INT16_MIN};
+
+    // Count blocks by type
+    std::map<std::string, int> blockCounts;
+
+    for (const auto& [hash, block] : BlocksDynamics)
+    {
+        if (block.modelId_ < 0) continue; // Skip removed blocks
+
+        minPos = glm::min(minPos, block.location);
+        maxPos = glm::max(maxPos, block.location);
+
+        // Get block type name
+        if (block.modelId_ < static_cast<int16_t>(BasicNodes.size()))
+        {
+            std::string typeName = BasicNodes[block.modelId_].type;
+            blockCounts[typeName]++;
+        }
+    }
+
+    // Describe bounding box
+    description += fmt::format("- Bounding box: ({},{},{}) to ({},{},{})\n",
+        minPos.x, minPos.y, minPos.z, maxPos.x, maxPos.y, maxPos.z);
+    description += fmt::format("- Size: {}x{}x{} (width x height x depth)\n",
+        maxPos.x - minPos.x + 1, maxPos.y - minPos.y + 1, maxPos.z - minPos.z + 1);
+
+    // Describe block composition
+    description += "- Block types used:\n";
+    for (const auto& [type, count] : blockCounts)
+    {
+        description += fmt::format("  - {}: {} blocks\n", type, count);
+    }
+
+    // List individual blocks (limit to avoid huge prompts)
+    int listedCount = 0;
+
+    description += "\nPlaced blocks (format: Type/Color at x,y,z):\n";
+    for (const auto& [hash, block] : BlocksDynamics)
+    {
+        if (block.modelId_ < 0) continue;
+        if (listedCount >= MagicaLego::AI::MaxBlocksToList)
+        {
+            description += fmt::format("... and {} more blocks\n",
+                static_cast<int>(BlocksDynamics.size()) - MagicaLego::AI::MaxBlocksToList);
+            break;
+        }
+
+        if (block.modelId_ < static_cast<int16_t>(BasicNodes.size()))
+        {
+            const auto& basicBlock = BasicNodes[block.modelId_];
+            description += fmt::format("- {}/{} at ({},{},{})\n",
+                basicBlock.type, basicBlock.name,
+                block.location.x, block.location.y, block.location.z);
+        }
+        listedCount++;
+    }
+
+    return description;
 }
 
 void MagicaLegoGameInstance::UpdateMouseCursor()
