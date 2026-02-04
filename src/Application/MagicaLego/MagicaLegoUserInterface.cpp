@@ -1095,8 +1095,13 @@ void MagicaLegoUserInterface::DrawConsole()
 {
     ImGui::Dummy(ImVec2(0, 5));
 
-    // Output area
-    float outputHeight = 6 * ImGui::GetTextLineHeightWithSpacing();
+    // Calculate fixed input area height (input line + load script button + spacing)
+    float inputAreaHeight = ImGui::GetFrameHeightWithSpacing() * 2 + ImGui::GetStyle().ItemSpacing.y * 2;
+
+    // Output area fills remaining space
+    float availableHeight = ImGui::GetContentRegionAvail().y - inputAreaHeight;
+    float outputHeight = std::max(availableHeight, 100.0f);  // Minimum 100px
+
     if (ImGui::BeginChild("ConsoleOutput", ImVec2(-FLT_MIN, outputHeight), ImGuiChildFlags_Borders))
     {
         for (const auto& line : consoleOutput_)
@@ -1441,8 +1446,13 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::Dummy(ImVec2(0, 5));
         if (ImGui::CollapsingHeader(LOCTEXT("Last Generated Script"), ImGuiTreeNodeFlags_DefaultOpen))
         {
+            // Calculate height for script preview - fill remaining space minus copy button
+            float copyButtonHeight = ImGui::GetFrameHeightWithSpacing();
+            float availableHeight = ImGui::GetContentRegionAvail().y - copyButtonHeight;
+            float previewHeight = std::max(availableHeight, 60.0f);  // Minimum 60px
+
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.15f, 0.8f));
-            if (ImGui::BeginChild("##ScriptPreview", ImVec2(-FLT_MIN, 100), ImGuiChildFlags_Borders))
+            if (ImGui::BeginChild("##ScriptPreview", ImVec2(-FLT_MIN, previewHeight), ImGuiChildFlags_Borders))
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.9f, 0.7f, 1.0f));
                 ImGui::TextWrapped("%s", lastGeneratedScript_.c_str());
