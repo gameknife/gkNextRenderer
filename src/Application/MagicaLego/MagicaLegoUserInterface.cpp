@@ -1,20 +1,13 @@
 #include "MagicaLegoUserInterface.hpp"
 
-#include "MagicaLegoStyle.hpp"
-#include "MagicaLegoConstants.hpp"
-#include <fmt/chrono.h>
-#include <im_anim.h>
-#include <imgui.h>
-#include <imgui_internal.h>
-#include <imgui_stdlib.h>
-#include <spdlog/spdlog.h>
-#include <cstring>
-#include <utility>
-
 #include "MagicaLegoAIService.hpp"
 #include "MagicaLegoCommands.hpp"
+#include "MagicaLegoConstants.hpp"
 #include "MagicaLegoGameInstance.hpp"
 #include "MagicaLegoScriptParser.hpp"
+#include "MagicaLegoStyle.hpp"
+#include "MagicaLegoUIHelpers.hpp"
+
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -22,43 +15,33 @@
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Localization.hpp"
 
+#include <fmt/chrono.h>
+#include <imgui_internal.h>
+#include <imgui_stdlib.h>
+#include <spdlog/spdlog.h>
+#include <utility>
+
+// ============================================================================
+// Local Constants and Helpers
+// ============================================================================
+
 namespace
 {
     using namespace MagicaLego;
+    using namespace MagicaLego::UIHelpers;
 
+    // Layout constants (aliases for brevity)
     constexpr float titlebarSize = UI::TitleBarHeight;
     constexpr float titlebarControlSize = UI::TitleBarControlWidth;
     constexpr float iconSize = UI::IconSize;
-    constexpr float paletteSize = UI::PaletteSize;  // Fixed spelling: palate -> palette
+    constexpr float paletteSize = UI::PaletteSize;
     constexpr float buttonSize = UI::ButtonSize;
     constexpr float buildBarWidth = UI::BuildBarWidth;
     constexpr float sideBarWidth = UI::SideBarWidth;
-    constexpr float shortcutSize = 10;
+    constexpr float shortcutSize = 10.0f;
 
-    constexpr int panelFlags =
-    ImGuiWindowFlags_NoTitleBar |
-    ImGuiWindowFlags_NoCollapse |
-    ImGuiWindowFlags_NoMove |
-    ImGuiWindowFlags_NoResize |
-    ImGuiWindowFlags_NoSavedSettings;
-
-    static ImGuiID MakeAnimId(const char* label)
-    {
-        return ImHashStr(label, std::strlen(label), 0);
-    }
-    
-    // Helper to calculate visual rect
-    static void GetZoomedRect(ImVec2 p_start, ImVec2 standardSize, float hoverFactor, float zoomScale, ImVec2& p_min, ImVec2& p_max)
-    {
-        ImVec2 zoomedSize = standardSize;
-        zoomedSize.x *= (1.0f + hoverFactor * zoomScale);
-        zoomedSize.y *= (1.0f + hoverFactor * zoomScale);
-        ImVec2 offset = (zoomedSize - standardSize) * 0.5f;
-        p_min = p_start - offset;
-        p_max = p_min + zoomedSize;
-    }
-
-    static bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
+    // Icon button with hover animation and selection state
+    bool SelectButton(const char* label, const char* shortcut, bool selected, const char* tooltip)
     {
         ImGui::PushID(shortcut);
         ImGuiID id = ImGui::GetID("Anim");
@@ -66,94 +49,109 @@ namespace
         ImGuiStyle& style = ImGui::GetStyle();
 
         ImGui::BeginGroup();
-        
+
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(iconSize, iconSize);
-        
+
         bool clicked = ImGui::InvisibleButton("##Hit", standardSize);
         bool hovered = ImGui::IsItemHovered();
         BUTTON_TOOLTIP( LOCTEXT(tooltip) )
         ImGui::PopID();
-        
+
         float hoverFactor = iam_tween_float(id, 0, hovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
         ImVec2 p_min, p_max;
         GetZoomedRect(p_start, standardSize, hoverFactor, 0.05f, p_min, p_max);
-        
+
         ImU32 bgCol = ImGui::GetColorU32(ImGuiCol_Button);
         if (selected || selectFactor > 0.01f)
         {
-             ImVec4 col = ImVec4(0.4f, 0.6f, 0.8f, selectFactor);
-             if (hoverFactor > 0.01f) {
-                 col.x += 0.1f * hoverFactor;
-                 col.y += 0.1f * hoverFactor;
-                 col.z += 0.1f * hoverFactor;
-             }
-             bgCol = ImGui::ColorConvertFloat4ToU32(col);
+            ImVec4 col = ImVec4(0.4f, 0.6f, 0.8f, selectFactor);
+            if (hoverFactor > 0.01f)
+            {
+                col.x += 0.1f * hoverFactor;
+                col.y += 0.1f * hoverFactor;
+                col.z += 0.1f * hoverFactor;
+            }
+            bgCol = ImGui::ColorConvertFloat4ToU32(col);
         }
         else if (hovered)
         {
-             bgCol = ImGui::GetColorU32(ImGuiCol_ButtonHovered);
+            bgCol = ImGui::GetColorU32(ImGuiCol_ButtonHovered);
         }
-        
+
         ImGui::GetWindowDrawList()->AddRectFilled(p_min, p_max, bgCol, style.FrameRounding);
-        
+
         ImVec2 textSize = ImGui::CalcTextSize(label);
         ImVec2 textPos = p_min + (p_max - p_min - textSize) * 0.5f;
         ImGui::GetWindowDrawList()->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
-        
+
         ImVec2 cursor = Utilities::UI::TextCentered(shortcut, iconSize);
-        ImGui::GetForegroundDrawList()->AddRect(cursor - ImVec2(shortcutSize, shortcutSize), cursor + ImVec2(shortcutSize, shortcutSize), IM_COL32(255, 255, 255, (int)(128 * (1.0f + hoverFactor))), 4.0f);
-        
+        ImGui::GetForegroundDrawList()->AddRect(
+            cursor - ImVec2(shortcutSize, shortcutSize),
+            cursor + ImVec2(shortcutSize, shortcutSize),
+            IM_COL32(255, 255, 255, static_cast<int>(128 * (1.0f + hoverFactor))), 4.0f);
+
         ImGui::EndGroup();
         return clicked;
     }
 
-    static bool MaterialButton(const FBasicBlock& block, ImTextureID texId, float windowWidth, bool selected)
+    // Material palette button with thumbnail
+    bool MaterialButton(const FBasicBlock& block, ImTextureID texId, float windowWidth, bool selected)
     {
         ImGuiStyle& style = ImGui::GetStyle();
-        ImGuiID id = ImGui::GetID((void*)(intptr_t)block.modelId_);
+        ImGuiID id = ImGui::GetID(reinterpret_cast<void*>(static_cast<intptr_t>(block.modelId_)));
         float dt = ImGui::GetIO().DeltaTime;
 
         ImGui::BeginGroup();
-        
+
         ImVec2 p_start = ImGui::GetCursorScreenPos();
         ImVec2 standardSize(paletteSize, paletteSize);
-        
+
         ImGui::PushID(static_cast<int>(block.modelId_));
         bool clicked = ImGui::InvisibleButton("##Hit", standardSize);
         ImGui::PopID();
-        
+
         bool hovered = ImGui::IsItemHovered();
-        
+
         float hoverFactor = iam_tween_float(id, 0, hovered ? 1.0f : 0.0f, 0.1f, {iam_ease_out_cubic}, iam_policy_crossfade, dt);
         float selectFactor = iam_tween_float(id, 1, selected ? 1.0f : 0.0f, 0.2f, {iam_ease_out_back}, iam_policy_crossfade, dt);
 
         ImVec2 p_min, p_max;
         GetZoomedRect(p_start, standardSize, hoverFactor, 0.1f, p_min, p_max);
-        
+
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        
+
         if (selected || selectFactor > 0.01f)
         {
             ImU32 borderCol = ImGui::ColorConvertFloat4ToU32(ImVec4(0.6f, 0.85f, 1.0f, selectFactor));
             drawList->AddRect(p_min, p_max, borderCol, 0.0f, 0, 4.0f * selectFactor);
         }
 
-        if(texId != 0) drawList->AddImage(texId, p_min, p_max);
-        
+        if (texId != 0)
+        {
+            drawList->AddImage(texId, p_min, p_max);
+        }
+
         Utilities::UI::TextCentered(block.name, paletteSize);
-        
+
         ImGui::EndGroup();
-        
+
         float lastButtonX2 = ImGui::GetItemRectMax().x;
-        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + paletteSize; 
-        if (nextButtonX2 < windowWidth) ImGui::SameLine();
-        
+        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + paletteSize;
+        if (nextButtonX2 < windowWidth)
+        {
+            ImGui::SameLine();
+        }
+
         return clicked;
     }
-}
+} // anonymous namespace
+
+// ============================================================================
+// Constructor / Destructor / Initialization
+// ============================================================================
 
 MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance): gameInstance_(gameInstance)
 {
@@ -238,6 +236,10 @@ void MagicaLegoUserInterface::OnSceneLoaded()
         });
     }
 }
+
+// ============================================================================
+// Title Bar and Opening Animation
+// ============================================================================
 
 void MagicaLegoUserInterface::DrawTitleBar()
 {
@@ -442,6 +444,10 @@ void MagicaLegoUserInterface::DrawOpening() const
     ImGui::PopFont();
 }
 
+// ============================================================================
+// Main Render Loop
+// ============================================================================
+
 void MagicaLegoUserInterface::OnRenderUI()
 {
     iam_update_begin_frame();
@@ -521,6 +527,10 @@ void MagicaLegoUserInterface::OnRenderUI()
     DrawVersionWatermark();
 }
 
+// ============================================================================
+// Overlays and HUD
+// ============================================================================
+
 void MagicaLegoUserInterface::DrawWaiting()
 {
     ImGui::OpenPopup("Waiting");
@@ -568,7 +578,7 @@ void MagicaLegoUserInterface::DrawWatermark()
     ImGui::SetNextWindowPos(ImVec2(30, viewportSize.y - 30), ImGuiCond_Always, ImVec2(0, 1));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
-    ImGui::Begin("Watermark", nullptr, panelFlags | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("Watermark", nullptr, PanelFlags | ImGuiWindowFlags_NoBackground);
     ImGui::PushFont(bigFont_);
     ImGui::TextUnformatted("MagicaLEGO");
     ImGui::PopFont();
@@ -582,7 +592,7 @@ void MagicaLegoUserInterface::DrawVersionWatermark()
     ImGui::SetNextWindowPos(ImVec2(viewportSize.x / 2, viewportSize.y), ImGuiCond_Always, ImVec2(0.5, 1));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
-    ImGui::Begin("VersionWatermark", nullptr, panelFlags | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("VersionWatermark", nullptr, PanelFlags | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
     //auto Size = ImGui::CalcTextSize(NextRenderer::GetBuildVersion().c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
     ImGui::TextUnformatted(NextRenderer::GetBuildVersion().c_str());
@@ -597,7 +607,7 @@ void MagicaLegoUserInterface::DrawHUD()
     ImGui::SetNextWindowSize(ImVec2(0,0));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
-    ImGui::Begin("HUD", nullptr, panelFlags | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("HUD", nullptr, PanelFlags | ImGuiWindowFlags_NoBackground);
     ImGui::PushFont(bigFont_);
     auto time = std::time(nullptr);
     ImGui::TextUnformatted(fmt::format("{:%H:%M}", *std::localtime(&time)).c_str());
@@ -617,7 +627,7 @@ void MagicaLegoUserInterface::DrawHelp()
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always, ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
     ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGui::Begin("Help", nullptr, panelFlags | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("Help", nullptr, PanelFlags | ImGuiWindowFlags_NoBackground);
 
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
 
@@ -664,6 +674,10 @@ void MagicaLegoUserInterface::DrawHelp()
 
     ImGui::End();
 }
+
+// ============================================================================
+// Recording and Layout Management
+// ============================================================================
 
 void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 {
@@ -762,6 +776,10 @@ void MagicaLegoUserInterface::PopLayout()
     uiStatus_ = uiStatusStack_.back();
 }
 
+// ============================================================================
+// Main Tool Bar and Side Panels
+// ============================================================================
+
 void MagicaLegoUserInterface::DrawMainToolBar()
 {
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
@@ -783,7 +801,7 @@ void MagicaLegoUserInterface::DrawMainToolBar()
     ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    if (ImGui::Begin("MainToolBar", nullptr, panelFlags))
+    if (ImGui::Begin("MainToolBar", nullptr, PanelFlags))
     {
         if (ImGui::Button(ICON_FA_SQUARE_CARET_LEFT, ImVec2(buttonSize, buttonSize)))
         {
@@ -828,7 +846,7 @@ void MagicaLegoUserInterface::DrawLeftBar()
     ImGui::SetNextWindowSize(ImVec2(buildBarWidth, viewportSize.y - titlebarSize - padding * 2));
     ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
     
-    if (ImGui::Begin("Place & Dig", nullptr, panelFlags))
+    if (ImGui::Begin("Place & Dig", nullptr, PanelFlags))
     {
         ImGui::SeparatorText(LOCTEXT("Mode"));
         if (SelectButton(ICON_FA_PERSON_DIGGING, "Q", GetGameInstance()->GetBuildMode() == ELegoMode::ELM_Dig, "Dig a block"))
@@ -988,7 +1006,7 @@ void MagicaLegoUserInterface::DrawRightBar()
     ImGui::SetNextWindowSize(ImVec2(sideBarWidth, viewportSize.y - titlebarSize - padding * 2));
     ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
-    if (ImGui::Begin("Color Pallete", nullptr, panelFlags))
+    if (ImGui::Begin("Color Pallete", nullptr, PanelFlags))
     {
         std::vector<const char*> types;
         static int currentType = 0;
@@ -1032,6 +1050,10 @@ void MagicaLegoUserInterface::DrawRightBar()
     ImGui::End();
 }
 
+// ============================================================================
+// Timeline
+// ============================================================================
+
 void MagicaLegoUserInterface::DrawTimeline()
 {
     float dt = GetGameInstance()->GetEngine().GetDeltaSeconds();
@@ -1054,7 +1076,7 @@ void MagicaLegoUserInterface::DrawTimeline()
     ImGui::SetNextWindowSize(ImVec2(width, 90));
     ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
-    if (ImGui::Begin("Timeline", nullptr, panelFlags))
+    if (ImGui::Begin("Timeline", nullptr, PanelFlags))
     {
         ImGui::PushItemWidth(width - 20);
         int step = GetGameInstance()->GetCurrentStep();
@@ -1093,6 +1115,10 @@ void MagicaLegoUserInterface::DrawTimeline()
     }
     ImGui::End();
 }
+
+// ============================================================================
+// Console and AI Assistant
+// ============================================================================
 
 void MagicaLegoUserInterface::DrawConsole()
 {
