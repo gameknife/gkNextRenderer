@@ -1,0 +1,12 @@
+# Build a simple tower
+var height = 5
+
+repeat $height as y
+    place Block1x1/#0 0 $y 0
+    place Block1x1/#0 2 $y 0
+    place Block1x1/#0 0 $y 2
+    place Block1x1/#0 2 $y 2
+end
+
+# Top plate
+place Plate2x2/#0 0 $height 0
