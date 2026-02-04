@@ -1,5 +1,192 @@
 #include <catch2/catch_test_macros.hpp>
 #include "Application/MagicaLego/MagicaLegoScriptParser.hpp"
+#include "Application/MagicaLego/MagicaLegoCommands.hpp"
+
+// ==================== Cursor Tests ====================
+// Note: These tests use header-only FCursor implementation
+// Command execution tests are omitted as they require full GameInstance
+
+TEST_CASE("MagicaLego Cursor - Direction Helpers", "[Cursor]")
+{
+    using namespace MagicaLego;
+
+    SECTION("GetDirectionVector returns correct vectors")
+    {
+        REQUIRE(GetDirectionVector(EOrientation::EO_North) == glm::i16vec3{0, 0, -1});
+        REQUIRE(GetDirectionVector(EOrientation::EO_East) == glm::i16vec3{1, 0, 0});
+        REQUIRE(GetDirectionVector(EOrientation::EO_South) == glm::i16vec3{0, 0, 1});
+        REQUIRE(GetDirectionVector(EOrientation::EO_West) == glm::i16vec3{-1, 0, 0});
+    }
+
+    SECTION("TurnLeft rotates counter-clockwise")
+    {
+        REQUIRE(TurnLeft(EOrientation::EO_North) == EOrientation::EO_West);
+        REQUIRE(TurnLeft(EOrientation::EO_West) == EOrientation::EO_South);
+        REQUIRE(TurnLeft(EOrientation::EO_South) == EOrientation::EO_East);
+        REQUIRE(TurnLeft(EOrientation::EO_East) == EOrientation::EO_North);
+    }
+
+    SECTION("TurnRight rotates clockwise")
+    {
+        REQUIRE(TurnRight(EOrientation::EO_North) == EOrientation::EO_East);
+        REQUIRE(TurnRight(EOrientation::EO_East) == EOrientation::EO_South);
+        REQUIRE(TurnRight(EOrientation::EO_South) == EOrientation::EO_West);
+        REQUIRE(TurnRight(EOrientation::EO_West) == EOrientation::EO_North);
+    }
+
+    SECTION("TurnAround reverses direction")
+    {
+        REQUIRE(TurnAround(EOrientation::EO_North) == EOrientation::EO_South);
+        REQUIRE(TurnAround(EOrientation::EO_East) == EOrientation::EO_West);
+        REQUIRE(TurnAround(EOrientation::EO_South) == EOrientation::EO_North);
+        REQUIRE(TurnAround(EOrientation::EO_West) == EOrientation::EO_East);
+    }
+
+    SECTION("Four left turns return to original")
+    {
+        EOrientation dir = EOrientation::EO_North;
+        dir = TurnLeft(dir);
+        dir = TurnLeft(dir);
+        dir = TurnLeft(dir);
+        dir = TurnLeft(dir);
+        REQUIRE(dir == EOrientation::EO_North);
+    }
+}
+
+TEST_CASE("MagicaLego Cursor - Movement", "[Cursor]")
+{
+    using namespace MagicaLego;
+
+    SECTION("Initial state")
+    {
+        FCursor cursor;
+        REQUIRE(cursor.position == glm::i16vec3{0, 0, 0});
+        REQUIRE(cursor.facing == EOrientation::EO_North);
+    }
+
+    SECTION("Move forward when facing North")
+    {
+        FCursor cursor;
+        cursor.MoveForward(3);
+        REQUIRE(cursor.position == glm::i16vec3{0, 0, -3});
+    }
+
+    SECTION("Move forward when facing East")
+    {
+        FCursor cursor;
+        cursor.facing = EOrientation::EO_East;
+        cursor.MoveForward(2);
+        REQUIRE(cursor.position == glm::i16vec3{2, 0, 0});
+    }
+
+    SECTION("Move backward")
+    {
+        FCursor cursor;
+        cursor.MoveBackward(2);
+        REQUIRE(cursor.position == glm::i16vec3{0, 0, 2});
+    }
+
+    SECTION("Move left when facing North")
+    {
+        FCursor cursor;
+        cursor.MoveLeft(1);
+        REQUIRE(cursor.position == glm::i16vec3{-1, 0, 0});
+    }
+
+    SECTION("Move right when facing North")
+    {
+        FCursor cursor;
+        cursor.MoveRight(1);
+        REQUIRE(cursor.position == glm::i16vec3{1, 0, 0});
+    }
+
+    SECTION("Move up and down")
+    {
+        FCursor cursor;
+        cursor.MoveUp(3);
+        REQUIRE(cursor.position == glm::i16vec3{0, 3, 0});
+        cursor.MoveDown(1);
+        REQUIRE(cursor.position == glm::i16vec3{0, 2, 0});
+    }
+
+    SECTION("Turn and move")
+    {
+        FCursor cursor;
+        cursor.TurnRight();  // Now facing East
+        cursor.MoveForward(2);
+        REQUIRE(cursor.position == glm::i16vec3{2, 0, 0});
+    }
+
+    SECTION("Complex movement")
+    {
+        FCursor cursor;
+        cursor.MoveForward(2);   // (0, 0, -2)
+        cursor.TurnLeft();       // Facing West
+        cursor.MoveForward(1);   // (-1, 0, -2)
+        cursor.MoveUp(3);        // (-1, 3, -2)
+        REQUIRE(cursor.position == glm::i16vec3{-1, 3, -2});
+    }
+
+    SECTION("TurnAround method")
+    {
+        FCursor cursor;
+        cursor.TurnAround();
+        REQUIRE(cursor.facing == EOrientation::EO_South);
+    }
+}
+
+TEST_CASE("MagicaLego Cursor - GetPositionOffset", "[Cursor]")
+{
+    using namespace MagicaLego;
+
+    SECTION("Offset when facing North")
+    {
+        FCursor cursor;
+        cursor.position = {5, 2, 3};
+        cursor.facing = EOrientation::EO_North;
+
+        // forward = -Z, right = +X
+        auto pos = cursor.GetPositionOffset(2, 1, 0);
+        REQUIRE(pos == glm::i16vec3{6, 2, 1});  // +1 right (X), +2 forward (-Z means z-2=1)
+    }
+
+    SECTION("Offset when facing East")
+    {
+        FCursor cursor;
+        cursor.position = {0, 0, 0};
+        cursor.facing = EOrientation::EO_East;
+
+        // forward = +X, right = +Z
+        auto pos = cursor.GetPositionOffset(3, 0, 1);
+        REQUIRE(pos == glm::i16vec3{3, 1, 0});
+    }
+}
+
+TEST_CASE("MagicaLego Cursor - FScanResult", "[Cursor]")
+{
+    using namespace MagicaLego;
+
+    SECTION("ToJson produces valid JSON")
+    {
+        FScanResult result;
+        result.cursorPos = {1, 2, 3};
+        result.cursorFacing = EOrientation::EO_East;
+
+        FScanEntry entry;
+        entry.relativePos = {0, 1, 0};
+        entry.blockType = "Block1x1";
+        entry.colorIndex = 5;
+        result.blocks.push_back(entry);
+
+        std::string json = result.ToJson();
+        REQUIRE(json.find("\"cursorPos\"") != std::string::npos);
+        REQUIRE(json.find("\"cursorFacing\"") != std::string::npos);
+        REQUIRE(json.find("\"blocks\"") != std::string::npos);
+        REQUIRE(json.find("east") != std::string::npos);
+    }
+}
+
+// ==================== Original Script Tests ====================
 
 TEST_CASE("MagicaLego Script Parser - ValidateAndFix", "[Script]")
 {
