@@ -13,6 +13,7 @@
 #include "MagicaLegoAIService.hpp"
 #include "MagicaLegoCommands.hpp"
 #include "MagicaLegoGameInstance.hpp"
+#include "MagicaLegoScriptParser.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -1307,8 +1308,11 @@ void MagicaLegoUserInterface::DrawAISection()
 
         if (response.success)
         {
-            // Save generated script for display
-            lastGeneratedScript_ = response.script;
+            // Validate and fix the script first
+            auto validation = MagicaLego::FScriptParser::ValidateAndFix(response.script);
+
+            // Save the fixed script for display
+            lastGeneratedScript_ = validation.fixedScript;
 
             consoleOutput_.push_back("> [AI] Generated script:");
 
@@ -1320,10 +1324,16 @@ void MagicaLegoUserInterface::DrawAISection()
                 consoleOutput_.push_back("  " + scriptLine);
             }
 
+            // Show validation warnings if any
+            for (const auto& warning : validation.warnings)
+            {
+                consoleOutput_.push_back(fmt::format("> [FIX] {}", warning));
+            }
+
             consoleOutput_.push_back("> [AI] Executing...");
 
-            // Execute the generated script
-            auto result = commandExecutor_->ExecuteScriptText(response.script);
+            // Execute the fixed script
+            auto result = commandExecutor_->ExecuteScriptText(validation.fixedScript);
 
             if (!result.message.empty())
             {

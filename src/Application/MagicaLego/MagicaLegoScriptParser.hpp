@@ -15,10 +15,20 @@ namespace MagicaLego
         std::unordered_map<std::string, int> variables_;
     };
 
+    struct FScriptValidationResult
+    {
+        bool valid;
+        std::string fixedScript;
+        std::vector<std::string> warnings;
+    };
+
     class FScriptParser
     {
     public:
         std::vector<std::string> Parse(const std::string& text, std::string& error);
+
+        // Validate and attempt to fix common script errors
+        static FScriptValidationResult ValidateAndFix(const std::string& text);
 
     private:
         struct FRepeatBlock

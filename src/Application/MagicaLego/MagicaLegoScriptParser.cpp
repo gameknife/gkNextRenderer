@@ -268,11 +268,92 @@ namespace MagicaLego
         }
     }
 
-    std::vector<std::string> FScriptParser::Parse(const std::string& text, std::string& error)
+    FScriptValidationResult FScriptParser::ValidateAndFix(const std::string& text)
     {
-        // Split text into lines
+        FScriptValidationResult result;
+        result.valid = true;
+
         std::vector<std::string> lines;
         std::istringstream stream(text);
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            lines.push_back(line);
+        }
+
+        // Count repeat and end statements
+        int repeatCount = 0;
+        int endCount = 0;
+        std::vector<int> repeatLineNumbers;
+
+        for (size_t i = 0; i < lines.size(); ++i)
+        {
+            std::string trimmed = lines[i];
+            auto start = trimmed.find_first_not_of(" \t");
+            if (start == std::string::npos) continue;
+            trimmed = trimmed.substr(start);
+
+            // Skip comments
+            if (trimmed[0] == '#') continue;
+
+            std::string lower = trimmed;
+            std::transform(lower.begin(), lower.end(), lower.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+
+            if (lower.substr(0, 7) == "repeat ")
+            {
+                repeatCount++;
+                repeatLineNumbers.push_back(static_cast<int>(i + 1));
+            }
+            else if (lower == "end")
+            {
+                endCount++;
+            }
+        }
+
+        // Check for mismatched repeat/end
+        if (repeatCount != endCount)
+        {
+            result.valid = false;
+            int missing = repeatCount - endCount;
+
+            if (missing > 0)
+            {
+                result.warnings.push_back(
+                    fmt::format("Missing {} 'end' statement(s) - auto-fixing", missing));
+
+                // Add missing end statements
+                std::string fixed = text;
+                for (int i = 0; i < missing; ++i)
+                {
+                    fixed += "\nend";
+                }
+                result.fixedScript = fixed;
+            }
+            else
+            {
+                result.warnings.push_back(
+                    fmt::format("Extra {} 'end' statement(s) found", -missing));
+                result.fixedScript = text;
+            }
+        }
+        else
+        {
+            result.fixedScript = text;
+        }
+
+        return result;
+    }
+
+    std::vector<std::string> FScriptParser::Parse(const std::string& text, std::string& error)
+    {
+        // First validate and fix the script
+        auto validation = ValidateAndFix(text);
+        std::string scriptToUse = validation.fixedScript;
+
+        // Split text into lines
+        std::vector<std::string> lines;
+        std::istringstream stream(scriptToUse);
         std::string line;
         while (std::getline(stream, line))
         {

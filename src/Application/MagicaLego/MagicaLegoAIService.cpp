@@ -123,37 +123,46 @@ Colors are referenced by index: #0, #1, #2, etc.
         }
 
         prompt += R"(
-## Script Syntax
-- Full line comments: # text
-- Inline comments: command # comment
+## Script Syntax (STRICT - follow exactly)
+- Comments: # text (full line only)
 - Variables: var name = value
-- Loops: repeat count as i ... end (i goes from 0 to count-1)
+- Loops: MUST use this exact format:
+  repeat <count> as <var>
+      <commands>
+  end
 - Variable reference: $varName
 - Expressions: $(varName + number) or $(varName - number)
 
-## Examples
-```mlscript
-# Build a 3x3 floor
+## CRITICAL RULES for repeat/end:
+- Every "repeat" MUST have a matching "end" on its own line
+- "end" must be lowercase and on a separate line
+- Nested loops need multiple "end" statements (one per repeat)
+- Do NOT use curly braces {} or other syntax
+
+## Examples (copy this structure exactly):
+
+# Single loop - 1 repeat needs 1 end
+repeat 5 as i
+    place Block1x1/#0 $i 0 0
+end
+
+# Nested loops - 2 repeats need 2 ends
 repeat 3 as x
     repeat 3 as z
         place Plate1x1/#1 $(x - 1) 0 $(z - 1)
     end
 end
 
-# Build a wall
-repeat 5 as i
-    place Block1x1/#0 $i 0 0  # bottom row
-    place Block1x1/#0 $i 1 0  # top row
+# Tower with offset centering
+repeat 4 as y
+    place Block1x1/#0 0 $y 0
 end
-```
 
-## Rules
-1. Output ONLY mlscript code, no explanations or markdown
-2. Use loops to reduce repetitive code
-3. y=0 is ground level, y increases upward
-4. Coordinate origin (0,0,0) is at center
-5. Loop iterator starts from 0, use $(i - offset) to center
-6. Orientations: north, east, south, west
+## Output Rules:
+1. Output ONLY the script code, no markdown, no explanations
+2. y=0 is ground, y increases upward
+3. Origin (0,0,0) is at center, use $(i - offset) to center
+4. Always match repeat with end
 
 User request: )";
 

@@ -1,6 +1,52 @@
 #include <catch2/catch_test_macros.hpp>
 #include "Application/MagicaLego/MagicaLegoScriptParser.hpp"
 
+TEST_CASE("MagicaLego Script Parser - ValidateAndFix", "[Script]")
+{
+    SECTION("Valid script passes validation")
+    {
+        std::string script = R"(
+repeat 3 as i
+    place Block1x1/#0 $i 0 0
+end
+)";
+        auto result = MagicaLego::FScriptParser::ValidateAndFix(script);
+        REQUIRE(result.valid == true);
+        REQUIRE(result.warnings.empty());
+    }
+
+    SECTION("Missing end is auto-fixed")
+    {
+        std::string script = R"(
+repeat 3 as i
+    place Block1x1/#0 $i 0 0
+)";
+        auto result = MagicaLego::FScriptParser::ValidateAndFix(script);
+        REQUIRE(result.valid == false);
+        REQUIRE(result.warnings.size() == 1);
+        REQUIRE(result.fixedScript.find("end") != std::string::npos);
+    }
+
+    SECTION("Multiple missing ends are auto-fixed")
+    {
+        std::string script = R"(
+repeat 3 as x
+    repeat 3 as z
+        place Block1x1/#0 $x 0 $z
+)";
+        auto result = MagicaLego::FScriptParser::ValidateAndFix(script);
+        REQUIRE(result.valid == false);
+        REQUIRE(result.warnings.size() == 1);
+
+        // Parse the fixed script - should work
+        MagicaLego::FScriptParser parser;
+        std::string error;
+        auto commands = parser.Parse(result.fixedScript, error);
+        REQUIRE(error.empty());
+        REQUIRE(commands.size() == 9);
+    }
+}
+
 TEST_CASE("MagicaLego Script Parser - Variable Substitution", "[Script]")
 {
     MagicaLego::FScriptContext context;
