@@ -55,6 +55,7 @@ private:
 	void DrawHUD();
 
 	void DrawHelp();
+	void DrawConsoleWindow();
 	void DrawConsole();
 	void DrawScriptLoadPopup();
 	void DrawAISection();
@@ -102,4 +103,8 @@ private:
 	std::unique_ptr<MagicaLego::FAIService> aiService_;
 	std::string aiInput_;
 	bool aiGenerating_ = false;
+	std::string lastGeneratedScript_;
+
+	// Console Window
+	bool showConsoleWindow_ = false;
 };

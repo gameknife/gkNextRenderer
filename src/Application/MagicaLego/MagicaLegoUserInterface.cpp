@@ -459,7 +459,8 @@ void MagicaLegoUserInterface::OnRenderUI()
     ImGui::PopStyleVar(1);
 
     DrawTimeline();
-    
+    DrawConsoleWindow();
+
     switch (introStep_)
     {
     case EIS_Entry:
@@ -949,8 +950,14 @@ void MagicaLegoUserInterface::DrawLeftBar()
             ImGui::EndPopup();
         }
 
-        DrawAISection();
-        DrawConsole();
+        // Console window toggle button
+        ImGui::Dummy(ImVec2(0, 20));
+        std::string consoleLabel = std::string(ICON_FA_TERMINAL) + " " + LOCTEXT("AI & Console");
+        if (ImGui::Button(consoleLabel.c_str(), ImVec2(-FLT_MIN, buttonSize)))
+        {
+            showConsoleWindow_ = !showConsoleWindow_;
+        }
+        BUTTON_TOOLTIP(LOCTEXT("Open AI Assistant and Console window"))
     }
     ImGui::End();
 
@@ -1085,8 +1092,7 @@ void MagicaLegoUserInterface::DrawTimeline()
 
 void MagicaLegoUserInterface::DrawConsole()
 {
-    ImGui::Dummy(ImVec2(0, 10));
-    ImGui::SeparatorText(LOCTEXT("Console"));
+    ImGui::Dummy(ImVec2(0, 5));
 
     // Output area
     float outputHeight = 6 * ImGui::GetTextLineHeightWithSpacing();
@@ -1129,7 +1135,8 @@ void MagicaLegoUserInterface::DrawConsole()
     ImGui::EndChild();
 
     // Input line
-    ImGui::PushItemWidth(buildBarWidth - buttonSize - 16);
+    float inputWidth = ImGui::GetContentRegionAvail().x - buttonSize - 8;
+    ImGui::PushItemWidth(inputWidth);
 
     ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory;
 
@@ -1290,8 +1297,7 @@ void MagicaLegoUserInterface::DrawScriptLoadPopup()
 
 void MagicaLegoUserInterface::DrawAISection()
 {
-    ImGui::Dummy(ImVec2(0, 10));
-    ImGui::SeparatorText(LOCTEXT("AI Assistant"));
+    ImGui::Dummy(ImVec2(0, 5));
 
     // Check for pending AI results
     if (aiService_ && aiService_->HasPendingResult())
@@ -1301,7 +1307,20 @@ void MagicaLegoUserInterface::DrawAISection()
 
         if (response.success)
         {
+            // Save generated script for display
+            lastGeneratedScript_ = response.script;
+
             consoleOutput_.push_back("> [AI] Generated script:");
+
+            // Show script content in console
+            std::istringstream scriptStream(response.script);
+            std::string scriptLine;
+            while (std::getline(scriptStream, scriptLine))
+            {
+                consoleOutput_.push_back("  " + scriptLine);
+            }
+
+            consoleOutput_.push_back("> [AI] Executing...");
 
             // Execute the generated script
             auto result = commandExecutor_->ExecuteScriptText(response.script);
@@ -1369,8 +1388,6 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::BeginDisabled();
     }
 
-    ImGui::PushItemWidth(buildBarWidth - buttonSize - 16);
-
     bool executeGenerate = false;
     if (ImGui::InputTextMultiline("##AIInput", &aiInput_,
         ImVec2(-FLT_MIN, 3 * ImGui::GetTextLineHeightWithSpacing()),
@@ -1383,8 +1400,6 @@ void MagicaLegoUserInterface::DrawAISection()
     {
         executeGenerate = true;
     }
-
-    ImGui::PopItemWidth();
 
     std::string generateLabel = aiGenerating_
         ? (std::string(ICON_FA_SPINNER) + " " + LOCTEXT("Generating..."))
@@ -1409,4 +1424,69 @@ void MagicaLegoUserInterface::DrawAISection()
     }
 
     BUTTON_TOOLTIP(LOCTEXT("Use AI to generate building script from natural language (Ctrl+Enter)"))
+
+    // Show last generated script in a collapsible section
+    if (!lastGeneratedScript_.empty())
+    {
+        ImGui::Dummy(ImVec2(0, 5));
+        if (ImGui::CollapsingHeader(LOCTEXT("Last Generated Script"), ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.15f, 0.8f));
+            if (ImGui::BeginChild("##ScriptPreview", ImVec2(-FLT_MIN, 100), ImGuiChildFlags_Borders))
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.9f, 0.7f, 1.0f));
+                ImGui::TextWrapped("%s", lastGeneratedScript_.c_str());
+                ImGui::PopStyleColor();
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+
+            // Copy to clipboard button
+            if (ImGui::Button(ICON_FA_COPY " Copy", ImVec2(-FLT_MIN, 0)))
+            {
+                ImGui::SetClipboardText(lastGeneratedScript_.c_str());
+            }
+            BUTTON_TOOLTIP(LOCTEXT("Copy script to clipboard"))
+        }
+    }
+}
+
+void MagicaLegoUserInterface::DrawConsoleWindow()
+{
+    if (!showConsoleWindow_)
+    {
+        return;
+    }
+
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+
+    // Set initial window size and position
+    ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(viewportSize.x * 0.5f, viewportSize.y * 0.5f),
+                            ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.9f);
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_None;
+
+    if (ImGui::Begin(ICON_FA_TERMINAL " AI & Console", &showConsoleWindow_, windowFlags))
+    {
+        // Tab bar for AI and Console
+        if (ImGui::BeginTabBar("##ConsoleTabs"))
+        {
+            if (ImGui::BeginTabItem(ICON_FA_ROBOT " AI Assistant"))
+            {
+                DrawAISection();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem(ICON_FA_TERMINAL " Console"))
+            {
+                DrawConsole();
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
+    }
+    ImGui::End();
 }
