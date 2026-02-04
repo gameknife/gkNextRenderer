@@ -47,10 +47,543 @@ namespace
 
 namespace MagicaLego
 {
+    // ============================================
+    // FGeminiProvider Implementation
+    // ============================================
+
+    bool FGeminiProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("apiKey"))
+            {
+                apiKey_ = config["apiKey"].get<std::string>();
+            }
+            if (config.contains("model"))
+            {
+                model_ = config["model"].get<std::string>();
+            }
+            if (config.contains("endpoint"))
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+
+            if (apiKey_.empty() || apiKey_ == "YOUR_GOOGLE_API_KEY")
+            {
+                configured_ = false;
+                return false;
+            }
+
+            configured_ = true;
+            SPDLOG_INFO("Gemini Provider initialized with model: {}", model_);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize Gemini Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FGeminiProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    FAIResponse FGeminiProvider::Generate(const std::string& prompt)
+    {
+        if (!configured_)
+        {
+            return FAIResponse::Failure("Gemini provider not configured");
+        }
+
+        // Build API URL
+        std::string url = fmt::format("{}/models/{}:generateContent?key={}",
+            endpoint_, model_, apiKey_);
+
+        // Build request body
+        json requestBody = {
+            {"contents", json::array({
+                {{"role", "user"}, {"parts", json::array({{{"text", prompt}}})}}
+            })},
+            {"generationConfig", {
+                {"temperature", 0.7},
+                {"maxOutputTokens", AI::MaxOutputTokens}
+            }}
+        };
+
+        std::string requestStr = requestBody.dump();
+        std::string responseBuffer;
+
+        CURL* curl = curl_easy_init();
+        if (!curl)
+        {
+            return FAIResponse::Failure("Failed to initialize CURL");
+        }
+
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AI::RequestTimeoutSeconds);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK)
+        {
+            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
+        }
+
+        // Parse response
+        try
+        {
+            json response = json::parse(responseBuffer);
+
+            // Check for API error
+            if (response.contains("error"))
+            {
+                std::string errorMsg = response["error"]["message"].get<std::string>();
+                return FAIResponse::Failure(fmt::format("API error: {}", errorMsg));
+            }
+
+            // Extract generated text
+            if (response.contains("candidates") && !response["candidates"].empty())
+            {
+                auto& candidate = response["candidates"][0];
+                if (candidate.contains("content") && candidate["content"].contains("parts"))
+                {
+                    auto& parts = candidate["content"]["parts"];
+                    if (!parts.empty() && parts[0].contains("text"))
+                    {
+                        std::string generatedText = parts[0]["text"].get<std::string>();
+                        return FAIResponse::Success(generatedText);
+                    }
+                }
+            }
+
+            return FAIResponse::Failure("Unexpected API response format");
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse Gemini response: {}", e.what());
+            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
+    // ============================================
+    // FOllamaProvider Implementation
+    // ============================================
+
+    bool FOllamaProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("endpoint"))
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+            if (config.contains("model"))
+            {
+                model_ = config["model"].get<std::string>();
+            }
+
+            // Ollama doesn't need API key, just check if endpoint is valid
+            if (endpoint_.empty())
+            {
+                configured_ = false;
+                return false;
+            }
+
+            configured_ = true;
+            SPDLOG_INFO("Ollama Provider initialized with model: {} at {}", model_, endpoint_);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize Ollama Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FOllamaProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    FAIResponse FOllamaProvider::Generate(const std::string& prompt)
+    {
+        if (!configured_)
+        {
+            return FAIResponse::Failure("Ollama provider not configured");
+        }
+
+        // Build API URL for Ollama generate endpoint
+        std::string url = endpoint_ + "/api/generate";
+
+        // Build request body for Ollama API
+        json requestBody = {
+            {"model", model_},
+            {"prompt", prompt},
+            {"stream", false}
+        };
+
+        std::string requestStr = requestBody.dump();
+        std::string responseBuffer;
+
+        CURL* curl = curl_easy_init();
+        if (!curl)
+        {
+            return FAIResponse::Failure("Failed to initialize CURL");
+        }
+
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AI::RequestTimeoutSeconds);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK)
+        {
+            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
+        }
+
+        // Parse Ollama response
+        try
+        {
+            json response = json::parse(responseBuffer);
+
+            // Check for error field
+            if (response.contains("error"))
+            {
+                std::string errorMsg = response["error"].get<std::string>();
+                return FAIResponse::Failure(fmt::format("Ollama error: {}", errorMsg));
+            }
+
+            // Extract response text
+            if (response.contains("response"))
+            {
+                std::string generatedText = response["response"].get<std::string>();
+                return FAIResponse::Success(generatedText);
+            }
+
+            return FAIResponse::Failure("Unexpected Ollama response format");
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse Ollama response: {}", e.what());
+            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
+    // ============================================
+    // FZhipuProvider Implementation
+    // ============================================
+
+    bool FZhipuProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("apiKey"))
+            {
+                apiKey_ = config["apiKey"].get<std::string>();
+            }
+            if (config.contains("model"))
+            {
+                model_ = config["model"].get<std::string>();
+            }
+            if (config.contains("endpoint"))
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+
+            if (apiKey_.empty() || apiKey_ == "YOUR_ZHIPU_API_KEY")
+            {
+                configured_ = false;
+                return false;
+            }
+
+            configured_ = true;
+            SPDLOG_INFO("Zhipu Provider initialized with model: {}", model_);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize Zhipu Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FZhipuProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    FAIResponse FZhipuProvider::Generate(const std::string& prompt)
+    {
+        if (!configured_)
+        {
+            return FAIResponse::Failure("Zhipu provider not configured");
+        }
+
+        // Build API URL for Zhipu chat completions endpoint
+        std::string url = endpoint_ + "/chat/completions";
+
+        // Build request body for Zhipu API (OpenAI-compatible format)
+        json requestBody = {
+            {"model", model_},
+            {"messages", json::array({
+                {{"role", "user"}, {"content", prompt}}
+            })}
+        };
+
+        std::string requestStr = requestBody.dump();
+        std::string responseBuffer;
+
+        CURL* curl = curl_easy_init();
+        if (!curl)
+        {
+            return FAIResponse::Failure("Failed to initialize CURL");
+        }
+
+        // Build Authorization header with Bearer token
+        std::string authHeader = fmt::format("Authorization: Bearer {}", apiKey_);
+
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        headers = curl_slist_append(headers, authHeader.c_str());
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AI::RequestTimeoutSeconds);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK)
+        {
+            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
+        }
+
+        // Parse Zhipu response (OpenAI-compatible format)
+        try
+        {
+            json response = json::parse(responseBuffer);
+
+            // Check for error field
+            if (response.contains("error"))
+            {
+                std::string errorMsg;
+                if (response["error"].is_object() && response["error"].contains("message"))
+                {
+                    errorMsg = response["error"]["message"].get<std::string>();
+                }
+                else
+                {
+                    errorMsg = response["error"].dump();
+                }
+                return FAIResponse::Failure(fmt::format("Zhipu error: {}", errorMsg));
+            }
+
+            // Extract response text from choices
+            if (response.contains("choices") && !response["choices"].empty())
+            {
+                auto& choice = response["choices"][0];
+                if (choice.contains("message") && choice["message"].contains("content"))
+                {
+                    std::string generatedText = choice["message"]["content"].get<std::string>();
+                    return FAIResponse::Success(generatedText);
+                }
+            }
+
+            return FAIResponse::Failure("Unexpected Zhipu response format");
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse Zhipu response: {}", e.what());
+            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
+    // ============================================
+    // FAIService Implementation
+    // ============================================
+
     FAIService::FAIService(MagicaLegoGameInstance* gi)
         : gameInstance_(gi)
     {
         LoadConfig();
+    }
+
+    std::unique_ptr<IAIProvider> FAIService::CreateProvider(EAIProviderType type)
+    {
+        switch (type)
+        {
+            case EAIProviderType::Gemini:
+                return std::make_unique<FGeminiProvider>();
+            case EAIProviderType::Ollama:
+                return std::make_unique<FOllamaProvider>();
+            case EAIProviderType::Zhipu:
+                return std::make_unique<FZhipuProvider>();
+            default:
+                return std::make_unique<FGeminiProvider>();
+        }
+    }
+
+    std::string FAIService::GetProviderName() const
+    {
+        if (provider_)
+        {
+            return provider_->GetName();
+        }
+        return "None";
+    }
+
+    std::string FAIService::ProviderTypeToString(EAIProviderType type)
+    {
+        switch (type)
+        {
+            case EAIProviderType::Gemini: return "gemini";
+            case EAIProviderType::Ollama: return "ollama";
+            case EAIProviderType::Zhipu: return "zhipu";
+            default: return "gemini";
+        }
+    }
+
+    EAIProviderType FAIService::StringToProviderType(const std::string& name)
+    {
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+        if (lower == "ollama") return EAIProviderType::Ollama;
+        if (lower == "zhipu") return EAIProviderType::Zhipu;
+        return EAIProviderType::Gemini;
+    }
+
+    std::vector<std::pair<EAIProviderType, std::string>> FAIService::GetAvailableProviders()
+    {
+        return {
+            {EAIProviderType::Gemini, "Gemini"},
+            {EAIProviderType::Ollama, "Ollama"},
+            {EAIProviderType::Zhipu, "Zhipu"}
+        };
+    }
+
+    nlohmann::json FAIService::GetProviderConfig(EAIProviderType type) const
+    {
+        if (!fullConfig_)
+        {
+            return nlohmann::json::object();
+        }
+
+        std::string configKey = ProviderTypeToString(type);
+
+        if (fullConfig_->contains(configKey))
+        {
+            return (*fullConfig_)[configKey];
+        }
+
+        // Backward compatibility: use root-level config for Gemini
+        if (type == EAIProviderType::Gemini)
+        {
+            return *fullConfig_;
+        }
+
+        return nlohmann::json::object();
+    }
+
+    bool FAIService::IsProviderConfigured(EAIProviderType type) const
+    {
+        // Return cached result
+        auto it = providerConfigCache_.find(type);
+        if (it != providerConfigCache_.end())
+        {
+            return it->second;
+        }
+        return false;
+    }
+
+    void FAIService::UpdateProviderConfigCache()
+    {
+        providerConfigCache_.clear();
+
+        for (const auto& [type, name] : GetAvailableProviders())
+        {
+            auto tempProvider = CreateProvider(type);
+            if (tempProvider)
+            {
+                nlohmann::json config = GetProviderConfig(type);
+                bool configured = tempProvider->Initialize(config);
+                providerConfigCache_[type] = configured;
+            }
+            else
+            {
+                providerConfigCache_[type] = false;
+            }
+        }
+    }
+
+    bool FAIService::SwitchProvider(EAIProviderType type)
+    {
+        if (status_ == EAIStatus::Generating)
+        {
+            SPDLOG_WARN("Cannot switch provider while generating");
+            return false;
+        }
+
+        // Create new provider
+        auto newProvider = CreateProvider(type);
+        if (!newProvider)
+        {
+            SPDLOG_ERROR("Failed to create provider: {}", ProviderTypeToString(type));
+            return false;
+        }
+
+        // Get config for the new provider
+        nlohmann::json config = GetProviderConfig(type);
+
+        // Initialize the new provider
+        if (!newProvider->Initialize(config))
+        {
+            status_ = EAIStatus::NotConfigured;
+            statusMessage_ = fmt::format("{} provider not configured", newProvider->GetName());
+            configured_ = false;
+            SPDLOG_WARN("Failed to initialize provider: {}", newProvider->GetName());
+            return false;
+        }
+
+        // Switch to new provider
+        provider_ = std::move(newProvider);
+        providerType_ = type;
+        configured_ = true;
+        status_ = EAIStatus::Ready;
+        statusMessage_ = fmt::format("{} ready", provider_->GetName());
+
+        SPDLOG_INFO("Switched to AI provider: {}", provider_->GetName());
+        return true;
     }
 
     bool FAIService::LoadConfig()
@@ -71,31 +604,42 @@ namespace MagicaLego
             json j;
             file >> j;
 
-            if (j.contains("apiKey"))
+            // Store full config for provider switching
+            fullConfig_ = std::make_unique<nlohmann::json>(j);
+
+            // Determine which provider to use
+            std::string providerName = "gemini";  // Default provider
+            if (j.contains("provider"))
             {
-                config_.apiKey = j["apiKey"].get<std::string>();
-            }
-            if (j.contains("model"))
-            {
-                config_.model = j["model"].get<std::string>();
-            }
-            if (j.contains("endpoint"))
-            {
-                config_.endpoint = j["endpoint"].get<std::string>();
+                providerName = j["provider"].get<std::string>();
             }
 
-            if (config_.apiKey.empty() || config_.apiKey == "YOUR_GOOGLE_API_KEY")
+            // Select provider type
+            providerType_ = StringToProviderType(providerName);
+
+            // Create the provider
+            provider_ = CreateProvider(providerType_);
+
+            // Get provider-specific config
+            nlohmann::json providerConfig = GetProviderConfig(providerType_);
+
+            // Initialize the provider
+            if (!provider_->Initialize(providerConfig))
             {
                 status_ = EAIStatus::NotConfigured;
-                statusMessage_ = "API key not configured";
+                statusMessage_ = fmt::format("{} provider not configured", provider_->GetName());
                 configured_ = false;
                 return false;
             }
 
             status_ = EAIStatus::Ready;
-            statusMessage_ = "Ready";
+            statusMessage_ = fmt::format("{} ready", provider_->GetName());
             configured_ = true;
-            SPDLOG_INFO("AI Service configured with model: {}", config_.model);
+
+            // Cache configuration status for all providers
+            UpdateProviderConfigCache();
+
+            SPDLOG_INFO("AI Service configured with provider: {}", provider_->GetName());
             return true;
         }
         catch (const std::exception& e)
@@ -541,9 +1085,9 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
         return contextPrompt;
     }
 
-    FAIResponse FAIService::CallGeminiAPI(const std::string& userPrompt)
+    FAIResponse FAIService::CallProvider(const std::string& userPrompt)
     {
-        if (!configured_)
+        if (!configured_ || !provider_)
         {
             return FAIResponse::Failure("AI service not configured");
         }
@@ -551,85 +1095,17 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
         std::string systemPrompt = BuildSystemPrompt();
         std::string fullPrompt = systemPrompt + userPrompt;
 
-        // Build API URL
-        std::string url = fmt::format("{}/models/{}:generateContent?key={}",
-            config_.endpoint, config_.model, config_.apiKey);
+        // Call the provider
+        auto response = provider_->Generate(fullPrompt);
 
-        // Build request body
-        json requestBody = {
-            {"contents", json::array({
-                {{"role", "user"}, {"parts", json::array({{{"text", fullPrompt}}})}}
-            })},
-            {"generationConfig", {
-                {"temperature", 0.7},
-                {"maxOutputTokens", AI::MaxOutputTokens}
-            }}
-        };
-
-        std::string requestStr = requestBody.dump();
-        std::string responseBuffer;
-
-        CURL* curl = curl_easy_init();
-        if (!curl)
+        // Extract script from response if successful
+        if (response.success)
         {
-            return FAIResponse::Failure("Failed to initialize CURL");
+            std::string script = ExtractScriptFromResponse(response.script);
+            return FAIResponse::Success(script);
         }
 
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AI::RequestTimeoutSeconds);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK)
-        {
-            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
-        }
-
-        // Parse response
-        try
-        {
-            json response = json::parse(responseBuffer);
-
-            // Check for API error
-            if (response.contains("error"))
-            {
-                std::string errorMsg = response["error"]["message"].get<std::string>();
-                return FAIResponse::Failure(fmt::format("API error: {}", errorMsg));
-            }
-
-            // Extract generated text
-            if (response.contains("candidates") && !response["candidates"].empty())
-            {
-                auto& candidate = response["candidates"][0];
-                if (candidate.contains("content") && candidate["content"].contains("parts"))
-                {
-                    auto& parts = candidate["content"]["parts"];
-                    if (!parts.empty() && parts[0].contains("text"))
-                    {
-                        std::string generatedText = parts[0]["text"].get<std::string>();
-                        std::string script = ExtractScriptFromResponse(generatedText);
-                        return FAIResponse::Success(script);
-                    }
-                }
-            }
-
-            return FAIResponse::Failure("Unexpected API response format");
-        }
-        catch (const std::exception& e)
-        {
-            SPDLOG_ERROR("Failed to parse AI response: {}", e.what());
-            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
-        }
+        return response;
     }
 
     std::string FAIService::ExtractScriptFromResponse(const std::string& responseText)
@@ -677,7 +1153,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
         status_ = EAIStatus::Generating;
         statusMessage_ = "Generating...";
 
-        auto response = CallGeminiAPI(prompt);
+        auto response = CallProvider(prompt);
 
         if (response.success)
         {
@@ -701,7 +1177,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
 
         std::thread([this, prompt, callback]()
         {
-            auto response = CallGeminiAPI(prompt);
+            auto response = CallProvider(prompt);
 
             {
                 std::lock_guard<std::mutex> lock(resultMutex_);
@@ -734,7 +1210,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
 
         // Build prompt with scene context
         std::string contextPrompt = BuildContextPrompt(prompt);
-        auto response = CallGeminiAPI(contextPrompt);
+        auto response = CallProvider(contextPrompt);
 
         if (response.success)
         {
@@ -759,7 +1235,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
         std::thread([this, prompt, callback]()
         {
             std::string contextPrompt = BuildContextPrompt(prompt);
-            auto response = CallGeminiAPI(contextPrompt);
+            auto response = CallProvider(contextPrompt);
 
             {
                 std::lock_guard<std::mutex> lock(resultMutex_);

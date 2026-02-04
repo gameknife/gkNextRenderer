@@ -1455,6 +1455,75 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
         ImGui::Text("%s", statusText.c_str());
         ImGui::PopStyleColor();
+
+        // Provider selector (same line as status)
+        ImGui::SameLine();
+        float availWidth = ImGui::GetContentRegionAvail().x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availWidth - 120.0f);
+
+        // Disable provider switching while generating
+        if (aiGenerating_)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        ImGui::SetNextItemWidth(120.0f);
+        auto providers = MagicaLego::FAIService::GetAvailableProviders();
+        auto currentType = aiService_->GetProviderType();
+        std::string currentName = aiService_->GetProviderName();
+
+        if (ImGui::BeginCombo("##ProviderSelect", currentName.c_str()))
+        {
+            for (const auto& [type, name] : providers)
+            {
+                bool isSelected = (type == currentType);
+                bool isConfigured = aiService_->IsProviderConfigured(type);
+
+                // Show unconfigured providers as disabled
+                if (!isConfigured)
+                {
+                    ImGui::BeginDisabled();
+                }
+
+                if (ImGui::Selectable(name.c_str(), isSelected))
+                {
+                    if (type != currentType)
+                    {
+                        if (aiService_->SwitchProvider(type))
+                        {
+                            consoleOutput_.push_back(fmt::format("> [AI] Switched to {} provider", name));
+                            scrollToBottom_ = true;
+                        }
+                        else
+                        {
+                            consoleOutput_.push_back(fmt::format("> [AI] Failed to switch to {}: {}",
+                                name, aiService_->GetStatusMessage()));
+                            scrollToBottom_ = true;
+                        }
+                    }
+                }
+
+                if (!isConfigured)
+                {
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    {
+                        ImGui::SetTooltip("Not configured in ai_config.json");
+                    }
+                }
+
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (aiGenerating_)
+        {
+            ImGui::EndDisabled();
+        }
     }
     else
     {
