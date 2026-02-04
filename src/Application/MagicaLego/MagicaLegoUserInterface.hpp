@@ -4,6 +4,12 @@
 struct ImFont;
 class MagicaLegoGameInstance;
 
+namespace MagicaLego
+{
+    class FCommandExecutor;
+    class FAIService;
+}
+
 enum EIntroStep : uint8_t
 {
 	EIS_Entry,
@@ -26,6 +32,7 @@ class MagicaLegoUserInterface final
 {
 public:
 	MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
+	~MagicaLegoUserInterface();
 
 	void OnInitUI();
 	void OnRenderUI();
@@ -48,6 +55,9 @@ private:
 	void DrawHUD();
 
 	void DrawHelp();
+	void DrawConsole();
+	void DrawScriptLoadPopup();
+	void DrawAISection();
 
 	void RecordTimeline(bool autoRotate);
 
@@ -78,4 +88,18 @@ private:
 
 	EIntroStep introStep_ = EIntroStep::EIS_Entry;
 
+	bool qualityMode_ {};
+
+	// Console
+	std::unique_ptr<MagicaLego::FCommandExecutor> commandExecutor_;
+	std::string consoleInput_;
+	std::vector<std::string> consoleOutput_;
+	bool scrollToBottom_ = false;
+	bool showScriptPopup_ = false;
+	std::string selectedScript_;
+
+	// AI Assistant
+	std::unique_ptr<MagicaLego::FAIService> aiService_;
+	std::string aiInput_;
+	bool aiGenerating_ = false;
 };

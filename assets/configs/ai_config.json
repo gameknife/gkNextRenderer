@@ -1,0 +1,5 @@
+{
+    "apiKey": "YOUR_GOOGLE_API_KEY",
+    "model": "gemini-1.5-flash",
+    "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+}

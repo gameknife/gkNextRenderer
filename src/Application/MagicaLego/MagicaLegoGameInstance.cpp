@@ -994,6 +994,77 @@ void MagicaLegoGameInstance::UpdateFocusToScreenCenter()
     cameraCenter_ = focusTarget_;
 }
 
+FBasicBlock* MagicaLegoGameInstance::GetBasicBlockBySpec(const std::string& type, const std::string& color)
+{
+    auto it = BasicBlockTypeMap.find(type);
+    if (it == BasicBlockTypeMap.end())
+    {
+        return nullptr;
+    }
+
+    for (auto& block : it->second)
+    {
+        if (block.name == color)
+        {
+            return &block;
+        }
+    }
+
+    return nullptr;
+}
+
+bool MagicaLegoGameInstance::HasBlockAt(glm::i16vec3 location) const
+{
+    uint32_t hash = GetHashFromBlockLocation(location);
+    auto it = BlocksDynamics.find(hash);
+    if (it == BlocksDynamics.end())
+    {
+        return false;
+    }
+    return it->second.modelId_ >= 0;
+}
+
+std::vector<std::string> MagicaLegoGameInstance::GetAllBlockTypes() const
+{
+    std::vector<std::string> types;
+    types.reserve(BasicBlockTypeMap.size());
+    for (const auto& [typeName, blocks] : BasicBlockTypeMap)
+    {
+        types.push_back(typeName);
+    }
+    return types;
+}
+
+std::vector<std::string> MagicaLegoGameInstance::GetAllBlockColors(const std::string& type) const
+{
+    std::vector<std::string> colors;
+
+    if (type.empty())
+    {
+        // Return all colors from all types
+        for (const auto& [typeName, blocks] : BasicBlockTypeMap)
+        {
+            for (const auto& block : blocks)
+            {
+                colors.push_back(block.name);
+            }
+        }
+    }
+    else
+    {
+        auto it = BasicBlockTypeMap.find(type);
+        if (it != BasicBlockTypeMap.end())
+        {
+            for (const auto& block : it->second)
+            {
+                colors.push_back(block.name);
+            }
+        }
+    }
+
+    return colors;
+}
+
 void MagicaLegoGameInstance::UpdateMouseCursor()
 {
     SDL_SystemCursor cursorType;

@@ -10,6 +10,8 @@
 #include <cstring>
 #include <utility>
 
+#include "MagicaLegoAIService.hpp"
+#include "MagicaLegoCommands.hpp"
 #include "MagicaLegoGameInstance.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -153,7 +155,15 @@ MagicaLegoUserInterface::MagicaLegoUserInterface(MagicaLegoGameInstance* gameIns
 {
     // set the uiStatus_ 1,2,3 bit to show the left, right, timeline
     DirectSetLayout(EULUT_TitleBar | EULUT_LayoutIndicator | EULUT_LeftBar | EULUT_RightBar);
+
+    // Initialize command executor
+    commandExecutor_ = std::make_unique<MagicaLego::FCommandExecutor>(gameInstance);
+
+    // Initialize AI service
+    aiService_ = std::make_unique<MagicaLego::FAIService>(gameInstance);
 }
+
+MagicaLegoUserInterface::~MagicaLegoUserInterface() = default;
 
 void MagicaLegoUserInterface::OnInitUI()
 {
@@ -938,8 +948,13 @@ void MagicaLegoUserInterface::DrawLeftBar()
             }
             ImGui::EndPopup();
         }
+
+        DrawAISection();
+        DrawConsole();
     }
     ImGui::End();
+
+    DrawScriptLoadPopup();
 }
 
 void MagicaLegoUserInterface::DrawRightBar()
@@ -1066,4 +1081,332 @@ void MagicaLegoUserInterface::DrawTimeline()
         ImGui::EndGroup();
     }
     ImGui::End();
+}
+
+void MagicaLegoUserInterface::DrawConsole()
+{
+    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::SeparatorText(LOCTEXT("Console"));
+
+    // Output area
+    float outputHeight = 6 * ImGui::GetTextLineHeightWithSpacing();
+    if (ImGui::BeginChild("ConsoleOutput", ImVec2(-FLT_MIN, outputHeight), ImGuiChildFlags_Borders))
+    {
+        for (const auto& line : consoleOutput_)
+        {
+            // Color code based on prefix
+            if (line.find("[OK]") == 0)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
+            }
+            else if (line.find("[FAIL]") == 0 || line.find("Error") != std::string::npos)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            }
+            else if (line.find("[SKIP]") == 0)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
+            }
+            else if (line.find(">") == 0)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.8f, 1.0f, 1.0f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+            }
+
+            ImGui::TextWrapped("%s", line.c_str());
+            ImGui::PopStyleColor();
+        }
+
+        if (scrollToBottom_)
+        {
+            ImGui::SetScrollHereY(1.0f);
+            scrollToBottom_ = false;
+        }
+    }
+    ImGui::EndChild();
+
+    // Input line
+    ImGui::PushItemWidth(buildBarWidth - buttonSize - 16);
+
+    ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory;
+
+    bool executeCommand = false;
+    if (ImGui::InputText("##ConsoleInput", &consoleInput_, inputFlags,
+        [](ImGuiInputTextCallbackData* data) -> int
+        {
+            auto* ui = static_cast<MagicaLegoUserInterface*>(data->UserData);
+            if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
+            {
+                std::string historyCmd;
+                if (data->EventKey == ImGuiKey_UpArrow)
+                {
+                    historyCmd = ui->commandExecutor_->GetHistoryPrev();
+                }
+                else if (data->EventKey == ImGuiKey_DownArrow)
+                {
+                    historyCmd = ui->commandExecutor_->GetHistoryNext();
+                }
+
+                if (!historyCmd.empty())
+                {
+                    data->DeleteChars(0, data->BufTextLen);
+                    data->InsertChars(0, historyCmd.c_str());
+                }
+            }
+            return 0;
+        }, this))
+    {
+        executeCommand = true;
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::SameLine();
+
+    if (ImGui::Button(ICON_FA_PLAY, ImVec2(buttonSize, 0)) || executeCommand)
+    {
+        if (!consoleInput_.empty())
+        {
+            consoleOutput_.push_back("> " + consoleInput_);
+
+            auto result = commandExecutor_->ExecuteCommand(consoleInput_);
+
+            if (!result.message.empty())
+            {
+                consoleOutput_.push_back(result.message);
+            }
+
+            for (const auto& line : result.output)
+            {
+                consoleOutput_.push_back("  " + line);
+            }
+
+            // Keep output limited to last 100 lines
+            while (consoleOutput_.size() > 100)
+            {
+                consoleOutput_.erase(consoleOutput_.begin());
+            }
+
+            consoleInput_.clear();
+            scrollToBottom_ = true;
+        }
+    }
+    BUTTON_TOOLTIP(LOCTEXT("Execute command"))
+
+    // Script load button
+    std::string loadScriptLabel = std::string(ICON_FA_FILE_CODE) + " " + LOCTEXT("Load Script");
+    if (ImGui::Button(loadScriptLabel.c_str(), ImVec2(-FLT_MIN, 0)))
+    {
+        showScriptPopup_ = true;
+    }
+    BUTTON_TOOLTIP(LOCTEXT("Load and execute a .mlscript file"))
+}
+
+void MagicaLegoUserInterface::DrawScriptLoadPopup()
+{
+    if (showScriptPopup_)
+    {
+        ImGui::OpenPopup("LoadScript");
+        showScriptPopup_ = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("LoadScript", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text(LOCTEXT("Select a script file to execute:"));
+        ImGui::Separator();
+
+        // List script files
+        std::string scriptsPath = Utilities::FileHelper::GetPlatformFilePath("assets/scripts/");
+        Utilities::FileHelper::EnsureDirectoryExists(scriptsPath);
+
+        if (ImGui::BeginListBox("##scriptlist", ImVec2(300, 8 * ImGui::GetTextLineHeightWithSpacing())))
+        {
+            try
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(scriptsPath))
+                {
+                    if (entry.path().extension() == ".mlscript")
+                    {
+                        std::string filename = entry.path().filename().string();
+                        bool isSelected = (selectedScript_ == filename);
+
+                        if (ImGui::Selectable(filename.c_str(), isSelected))
+                        {
+                            selectedScript_ = filename;
+                        }
+
+                        if (isSelected)
+                        {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                }
+            }
+            catch (const std::exception&)
+            {
+                ImGui::TextDisabled("No scripts found");
+            }
+            ImGui::EndListBox();
+        }
+
+        if (ImGui::Button(LOCTEXT("Execute"), ImVec2(120, 0)))
+        {
+            if (!selectedScript_.empty())
+            {
+                std::string fullPath = scriptsPath + selectedScript_;
+                consoleOutput_.push_back("> [Script] " + selectedScript_);
+
+                auto result = commandExecutor_->ExecuteScript(fullPath);
+
+                if (!result.message.empty())
+                {
+                    consoleOutput_.push_back(result.message);
+                }
+
+                for (const auto& line : result.output)
+                {
+                    consoleOutput_.push_back("  " + line);
+                }
+
+                scrollToBottom_ = true;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SetItemDefaultFocus();
+        ImGui::SameLine();
+        if (ImGui::Button(LOCTEXT("Cancel"), ImVec2(120, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+void MagicaLegoUserInterface::DrawAISection()
+{
+    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::SeparatorText(LOCTEXT("AI Assistant"));
+
+    // Check for pending AI results
+    if (aiService_ && aiService_->HasPendingResult())
+    {
+        auto response = aiService_->GetPendingResult();
+        aiGenerating_ = false;
+
+        if (response.success)
+        {
+            consoleOutput_.push_back("> [AI] Generated script:");
+
+            // Execute the generated script
+            auto result = commandExecutor_->ExecuteScriptText(response.script);
+
+            if (!result.message.empty())
+            {
+                consoleOutput_.push_back(result.message);
+            }
+
+            for (const auto& line : result.output)
+            {
+                consoleOutput_.push_back("  " + line);
+            }
+
+            scrollToBottom_ = true;
+        }
+        else
+        {
+            consoleOutput_.push_back(fmt::format("> [AI] Error: {}", response.message));
+            scrollToBottom_ = true;
+        }
+    }
+
+    // Status indicator
+    if (aiService_)
+    {
+        auto status = aiService_->GetStatus();
+        ImVec4 statusColor;
+        const char* statusIcon;
+
+        switch (status)
+        {
+        case MagicaLego::EAIStatus::NotConfigured:
+            statusColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+            statusIcon = ICON_FA_TRIANGLE_EXCLAMATION;
+            break;
+        case MagicaLego::EAIStatus::Ready:
+            statusColor = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
+            statusIcon = ICON_FA_ROBOT;
+            break;
+        case MagicaLego::EAIStatus::Generating:
+            statusColor = ImVec4(0.4f, 0.8f, 1.0f, 1.0f);
+            statusIcon = ICON_FA_SPINNER;
+            break;
+        case MagicaLego::EAIStatus::Error:
+            statusColor = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+            statusIcon = ICON_FA_CIRCLE_XMARK;
+            break;
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
+        ImGui::Text("%s %s", statusIcon, aiService_->GetStatusMessage().c_str());
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        ImGui::TextDisabled("AI service unavailable");
+    }
+
+    // Input and generate button
+    bool canGenerate = aiService_ && aiService_->IsConfigured() && !aiGenerating_;
+
+    if (!canGenerate)
+    {
+        ImGui::BeginDisabled();
+    }
+
+    ImGui::PushItemWidth(buildBarWidth - buttonSize - 16);
+
+    bool executeGenerate = false;
+    if (ImGui::InputTextMultiline("##AIInput", &aiInput_,
+        ImVec2(-FLT_MIN, 3 * ImGui::GetTextLineHeightWithSpacing()),
+        ImGuiInputTextFlags_CtrlEnterForNewLine))
+    {
+    }
+
+    // Check for Ctrl+Enter to generate
+    if (ImGui::IsItemFocused() && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Enter))
+    {
+        executeGenerate = true;
+    }
+
+    ImGui::PopItemWidth();
+
+    std::string generateLabel = aiGenerating_
+        ? (std::string(ICON_FA_SPINNER) + " " + LOCTEXT("Generating..."))
+        : (std::string(ICON_FA_ROBOT) + " " + LOCTEXT("Generate"));
+
+    if (ImGui::Button(generateLabel.c_str(), ImVec2(-FLT_MIN, 0)) || executeGenerate)
+    {
+        if (!aiInput_.empty() && canGenerate)
+        {
+            aiGenerating_ = true;
+            consoleOutput_.push_back(fmt::format("> [AI] Request: {}", aiInput_));
+            scrollToBottom_ = true;
+
+            std::string prompt = aiInput_;
+            aiService_->GenerateScriptAsync(prompt, nullptr);
+        }
+    }
+
+    if (!canGenerate)
+    {
+        ImGui::EndDisabled();
+    }
+
+    BUTTON_TOOLTIP(LOCTEXT("Use AI to generate building script from natural language (Ctrl+Enter)"))
 }

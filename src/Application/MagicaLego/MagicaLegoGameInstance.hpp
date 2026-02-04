@@ -158,6 +158,12 @@ public:
     // Blocks
     bool PlaceDynamicBlock(FPlacedBlock Block);
 
+    // Command System Support
+    FBasicBlock* GetBasicBlockBySpec(const std::string& type, const std::string& color);
+    bool HasBlockAt(glm::i16vec3 location) const;
+    std::vector<std::string> GetAllBlockTypes() const;
+    std::vector<std::string> GetAllBlockColors(const std::string& type) const;
+
     // Base
     void SwitchBasePlane(EBasePlane Type);
     EBasePlane GetCurrentBasePlane() const { return currentBaseSize_; }
