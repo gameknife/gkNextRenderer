@@ -1,0 +1,10 @@
+# Build a small pyramid
+# Layer 0 - 3x3 base
+repeat 3 as x
+    repeat 3 as z
+        place Block1x1/#0 $x 0 $z
+    end
+end
+
+# Layer 1 - center
+place Block1x1/#0 1 1 1
