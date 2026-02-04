@@ -162,8 +162,33 @@ Project Layout (quick map)
 - `src/Runtime/` core runtime code
 - `src/Runtime/Platform/` platform-specific code (via `PlatformCommon.h`)
 - `src/Vulkan/` Vulkan backend
+- `src/Application/` application entry points
+  - `gkNextRenderer/` main renderer
+  - `gkNextEditor/` scene editor
+  - `MagicaLego/` voxel building game (see below)
 - `src/Tests/` Catch2 tests
 - `assets/` shaders, scenes, runtime data
+
+--------------------------------------------------------------------------------
+MagicaLego Subproject
+--------------------------------------------------------------------------------
+
+MagicaLego is a voxel building game with AI-assisted construction.
+
+Key files:
+- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp` - core logic
+- `src/Application/MagicaLego/MagicaLegoUserInterface.cpp` - UI rendering
+- `src/Application/MagicaLego/MagicaLegoCommands.cpp` - command system
+- `src/Application/MagicaLego/MagicaLegoAIService.cpp` - Gemini AI integration
+- `src/Application/MagicaLego/MagicaLegoConstants.hpp` - centralized constants
+
+Code organization patterns:
+- Constants centralized in `MagicaLegoConstants.hpp` (Grid, UI, Anim, AI namespaces)
+- UI helpers extracted to `MagicaLegoUIHelpers.hpp`
+- Large files use section comments: `// ============ Section Name ============`
+- Async AI calls use callbacks to avoid blocking UI
+
+For detailed documentation, see `AGENT_GUIDE/MagicaLego.md`.
 
 --------------------------------------------------------------------------------
 Notes for Agents

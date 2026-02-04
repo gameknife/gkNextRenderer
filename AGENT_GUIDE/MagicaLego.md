@@ -108,8 +108,135 @@
 - 缩略图在非 Apple 平台按文件名动态加载。
 - 录屏依赖系统 `ffmpeg`，缺失时会失败。
 
+## 脚本系统 (mlscript)
+
+MagicaLego 支持脚本化建造，通过 `.mlscript` 文件或控制台命令执行。
+
+### 核心文件
+- `MagicaLegoCommands.hpp/.cpp` - 命令定义与解析
+- `MagicaLegoScriptParser.hpp/.cpp` - 脚本解析器（支持变量、循环）
+
+### 命令列表
+| 命令 | 语法 | 说明 |
+|-----|------|------|
+| place | `place <Type>/<Color> <x> <y> <z> [orientation]` | 放置方块 |
+| place | `place <Type>/<Color> here/ahead [n]` | 相对光标放置 |
+| dig | `dig <x> <y> <z>` | 挖掘方块 |
+| list | `list types` / `list colors [type]` | 列出可用类型/颜色 |
+| move | `move <forward/backward/left/right/up/down> [n]` | 移动光标 |
+| turn | `turn <left/right/around>` | 转向 |
+| goto | `goto <x> <y> <z>` | 光标绝对定位 |
+| face | `face <north/east/south/west>` | 设置光标朝向 |
+| scan | `scan [radius]` | 扫描周围方块 |
+
+### 脚本语法
+```mlscript
+# 注释
+var height = 5
+
+repeat $height as y
+    place Block1x1/#0 0 $y 0
+end
+```
+
+### Cursor 系统
+光标（FCursor）是相对坐标系统的核心，类似 Turtle Graphics：
+- `position`: 当前位置 (glm::i16vec3)
+- `facing`: 朝向 (North=-Z, East=+X, South=+Z, West=-X)
+- 用户手动放置方块时，光标自动同步到新位置
+
+## AI 助手集成
+
+### 核心文件
+- `MagicaLegoAIService.hpp/.cpp` - Gemini API 集成
+- 配置文件: `assets/configs/ai_config.json`
+
+### 配置格式
+```json
+{
+    "apiKey": "YOUR_GOOGLE_API_KEY",
+    "model": "gemini-2.0-flash",
+    "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+}
+```
+
+### 功能特性
+- **脚本生成**: 用自然语言描述，AI 生成 mlscript
+- **上下文感知**: "Build on existing" 模式包含当前场景状态
+- **颜色词汇表**: 自动分析颜色生成语义描述（自然色、建筑色等）
+- **脚本验证**: 自动修复缺失的 `end` 语句
+
+### 提示词设计要点
+1. 明确坐标系统: North=-Z, East=+X, South=+Z, West=-X
+2. 列出所有可用方块类型和颜色代码
+3. 提供示例脚本展示语法
+4. 强调扁平方块（Plate/Flat）应先放置作为地基
+
+## 代码组织
+
+### 文件结构
+```
+src/Application/MagicaLego/
+├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑 (~1200行)
+├── MagicaLegoUserInterface.hpp/cpp  # UI 渲染 (~1700行)
+├── MagicaLegoCommands.hpp/cpp       # 命令系统 (~700行)
+├── MagicaLegoScriptParser.hpp/cpp   # 脚本解析 (~500行)
+├── MagicaLegoAIService.hpp/cpp      # AI 集成 (~800行)
+├── MagicaLegoConstants.hpp          # 集中常量定义
+├── MagicaLegoUIHelpers.hpp          # UI 辅助函数
+└── MagicaLegoStyle.hpp/cpp          # ImGui 样式
+```
+
+### 常量管理
+所有魔法数字集中在 `MagicaLegoConstants.hpp`:
+```cpp
+namespace MagicaLego
+{
+    namespace Grid { constexpr float UnitX = 0.08f; /* ... */ }
+    namespace UI { constexpr float TitleBarHeight = 40.0f; /* ... */ }
+    namespace Anim { constexpr float Fast = 0.2f; /* ... */ }
+    namespace AI { constexpr int MaxOutputTokens = 819200; /* ... */ }
+}
+```
+
+### UI 文件组织
+`MagicaLegoUserInterface.cpp` 使用区域注释组织：
+- Constructor / Destructor / Initialization
+- Title Bar and Opening Animation
+- Main Render Loop
+- Overlays and HUD
+- Recording and Layout Management
+- Main Tool Bar and Side Panels
+- Timeline
+- Console and AI Assistant
+
+## 开发经验总结
+
+### 最佳实践
+1. **常量集中管理**: 避免散落的魔法数字，便于调整和维护
+2. **辅助函数提取**: 可复用的 UI 代码放入 `UIHelpers.hpp`
+3. **区域注释**: 大文件使用 `// ====` 风格的区域分隔符
+4. **异步 AI 调用**: 使用回调避免阻塞 UI 线程
+5. **脚本验证**: AI 生成的脚本需要验证和自动修复
+
+### 调试技巧
+- 控制台窗口可直接输入命令测试
+- `list types` / `list colors` 查看可用资源
+- `scan` 命令查看周围方块状态
+- AI 生成的脚本会显示在 "Last Generated Script" 区域
+
 ## 关联文件速查
 - `src/Application/MagicaLego/MagicaLegoGameInstance.hpp`
 - `src/Application/MagicaLego/MagicaLegoGameInstance.cpp`
 - `src/Application/MagicaLego/MagicaLegoUserInterface.hpp`
 - `src/Application/MagicaLego/MagicaLegoUserInterface.cpp`
+- `src/Application/MagicaLego/MagicaLegoCommands.hpp`
+- `src/Application/MagicaLego/MagicaLegoCommands.cpp`
+- `src/Application/MagicaLego/MagicaLegoScriptParser.hpp`
+- `src/Application/MagicaLego/MagicaLegoScriptParser.cpp`
+- `src/Application/MagicaLego/MagicaLegoAIService.hpp`
+- `src/Application/MagicaLego/MagicaLegoAIService.cpp`
+- `src/Application/MagicaLego/MagicaLegoConstants.hpp`
+- `src/Application/MagicaLego/MagicaLegoUIHelpers.hpp`
+- `assets/configs/ai_config.json`
+- `assets/scripts/*.mlscript`
