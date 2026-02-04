@@ -1,4 +1,5 @@
 #include "MagicaLegoGameInstance.hpp"
+#include "MagicaLegoCommands.hpp"
 #include "Assets/Core/Scene.hpp"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -96,6 +97,9 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     GetEngine().GetPakSystem().Reset();
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
+
+    // Initialize cursor
+    cursor_ = std::make_unique<MagicaLego::FCursor>();
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
@@ -161,6 +165,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
     case ELegoMode::ELM_Select:
         lastSelectLocation_ = node->GetName() == "blockInst" ? GetBlockLocationFromRenderLocation(glm::vec3((node->WorldTransform() * glm::vec4(0, 0.0475f, 0, 1)))) : invalidPos;
         GetEngine().GetScene().SetSelectedId(lastSelectIndex_);
+        // Sync cursor to selection location
+        if (cursor_ && lastSelectLocation_ != invalidPos)
+        {
+            cursor_->position = lastSelectLocation_;
+        }
         break;
     }
 }
@@ -610,6 +619,13 @@ bool MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock block)
     currentPreviewStep = static_cast<int>(BlockRecords.size());
     RebuildScene(BlocksDynamics, blockHash);
     lastPlacedLocation_ = block.location;
+
+    // Sync cursor position to placed block location
+    // Note: Only sync position, not facing. Cursor facing is controlled by face/turn commands in scripts.
+    if (cursor_)
+    {
+        cursor_->position = block.location;
+    }
 
     // random put1 or put2
     if (block.modelId_ >= 0)
@@ -1063,6 +1079,16 @@ std::vector<std::string> MagicaLegoGameInstance::GetAllBlockColors(const std::st
     }
 
     return colors;
+}
+
+MagicaLego::FCursor& MagicaLegoGameInstance::GetCursor()
+{
+    return *cursor_;
+}
+
+const MagicaLego::FCursor& MagicaLegoGameInstance::GetCursor() const
+{
+    return *cursor_;
 }
 
 void MagicaLegoGameInstance::UpdateMouseCursor()

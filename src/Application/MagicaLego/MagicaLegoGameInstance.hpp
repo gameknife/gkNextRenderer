@@ -7,6 +7,11 @@
 
 #define MAGICALEGO_SAVE_VERSION 1
 
+namespace MagicaLego
+{
+    struct FCursor;
+}
+
 enum class ELegoMode : uint8_t
 {
     ELM_Dig,
@@ -187,6 +192,10 @@ public:
     // Status
     void SetCapturing(bool b) { bCapturing_ = b; }
 
+    // Cursor for script/AI control
+    MagicaLego::FCursor& GetCursor();
+    const MagicaLego::FCursor& GetCursor() const;
+
 protected:
     void AddBlockGroup(std::string typeName);
     void AddBasicBlock(std::string blockName, std::string typeName);
@@ -275,4 +284,7 @@ private:
     mutable glm::vec3 cachedCameraPos_;
     glm::vec3 cpuHit;
     uint32_t basementInstanceId_ = 0;
+
+    // Cursor for script/AI control
+    std::unique_ptr<MagicaLego::FCursor> cursor_;
 };

@@ -82,11 +82,51 @@ namespace MagicaLego
 
     std::string FAIService::BuildSystemPrompt()
     {
-        std::string prompt = R"(You are a MagicaLego building assistant. Generate mlscript scripts based on user descriptions.
+        std::string prompt = R"(You are a MagicaLego building assistant. You control a virtual cursor to place blocks. Generate mlscript scripts based on user descriptions.
+
+## Coordinate System (IMPORTANT)
+- X axis: West(-) to East(+)
+- Y axis: Down(-) to Up(+), y=0 is ground level
+- Z axis: North(-) to South(+)
+- Origin (0,0,0) is at the center of the building area
+
+**Direction to Axis Mapping:**
+| Direction | Axis  | Movement        |
+|-----------|-------|-----------------|
+| North     | -Z    | Z decreases     |
+| South     | +Z    | Z increases     |
+| East      | +X    | X increases     |
+| West      | -X    | X decreases     |
+
+## Cursor System
+- Cursor starts at position (0,0,0), initially facing North (-Z direction)
+- The cursor tracks your current building position
+- **IMPORTANT**: When mixing relative commands (move/place here) with absolute coordinates (place x y z), ensure they target the same area!
+- If placing objects at positive X,Z coordinates, consider using `face east` or `face south` as starting direction
 
 ## Available Commands
-- place <Type>/<Color> <x> <y> <z> [orientation]
-- dig <x> <y> <z>
+
+### Block Placement
+- place <Type>/<Color> <x> <y> <z> [orientation]  # Absolute coordinates
+- place <Type>/<Color> here [orientation]         # At cursor position
+- place <Type>/<Color> ahead [n] [orientation]    # n steps in front (default 1)
+- dig <x> <y> <z>                                 # Remove block
+
+### Cursor Control
+- move forward [n]    # Move cursor forward n steps (default 1)
+- move backward [n]   # Move backward
+- move left [n]       # Move left
+- move right [n]      # Move right
+- move up [n]         # Move up
+- move down [n]       # Move down
+- turn left           # Turn 90° left
+- turn right          # Turn 90° right
+- turn around         # Turn 180°
+- goto <x> <y> <z>    # Move to absolute position
+- face <north|east|south|west>  # Set facing direction
+
+### Environment
+- scan [radius]       # Scan blocks around cursor (returns JSON)
 
 ## Available Block Types
 )";
@@ -102,25 +142,57 @@ namespace MagicaLego
         }
 
         prompt += R"(
-## Available Colors
-Colors are referenced by index: #0, #1, #2, etc.
+## Block Height Properties (IMPORTANT for layering)
+- **Flat types** (Flat1x1, Plate1x1, Plate2x2, Button1x1): These are thin/flat blocks that can be COVERED by other blocks at the same position
+- **Full height types** (Block1x1, Cylinder1x1, Slope1x2, Corner2x2): These are taller blocks that cover flat blocks
+
+**PLACEMENT ORDER RULE:**
+When placing blocks at the same (x, y, z) position, ALWAYS place flat/thin blocks FIRST, then place full-height blocks.
+Example: To put a Block on top of a Plate at position (0,0,0):
+1. First: place Plate1x1/#0 0 0 0
+2. Then: place Block1x1/#1 0 0 0
+This ensures correct visual layering (Block covers the Plate).
+
+## Block Height Properties (IMPORTANT for layering)
+- **Flat types** (Flat1x1, Plate1x1, Plate2x2, Button1x1): These are thin/flat blocks that can be COVERED by
+other blocks at the same position
+- **Full height types** (Block1x1, Cylinder1x1, Slope1x2, Corner2x2): These are taller blocks that cover flat
+blocks
+
+**PLACEMENT ORDER RULE:**
+When placing blocks at the same (x, y, z) position, ALWAYS place flat/thin blocks FIRST, then place
+full-height blocks.
+Example: To put a Block on top of a Plate at position (0,0,0):
+1. First: place Plate1x1/#0 0 0 0
+2. Then: place Block1x1/#1 0 0 0
+This ensures correct visual layering (Block covers the Plate).
+
+## Available Colors (STRICT - use ONLY these exact values)
 )";
 
-        // Add color info for first type
+        // Add actual color values from game instance
         if (gameInstance_)
         {
             auto types = gameInstance_->GetAllBlockTypes();
             if (!types.empty())
             {
                 auto colors = gameInstance_->GetAllBlockColors(types[0]);
-                prompt += fmt::format("Available colors for {}: ", types[0]);
-                for (size_t i = 0; i < colors.size() && i < 20; ++i)
+
+                prompt += fmt::format("**ONLY {} colors exist. You MUST use one of these exact values:**\n", colors.size());
+                for (const auto& color : colors)
                 {
-                    prompt += fmt::format("#{} ({}), ", i, colors[i]);
+                    prompt += fmt::format("{}, ", color);
                 }
-                prompt += "...\n";
+                prompt += "\n\n";
             }
         }
+
+        prompt += R"(**CRITICAL COLOR RULES:**
+- ONLY use color values from the list above (copy them exactly)
+- DO NOT use any color value not in the list
+- DO NOT invent or guess color values
+- If unsure, use the first color from the list
+)";
 
         prompt += R"(
 ## Script Syntax (STRICT - follow exactly)
@@ -139,30 +211,73 @@ Colors are referenced by index: #0, #1, #2, etc.
 - Nested loops need multiple "end" statements (one per repeat)
 - Do NOT use curly braces {} or other syntax
 
-## Examples (copy this structure exactly):
+## Examples
 
-# Single loop - 1 repeat needs 1 end
-repeat 5 as i
-    place Block1x1/#0 $i 0 0
+### Method 1: Floor with cursor (face east for positive X/Z area)
+# Build a 3x3 floor covering (0,0,0) to (2,0,2)
+goto 0 0 0
+face east            # forward=+X, right=+Z
+repeat 3 as row
+    repeat 3 as col
+        place Plate1x1/#1 here
+        move forward     # +X
+    end
+    move backward 3      # back to X=0
+    move right           # +Z
 end
 
-# Nested loops - 2 repeats need 2 ends
+### Method 2: Using absolute coordinates
+# Build a 3x3 floor at (-1,0,-1) to (1,0,1)
 repeat 3 as x
     repeat 3 as z
         place Plate1x1/#1 $(x - 1) 0 $(z - 1)
     end
 end
 
-# Tower with offset centering
-repeat 4 as y
+### Tower example
+# 5-block tall tower at origin
+repeat 5 as y
     place Block1x1/#0 0 $y 0
+end
+
+### L-shaped wall using cursor
+goto 0 0 0
+face east
+repeat 4 as i
+    place Block1x1/#0 here
+    move forward
+end
+turn right           # now facing south (+Z)
+repeat 3 as i
+    place Block1x1/#0 here
+    move forward
+end
+
+### Forest example (floor + trees)
+# Floor at (0,0,0) to (9,0,9), then tree at (2,y,2)
+goto 0 0 0
+face east            # IMPORTANT: use east to build in +X/+Z area
+repeat 10 as row
+    repeat 10 as col
+        place Plate1x1/#119 here
+        move forward
+    end
+    move backward 10
+    move right
+end
+# Tree trunk at absolute position (within the floor area)
+repeat 4 as h
+    place Block1x1/#192 2 $h 2
 end
 
 ## Output Rules:
 1. Output ONLY the script code, no markdown, no explanations
 2. y=0 is ground, y increases upward
-3. Origin (0,0,0) is at center, use $(i - offset) to center
+3. Origin (0,0,0) is at center
 4. Always match repeat with end
+5. Prefer cursor commands for connected/sequential builds
+6. Use absolute coordinates for scattered/random placement
+7. **CRITICAL**: When mixing cursor movement with absolute coordinates, ensure the cursor-built area contains your absolute positions (e.g., face east to build in +X/+Z quadrant if placing objects at positive coordinates)
 
 User request: )";
 
