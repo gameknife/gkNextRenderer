@@ -1259,7 +1259,7 @@ void MagicaLegoUserInterface::DrawScriptLoadPopup()
 
     if (ImGui::BeginPopupModal("LoadScript", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
-        ImGui::Text(LOCTEXT("Select a script file to execute:"));
+        ImGui::Text("%s", LOCTEXT("Select a script file to execute:"));
         ImGui::Separator();
 
         // List script files
@@ -1559,7 +1559,7 @@ void MagicaLegoUserInterface::DrawAISection()
             LOCTEXT("Build on existing"), blockCount).c_str(), &aiBuildOnExisting_);
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(LOCTEXT("Include current scene context in AI prompt"));
+            ImGui::SetTooltip("%s", LOCTEXT("Include current scene context in AI prompt"));
         }
     }
     else
@@ -1570,7 +1570,7 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(LOCTEXT("Place some blocks first to enable this option"));
+            ImGui::SetTooltip("%s", LOCTEXT("Place some blocks first to enable this option"));
         }
     }
 
@@ -1705,7 +1705,7 @@ void MagicaLegoUserInterface::DrawColorVocabulary()
         return;
     }
 
-    ImGui::TextWrapped(LOCTEXT("Color vocabulary helps AI understand natural language descriptions. "
+    ImGui::TextWrapped("%s", LOCTEXT("Color vocabulary helps AI understand natural language descriptions. "
                                "Use these semantic names when describing scenes."));
     ImGui::Dummy(ImVec2(0, 5));
     ImGui::Separator();
