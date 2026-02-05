@@ -36,7 +36,5 @@ namespace MagicaLego
     namespace AI
     {
         constexpr int MaxBlocksToList = 100;
-        constexpr int MaxOutputTokens = 819200;
-        constexpr long RequestTimeoutSeconds = 120L;
     }
 }

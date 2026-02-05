@@ -5,6 +5,7 @@
 #include "Assets/GPU/Texture.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Runtime/Subsystems/AIService.hpp"
 #include "Runtime/Command/DeleteNodeCommand.hpp"
 #include "Runtime/ScreenShot.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
@@ -201,6 +202,7 @@ NextEngine::NextEngine(Options& options, void* userdata)
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+    aiService_ = std::make_unique<NextAI::FAIService>();
 
     Vulkan::Window::InitGLFW();
     // Create Window

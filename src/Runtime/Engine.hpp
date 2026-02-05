@@ -18,6 +18,11 @@ class QuickJSEngine;
 class NextAudio;
 
 class NextEngine;
+
+namespace NextAI
+{
+    class FAIService;
+}
 class NextAnimation;
 
 class NextGameInstanceBase
@@ -206,6 +211,9 @@ public:
 
     class UserInterface* GetUserInterface() { return userInterface_.get(); }
 
+    NextAI::FAIService* GetAIService() { return aiService_.get(); }
+    const NextAI::FAIService* GetAIService() const { return aiService_.get(); }
+
     // monitor info
     glm::ivec2 GetMonitorSize() const;
 
@@ -293,6 +301,8 @@ private:
 
     // internal ui
     std::unique_ptr<class UserInterface> userInterface_;
+
+    std::unique_ptr<NextAI::FAIService> aiService_;
 
     // audio
     std::unique_ptr<NextAudio> audioEngine_;
