@@ -8,6 +8,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Vulkan/SwapChain.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -65,10 +66,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // options
     // options.SceneName = "legobricks.glb";
-    options.Samples = 16;
-    options.Temporal = 8;
     options.ForceSDR = true;
-    options.RendererType = 0;
     options.locale = "zhCN";
     //options.SuperResolution = 0;
     //options.DLSS = true;
@@ -103,6 +101,14 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
 
     // Initialize cursor
     cursor_ = std::make_unique<MagicaLego::FCursor>();
+}
+
+void MagicaLegoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+{
+    std::string error;
+    cvars.SetDefaultFromString("r.samples", "16", &error);
+    cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
+    cvars.SetDefaultFromString("r.rendererType", "0", &error);
 }
 
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)

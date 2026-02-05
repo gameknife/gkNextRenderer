@@ -1,6 +1,7 @@
 #include "gkNextMotionBenchmark.hpp"
 #include "Application/gkNextBenchmark/Common/BenchMark.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
                                                          NextEngine* engine)
@@ -12,17 +13,22 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Optio
     NextGameInstanceBase(config, options, engine), engine_(engine)
 {
     config.Title = "gkNextMotionBenchmark";
-    options.Samples = 8;
-    options.Temporal = 16;
-    options.Bounces = 4;
     options.PresentMode = 0;
-    options.NoDenoiser = true;
     options.Width = 1280;
     options.Height = 720;
-    options.SuperResolution = 4;
     
     // config.Width = 1920;
     // config.Height = 1080;
+}
+
+void BenchmarkGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+{
+    std::string error;
+    cvars.SetDefaultFromString("r.samples", "8", &error);
+    cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+    cvars.SetDefaultFromString("r.bounces", "4", &error);
+    cvars.SetDefaultFromString("r.denoiser", "0", &error);
+    cvars.SetDefaultFromString("r.superResolution", "4", &error);
 }
 
 void BenchmarkGameInstance::OnInit()

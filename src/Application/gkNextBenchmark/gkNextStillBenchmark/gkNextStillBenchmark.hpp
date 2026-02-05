@@ -15,6 +15,7 @@ public:
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override {};
     void OnSceneLoaded() override;
+    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
     
     bool OnRenderUI() override;
     

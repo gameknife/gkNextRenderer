@@ -4,6 +4,7 @@
 #include "EditorInterface.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
 
 #include "Editor/EditorActionDispatcher.hpp"
@@ -31,12 +32,17 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     config.ForceSDR = true;
     config.HideTitleBar = true;
 
-    options.Samples = 8;
-    options.Temporal = 16;
     options.ForceSDR = true;
-    options.NoDenoiser = true;
-    options.SuperResolution = 2;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
+}
+
+void EditorGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+{
+    std::string error;
+    cvars.SetDefaultFromString("r.samples", "8", &error);
+    cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+    cvars.SetDefaultFromString("r.denoiser", "0", &error);
+    cvars.SetDefaultFromString("r.superResolution", "2", &error);
 }
 
 void EditorGameInstance::OnInit()

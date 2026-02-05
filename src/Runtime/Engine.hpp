@@ -9,6 +9,7 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
+#include "Options.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/WindowSurface.hpp"
@@ -22,6 +23,16 @@ class NextEngine;
 namespace NextAI
 {
     class FAIService;
+}
+
+namespace NextCVar
+{
+    class FCVarSystem;
+}
+
+namespace NextCVar
+{
+    class FCVarSystem;
 }
 class NextAnimation;
 
@@ -37,6 +48,7 @@ public:
     virtual void OnPreConfigUI() {}
     virtual void OnInitUI() {}
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
+    virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
 
     // camera
     virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const { return false; }
@@ -133,6 +145,8 @@ public:
     static NextEngine* GetInstance() { return instance_; }
 
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
+    Vulkan::VulkanBaseRenderer* GetRendererPtr() { return renderer_.get(); }
+    const Vulkan::VulkanBaseRenderer* GetRendererPtr() const { return renderer_.get(); }
 
     void Start();
     bool HandleEvent(SDL_Event& event);
@@ -213,6 +227,9 @@ public:
 
     NextAI::FAIService* GetAIService() { return aiService_.get(); }
     const NextAI::FAIService* GetAIService() const { return aiService_.get(); }
+
+    NextCVar::FCVarSystem& GetCVarSystem() { return *cvarSystem_; }
+    const NextCVar::FCVarSystem& GetCVarSystem() const { return *cvarSystem_; }
 
     // monitor info
     glm::ivec2 GetMonitorSize() const;
@@ -303,6 +320,10 @@ private:
     std::unique_ptr<class UserInterface> userInterface_;
 
     std::unique_ptr<NextAI::FAIService> aiService_;
+
+    std::unique_ptr<NextCVar::FCVarSystem> cvarSystem_;
+
+    Options* options_ = nullptr;
 
     // audio
     std::unique_ptr<NextAudio> audioEngine_;

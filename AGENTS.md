@@ -196,6 +196,8 @@ assets/
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
 
+**Assistant Note:** Large refactors must include a full build and fix any compile errors before reporting completion.
+
 ## Key References
 
 - **CLAUDE.md** - Claude Code specific guidance

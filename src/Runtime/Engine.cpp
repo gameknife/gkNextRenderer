@@ -4,6 +4,8 @@
 #include "Assets/Core/Scene.hpp"
 #include "Assets/GPU/Texture.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
+#include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
 #include "Runtime/Command/DeleteNodeCommand.hpp"
@@ -81,6 +83,8 @@ namespace
     }
 } // namespace
 
+// RegisterEngineCVars moved to Runtime/Config/EngineCVars.*
+
 namespace NextRenderer
 {
     std::string GetBuildVersion() { return buildver; }
@@ -140,18 +144,20 @@ namespace
 
 UserSettings CreateUserSettings(const Options& options)
 {
+    (void)options;
     SceneList::ScanScenes();
 
     UserSettings userSettings{};
 
-    userSettings.RendererType = options.RendererType;
+    userSettings.RendererType = 0;
     userSettings.SceneIndex = 0;
+    userSettings.CameraIdx = 0;
 
-    userSettings.NumberOfSamples = options.Samples;
-    userSettings.NumberOfBounces = options.Bounces;
-    userSettings.MaxNumberOfBounces = options.MaxBounces;
+    userSettings.NumberOfSamples = 8;
+    userSettings.NumberOfBounces = 5;
+    userSettings.MaxNumberOfBounces = 10;
 
-    userSettings.AdaptiveSample = options.AdaptiveSample;
+    userSettings.AdaptiveSample = false;
     userSettings.AdaptiveVariance = 6.0f;
     userSettings.AdaptiveSteps = 4;
 
@@ -163,15 +169,25 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.HeatmapScale = 1.0f;
 
     userSettings.UseCheckerBoardRendering = false;
-    userSettings.TemporalFrames = options.Temporal;
+    userSettings.TemporalFrames = 16;
 
-    userSettings.Denoiser = !options.NoDenoiser;
+    userSettings.Denoiser = false;
+    userSettings.DenoiseSigma = 0.5f;
+    userSettings.DenoiseSigmaLum = 10.0f;
+    userSettings.DenoiseSigmaNormal = 0.1f;
+    userSettings.DenoiseSize = 5;
 
     userSettings.PaperWhiteNit = 600.f;
     
-    userSettings.SuperResolution = options.SuperResolution;
-    userSettings.DLSS = options.DLSS;
-    userSettings.DLSSRR = options.DLSSRR;
+    userSettings.SuperResolution = 0;
+    userSettings.DLSS = false;
+    userSettings.DLSSRR = false;
+
+    userSettings.BakeSpeedLevel = 1;
+
+    userSettings.TickPhysics = true;
+    userSettings.TickAnimation = true;
+    userSettings.SceneEpsilonScale = 1.0f;
 
     return userSettings;
 }
@@ -179,6 +195,7 @@ UserSettings CreateUserSettings(const Options& options)
 NextEngine* NextEngine::instance_ = nullptr;
 
 NextEngine::NextEngine(Options& options, void* userdata)
+    : options_(&options)
 {
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::debug);
@@ -217,18 +234,28 @@ NextEngine::NextEngine(Options& options, void* userdata)
                                       options.ForceSDR};
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
+    cvarSystem_ = std::make_unique<NextCVar::FCVarSystem>();
+    NextCVar::RegisterEngineCVars(*cvarSystem_, userSettings_, showFlags_, this);
+    cvarSystem_->LoadDefaultFile("assets/configs/cvar_default.json");
+    gameInstance_->ApplyDefaultCVars(*cvarSystem_);
+    cvarSystem_->LoadUserFile("assets/configs/cvar_user.json");
     window_.reset(new Vulkan::Window(windowConfig));
     quickJSEngine_ = std::make_unique<QuickJSEngine>();
 
     // Initialize Localization
-    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
 NextEngine::~NextEngine()
 {
-    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    if (cvarSystem_)
+    {
+        cvarSystem_->SaveUserFile("assets/configs/cvar_user.json");
+    }
+
+    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
 
     scene_.reset();
     renderer_.reset();
@@ -250,8 +277,8 @@ void NextEngine::Start()
     shouldEnableValidation = true;
 #endif
 
-    renderer_.reset(NextRenderer::CreateRenderer(GOption->RendererType, window_.get(),
-                                                 static_cast<VkPresentModeKHR>(GOption->PresentMode),
+    renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(userSettings_.RendererType), window_.get(),
+                                                 static_cast<VkPresentModeKHR>(options_->PresentMode),
                                                  shouldEnableValidation));
     userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
@@ -470,7 +497,7 @@ void NextEngine::End()
     renderer_->End();
     userInterface_.reset();
 
-    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", GOption->locale).c_str());
+    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
 }
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)

@@ -3,6 +3,7 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/UserSettings.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
@@ -14,6 +15,8 @@
 
 #include <imgui.h>
 #include <imgui_freetype.h>
+#include <imgui_stdlib.h>
+#include <SDL3/SDL.h>
 #if !ANDROID
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
@@ -23,6 +26,7 @@
 #endif
 
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fmt/chrono.h>
@@ -337,6 +341,7 @@ void UserInterface::PreRender()
 void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
     DrawOverlay(statistics, gpuTimer);
+    DrawConsoleWindow();
 }
 
 void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
@@ -374,7 +379,23 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     }
 }
 
-void UserInterface::HandleEvent(const SDL_Event* event) { ImGui_ImplSDL3_ProcessEvent(event); }
+void UserInterface::HandleEvent(const SDL_Event* event)
+{
+    ImGui_ImplSDL3_ProcessEvent(event);
+    if (!event)
+    {
+        return;
+    }
+
+    if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_GRAVE)
+    {
+        //if (!ImGui::GetIO().WantCaptureKeyboard)
+        {
+            showConsole_ = !showConsole_;
+            requestConsoleFocus_ = showConsole_;
+        }
+    }
+}
 
 bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
 
@@ -531,4 +552,274 @@ void UserInterface::DrawIndicator(uint32_t frameCount)
                                               : "...");
         ImGui::EndPopup();
     }
+}
+
+void UserInterface::DrawConsoleWindow()
+{
+    if (!showConsole_)
+    {
+        return;
+    }
+
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(displaySize, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.7f);
+
+    const auto flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+    if (ImGui::Begin("Console", &showConsole_, flags))
+    {
+        const size_t kConsoleMatchLimit = 8;
+
+        auto ExtractPrefix = [](const std::string& input) -> std::string
+        {
+            size_t start = input.find_first_not_of(" \t\r\n");
+            if (start == std::string::npos)
+            {
+                return {};
+            }
+            size_t end = input.find_first_of(" =\t\r\n", start);
+            if (end == std::string::npos)
+            {
+                return input.substr(start);
+            }
+            return input.substr(start, end - start);
+        };
+
+        if (consoleInput_ != consoleLastInput_)
+        {
+            consoleLastInput_ = consoleInput_;
+            consoleMatchIndex_ = 0;
+            consoleCompletionBase_.clear();
+            consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
+        }
+
+        std::string matchBase = consoleCompletionBase_.empty() ? ExtractPrefix(consoleInput_) : consoleCompletionBase_;
+        if (!matchBase.empty())
+        {
+            consoleMatches_ = GetEngine().GetCVarSystem().GetMatchingNames(matchBase, kConsoleMatchLimit);
+        }
+        else
+        {
+            consoleMatches_.clear();
+        }
+
+        float hintHeight = 0.0f;
+        if (!consoleMatches_.empty())
+        {
+            hintHeight = ImGui::GetTextLineHeightWithSpacing() * (static_cast<float>(consoleMatches_.size()) + 1.0f);
+        }
+
+        float inputHeight = ImGui::GetFrameHeightWithSpacing();
+        float outputHeight = ImGui::GetContentRegionAvail().y - inputHeight - hintHeight;
+        outputHeight = std::max(outputHeight, ImGui::GetFontSize() * 5.0f);
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.55f));
+        if (ImGui::BeginChild("ConsoleOutput", ImVec2(0, outputHeight), ImGuiChildFlags_Borders))
+        {
+            for (const auto& line : consoleOutput_)
+            {
+                if (line.rfind("[Error]", 0) == 0)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
+                }
+                else if (line.rfind(">", 0) == 0)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.8f, 1.0f, 1.0f));
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+                }
+
+                ImGui::TextWrapped("%s", line.c_str());
+                ImGui::PopStyleColor();
+            }
+
+            if (scrollToBottom_)
+            {
+                ImGui::SetScrollHereY(1.0f);
+                scrollToBottom_ = false;
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+
+        if (!consoleMatches_.empty())
+        {
+            ImGui::BeginChild("ConsoleMatches", ImVec2(0, hintHeight), false, ImGuiWindowFlags_NoScrollbar);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+            ImGui::Text("Matches (%zu/%zu):", consoleMatches_.size(), kConsoleMatchLimit);
+            ImGui::PopStyleColor();
+            for (const auto& name : consoleMatches_)
+            {
+                ImGui::Text("%s", name.c_str());
+            }
+            ImGui::EndChild();
+        }
+
+        if (requestConsoleFocus_)
+        {
+            ImGui::SetKeyboardFocusHere();
+            requestConsoleFocus_ = false;
+        }
+
+        ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory |
+            ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackEdit;
+        bool executeCommand = false;
+        ImGui::PushItemWidth(-1);
+        if (ImGui::InputText("##ConsoleInput", &consoleInput_, inputFlags,
+            [](ImGuiInputTextCallbackData* data) -> int
+            {
+                auto* ui = static_cast<UserInterface*>(data->UserData);
+                if (data->EventFlag == ImGuiInputTextFlags_CallbackEdit)
+                {
+                    if (ui->consoleSkipEditReset_)
+                    {
+                        ui->consoleSkipEditReset_ = false;
+                        return 0;
+                    }
+                    ui->consoleCompletionBase_.clear();
+                    ui->consoleMatchIndex_ = 0;
+                    return 0;
+                }
+                if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
+                {
+                    if (data->EventKey == ImGuiKey_UpArrow)
+                    {
+                        if (ui->consoleHistoryIndex_ > 0)
+                        {
+                            ui->consoleHistoryIndex_--;
+                        }
+                        else if (!ui->consoleHistory_.empty())
+                        {
+                            ui->consoleHistoryIndex_ = 0;
+                        }
+                    }
+                    else if (data->EventKey == ImGuiKey_DownArrow)
+                    {
+                        if (ui->consoleHistoryIndex_ + 1 < static_cast<int>(ui->consoleHistory_.size()))
+                        {
+                            ui->consoleHistoryIndex_++;
+                        }
+                        else
+                        {
+                            ui->consoleHistoryIndex_ = static_cast<int>(ui->consoleHistory_.size());
+                        }
+                    }
+
+                    std::string historyCmd;
+                    if (!ui->consoleHistory_.empty() &&
+                        ui->consoleHistoryIndex_ >= 0 &&
+                        ui->consoleHistoryIndex_ < static_cast<int>(ui->consoleHistory_.size()))
+                    {
+                        historyCmd = ui->consoleHistory_[ui->consoleHistoryIndex_];
+                    }
+
+                    data->DeleteChars(0, data->BufTextLen);
+                    if (!historyCmd.empty())
+                    {
+                        data->InsertChars(0, historyCmd.c_str());
+                    }
+                }
+                if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
+                {
+                    std::string buffer(data->Buf, data->BufTextLen);
+                    size_t start = buffer.find_first_not_of(" \t\r\n");
+                    if (start == std::string::npos)
+                    {
+                        return 0;
+                    }
+                    size_t end = buffer.find_first_of(" =\t\r\n", start);
+                    if (end == std::string::npos)
+                    {
+                        end = buffer.size();
+                    }
+                    if (data->CursorPos > static_cast<int>(end))
+                    {
+                        return 0;
+                    }
+
+                    std::string prefix = buffer.substr(start, end - start);
+                    if (prefix.empty())
+                    {
+                        return 0;
+                    }
+
+                    if (ui->consoleCompletionBase_.empty())
+                    {
+                        ui->consoleCompletionBase_ = prefix;
+                        ui->consoleMatchIndex_ = 0;
+                    }
+
+                    const size_t kMatchLimit = 8;
+                    auto matches = ui->GetEngine().GetCVarSystem().GetMatchingNames(
+                        ui->consoleCompletionBase_, kMatchLimit);
+                    ui->consoleMatches_ = matches;
+                    if (matches.empty())
+                    {
+                        return 0;
+                    }
+
+                    int index = ui->consoleMatchIndex_ % static_cast<int>(matches.size());
+                    const std::string& match = matches[index];
+                    ui->consoleMatchIndex_ = (index + 1) % static_cast<int>(matches.size());
+
+                    std::string rest = end < buffer.size() ? buffer.substr(end) : "";
+                    std::string newBuffer = match + rest;
+
+                    ui->consoleSkipEditReset_ = true;
+                    data->DeleteChars(0, data->BufTextLen);
+                    data->InsertChars(0, newBuffer.c_str());
+                    data->CursorPos = static_cast<int>(match.size());
+                }
+                return 0;
+            }, this))
+        {
+            executeCommand = true;
+        }
+        ImGui::PopItemWidth();
+
+        if (executeCommand)
+        {
+            if (!consoleInput_.empty())
+            {
+                consoleOutput_.push_back("> " + consoleInput_);
+                consoleHistory_.push_back(consoleInput_);
+                consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
+
+                auto result = GetEngine().GetCVarSystem().ExecuteCommand(consoleInput_);
+                if (!result.message.empty())
+                {
+                    if (!result.success)
+                    {
+                        consoleOutput_.push_back("[Error] " + result.message);
+                    }
+                    else
+                    {
+                        consoleOutput_.push_back(result.message);
+                    }
+                }
+                for (const auto& line : result.output)
+                {
+                    consoleOutput_.push_back("  " + line);
+                }
+
+                while (consoleOutput_.size() > 200)
+                {
+                    consoleOutput_.erase(consoleOutput_.begin());
+                }
+
+                consoleInput_.clear();
+                consoleLastInput_.clear();
+                consoleMatches_.clear();
+                consoleCompletionBase_.clear();
+                consoleMatchIndex_ = 0;
+                scrollToBottom_ = true;
+                showConsole_ = false;
+                requestConsoleFocus_ = false;
+            }
+        }
+    }
+    ImGui::End();
 }

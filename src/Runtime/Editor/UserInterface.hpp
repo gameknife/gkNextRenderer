@@ -95,6 +95,7 @@ private:
 	
 	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);
+	void DrawConsoleWindow();
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
@@ -102,6 +103,18 @@ private:
 	
 	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
 	std::vector< std::function<void ()> > auxDrawRequest_;
+	std::vector<std::string> consoleOutput_;
+	std::vector<std::string> consoleHistory_;
+	std::vector<std::string> consoleMatches_;
+	std::string consoleInput_;
+	std::string consoleLastInput_;
+	std::string consoleCompletionBase_;
+	int consoleHistoryIndex_ = -1;
+	int consoleMatchIndex_ = 0;
+	bool consoleSkipEditReset_ = false;
+	bool showConsole_ = false;
+	bool scrollToBottom_ = false;
+	bool requestConsoleFocus_ = false;
 
 	NextEngine* engine_;
 };

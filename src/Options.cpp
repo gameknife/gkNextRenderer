@@ -7,14 +7,6 @@ Options::Options(const int argc, const char* argv[])
 {	
 	cxxopts::Options options("options", "");
 	options.add_options()
-		("renderer",  "Renderer Type (0 = PathTracing, 1 = SoftTracing, 2 = PureAmbient, 3 = VoxelTracing).", cxxopts::value<uint32_t>(RendererType)->default_value("0"))
-		("samples", "The number of ray samples per pixel.", cxxopts::value<uint32_t>(Samples)->default_value("8"))
-		("bounces", "The general limit number of bounces per ray.", cxxopts::value<uint32_t>(Bounces)->default_value("5"))
-		("max-bounces", "The maximum bounces per ray.", cxxopts::value<uint32_t>(MaxBounces)->default_value("10"))
-		("temporal", "The number of temporal frames.", cxxopts::value<uint32_t>(Temporal)->default_value("16"))
-		("nodenoiser", "Not Use Denoiser.", cxxopts::value<bool>(NoDenoiser)->default_value("true"))
-		("adaptivesample", "use adaptive sample to improve render quality.", cxxopts::value<bool>(AdaptiveSample)->default_value("false"))
-
 		("load-scene", "The scene to load. absolute path or relative path to project root.", cxxopts::value<std::string>(SceneName)->default_value(""))
 		("hdri", "The HDRI file to load.", cxxopts::value<std::string>(HDRIfile)->default_value(""))
 
@@ -32,13 +24,12 @@ Options::Options(const int argc, const char* argv[])
 		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
 		("forcenort", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
 		("forcesoftgen", "Forcing software raytracing for ambient cube gen.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
-		("superres", "SuperResolution: Quality/Balanced/Perf/Ultra/Native -> 0/1/2/3/4", cxxopts::value<uint32_t>(SuperResolution)->default_value("0"))
-		("dlss", "Enable NVIDIA DLSS Super Resolution.", cxxopts::value<bool>(DLSS)->default_value("false"))
-		("dlssrr", "Enable NVIDIA DLSS Ray Reconstruction.", cxxopts::value<bool>(DLSSRR)->default_value("false"))
+		
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
 		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
 		("agent-validation", "Enable agent validation actions (auto screenshot).", cxxopts::value<bool>(AgentValidation)->default_value("false"))
+		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 
 		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
 		("test-gltf-filter", "Filter for glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""))

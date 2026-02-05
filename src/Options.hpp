@@ -23,12 +23,8 @@ public:
 	// Application options.
 	bool SaveFile{};
 	bool RenderDoc{};
-	bool NoDenoiser{};
 	bool ForceSDR{};
 	bool ReferenceMode{};
-	uint32_t SuperResolution{};
-	bool DLSS{};
-	bool DLSSRR{};
 	bool ForceNoRT{};
 	bool ForceSoftGen{};
 	bool HardwareQuery{};
@@ -38,14 +34,7 @@ public:
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	std::string locale{};
 
-	// Renderer options.
-	uint32_t Samples{};
-	uint32_t Bounces{};
-	uint32_t MaxBounces{};
-	uint32_t RendererType{};
-	uint32_t Temporal{};
 
-	bool AdaptiveSample{};
 	
 	// Scene options.
 	std::string SceneName{};

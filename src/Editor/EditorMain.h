@@ -32,6 +32,8 @@ public:
     bool OnRenderUI() override;
     void OnInitUI() override;
 
+    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;

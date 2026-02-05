@@ -47,6 +47,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
 
+
 #if __APPLE__
     setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
 #endif   
