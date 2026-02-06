@@ -11,6 +11,7 @@ public static const float3 PAGE_OFFSET = float3(-512, 0, -512);
 
 public static const int CUBE_SIZE_XY = 192; // 256;
 public static const int CUBE_SIZE_Z = 48;
+public static const uint CUBE_CASCADE_MAX = 4;
 
 float GetAmbientCubeUnit()
 {
@@ -20,6 +21,39 @@ float GetAmbientCubeUnit()
 float3 GetAmbientCubeOffset()
 {
     return Bindless.GetGpuscene().Camera[0].AmbientCubeOffset;
+}
+
+public uint GetAmbientCubeCascadeCount()
+{
+    uint count = uint(max(Bindless.GetGpuscene().Camera[0].AmbientCubeCascadeParams.x, 1.0f));
+    return min(count, CUBE_CASCADE_MAX);
+}
+
+public float GetAmbientCubeCascadeRatio()
+{
+    return max(Bindless.GetGpuscene().Camera[0].AmbientCubeCascadeParams.y, 1.0f);
+}
+
+public float3 GetAmbientCubeOffsetBias()
+{
+    float3 baseOffset = float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f) * GetAmbientCubeUnit();
+    return GetAmbientCubeOffset() - baseOffset;
+}
+
+public float GetAmbientCubeUnitAtCascade(uint cascadeIndex)
+{
+    return GetAmbientCubeUnit() * pow(GetAmbientCubeCascadeRatio(), float(cascadeIndex));
+}
+
+public float3 GetAmbientCubeOffsetAtCascade(uint cascadeIndex)
+{
+    float unit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    return float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f) * unit + GetAmbientCubeOffsetBias();
+}
+
+public uint GetCascadeBaseOffset(uint cascadeIndex)
+{
+    return cascadeIndex * uint(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
 }
 
 public static const float3 cubeVectors[6] = {
@@ -261,15 +295,25 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
 
 AmbientCube FetchCubeV2(int3 probePos, in AmbientCube* Cubes)
 {
-    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
-              probePos.z * CUBE_SIZE_XY + probePos.x;
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
+}
+
+AmbientCube FetchCubeV2(int3 probePos, in AmbientCube* Cubes, uint baseOffset)
+{
+    int idx = int(baseOffset) + probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
     return Cubes[idx];
 }
 
 VoxelData FetchVoxelV2(int3 probePos, in VoxelData* Cubes)
 {
-    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY +
-              probePos.z * CUBE_SIZE_XY + probePos.x;
+    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
+    return Cubes[idx];
+}
+
+VoxelData FetchVoxelV2(int3 probePos, in VoxelData* Cubes, uint baseOffset)
+{
+    int idx = int(baseOffset) + probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
     return Cubes[idx];
 }
 
@@ -299,96 +343,88 @@ public float4 interpolateAmbientCubesV2<T : IAmbientCubeSampler>(float3 inPos, f
 {
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
-    float cubeUnit = GetAmbientCubeUnit();
-    float3 cubeOffset = GetAmbientCubeOffset();
+    uint cascadeCount = GetAmbientCubeCascadeCount();
 
-    float3 nearpos = (inPos - cubeOffset) / cubeUnit;
-
-    // Early out if position is outside the probe grid
-    if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
-        nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 || nearpos.z > CUBE_SIZE_XY - 2)
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
     {
-        return float4(0, 0, 0, 1);
+        float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+        float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+        float3 nearpos = (inPos - cubeOffset) / cubeUnit;
+
+        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 ||
+            nearpos.z > CUBE_SIZE_XY - 2)
+        {
+            continue;
+        }
+
+        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
+        int3 baseIdx = int3(floor(nearpos));
+        float3 frac = frac(nearpos);
+
+        float totalWeight = 0.0;
+        float4 result = float4(0.0, 0.0, 0.0, 0.0);
+
+        for (int i = 0; i < 8; i++)
+        {
+            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+
+            int3 probePos = baseIdx + offset;
+            AmbientCube cube = FetchCubeV2(probePos, Cubes, baseOffset);
+            VoxelData voxel = FetchVoxelV2(probePos, Voxels, baseOffset);
+
+            uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
+            uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
+
+            float4 distance00z01 = unpacked0 / 255.0f;
+            float4 distancex01y01 = unpacked1 / 255.0f;
+
+            if (distance00z01.y < 0.01f)
+                continue;
+
+            float3 localPos = frac;
+            float3 probeRealPos = offset;
+            float3 probeToLocal = localPos - probeRealPos;
+
+            float distanceToProbe = length(probeToLocal);
+            float3 dir = normalize(probeToLocal);
+
+            float distPZ = distance00z01.z;
+            float distNZ = distance00z01.w;
+            float distPX = distancex01y01.x;
+            float distNX = distancex01y01.y;
+            float distPY = distancex01y01.z;
+            float distNY = distancex01y01.w;
+
+            float wx_pos = sqrt(max(dir.x, 0.0));
+            float wx_neg = sqrt(max(-dir.x, 0.0));
+            float wy_pos = sqrt(max(dir.y, 0.0));
+            float wy_neg = sqrt(max(-dir.y, 0.0));
+            float wz_pos = sqrt(max(dir.z, 0.0));
+            float wz_neg = sqrt(max(-dir.z, 0.0));
+
+            float hitLength = wx_pos * distPX + wx_neg * distNX + wy_pos * distPY + wy_neg * distNY +
+                              wz_pos * distPZ + wz_neg * distNZ;
+
+            if (distanceToProbe > hitLength + 0.05f)
+                continue;
+
+            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+            float weight = wx * wy * wz;
+
+            float4 sampleColor = T.Sample(cube, normal);
+            result += sampleColor * weight;
+            totalWeight += weight;
+        }
+
+        if (totalWeight > 0.0)
+        {
+            return result / totalWeight;
+        }
     }
 
-    int3 baseIdx = int3(floor(nearpos));
-    float3 frac = frac(nearpos);
-
-    float totalWeight = 0.0;
-    float4 result = float4(0.0, 0.0, 0.0, 0.0);
-
-    for (int i = 0; i < 8; i++)
-    {
-        int3 offset = int3(
-            i & 1,
-            (i >> 1) & 1,
-            (i >> 2) & 1);
-
-        int3 probePos = baseIdx + offset;
-        AmbientCube cube = FetchCubeV2(probePos, Cubes);
-        VoxelData voxel = FetchVoxelV2(probePos, Voxels);
-
-        uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
-        uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
-
-        float4 distance00z01 = unpacked0 / 255.0f;
-        float4 distancex01y01 = unpacked1 / 255.0f;
-
-        if (distance00z01.y < 0.01f)
-            continue;
-
-        float3 localPos = frac;
-        float3 probeRealPos = offset;
-        float3 probeToLocal = localPos - probeRealPos;
-
-        // 计算查询点到probe的实际距离
-        float distanceToProbe = length(probeToLocal);
-        
-        // 归一化方向向量
-        float3 dir = normalize(probeToLocal);
-        
-        // 从voxel数据中获取各个方向的距离信息
-        float distPZ = distance00z01.z;
-        float distNZ = distance00z01.w;
-        float distPX = distancex01y01.x;
-        float distNX = distancex01y01.y;
-        float distPY = distancex01y01.z;
-        float distNY = distancex01y01.w;
-        
-        // 根据方向权重混合距离
-        float wx_pos = sqrt(max(dir.x, 0.0));
-        float wx_neg = sqrt(max(-dir.x, 0.0));
-        float wy_pos = sqrt(max(dir.y, 0.0));
-        float wy_neg = sqrt(max(-dir.y, 0.0));
-        float wz_pos = sqrt(max(dir.z, 0.0));
-        float wz_neg = sqrt(max(-dir.z, 0.0));
-        
-        float hitLength = wx_pos * distPX + wx_neg * distNX +
-                            wy_pos * distPY + wy_neg * distNY +
-                            wz_pos * distPZ + wz_neg * distNZ;
-
-        // 如果查询点到probe的距离大于插值后的hitLength，说明被遮挡，跳过
-        if (distanceToProbe > hitLength + 0.05f)// - 0.125f) 
-            continue;
-
-        // voxel here, matId will store at edge, we should discard it by the distance
-        // if (voxel.matId > 0)
-        //     continue;
-
-        float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-        float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-        float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-        float weight = wx * wy * wz;
-
-        float occlusion;
-        float4 sampleColor = T.Sample(cube, normal);
-        result += sampleColor * weight;
-        totalWeight += weight;
-    }
-
-    // Normalize result by total weight
-    float4 indirectColor = totalWeight > 0.0 ? result / totalWeight : float4(0.0, 0.0, 0.0, 0.0);
-    return indirectColor;
+    return float4(0.0, 0.0, 0.0, 1.0);
 }
 
 // Interpolate between 8 probes
@@ -407,7 +443,8 @@ public float FetchSDF(float3 pos, in RWStructuredBuffer<VoxelData> Cubes)
     return unpack0.x;
 }
 
-public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp, in VoxelData* Cubes)
+public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+                      in VoxelData* Cubes, uint baseOffset)
 {
     skipSetp = 1;
     // Early out if position is outside the probe grid
@@ -420,7 +457,7 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
 
     int3 baseIdx = int3(floor(pos));
 
-    VoxelData cube = FetchVoxelV2(baseIdx, Cubes);
+    VoxelData cube = FetchVoxelV2(baseIdx, Cubes, baseOffset);
     matId = cube.matId;
 
     uint4 unpack0 =unpack_bytes(cube.distanceToSolid_gg_z01);
@@ -469,6 +506,12 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
     }
 
     return false;
+}
+
+public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+                      in VoxelData* Cubes)
+{
+    return inSolidV2(pos, rayDir, offsetDist, matId, skipSetp, Cubes, 0);
 }
 
 public interface IProbeGenerator

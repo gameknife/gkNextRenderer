@@ -540,15 +540,46 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
-        UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-        float cubeUnit = max(camera.AmbientCubeUnit, 0.0001f);
-        float3 cubeOffset = camera.AmbientCubeOffset;
+        uint cascadeCount = GetAmbientCubeCascadeCount();
+
+        float cubeUnit = GetAmbientCubeUnit();
+        float3 cubeOffset = GetAmbientCubeOffset();
+        uint baseOffset = 0;
+        float3 voxelPos = float3(0);
+        bool foundCascade = false;
+
+        for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+        {
+            float candidateUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+            float3 candidateOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+            float3 candidateVoxelPos = (rayOrigin.xyz - candidateOffset) / candidateUnit;
+
+            if (candidateVoxelPos.x >= 0 && candidateVoxelPos.y >= 0 && candidateVoxelPos.z >= 0 &&
+                candidateVoxelPos.x <= CUBE_SIZE_XY - 1 && candidateVoxelPos.y <= CUBE_SIZE_Z - 1 &&
+                candidateVoxelPos.z <= CUBE_SIZE_XY - 1)
+            {
+                cubeUnit = candidateUnit;
+                cubeOffset = candidateOffset;
+                baseOffset = GetCascadeBaseOffset(cascadeIndex);
+                voxelPos = candidateVoxelPos;
+                foundCascade = true;
+                break;
+            }
+        }
+
+        if (!foundCascade)
+        {
+            uint fallbackCascade = cascadeCount - 1;
+            cubeUnit = GetAmbientCubeUnitAtCascade(fallbackCascade);
+            cubeOffset = GetAmbientCubeOffsetAtCascade(fallbackCascade);
+            baseOffset = GetCascadeBaseOffset(fallbackCascade);
+            voxelPos = (rayOrigin.xyz - cubeOffset) / cubeUnit;
+        }
 
 
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / cubeUnit);
     
-        float3 voxelPos = (rayOrigin.xyz - cubeOffset) / cubeUnit;
         float3 tDelta = abs(cubeUnit / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
@@ -571,7 +602,7 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     
             float offsetDist = 0;
             float skipLength = 1;
-            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels, baseOffset))
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
