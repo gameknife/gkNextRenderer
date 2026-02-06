@@ -30,6 +30,8 @@ namespace Assets
     struct RayCastResult;
 }
 
+struct UserSettings;
+
 namespace Vulkan
 {
     class DeviceMemory;
@@ -70,14 +72,16 @@ struct FCPUBLASContext
 // 由CpuAS来控制
 struct FCPUProbeBaker
 {
+    uint32_t cascadeIndex = 0;
     float UNIT_SIZE;
     glm::vec3 CUBE_OFFSET;
     
     std::vector<Assets::VoxelData> voxels;
 
-    void Init( float unit_size, glm::vec3 offset );
+    void Init(uint32_t cascadeIdx, float unitSize, glm::vec3 offset);
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory, uint32_t elementOffset);
     void ClearAmbientCubes();
 };
 
@@ -100,7 +104,8 @@ public:
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
     
     bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
-    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType);
+    void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType,
+                           uint32_t cascadeIndex);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
 
@@ -111,6 +116,9 @@ public:
     void ClearAllTasks();
 
 private:
+    bool InitCascadeBakers(const UserSettings& settings);
+    uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
+
     void UpdateBVH(Assets::Scene& scene);
     
     std::vector<FCPUBLASContext> bvhBLASContexts;
@@ -120,11 +128,11 @@ private:
         
     std::vector<uint32_t> lastBatchTasks;
 
-    std::queue<std::tuple<glm::ivec3, ECubeProcType, EBakerType> > needUpdateGroups;
+    std::queue<std::tuple<glm::ivec3, ECubeProcType, EBakerType, uint32_t> > needUpdateGroups;
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
 
-    FCPUProbeBaker probeBaker;
+    std::vector<FCPUProbeBaker> cascadeBakers;
     FCPUPageIndex cpuPageIndex;
 };

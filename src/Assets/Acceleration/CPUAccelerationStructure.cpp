@@ -21,6 +21,11 @@ static std::vector<FCPUBLASContext>* GbvhBlasContexts;
 
 Assets::SphericalHarmonics HdrsHs[100];
 
+namespace
+{
+    constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+}
+
 using namespace Assets;
 
 uint PackBytes(glm::u32vec4 values)
@@ -166,11 +171,61 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
 #undef float3
 #undef float4
 
-void FCPUProbeBaker::Init(float unitSize, vec3 offset)
+void FCPUProbeBaker::Init(uint32_t cascadeIdx, float unitSize, vec3 offset)
 {
+    cascadeIndex = cascadeIdx;
     UNIT_SIZE = unitSize;
     CUBE_OFFSET = offset;
-    voxels.resize(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
+    voxels.resize(kCascadeVoxelCount);
+}
+
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t elementOffset)
+{
+    const size_t byteOffset = static_cast<size_t>(elementOffset) * sizeof(VoxelData);
+    VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(byteOffset, sizeof(VoxelData) * voxels.size()));
+    std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
+    voxelGpuMemory.Unmap();
+}
+
+bool FCPUAccelerationStructure::InitCascadeBakers(const UserSettings& settings)
+{
+    const float baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
+    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
+    const uint32_t cascadeCount = SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount);
+    const float cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
+
+    bool needRebuild = cascadeBakers.size() != cascadeCount;
+    if (!needRebuild)
+    {
+        for (uint32_t i = 0; i < cascadeCount; ++i)
+        {
+            const float unit = CalculateAmbientCubeCascadeUnit(baseUnit, cascadeRatio, i);
+            const vec3 offset = CalculateAmbientCubeOffset(unit, cubeOffsetBias);
+            const FCPUProbeBaker& baker = cascadeBakers[i];
+            if (glm::abs(unit - baker.UNIT_SIZE) > 1e-6f || glm::length(offset - baker.CUBE_OFFSET) > 1e-6f)
+            {
+                needRebuild = true;
+                break;
+            }
+        }
+    }
+
+    if (!needRebuild)
+    {
+        return false;
+    }
+
+    cascadeBakers.clear();
+    cascadeBakers.resize(cascadeCount);
+    for (uint32_t i = 0; i < cascadeCount; ++i)
+    {
+        const float unit = CalculateAmbientCubeCascadeUnit(baseUnit, cascadeRatio, i);
+        const vec3 offset = CalculateAmbientCubeOffset(unit, cubeOffsetBias);
+        cascadeBakers[i].Init(i, unit, offset);
+    }
+
+    cpuPageIndex.Init();
+    return true;
 }
 
 void FCPUAccelerationStructure::InitBVH(Scene& scene)
@@ -233,11 +288,7 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     }
     
     const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-    const float cubeUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
-    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
-    const vec3 cubeOffset = CalculateAmbientCubeOffset(cubeUnit, cubeOffsetBias);
-    probeBaker.Init(cubeUnit, cubeOffset);
-    cpuPageIndex.Init();
+    InitCascadeBakers(settings);
 
     UpdateBVH(scene);
 }
@@ -342,9 +393,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
 
 void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory)
 {
-    VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(0, sizeof(VoxelData) * voxels.size()));
-    std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
-    voxelGpuMemory.Unmap();
+    UploadGPU(voxelGpuMemory, 0);
 }
 
 bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
@@ -359,21 +408,19 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     lastBatchTasks.clear();
 
     const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-    const float cubeUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
-    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
-    const vec3 cubeOffset = CalculateAmbientCubeOffset(cubeUnit, cubeOffsetBias);
-
-    if (glm::abs(cubeUnit - probeBaker.UNIT_SIZE) > 1e-6f || glm::length(cubeOffset - probeBaker.CUBE_OFFSET) > 1e-6f)
+    if (InitCascadeBakers(settings))
     {
-        probeBaker.Init(cubeUnit, cubeOffset);
-        cpuPageIndex.Init();
         incremental = false;
     }
 
     if (!incremental)
     {
-        probeBaker.ClearAmbientCubes();
-        probeBaker.UploadGPU(*voxelGpuMemory);
+        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+        {
+            FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
+            baker.ClearAmbientCubes();
+            baker.UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+        }
     }
     else
     {
@@ -403,18 +450,30 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         std::shuffle(coordinates.begin(), coordinates.end(), g);
 
         // dispatch
-        for (const auto& [x, z] : coordinates)
-            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe});
+        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+        {
+            for (const auto& [x, z] : coordinates)
+            {
+                needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe, cascadeIndex});
+            }
+            needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe, cascadeIndex});
+        }
         // add fence
-        needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe});
     }
 
     return true;
 }
 
-void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Scene& scene, ECubeProcType procType, EBakerType bakerType)
+void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Scene& scene, ECubeProcType procType,
+                                                  EBakerType bakerType, uint32_t cascadeIndex)
 {
+    (void)bakerType;
     if (bvhInstanceList.empty())
+    {
+        return;
+    }
+
+    if (cascadeIndex >= cascadeBakers.size())
     {
         return;
     }
@@ -437,13 +496,14 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
     }
 
     uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, procType](ResTask& task)
+                [this, actualX, actualZ, groupSize, procType, cascadeIndex](ResTask& task)
             {
+                FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
                         {
-                            probeBaker.ProcessCube(x, y, z, procType);
+                            baker.ProcessCube(x, y, z, procType);
                         }
             },
             [this](ResTask& task)
@@ -478,8 +538,14 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
     if (needFlush)
     {
         // Upload to GPU, now entire range, optimize to partial upload later
-        probeBaker.UploadGPU(*voxelGpuMemory);
-        cpuPageIndex.UpdateData(probeBaker);
+        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+        {
+            cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+        }
+        if (!cascadeBakers.empty())
+        {
+            cpuPageIndex.UpdateData(cascadeBakers[0]);
+        }
         cpuPageIndex.UploadGPU(*pageIndexMemory);
         needFlush = false;
     }
@@ -497,6 +563,7 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
         {
             auto& group = needUpdateGroups.front();
             ECubeProcType type = std::get<1>(group);
+            uint32_t cascadeIndex = std::get<3>(group);
             if (type == ECubeProcType::ECPT_Fence)
             {
                 if (!TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
@@ -506,7 +573,7 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                 needUpdateGroups.pop();
                 continue;
             }
-            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group));
+            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group), cascadeIndex);
             needUpdateGroups.pop();
         }
     }
@@ -514,16 +581,21 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 
 void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
 {
-    ivec3 center = ivec3((worldPos - probeBaker.CUBE_OFFSET) / probeBaker.UNIT_SIZE);
-    const int radiusInCells = static_cast<int>(radius / probeBaker.UNIT_SIZE);
-    ivec3 min = center - ivec3(radiusInCells);
-    ivec3 max = center + ivec3(radiusInCells);
+    for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+    {
+        FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
+        ivec3 center = ivec3((worldPos - baker.CUBE_OFFSET) / baker.UNIT_SIZE);
+        const int radiusInCells = static_cast<int>(radius / baker.UNIT_SIZE);
+        ivec3 min = center - ivec3(radiusInCells);
+        ivec3 max = center + ivec3(radiusInCells);
 
-    // Insert all points within the radius (using manhattan distance for simplicity)
-    for (int x = min.x; x <= max.x; ++x) {
-        for (int z = min.z; z <= max.z; ++z) {
-            ivec3 point(x, 1, z);
-            needUpdateGroups.push({point, ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe});
+        for (int x = min.x; x <= max.x; ++x)
+        {
+            for (int z = min.z; z <= max.z; ++z)
+            {
+                ivec3 point(x, 1, z);
+                needUpdateGroups.push({point, ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe, cascadeIndex});
+            }
         }
     }
 }

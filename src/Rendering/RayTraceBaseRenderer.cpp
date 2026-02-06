@@ -236,8 +236,10 @@ namespace Vulkan::RayTracing
         if(supportRayTracing_ && !GOption->ForceSoftGen)
         {
             const int cubesPerGroup = 64;
-            const int count = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-            const int group = count / cubesPerGroup;
+            const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+            const int group = perCascadeCount / cubesPerGroup;
+            const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
+                NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
 
             // 每32个cube一个group
             int temporalFrames = 120;
@@ -262,19 +264,28 @@ namespace Vulkan::RayTracing
                 if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
                 {
                     int frame = (int)(frameCount_ % temporalFrames);
-                    int groupPerFrame = group / temporalFrames;
-                    int offset = frame * groupPerFrame;
-                    int offsetInCubes = offset * cubesPerGroup;
-                
-                    directLightGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-                    Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-                    gpuScene.custom_data_0 = offsetInCubes;
+                    const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
+                    frame = static_cast<int>((frameCount_ / safeCascadeCount) % temporalFrames);
+                    const int groupPerFrame = std::max(1, (group + temporalFrames - 1) / temporalFrames);
+                    const int offset = frame * groupPerFrame;
+                    if (offset < group)
+                    {
+                        const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
+                        int offsetInCubes = offset * cubesPerGroup;
+                        const uint32_t cascadeIndex = static_cast<uint32_t>(frameCount_ % safeCascadeCount);
+                        const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
                     
-                    vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                       0, sizeof(Assets::GPUScene), &gpuScene);
-            
-                    vkCmdDispatch(commandBuffer, groupPerFrame, 1, 1);
+                        directLightGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+
+                        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+                        gpuScene.custom_data_0 = cascadeBaseOffset + offsetInCubes;
+                        gpuScene.custom_data_1 = cascadeIndex;
+                        
+                        vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+                                           0, sizeof(Assets::GPUScene), &gpuScene);
+                
+                        vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
+                    }
                 }
             }
         }

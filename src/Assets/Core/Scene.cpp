@@ -70,7 +70,7 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "VoxelDatas", flags,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
+            Assets::CUBE_CASCADE_MAX * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
             farAmbientCubeBuffer_, farAmbientCubeBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "PageIndex", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -92,7 +92,7 @@ namespace Assets
             indirectDrawBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
+            Assets::CUBE_CASCADE_MAX * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
             ambientCubeBuffer_, ambientCubeBufferMemory_);
 
         // shadow maps

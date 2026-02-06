@@ -1,6 +1,9 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
 #include "Utilities/Glm.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <memory>
 
 namespace Vulkan
@@ -22,6 +25,7 @@ namespace Assets
 	const int SHADOWMAP_SIZE = 4096;
 	const int CUBE_SIZE_XY = 192;//256;
 	const int CUBE_SIZE_Z = 48;
+	const int CUBE_CASCADE_MAX = 4;
 	const float CUBE_UNIT = 0.25f;
 	const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
 
@@ -38,6 +42,21 @@ namespace Assets
 	inline vec3 CalculateAmbientCubeOffset(float unit, vec3 offsetBias)
 	{
 		return CalculateAmbientCubeOffset(unit) + offsetBias;
+	}
+
+	inline uint32_t SanitizeAmbientCubeCascadeCount(int count)
+	{
+		return static_cast<uint32_t>(std::clamp(count, 1, CUBE_CASCADE_MAX));
+	}
+
+	inline float SanitizeAmbientCubeCascadeRatio(float ratio)
+	{
+		return std::max(ratio, 1.0f);
+	}
+
+	inline float CalculateAmbientCubeCascadeUnit(float baseUnit, float ratio, uint32_t cascadeIndex)
+	{
+		return baseUnit * std::pow(ratio, static_cast<float>(cascadeIndex));
 	}
 
 #define float3 vec3

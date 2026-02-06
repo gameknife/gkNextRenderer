@@ -54,4 +54,6 @@ struct UserSettings final
     float AmbientCubeOffsetX = 0.0f;
     float AmbientCubeOffsetY = 0.0f;
     float AmbientCubeOffsetZ = 0.0f;
+    int AmbientCubeCascadeCount = 3;
+    float AmbientCubeCascadeRatio = 2.0f;
 };

@@ -193,6 +193,8 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.AmbientCubeOffsetX = 0.0f;
     userSettings.AmbientCubeOffsetY = 0.0f;
     userSettings.AmbientCubeOffsetZ = 0.0f;
+    userSettings.AmbientCubeCascadeCount = 3;
+    userSettings.AmbientCubeCascadeRatio = 2.0f;
 
     return userSettings;
 }
@@ -833,8 +835,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(userSettings_.AmbientCubeUnit);
     const glm::vec3 ambientCubeOffsetBias =
         glm::vec3(userSettings_.AmbientCubeOffsetX, userSettings_.AmbientCubeOffsetY, userSettings_.AmbientCubeOffsetZ);
+    const uint32_t ambientCubeCascadeCount =
+        Assets::SanitizeAmbientCubeCascadeCount(userSettings_.AmbientCubeCascadeCount);
+    const float ambientCubeCascadeRatio =
+        Assets::SanitizeAmbientCubeCascadeRatio(userSettings_.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
+    ubo.AmbientCubeCascadeParams = glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio, 0.0f, 0.0f);
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

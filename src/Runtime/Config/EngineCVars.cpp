@@ -105,6 +105,10 @@ namespace NextCVar
                       "Ambient cube offset Y in world units");
         GK_CVAR_FLOAT("sys.ambientCubeOffsetZ", settings, AmbientCubeOffsetZ, 0.0f, ECVarFlags::Archive,
                       "Ambient cube offset Z in world units");
+        GK_CVAR_INT("sys.ambientCubeCascadeCount", settings, AmbientCubeCascadeCount, 3, ECVarFlags::Archive,
+                    "Ambient cube cascade count");
+        GK_CVAR_FLOAT("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive,
+                      "Ambient cube cascade ratio between levels");
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");

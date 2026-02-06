@@ -86,6 +86,7 @@ public struct ALIGN_16 UniformBufferObject
     public float SceneEpsilonScale;
     public float AmbientCubeUnit;
     public float3 AmbientCubeOffset;
+    public float4 AmbientCubeCascadeParams;
 };
 
 public struct ALIGN_16 NodeProxy
