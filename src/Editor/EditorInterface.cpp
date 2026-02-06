@@ -258,6 +258,7 @@ void EditorInterface::Render()
         ImGui::DockBuilderDockWindow("Properties", dock2);
         ImGui::DockBuilderDockWindow("Command History", dock2);
         ImGui::DockBuilderDockWindow("Content Browser", dock3);
+        ImGui::DockBuilderDockWindow("Log", dock3);
         ImGui::DockBuilderDockWindow("Material Browser", dock3);
         ImGui::DockBuilderDockWindow("Texture Browser", dock3);
         ImGui::DockBuilderDockWindow("Mesh Browser", dock3);
@@ -272,6 +273,8 @@ void EditorInterface::Render()
         Editor::DrawPropertiesPanel(ctx, uiState_);
     if (uiState_.contentBrowser)
         Editor::DrawContentBrowserPanel(ctx, uiState_);
+    if (uiState_.logPanel)
+        Editor::DrawConsoleLogPanel(ctx, uiState_);
     if (uiState_.materialBrowser)
         Editor::DrawMaterialBrowserPanel(ctx, uiState_);
     if (uiState_.textureBrowser)

@@ -31,6 +31,7 @@ namespace Editor
         bool materialBrowser = true;
         bool textureBrowser = true;
         bool meshBrowser = true;
+        bool logPanel = true;
 
         // Selection
         uint32_t selected_obj_id = InvalidId;

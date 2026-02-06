@@ -4,6 +4,7 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Runtime/Config/CVarSystem.hpp"
+#include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
@@ -31,6 +32,7 @@
 #include <filesystem>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "Assets/GPU/TextureImage.hpp"
 #include "Options.hpp"
@@ -44,6 +46,24 @@
 
 extern float GAndroidMagicScale;
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
+
+namespace
+{
+    std::string ExtractConsolePrefix(const std::string& input)
+    {
+        size_t start = input.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos)
+        {
+            return {};
+        }
+        size_t end = input.find_first_of(" =\t\r\n", start);
+        if (end == std::string::npos)
+        {
+            return input.substr(start);
+        }
+        return input.substr(start, end - start);
+    }
+} // namespace
 
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
                              const Vulkan::DepthBuffer& depthBuffer, UserSettings& userSettings,
@@ -324,6 +344,333 @@ void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, flo
         });
 }
 
+void UserInterface::SubmitConsoleCommand(const std::string& command)
+{
+    if (command.empty())
+    {
+        return;
+    }
+
+    spdlog::info("> {}", command);
+
+    consoleHistory_.push_back(command);
+    constexpr size_t kConsoleHistoryLimit = 128;
+    if (consoleHistory_.size() > kConsoleHistoryLimit)
+    {
+        consoleHistory_.erase(consoleHistory_.begin(),
+                              consoleHistory_.begin() + static_cast<std::ptrdiff_t>(consoleHistory_.size() - kConsoleHistoryLimit));
+    }
+    consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
+
+    const auto result = GetEngine().GetCVarSystem().ExecuteCommand(command);
+    if (!result.message.empty())
+    {
+        if (!result.success)
+        {
+            spdlog::error("{}", result.message);
+        }
+        else
+        {
+            spdlog::info("{}", result.message);
+        }
+    }
+
+    for (const auto& line : result.output)
+    {
+        spdlog::info("  {}", line);
+    }
+
+    consoleScrollToBottom_ = true;
+}
+
+void UserInterface::RefreshConsoleMatches(size_t matchLimit)
+{
+    if (consoleInput_ != consoleLastInput_)
+    {
+        consoleLastInput_ = consoleInput_;
+        consoleMatchIndex_ = 0;
+        consoleCompletionBase_.clear();
+        consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
+    }
+
+    std::string matchBase = consoleCompletionBase_.empty() ? ExtractConsolePrefix(consoleInput_) : consoleCompletionBase_;
+    if (!matchBase.empty())
+    {
+        consoleMatches_ = GetEngine().GetCVarSystem().GetMatchingNames(matchBase, matchLimit);
+    }
+    else
+    {
+        consoleMatches_.clear();
+    }
+}
+
+void UserInterface::DrawConsoleMatchPopup(float width, const char* popupId)
+{
+    if (popupId == nullptr || consoleMatches_.empty() || !ImGui::IsItemActive())
+    {
+        return;
+    }
+
+    const ImVec2 itemMin = ImGui::GetItemRectMin();
+    const ImVec2 itemMax = ImGui::GetItemRectMax();
+    const float itemWidth = (width > 0.0f) ? width : (itemMax.x - itemMin.x);
+    const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
+    const float popupHeight = std::min(rowHeight * (static_cast<float>(consoleMatches_.size()) + 1.5f), rowHeight * 9.0f);
+    const float offset = 2.0f;
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float viewportBottom = viewport->Pos.y + viewport->Size.y;
+    const float yBelow = itemMax.y + offset;
+    const float yAbove = itemMin.y - popupHeight - offset;
+    const float popupY = (yBelow + popupHeight <= viewportBottom) ? yBelow : std::max(viewport->Pos.y + offset, yAbove);
+
+    ImGui::SetNextWindowPos(ImVec2(itemMin.x, popupY));
+    ImGui::SetNextWindowSize(ImVec2(itemWidth, popupHeight));
+    ImGui::SetNextWindowBgAlpha(0.95f);
+    ImGuiWindowFlags popupFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
+    if (ImGui::Begin(popupId, nullptr, popupFlags))
+    {
+        ImGui::Text("Matches:");
+        ImGui::Separator();
+        for (const auto& name : consoleMatches_)
+        {
+            ImGui::TextUnformatted(name.c_str());
+        }
+    }
+    ImGui::End();
+}
+
+bool UserInterface::DrawConsoleCommandInput(
+    const char* label, const char* hint, float width, bool closeConsoleOnSubmit, bool showMatchPopup,
+    const char* matchPopupId, bool refreshMatches)
+{
+    constexpr size_t kMatchLimit = 8;
+    if (refreshMatches)
+    {
+        RefreshConsoleMatches(kMatchLimit);
+    }
+
+    ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory |
+        ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackEdit;
+    if (width > 0.0f)
+    {
+        ImGui::SetNextItemWidth(width);
+    }
+
+    const bool executeCommand =
+        ImGui::InputTextWithHint(label, hint, &consoleInput_, inputFlags, &UserInterface::ConsoleInputTextCallback, this);
+    if (showMatchPopup)
+    {
+        DrawConsoleMatchPopup(width, matchPopupId);
+    }
+
+    if (!executeCommand || consoleInput_.empty())
+    {
+        return false;
+    }
+
+    SubmitConsoleCommand(consoleInput_);
+    consoleInput_.clear();
+    consoleLastInput_.clear();
+    consoleMatches_.clear();
+    consoleCompletionBase_.clear();
+    consoleMatchIndex_ = 0;
+    if (closeConsoleOnSubmit)
+    {
+        showConsole_ = false;
+        requestConsoleFocus_ = false;
+    }
+    return true;
+}
+
+int UserInterface::ConsoleInputTextCallback(ImGuiInputTextCallbackData* data)
+{
+    auto* ui = static_cast<UserInterface*>(data->UserData);
+    if (ui == nullptr)
+    {
+        return 0;
+    }
+    return ui->HandleConsoleInputTextCallback(data);
+}
+
+int UserInterface::HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data)
+{
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackEdit)
+    {
+        if (consoleSkipEditReset_)
+        {
+            consoleSkipEditReset_ = false;
+            return 0;
+        }
+        consoleCompletionBase_.clear();
+        consoleMatchIndex_ = 0;
+        return 0;
+    }
+
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
+    {
+        if (data->EventKey == ImGuiKey_UpArrow)
+        {
+            if (consoleHistoryIndex_ > 0)
+            {
+                consoleHistoryIndex_--;
+            }
+            else if (!consoleHistory_.empty())
+            {
+                consoleHistoryIndex_ = 0;
+            }
+        }
+        else if (data->EventKey == ImGuiKey_DownArrow)
+        {
+            if (consoleHistoryIndex_ + 1 < static_cast<int>(consoleHistory_.size()))
+            {
+                consoleHistoryIndex_++;
+            }
+            else
+            {
+                consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
+            }
+        }
+
+        std::string historyCmd;
+        if (!consoleHistory_.empty() && consoleHistoryIndex_ >= 0 &&
+            consoleHistoryIndex_ < static_cast<int>(consoleHistory_.size()))
+        {
+            historyCmd = consoleHistory_[consoleHistoryIndex_];
+        }
+
+        data->DeleteChars(0, data->BufTextLen);
+        if (!historyCmd.empty())
+        {
+            data->InsertChars(0, historyCmd.c_str());
+        }
+        return 0;
+    }
+
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
+    {
+        std::string buffer(data->Buf, data->BufTextLen);
+        size_t start = buffer.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos)
+        {
+            return 0;
+        }
+        size_t end = buffer.find_first_of(" =\t\r\n", start);
+        if (end == std::string::npos)
+        {
+            end = buffer.size();
+        }
+        if (data->CursorPos > static_cast<int>(end))
+        {
+            return 0;
+        }
+
+        std::string prefix = buffer.substr(start, end - start);
+        if (prefix.empty())
+        {
+            return 0;
+        }
+
+        if (consoleCompletionBase_.empty())
+        {
+            consoleCompletionBase_ = prefix;
+            consoleMatchIndex_ = 0;
+        }
+
+        constexpr size_t kMatchLimit = 8;
+        auto matches = GetEngine().GetCVarSystem().GetMatchingNames(consoleCompletionBase_, kMatchLimit);
+        consoleMatches_ = matches;
+        if (matches.empty())
+        {
+            return 0;
+        }
+
+        int index = consoleMatchIndex_ % static_cast<int>(matches.size());
+        const std::string& match = matches[index];
+        consoleMatchIndex_ = (index + 1) % static_cast<int>(matches.size());
+
+        std::string rest = end < buffer.size() ? buffer.substr(end) : "";
+        std::string newBuffer = match + rest;
+
+        consoleSkipEditReset_ = true;
+        data->DeleteChars(0, data->BufTextLen);
+        data->InsertChars(0, newBuffer.c_str());
+        data->CursorPos = static_cast<int>(match.size());
+    }
+
+    return 0;
+}
+
+void UserInterface::DrawConsoleLogOutput(const char* childId, const ImVec2& size, bool bordered)
+{
+    DrawConsoleLogOutputInternal(childId, size, bordered);
+}
+
+void UserInterface::DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered)
+{
+    const auto logSink = Runtime::Editor::GetConsoleLogSink();
+    const std::vector<spdlog::details::log_msg_buffer> lines = logSink ? logSink->last_raw() : std::vector<spdlog::details::log_msg_buffer>{};
+    const uint64_t revision = Runtime::Editor::GetConsoleLogSequence();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.55f));
+    const ImGuiChildFlags childFlags = bordered ? ImGuiChildFlags_Borders : ImGuiChildFlags_None;
+    if (ImGui::BeginChild(childId, size, childFlags))
+    {
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(lines.size()));
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+            {
+                const auto& line = lines[static_cast<size_t>(i)];
+                ImVec4 color = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+                switch (line.level)
+                {
+                case spdlog::level::trace:
+                    color = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
+                    break;
+                case spdlog::level::debug:
+                    color = ImVec4(0.55f, 0.9f, 0.95f, 1.0f);
+                    break;
+                case spdlog::level::info:
+                    color = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+                    break;
+                case spdlog::level::warn:
+                    color = ImVec4(1.0f, 0.82f, 0.35f, 1.0f);
+                    break;
+                case spdlog::level::err:
+                    color = ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+                    break;
+                case spdlog::level::critical:
+                    color = ImVec4(1.0f, 0.25f, 0.55f, 1.0f);
+                    break;
+                case spdlog::level::off:
+                case spdlog::level::n_levels:
+                    color = ImVec4(0.78f, 0.78f, 0.78f, 1.0f);
+                    break;
+                }
+
+                const char* payloadStart = line.payload.data();
+                const char* payloadEnd = payloadStart + line.payload.size();
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGui::TextUnformatted(payloadStart, payloadEnd);
+                ImGui::PopStyleColor();
+            }
+        }
+
+        if (consoleScrollToBottom_ || revision != consoleLogRevision_)
+        {
+            ImGui::SetScrollHereY(1.0f);
+            consoleScrollToBottom_ = false;
+            consoleLogRevision_ = revision;
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
 void UserInterface::PreRender()
 {
     ImGui_ImplVulkan_NewFrame();
@@ -570,39 +917,7 @@ void UserInterface::DrawConsoleWindow()
     if (ImGui::Begin("Console", &showConsole_, flags))
     {
         const size_t kConsoleMatchLimit = 8;
-
-        auto ExtractPrefix = [](const std::string& input) -> std::string
-        {
-            size_t start = input.find_first_not_of(" \t\r\n");
-            if (start == std::string::npos)
-            {
-                return {};
-            }
-            size_t end = input.find_first_of(" =\t\r\n", start);
-            if (end == std::string::npos)
-            {
-                return input.substr(start);
-            }
-            return input.substr(start, end - start);
-        };
-
-        if (consoleInput_ != consoleLastInput_)
-        {
-            consoleLastInput_ = consoleInput_;
-            consoleMatchIndex_ = 0;
-            consoleCompletionBase_.clear();
-            consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
-        }
-
-        std::string matchBase = consoleCompletionBase_.empty() ? ExtractPrefix(consoleInput_) : consoleCompletionBase_;
-        if (!matchBase.empty())
-        {
-            consoleMatches_ = GetEngine().GetCVarSystem().GetMatchingNames(matchBase, kConsoleMatchLimit);
-        }
-        else
-        {
-            consoleMatches_.clear();
-        }
+        RefreshConsoleMatches(kConsoleMatchLimit);
 
         float hintHeight = 0.0f;
         if (!consoleMatches_.empty())
@@ -614,36 +929,7 @@ void UserInterface::DrawConsoleWindow()
         float outputHeight = ImGui::GetContentRegionAvail().y - inputHeight - hintHeight;
         outputHeight = std::max(outputHeight, ImGui::GetFontSize() * 5.0f);
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.55f));
-        if (ImGui::BeginChild("ConsoleOutput", ImVec2(0, outputHeight), ImGuiChildFlags_Borders))
-        {
-            for (const auto& line : consoleOutput_)
-            {
-                if (line.rfind("[Error]", 0) == 0)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
-                }
-                else if (line.rfind(">", 0) == 0)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.8f, 1.0f, 1.0f));
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
-                }
-
-                ImGui::TextWrapped("%s", line.c_str());
-                ImGui::PopStyleColor();
-            }
-
-            if (scrollToBottom_)
-            {
-                ImGui::SetScrollHereY(1.0f);
-                scrollToBottom_ = false;
-            }
-        }
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
+        DrawConsoleLogOutputInternal("ConsoleOutput", ImVec2(0, outputHeight), true);
 
         if (!consoleMatches_.empty())
         {
@@ -664,162 +950,9 @@ void UserInterface::DrawConsoleWindow()
             requestConsoleFocus_ = false;
         }
 
-        ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory |
-            ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackEdit;
-        bool executeCommand = false;
         ImGui::PushItemWidth(-1);
-        if (ImGui::InputText("##ConsoleInput", &consoleInput_, inputFlags,
-            [](ImGuiInputTextCallbackData* data) -> int
-            {
-                auto* ui = static_cast<UserInterface*>(data->UserData);
-                if (data->EventFlag == ImGuiInputTextFlags_CallbackEdit)
-                {
-                    if (ui->consoleSkipEditReset_)
-                    {
-                        ui->consoleSkipEditReset_ = false;
-                        return 0;
-                    }
-                    ui->consoleCompletionBase_.clear();
-                    ui->consoleMatchIndex_ = 0;
-                    return 0;
-                }
-                if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
-                {
-                    if (data->EventKey == ImGuiKey_UpArrow)
-                    {
-                        if (ui->consoleHistoryIndex_ > 0)
-                        {
-                            ui->consoleHistoryIndex_--;
-                        }
-                        else if (!ui->consoleHistory_.empty())
-                        {
-                            ui->consoleHistoryIndex_ = 0;
-                        }
-                    }
-                    else if (data->EventKey == ImGuiKey_DownArrow)
-                    {
-                        if (ui->consoleHistoryIndex_ + 1 < static_cast<int>(ui->consoleHistory_.size()))
-                        {
-                            ui->consoleHistoryIndex_++;
-                        }
-                        else
-                        {
-                            ui->consoleHistoryIndex_ = static_cast<int>(ui->consoleHistory_.size());
-                        }
-                    }
-
-                    std::string historyCmd;
-                    if (!ui->consoleHistory_.empty() &&
-                        ui->consoleHistoryIndex_ >= 0 &&
-                        ui->consoleHistoryIndex_ < static_cast<int>(ui->consoleHistory_.size()))
-                    {
-                        historyCmd = ui->consoleHistory_[ui->consoleHistoryIndex_];
-                    }
-
-                    data->DeleteChars(0, data->BufTextLen);
-                    if (!historyCmd.empty())
-                    {
-                        data->InsertChars(0, historyCmd.c_str());
-                    }
-                }
-                if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion)
-                {
-                    std::string buffer(data->Buf, data->BufTextLen);
-                    size_t start = buffer.find_first_not_of(" \t\r\n");
-                    if (start == std::string::npos)
-                    {
-                        return 0;
-                    }
-                    size_t end = buffer.find_first_of(" =\t\r\n", start);
-                    if (end == std::string::npos)
-                    {
-                        end = buffer.size();
-                    }
-                    if (data->CursorPos > static_cast<int>(end))
-                    {
-                        return 0;
-                    }
-
-                    std::string prefix = buffer.substr(start, end - start);
-                    if (prefix.empty())
-                    {
-                        return 0;
-                    }
-
-                    if (ui->consoleCompletionBase_.empty())
-                    {
-                        ui->consoleCompletionBase_ = prefix;
-                        ui->consoleMatchIndex_ = 0;
-                    }
-
-                    const size_t kMatchLimit = 8;
-                    auto matches = ui->GetEngine().GetCVarSystem().GetMatchingNames(
-                        ui->consoleCompletionBase_, kMatchLimit);
-                    ui->consoleMatches_ = matches;
-                    if (matches.empty())
-                    {
-                        return 0;
-                    }
-
-                    int index = ui->consoleMatchIndex_ % static_cast<int>(matches.size());
-                    const std::string& match = matches[index];
-                    ui->consoleMatchIndex_ = (index + 1) % static_cast<int>(matches.size());
-
-                    std::string rest = end < buffer.size() ? buffer.substr(end) : "";
-                    std::string newBuffer = match + rest;
-
-                    ui->consoleSkipEditReset_ = true;
-                    data->DeleteChars(0, data->BufTextLen);
-                    data->InsertChars(0, newBuffer.c_str());
-                    data->CursorPos = static_cast<int>(match.size());
-                }
-                return 0;
-            }, this))
-        {
-            executeCommand = true;
-        }
+        DrawConsoleCommandInput("##ConsoleInput", "", -1.0f, true, false, nullptr, false);
         ImGui::PopItemWidth();
-
-        if (executeCommand)
-        {
-            if (!consoleInput_.empty())
-            {
-                consoleOutput_.push_back("> " + consoleInput_);
-                consoleHistory_.push_back(consoleInput_);
-                consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
-
-                auto result = GetEngine().GetCVarSystem().ExecuteCommand(consoleInput_);
-                if (!result.message.empty())
-                {
-                    if (!result.success)
-                    {
-                        consoleOutput_.push_back("[Error] " + result.message);
-                    }
-                    else
-                    {
-                        consoleOutput_.push_back(result.message);
-                    }
-                }
-                for (const auto& line : result.output)
-                {
-                    consoleOutput_.push_back("  " + line);
-                }
-
-                while (consoleOutput_.size() > 200)
-                {
-                    consoleOutput_.erase(consoleOutput_.begin());
-                }
-
-                consoleInput_.clear();
-                consoleLastInput_.clear();
-                consoleMatches_.clear();
-                consoleCompletionBase_.clear();
-                consoleMatchIndex_ = 0;
-                scrollToBottom_ = true;
-                showConsole_ = false;
-                requestConsoleFocus_ = false;
-            }
-        }
     }
     ImGui::End();
 }

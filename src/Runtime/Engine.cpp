@@ -11,6 +11,7 @@
 #include "Runtime/Command/DeleteNodeCommand.hpp"
 #include "Runtime/ScreenShot.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
+#include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
@@ -201,15 +202,16 @@ NextEngine::NextEngine(Options& options, void* userdata)
     spdlog::flush_on(spdlog::level::debug);
     spdlog::flush_every(std::chrono::seconds(1));
 
-    SPDLOG_INFO("---- Next Engine Initializing...");
-    spdlog::stopwatch stopwatch;
-
 #if ANDROID
     std::string tag = "gknext";
     auto android_logger = spdlog::android_logger_mt("android", tag);
     android_logger->critical("Use \"adb shell logcat\" to view this message.");
     spdlog::set_default_logger(android_logger);
 #endif
+    Runtime::Editor::AttachConsoleLogSinkToDefaultLogger();
+
+    SPDLOG_INFO("---- Next Engine Initializing...");
+    spdlog::stopwatch stopwatch;
 
     instance_ = this;
     

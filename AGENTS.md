@@ -191,12 +191,16 @@ assets/
 
 ## Verification After Changes
 
-1. **Build:** Run build script for target preset
+1. **Build:** For AI assistant verification, always build with the platform `full-*` preset (not `default-*`/`minimal-*`)
+   - macOS: `./build.sh --preset full-macos-arm64 --reconfigure`
+   - Windows: `./build.bat --preset full-windows --reconfigure`
+   - Linux: `./build.sh --preset full-linux --reconfigure`
+   - If only one target needs verification, still use `full-*` preset and pass target via CMake build command
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
 
-**Assistant Note:** Large refactors must include a full build and fix any compile errors before reporting completion.
+**Assistant Note:** Large refactors must include a full build with `full-*` preset and fix any compile errors before reporting completion.
 
 ## Key References
 

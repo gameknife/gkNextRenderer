@@ -9,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Runtime/Engine.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 
 namespace Editor
 {
@@ -122,6 +123,7 @@ namespace Editor
                 ImGui::MenuItem("Stack Tool", nullptr, &ui.child_stack);
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
+                ImGui::MenuItem("Log", nullptr, &ui.logPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
                 ImGui::EndMenu();
             }
@@ -233,10 +235,8 @@ namespace Editor
         }
         ImGui::SameLine();
 
-        static char cvar[255] = "";
-        ImGui::SetNextItemWidth(200);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
-        ImGui::InputTextWithHint("##CVar", "Execute CVar...", cvar, 255);
+        ctx.ui.DrawConsoleCommandInput("##CVar", "Execute CVar...", 200.0f, false, true, "##FooterConsoleMatches");
         ImGui::PopStyleVar();
         ImGui::End();
 
