@@ -84,6 +84,8 @@ public struct ALIGN_16 UniformBufferObject
     public bool ReservedBool2;
     public uint SuperResolution;
     public float SceneEpsilonScale;
+    public float AmbientCubeUnit;
+    public float3 AmbientCubeOffset;
 };
 
 public struct ALIGN_16 NodeProxy
