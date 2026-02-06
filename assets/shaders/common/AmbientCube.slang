@@ -11,8 +11,16 @@ public static const float3 PAGE_OFFSET = float3(-512, 0, -512);
 
 public static const int CUBE_SIZE_XY = 192; // 256;
 public static const int CUBE_SIZE_Z = 48;
-public static const float CUBE_UNIT = 0.25f;
-public static const float3 CUBE_OFFSET = float3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
+
+float GetAmbientCubeUnit()
+{
+    return max(Bindless.GetGpuscene().Camera[0].AmbientCubeUnit, 0.0001f);
+}
+
+float3 GetAmbientCubeOffset()
+{
+    return Bindless.GetGpuscene().Camera[0].AmbientCubeOffset;
+}
 
 public static const float3 cubeVectors[6] = {
     float3(0, 1, 0),
@@ -291,8 +299,10 @@ public float4 interpolateAmbientCubesV2<T : IAmbientCubeSampler>(float3 inPos, f
 {
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+    float cubeUnit = GetAmbientCubeUnit();
+    float3 cubeOffset = GetAmbientCubeOffset();
 
-    float3 nearpos = (inPos - CUBE_OFFSET) / CUBE_UNIT;
+    float3 nearpos = (inPos - cubeOffset) / cubeUnit;
 
     // Early out if position is outside the probe grid
     if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 ||
@@ -448,7 +458,7 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
 
         if (hitLength < hitLengthRef)
         {
-            offsetDist = hitLength * CUBE_UNIT;
+            offsetDist = hitLength * GetAmbientCubeUnit();
             return true;
         }
     }
@@ -479,8 +489,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
     bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        float cubeUnit = GetAmbientCubeUnit();
 
-        origin = origin + basis * CUBE_UNIT * 0.25f;
+        origin = origin + basis * cubeUnit * 0.25f;
         // 输出结果
         float4 directColor = float4(0.0);
         float4 bounceColor = float4(0.0);
@@ -527,7 +538,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float4 lightPower = float4(0.0);
             LightObject light = FetchLight(0, lightPower);
             float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
-            float lightAtten = tracer.TraceSegment(origin, lightPos, CUBE_UNIT * 0.5f) ? 0.0f : 1.0f;
+            float lightAtten = tracer.TraceSegment(origin, lightPos, cubeUnit * 0.5f) ? 0.0f : 1.0f;
             float3 lightDir = normalize(lightPos - origin);
             float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
             float distance = length(lightPos - origin);
@@ -555,12 +566,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     float DetectDistance(IRayTracer tracer, float3 origin, float3 rayDir)
     {
+        float cubeUnit = GetAmbientCubeUnit();
         Vertex hitVertex;
         NodeProxy hitNode;
         float4 tempColor = float4(0.0);
         uint TempInstanceId;
         float hitDist = 0;
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor, hitDist))
+        if (tracer.TraceRay(origin, rayDir, cubeUnit * 64, hitVertex, hitNode, tempColor, hitDist))
         {
             return hitDist;
         }
@@ -569,16 +581,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
     bool InsideGeometry(IRayTracer tracer, inout float3 origin, float3 rayDir, inout uint OutMaterialId, inout float OutDistanceToSolid)
     {
+        float cubeUnit = GetAmbientCubeUnit();
         // 求交测试
         Vertex hitVertex;
         NodeProxy hitNode;
         float4 tempColor;
         float hitDist = 0;
-        if (tracer.TraceRay(origin, rayDir, CUBE_UNIT * 64, hitVertex, hitNode, tempColor, hitDist))
+        if (tracer.TraceRay(origin, rayDir, cubeUnit * 64, hitVertex, hitNode, tempColor, hitDist))
         {
             OutDistanceToSolid = hitDist;
 
-            if (OutDistanceToSolid <= CUBE_UNIT)
+            if (OutDistanceToSolid <= cubeUnit)
             {
                 Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
                 OutMaterialId = hitVertex.MaterialIndex;
@@ -597,6 +610,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
     {
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+        float cubeUnit = GetAmbientCubeUnit();
 
        
 
@@ -639,7 +653,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
         // store the dist, the dist is abs meters, can store 4 unit_size max
-        Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(uint(minDist / CUBE_UNIT), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
+        Voxels[CubeIdx].distanceToSolid_gg_z01 = pack_bytes(uint4(uint(minDist / cubeUnit), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
         Voxels[CubeIdx].distanceToSolid_x01_y01 = pack_bytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 
         if (minDist < 8) // 只处理表面，增值算法的时候可以具体的把他做好

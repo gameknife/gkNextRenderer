@@ -540,13 +540,16 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+        UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+        float cubeUnit = max(camera.AmbientCubeUnit, 0.0001f);
+        float3 cubeOffset = camera.AmbientCubeOffset;
 
 
         uint hitMatId = 0;
-        uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
+        uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / cubeUnit);
     
-        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
-        float3 tDelta = abs(CUBE_UNIT / rayDir);
+        float3 voxelPos = (rayOrigin.xyz - cubeOffset) / cubeUnit;
+        float3 tDelta = abs(cubeUnit / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
     
@@ -561,8 +564,8 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         {
             if (useBounds)
             {
-                float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
-                if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
+                float3 worldPos = cubeOffset + voxelPos * cubeUnit;
+                if (any(worldPos < boxMin - float3(cubeUnit)) || any(worldPos > boxMax + float3(cubeUnit)))
                     break;
             }
     
@@ -572,8 +575,8 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
             {
                 hit = true;
                 outVertex.Normal = normalize(normal);
-                float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
-                float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
+                float3 voxelBoxMin = floor(voxelPos) * cubeUnit + cubeOffset - float3(0.01);
+                float3 voxelBoxMax = floor(voxelPos) * cubeUnit + cubeOffset + float3(cubeUnit);
                 outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
                 outVertex.MaterialIndex = hitMatId;
                 outVertex.TexCoord = float2(0.5, 0.5);
@@ -654,10 +657,11 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
         PageIndex* Pages = Bindless.GetGpuscene().Pages;
+        float cubeUnit = max(Bindless.GetGpuscene().Camera[0].AmbientCubeUnit, 0.0001f);
         // DDA voxel traversal
         bool hit = false;
         outHitDist = 0;
-        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 2;
+        rayOrigin = rayOrigin + rayDir * cubeUnit * 2;
 
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;

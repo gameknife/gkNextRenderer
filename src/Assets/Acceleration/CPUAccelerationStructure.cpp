@@ -72,20 +72,20 @@ bool TraceRay(vec3 origin, vec3 rayDir, float dist, vec3& outNormal, uint& outMa
 #define FLOAT3 vec3
 #define FLOAT4 vec4
 
-float DetectDistance( FLOAT3 origin, FLOAT3 rayDir)
+float DetectDistance(FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
 {
     vec3 outNormal;
     float outRayDist;
     uint tempMaterialId;
     uint tempInstanceId;
-    if( TraceRay(origin, rayDir, CUBE_UNIT * 64, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
     {
         return outRayDist;
     }
     return 255;
 }
 
-bool InsideGeometry( FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance)
+bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance, float cubeUnit)
 {
     // 求交测试
     vec3 outNormal;
@@ -93,10 +93,10 @@ bool InsideGeometry( FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& d
     uint tempMaterialId;
     uint tempInstanceId;
 
-    if (TraceRay(origin, rayDir, CUBE_UNIT * 64, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
     {
         distance = outRayDist;
-        if( distance <= CUBE_UNIT)
+        if (distance <= cubeUnit)
         {
             FMaterial hitMaterial = FetchMaterial(tempMaterialId);
             outCube.matId = tempMaterialId;
@@ -112,7 +112,7 @@ bool InsideGeometry( FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& d
     return false;
 }
 
-void VoxelizeCube(VoxelData& cube, FLOAT3 origin)
+void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
 {
     // just write matid and solid status
     cube.age = 0;
@@ -126,38 +126,39 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin)
     float distNZ = 255.0f;
 
     // 现在是向轴向上发射了6根光线，记录下距离，并用于后续采样判断
-    InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY);
-    InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY);
-    InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX);
-    InsideGeometry(origin, FLOAT3(-1, 0, 0), cube, distNX);
-    InsideGeometry(origin, FLOAT3(0, 0, 1), cube, distPZ);
-    InsideGeometry(origin, FLOAT3(0, 0, -1), cube, distNZ);
+    InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
+    InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
+    InsideGeometry(origin, FLOAT3(-1, 0, 0), cube, distNX, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
 
     // get the min dist of each direction
     float minDist = std::min({distPY, distNY, distPX, distNX, distPZ, distNZ});
-    if( minDist > 254.0f )
+    if (minDist > 254.0f)
     {
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(1, 1, 1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, 1, 1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, -1, 1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, 1, 1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(1, 1, -1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, 1, -1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, -1, -1))});
-        minDist = std::min( { minDist, DetectDistance(origin, FLOAT3(-1, 1, -1))});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
     }
 
     // 现在，相当于每一个体素，都有了一个距离场，通过判断这个，可以快速跳过？
-    distPY = glm::fclamp(distPY / CUBE_UNIT, 0.0f, 1.0f);
-    distNY = glm::fclamp(distNY / CUBE_UNIT, 0.0f, 1.0f);
-    distPX = glm::fclamp(distPX / CUBE_UNIT, 0.0f, 1.0f);
-    distNX = glm::fclamp(distNX / CUBE_UNIT, 0.0f, 1.0f);
-    distPZ = glm::fclamp(distPZ / CUBE_UNIT, 0.0f, 1.0f);
-    distNZ = glm::fclamp(distNZ / CUBE_UNIT, 0.0f, 1.0f);
+    distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
+    distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
+    distPX = glm::fclamp(distPX / cubeUnit, 0.0f, 1.0f);
+    distNX = glm::fclamp(distNX / cubeUnit, 0.0f, 1.0f);
+    distPZ = glm::fclamp(distPZ / cubeUnit, 0.0f, 1.0f);
+    distNZ = glm::fclamp(distNZ / cubeUnit, 0.0f, 1.0f);
 
     float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
-    cube.distanceToSolid_gg_z01 = PackBytes(glm::u32vec4(minDist / CUBE_UNIT, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
+    cube.distanceToSolid_gg_z01 =
+        PackBytes(glm::u32vec4(minDist / cubeUnit, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
     cube.distanceToSolid_x01_y01 = PackBytes(glm::u32vec4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
 }
 
@@ -169,7 +170,7 @@ void FCPUProbeBaker::Init(float unitSize, vec3 offset)
 {
     UNIT_SIZE = unitSize;
     CUBE_OFFSET = offset;
-    voxels.resize( CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z );
+    voxels.resize(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
 }
 
 void FCPUAccelerationStructure::InitBVH(Scene& scene)
@@ -231,7 +232,11 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
         bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
     }
     
-    probeBaker.Init( CUBE_UNIT, CUBE_OFFSET );
+    const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+    const float cubeUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
+    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
+    const vec3 cubeOffset = CalculateAmbientCubeOffset(cubeUnit, cubeOffsetBias);
+    probeBaker.Init(cubeUnit, cubeOffset);
     cpuPageIndex.Init();
 
     UpdateBVH(scene);
@@ -320,7 +325,6 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 
 void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
-    auto& ubo = NextEngine::GetInstance()->GetUniformBufferObject();
     vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
     uint32_t addressIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
     VoxelData& voxel = voxels[addressIdx];
@@ -331,7 +335,7 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
         case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Voxelize:
-            VoxelizeCube(voxel, probePos);
+            VoxelizeCube(voxel, probePos, UNIT_SIZE);
             break;
     }
 }
@@ -353,6 +357,18 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     while (!needUpdateGroups.empty())
         needUpdateGroups.pop();
     lastBatchTasks.clear();
+
+    const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+    const float cubeUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
+    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
+    const vec3 cubeOffset = CalculateAmbientCubeOffset(cubeUnit, cubeOffsetBias);
+
+    if (glm::abs(cubeUnit - probeBaker.UNIT_SIZE) > 1e-6f || glm::length(cubeOffset - probeBaker.CUBE_OFFSET) > 1e-6f)
+    {
+        probeBaker.Init(cubeUnit, cubeOffset);
+        cpuPageIndex.Init();
+        incremental = false;
+    }
 
     if (!incremental)
     {
@@ -498,13 +514,14 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 
 void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
 {
-    ivec3 center = ivec3(worldPos - CUBE_OFFSET);
-    ivec3 min = center - ivec3(static_cast<int>(radius));
-    ivec3 max = center + ivec3(static_cast<int>(radius));
+    ivec3 center = ivec3((worldPos - probeBaker.CUBE_OFFSET) / probeBaker.UNIT_SIZE);
+    const int radiusInCells = static_cast<int>(radius / probeBaker.UNIT_SIZE);
+    ivec3 min = center - ivec3(radiusInCells);
+    ivec3 max = center + ivec3(radiusInCells);
 
     // Insert all points within the radius (using manhattan distance for simplicity)
     for (int x = min.x; x <= max.x; ++x) {
-        for (int z = min.z; x <= max.z; ++z) {
+        for (int z = min.z; z <= max.z; ++z) {
             ivec3 point(x, 1, z);
             needUpdateGroups.push({point, ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe});
         }
@@ -544,7 +561,7 @@ void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
         uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
         uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
-        vec3 worldPos = vec3(x, y, z) *  CUBE_UNIT + CUBE_OFFSET;
+        vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
 
         // 获取对应的page
         Assets::PageIndex& page = GetPage(worldPos);
@@ -668,5 +685,3 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
         }
     }
 }
-
-

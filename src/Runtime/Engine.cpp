@@ -189,6 +189,10 @@ UserSettings CreateUserSettings(const Options& options)
     userSettings.TickPhysics = true;
     userSettings.TickAnimation = true;
     userSettings.SceneEpsilonScale = 1.0f;
+    userSettings.AmbientCubeUnit = Assets::CUBE_UNIT;
+    userSettings.AmbientCubeOffsetX = 0.0f;
+    userSettings.AmbientCubeOffsetY = 0.0f;
+    userSettings.AmbientCubeOffsetZ = 0.0f;
 
     return userSettings;
 }
@@ -826,6 +830,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowEdge = showFlags_.ShowEdge;
     ubo.ProgressiveRender = progressiveRendering_;
     ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
+    const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(userSettings_.AmbientCubeUnit);
+    const glm::vec3 ambientCubeOffsetBias =
+        glm::vec3(userSettings_.AmbientCubeOffsetX, userSettings_.AmbientCubeOffsetY, userSettings_.AmbientCubeOffsetZ);
+    ubo.AmbientCubeUnit = ambientCubeUnit;
+    ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
 
     // Other Setup
     renderer_->supportDenoiser_ = userSettings_.Denoiser;

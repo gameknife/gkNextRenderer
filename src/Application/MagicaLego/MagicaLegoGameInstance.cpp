@@ -219,6 +219,11 @@ void MagicaLegoGameInstance::OnInit()
 
     GetEngine().RequestLoadScene("assets/models/legobricks.glb");
     GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
+    GetEngine().GetUserSettings().AmbientCubeUnit = 0.04f;//0.0625f;
+    GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.02f;
+    GetEngine().GetUserSettings().AmbientCubeOffsetZ = 0.02f;
+    // GetEngine().GetUserSettings().AmbientCubeOffsetY = -0.04f;
+    GetEngine().GetUserSettings().ShowOverlay = false;
 }
 
 void MagicaLegoGameInstance::OnTick(double deltaSeconds)
@@ -269,7 +274,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
 bool MagicaLegoGameInstance::OnRenderUI()
 {
     UserInterface_->OnRenderUI();
-    return true;
+    return false;
 }
 
 void MagicaLegoGameInstance::OnInitUI()

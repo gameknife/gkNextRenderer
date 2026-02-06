@@ -13,8 +13,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
     uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
-    uint4 RandomSeed = InitRandomSeed(x + y, y + z, Bindless.GetGpuscene().Camera[0].TotalFrames);
-    float3 origin = float3(x, y, z) * CUBE_UNIT + CUBE_OFFSET;
+    UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    float cubeUnit = max(camera.AmbientCubeUnit, 0.0001f);
+    uint4 RandomSeed = InitRandomSeed(x + y, y + z, camera.TotalFrames);
+    float3 origin = float3(x, y, z) * cubeUnit + camera.AmbientCubeOffset;
 
     probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed);
 }

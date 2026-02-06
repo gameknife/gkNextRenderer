@@ -25,6 +25,21 @@ namespace Assets
 	const float CUBE_UNIT = 0.25f;
 	const vec3 CUBE_OFFSET = vec3(-CUBE_SIZE_XY / 2, -1.375f, -CUBE_SIZE_XY / 2) * CUBE_UNIT;
 
+	inline float SanitizeAmbientCubeUnit(float unit)
+	{
+		return std::max(unit, 0.001f);
+	}
+
+	inline vec3 CalculateAmbientCubeOffset(float unit)
+	{
+		return vec3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f) * unit;
+	}
+
+	inline vec3 CalculateAmbientCubeOffset(float unit, vec3 offsetBias)
+	{
+		return CalculateAmbientCubeOffset(unit) + offsetBias;
+	}
+
 #define float3 vec3
 #define float4 vec4
 #define float4x4 mat4

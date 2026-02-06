@@ -97,6 +97,14 @@ namespace NextCVar
                      "Tick animation system");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive,
                       "Scene epsilon scale");
+        GK_CVAR_FLOAT("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive,
+                      "Ambient cube probe unit size in world units");
+        GK_CVAR_FLOAT("sys.ambientCubeOffsetX", settings, AmbientCubeOffsetX, 0.0f, ECVarFlags::Archive,
+                      "Ambient cube offset X in world units");
+        GK_CVAR_FLOAT("sys.ambientCubeOffsetY", settings, AmbientCubeOffsetY, 0.0f, ECVarFlags::Archive,
+                      "Ambient cube offset Y in world units");
+        GK_CVAR_FLOAT("sys.ambientCubeOffsetZ", settings, AmbientCubeOffsetZ, 0.0f, ECVarFlags::Archive,
+                      "Ambient cube offset Z in world units");
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");

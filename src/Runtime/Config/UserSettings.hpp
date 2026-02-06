@@ -47,7 +47,11 @@ struct UserSettings final
 
 	float PaperWhiteNit;
 
-	bool TickPhysics = true;
-	bool TickAnimation = true;
+    bool TickPhysics = true;
+    bool TickAnimation = true;
     float SceneEpsilonScale = 1.0f;
+    float AmbientCubeUnit = 0.25f;
+    float AmbientCubeOffsetX = 0.0f;
+    float AmbientCubeOffsetY = 0.0f;
+    float AmbientCubeOffsetZ = 0.0f;
 };
