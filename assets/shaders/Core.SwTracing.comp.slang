@@ -19,6 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
+    renderer.EnableSoftTracingAdaptiveOffset = true;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
