@@ -603,6 +603,31 @@ namespace NextAI
             file >> j;
 
             fullConfig_ = std::make_unique<nlohmann::json>(j);
+            UpdateProviderConfigCache();
+
+            auto activateProvider = [this](EAIProviderType type) -> bool
+            {
+                auto newProvider = CreateProvider(type);
+                if (!newProvider)
+                {
+                    SPDLOG_ERROR("Failed to create provider: {}", ProviderTypeToString(type));
+                    return false;
+                }
+
+                nlohmann::json providerConfig = GetProviderConfig(type);
+                if (!newProvider->Initialize(providerConfig))
+                {
+                    SPDLOG_WARN("Failed to initialize provider: {}", newProvider->GetName());
+                    return false;
+                }
+
+                provider_ = std::move(newProvider);
+                providerType_ = type;
+                configured_ = true;
+                status_ = EAIStatus::Ready;
+                statusMessage_ = fmt::format("{} ready", provider_->GetName());
+                return true;
+            };
 
             std::string providerName = "gemini";
             if (j.contains("provider"))
@@ -610,27 +635,38 @@ namespace NextAI
                 providerName = j["provider"].get<std::string>();
             }
 
-            providerType_ = StringToProviderType(providerName);
-            provider_ = CreateProvider(providerType_);
-
-            nlohmann::json providerConfig = GetProviderConfig(providerType_);
-
-            if (!provider_->Initialize(providerConfig))
+            const EAIProviderType preferredType = StringToProviderType(providerName);
+            if (activateProvider(preferredType))
             {
-                status_ = EAIStatus::NotConfigured;
-                statusMessage_ = fmt::format("{} provider not configured", provider_->GetName());
-                configured_ = false;
-                return false;
+                SPDLOG_INFO("AI Service configured with provider: {}", provider_->GetName());
+                return true;
             }
 
-            status_ = EAIStatus::Ready;
-            statusMessage_ = fmt::format("{} ready", provider_->GetName());
-            configured_ = true;
+            for (const auto& [type, name] : GetAvailableProviders())
+            {
+                if (type == preferredType || !IsProviderConfigured(type))
+                {
+                    continue;
+                }
 
-            UpdateProviderConfigCache();
+                SPDLOG_WARN("Preferred AI provider '{}' is unavailable, fallback to '{}'",
+                    ProviderTypeToString(preferredType), name);
 
-            SPDLOG_INFO("AI Service configured with provider: {}", provider_->GetName());
-            return true;
+                if (activateProvider(type))
+                {
+                    SPDLOG_INFO("AI Service configured with fallback provider: {}", provider_->GetName());
+                    return true;
+                }
+            }
+
+            provider_.reset();
+            providerType_ = preferredType;
+            status_ = EAIStatus::NotConfigured;
+            statusMessage_ = fmt::format("No configured AI provider available (preferred: {})",
+                ProviderTypeToString(preferredType));
+            configured_ = false;
+            SPDLOG_WARN("AI Service has no configured provider. Preferred: {}", ProviderTypeToString(preferredType));
+            return false;
         }
         catch (const std::exception& e)
         {
