@@ -602,10 +602,10 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     
             float offsetDist = 0;
             float skipLength = 1;
-            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels, baseOffset))
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels, baseOffset, cubeUnit))
             {
                 hit = true;
-                outVertex.Normal = normalize(normal);
+                outVertex.Normal = dot(normal, normal) > 0.0f ? normalize(normal) : normalize(-rayDir);
                 float3 voxelBoxMin = floor(voxelPos) * cubeUnit + cubeOffset - float3(0.01);
                 float3 voxelBoxMax = floor(voxelPos) * cubeUnit + cubeOffset + float3(cubeUnit);
                 outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
@@ -688,11 +688,11 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
         PageIndex* Pages = Bindless.GetGpuscene().Pages;
-        float cubeUnit = max(Bindless.GetGpuscene().Camera[0].AmbientCubeUnit, 0.0001f);
+        float startUnit = max(GetAmbientCubeUnitAtPosition(rayOrigin), 0.0001f);
         // DDA voxel traversal
         bool hit = false;
         outHitDist = 0;
-        rayOrigin = rayOrigin + rayDir * cubeUnit * 2;
+        rayOrigin = rayOrigin + rayDir * startUnit * 2;
 
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
@@ -971,10 +971,19 @@ public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
         if (Camera.HasSun)
         {
+            const uint cascadeIndex = GetAmbientCubeCascadeAtPosition(position);
+            const float cascadeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
             const float3 lightVector = Camera.SunDirection.xyz;
             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
             shadow = 1;
-            if (HWTracer.TraceOcclusion(position + normal * 0.25f, lightVectorCone))
+            float shadowTraceOffset = cascadeUnit * 0.5f;
+            if (cascadeIndex > 0)
+            {
+                // Coarser cascades are more prone to self-hit near surfaces; push farther out.
+                shadowTraceOffset = cascadeUnit * (1.0f + 0.5f * float(cascadeIndex));
+            }
+            shadowTraceOffset = max(0.25f, shadowTraceOffset);
+            if (HWTracer.TraceOcclusion(position + normal * shadowTraceOffset, lightVectorCone))
             {
                 shadow = 0;
             }
@@ -1046,6 +1055,7 @@ public struct FPathTracingRendererV2
     public int SampleDownscale = 1;
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
+    public bool EnableSoftTracingAdaptiveOffset = false;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist)
     {
@@ -1092,7 +1102,13 @@ public struct FPathTracingRendererV2
 
         NodeProxy hitNode;
         float4 tempColor = float4(0, 0, 0, 1);
-        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor, outHitDist))
+        float surfaceOffset = HitNormalOffset;
+        if (EnableSoftTracingAdaptiveOffset)
+        {
+            surfaceOffset = max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f);
+        }
+        const float3 traceOrigin = inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        if (tracer.TraceRay(traceOrigin, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor, outHitDist))
         {
             if(FuzzyTracing)
             {
@@ -1199,7 +1215,12 @@ public struct FPathTracingRendererV2
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
                             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
-                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                            float shadowTraceOffset = TRACE_CORRECTION_OFFSET;
+                            if (EnableSoftTracingAdaptiveOffset)
+                            {
+                                shadowTraceOffset = max(TRACE_CORRECTION_OFFSET, GetAmbientCubeUnitAtPosition(vertexStart.Position) * 0.5f);
+                            }
+                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * shadowTraceOffset, lightVectorCone))
                             {
                                 RayColor *= Camera.SunColor;
                                 break;

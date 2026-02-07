@@ -544,7 +544,7 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
         }
         if (!cascadeBakers.empty())
         {
-            cpuPageIndex.UpdateData(cascadeBakers[0]);
+            cpuPageIndex.UpdateData(cascadeBakers);
         }
         cpuPageIndex.UploadGPU(*pageIndexMemory);
         needFlush = false;
@@ -613,7 +613,7 @@ void FCPUPageIndex::Init()
     pageIndex.resize(Assets::ACGI_PAGE_COUNT * Assets::ACGI_PAGE_COUNT);
 }
 
-void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
+void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
 {
     // 粗暴实现，先全部page置空
     for (auto& page : pageIndex)
@@ -622,24 +622,30 @@ void FCPUPageIndex::UpdateData(FCPUProbeBaker& baker)
         page.voxelCount = 0;
     }
 
-    // 遍历baker里的数据，根据index，取得worldpos，然后取page出来，给voxel数量提升
-    for ( uint gIdx = 0; gIdx < baker.voxels.size(); ++gIdx)
+    // 聚合所有cascade，构建全局PageIndex覆盖
+    for (const FCPUProbeBaker& baker : bakers)
     {
-        VoxelData& voxel = baker.voxels[gIdx];
-        if (voxel.matId == 0) continue; // 只处理活跃的cube
+        const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
+        for (uint32_t gIdx = 0; gIdx < voxelCount; ++gIdx)
+        {
+            const VoxelData& voxel = baker.voxels[gIdx];
+            if (voxel.matId == 0)
+            {
+                continue;
+            }
 
-        // convert to local position
-        uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
-        uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
-        uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
+            // convert to local position
+            uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
+            uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
+            uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
 
-        vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
+            vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
 
-        // 获取对应的page
-        Assets::PageIndex& page = GetPage(worldPos);
+            Assets::PageIndex& page = GetPage(worldPos);
 
-        // 增加voxel数量
-        page.voxelCount += 1; // 假设每个cube对应一个voxel
+            // 当前仅使用voxelCount>0做粗粒度裁剪，保持占用标记语义即可
+            page.voxelCount = 1;
+        }
     }
 }
 

@@ -51,6 +51,28 @@ public float3 GetAmbientCubeOffsetAtCascade(uint cascadeIndex)
     return float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f) * unit + GetAmbientCubeOffsetBias();
 }
 
+public uint GetAmbientCubeCascadeAtPosition(float3 worldPos)
+{
+    uint cascadeCount = GetAmbientCubeCascadeCount();
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+    {
+        float unit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+        float3 offset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+        float3 voxelPos = (worldPos - offset) / unit;
+        if (voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0 && voxelPos.x <= CUBE_SIZE_XY - 1 &&
+            voxelPos.y <= CUBE_SIZE_Z - 1 && voxelPos.z <= CUBE_SIZE_XY - 1)
+        {
+            return cascadeIndex;
+        }
+    }
+    return cascadeCount - 1;
+}
+
+public float GetAmbientCubeUnitAtPosition(float3 worldPos)
+{
+    return GetAmbientCubeUnitAtCascade(GetAmbientCubeCascadeAtPosition(worldPos));
+}
+
 public uint GetCascadeBaseOffset(uint cascadeIndex)
 {
     return cascadeIndex * uint(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
@@ -444,7 +466,7 @@ public float FetchSDF(float3 pos, in RWStructuredBuffer<VoxelData> Cubes)
 }
 
 public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
-                      in VoxelData* Cubes, uint baseOffset)
+                      in VoxelData* Cubes, uint baseOffset, float cubeUnit)
 {
     skipSetp = 1;
     // Early out if position is outside the probe grid
@@ -495,7 +517,7 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
 
         if (hitLength < hitLengthRef)
         {
-            offsetDist = hitLength * GetAmbientCubeUnit();
+            offsetDist = hitLength * cubeUnit;
             return true;
         }
     }
@@ -511,7 +533,13 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
 public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
                       in VoxelData* Cubes)
 {
-    return inSolidV2(pos, rayDir, offsetDist, matId, skipSetp, Cubes, 0);
+    return inSolidV2(pos, rayDir, offsetDist, matId, skipSetp, Cubes, 0, GetAmbientCubeUnit());
+}
+
+public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+                      in VoxelData* Cubes, uint baseOffset)
+{
+    return inSolidV2(pos, rayDir, offsetDist, matId, skipSetp, Cubes, baseOffset, GetAmbientCubeUnit());
 }
 
 public interface IProbeGenerator

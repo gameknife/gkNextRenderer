@@ -90,7 +90,7 @@ struct FCPUPageIndex
     std::vector<Assets::PageIndex> pageIndex;
 
     void Init();
-    void UpdateData(FCPUProbeBaker& baker);
+    void UpdateData(const std::vector<FCPUProbeBaker>& bakers);
     Assets::PageIndex& GetPage(glm::vec3 worldpos);
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
 };
