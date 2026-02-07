@@ -2,16 +2,16 @@
     "provider": "gemini",
     "gemini": {
         "apiKey": "YOUR_GOOGLE_API_KEY",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3-flash-preview",
         "endpoint": "https://generativelanguage.googleapis.com/v1beta"
     },
     "ollama": {
         "endpoint": "http://localhost:11434",
-        "model": "llama3.2"
+        "model": "gemma3:12b"
     },
     "zhipu": {
         "apiKey": "YOUR_ZHIPU_API_KEY",
-        "model": "glm-4-flash",
+        "model": "glm-4.7",
         "endpoint": "https://open.bigmodel.cn/api/paas/v4"
     }
 }
