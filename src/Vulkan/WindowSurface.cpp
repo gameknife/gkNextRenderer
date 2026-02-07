@@ -38,6 +38,11 @@ SDL_HitTestResult SDLCALL Window::TitleBarHitTestCallback(SDL_Window* win, const
     }
 
     const Uint64 windowFlags = SDL_GetWindowFlags(win);
+    if ((windowFlags & SDL_WINDOW_FULLSCREEN) != 0)
+    {
+        return SDL_HITTEST_NORMAL;
+    }
+
     const bool isMaximized = (windowFlags & SDL_WINDOW_MAXIMIZED) != 0;
     if (dragState.resizeBorder > 0 && self->config_.Resizable && !isMaximized)
     {
@@ -107,6 +112,11 @@ Window::Window(const WindowConfig& config) :
             SPDLOG_WARN("SDL_SetWindowHitTest is not available, custom title bar drag may not work: {}",
                 SDL_GetError());
         }
+    }
+
+    if (!SetBorderlessFullscreen(config.Fullscreen))
+    {
+        SPDLOG_WARN("Failed to apply startup fullscreen state: {}", config.Fullscreen);
     }
 }
 
@@ -199,6 +209,37 @@ void Window::Maximum()
 void Window::Restore()
 {
     SDL_RestoreWindow(window_);
+}
+
+bool Window::IsBorderlessFullscreen() const
+{
+    return (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+bool Window::SetBorderlessFullscreen(bool enable)
+{
+    if (IsBorderlessFullscreen() == enable)
+    {
+        return true;
+    }
+
+    if (!SDL_SetWindowFullscreen(window_, enable))
+    {
+        SPDLOG_WARN("Failed to set borderless fullscreen={} : {}", enable, SDL_GetError());
+        return false;
+    }
+
+    if (!SDL_SyncWindow(window_))
+    {
+        SPDLOG_WARN("Fullscreen state synchronization timed out: {}", SDL_GetError());
+    }
+
+    return true;
+}
+
+bool Window::ToggleBorderlessFullscreen()
+{
+    return SetBorderlessFullscreen(!IsBorderlessFullscreen());
 }
 
 void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth)

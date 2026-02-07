@@ -322,6 +322,30 @@ namespace NextCVar
             return FConsoleResult::Failure("Empty command");
         }
 
+        auto toggleBoolCVar = [this](const std::string& name) -> FConsoleResult
+        {
+            auto it = cvars_.find(name);
+            if (it == cvars_.end())
+            {
+                return FConsoleResult::Failure("Unknown cvar");
+            }
+
+            if (it->second.type != ECVarType::Bool)
+            {
+                return FConsoleResult::Failure("toggle only supports bool cvars");
+            }
+
+            const bool current = std::get<bool>(GetEntryValue(it->second));
+            std::string error;
+            if (!SetEntryValue(it->second, !current, ECVarSetBy::Console, &error))
+            {
+                return FConsoleResult::Failure(error.empty() ? "Failed to toggle" : error);
+            }
+
+            return FConsoleResult::Success(
+                fmt::format("{} = {}", name, GetValueString(name)));
+        };
+
         if (tokens[0] == "cvar.list")
         {
             std::string prefix = tokens.size() > 1 ? tokens[1] : "";
@@ -370,6 +394,24 @@ namespace NextCVar
                 return FConsoleResult::Success(fmt::format("Reset {}", tokens[1]));
             }
             return FConsoleResult::Failure("Unknown cvar");
+        }
+
+        if (tokens[0] == "cvar.toggle")
+        {
+            if (tokens.size() < 2)
+            {
+                return FConsoleResult::Failure("Usage: cvar.toggle <name>");
+            }
+            return toggleBoolCVar(tokens[1]);
+        }
+
+        const std::string toggleSuffix = ".toggle";
+        if (tokens.size() == 1 &&
+            tokens[0].size() > toggleSuffix.size() &&
+            tokens[0].compare(tokens[0].size() - toggleSuffix.size(), toggleSuffix.size(), toggleSuffix) == 0)
+        {
+            const std::string cvarName = tokens[0].substr(0, tokens[0].size() - toggleSuffix.size());
+            return toggleBoolCVar(cvarName);
         }
 
         if (tokens[0] == "cvar.save")

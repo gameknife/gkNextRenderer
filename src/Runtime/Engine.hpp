@@ -193,6 +193,9 @@ public:
     void RequestMinimize();
     bool IsMaximumed();
     void ToggleMaximize();
+    bool IsBorderlessFullscreen() const;
+    bool SetBorderlessFullscreen(bool enable);
+    bool ToggleBorderlessFullscreen();
     void ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight, float leftReservedWidth,
                                      float rightReservedWidth);
 

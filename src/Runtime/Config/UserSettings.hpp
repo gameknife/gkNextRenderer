@@ -33,6 +33,7 @@ struct UserSettings final
 	// UI
 	bool ShowSettings;
 	bool ShowOverlay;
+    bool BorderlessFullscreen = false;
 
 	// Performance
 	bool UseCheckerBoardRendering;

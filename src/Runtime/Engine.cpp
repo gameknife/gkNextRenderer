@@ -166,6 +166,7 @@ UserSettings CreateUserSettings(const Options& options)
 
     userSettings.ShowSettings = true;
     userSettings.ShowOverlay = true;
+    userSettings.BorderlessFullscreen = options.Fullscreen;
 
     userSettings.HeatmapScale = 1.0f;
 
@@ -247,7 +248,9 @@ NextEngine::NextEngine(Options& options, void* userdata)
     cvarSystem_->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ApplyDefaultCVars(*cvarSystem_);
     cvarSystem_->LoadUserFile("assets/configs/cvar_user.json");
+    windowConfig.Fullscreen = userSettings_.BorderlessFullscreen;
     window_.reset(new Vulkan::Window(windowConfig));
+    SetBorderlessFullscreen(userSettings_.BorderlessFullscreen);
     quickJSEngine_ = std::make_unique<QuickJSEngine>();
 
     // Initialize Localization
@@ -557,6 +560,43 @@ glm::dvec2 NextEngine::GetMousePos()
 void NextEngine::RequestClose() { window_->Close(); }
 
 void NextEngine::RequestMinimize() { window_->Minimize(); }
+
+bool NextEngine::IsBorderlessFullscreen() const
+{
+    if (!window_)
+    {
+        return userSettings_.BorderlessFullscreen;
+    }
+
+    return window_->IsBorderlessFullscreen();
+}
+
+bool NextEngine::SetBorderlessFullscreen(bool enable)
+{
+    userSettings_.BorderlessFullscreen = enable;
+    if (!window_)
+    {
+        return true;
+    }
+
+    return window_->SetBorderlessFullscreen(enable);
+}
+
+bool NextEngine::ToggleBorderlessFullscreen()
+{
+    if (!window_)
+    {
+        userSettings_.BorderlessFullscreen = !userSettings_.BorderlessFullscreen;
+        return true;
+    }
+
+    const bool success = window_->ToggleBorderlessFullscreen();
+    if (success)
+    {
+        userSettings_.BorderlessFullscreen = window_->IsBorderlessFullscreen();
+    }
+    return success;
+}
 
 void NextEngine::ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight, float leftReservedWidth,
                                              float rightReservedWidth)
@@ -965,6 +1005,31 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 
 void NextEngine::OnKey(SDL_Event& event)
 {
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+    {
+        const bool altPressed = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+        const bool isAltEnter =
+            altPressed && (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER);
+        const bool isF11 = event.key.key == SDLK_F11;
+
+        if (isAltEnter || isF11)
+        {
+            if (cvarSystem_)
+            {
+                auto result = cvarSystem_->ExecuteCommand("cvar.toggle sys.fullscreen");
+                if (!result.success)
+                {
+                    ToggleBorderlessFullscreen();
+                }
+            }
+            else
+            {
+                ToggleBorderlessFullscreen();
+            }
+            return;
+        }
+    }
+
     if (userInterface_->WantsToCaptureKeyboard())
     {
         return;

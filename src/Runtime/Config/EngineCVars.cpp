@@ -4,6 +4,7 @@
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Runtime/Engine.hpp"
+#include <functional>
 
 namespace
 {
@@ -23,26 +24,36 @@ namespace
     cvars.RegisterBool(name, defaultValue, &obj.field, flags, desc)
 #define GK_CVAR_BOOL_CB(name, obj, field, defaultValue, flags, desc, cb) \
     cvars.RegisterBool(name, defaultValue, &obj.field, flags, desc, cb)
+
+    void RequestSwapChainIfPossible(NextEngine* engine)
+    {
+        if (!engine)
+        {
+            return;
+        }
+
+        auto* renderer = engine->GetRendererPtr();
+        if (renderer)
+        {
+            renderer->RequestRecreateSwapChain();
+        }
+    }
+
+    void ApplyBorderlessFullscreenIfPossible(NextEngine* engine, const UserSettings& settings)
+    {
+        if (!engine)
+        {
+            return;
+        }
+
+        engine->SetBorderlessFullscreen(settings.BorderlessFullscreen);
+    }
 }
 
 namespace NextCVar
 {
     void RegisterEngineCVars(FCVarSystem& cvars, UserSettings& settings, ShowFlags& showFlags, NextEngine* engine)
     {
-        auto requestSwapChain = [engine]()
-        {
-            if (!engine)
-            {
-                return;
-            }
-
-            auto* renderer = engine->GetRendererPtr();
-            if (renderer)
-            {
-                renderer->RequestRecreateSwapChain();
-            }
-        };
-
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive,
                      "Temporal accumulation frames");
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 8, ECVarFlags::Archive,
@@ -64,11 +75,11 @@ namespace NextCVar
         GK_CVAR_INT("r.denoiseSize", settings, DenoiseSize, 5, ECVarFlags::Archive,
                     "Denoise kernel size");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive,
-                        "Super resolution mode (0-4)", requestSwapChain);
+                        "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive,
-                        "Enable NVIDIA DLSS", requestSwapChain);
+                        "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive,
-                        "Enable NVIDIA DLSS Ray Reconstruction", requestSwapChain);
+                        "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive,
                      "Enable temporal anti-aliasing");
         GK_CVAR_BOOL("r.adaptiveSample", settings, AdaptiveSample, false, ECVarFlags::Archive,
@@ -95,6 +106,9 @@ namespace NextCVar
                      "Tick physics system");
         GK_CVAR_BOOL("sys.tickAnimation", settings, TickAnimation, true, ECVarFlags::Archive,
                      "Tick animation system");
+        GK_CVAR_BOOL_CB("sys.fullscreen", settings, BorderlessFullscreen, settings.BorderlessFullscreen,
+                        ECVarFlags::Archive, "Toggle borderless fullscreen mode",
+                        std::bind(ApplyBorderlessFullscreenIfPossible, engine, std::cref(settings)));
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive,
                       "Scene epsilon scale");
         GK_CVAR_FLOAT("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive,
