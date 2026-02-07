@@ -90,32 +90,63 @@ endif()
 # --- TypeScript Compiler (for QuickJS) ---
 if(WITH_QUICKJS)
     message(STATUS "Preparing TypeScript Compiler...")
+    set(TSC_VERSION "v2025.5.23")
 
     if(CMAKE_HOST_WIN32)
-        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-windows-amd64.exe")
+        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/${TSC_VERSION}/tsgo-windows-amd64.exe")
         set(TSC_FILENAME "tsc.exe")
     elseif(CMAKE_HOST_APPLE)
-        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64")
+        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/${TSC_VERSION}/tsgo-darwin-arm64")
         set(TSC_FILENAME "tsc")
     elseif(CMAKE_HOST_UNIX) # Linux
-        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-linux-amd64")
+        set(TSC_URL "https://github.com/rxliuli/tsgo-npm-release/releases/download/${TSC_VERSION}/tsgo-linux-amd64")
         set(TSC_FILENAME "tsc")
     endif()
 
-    FetchContent_Declare(
-        tsc
-        URL ${TSC_URL}
-        DOWNLOAD_NO_EXTRACT TRUE
-    )
-    FetchContent_MakeAvailable(tsc)
+    set(TSC_CACHE_DIR "${FETCHCONTENT_BASE_DIR}/tsc-src")
+    set(TSC_VERSION_FILE "${TSC_CACHE_DIR}/.tsc_version")
+    set(TSC_EXECUTABLE "${TSC_CACHE_DIR}/${TSC_FILENAME}")
+    set(TSC_CACHE_VALID FALSE)
 
-    # Rename the downloaded file to the expected TSC_FILENAME
-    get_filename_component(TSC_DOWNLOADED_NAME "${TSC_URL}" NAME)
-    if(EXISTS "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}")
-        file(RENAME "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}" "${tsc_SOURCE_DIR}/${TSC_FILENAME}")
+    if(EXISTS "${TSC_EXECUTABLE}")
+        if(EXISTS "${TSC_VERSION_FILE}")
+            file(READ "${TSC_VERSION_FILE}" TSC_CACHED_VERSION)
+            string(STRIP "${TSC_CACHED_VERSION}" TSC_CACHED_VERSION)
+            if(TSC_CACHED_VERSION STREQUAL TSC_VERSION)
+                set(TSC_CACHE_VALID TRUE)
+            endif()
+        else()
+            # Backward compatibility: old cache has no version marker.
+            set(TSC_CACHE_VALID TRUE)
+            file(WRITE "${TSC_VERSION_FILE}" "${TSC_VERSION}\n")
+        endif()
     endif()
 
-    set(TSC_EXECUTABLE "${tsc_SOURCE_DIR}/${TSC_FILENAME}")
+    if(TSC_CACHE_VALID)
+        message(STATUS "Using cached TypeScript Compiler: ${TSC_EXECUTABLE} (${TSC_VERSION})")
+    else()
+        FetchContent_Declare(
+            tsc
+            URL ${TSC_URL}
+            DOWNLOAD_NO_EXTRACT TRUE
+        )
+        FetchContent_MakeAvailable(tsc)
+
+        # Rename the downloaded file to the expected TSC_FILENAME
+        get_filename_component(TSC_DOWNLOADED_NAME "${TSC_URL}" NAME)
+        if(EXISTS "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}")
+            if(EXISTS "${TSC_EXECUTABLE}")
+                file(REMOVE "${TSC_EXECUTABLE}")
+            endif()
+            file(RENAME "${tsc_SOURCE_DIR}/${TSC_DOWNLOADED_NAME}" "${TSC_EXECUTABLE}")
+        endif()
+
+        if(NOT EXISTS "${TSC_EXECUTABLE}")
+            message(FATAL_ERROR "Failed to prepare TypeScript Compiler at ${TSC_EXECUTABLE}")
+        endif()
+
+        file(WRITE "${TSC_VERSION_FILE}" "${TSC_VERSION}\n")
+    endif()
     
     # On non-Windows host, we need to ensure the file is executable
     if(NOT CMAKE_HOST_WIN32)
