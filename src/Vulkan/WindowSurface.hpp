@@ -64,23 +64,29 @@ public:
     void Maximum();
     void Restore();
 
-    void attemptDragWindow();
+    void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
     static void InitGLFW();
     static void TerminateGLFW();
 
-    bool IsCapturingMouse() const { return capturedMouse_; }
-
 private:
+    static SDL_HitTestResult SDLCALL TitleBarHitTestCallback(SDL_Window* win, const SDL_Point* area, void* data);
+
+    struct FCustomTitleBarDragState
+    {
+        bool enabled = false;
+        bool hitTestSupported = false;
+        int titleBarHeight = 0;
+        int leftReservedWidth = 0;
+        int rightReservedWidth = 0;
+        int resizeBorder = 6;
+    };
 
     const WindowConfig config_;
     Next_Window* window_{};
 
-    bool capturedMouse_ = false;
-    double s_xpos = 0, s_ypos = 0;
-    int w_xsiz = 0, w_ysiz = 0;
-    int dragState = 0;
+    FCustomTitleBarDragState customTitleBarDrag_;
 };
 
 // ============================================================================

@@ -22,6 +22,7 @@ namespace Editor
     void DrawTitleBarOverlay(EditorContext& ctx, EditorUiState& ui)
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
+        float menuUsedWidth = 0.0f;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -138,8 +139,12 @@ namespace Editor
             }
 
             ImGui::EndMenuBar();
+            menuUsedWidth = ImGui::GetCursorPosX();
         }
         ImGui::End();
+
+        const float dragLeftReserved = std::max(kTitleBarHeight, kTitleBarHeight + menuUsedWidth + 16.0f);
+        ctx.engine.ConfigureCustomTitleBarDrag(true, kTitleBarHeight, dragLeftReserved, 200.0f);
 
         // LOGO
         ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y));

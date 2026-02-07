@@ -721,6 +721,8 @@ void NextRendererGameInstance::DrawTitleBar()
 {
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    GetEngine().ConfigureCustomTitleBarDrag(true, TitlebarSize, TitlebarSize * 18.0f, TitlebarControlSize);
+
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
     bgColor.w = 0.9f;
     ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(windowSize.x, TitlebarSize), ImGui::ColorConvertFloat4ToU32(bgColor));

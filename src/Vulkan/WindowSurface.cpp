@@ -5,6 +5,7 @@
 #include "Common/CoreMinimal.hpp"
 #include "Options.hpp"
 #include "Utilities/FileHelper.hpp"
+#include <algorithm>
 #include <spdlog/spdlog.h>
 
 namespace Vulkan
@@ -14,17 +15,98 @@ namespace Vulkan
 // Window Implementation
 // ============================================================================
 
+SDL_HitTestResult SDLCALL Window::TitleBarHitTestCallback(SDL_Window* win, const SDL_Point* area, void* data)
+{
+    auto* self = static_cast<Window*>(data);
+    if (!self || !area)
+    {
+        return SDL_HITTEST_NORMAL;
+    }
+
+    const auto& dragState = self->customTitleBarDrag_;
+    if (!dragState.enabled)
+    {
+        return SDL_HITTEST_NORMAL;
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(win, &width, &height);
+    if (width <= 0 || height <= 0)
+    {
+        return SDL_HITTEST_NORMAL;
+    }
+
+    const Uint64 windowFlags = SDL_GetWindowFlags(win);
+    const bool isMaximized = (windowFlags & SDL_WINDOW_MAXIMIZED) != 0;
+    if (dragState.resizeBorder > 0 && self->config_.Resizable && !isMaximized)
+    {
+        const int border = dragState.resizeBorder;
+        const bool left = area->x >= 0 && area->x < border;
+        const bool right = area->x >= width - border && area->x < width;
+        const bool top = area->y >= 0 && area->y < border;
+        const bool bottom = area->y >= height - border && area->y < height;
+
+        if (top && left) return SDL_HITTEST_RESIZE_TOPLEFT;
+        if (top && right) return SDL_HITTEST_RESIZE_TOPRIGHT;
+        if (bottom && left) return SDL_HITTEST_RESIZE_BOTTOMLEFT;
+        if (bottom && right) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
+        if (top) return SDL_HITTEST_RESIZE_TOP;
+        if (bottom) return SDL_HITTEST_RESIZE_BOTTOM;
+        if (left) return SDL_HITTEST_RESIZE_LEFT;
+        if (right) return SDL_HITTEST_RESIZE_RIGHT;
+    }
+
+    const int titleBarHeight = std::max(0, dragState.titleBarHeight);
+    if (area->y < 0 || area->y >= titleBarHeight)
+    {
+        return SDL_HITTEST_NORMAL;
+    }
+
+    const int leftReserved = std::clamp(dragState.leftReservedWidth, 0, width);
+    const int rightReserved = std::clamp(dragState.rightReservedWidth, 0, width);
+    const int dragMinX = leftReserved;
+    const int dragMaxX = std::max(dragMinX, width - rightReserved);
+
+    if (area->x >= dragMinX && area->x < dragMaxX)
+    {
+        return SDL_HITTEST_DRAGGABLE;
+    }
+
+    return SDL_HITTEST_NORMAL;
+}
+
 Window::Window(const WindowConfig& config) :
     config_(config)
 {
-    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
-#if WIN32
-    flags |= SDL_WINDOW_BORDERLESS;
-#endif
+    SDL_WindowFlags flags = SDL_WINDOW_VULKAN;
+    if (config.Resizable)
+    {
+        flags |= SDL_WINDOW_RESIZABLE;
+    }
+    if (config.HideTitleBar)
+    {
+        flags |= SDL_WINDOW_BORDERLESS;
+    }
     window_ = SDL_CreateWindow(config.Title.c_str(), config.Width, config.Height, flags);
     if (!window_)
     {
         Throw(std::runtime_error("failed to init SDL Window."));
+    }
+
+    if (config.HideTitleBar)
+    {
+        if (!SDL_SetWindowBordered(window_, false))
+        {
+            SPDLOG_WARN("Failed to hide window title bar: {}", SDL_GetError());
+        }
+
+        customTitleBarDrag_.hitTestSupported = SDL_SetWindowHitTest(window_, TitleBarHitTestCallback, this);
+        if (!customTitleBarDrag_.hitTestSupported)
+        {
+            SPDLOG_WARN("SDL_SetWindowHitTest is not available, custom title bar drag may not work: {}",
+                SDL_GetError());
+        }
     }
 }
 
@@ -119,53 +201,18 @@ void Window::Restore()
     SDL_RestoreWindow(window_);
 }
 
-constexpr double closeAreaWidth = 0;
-constexpr double titleAreaHeight = 55;
-void Window::attemptDragWindow()
+void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth)
 {
-#if !ANDROID
-    float x{};
-    float y{};
-    SDL_MouseButtonFlags flag = SDL_GetMouseState(&x, &y);
-
-    if (flag == SDL_BUTTON_LEFT && dragState == 0)
+    if (!config_.HideTitleBar)
     {
-        SDL_GetWindowSize(window_, &w_xsiz, &w_ysiz);
-
-        s_xpos = x;
-        s_ypos = y;
-        dragState = 1;
+        customTitleBarDrag_.enabled = false;
+        return;
     }
-    if (flag == SDL_BUTTON_LEFT && dragState == 1)
-    {
-        double cXpos, cYpos;
-        int wXpos, wYpos;
-        SDL_GetWindowPosition(window_, &wXpos, &wYpos);
 
-        cXpos = x;
-        cYpos = y;
-
-        if (
-            s_xpos >= 0 && s_xpos <= (static_cast<double>(w_xsiz) - closeAreaWidth) &&
-            s_ypos >= 0 && s_ypos <= titleAreaHeight)
-        {
-            SDL_SetWindowPosition(window_, wXpos + static_cast<int>(cXpos - s_xpos), wYpos + static_cast<int>(cYpos - s_ypos));
-            capturedMouse_ = true;
-        }
-        if (
-            s_xpos >= (static_cast<double>(w_xsiz) - 15) && s_xpos <= (static_cast<double>(w_xsiz)) &&
-            s_ypos >= (static_cast<double>(w_ysiz) - 15) && s_ypos <= (static_cast<double>(w_ysiz)))
-        {
-            SDL_SetWindowSize(window_, w_xsiz + static_cast<int>(cXpos - s_xpos), w_ysiz + static_cast<int>(cYpos - s_ypos));
-            capturedMouse_ = true;
-        }
-    }
-    if (flag != SDL_BUTTON_LEFT && dragState == 1)
-    {
-        dragState = 0;
-        capturedMouse_ = false;
-    }
-#endif
+    customTitleBarDrag_.enabled = enabled && customTitleBarDrag_.hitTestSupported;
+    customTitleBarDrag_.titleBarHeight = std::max(0, titleBarHeight);
+    customTitleBarDrag_.leftReservedWidth = std::max(0, leftReservedWidth);
+    customTitleBarDrag_.rightReservedWidth = std::max(0, rightReservedWidth);
 }
 
 void Window::InitGLFW()

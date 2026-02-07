@@ -247,10 +247,17 @@ void MagicaLegoUserInterface::DrawTitleBar()
     bool isOpen = (uiStatus_ & EULUT_TitleBar) != 0;
     float currentAnim = iam_tween_float(MakeAnimId("MagicaLego.TitleBarAlpha"), 0, isOpen ? 1.0f : 0.0f, 0.3f, {iam_ease_out_cubic}, iam_policy_crossfade, dt, 0.0f);
 
-    if (currentAnim <= 0.0f && !isOpen) return;
+    if (currentAnim <= 0.0f && !isOpen)
+    {
+        GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(false, 0.0f, 0.0f, 0.0f);
+        return;
+    }
 
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+    GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(
+        isOpen, titlebarSize, titlebarSize * 18.0f, titlebarControlSize);
+
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
     bgColor.w = currentAnim * 0.6f;
     
@@ -451,6 +458,7 @@ void MagicaLegoUserInterface::DrawOpening() const
 void MagicaLegoUserInterface::OnRenderUI()
 {
     iam_update_begin_frame();
+    GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(false, 0.0f, 0.0f, 0.0f);
     // static int frameCount = 0;
     // if (++frameCount % 600 == 0) iam_gc();
 

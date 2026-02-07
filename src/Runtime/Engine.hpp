@@ -193,6 +193,8 @@ public:
     void RequestMinimize();
     bool IsMaximumed();
     void ToggleMaximize();
+    void ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight, float leftReservedWidth,
+                                     float rightReservedWidth);
 
     // capture
     void RequestScreenShot(std::string filename);

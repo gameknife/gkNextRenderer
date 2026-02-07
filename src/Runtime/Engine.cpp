@@ -477,8 +477,6 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
-    window_->attemptDragWindow();
-
     // sample gamepad stats
 
     TickGamepadInput();
@@ -559,6 +557,20 @@ glm::dvec2 NextEngine::GetMousePos()
 void NextEngine::RequestClose() { window_->Close(); }
 
 void NextEngine::RequestMinimize() { window_->Minimize(); }
+
+void NextEngine::ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight, float leftReservedWidth,
+                                             float rightReservedWidth)
+{
+    if (!window_)
+    {
+        return;
+    }
+
+    const int titleBarHeightInt = std::max(0, static_cast<int>(titleBarHeight));
+    const int leftReservedWidthInt = std::max(0, static_cast<int>(leftReservedWidth));
+    const int rightReservedWidthInt = std::max(0, static_cast<int>(rightReservedWidth));
+    window_->ConfigureCustomTitleBarDrag(enabled, titleBarHeightInt, leftReservedWidthInt, rightReservedWidthInt);
+}
 
 bool NextEngine::IsMaximumed() { return window_->IsMaximumed(); }
 
@@ -1034,7 +1046,7 @@ void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, 
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse() || window_->IsCapturingMouse())
+        userInterface_->WantsToCaptureMouse())
     {
         return;
     }
