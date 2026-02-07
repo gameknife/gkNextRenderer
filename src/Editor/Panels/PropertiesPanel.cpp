@@ -6,6 +6,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Command/RenameNodeCommand.hpp"
 #include "Runtime/Engine.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -41,6 +42,33 @@ namespace Editor
             if (ui.fontIcon)
             {
                 ImGui::PopFont();
+            }
+
+            ImGui::TextUnformatted("Name");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            static uint32_t editingNodeId = InvalidId;
+            static std::string editingName;
+            if (editingNodeId != selectedObj->GetInstanceId())
+            {
+                editingNodeId = selectedObj->GetInstanceId();
+                editingName = selectedObj->GetName();
+            }
+
+            const bool nameSubmitted =
+                ImGui::InputText("##NodeRenameInput", &editingName, ImGuiInputTextFlags_EnterReturnsTrue);
+            const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivatedAfterEdit();
+            if (nameEditFinished)
+            {
+                if (editingName.empty())
+                {
+                    editingName = selectedObj->GetName();
+                }
+                else if (editingName != selectedObj->GetName())
+                {
+                    ctx.engine.ExecuteCommand(std::make_unique<RenameNodeCommand>(
+                        ctx.scene, selectedObj->GetInstanceId(), editingName));
+                }
             }
 
             ImGui::Separator();

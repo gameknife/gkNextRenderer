@@ -40,6 +40,7 @@ namespace Assets
         glm::vec3 WorldScale() const;
         
         const std::string& GetName() const {return name_; }
+        void SetName(std::string name);
 
         Component* GetComponentByTypeName(const std::string& componentType) const;
 

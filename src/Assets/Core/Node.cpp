@@ -72,6 +72,11 @@ namespace Assets
         scaling_ = scale;
     }
 
+    void Node::SetName(std::string name)
+    {
+        name_ = std::move(name);
+    }
+
     void Node::RecalcLocalTransform()
     {
         localTransform_ = glm::translate(glm::mat4(1), translation_) * glm::mat4_cast(rotation_) * glm::scale(glm::mat4(1), scaling_);

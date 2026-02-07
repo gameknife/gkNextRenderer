@@ -6,14 +6,18 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Command/RenameNodeCommand.hpp"
+#include "Runtime/Engine.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include <imgui_stdlib.h>
 
 namespace Editor
 {
     namespace
     {
-        void DrawNode(EditorContext& ctx, Assets::Node& node)
+        void DrawNode(EditorContext& ctx, Assets::Node& node, uint32_t& renameTargetId,
+                      std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput)
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
@@ -50,11 +54,23 @@ namespace Editor
                                      std::to_string(node.GetInstanceId()));
             }
 
+            if (ImGui::BeginPopupContextItem())
+            {
+                if (ImGui::MenuItem("Rename..."))
+                {
+                    renameTargetId = node.GetInstanceId();
+                    renameBuffer = node.GetName();
+                    openRenamePopup = true;
+                    focusRenameInput = true;
+                }
+                ImGui::EndPopup();
+            }
+
             if (opened)
             {
                 for (auto& child : node.Children())
                 {
-                    DrawNode(ctx, *child);
+                    DrawNode(ctx, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput);
                 }
                 ImGui::TreePop();
             }
@@ -65,6 +81,11 @@ namespace Editor
 
     void DrawOutlinerPanel(EditorContext& ctx, EditorUiState& ui)
     {
+        static uint32_t renameTargetId = InvalidId;
+        static std::string renameBuffer;
+        static bool openRenamePopup = false;
+        static bool focusRenameInput = false;
+
         ImGui::Begin("Outliner", nullptr);
         {
             ImGui::TextDisabled("NOTE");
@@ -91,7 +112,7 @@ namespace Editor
                         continue;
                     }
 
-                    DrawNode(ctx, *node);
+                    DrawNode(ctx, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput);
 
                     if (limit-- <= 0)
                     {
@@ -102,6 +123,82 @@ namespace Editor
             }
 
             ImGui::EndChild();
+
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+                ImGui::IsKeyPressed(ImGuiKey_F2, false))
+            {
+                Assets::Node* selectedNode = ctx.scene.GetNodeByInstanceId(ctx.scene.GetSelectedId());
+                if (selectedNode != nullptr)
+                {
+                    renameTargetId = selectedNode->GetInstanceId();
+                    renameBuffer = selectedNode->GetName();
+                    openRenamePopup = true;
+                    focusRenameInput = true;
+                }
+            }
+
+            if (openRenamePopup)
+            {
+                ImGui::OpenPopup("Rename Node");
+                openRenamePopup = false;
+            }
+
+            if (ImGui::BeginPopupModal("Rename Node", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                Assets::Node* targetNode = ctx.scene.GetNodeByInstanceId(renameTargetId);
+                if (targetNode == nullptr)
+                {
+                    renameTargetId = InvalidId;
+                    renameBuffer.clear();
+                    focusRenameInput = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                else
+                {
+                    ImGui::Text("Node:");
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(targetNode->GetName().c_str());
+                    ImGui::Separator();
+
+                    if (focusRenameInput)
+                    {
+                        ImGui::SetKeyboardFocusHere();
+                        focusRenameInput = false;
+                    }
+
+                    const bool submitWithEnter =
+                        ImGui::InputText("##RenameNodeInput", &renameBuffer, ImGuiInputTextFlags_EnterReturnsTrue);
+
+                    bool shouldSubmit = submitWithEnter;
+                    ImGui::SameLine();
+                    shouldSubmit = ImGui::Button("OK") || shouldSubmit;
+                    ImGui::SameLine();
+                    const bool shouldCancel = ImGui::Button("Cancel");
+
+                    if (shouldSubmit)
+                    {
+                        if (!renameBuffer.empty() && renameBuffer != targetNode->GetName())
+                        {
+                            ctx.engine.ExecuteCommand(std::make_unique<RenameNodeCommand>(
+                                ctx.scene, targetNode->GetInstanceId(), renameBuffer));
+                        }
+
+                        renameTargetId = InvalidId;
+                        renameBuffer.clear();
+                        focusRenameInput = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    else if (shouldCancel)
+                    {
+                        renameTargetId = InvalidId;
+                        renameBuffer.clear();
+                        focusRenameInput = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+
+                ImGui::EndPopup();
+            }
 
             ImGui::Spacing();
             ImGui::Text("%d Nodes", static_cast<int>(ctx.scene.Nodes().size()));
