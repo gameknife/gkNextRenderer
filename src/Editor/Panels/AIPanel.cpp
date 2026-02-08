@@ -484,7 +484,61 @@ namespace Editor
         }
     }
 
-    static void DrawAIAssistantTab(FEditorAIService& service)
+    static void DrawPendingActions(EditorContext& ctx, FEditorAIService& service)
+    {
+        const auto& pendingActions = service.GetPendingActions();
+        if (pendingActions.empty())
+        {
+            return;
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Pending Actions");
+
+        uint64_t confirmId = 0;
+        uint64_t cancelId = 0;
+        bool doConfirm = false;
+        bool doCancel = false;
+
+        for (const auto& pending : pendingActions)
+        {
+            ImGui::PushID(static_cast<int>(pending.id));
+
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.82f, 0.45f, 1.0f));
+            ImGui::TextWrapped("%s", pending.request.description.c_str());
+            ImGui::PopStyleColor();
+
+            if (ImGui::Button("Confirm", ImVec2(90.0f, 0.0f)))
+            {
+                confirmId = pending.id;
+                doConfirm = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(90.0f, 0.0f)))
+            {
+                cancelId = pending.id;
+                doCancel = true;
+            }
+            ImGui::Spacing();
+            ImGui::PopID();
+        }
+
+        if (doConfirm)
+        {
+            const bool ok = service.ConfirmPendingAction(confirmId, ctx);
+            chatHistory.push_back({ok ? "已确认并执行待处理 action。" : "确认失败：无法执行待处理 action。", false, !ok});
+            chatScrollToBottom = true;
+        }
+
+        if (doCancel)
+        {
+            const bool ok = service.CancelPendingAction(cancelId);
+            chatHistory.push_back({ok ? "已取消待处理 action。" : "取消失败：未找到待处理 action。", false, !ok});
+            chatScrollToBottom = true;
+        }
+    }
+
+    static void DrawAIAssistantTab(EditorContext& ctx, FEditorAIService& service)
     {
         auto status = service.GetStatus();
         bool generating = (status == EEditorAIStatus::Generating);
@@ -536,6 +590,8 @@ namespace Editor
             ImGui::PopStyleColor();
         }
 
+        DrawPendingActions(ctx, service);
+
         if (chatScrollToBottom)
         {
             ImGui::SetScrollHereY(1.0f);
@@ -570,7 +626,7 @@ namespace Editor
             if (aiInputBuffer[0] != '\0')
             {
                 chatHistory.push_back({aiInputBuffer, true});
-                service.GenerateAsync(aiInputBuffer);
+                service.GenerateAsync(aiInputBuffer, ctx);
                 aiInputBuffer[0] = '\0';
                 chatScrollToBottom = true;
             }
@@ -582,7 +638,7 @@ namespace Editor
         }
     }
 
-    static void DrawEditorScriptTab(FEditorAIService& service)
+    static void DrawEditorScriptTab(EditorContext& ctx, FEditorAIService& service)
     {
         // Execution log area
         float footerHeight = ImGui::GetFrameHeightWithSpacing() * 6.0f + ImGui::GetStyle().ItemSpacing.y;
@@ -628,7 +684,7 @@ namespace Editor
             if (scriptInputBuffer[0] != '\0')
             {
                 logHistory.push_back({fmt::format("> [script]\n{}", scriptInputBuffer), false});
-                service.ExecuteDirect(scriptInputBuffer);
+                service.ExecuteDirect(scriptInputBuffer, ctx);
                 logScrollToBottom = true;
             }
         }
@@ -661,7 +717,7 @@ namespace Editor
         // Poll async results
         if (aiService->HasPendingResult())
         {
-            aiService->ConsumePendingResult();
+            aiService->ConsumePendingResult(ctx);
 
             auto status = aiService->GetStatus();
             if (status == EEditorAIStatus::Error)
@@ -697,13 +753,13 @@ namespace Editor
         {
             if (ImGui::BeginTabItem(ICON_FA_ROBOT " AI"))
             {
-                DrawAIAssistantTab(*aiService);
+                DrawAIAssistantTab(ctx, *aiService);
                 ImGui::EndTabItem();
             }
 
             if (ImGui::BeginTabItem(ICON_FA_CODE " EditorScript"))
             {
-                DrawEditorScriptTab(*aiService);
+                DrawEditorScriptTab(ctx, *aiService);
                 ImGui::EndTabItem();
             }
 

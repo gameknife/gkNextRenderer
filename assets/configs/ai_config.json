@@ -13,5 +13,10 @@
         "apiKey": "YOUR_ZHIPU_API_KEY",
         "model": "glm-4.7",
         "endpoint": "https://open.bigmodel.cn/api/paas/v4"
+    },
+    "deepseek": {
+        "apiKey": "YOUR_DEEPSEEK_API_KEY",
+        "model": "deepseek-chat",
+        "endpoint": "https://api.deepseek.com/v1"
     }
 }

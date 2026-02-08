@@ -13,7 +13,8 @@ namespace NextAI
     {
         Gemini,
         Ollama,
-        Zhipu
+        Zhipu,
+        DeepSeek
     };
 
     struct FAIResponse

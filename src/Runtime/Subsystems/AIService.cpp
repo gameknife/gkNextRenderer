@@ -77,6 +77,21 @@ namespace NextAI
         bool configured_ = false;
     };
 
+    class FDeepSeekProvider : public IAIProvider
+    {
+    public:
+        bool Initialize(const nlohmann::json& config) override;
+        bool IsConfigured() const override;
+        FAIResponse Generate(const std::string& prompt) override;
+        std::string GetName() const override { return "DeepSeek"; }
+
+    private:
+        std::string apiKey_;
+        std::string model_ = "deepseek-chat";
+        std::string endpoint_ = "https://api.deepseek.com/v1";
+        bool configured_ = false;
+    };
+
     bool FGeminiProvider::Initialize(const nlohmann::json& config)
     {
         try
@@ -429,6 +444,131 @@ namespace NextAI
         }
     }
 
+    bool FDeepSeekProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("apiKey"))
+            {
+                apiKey_ = config["apiKey"].get<std::string>();
+            }
+            if (config.contains("model"))
+            {
+                model_ = config["model"].get<std::string>();
+            }
+            if (config.contains("endpoint"))
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+
+            if (apiKey_.empty() || apiKey_ == "YOUR_DEEPSEEK_API_KEY")
+            {
+                configured_ = false;
+                return false;
+            }
+
+            configured_ = true;
+            SPDLOG_INFO("DeepSeek Provider initialized with model: {}", model_);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize DeepSeek Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FDeepSeekProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    FAIResponse FDeepSeekProvider::Generate(const std::string& prompt)
+    {
+        if (!configured_)
+        {
+            return FAIResponse::Failure("DeepSeek provider not configured");
+        }
+
+        std::string url = endpoint_ + "/chat/completions";
+
+        json requestBody = {
+            {"model", model_},
+            {"messages", json::array({
+                {{"role", "user"}, {"content", prompt}}
+            })}
+        };
+
+        std::string requestStr = requestBody.dump();
+        std::string responseBuffer;
+
+        CURL* curl = curl_easy_init();
+        if (!curl)
+        {
+            return FAIResponse::Failure("Failed to initialize CURL");
+        }
+
+        std::string authHeader = fmt::format("Authorization: Bearer {}", apiKey_);
+
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        headers = curl_slist_append(headers, authHeader.c_str());
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
+
+        CURLcode res = curl_easy_perform(curl);
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK)
+        {
+            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
+        }
+
+        try
+        {
+            json response = json::parse(responseBuffer);
+
+            if (response.contains("error"))
+            {
+                std::string errorMsg;
+                if (response["error"].is_object() && response["error"].contains("message"))
+                {
+                    errorMsg = response["error"]["message"].get<std::string>();
+                }
+                else
+                {
+                    errorMsg = response["error"].dump();
+                }
+                return FAIResponse::Failure(fmt::format("DeepSeek error: {}", errorMsg));
+            }
+
+            if (response.contains("choices") && !response["choices"].empty())
+            {
+                auto& choice = response["choices"][0];
+                if (choice.contains("message") && choice["message"].contains("content"))
+                {
+                    std::string generatedText = choice["message"]["content"].get<std::string>();
+                    return FAIResponse::Success(generatedText);
+                }
+            }
+
+            return FAIResponse::Failure("Unexpected DeepSeek response format");
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse DeepSeek response: {}", e.what());
+            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
     FAIService::FAIService()
     {
         LoadConfig();
@@ -452,6 +592,8 @@ namespace NextAI
             return std::make_unique<FOllamaProvider>();
         case EAIProviderType::Zhipu:
             return std::make_unique<FZhipuProvider>();
+        case EAIProviderType::DeepSeek:
+            return std::make_unique<FDeepSeekProvider>();
         default:
             return std::make_unique<FGeminiProvider>();
         }
@@ -473,6 +615,7 @@ namespace NextAI
         case EAIProviderType::Gemini: return "gemini";
         case EAIProviderType::Ollama: return "ollama";
         case EAIProviderType::Zhipu: return "zhipu";
+        case EAIProviderType::DeepSeek: return "deepseek";
         default: return "gemini";
         }
     }
@@ -484,6 +627,7 @@ namespace NextAI
 
         if (lower == "ollama") return EAIProviderType::Ollama;
         if (lower == "zhipu") return EAIProviderType::Zhipu;
+        if (lower == "deepseek") return EAIProviderType::DeepSeek;
         return EAIProviderType::Gemini;
     }
 
@@ -492,7 +636,8 @@ namespace NextAI
         return {
             {EAIProviderType::Gemini, "Gemini"},
             {EAIProviderType::Ollama, "Ollama"},
-            {EAIProviderType::Zhipu, "Zhipu"}
+            {EAIProviderType::Zhipu, "Zhipu"},
+            {EAIProviderType::DeepSeek, "DeepSeek"}
         };
     }
 

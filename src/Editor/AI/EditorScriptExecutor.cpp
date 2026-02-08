@@ -2,6 +2,7 @@
 
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
+#include "Editor/EditorContext.hpp"
 #include "Runtime/Command/CommandHistory.hpp"
 #include "Runtime/Command/DeleteNodesCommand.hpp"
 #include "Runtime/Command/DuplicateNodesCommand.hpp"
@@ -12,8 +13,11 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Utilities/FileHelper.hpp"
 
 #include <glm/gtc/quaternion.hpp>
+#include <cctype>
+#include <filesystem>
 #include <regex>
 #include <spdlog/spdlog.h>
 #include <sstream>
@@ -24,6 +28,64 @@
 
 namespace Editor
 {
+    namespace
+    {
+        std::string ToLowerCopy(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return value;
+        }
+
+        std::string JoinTokens(const std::vector<std::string>& tokens, size_t startIdx)
+        {
+            std::string joined;
+            for (size_t i = startIdx; i < tokens.size(); ++i)
+            {
+                if (!joined.empty())
+                {
+                    joined += " ";
+                }
+                joined += tokens[i];
+            }
+            return joined;
+        }
+
+        bool ParseVec3FromText(const std::string& text, glm::vec3& outValue)
+        {
+            std::string normalized = text;
+            for (char& ch : normalized)
+            {
+                if (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == ',')
+                {
+                    ch = ' ';
+                }
+            }
+
+            std::istringstream iss(normalized);
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            if (!(iss >> x >> y >> z))
+            {
+                return false;
+            }
+
+            outValue = glm::vec3(x, y, z);
+            return true;
+        }
+
+        bool ParseVec3FromTokens(const std::vector<std::string>& tokens, size_t startIdx, glm::vec3& outValue)
+        {
+            if (tokens.size() <= startIdx)
+            {
+                return false;
+            }
+
+            return ParseVec3FromText(JoinTokens(tokens, startIdx), outValue);
+        }
+    } // namespace
+
     FEditorScriptExecutor* FEditorScriptExecutor::activeInstance_ = nullptr;
 
     FEditorScriptExecutor::FEditorScriptExecutor(NextEngine& engine)
@@ -36,6 +98,13 @@ namespace Editor
     {
         std::vector<ScriptLogEntry> result;
         std::swap(result, log_);
+        return result;
+    }
+
+    std::vector<FDeferredEditorAction> FEditorScriptExecutor::TakeDeferredActions()
+    {
+        std::vector<FDeferredEditorAction> result;
+        std::swap(result, deferredActions_);
         return result;
     }
 
@@ -54,12 +123,59 @@ namespace Editor
     std::vector<std::string> FEditorScriptExecutor::Tokenize(const std::string& line)
     {
         std::vector<std::string> tokens;
-        std::istringstream iss(line);
         std::string token;
-        while (iss >> token)
+
+        bool inQuote = false;
+        char quoteChar = '\0';
+
+        auto flushToken = [&]() {
+            if (!token.empty())
+            {
+                tokens.push_back(token);
+                token.clear();
+            }
+        };
+
+        for (size_t i = 0; i < line.size(); ++i)
         {
-            tokens.push_back(token);
+            const char ch = line[i];
+
+            if (inQuote)
+            {
+                if (ch == '\\' && i + 1 < line.size() && (line[i + 1] == quoteChar || line[i + 1] == '\\'))
+                {
+                    token += line[i + 1];
+                    ++i;
+                    continue;
+                }
+
+                if (ch == quoteChar)
+                {
+                    inQuote = false;
+                    continue;
+                }
+
+                token += ch;
+                continue;
+            }
+
+            if (ch == '\'' || ch == '"')
+            {
+                inQuote = true;
+                quoteChar = ch;
+                continue;
+            }
+
+            if (std::isspace(static_cast<unsigned char>(ch)))
+            {
+                flushToken();
+                continue;
+            }
+
+            token += ch;
         }
+
+        flushToken();
         return tokens;
     }
 
@@ -68,6 +184,16 @@ namespace Editor
         auto* scene = engine_.GetScenePtr();
         if (!scene)
         {
+            return static_cast<uint32_t>(-1);
+        }
+
+        if (nameOrId == "$selected")
+        {
+            uint32_t selectedId = scene->GetSelectedId();
+            if (selectedId != static_cast<uint32_t>(-1) && scene->GetNodeByInstanceId(selectedId))
+            {
+                return selectedId;
+            }
             return static_cast<uint32_t>(-1);
         }
 
@@ -99,10 +225,152 @@ namespace Editor
         return static_cast<uint32_t>(-1);
     }
 
+    bool FEditorScriptExecutor::DispatchAction(EditorContext& editorContext, EEditorAction action, std::string_view args,
+                                               std::string_view commandText)
+    {
+        (void)action;
+        const bool dispatched = editorContext.actions.Dispatch(editorContext, action, args);
+        if (dispatched)
+        {
+            Log(fmt::format("Executed action: {}", commandText));
+            return true;
+        }
+
+        LogError(fmt::format("action dispatch failed: {}", commandText));
+        return false;
+    }
+
+    bool FEditorScriptExecutor::IsHighRiskAction(EEditorAction action) const
+    {
+        return action == EEditorAction::IO_LoadScene;
+    }
+
+    std::optional<std::string> FEditorScriptExecutor::ResolveScenePath(const std::string& sceneRef,
+                                                                        std::string& errorMessage,
+                                                                        std::vector<std::string>* outCandidates) const
+    {
+        namespace fs = std::filesystem;
+
+        if (sceneRef.empty())
+        {
+            errorMessage = "sceneRef is empty";
+            return std::nullopt;
+        }
+
+        auto IsSceneAsset = [](const fs::path& path) {
+            return path.has_extension() && ToLowerCopy(path.extension().string()) == ".glb";
+        };
+
+        fs::path inputPath(sceneRef);
+        if (inputPath.is_absolute())
+        {
+            if (fs::exists(inputPath) && fs::is_regular_file(inputPath) && IsSceneAsset(inputPath))
+            {
+                return fs::absolute(inputPath).string();
+            }
+
+            errorMessage = fmt::format("absolute path is not a valid .glb scene: {}", sceneRef);
+            return std::nullopt;
+        }
+
+        const fs::path assetsRoot(Utilities::FileHelper::GetPlatformFilePath("assets"));
+        fs::path relPath = inputPath;
+        if (relPath.string().rfind("assets/", 0) == 0 || relPath.string() == "assets")
+        {
+            relPath = relPath.lexically_relative("assets");
+        }
+
+        auto TryPath = [&](const fs::path& pathCandidate) -> std::optional<std::string>
+        {
+            if (fs::exists(pathCandidate) && fs::is_regular_file(pathCandidate) && IsSceneAsset(pathCandidate))
+            {
+                return fs::absolute(pathCandidate).string();
+            }
+            return std::nullopt;
+        };
+
+        if (auto direct = TryPath(assetsRoot / relPath))
+        {
+            return direct;
+        }
+
+        if (!relPath.has_extension())
+        {
+            if (auto withExt = TryPath((assetsRoot / relPath).replace_extension(".glb")))
+            {
+                return withExt;
+            }
+        }
+
+        std::vector<std::string> matches;
+        const std::string targetName = ToLowerCopy(inputPath.filename().string());
+        const std::string targetStem = ToLowerCopy(inputPath.stem().string());
+        const std::string targetRel = ToLowerCopy(inputPath.generic_string());
+
+        std::error_code iterErr;
+        const auto iterOpts = fs::directory_options::skip_permission_denied;
+        for (fs::recursive_directory_iterator it(assetsRoot, iterOpts, iterErr), end; it != end; it.increment(iterErr))
+        {
+            if (iterErr)
+            {
+                continue;
+            }
+
+            const auto& entry = *it;
+            if (!entry.is_regular_file())
+            {
+                continue;
+            }
+
+            const fs::path& file = entry.path();
+            if (!IsSceneAsset(file))
+            {
+                continue;
+            }
+
+            const std::string rel = ToLowerCopy(fs::relative(file, assetsRoot).generic_string());
+            const std::string name = ToLowerCopy(file.filename().string());
+            const std::string stem = ToLowerCopy(file.stem().string());
+
+            const bool matchesName = (!targetName.empty() && name == targetName);
+            const bool matchesStem = (!targetStem.empty() && stem == targetStem);
+            const bool matchesRel = (!targetRel.empty() && rel == targetRel);
+
+            if (matchesName || matchesStem || matchesRel)
+            {
+                matches.push_back(fs::absolute(file).string());
+            }
+        }
+
+        if (outCandidates)
+        {
+            *outCandidates = matches;
+        }
+
+        if (matches.empty())
+        {
+            errorMessage = fmt::format("no .glb scene matched '{}'", sceneRef);
+            return std::nullopt;
+        }
+
+        if (matches.size() > 1)
+        {
+            errorMessage = fmt::format("scene reference '{}' is ambiguous ({} matches)", sceneRef, matches.size());
+            return std::nullopt;
+        }
+
+        return matches.front();
+    }
+
     // ========== EditorScript command execution ==========
 
-    void FEditorScriptExecutor::ExecuteScriptText(const std::string& scriptText)
+    void FEditorScriptExecutor::ExecuteScriptText(const std::string& scriptText, EditorContext* editorContext,
+                                                  bool deferHighRiskActions)
     {
+        activeEditorContext_ = editorContext;
+        deferHighRiskActions_ = deferHighRiskActions;
+        deferredActions_.clear();
+
         auto& history = engine_.GetCommandHistory();
         history.BeginGroup("AI EditorScript");
 
@@ -157,11 +425,16 @@ namespace Editor
                 ExecListNodes(tokens);
             else if (cmd == "cvar")
                 ExecCVar(tokens);
+            else if (cmd == "action")
+                ExecAction(tokens);
             else
                 LogError(fmt::format("Line {}: Unknown command '{}'", lineNum, cmd));
         }
 
         history.EndGroup();
+
+        activeEditorContext_ = nullptr;
+        deferHighRiskActions_ = false;
     }
 
     void FEditorScriptExecutor::ExecSelect(const std::vector<std::string>& tokens)
@@ -237,9 +510,9 @@ namespace Editor
 
     void FEditorScriptExecutor::ExecMove(const std::vector<std::string>& tokens)
     {
-        if (tokens.size() < 5)
+        if (tokens.size() < 3)
         {
-            LogError("move: usage: move <node> <x> <y> <z>");
+            LogError("move: usage: move <node> <x> <y> <z> or move <node> (x y z)");
             return;
         }
         uint32_t id = ResolveNode(tokens[1]);
@@ -260,20 +533,27 @@ namespace Editor
         before.scale = node->Scale();
 
         TransformSnapshot after = before;
-        after.translation = glm::vec3(std::stof(tokens[2]), std::stof(tokens[3]), std::stof(tokens[4]));
+        glm::vec3 targetPosition;
+        if (!ParseVec3FromTokens(tokens, 2, targetPosition))
+        {
+            LogError("move: invalid vector, expected <x> <y> <z> or (x y z)");
+            return;
+        }
+        after.translation = targetPosition;
 
         auto cmd = std::make_unique<TransformNodesCommand>(
             engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
             std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
-        Log(fmt::format("Moved '{}' to ({}, {}, {})", tokens[1], tokens[2], tokens[3], tokens[4]));
+        Log(fmt::format("Moved '{}' to ({:.3f}, {:.3f}, {:.3f})", tokens[1], targetPosition.x, targetPosition.y,
+                        targetPosition.z));
     }
 
     void FEditorScriptExecutor::ExecRotate(const std::vector<std::string>& tokens)
     {
-        if (tokens.size() < 5)
+        if (tokens.size() < 3)
         {
-            LogError("rotate: usage: rotate <node> <rx> <ry> <rz>");
+            LogError("rotate: usage: rotate <node> <rx> <ry> <rz> or rotate <node> (rx ry rz)");
             return;
         }
         uint32_t id = ResolveNode(tokens[1]);
@@ -294,23 +574,30 @@ namespace Editor
         before.scale = node->Scale();
 
         TransformSnapshot after = before;
-        float rx = glm::radians(std::stof(tokens[2]));
-        float ry = glm::radians(std::stof(tokens[3]));
-        float rz = glm::radians(std::stof(tokens[4]));
+        glm::vec3 eulerDeg;
+        if (!ParseVec3FromTokens(tokens, 2, eulerDeg))
+        {
+            LogError("rotate: invalid vector, expected <rx> <ry> <rz> or (rx ry rz)");
+            return;
+        }
+        float rx = glm::radians(eulerDeg.x);
+        float ry = glm::radians(eulerDeg.y);
+        float rz = glm::radians(eulerDeg.z);
         after.rotation = glm::quat(glm::vec3(rx, ry, rz));
 
         auto cmd = std::make_unique<TransformNodesCommand>(
             engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
             std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
-        Log(fmt::format("Rotated '{}' to ({}, {}, {}) degrees", tokens[1], tokens[2], tokens[3], tokens[4]));
+        Log(fmt::format("Rotated '{}' to ({:.3f}, {:.3f}, {:.3f}) degrees", tokens[1], eulerDeg.x, eulerDeg.y,
+                        eulerDeg.z));
     }
 
     void FEditorScriptExecutor::ExecScale(const std::vector<std::string>& tokens)
     {
-        if (tokens.size() < 5)
+        if (tokens.size() < 3)
         {
-            LogError("scale: usage: scale <node> <sx> <sy> <sz>");
+            LogError("scale: usage: scale <node> <sx> <sy> <sz> or scale <node> (sx sy sz)");
             return;
         }
         uint32_t id = ResolveNode(tokens[1]);
@@ -331,13 +618,20 @@ namespace Editor
         before.scale = node->Scale();
 
         TransformSnapshot after = before;
-        after.scale = glm::vec3(std::stof(tokens[2]), std::stof(tokens[3]), std::stof(tokens[4]));
+        glm::vec3 targetScale;
+        if (!ParseVec3FromTokens(tokens, 2, targetScale))
+        {
+            LogError("scale: invalid vector, expected <sx> <sy> <sz> or (sx sy sz)");
+            return;
+        }
+        after.scale = targetScale;
 
         auto cmd = std::make_unique<TransformNodesCommand>(
             engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
             std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
-        Log(fmt::format("Scaled '{}' to ({}, {}, {})", tokens[1], tokens[2], tokens[3], tokens[4]));
+        Log(fmt::format("Scaled '{}' to ({:.3f}, {:.3f}, {:.3f})", tokens[1], targetScale.x, targetScale.y,
+                        targetScale.z));
     }
 
     void FEditorScriptExecutor::ExecSetProperty(const std::vector<std::string>& tokens)
@@ -485,16 +779,7 @@ namespace Editor
             return;
         }
 
-        // Rejoin all tokens after "cvar"
-        std::string cvarCmd;
-        for (size_t i = 1; i < tokens.size(); ++i)
-        {
-            if (i > 1)
-            {
-                cvarCmd += " ";
-            }
-            cvarCmd += tokens[i];
-        }
+        const std::string cvarCmd = JoinTokens(tokens, 1);
 
         auto result = engine_.GetCVarSystem().ExecuteCommand(cvarCmd);
         if (result.success)
@@ -505,6 +790,88 @@ namespace Editor
         {
             LogError(fmt::format("CVar error: {}", result.message));
         }
+    }
+
+    bool FEditorScriptExecutor::ExecuteDeferredAction(const FDeferredEditorAction& deferredAction,
+                                                      EditorContext& editorContext)
+    {
+        return DispatchAction(editorContext, deferredAction.action, deferredAction.args, deferredAction.commandText);
+    }
+
+    void FEditorScriptExecutor::ExecAction(const std::vector<std::string>& tokens)
+    {
+        if (!activeEditorContext_)
+        {
+            LogError("action: editor context unavailable");
+            return;
+        }
+
+        if (tokens.size() < 2)
+        {
+            LogError("action: usage: action <load_scene|add_scene|focus_selected> [args]");
+            return;
+        }
+
+        const std::string actionName = ToLowerCopy(tokens[1]);
+        EEditorAction action = EEditorAction::Camera_FocusSelected;
+        std::string args;
+
+        if (actionName == "focus_selected")
+        {
+            action = EEditorAction::Camera_FocusSelected;
+        }
+        else if (actionName == "load_scene" || actionName == "add_scene")
+        {
+            const std::string sceneRef = JoinTokens(tokens, 2);
+            if (sceneRef.empty())
+            {
+                LogError(fmt::format("action {}: missing scene reference", actionName));
+                return;
+            }
+
+            std::string resolveError;
+            std::vector<std::string> candidates;
+            std::optional<std::string> resolvedPath = ResolveScenePath(sceneRef, resolveError, &candidates);
+            if (!resolvedPath)
+            {
+                LogError(fmt::format("action {}: {}", actionName, resolveError));
+                for (const auto& candidate : candidates)
+                {
+                    LogError(fmt::format("  candidate: {}", candidate));
+                }
+                return;
+            }
+
+            args = *resolvedPath;
+            action = (actionName == "load_scene") ? EEditorAction::IO_LoadScene : EEditorAction::IO_LoadSceneAdd;
+        }
+        else
+        {
+            LogError(fmt::format("action: unknown action '{}'", tokens[1]));
+            return;
+        }
+
+        std::string commandText = fmt::format("action {}", actionName);
+        if (!args.empty())
+        {
+            commandText += " ";
+            commandText += args;
+        }
+
+        if (deferHighRiskActions_ && IsHighRiskAction(action))
+        {
+            FDeferredEditorAction deferredAction;
+            deferredAction.action = action;
+            deferredAction.args = args;
+            deferredAction.commandText = commandText;
+            deferredAction.description = fmt::format("需要确认后执行: {}", commandText);
+            deferredActions_.push_back(std::move(deferredAction));
+
+            Log(fmt::format("Deferred action pending confirmation: {}", commandText));
+            return;
+        }
+
+        DispatchAction(*activeEditorContext_, action, args, commandText);
     }
 
     // ========== JavaScript eval ==========
