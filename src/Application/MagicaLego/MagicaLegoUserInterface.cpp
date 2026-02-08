@@ -1380,6 +1380,8 @@ void MagicaLegoUserInterface::DrawAISection()
 
             // Save the fixed script for display
             lastGeneratedScript_ = validation.fixedScript;
+            aiChatHistory_.push_back({validation.fixedScript, false, false, true});
+            aiChatScrollToBottom_ = true;
 
             consoleOutput_.push_back(fmt::format("> [AI] Generated script (took {}):", timeStr));
 
@@ -1417,9 +1419,90 @@ void MagicaLegoUserInterface::DrawAISection()
         else
         {
             consoleOutput_.push_back(fmt::format("> [AI] Error (after {}): {}", timeStr, response.message));
+            aiChatHistory_.push_back({response.message, false, true});
+            aiChatScrollToBottom_ = true;
             scrollToBottom_ = true;
         }
     }
+
+    const float chatHeight = std::max(120.0f, ImGui::GetContentRegionAvail().y * 0.32f);
+    ImGui::BeginChild("##AIChatHistory", ImVec2(0, chatHeight), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+
+    for (size_t msgIndex = 0; msgIndex < aiChatHistory_.size(); ++msgIndex)
+    {
+        const auto& msg = aiChatHistory_[msgIndex];
+        if (msg.isUser)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::TextUnformatted(ICON_FA_USER);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(msg.text.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+        else if (msg.isError)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            ImGui::TextWrapped("%s %s", ICON_FA_CIRCLE_EXCLAMATION, msg.text.c_str());
+            ImGui::PopStyleColor();
+        }
+        else if (msg.isCodeBlock)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::TextUnformatted(ICON_FA_ROBOT);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+
+            const std::string header = fmt::format(ICON_FA_CODE " Generated Script##AIHistoryCode{}", msgIndex);
+            if (ImGui::CollapsingHeader(header.c_str()))
+            {
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.15f, 0.8f));
+                if (ImGui::BeginChild(fmt::format("##AIHistoryCodeBody{}", msgIndex).c_str(), ImVec2(0, 140.0f),
+                                      ImGuiChildFlags_Borders))
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.9f, 0.7f, 1.0f));
+                    ImGui::TextWrapped("%s", msg.text.c_str());
+                    ImGui::PopStyleColor();
+                }
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+            }
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::TextUnformatted(ICON_FA_ROBOT);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.85f, 1.0f, 1.0f));
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(msg.text.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+        ImGui::Spacing();
+        ImGui::Spacing();
+    }
+
+    if (aiGenerating_)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 0.7f));
+        ImGui::TextWrapped(ICON_FA_SPINNER " Thinking...");
+        ImGui::PopStyleColor();
+    }
+
+    if (aiChatScrollToBottom_)
+    {
+        ImGui::SetScrollHereY(1.0f);
+        aiChatScrollToBottom_ = false;
+    }
+
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 5));
 
     // Status indicator with animation
     if (aiService_)
@@ -1516,12 +1599,18 @@ void MagicaLegoUserInterface::DrawAISection()
                         if (aiService_->SwitchProvider(type))
                         {
                             consoleOutput_.push_back(fmt::format("> [AI] Switched to {} provider", name));
+                            aiChatHistory_.push_back({fmt::format("Switched to {} provider", name), false, false});
+                            aiChatScrollToBottom_ = true;
                             scrollToBottom_ = true;
                         }
                         else
                         {
                             consoleOutput_.push_back(fmt::format("> [AI] Failed to switch to {}: {}",
                                 name, aiService_->GetStatusMessage()));
+                            aiChatHistory_.push_back(
+                                {fmt::format("Failed to switch to {}: {}", name, aiService_->GetStatusMessage()),
+                                 false, true});
+                            aiChatScrollToBottom_ = true;
                             scrollToBottom_ = true;
                         }
                     }
@@ -1662,6 +1751,8 @@ void MagicaLegoUserInterface::DrawAISection()
     {
         if (!aiInput_.empty() && canGenerate)
         {
+            aiChatHistory_.push_back({aiInput_, true, false});
+            aiChatScrollToBottom_ = true;
             aiGenerating_ = true;
             aiGenerateStartTime_ = static_cast<float>(ImGui::GetTime());  // Start timer
 
@@ -1705,7 +1796,7 @@ void MagicaLegoUserInterface::DrawAISection()
     if (!lastGeneratedScript_.empty())
     {
         ImGui::Dummy(ImVec2(0, 5));
-        if (ImGui::CollapsingHeader(LOCTEXT("Last Generated Script"), ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader(LOCTEXT("Last Generated Script")))
         {
             // Calculate height for script preview - fill remaining space minus copy button
             float copyButtonHeight = ImGui::GetFrameHeightWithSpacing();

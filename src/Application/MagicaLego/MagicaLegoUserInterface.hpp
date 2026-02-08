@@ -101,12 +101,22 @@ private:
 	std::string selectedScript_;
 
 	// AI Assistant
+	struct FAIChatMessage
+	{
+		std::string text;
+		bool isUser = false;
+		bool isError = false;
+		bool isCodeBlock = false;
+	};
+
 	std::unique_ptr<MagicaLego::FAIService> aiService_;
 	std::string aiInput_;
 	bool aiGenerating_ = false;
 	bool aiBuildOnExisting_ = false;  // Toggle for context-aware generation
 	std::string lastGeneratedScript_;
 	float aiGenerateStartTime_ = 0.0f;  // Timer for AI generation
+	std::vector<FAIChatMessage> aiChatHistory_;
+	bool aiChatScrollToBottom_ = false;
 
 	// Console Window
 	bool showConsoleWindow_ = false;
