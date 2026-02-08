@@ -124,6 +124,7 @@ namespace Editor
                 ImGui::MenuItem("Stack Tool", nullptr, &ui.child_stack);
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
+                ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
                 ImGui::MenuItem("Log", nullptr, &ui.logPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
                 ImGui::EndMenu();

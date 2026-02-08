@@ -133,9 +133,11 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     // https://github.com/ocornut/imgui/tree/master/misc/freetype).
     io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
     io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
-    const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic()
-        : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
-                                                        : io.Fonts->GetGlyphRangesDefault();
+    // const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic()
+    //     : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
+    //                                                     : io.Fonts->GetGlyphRangesDefault();
+
+    const ImWchar* glyphRange = io.Fonts->GetGlyphRangesChineseFull();
 
     std::vector<uint8_t> tmpData;
     if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-Regular.ttf", tmpData))

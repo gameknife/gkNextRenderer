@@ -236,6 +236,8 @@ public:
     NextCVar::FCVarSystem& GetCVarSystem() { return *cvarSystem_; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *cvarSystem_; }
 
+    QuickJSEngine* GetQuickJSEngine() { return quickJSEngine_.get(); }
+
     // monitor info
     glm::ivec2 GetMonitorSize() const;
 

@@ -257,6 +257,7 @@ void EditorInterface::Render()
         ImGui::DockBuilderDockWindow("Outliner", dock1);
         ImGui::DockBuilderDockWindow("Properties", dock2);
         ImGui::DockBuilderDockWindow("Command History", dock2);
+        ImGui::DockBuilderDockWindow("AI Assistant", dock2);
         ImGui::DockBuilderDockWindow("Content Browser", dock3);
         ImGui::DockBuilderDockWindow("Log", dock3);
         ImGui::DockBuilderDockWindow("Material Browser", dock3);
@@ -283,6 +284,8 @@ void EditorInterface::Render()
         Editor::DrawMeshBrowserPanel(ctx, uiState_);
     if (uiState_.commandHistoryPanel)
         Editor::DrawCommandHistoryPanel(ctx, uiState_);
+    if (uiState_.aiPanel)
+        Editor::DrawAIPanel(ctx, uiState_);
     if (uiState_.viewport)
         Editor::DrawViewportOverlay(ctx, uiState_);
 

@@ -940,6 +940,11 @@ void QuickJSEngine::ResetContextAndLoadScript()
         qjs::Context* jsContext = context_.get();
         BindScenePrototype(jsContext->ctx);
 
+        if (editorBindingsCallback_)
+        {
+            editorBindingsCallback_(jsContext->ctx);
+        }
+
         std::vector<uint8_t> scriptBuffer;
         if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer))
         {
@@ -1136,5 +1141,76 @@ bool QuickJSEngine::CompileTypeScriptSources()
     }
 
     return false;
+}
+
+void QuickJSEngine::SetEditorBindingsCallback(BindingsCallback callback)
+{
+    editorBindingsCallback_ = std::move(callback);
+    // Re-register if context already exists
+    if (context_ && editorBindingsCallback_)
+    {
+        editorBindingsCallback_(context_->ctx);
+    }
+}
+
+std::string QuickJSEngine::Eval(const std::string& code)
+{
+    if (!context_)
+    {
+        return "QuickJS context not initialized";
+    }
+
+    try
+    {
+        JSContext* ctx = context_->ctx;
+        // Wrap in IIFE so const/let declarations don't persist in global scope
+        // across multiple eval calls (avoids "redeclaration" errors).
+        std::string wrapped = "(function(){" + code + "\n})()";
+        JSValue result = JS_Eval(ctx, wrapped.c_str(), wrapped.size(), "<ai-eval>", JS_EVAL_TYPE_GLOBAL);
+        if (JS_IsException(result))
+        {
+            JSValue exc = JS_GetException(ctx);
+            const char* str = JS_ToCString(ctx, exc);
+            std::string errMsg = str ? str : "Unknown error";
+            if (str)
+            {
+                JS_FreeCString(ctx, str);
+            }
+            JSValue stack = JS_GetPropertyStr(ctx, exc, "stack");
+            if (JS_IsString(stack))
+            {
+                const char* stackStr = JS_ToCString(ctx, stack);
+                if (stackStr)
+                {
+                    errMsg += "\n";
+                    errMsg += stackStr;
+                    JS_FreeCString(ctx, stackStr);
+                }
+            }
+            JS_FreeValue(ctx, stack);
+            JS_FreeValue(ctx, exc);
+            return errMsg;
+        }
+        JS_FreeValue(ctx, result);
+        return "";
+    }
+    catch (const std::exception& e)
+    {
+        return e.what();
+    }
+}
+#endif
+
+// Non-QuickJS stubs
+#if !WITH_QUICKJS
+std::string QuickJSEngine::Eval(const std::string& code)
+{
+    (void)code;
+    return "QuickJS not available";
+}
+
+void QuickJSEngine::SetEditorBindingsCallback(BindingsCallback callback)
+{
+    (void)callback;
 }
 #endif

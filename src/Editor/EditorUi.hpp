@@ -25,6 +25,9 @@ namespace Editor
     // Viewport overlay widgets (stats/tools)
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui);
 
+    // AI panel
+    void DrawAIPanel(EditorContext& ctx, EditorUiState& ui);
+
     // Floating panels
     void DrawMaterialEditorPanel(EditorContext& ctx, EditorUiState& ui);
 
