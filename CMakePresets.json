@@ -31,6 +31,7 @@
                 "ENABLE_AUDIO": "OFF",
                 "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "OFF",
+                "ENABLE_WHISPERCPP": "OFF",
                 "ENABLE_UNITY_BUILD": "ON"
             }
         },
@@ -45,6 +46,7 @@
                 "ENABLE_AUDIO": "ON",
                 "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "OFF",
+                "ENABLE_WHISPERCPP": "ON",
                 "ENABLE_UNITY_BUILD": "ON"
             }
         },
@@ -59,6 +61,7 @@
                 "ENABLE_AUDIO": "ON",
                 "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "ON",
+                "ENABLE_WHISPERCPP": "ON",
                 "ENABLE_UNITY_BUILD": "OFF"
             }
         },

@@ -52,6 +52,11 @@ if (ENABLE_QUICKJS)
     set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
 endif()
 
+option(ENABLE_WHISPERCPP "Enable whisper.cpp support" ON)
+if (ENABLE_WHISPERCPP)
+    set(WITH_WHISPERCPP ON CACHE BOOL "Enable whisper.cpp" FORCE)
+endif()
+
 include(cmake/SetupExternalLibs.cmake)
 include(cmake/SetupDependencies.cmake)
 

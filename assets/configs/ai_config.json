@@ -18,5 +18,15 @@
         "apiKey": "YOUR_DEEPSEEK_API_KEY",
         "model": "deepseek-chat",
         "endpoint": "https://api.deepseek.com/v1"
+    },
+    "voiceInput": {
+        "enabled": false,
+        "model": "base",
+        "language": "zh",
+        "threads": 4,
+        "maxRecordSeconds": 20,
+        "sampleRate": 16000,
+        "autoSend": false,
+        "keepTempFiles": false
     }
 }
