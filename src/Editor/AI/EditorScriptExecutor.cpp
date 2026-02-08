@@ -3,11 +3,11 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
 #include "Runtime/Command/CommandHistory.hpp"
-#include "Runtime/Command/DeleteNodeCommand.hpp"
-#include "Runtime/Command/DuplicateNodeCommand.hpp"
+#include "Runtime/Command/DeleteNodesCommand.hpp"
+#include "Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Runtime/Command/PropertyCommand.hpp"
 #include "Runtime/Command/RenameNodeCommand.hpp"
-#include "Runtime/Command/TransformNodeCommand.hpp"
+#include "Runtime/Command/TransformNodesCommand.hpp"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
@@ -212,7 +212,7 @@ namespace Editor
             LogError(fmt::format("delete: node '{}' not found", tokens[1]));
             return;
         }
-        auto cmd = std::make_unique<DeleteNodeCommand>(engine_.GetScene(), id);
+        auto cmd = std::make_unique<DeleteNodesCommand>(engine_.GetScene(), std::vector<uint32_t>{id});
         engine_.ExecuteCommand(std::move(cmd));
         Log(fmt::format("Deleted node '{}'", tokens[1]));
     }
@@ -230,7 +230,7 @@ namespace Editor
             LogError(fmt::format("duplicate: node '{}' not found", tokens[1]));
             return;
         }
-        auto cmd = std::make_unique<DuplicateNodeCommand>(engine_.GetScene(), id);
+        auto cmd = std::make_unique<DuplicateNodesCommand>(engine_.GetScene(), std::vector<uint32_t>{id});
         engine_.ExecuteCommand(std::move(cmd));
         Log(fmt::format("Duplicated node '{}'", tokens[1]));
     }
@@ -262,7 +262,9 @@ namespace Editor
         TransformSnapshot after = before;
         after.translation = glm::vec3(std::stof(tokens[2]), std::stof(tokens[3]), std::stof(tokens[4]));
 
-        auto cmd = std::make_unique<TransformNodeCommand>(engine_.GetScene(), id, before, after);
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
         Log(fmt::format("Moved '{}' to ({}, {}, {})", tokens[1], tokens[2], tokens[3], tokens[4]));
     }
@@ -297,7 +299,9 @@ namespace Editor
         float rz = glm::radians(std::stof(tokens[4]));
         after.rotation = glm::quat(glm::vec3(rx, ry, rz));
 
-        auto cmd = std::make_unique<TransformNodeCommand>(engine_.GetScene(), id, before, after);
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
         Log(fmt::format("Rotated '{}' to ({}, {}, {}) degrees", tokens[1], tokens[2], tokens[3], tokens[4]));
     }
@@ -329,7 +333,9 @@ namespace Editor
         TransformSnapshot after = before;
         after.scale = glm::vec3(std::stof(tokens[2]), std::stof(tokens[3]), std::stof(tokens[4]));
 
-        auto cmd = std::make_unique<TransformNodeCommand>(engine_.GetScene(), id, before, after);
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
         engine_.ExecuteCommand(std::move(cmd));
         Log(fmt::format("Scaled '{}' to ({}, {}, {})", tokens[1], tokens[2], tokens[3], tokens[4]));
     }
@@ -622,7 +628,7 @@ namespace Editor
             }
 
             auto* engine = NextEngine::GetInstance();
-            auto cmd = std::make_unique<DeleteNodeCommand>(engine->GetScene(), id);
+            auto cmd = std::make_unique<DeleteNodesCommand>(engine->GetScene(), std::vector<uint32_t>{id});
             engine->ExecuteCommand(std::move(cmd));
             return JS_UNDEFINED;
         }
@@ -643,9 +649,15 @@ namespace Editor
             }
 
             auto* engine = NextEngine::GetInstance();
-            auto cmd = std::make_unique<DuplicateNodeCommand>(engine->GetScene(), id);
+            auto cmd = std::make_unique<DuplicateNodesCommand>(engine->GetScene(), std::vector<uint32_t>{id});
+            auto* cmdPtr = cmd.get();
             engine->ExecuteCommand(std::move(cmd));
-            return JS_NewUint32(ctx, cmd->GetNewInstanceId());
+            const auto& newIds = cmdPtr->GetNewInstanceIds();
+            if (newIds.empty())
+            {
+                return JS_UNDEFINED;
+            }
+            return JS_NewUint32(ctx, newIds.back());
         }
 
         // Editor.moveNode(nameOrId, x, y, z)
@@ -684,7 +696,9 @@ namespace Editor
             after.translation = glm::vec3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
 
             auto* engine = NextEngine::GetInstance();
-            auto cmd = std::make_unique<TransformNodeCommand>(*scene, id, before, after);
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
             engine->ExecuteCommand(std::move(cmd));
             return JS_UNDEFINED;
         }
@@ -727,7 +741,9 @@ namespace Editor
                                                    glm::radians(static_cast<float>(rz))));
 
             auto* engine = NextEngine::GetInstance();
-            auto cmd = std::make_unique<TransformNodeCommand>(*scene, id, before, after);
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
             engine->ExecuteCommand(std::move(cmd));
             return JS_UNDEFINED;
         }
@@ -768,7 +784,9 @@ namespace Editor
             after.scale = glm::vec3(static_cast<float>(sx), static_cast<float>(sy), static_cast<float>(sz));
 
             auto* engine = NextEngine::GetInstance();
-            auto cmd = std::make_unique<TransformNodeCommand>(*scene, id, before, after);
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
             engine->ExecuteCommand(std::move(cmd));
             return JS_UNDEFINED;
         }

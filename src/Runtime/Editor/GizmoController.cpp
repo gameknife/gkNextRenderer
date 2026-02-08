@@ -4,17 +4,115 @@
 
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
+#include "Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Command/TransformNodeCommand.hpp"
-#include "Runtime/Command/DuplicateNodeCommand.hpp"
+#include "Runtime/Command/TransformNodesCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
-#include <memory>
+
+#include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <memory>
+#include <unordered_set>
 
 namespace
 {
     constexpr float kToolbarEdgePadding = 5.0f;
+    constexpr uint32_t InvalidNodeId = static_cast<uint32_t>(-1);
+
+    std::vector<uint32_t> BuildSelectionList(Assets::Scene& scene)
+    {
+        std::vector<uint32_t> selectedIds = scene.GetSelectedIds();
+        if (selectedIds.empty())
+        {
+            const uint32_t selectedId = scene.GetSelectedId();
+            if (selectedId != InvalidNodeId)
+            {
+                selectedIds.push_back(selectedId);
+            }
+        }
+
+        selectedIds.erase(
+            std::remove_if(
+                selectedIds.begin(),
+                selectedIds.end(),
+                [&scene](uint32_t id)
+                {
+                    return id == InvalidNodeId || scene.GetNodeByInstanceId(id) == nullptr;
+                }),
+            selectedIds.end());
+
+        return selectedIds;
+    }
+
+    std::vector<uint32_t> BuildRootSelection(Assets::Scene& scene, const std::vector<uint32_t>& sourceIds)
+    {
+        std::vector<uint32_t> orderedUnique;
+        orderedUnique.reserve(sourceIds.size());
+
+        std::unordered_set<uint32_t> dedupSet;
+        dedupSet.reserve(sourceIds.size());
+        for (uint32_t id : sourceIds)
+        {
+            if (id == InvalidNodeId || dedupSet.contains(id))
+            {
+                continue;
+            }
+
+            if (scene.GetNodeByInstanceId(id) == nullptr)
+            {
+                continue;
+            }
+
+            dedupSet.insert(id);
+            orderedUnique.push_back(id);
+        }
+
+        std::vector<uint32_t> roots;
+        roots.reserve(orderedUnique.size());
+        for (uint32_t id : orderedUnique)
+        {
+            Assets::Node* node = scene.GetNodeByInstanceId(id);
+            if (node == nullptr)
+            {
+                continue;
+            }
+
+            bool hasSelectedAncestor = false;
+            for (Assets::Node* parent = node->GetParent(); parent != nullptr; parent = parent->GetParent())
+            {
+                if (dedupSet.contains(parent->GetInstanceId()))
+                {
+                    hasSelectedAncestor = true;
+                    break;
+                }
+            }
+
+            if (!hasSelectedAncestor)
+            {
+                roots.push_back(id);
+            }
+        }
+
+        return roots;
+    }
+
+    glm::mat4 BuildGizmoMatrix(Assets::Scene& scene, Assets::Node* activeNode, bool useSelectionBounds)
+    {
+        if (!useSelectionBounds || activeNode == nullptr)
+        {
+            return activeNode ? activeNode->WorldTransform() : glm::mat4(1.0f);
+        }
+
+        glm::vec3 center;
+        float radius = 0.0f;
+        if (scene.GetSelectedNodeBounds(center, radius))
+        {
+            return glm::translate(glm::mat4(1.0f), center);
+        }
+
+        return activeNode->WorldTransform();
+    }
 }
 
 void GizmoController::EnsureDefaults()
@@ -63,6 +161,10 @@ void GizmoController::ResetState()
     isShowing_ = false;
     wasUsing_ = false;
     dragActive_ = false;
+    dragInstanceIds_.clear();
+    dragStartWorldMatrices_.clear();
+    dragStartSnapshots_.clear();
+    dragStartGizmoMatrix_ = glm::mat4(1.0f);
 }
 
 void GizmoController::DrawToolbar()
@@ -97,6 +199,18 @@ void GizmoController::DrawToolbar()
     {
         operation_ = static_cast<int>(ImGuizmo::SCALE);
     }
+    ImGui::SameLine();
+    ImGui::TextUnformatted("|");
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Pivot", pivotMode_ == static_cast<int>(EGizmoPivotMode::Pivot)))
+    {
+        pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Bounds", pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds)))
+    {
+        pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
+    }
 
     ImGui::End();
     ImGui::PopStyleColor();
@@ -106,24 +220,36 @@ void GizmoController::DrawToolbar()
 void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize)
 {
     Assets::Scene& scene = engine.GetScene();
+    std::vector<uint32_t> selectedIds = BuildSelectionList(scene);
+    if (selectedIds.empty())
+    {
+        ResetState();
+        return;
+    }
+
     uint32_t selectedId = scene.GetSelectedId();
-    if (selectedId == static_cast<uint32_t>(-1))
+    Assets::Node* activeNode = scene.GetNodeByInstanceId(selectedId);
+    if (activeNode == nullptr)
+    {
+        selectedId = selectedIds.back();
+        activeNode = scene.GetNodeByInstanceId(selectedId);
+    }
+
+    if (activeNode == nullptr || viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
     {
         ResetState();
         return;
     }
 
-    Assets::Node* node = scene.GetNodeByInstanceId(selectedId);
-    if (node == nullptr)
+    const bool multiSelection = selectedIds.size() > 1;
+    if (multiSelection && !multiSelectionModeInitialized_)
     {
-        ResetState();
-        return;
+        pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
+        multiSelectionModeInitialized_ = true;
     }
-
-    if (viewportSize.x <= 0.0f || viewportSize.y <= 0.0f)
+    else if (!multiSelection)
     {
-        ResetState();
-        return;
+        multiSelectionModeInitialized_ = false;
     }
 
     isShowing_ = true;
@@ -144,8 +270,10 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     glm::mat4 projection = ubo.Projection;
     projection[1][1] *= -1.0f;
 
-    glm::mat4 worldMatrix = node->WorldTransform();
-    Assets::Node* activeNode = node;
+    const bool useSelectionBounds = pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds);
+    glm::mat4 worldMatrix = BuildGizmoMatrix(scene, activeNode, useSelectionBounds);
+    const ImGuizmo::MODE gizmoMode =
+        useSelectionBounds ? ImGuizmo::WORLD : static_cast<ImGuizmo::MODE>(mode_);
     
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::BeginFrame();
@@ -157,7 +285,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
         glm::value_ptr(view),
         glm::value_ptr(projection),
         static_cast<ImGuizmo::OPERATION>(operation_),
-        static_cast<ImGuizmo::MODE>(mode_),
+        gizmoMode,
         glm::value_ptr(worldMatrix));
 
     isUsing_ = ImGuizmo::IsUsing();
@@ -166,63 +294,129 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     {
         if (io.KeyShift)
         {
-            auto duplicateCommand = std::make_unique<DuplicateNodeCommand>(scene, selectedId);
-            auto* duplicateCommandPtr = duplicateCommand.get();
+            auto duplicateCommand = std::make_unique<DuplicateNodesCommand>(scene, selectedIds);
             if (engine.ExecuteCommand(std::move(duplicateCommand)))
             {
-                const uint32_t newId = duplicateCommandPtr->GetNewInstanceId();
-                Assets::Node* newNode = scene.GetNodeByInstanceId(newId);
-                if (newNode)
+                selectedIds = BuildSelectionList(scene);
+                if (selectedIds.empty())
                 {
-                    selectedId = newId;
-                    scene.SetSelectedId(newId);
-                    activeNode = newNode;
+                    ResetState();
+                    return;
                 }
+                selectedId = scene.GetSelectedId();
+                activeNode = scene.GetNodeByInstanceId(selectedId);
+                if (activeNode == nullptr)
+                {
+                    selectedId = selectedIds.back();
+                    activeNode = scene.GetNodeByInstanceId(selectedId);
+                }
+                worldMatrix = BuildGizmoMatrix(scene, activeNode, useSelectionBounds);
             }
         }
+
         dragActive_ = true;
-        dragInstanceId_ = selectedId;
-        dragStartTranslation_ = activeNode->Translation();
-        dragStartRotation_ = activeNode->Rotation();
-        dragStartScale_ = activeNode->Scale();
+        dragInstanceIds_ = BuildRootSelection(scene, selectedIds);
+        dragStartWorldMatrices_.clear();
+        dragStartSnapshots_.clear();
+        dragStartWorldMatrices_.reserve(dragInstanceIds_.size());
+        dragStartSnapshots_.reserve(dragInstanceIds_.size());
+        for (uint32_t id : dragInstanceIds_)
+        {
+            Assets::Node* node = scene.GetNodeByInstanceId(id);
+            if (node == nullptr)
+            {
+                continue;
+            }
+
+            dragStartWorldMatrices_.push_back(node->WorldTransform());
+            dragStartSnapshots_.push_back(TransformSnapshot{node->Translation(), node->Rotation(), node->Scale()});
+        }
+        dragStartGizmoMatrix_ = worldMatrix;
     }
+
     if (isUsing_)
     {
-        glm::mat4 parentWorld(1.0f);
-        if (activeNode->GetParent() != nullptr)
+        bool changed = false;
+        const glm::mat4 deltaMatrix = worldMatrix * glm::inverse(dragStartGizmoMatrix_);
+        const size_t count = std::min(dragInstanceIds_.size(), dragStartWorldMatrices_.size());
+        for (size_t i = 0; i < count; ++i)
         {
-            parentWorld = activeNode->GetParent()->WorldTransform();
+            Assets::Node* node = scene.GetNodeByInstanceId(dragInstanceIds_[i]);
+            if (node == nullptr)
+            {
+                continue;
+            }
+
+            const glm::mat4 targetWorld = deltaMatrix * dragStartWorldMatrices_[i];
+            glm::mat4 parentWorld(1.0f);
+            if (node->GetParent() != nullptr)
+            {
+                parentWorld = node->GetParent()->WorldTransform();
+            }
+
+            const glm::mat4 localMatrix = glm::inverse(parentWorld) * targetWorld;
+            glm::vec3 scale{};
+            glm::quat rotation{};
+            glm::vec3 translation{};
+            glm::vec3 skew{};
+            glm::vec4 perspective{};
+            if (!glm::decompose(localMatrix, scale, rotation, translation, skew, perspective))
+            {
+                continue;
+            }
+
+            node->SetTranslation(translation);
+            node->SetRotation(rotation);
+            node->SetScale(scale);
+            node->RecalcTransform(true);
+            changed = true;
         }
-        glm::mat4 localMatrix = glm::inverse(parentWorld) * worldMatrix;
 
-        glm::vec3 scale{};
-        glm::quat rotation{};
-        glm::vec3 translation{};
-        glm::vec3 skew{};
-        glm::vec4 perspective{};
-
-        if (glm::decompose(localMatrix, scale, rotation, translation, skew, perspective))
+        if (changed)
         {
-            activeNode->SetTranslation(translation);
-            activeNode->SetRotation(rotation);
-            activeNode->SetScale(scale);
-            activeNode->RecalcTransform(true);
             scene.MarkDirty();
         }
     }
     else if (wasUsing_)
     {
-        if (dragActive_)
+        if (dragActive_ && !dragStartSnapshots_.empty())
         {
-            TransformSnapshot beforeSnapshot{dragStartTranslation_, dragStartRotation_, dragStartScale_};
-            TransformSnapshot afterSnapshot{activeNode->Translation(), activeNode->Rotation(), activeNode->Scale()};
-            if (TransformNodeCommand::IsDifferent(beforeSnapshot, afterSnapshot))
+            std::vector<uint32_t> validIds;
+            std::vector<TransformSnapshot> beforeSnapshots;
+            std::vector<TransformSnapshot> afterSnapshots;
+            const size_t count = std::min(dragInstanceIds_.size(), dragStartSnapshots_.size());
+            validIds.reserve(count);
+            beforeSnapshots.reserve(count);
+            afterSnapshots.reserve(count);
+
+            for (size_t i = 0; i < count; ++i)
             {
-                auto command = std::make_unique<TransformNodeCommand>(scene, dragInstanceId_, beforeSnapshot, afterSnapshot);
-                engine.ExecuteCommand(std::move(command));
+                Assets::Node* node = scene.GetNodeByInstanceId(dragInstanceIds_[i]);
+                if (node == nullptr)
+                {
+                    continue;
+                }
+
+                validIds.push_back(dragInstanceIds_[i]);
+                beforeSnapshots.push_back(dragStartSnapshots_[i]);
+                afterSnapshots.push_back({node->Translation(), node->Rotation(), node->Scale()});
+            }
+
+            if (!validIds.empty())
+            {
+                if (TransformNodesCommand::IsDifferent(beforeSnapshots, afterSnapshots))
+                {
+                    auto command = std::make_unique<TransformNodesCommand>(
+                        scene, validIds, beforeSnapshots, afterSnapshots);
+                    engine.ExecuteCommand(std::move(command));
+                }
             }
         }
         dragActive_ = false;
+        dragInstanceIds_.clear();
+        dragStartWorldMatrices_.clear();
+        dragStartSnapshots_.clear();
+        dragStartGizmoMatrix_ = glm::mat4(1.0f);
     }
 
     wasUsing_ = isUsing_;

@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Runtime/Command/TransformNodesCommand.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <vector>
 
 class NextEngine;
 struct ImGuiIO;
@@ -22,15 +24,23 @@ private:
     void HandleShortcuts(const ImGuiIO& io);
     void ResetState();
 
+    enum class EGizmoPivotMode
+    {
+        Pivot = 0,
+        SelectionBounds = 1
+    };
+
     int operation_ = 0;
     int mode_ = 0;
+    int pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
     bool isUsing_ = false;
     bool isOver_ = false;
     bool isShowing_ = false;
     bool wasUsing_ = false;
+    bool multiSelectionModeInitialized_ = false;
     bool dragActive_ = false;
-    uint32_t dragInstanceId_ = 0;
-    glm::vec3 dragStartTranslation_ {};
-    glm::quat dragStartRotation_ {};
-    glm::vec3 dragStartScale_ {1.0f, 1.0f, 1.0f};
+    std::vector<uint32_t> dragInstanceIds_;
+    std::vector<glm::mat4> dragStartWorldMatrices_;
+    std::vector<TransformSnapshot> dragStartSnapshots_;
+    glm::mat4 dragStartGizmoMatrix_ {1.0f};
 };

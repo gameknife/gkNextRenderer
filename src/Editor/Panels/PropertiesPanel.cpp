@@ -13,6 +13,8 @@
 
 #include <imgui_stdlib.h>
 
+#include <cmath>
+#include <functional>
 #include <glm/gtc/quaternion.hpp>
 
 namespace Editor
@@ -21,13 +23,135 @@ namespace Editor
     {
         ImGui::Begin("Properties", nullptr);
         {
-            if (ui.selected_obj_id == InvalidId)
+            std::vector<uint32_t> selectedIds = ctx.scene.GetSelectedIds();
+            if (selectedIds.empty() && ui.selected_obj_id != InvalidId)
+            {
+                selectedIds.push_back(ui.selected_obj_id);
+            }
+
+            if (selectedIds.empty())
             {
                 ImGui::End();
                 return;
             }
 
-            Assets::Node* selectedObj = ctx.scene.GetNodeByInstanceId(ui.selected_obj_id);
+            if (selectedIds.size() > 1)
+            {
+                Assets::Node* activeObj = ctx.scene.GetNodeByInstanceId(ui.selected_obj_id);
+                if (activeObj == nullptr)
+                {
+                    for (uint32_t id : selectedIds)
+                    {
+                        activeObj = ctx.scene.GetNodeByInstanceId(id);
+                        if (activeObj != nullptr)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (activeObj == nullptr)
+                {
+                    ImGui::End();
+                    return;
+                }
+
+                ImGui::Text("%d Objects Selected", static_cast<int>(selectedIds.size()));
+                ImGui::TextDisabled("Active: %s", activeObj->GetName().c_str());
+                ImGui::Separator();
+
+                auto applyTransformToSelection = [&](const std::function<void(Assets::Node&)>& apply)
+                {
+                    bool changed = false;
+                    for (uint32_t id : selectedIds)
+                    {
+                        Assets::Node* node = ctx.scene.GetNodeByInstanceId(id);
+                        if (node == nullptr)
+                        {
+                            continue;
+                        }
+
+                        apply(*node);
+                        changed = true;
+                    }
+
+                    if (changed)
+                    {
+                        ctx.scene.MarkDirty();
+                    }
+                };
+
+                ImGui::Text(ICON_FA_LOCATION_ARROW " Transform");
+                ImGui::Separator();
+
+                glm::vec3 location = activeObj->Translation();
+                const glm::vec3 baseLocation = location;
+                if (ImGui::DragFloat3("##MultiLocation", &location.x, 0.1f))
+                {
+                    const glm::vec3 delta = location - baseLocation;
+                    applyTransformToSelection(
+                        [&](Assets::Node& node)
+                        {
+                            node.SetTranslation(node.Translation() + delta);
+                            node.RecalcTransform(true);
+                        });
+                }
+
+                glm::vec3 rotationEuler = glm::eulerAngles(activeObj->Rotation());
+                const glm::vec3 baseRotationEuler = rotationEuler;
+                if (ImGui::DragFloat3("##MultiRotation", &rotationEuler.x, 0.1f))
+                {
+                    const glm::vec3 delta = rotationEuler - baseRotationEuler;
+                    applyTransformToSelection(
+                        [&](Assets::Node& node)
+                        {
+                            glm::vec3 nodeEuler = glm::eulerAngles(node.Rotation()) + delta;
+                            node.SetRotation(glm::quat(nodeEuler));
+                            node.RecalcTransform(true);
+                        });
+                }
+
+                glm::vec3 scale = activeObj->Scale();
+                const glm::vec3 baseScale = scale;
+                if (ImGui::DragFloat3("##MultiScale", &scale.x, 0.1f))
+                {
+                    const glm::vec3 addDelta = scale - baseScale;
+                    glm::vec3 mulFactor(1.0f, 1.0f, 1.0f);
+                    for (int axis = 0; axis < 3; ++axis)
+                    {
+                        if (std::abs(baseScale[axis]) > 1e-4f)
+                        {
+                            mulFactor[axis] = scale[axis] / baseScale[axis];
+                        }
+                    }
+
+                    applyTransformToSelection(
+                        [&](Assets::Node& node)
+                        {
+                            glm::vec3 nodeScale = node.Scale();
+                            for (int axis = 0; axis < 3; ++axis)
+                            {
+                                if (std::abs(baseScale[axis]) > 1e-4f)
+                                {
+                                    nodeScale[axis] *= mulFactor[axis];
+                                }
+                                else
+                                {
+                                    nodeScale[axis] += addDelta[axis];
+                                }
+                            }
+                            node.SetScale(nodeScale);
+                            node.RecalcTransform(true);
+                        });
+                }
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Multi-selection mode: Mesh/Material/Components editing is disabled.");
+                ImGui::End();
+                return;
+            }
+
+            Assets::Node* selectedObj = ctx.scene.GetNodeByInstanceId(selectedIds.front());
             if (selectedObj == nullptr)
             {
                 ImGui::End();

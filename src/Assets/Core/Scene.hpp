@@ -8,6 +8,7 @@
 
 #include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Assets/Core/Model.hpp"
+#include "Assets/Core/SceneSelectionState.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Assets/Data/Skeleton.hpp"
@@ -87,8 +88,15 @@ namespace Assets
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
 
-        uint32_t GetSelectedId() const { return selectedId_; }
-        void SetSelectedId(uint32_t id) const { selectedId_ = id; }
+        uint32_t GetSelectedId() const { return selectionState_.GetPrimaryId(); }
+        const std::vector<uint32_t>& GetSelectedIds() const { return selectionState_.GetIds(); }
+        void SetSelectedId(uint32_t id) const;
+        void SetSelection(const std::vector<uint32_t>& ids) const;
+        void ClearSelection() const;
+        void AddToSelection(uint32_t id) const;
+        void RemoveFromSelection(uint32_t id) const;
+        void ToggleSelection(uint32_t id) const;
+        bool IsSelected(uint32_t id) const;
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
 
@@ -227,7 +235,7 @@ namespace Assets
         uint32_t verticeCount_{};
         uint32_t indirectDrawBatchCount_{};
 
-        mutable uint32_t selectedId_ = -1;
+        mutable SceneSelectionState selectionState_;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;

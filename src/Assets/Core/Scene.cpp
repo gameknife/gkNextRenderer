@@ -26,6 +26,11 @@
 
 namespace Assets
 {
+    namespace
+    {
+        constexpr uint32_t InvalidNodeId = static_cast<uint32_t>(-1);
+    }
+
     void Scene::RegisterReflection()
     {
         using namespace entt::literals;
@@ -1063,7 +1068,7 @@ namespace Assets
 
     bool Scene::GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const
     {
-        if (nodeId == static_cast<uint32_t>(-1))
+        if (nodeId == InvalidNodeId)
         {
             return false;
         }
@@ -1101,11 +1106,6 @@ namespace Assets
         // Fallback for non-render nodes (default small radius)
         radius = 1.0f;
         return true;
-    }
-
-    bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const
-    {
-        return GetNodeBounds(selectedId_, center, radius);
     }
 
     const Model* Scene::GetModel(uint32_t id) const

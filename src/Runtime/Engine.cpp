@@ -8,7 +8,8 @@
 #include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
-#include "Runtime/Command/DeleteNodeCommand.hpp"
+#include "Runtime/Command/DeleteNodesCommand.hpp"
+#include "Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Runtime/ScreenShot.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
@@ -1042,6 +1043,22 @@ void NextEngine::OnKey(SDL_Event& event)
         if (hasCtrlOrCmd)
         {
             const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
+            std::vector<uint32_t> selectedIds;
+            const auto& currentSelection = GetScene().GetSelectedIds();
+            selectedIds.reserve(currentSelection.size() + 1);
+            for (uint32_t id : currentSelection)
+            {
+                selectedIds.push_back(id);
+            }
+            if (selectedIds.empty())
+            {
+                const uint32_t selectedId = GetScene().GetSelectedId();
+                if (selectedId != static_cast<uint32_t>(-1))
+                {
+                    selectedIds.push_back(selectedId);
+                }
+            }
+
             if (event.key.key == SDLK_Z)
             {
                 if (hasShift)
@@ -1066,14 +1083,40 @@ void NextEngine::OnKey(SDL_Event& event)
                     return;
                 }
             }
+            else if (event.key.key == SDLK_D)
+            {
+                if (!selectedIds.empty())
+                {
+                    auto command = std::make_unique<DuplicateNodesCommand>(GetScene(), selectedIds);
+                    if (ExecuteCommand(std::move(command)))
+                    {
+                        return;
+                    }
+                }
+            }
         }
 
         if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
         {
-            const uint32_t selectedId = GetScene().GetSelectedId();
-            if (selectedId != static_cast<uint32_t>(-1))
+            std::vector<uint32_t> selectedIds;
+            const auto& currentSelection = GetScene().GetSelectedIds();
+            selectedIds.reserve(currentSelection.size() + 1);
+            for (uint32_t id : currentSelection)
             {
-                auto command = std::make_unique<DeleteNodeCommand>(GetScene(), selectedId);
+                selectedIds.push_back(id);
+            }
+            if (selectedIds.empty())
+            {
+                const uint32_t selectedId = GetScene().GetSelectedId();
+                if (selectedId != static_cast<uint32_t>(-1))
+                {
+                    selectedIds.push_back(selectedId);
+                }
+            }
+
+            if (!selectedIds.empty())
+            {
+                auto command = std::make_unique<DeleteNodesCommand>(GetScene(), selectedIds);
                 if (ExecuteCommand(std::move(command)))
                 {
                     return;

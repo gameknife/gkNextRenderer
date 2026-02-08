@@ -135,7 +135,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
         switch (event.key.key)
         {
         case SDLK_ESCAPE:
-            GetEngine().GetScene().SetSelectedId(-1);
+            GetEngine().GetScene().ClearSelection();
             break;
         case SDLK_F:
             {
@@ -191,24 +191,31 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
     }
     if (event.button.button == SDL_BUTTON_LEFT && event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
+        const bool toggleSelection = (SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
         NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
         GetEngine().RayCastGPU(org, dir,
-                               [this](Assets::RayCastResult result)
+                               [this, toggleSelection](Assets::RayCastResult result)
                                {
                                    if (result.Hitted)
                                    {
                                        GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
                                        NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
                                                                       30);
-                                       // selection
-                                       GetEngine().GetScene().SetSelectedId(result.InstanceId);
+                                       if (toggleSelection)
+                                       {
+                                           GetEngine().GetScene().ToggleSelection(result.InstanceId);
+                                       }
+                                       else
+                                       {
+                                           GetEngine().GetScene().SetSelectedId(result.InstanceId);
+                                       }
                                    }
-                                   else
+                                   else if (!toggleSelection)
                                    {
-                                       GetEngine().GetScene().SetSelectedId(-1);
+                                       GetEngine().GetScene().ClearSelection();
                                    }
 
                                    return true;

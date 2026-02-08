@@ -22,7 +22,7 @@ namespace Editor
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
 
-            const bool selected = ctx.scene.GetSelectedId() == node.GetInstanceId();
+            const bool selected = ctx.scene.IsSelected(node.GetInstanceId());
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
                 ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
@@ -43,13 +43,30 @@ namespace Editor
             // Single click to select
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
             {
-                ctx.scene.SetSelectedId(node.GetInstanceId());
+                const ImGuiIO& io = ImGui::GetIO();
+                const bool toggleSelection = io.KeyCtrl || io.KeySuper;
+                if (toggleSelection)
+                {
+                    ctx.scene.ToggleSelection(node.GetInstanceId());
+                }
+                else
+                {
+                    ctx.scene.SetSelectedId(node.GetInstanceId());
+                }
             }
 
             // Double-click to focus camera on the node
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             {
-                ctx.scene.SetSelectedId(node.GetInstanceId());
+                const ImGuiIO& io = ImGui::GetIO();
+                if (io.KeyCtrl || io.KeySuper)
+                {
+                    ctx.scene.AddToSelection(node.GetInstanceId());
+                }
+                else
+                {
+                    ctx.scene.SetSelectedId(node.GetInstanceId());
+                }
                 ctx.actions.Dispatch(ctx, EEditorAction::Camera_FocusSelected,
                                      std::to_string(node.GetInstanceId()));
             }
