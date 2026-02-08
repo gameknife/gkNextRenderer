@@ -8,6 +8,7 @@
 #include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
+#include "Runtime/Subsystems/VoiceInputService.hpp"
 #include "Runtime/Command/DeleteNodesCommand.hpp"
 #include "Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Runtime/ScreenShot.hpp"
@@ -314,6 +315,14 @@ void NextEngine::Start()
 
     audioEngine_ = std::make_unique<NextAudio>();
     audioEngine_->Start();
+
+    voiceInputService_ = std::make_unique<NextAI::VoiceInputService>();
+    NextAI::FVoiceInputConfig voiceConfig;
+    if (aiService_)
+    {
+        aiService_->TryGetVoiceInputConfig(voiceConfig);
+    }
+    voiceInputService_->Initialize(voiceConfig);
 
     if (quickJSEngine_)
     {

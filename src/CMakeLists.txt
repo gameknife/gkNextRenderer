@@ -220,6 +220,10 @@ foreach(target IN LISTS AllTargets)
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
+		if ( WITH_WHISPERCPP )
+			find_package(whisper CONFIG REQUIRED)
+			target_link_libraries(${target} PRIVATE whisper)
+		endif()
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -298,6 +302,10 @@ foreach(target IN LISTS AllTargets)
 	if ( WITH_QUICKJS )
 		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
 		target_link_libraries(${target} PRIVATE quickjs )
+	endif()
+
+	if ( WITH_WHISPERCPP )
+		target_compile_definitions(${target} PUBLIC WITH_WHISPERCPP=1)
 	endif()
 
 	if ( WITH_OZZ )

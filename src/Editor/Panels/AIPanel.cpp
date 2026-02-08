@@ -3,8 +3,11 @@
 #include "Editor/AI/EditorAIService.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
+#include "Runtime/Subsystems/VoiceInputService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
+#include <algorithm>
+#include <cstring>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
@@ -376,6 +379,17 @@ namespace Editor
         bool logScrollToBottom = false;
 
         std::unique_ptr<FEditorAIService> aiService;
+
+        void SetAiInputBuffer(const std::string& text)
+        {
+            const size_t capacity = sizeof(aiInputBuffer) - 1;
+            const size_t copyLength = std::min(capacity, text.size());
+            if (copyLength > 0)
+            {
+                std::memcpy(aiInputBuffer, text.data(), copyLength);
+            }
+            aiInputBuffer[copyLength] = '\0';
+        }
     } // namespace
 
     // ========== UI Drawing ==========
@@ -542,6 +556,7 @@ namespace Editor
     {
         auto status = service.GetStatus();
         bool generating = (status == EEditorAIStatus::Generating);
+        auto* voiceService = ctx.engine.GetVoiceInputService();
 
         // Chat area
         float footerHeight = ImGui::GetFrameHeightWithSpacing() * 2.5f;
@@ -604,7 +619,9 @@ namespace Editor
 
         // Input area: text input + Send button
         float buttonWidth = 80.0f;
-        float inputWidth = ImGui::GetContentRegionAvail().x - buttonWidth - ImGui::GetStyle().ItemSpacing.x;
+        float micButtonWidth = 42.0f;
+        float inputWidth = ImGui::GetContentRegionAvail().x - buttonWidth - micButtonWidth - ImGui::GetStyle().ItemSpacing.x * 2.0f;
+        inputWidth = std::max(inputWidth, 100.0f);
 
         if (generating)
         {
@@ -617,6 +634,57 @@ namespace Editor
                                                    ImGuiInputTextFlags_CtrlEnterForNewLine |
                                                        ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        bool micEnabled = voiceService != nullptr && voiceService->IsEnabled() && !voiceService->IsTranscribing();
+        if (!micEnabled)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        const float inputHeight = ImGui::GetFrameHeightWithSpacing() * 1.5f;
+        ImGui::Button(ICON_FA_MICROPHONE, ImVec2(micButtonWidth, inputHeight));
+        if (voiceService)
+        {
+            if (ImGui::IsItemActivated())
+            {
+                if (!voiceService->BeginCapture())
+                {
+                    chatHistory.push_back({voiceService->GetStatusMessage(), false, true});
+                    chatScrollToBottom = true;
+                }
+            }
+            if (ImGui::IsItemDeactivated() && voiceService->IsCapturing())
+            {
+                voiceService->EndCaptureAndTranscribeAsync();
+            }
+        }
+
+        if (ImGui::IsItemHovered())
+        {
+            if (!voiceService || !voiceService->IsEnabled())
+            {
+                ImGui::SetTooltip("%s", voiceService ? voiceService->GetStatusMessage().c_str() : "Voice input unavailable");
+            }
+            else if (voiceService->IsCapturing())
+            {
+                ImGui::SetTooltip("Release to transcribe");
+            }
+            else if (voiceService->IsTranscribing())
+            {
+                ImGui::SetTooltip("Transcribing...");
+            }
+            else
+            {
+                ImGui::SetTooltip("Hold to talk");
+            }
+        }
+
+        if (!micEnabled)
+        {
+            ImGui::EndDisabled();
+        }
 
         ImGui::SameLine();
 
@@ -635,6 +703,18 @@ namespace Editor
         if (generating)
         {
             ImGui::EndDisabled();
+        }
+
+        if (voiceService && voiceService->IsEnabled())
+        {
+            if (voiceService->IsCapturing())
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.6f, 1.0f), ICON_FA_MICROPHONE " Recording...");
+            }
+            else if (voiceService->IsTranscribing())
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.4f, 1.0f), ICON_FA_SPINNER " Transcribing...");
+            }
         }
     }
 
@@ -712,6 +792,21 @@ namespace Editor
         if (!aiService)
         {
             aiService = std::make_unique<FEditorAIService>(ctx.engine);
+        }
+
+        if (auto* voiceService = ctx.engine.GetVoiceInputService();
+            voiceService && voiceService->HasPendingResult())
+        {
+            auto result = voiceService->ConsumePendingResult();
+            if (result.success)
+            {
+                SetAiInputBuffer(result.text);
+            }
+            else
+            {
+                chatHistory.push_back({result.message, false, true});
+                chatScrollToBottom = true;
+            }
         }
 
         // Poll async results

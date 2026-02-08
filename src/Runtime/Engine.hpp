@@ -23,6 +23,7 @@ class NextEngine;
 namespace NextAI
 {
     class FAIService;
+    class VoiceInputService;
 }
 
 namespace NextCVar
@@ -232,6 +233,8 @@ public:
 
     NextAI::FAIService* GetAIService() { return aiService_.get(); }
     const NextAI::FAIService* GetAIService() const { return aiService_.get(); }
+    NextAI::VoiceInputService* GetVoiceInputService() { return voiceInputService_.get(); }
+    const NextAI::VoiceInputService* GetVoiceInputService() const { return voiceInputService_.get(); }
 
     NextCVar::FCVarSystem& GetCVarSystem() { return *cvarSystem_; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *cvarSystem_; }
@@ -327,6 +330,7 @@ private:
     std::unique_ptr<class UserInterface> userInterface_;
 
     std::unique_ptr<NextAI::FAIService> aiService_;
+    std::unique_ptr<NextAI::VoiceInputService> voiceInputService_;
 
     std::unique_ptr<NextCVar::FCVarSystem> cvarSystem_;
 

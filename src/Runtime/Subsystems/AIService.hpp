@@ -1,5 +1,6 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
+#include "Runtime/Subsystems/VoiceInputService.hpp"
 #include <functional>
 #include <map>
 #include <memory>
@@ -66,6 +67,7 @@ namespace NextAI
         static std::vector<std::pair<EAIProviderType, std::string>> GetAvailableProviders();
         static std::string ProviderTypeToString(EAIProviderType type);
         static EAIProviderType StringToProviderType(const std::string& name);
+        bool TryGetVoiceInputConfig(FVoiceInputConfig& outConfig) const;
 
     private:
         FAIResponse CallProvider(const std::string& prompt);
@@ -78,6 +80,8 @@ namespace NextAI
         EAIProviderType providerType_ = EAIProviderType::Gemini;
         std::unique_ptr<nlohmann::json> fullConfig_;
         std::map<EAIProviderType, bool> providerConfigCache_;
+        FVoiceInputConfig voiceInputConfig_{};
+        bool hasVoiceInputConfig_ = false;
         bool configured_ = false;
         EAIStatus status_ = EAIStatus::NotConfigured;
         std::string statusMessage_;
