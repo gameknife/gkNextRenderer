@@ -4,6 +4,7 @@ add_library(gk_project_options INTERFACE)
 if (WIN32)
     target_compile_definitions(gk_project_options INTERFACE
         UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS
+        NOMINMAX
         WIN32_LEAN_AND_MEAN
     )
 endif ()
