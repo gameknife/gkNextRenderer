@@ -42,9 +42,6 @@ using namespace JPH;
 // If you want your code to compile using single or double precision write 0.0_r to get a Real value that compiles to double or float depending if JPH_DOUBLE_PRECISION is set or not.
 using namespace JPH::literals;
 
-// We're also using STL classes in this example
-using namespace std;
-
 // Callback for traces, connect this to your own trace function if you have one
 static void TraceImpl(const char *inFMT, ...)
 {
@@ -56,7 +53,7 @@ static void TraceImpl(const char *inFMT, ...)
 	va_end(list);
 
 	// Print to the TTY
-	cout << buffer << endl;
+	std::cout << buffer << std::endl;
 }
 
 #ifdef JPH_ENABLE_ASSERTS
@@ -65,7 +62,7 @@ static void TraceImpl(const char *inFMT, ...)
 static bool AssertFailedImpl(const char *inExpression, const char *inMessage, const char *inFile, uint inLine)
 {
 	// Print to the TTY
-	cout << inFile << ":" << inLine << ": (" << inExpression << ") " << (inMessage != nullptr? inMessage : "") << endl;
+	std::cout << inFile << ":" << inLine << ": (" << inExpression << ") " << (inMessage != nullptr? inMessage : "") << std::endl;
 
 	// Breakpoint
 	return true;
@@ -222,7 +219,7 @@ struct FNextPhysicsContext
 {
 	FNextPhysicsContext():
 		tempAllocator(10 * 1024 * 1024),
-		jobSystem(cMaxPhysicsJobs, cMaxPhysicsBarriers, thread::hardware_concurrency() - 1)
+		jobSystem(cMaxPhysicsJobs, cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1)
 	{
 		// This is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
 		// Note: This value is low because this is a simple test. For a real project use something in the order of 65536.

@@ -26,11 +26,6 @@
 
 namespace Assets
 {
-    namespace
-    {
-        constexpr uint32_t InvalidNodeId = static_cast<uint32_t>(-1);
-    }
-
     void Scene::RegisterReflection()
     {
         using namespace entt::literals;
@@ -177,7 +172,7 @@ namespace Assets
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
         selectionState_.Clear();
-        hoveredId_ = InvalidNodeId;
+        hoveredId_ = SceneSelectionState::invalidNodeId;
         lockedIds_.clear();
     }
 
@@ -623,7 +618,7 @@ namespace Assets
                 selectionState_.Remove(id);
                 if (hoveredId_ == id)
                 {
-                    hoveredId_ = InvalidNodeId;
+                    hoveredId_ = SceneSelectionState::invalidNodeId;
                 }
                 lockedIds_.erase(id);
                 node->ClearParent();
@@ -705,7 +700,7 @@ namespace Assets
             lockedIds_.erase(removeId);
             if (hoveredId_ == removeId)
             {
-                hoveredId_ = InvalidNodeId;
+                hoveredId_ = SceneSelectionState::invalidNodeId;
             }
         }
 
@@ -1094,7 +1089,7 @@ namespace Assets
 
     bool Scene::GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const
     {
-        if (nodeId == InvalidNodeId)
+        if (nodeId == SceneSelectionState::invalidNodeId)
         {
             return false;
         }

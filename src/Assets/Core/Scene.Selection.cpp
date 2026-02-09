@@ -6,11 +6,9 @@ namespace Assets
 {
     namespace
     {
-        constexpr uint32_t InvalidNodeId = SceneSelectionState::invalidNodeId;
-
         bool IsValidSelectionId(const Scene& scene, uint32_t id)
         {
-            return id != InvalidNodeId && scene.GetNodeSharedByInstanceId(id) != nullptr;
+            return id != SceneSelectionState::invalidNodeId && scene.GetNodeSharedByInstanceId(id) != nullptr;
         }
 
         const std::vector<uint32_t>& ResolveEffectiveSelection(const Scene& scene, std::vector<uint32_t>& fallback)
@@ -22,7 +20,7 @@ namespace Assets
             }
 
             const uint32_t selectedId = scene.GetSelectedId();
-            if (selectedId != InvalidNodeId)
+            if (selectedId != SceneSelectionState::invalidNodeId)
             {
                 fallback.push_back(selectedId);
             }
@@ -98,7 +96,7 @@ namespace Assets
     {
         if (!IsValidSelectionId(*this, id))
         {
-            hoveredId_ = InvalidNodeId;
+            hoveredId_ = SceneSelectionState::invalidNodeId;
             return;
         }
         hoveredId_ = id;
@@ -106,7 +104,7 @@ namespace Assets
 
     void Scene::ClearHoveredId() const
     {
-        hoveredId_ = InvalidNodeId;
+        hoveredId_ = SceneSelectionState::invalidNodeId;
     }
 
     bool Scene::IsLocked(uint32_t id) const
