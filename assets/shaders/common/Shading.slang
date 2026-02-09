@@ -16,9 +16,32 @@ static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
 static const float TRACE_CORRECTION_OFFSET = 0.0f;
+static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
+static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
+static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
+static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
+static const uint OBJECT_ID_INSTANCE_MASK = 0x0FFFFFFFu;
 
 namespace Common
 {
+    public uint EncodeObjectId(uint instanceId, bool selected, bool hovered, bool locked)
+    {
+        uint objectId = OBJECT_ID_FLAG_VALID | (instanceId & OBJECT_ID_INSTANCE_MASK);
+        if (selected)
+        {
+            objectId |= OBJECT_ID_FLAG_SELECTED;
+        }
+        if (hovered)
+        {
+            objectId |= OBJECT_ID_FLAG_HOVERED;
+        }
+        if (locked)
+        {
+            objectId |= OBJECT_ID_FLAG_LOCKED;
+        }
+        return objectId;
+    }
+
     public uint GetPageIndex(float3 pagePos)
     {
         // Calculate the page index based on the page position
@@ -1286,7 +1309,7 @@ public struct FPathTracingRendererV2
             OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
             OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
             OutNormal.Store(pixel_, float4(0, 1, 0, 1));
-            OutObjectID.Store(pixel_, 65535);
+            OutObjectID.Store(pixel_, 0);
             OutDiffuseHitDist.Store(pixel_, 0);
             OutSpecularHitDist.Store(pixel_, 0);
             OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
@@ -1303,7 +1326,10 @@ public struct FPathTracingRendererV2
 
         OutAlbedo.Store(pixel_, primaryAlbedo_);
         OutNormal.Store(pixel_, gbuffer);
-        OutObjectID.Store(pixel_, hitPrimaryNode_.instanceId);
+        const bool selected = hitPrimaryNode_.reserved1 != 0;
+        const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
+        const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
+        OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked));
         OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
         OutPrevDepth.Store(pixel_, ndcDepth);
         
