@@ -16,9 +16,13 @@ struct PushConsts
 ConstantBuffer<PushConsts> pushConsts;
 
 // Helper functions
-uint FetchPrimitiveIndex(uint InstanceID)
+static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
+static const uint OBJECT_ID_INSTANCE_MASK = 0x0FFFFFFFu;
+static const uint OBJECT_ID_INVALID_INSTANCE = 0xFFFFFFFFu;
+
+uint FetchPrimitiveIndex(uint objectId)
 {
-    return InstanceID;
+    return (objectId & OBJECT_ID_FLAG_VALID) != 0 ? (objectId & OBJECT_ID_INSTANCE_MASK) : OBJECT_ID_INVALID_INSTANCE;
 }
 
 static const float2 offsets5x5[25] = {
@@ -111,7 +115,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                         all(previpos >= int2(-1, -1));
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
     uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
-    const bool miss = current_primitive_index0 == 65535;
+    const bool miss = current_primitive_index0 == OBJECT_ID_INVALID_INSTANCE;
     
     uint moment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[ipos];
 

@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include "Common/CoreMinimal.hpp"
 #include "Vulkan/DebugUtilities.hpp"
 
@@ -97,6 +98,12 @@ namespace Assets
         void RemoveFromSelection(uint32_t id) const;
         void ToggleSelection(uint32_t id) const;
         bool IsSelected(uint32_t id) const;
+        uint32_t GetHoveredId() const { return hoveredId_; }
+        void SetHoveredId(uint32_t id) const;
+        void ClearHoveredId() const;
+        bool IsLocked(uint32_t id) const;
+        void SetLocked(uint32_t id, bool locked) const;
+        void ToggleLocked(uint32_t id) const;
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
 
@@ -236,6 +243,8 @@ namespace Assets
         uint32_t indirectDrawBatchCount_{};
 
         mutable SceneSelectionState selectionState_;
+        mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
+        mutable std::unordered_set<uint32_t> lockedIds_;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;

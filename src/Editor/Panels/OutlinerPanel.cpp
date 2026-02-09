@@ -16,13 +16,37 @@ namespace Editor
 {
     namespace
     {
+        bool ContainsNodeInSubtree(const Assets::Node& node, uint32_t targetId)
+        {
+            if (targetId == InvalidId)
+            {
+                return false;
+            }
+
+            if (node.GetInstanceId() == targetId)
+            {
+                return true;
+            }
+
+            for (const auto& child : node.Children())
+            {
+                if (ContainsNodeInSubtree(*child, targetId))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void DrawNode(EditorContext& ctx, Assets::Node& node, uint32_t& renameTargetId,
-                      std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput)
+                      std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput,
+                      uint32_t& hoveredIdCandidate, bool autoScrollEnabled, uint32_t& pendingScrollTargetId)
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
 
             const bool selected = ctx.scene.IsSelected(node.GetInstanceId());
+            const bool locked = ctx.scene.IsLocked(node.GetInstanceId());
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
                 ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
@@ -34,14 +58,34 @@ namespace Editor
             auto render = node.GetComponent<Runtime::RenderComponent>();
             const int modelId = render ? render->GetModelId() : -1;
 
-            const std::string label =
-                (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) + std::string(" ") + node.GetName();
+            const bool shouldOpenForTarget =
+                autoScrollEnabled && pendingScrollTargetId != InvalidId &&
+                ContainsNodeInSubtree(node, pendingScrollTargetId);
+            if (shouldOpenForTarget)
+            {
+                ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            }
+
+            const std::string lockPrefix = locked ? std::string(ICON_FA_LOCK " ") : "";
+            const std::string label = lockPrefix + (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) +
+                std::string(" ") + node.GetName();
             const bool opened = ImGui::TreeNodeEx(label.c_str(), flag);
 
             ImGui::PopStyleColor();
 
+            if (ImGui::IsItemHovered())
+            {
+                hoveredIdCandidate = node.GetInstanceId();
+            }
+
+            if (autoScrollEnabled && node.GetInstanceId() == pendingScrollTargetId)
+            {
+                ImGui::SetScrollHereY(0.35f);
+                pendingScrollTargetId = InvalidId;
+            }
+
             // Single click to select
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
+            if (!locked && ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
             {
                 const ImGuiIO& io = ImGui::GetIO();
                 const bool toggleSelection = io.KeyCtrl || io.KeySuper;
@@ -59,11 +103,11 @@ namespace Editor
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             {
                 const ImGuiIO& io = ImGui::GetIO();
-                if (io.KeyCtrl || io.KeySuper)
+                if (!locked && (io.KeyCtrl || io.KeySuper))
                 {
                     ctx.scene.AddToSelection(node.GetInstanceId());
                 }
-                else
+                else if (!locked)
                 {
                     ctx.scene.SetSelectedId(node.GetInstanceId());
                 }
@@ -80,6 +124,10 @@ namespace Editor
                     openRenamePopup = true;
                     focusRenameInput = true;
                 }
+                if (ImGui::MenuItem(locked ? "Unlock" : "Lock"))
+                {
+                    ctx.scene.ToggleLocked(node.GetInstanceId());
+                }
                 ImGui::EndPopup();
             }
 
@@ -87,7 +135,8 @@ namespace Editor
             {
                 for (auto& child : node.Children())
                 {
-                    DrawNode(ctx, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput);
+                    DrawNode(ctx, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
+                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId);
                 }
                 ImGui::TreePop();
             }
@@ -102,6 +151,10 @@ namespace Editor
         static std::string renameBuffer;
         static bool openRenamePopup = false;
         static bool focusRenameInput = false;
+        static bool prevAutoScrollEnabled = true;
+        static uint32_t lastSelectionId = InvalidId;
+        static uint32_t pendingScrollTargetId = InvalidId;
+        uint32_t hoveredIdCandidate = InvalidId;
 
         ImGui::Begin("Outliner", nullptr);
         {
@@ -113,7 +166,48 @@ namespace Editor
             ImGui::Separator();
 
             ImGui::Text("Nodes");
+            ImGui::SameLine();
+            const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
+            if (autoScrollWasEnabled)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.35f, 0.75f, 0.75f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f, 0.42f, 0.82f, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.30f, 0.68f, 0.95f));
+            }
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+            if (ImGui::Button(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection"))
+            {
+                ui.outlinerAutoScrollToSelection = !ui.outlinerAutoScrollToSelection;
+            }
+            ImGui::PopStyleVar();
+            if (autoScrollWasEnabled)
+            {
+                ImGui::PopStyleColor(3);
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Auto Scroll To Selection: %s\nWhen enabled, selecting an object in viewport "
+                                  "auto-scrolls Outliner to it.",
+                                  ui.outlinerAutoScrollToSelection ? "On" : "Off");
+            }
             ImGui::Separator();
+
+            const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
+            if (ui.outlinerAutoScrollToSelection)
+            {
+                const bool toggledOn = !prevAutoScrollEnabled;
+                const bool selectionChanged = currentSelectionId != lastSelectionId;
+                if (currentSelectionId != InvalidId && (toggledOn || selectionChanged))
+                {
+                    pendingScrollTargetId = currentSelectionId;
+                }
+            }
+            else
+            {
+                pendingScrollTargetId = InvalidId;
+            }
+            prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
+            lastSelectionId = currentSelectionId;
 
             ImGui::BeginChild("ListBox", ImVec2(0, -50));
 
@@ -129,7 +223,8 @@ namespace Editor
                         continue;
                     }
 
-                    DrawNode(ctx, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput);
+                    DrawNode(ctx, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
+                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId);
 
                     if (limit-- <= 0)
                     {
@@ -140,6 +235,18 @@ namespace Editor
             }
 
             ImGui::EndChild();
+
+            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
+            {
+                if (hoveredIdCandidate != InvalidId)
+                {
+                    ctx.scene.SetHoveredId(hoveredIdCandidate);
+                }
+                else
+                {
+                    ctx.scene.ClearHoveredId();
+                }
+            }
 
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
                 ImGui::IsKeyPressed(ImGuiKey_F2, false))

@@ -176,6 +176,9 @@ namespace Assets
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
+        selectionState_.Clear();
+        hoveredId_ = InvalidNodeId;
+        lockedIds_.clear();
     }
 
     std::shared_ptr<Node> Scene::Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
@@ -617,6 +620,12 @@ namespace Assets
             if ((*it)->GetInstanceId() == id)
             {
                 auto node = *it;
+                selectionState_.Remove(id);
+                if (hoveredId_ == id)
+                {
+                    hoveredId_ = InvalidNodeId;
+                }
+                lockedIds_.erase(id);
                 node->ClearParent();
                 nodes_.erase(it);
                 return node;
@@ -688,6 +697,16 @@ namespace Assets
         for (const auto& node : nodesToRemove)
         {
             removeIds.insert(node->GetInstanceId());
+        }
+
+        for (uint32_t removeId : removeIds)
+        {
+            selectionState_.Remove(removeId);
+            lockedIds_.erase(removeId);
+            if (hoveredId_ == removeId)
+            {
+                hoveredId_ = InvalidNodeId;
+            }
         }
 
         removedEntries.reserve(nodesToRemove.size());
@@ -1011,6 +1030,11 @@ namespace Assets
                             if (model)
                             {
                                 uint32_t nodeJointOffset = 0;
+                                const uint32_t instanceId = node->GetInstanceId();
+                                const uint32_t selectedBit = IsSelected(instanceId) ? 1u : 0u;
+                                const uint32_t hoveredBit = hoveredId_ == instanceId ? 1u : 0u;
+                                const uint32_t lockedBit = IsLocked(instanceId) ? 1u : 0u;
+                                const uint32_t stateBits = hoveredBit | (lockedBit << 1u);
                                 if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                                 {
                                     nodeJointOffset = currentJointOffset;
@@ -1023,6 +1047,8 @@ namespace Assets
                                     proxy.combinedPrevTS = combined;
                                     proxy.modelId = render->GetModelId() * 10 + section;
                                     proxy.nort = section == 0 ? 0 : 1;
+                                    proxy.reserved1 = selectedBit;
+                                    proxy.reserved2 = stateBits;
                                     proxy.jointMatrixOffset = nodeJointOffset;
                                     nodeProxys.push_back(proxy);
                                     indirectDrawBatchCount_++;

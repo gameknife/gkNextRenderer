@@ -4,6 +4,11 @@ import Bindless;
 static const int WORK_GROUP_AXIS_SIZE = 8;
 static const int WINDOW_R = 5; // HALF SIZE, must be even, 8 is a 17 x 17 sobel
 static const int WINDOW_LEN = WORK_GROUP_AXIS_SIZE + 2 * WINDOW_R;
+static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
+static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
+static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
+static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
+static const float DIAGONAL_EDGE_WEIGHT = 0.70710678;
 
 // Shared memory arrays
 groupshared float3 diffuse[WINDOW_LEN][WINDOW_LEN];
@@ -31,19 +36,42 @@ uint FetchVisibility(int2 ipos)
     return visibility[ipos.x][ipos.y];
 }
 
-bool EdgeDetect(uint current_primitive_index, RWTexture2D<uint> ObjectImage, int2 ipos)
+bool HasObjectFlag(uint objectId, uint flag)
 {
-    uint center = current_primitive_index;
+    return ((objectId & OBJECT_ID_FLAG_VALID) != 0) && ((objectId & flag) != 0);
+}
 
-    uint prev_primitive_index0 = (ObjectImage[ipos + int2(1, 1)]);
-    uint prev_primitive_index1 = (ObjectImage[ipos + int2(-1, -1)]);
-    uint prev_primitive_index2 = (ObjectImage[ipos + int2(-1, 1)]);
-    uint prev_primitive_index3 = (ObjectImage[ipos + int2(1, -1)]);
+float ComputeEdgeStrengthTwoSided(RWTexture2D<uint> ObjectImage, int2 ipos, uint flag)
+{
+    // Draw on both sides of the boundary, used for thicker selected outline.
+    bool centerFlagged = HasObjectFlag(ObjectImage[ipos], flag);
 
-    bool edge0 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) != uint4(center));
-    bool edge1 = any(uint4(prev_primitive_index0, prev_primitive_index1, prev_primitive_index2, prev_primitive_index3) == uint4(center));
+    float edgeSum = 0.0;
+    float weightSum = 0.0;
 
-    return edge0 && edge1;
+    bool x0 = HasObjectFlag(ObjectImage[ipos + int2(1, 0)], flag);
+    bool x1 = HasObjectFlag(ObjectImage[ipos + int2(-1, 0)], flag);
+    bool y0 = HasObjectFlag(ObjectImage[ipos + int2(0, 1)], flag);
+    bool y1 = HasObjectFlag(ObjectImage[ipos + int2(0, -1)], flag);
+    bool d0 = HasObjectFlag(ObjectImage[ipos + int2(1, 1)], flag);
+    bool d1 = HasObjectFlag(ObjectImage[ipos + int2(-1, -1)], flag);
+    bool d2 = HasObjectFlag(ObjectImage[ipos + int2(-1, 1)], flag);
+    bool d3 = HasObjectFlag(ObjectImage[ipos + int2(1, -1)], flag);
+
+    edgeSum += (x0 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (x1 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (y0 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (y1 != centerFlagged) ? 1.0 : 0.0;
+    weightSum += 4.0;
+
+    edgeSum += ((d0 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d1 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d2 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d3 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    weightSum += DIAGONAL_EDGE_WEIGHT * 4.0;
+
+    float rawEdge = edgeSum / max(1e-5, weightSum);
+    return smoothstep(0.1, 0.4, rawEdge);
 }
 
 void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, float CenterLum, float3 CenterNormal, uint CenterVisibility)
@@ -159,12 +187,25 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         }
     }
 
-    float edgeThis = EdgeDetect(Camera.SelectedId, ObjectId0, ipos) ? 0.5 : 0.0;
-    float edgePrev = EdgeDetect(Camera.SelectedId, ObjectId1, ipos) ? 0.5 : 0.0;
-    // selected edge
-    if (edgeThis + edgeThis > 0)
+    float selectedEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_SELECTED) * 0.80 +
+                                  ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_SELECTED) * 0.20);
+    float hoveredEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_HOVERED) * 0.75 +
+                                 ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_HOVERED) * 0.25);
+    float lockedEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_LOCKED) * 0.75 +
+                                ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_LOCKED) * 0.25);
+
+    // Priority: locked > selected > hovered
+    if (lockedEdge > 0)
     {
-        Total = lerp(Total, float3(150, 100, 0), edgeThis + edgePrev);
+        Total = lerp(Total, float3(35, 145, 255), lockedEdge);
+    }
+    else if (selectedEdge > 0)
+    {
+        Total = lerp(Total, float3(150, 100, 0), selectedEdge);
+    }
+    else if (hoveredEdge > 0)
+    {
+        Total = lerp(Total, float3(80, 220, 120), hoveredEdge);
     }
     
     if(Camera.HDR)

@@ -176,6 +176,30 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
     {
         modelViewController_.OnCursorPosition(xpos, ypos);
     }
+
+    const uint32_t mouseButtons = SDL_GetMouseState(nullptr, nullptr);
+    const bool rightMousePressed = (mouseButtons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+    if (!gizmoController_.IsInteracting() && !rightMousePressed)
+    {
+        auto mousePos = GetEngine().GetMousePos();
+        glm::vec3 org;
+        glm::vec3 dir;
+        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        GetEngine().RayCastGPU(org, dir,
+                               [this](Assets::RayCastResult result)
+                               {
+                                   if (result.Hitted)
+                                   {
+                                       GetEngine().GetScene().SetHoveredId(result.InstanceId);
+                                   }
+                                   else
+                                   {
+                                       GetEngine().GetScene().ClearHoveredId();
+                                   }
+                                   return true;
+                               });
+    }
+
     return true;
 }
 
@@ -201,6 +225,10 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
                                {
                                    if (result.Hitted)
                                    {
+                                       if (GetEngine().GetScene().IsLocked(result.InstanceId))
+                                       {
+                                           return true;
+                                       }
                                        GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
                                        NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
                                                                       30);

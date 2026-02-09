@@ -33,6 +33,7 @@ namespace Editor
         bool meshBrowser = true;
         bool logPanel = true;
         bool aiPanel = true;
+        bool outlinerAutoScrollToSelection = true;
 
         // Selection
         uint32_t selected_obj_id = InvalidId;

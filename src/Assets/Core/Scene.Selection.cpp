@@ -94,6 +94,57 @@ namespace Assets
         return selectionState_.IsSelected(id);
     }
 
+    void Scene::SetHoveredId(uint32_t id) const
+    {
+        if (!IsValidSelectionId(*this, id))
+        {
+            hoveredId_ = InvalidNodeId;
+            return;
+        }
+        hoveredId_ = id;
+    }
+
+    void Scene::ClearHoveredId() const
+    {
+        hoveredId_ = InvalidNodeId;
+    }
+
+    bool Scene::IsLocked(uint32_t id) const
+    {
+        return lockedIds_.find(id) != lockedIds_.end();
+    }
+
+    void Scene::SetLocked(uint32_t id, bool locked) const
+    {
+        if (!IsValidSelectionId(*this, id))
+        {
+            return;
+        }
+
+        if (locked)
+        {
+            lockedIds_.insert(id);
+            return;
+        }
+
+        lockedIds_.erase(id);
+    }
+
+    void Scene::ToggleLocked(uint32_t id) const
+    {
+        if (!IsValidSelectionId(*this, id))
+        {
+            return;
+        }
+
+        if (IsLocked(id))
+        {
+            lockedIds_.erase(id);
+            return;
+        }
+        lockedIds_.insert(id);
+    }
+
     bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const
     {
         std::vector<uint32_t> fallbackSelection;

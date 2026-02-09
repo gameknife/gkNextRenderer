@@ -203,6 +203,8 @@ namespace Assets
         NodeProxy proxy;
         proxy.instanceId = instanceId_;
         proxy.worldTS = WorldTransform();
+        proxy.reserved1 = 0;
+        proxy.reserved2 = 0;
         
         auto renderComp = GetComponent<Runtime::RenderComponent>();
         if (renderComp)
