@@ -459,6 +459,7 @@ void MagicaLegoUserInterface::DrawOpening() const
 void MagicaLegoUserInterface::OnRenderUI()
 {
     iam_update_begin_frame();
+    GetGameInstance()->SetMouseCapturedByUI(ImGui::GetIO().WantCaptureMouse);
     GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(false, 0.0f, 0.0f, 0.0f);
     // static int frameCount = 0;
     // if (++frameCount % 600 == 0) iam_gc();
@@ -616,7 +617,7 @@ void MagicaLegoUserInterface::DrawHUD()
     ImGui::SetNextWindowSize(ImVec2(0,0));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
-    ImGui::Begin("HUD", nullptr, PanelFlags | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("HUD", nullptr, PanelFlags | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
     ImGui::PushFont(bigFont_);
     auto time = std::time(nullptr);
     ImGui::TextUnformatted(fmt::format("{:%H:%M}", *std::localtime(&time)).c_str());

@@ -199,6 +199,7 @@ public:
 
     // Status
     void SetCapturing(bool b) { bCapturing_ = b; }
+    void SetMouseCapturedByUI(bool captured) { mouseCapturedByUI_ = captured; }
 
     // Cursor for script/AI control
     MagicaLego::FCursor& GetCursor();
@@ -292,6 +293,7 @@ private:
     glm::vec3 currentBlockPosCurrent_{};
     std::shared_ptr<Assets::Node> previewNode_;
     bool hasValidPlacementTarget_ = false;
+    bool previewWasVisible_ = false;
     std::string placementConflictReason_;
 
     // BGM Stuff
@@ -300,6 +302,7 @@ private:
 
     // Status
     bool bCapturing_ = false;
+    bool mouseCapturedByUI_ = false;
 
     // cpu hit
     mutable glm::vec3 cachedCameraPos_;

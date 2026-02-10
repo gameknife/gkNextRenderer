@@ -346,11 +346,34 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     float t = 1.0f - glm::pow(1.0f - speed, float(deltaSeconds) * 60.0f);
     realCameraCenter_ = glm::mix(realCameraCenter_, cameraCenter_, t);
 
+    const bool isMouseOverUI = mouseCapturedByUI_;
+    const bool shouldShowPreview = (currentMode_ == ELegoMode::ELM_Place) && isTracingObject_ && !isOrbitDragging_ && hasValidPlacementTarget_ && !isMouseOverUI;
+
     // indicator update
     float invDelta = static_cast<float>(deltaSeconds) / 60.0f;
-    indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
-    indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
-    currentBlockPosCurrent_ = glm::mix(currentBlockPosCurrent_, currentBlockPosTarget_, invDelta * 1000.0f);
+    if (shouldShowPreview)
+    {
+        if (!previewWasVisible_)
+        {
+            // Reappear should snap to target directly, no interpolation from hidden position.
+            indicatorMinCurrent_ = indicatorMinTarget_;
+            indicatorMaxCurrent_ = indicatorMaxTarget_;
+            currentBlockPosCurrent_ = currentBlockPosTarget_;
+        }
+        else
+        {
+            indicatorMinCurrent_ = glm::mix(indicatorMinCurrent_, indicatorMinTarget_, invDelta * 2000.0f);
+            indicatorMaxCurrent_ = glm::mix(indicatorMaxCurrent_, indicatorMaxTarget_, invDelta * 1000.0f);
+            currentBlockPosCurrent_ = glm::mix(currentBlockPosCurrent_, currentBlockPosTarget_, invDelta * 1000.0f);
+        }
+    }
+    else if (indicatorDrawRequest_)
+    {
+        // If preview is hidden but indicator should be drawn (e.g. conflict), snap indicator
+        // to latest target to avoid a one-frame red box at stale hidden position.
+        indicatorMinCurrent_ = indicatorMinTarget_;
+        indicatorMaxCurrent_ = indicatorMaxTarget_;
+    }
     
     // draw preview block
     if ( previewNode_.get() )
@@ -362,10 +385,10 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         // 只在 Place 模式、trace 到物体且非绕物拖拽时显示预览块
         if (auto render = previewNode_->GetComponent<Runtime::RenderComponent>())
         {
-            bool shouldShow = (currentMode_ == ELegoMode::ELM_Place) && isTracingObject_ && !isOrbitDragging_ && hasValidPlacementTarget_;
-            render->SetVisible(shouldShow);
+            render->SetVisible(shouldShowPreview);
         }
     }
+    previewWasVisible_ = shouldShowPreview;
     
     // draw if no capturing
     if (indicatorDrawRequest_ && !bCapturing_)
@@ -392,6 +415,7 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
     lastSelectLocation_ = invalidPos;
     lastPlacedLocation_ = invalidPos;
     hasValidPlacementTarget_ = false;
+    previewWasVisible_ = false;
     placementConflictReason_.clear();
 }
 
@@ -1163,6 +1187,16 @@ void MagicaLegoGameInstance::CleanDynamicBlocks()
 
 void MagicaLegoGameInstance::CPURaycast()
 {
+    if (mouseCapturedByUI_)
+    {
+        isTracingObject_ = false;
+        hasValidPlacementTarget_ = false;
+        previewWasVisible_ = false;
+        placementConflictReason_.clear();
+        indicatorDrawRequest_ = false;
+        return;
+    }
+
     glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
     isTracingObject_ = false;
     GetEngine().RayCastGPU(cachedCameraPos_, dir, [this](Assets::RayCastResult result)
@@ -1178,6 +1212,7 @@ void MagicaLegoGameInstance::CPURaycast()
     if (!isTracingObject_)
     {
         hasValidPlacementTarget_ = false;
+        previewWasVisible_ = false;
         placementConflictReason_.clear();
     }
 }
