@@ -1,6 +1,7 @@
 #include "MagicaLegoGameInstance.hpp"
 #include "MagicaLegoCommands.hpp"
 #include "MagicaLegoConstants.hpp"
+#include "MagicaLegoPlacementRules.hpp"
 #include "Assets/Core/Scene.hpp"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -14,6 +15,31 @@
 #include <glm/gtc/quaternion.hpp>
 
 const glm::i16vec3 invalidPos(0, -10, 0);
+constexpr uint32_t InvalidOwnerHash = std::numeric_limits<uint32_t>::max();
+
+enum class EHitFace
+{
+    PositiveX,
+    NegativeX,
+    PositiveY,
+    NegativeY,
+    PositiveZ,
+    NegativeZ
+};
+
+EHitFace GetHitFaceFromNormal(const glm::vec3& normal)
+{
+    const glm::vec3 absNormal = glm::abs(normal);
+    if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z)
+    {
+        return normal.y >= 0.0f ? EHitFace::PositiveY : EHitFace::NegativeY;
+    }
+    if (absNormal.x >= absNormal.z)
+    {
+        return normal.x >= 0.0f ? EHitFace::PositiveX : EHitFace::NegativeX;
+    }
+    return normal.z >= 0.0f ? EHitFace::PositiveZ : EHitFace::NegativeZ;
+}
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {
@@ -111,6 +137,59 @@ void MagicaLegoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
 }
 
+bool MagicaLegoGameInstance::ResolvePlacementLocationFromRay(const Assets::RayCastResult& rayResult, glm::i16vec3& outBlockLocation, std::string* reason)
+{
+    glm::vec3 hitPoint = glm::vec3(rayResult.HitPoint);
+    glm::vec3 hitNormal = glm::vec3(rayResult.Normal);
+    if (glm::dot(hitNormal, hitNormal) > 0.0f)
+    {
+        hitNormal = glm::normalize(hitNormal);
+    }
+
+    outBlockLocation = GetBlockLocationFromRenderLocation(hitPoint + hitNormal * 0.005f);
+
+    auto* hitNode = GetEngine().GetScene().GetNodeByInstanceId(rayResult.InstanceId);
+    if (hitNode == nullptr || hitNode->GetName() != "blockInst")
+    {
+        return true;
+    }
+
+    glm::i16vec3 hitAnchor = GetBlockLocationFromRenderLocation(
+        glm::vec3(hitNode->WorldTransform() * glm::vec4(0, 0.0475f, 0, 1)));
+    uint32_t ownerHash = GetOccupancyOwnerHash(hitAnchor);
+    if (ownerHash == InvalidOwnerHash)
+    {
+        return true;
+    }
+
+    auto ownerIt = BlocksDynamics.find(ownerHash);
+    if (ownerIt == BlocksDynamics.end() || ownerIt->second.modelId_ < 0 ||
+        ownerIt->second.modelId_ >= static_cast<int16_t>(BasicNodes.size()))
+    {
+        return true;
+    }
+
+    const std::string_view ownerType(BasicNodes[ownerIt->second.modelId_].type);
+    EHitFace hitFace = GetHitFaceFromNormal(hitNormal);
+
+    if (hitFace == EHitFace::PositiveY)
+    {
+        glm::i16vec3 hitCell = GetBlockLocationFromRenderLocation(hitPoint);
+        outBlockLocation = {
+            hitCell.x,
+            static_cast<int16_t>(ownerIt->second.location.y + 1),
+            hitCell.z
+        };
+    }
+
+    // For thin blocks, side-hit should still be allowed if it resolves to a non-overlapping cell.
+    // We only force y+1 when hitting the top face.
+    (void)ownerType;
+    (void)reason;
+
+    return true;
+}
+
 void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
 {
     // 如果正在 Orbit 拖拽，不执行建造操作
@@ -119,26 +198,46 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         return;
     }
 
-    glm::vec3 newLocation = glm::vec3(rayResult.HitPoint) + glm::vec3(rayResult.Normal) * 0.005f;
-    glm::i16vec3 blockLocation = GetBlockLocationFromRenderLocation(newLocation);
-    glm::vec3 renderLocation = GetRenderLocationFromBlockLocation(blockLocation);
     uint32_t instanceId = rayResult.InstanceId;
     lastSelectIndex_ = instanceId;
+    glm::i16vec3 blockLocation = invalidPos;
+    std::string placementResolveReason;
+    bool hasPlacementLocation = ResolvePlacementLocationFromRay(rayResult, blockLocation, &placementResolveReason);
 
     if (!bMouseLeftDown_)
     {
+        hasValidPlacementTarget_ = false;
+        indicatorDrawRequest_ = false;
+        placementConflictReason_.clear();
+
         if (currentMode_ == ELegoMode::ELM_Place)
         {
-            if (BasicNodeIndicatorMap.size() > 0 && BasicNodes.size() > 0)
+            if (hasPlacementLocation && currentBlockIdx_ >= 0 && currentBlockIdx_ < static_cast<int16_t>(BasicNodes.size()))
             {
-                auto& indicator = BasicNodeIndicatorMap[BasicNodes[currentBlockIdx_].type];
+                FPlacedBlock previewBlock{blockLocation, currentOrientation_, 0, currentBlockIdx_, 0, 0};
+                std::string placeReason;
+                bool canPlace = CanPlaceBlock(previewBlock, &placeReason);
+                hasValidPlacementTarget_ = canPlace;
+                placementConflictReason_ = canPlace ? std::string() : placeReason;
 
-                glm::mat4 orientation = GetOrientationMatrix(currentOrientation_);
-
-                indicatorMinTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<0>(indicator), 1.0f));
-                indicatorMaxTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<1>(indicator), 1.0f));
+                glm::vec3 renderLocation = GetRenderLocationFromBlockLocation(blockLocation);
                 currentBlockPosTarget_ = renderLocation;
-                indicatorDrawRequest_ = true;
+
+                auto indicatorIt = BasicNodeIndicatorMap.find(BasicNodes[currentBlockIdx_].type);
+                if (indicatorIt != BasicNodeIndicatorMap.end())
+                {
+                    const auto& indicator = indicatorIt->second;
+                    glm::mat4 orientation = GetOrientationMatrix(currentOrientation_);
+
+                    indicatorMinTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<0>(indicator), 1.0f));
+                    indicatorMaxTarget_ = renderLocation + glm::vec3(orientation * glm::vec4(std::get<1>(indicator), 1.0f));
+                    indicatorColor_ = canPlace ? glm::vec4(0.5f, 0.65f, 1.0f, 0.75f) : glm::vec4(1.0f, 0.2f, 0.2f, 0.85f);
+                    indicatorDrawRequest_ = true;
+                }
+            }
+            else if (!hasPlacementLocation && !placementResolveReason.empty())
+            {
+                placementConflictReason_ = placementResolveReason;
             }
         }
         return;
@@ -161,6 +260,11 @@ void MagicaLegoGameInstance::OnRayHitResponse(Assets::RayCastResult& rayResult)
         }
         break;
     case ELegoMode::ELM_Place:
+        if (!hasPlacementLocation || currentBlockIdx_ < 0 || currentBlockIdx_ >= static_cast<int16_t>(BasicNodes.size()))
+        {
+            return;
+        }
+
         if (blockLocation == lastPlacedLocation_
             || std::find(oneLinePlacedInstance_.begin(), oneLinePlacedInstance_.end(), instanceId) != oneLinePlacedInstance_.end())
         {
@@ -258,7 +362,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
         // 只在 Place 模式、trace 到物体且非绕物拖拽时显示预览块
         if (auto render = previewNode_->GetComponent<Runtime::RenderComponent>())
         {
-            bool shouldShow = (currentMode_ == ELegoMode::ELM_Place) && isTracingObject_ && !isOrbitDragging_;
+            bool shouldShow = (currentMode_ == ELegoMode::ELM_Place) && isTracingObject_ && !isOrbitDragging_ && hasValidPlacementTarget_;
             render->SetVisible(shouldShow);
         }
     }
@@ -266,7 +370,7 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // draw if no capturing
     if (indicatorDrawRequest_ && !bCapturing_)
     {
-        NextEngineHelper::DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, glm::vec4(0.5, 0.65, 1, 0.75), 2.0);
+        NextEngineHelper::DrawAuxBox(indicatorMinCurrent_, indicatorMaxCurrent_, indicatorColor_, 2.0);
         indicatorDrawRequest_ = false;
     }
 }
@@ -287,6 +391,8 @@ void MagicaLegoGameInstance::SetBuildMode(ELegoMode mode)
     currentMode_ = mode;
     lastSelectLocation_ = invalidPos;
     lastPlacedLocation_ = invalidPos;
+    hasValidPlacementTarget_ = false;
+    placementConflictReason_.clear();
 }
 
 void MagicaLegoGameInstance::OnSceneLoaded()
@@ -506,16 +612,51 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
 
 void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
 {
-    if (currentMode_ == ELegoMode::ELM_Select)
+    if (currentMode_ != ELegoMode::ELM_Select || lastSelectLocation_ == invalidPos)
     {
-        if (lastSelectLocation_ != invalidPos)
-        {
-            uint32_t currentHash = GetHashFromBlockLocation(lastSelectLocation_);
-            FPlacedBlock currentBlock = BlocksDynamics[currentHash];
-            FPlacedBlock block{lastSelectLocation_, currentBlock.orientation, 0, idx, 0, 0};
-            PlaceDynamicBlock(block);
-        }
+        return;
     }
+
+    if (idx < 0 || idx >= static_cast<int16_t>(BasicNodes.size()))
+    {
+        return;
+    }
+
+    const uint32_t selectedOwnerHash = GetOccupancyOwnerHash(lastSelectLocation_);
+    if (selectedOwnerHash == InvalidOwnerHash)
+    {
+        return;
+    }
+
+    auto selectedIt = BlocksDynamics.find(selectedOwnerHash);
+    if (selectedIt == BlocksDynamics.end() || selectedIt->second.modelId_ < 0)
+    {
+        return;
+    }
+
+    FPlacedBlock replacedBlock = selectedIt->second;
+    replacedBlock.modelId_ = idx;
+
+    if (!CanPlaceBlockInternal(replacedBlock, selectedOwnerHash, nullptr))
+    {
+        return;
+    }
+
+    UnregisterOccupancy(selectedOwnerHash);
+    BlocksDynamics[selectedOwnerHash] = replacedBlock;
+    RegisterOccupancy(selectedOwnerHash, GetOccupiedCellsForBlock(replacedBlock));
+    BlockRecords.push_back(replacedBlock);
+    currentPreviewStep = static_cast<int>(BlockRecords.size());
+    RebuildScene(BlocksDynamics, selectedOwnerHash);
+    lastPlacedLocation_ = replacedBlock.location;
+
+    int random = rand();
+    if (random % 3 == 0)
+        GetEngine().PlaySound("assets/sfx/put2.wav");
+    else if (random % 3 == 1)
+        GetEngine().PlaySound("assets/sfx/put1.wav");
+    else
+        GetEngine().PlaySound("assets/sfx/put3.wav");
 }
 
 void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
@@ -549,8 +690,17 @@ void MagicaLegoGameInstance::DumpReplayStep(int step)
         CleanDynamicBlocks();
         for (auto& block : BlockRecords)
         {
-            BlocksDynamics[GetHashFromBlockLocation(block.location)] = block;
+            uint32_t ownerHash = GetHashFromBlockLocation(block.location);
+            if (block.modelId_ < 0)
+            {
+                BlocksDynamics.erase(ownerHash);
+            }
+            else
+            {
+                BlocksDynamics[ownerHash] = block;
+            }
         }
+        RebuildOccupancyIndex();
         RebuildScene(BlocksDynamics, -1);
     }
 }
@@ -618,20 +768,178 @@ FBasicBlock* MagicaLegoGameInstance::GetBasicBlock(uint32_t blockIdx)
     return nullptr;
 }
 
+std::vector<glm::i16vec3> MagicaLegoGameInstance::GetOccupiedCellsForBlock(const FPlacedBlock& block) const
+{
+    if (block.modelId_ < 0 || block.modelId_ >= static_cast<int16_t>(BasicNodes.size()))
+    {
+        return {};
+    }
+
+    const FBasicBlock& basicBlock = BasicNodes[block.modelId_];
+    return MagicaLego::Placement::BuildOccupiedCells(basicBlock.type, block.location, block.orientation);
+}
+
+uint32_t MagicaLegoGameInstance::GetOccupancyOwnerHash(glm::i16vec3 location) const
+{
+    const uint32_t locationHash = GetHashFromBlockLocation(location);
+
+    auto occupiedIt = OccupiedCellOwnerMap.find(locationHash);
+    if (occupiedIt != OccupiedCellOwnerMap.end())
+    {
+        return occupiedIt->second;
+    }
+
+    auto blockIt = BlocksDynamics.find(locationHash);
+    if (blockIt != BlocksDynamics.end() && blockIt->second.modelId_ >= 0)
+    {
+        return locationHash;
+    }
+
+    return InvalidOwnerHash;
+}
+
+bool MagicaLegoGameInstance::CanPlaceBlockInternal(const FPlacedBlock& block, uint32_t ignoredOwnerHash, std::string* reason) const
+{
+    if (block.modelId_ < 0)
+    {
+        if (reason) *reason = "Invalid place operation";
+        return false;
+    }
+
+    if (block.location.y < 0)
+    {
+        if (reason) *reason = "Block location below base plane";
+        return false;
+    }
+
+    if (block.modelId_ >= static_cast<int16_t>(BasicNodes.size()))
+    {
+        if (reason) *reason = "Invalid block model id";
+        return false;
+    }
+
+    const std::vector<glm::i16vec3> occupiedCells = GetOccupiedCellsForBlock(block);
+    if (occupiedCells.empty())
+    {
+        if (reason) *reason = "Invalid block footprint";
+        return false;
+    }
+
+    for (const glm::i16vec3& occupiedCell : occupiedCells)
+    {
+        const uint32_t cellHash = GetHashFromBlockLocation(occupiedCell);
+        auto occupiedIt = OccupiedCellOwnerMap.find(cellHash);
+        if (occupiedIt == OccupiedCellOwnerMap.end())
+        {
+            continue;
+        }
+
+        if (ignoredOwnerHash != InvalidOwnerHash && occupiedIt->second == ignoredOwnerHash)
+        {
+            continue;
+        }
+
+        if (reason)
+        {
+            *reason = fmt::format("Cell ({},{},{}) already occupied", occupiedCell.x, occupiedCell.y, occupiedCell.z);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool MagicaLegoGameInstance::CanPlaceBlock(const FPlacedBlock& block, std::string* reason) const
+{
+    return CanPlaceBlockInternal(block, InvalidOwnerHash, reason);
+}
+
+void MagicaLegoGameInstance::RegisterOccupancy(uint32_t ownerHash, const std::vector<glm::i16vec3>& occupiedCells)
+{
+    OwnerOccupiedCellsMap[ownerHash] = occupiedCells;
+    for (const glm::i16vec3& occupiedCell : occupiedCells)
+    {
+        OccupiedCellOwnerMap[GetHashFromBlockLocation(occupiedCell)] = ownerHash;
+    }
+}
+
+void MagicaLegoGameInstance::UnregisterOccupancy(uint32_t ownerHash)
+{
+    auto ownerIt = OwnerOccupiedCellsMap.find(ownerHash);
+    if (ownerIt != OwnerOccupiedCellsMap.end())
+    {
+        for (const glm::i16vec3& occupiedCell : ownerIt->second)
+        {
+            OccupiedCellOwnerMap.erase(GetHashFromBlockLocation(occupiedCell));
+        }
+        OwnerOccupiedCellsMap.erase(ownerIt);
+    }
+}
+
+void MagicaLegoGameInstance::RebuildOccupancyIndex()
+{
+    OccupiedCellOwnerMap.clear();
+    OwnerOccupiedCellsMap.clear();
+
+    for (const auto& [ownerHash, block] : BlocksDynamics)
+    {
+        if (block.modelId_ < 0)
+        {
+            continue;
+        }
+
+        RegisterOccupancy(ownerHash, GetOccupiedCellsForBlock(block));
+    }
+}
+
 bool MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock block)
 {
-    if (block.location.y < 0)
+    if (block.modelId_ < 0)
+    {
+        const uint32_t ownerHash = GetOccupancyOwnerHash(block.location);
+        if (ownerHash == InvalidOwnerHash)
+        {
+            return false;
+        }
+
+        auto ownerIt = BlocksDynamics.find(ownerHash);
+        if (ownerIt == BlocksDynamics.end() || ownerIt->second.modelId_ < 0)
+        {
+            return false;
+        }
+
+        const glm::i16vec3 anchorLocation = ownerIt->second.location;
+        const EOrientation anchorOrientation = ownerIt->second.orientation;
+
+        UnregisterOccupancy(ownerHash);
+        BlocksDynamics.erase(ownerIt);
+
+        FPlacedBlock removeOp{anchorLocation, anchorOrientation, 0, -1, 0, 0};
+        BlockRecords.push_back(removeOp);
+        currentPreviewStep = static_cast<int>(BlockRecords.size());
+        RebuildScene(BlocksDynamics, ownerHash);
+        lastPlacedLocation_ = anchorLocation;
+
+        if (cursor_)
+        {
+            cursor_->position = anchorLocation;
+        }
+        return true;
+    }
+
+    if (!CanPlaceBlock(block))
     {
         return false;
     }
 
-    uint32_t blockHash = GetHashFromBlockLocation(block.location);
+    const uint32_t ownerHash = GetHashFromBlockLocation(block.location);
+    const std::vector<glm::i16vec3> occupiedCells = GetOccupiedCellsForBlock(block);
 
-    // Place it
-    BlocksDynamics[blockHash] = block;
+    BlocksDynamics[ownerHash] = block;
+    RegisterOccupancy(ownerHash, occupiedCells);
     BlockRecords.push_back(block);
     currentPreviewStep = static_cast<int>(BlockRecords.size());
-    RebuildScene(BlocksDynamics, blockHash);
+    RebuildScene(BlocksDynamics, ownerHash);
     lastPlacedLocation_ = block.location;
 
     // Sync cursor position to placed block location
@@ -642,20 +950,16 @@ bool MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock block)
     }
 
     // random put1 or put2
-    if (block.modelId_ >= 0)
-    {
-        int random = rand();
-        if (random % 3 == 0)
-            GetEngine().PlaySound("assets/sfx/put2.wav");
-        else if (random % 3 == 1)
-            GetEngine().PlaySound("assets/sfx/put1.wav");
-        else
-            GetEngine().PlaySound("assets/sfx/put3.wav");
-    }
+    int random = rand();
+    if (random % 3 == 0)
+        GetEngine().PlaySound("assets/sfx/put2.wav");
+    else if (random % 3 == 1)
+        GetEngine().PlaySound("assets/sfx/put1.wav");
+    else
+        GetEngine().PlaySound("assets/sfx/put3.wav");
 
     return true;
 }
-
 void MagicaLegoGameInstance::SwitchBasePlane(EBasePlane type)
 {
     currentBaseSize_ = type;
@@ -837,7 +1141,15 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
     for (int i = 0; i < timelapse; i++)
     {
         auto& block = BlockRecords[i];
-        tempBlocksDynamics[GetHashFromBlockLocation(block.location)] = block;
+        uint32_t ownerHash = GetHashFromBlockLocation(block.location);
+        if (block.modelId_ < 0)
+        {
+            tempBlocksDynamics.erase(ownerHash);
+        }
+        else
+        {
+            tempBlocksDynamics[ownerHash] = block;
+        }
     }
     RebuildScene(tempBlocksDynamics, -1);
 }
@@ -845,6 +1157,8 @@ void MagicaLegoGameInstance::RebuildFromRecord(int timelapse)
 void MagicaLegoGameInstance::CleanDynamicBlocks()
 {
     BlocksDynamics.clear();
+    OccupiedCellOwnerMap.clear();
+    OwnerOccupiedCellsMap.clear();
 }
 
 void MagicaLegoGameInstance::CPURaycast()
@@ -860,6 +1174,12 @@ void MagicaLegoGameInstance::CPURaycast()
             }
             return true;
         });
+
+    if (!isTracingObject_)
+    {
+        hasValidPlacementTarget_ = false;
+        placementConflictReason_.clear();
+    }
 }
 
 int16_t MagicaLegoGameInstance::ConvertBrushIdxToNextType(const std::string& prefix, int idx) const
@@ -1045,13 +1365,13 @@ FBasicBlock* MagicaLegoGameInstance::GetBasicBlockBySpec(const std::string& type
 
 bool MagicaLegoGameInstance::HasBlockAt(glm::i16vec3 location) const
 {
-    uint32_t hash = GetHashFromBlockLocation(location);
-    auto it = BlocksDynamics.find(hash);
-    if (it == BlocksDynamics.end())
+    uint32_t ownerHash = GetOccupancyOwnerHash(location);
+    if (ownerHash == InvalidOwnerHash)
     {
         return false;
     }
-    return it->second.modelId_ >= 0;
+    auto ownerIt = BlocksDynamics.find(ownerHash);
+    return ownerIt != BlocksDynamics.end() && ownerIt->second.modelId_ >= 0;
 }
 
 std::vector<std::string> MagicaLegoGameInstance::GetAllBlockTypes() const
@@ -1205,7 +1525,7 @@ void MagicaLegoGameInstance::UpdateMouseCursor()
             cursorType = SDL_SYSTEM_CURSOR_NOT_ALLOWED;  // 禁止符号，表示删除
             break;
         case ELegoMode::ELM_Place:
-            cursorType = SDL_SYSTEM_CURSOR_CROSSHAIR;  // 十字线，表示放置
+            cursorType = hasValidPlacementTarget_ ? SDL_SYSTEM_CURSOR_CROSSHAIR : SDL_SYSTEM_CURSOR_NOT_ALLOWED;
             break;
         case ELegoMode::ELM_Select:
             cursorType = SDL_SYSTEM_CURSOR_POINTER;  // 手型，表示选择

@@ -33,8 +33,10 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_MagicaLegoStyle.cpp
 	Tests/Test_MagicaLegoScript.cpp
+	Tests/Test_MagicaLegoPlacementRules.cpp
 	Application/MagicaLego/MagicaLegoStyle.cpp
 	Application/MagicaLego/MagicaLegoScriptParser.cpp
+	Application/MagicaLego/MagicaLegoPlacementRules.cpp
 )
 
 if (ENABLE_PHYSIC)

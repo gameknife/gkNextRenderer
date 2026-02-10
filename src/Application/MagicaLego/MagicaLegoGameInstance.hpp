@@ -163,6 +163,9 @@ public:
 
     // Blocks
     bool PlaceDynamicBlock(FPlacedBlock Block);
+    bool CanPlaceBlock(const FPlacedBlock& Block, std::string* reason = nullptr) const;
+    bool HasPlacementConflictReason() const { return !placementConflictReason_.empty(); }
+    const std::string& GetPlacementConflictReason() const { return placementConflictReason_; }
 
     // Command System Support
     FBasicBlock* GetBasicBlockBySpec(const std::string& type, const std::string& color);
@@ -217,6 +220,14 @@ protected:
     void UpdateFocusToScreenCenter();
     void UpdateMouseCursor();
 
+    std::vector<glm::i16vec3> GetOccupiedCellsForBlock(const FPlacedBlock& Block) const;
+    uint32_t GetOccupancyOwnerHash(glm::i16vec3 location) const;
+    bool CanPlaceBlockInternal(const FPlacedBlock& Block, uint32_t ignoredOwnerHash, std::string* reason) const;
+    bool ResolvePlacementLocationFromRay(const Assets::RayCastResult& rayResult, glm::i16vec3& outBlockLocation, std::string* reason = nullptr);
+    void RebuildOccupancyIndex();
+    void RegisterOccupancy(uint32_t ownerHash, const std::vector<glm::i16vec3>& occupiedCells);
+    void UnregisterOccupancy(uint32_t ownerHash);
+
 private:
     ELegoMode currentMode_{};
     EBasePlane currentBaseSize_{};
@@ -238,6 +249,8 @@ private:
     // 基础加速结构，location -> uint64_t，存储已经放置的方块
     FPlacedBlockDatabase BlocksDynamics;
     FPlacedRecords BlockRecords;
+    std::unordered_map<uint32_t, uint32_t> OccupiedCellOwnerMap;
+    std::unordered_map<uint32_t, std::vector<glm::i16vec3>> OwnerOccupiedCellsMap;
 
     NextEngine* engine_;
 
@@ -270,6 +283,7 @@ private:
 
     // Indicator Stuff
     bool indicatorDrawRequest_{};
+    glm::vec4 indicatorColor_ = glm::vec4(0.5f, 0.65f, 1.0f, 0.75f);
     glm::vec3 indicatorMinTarget_{};
     glm::vec3 indicatorMaxTarget_{};
     glm::vec3 indicatorMinCurrent_{};
@@ -277,6 +291,8 @@ private:
     glm::vec3 currentBlockPosTarget_{};
     glm::vec3 currentBlockPosCurrent_{};
     std::shared_ptr<Assets::Node> previewNode_;
+    bool hasValidPlacementTarget_ = false;
+    std::string placementConflictReason_;
 
     // BGM Stuff
     uint32_t currentBGM_ = 0;
