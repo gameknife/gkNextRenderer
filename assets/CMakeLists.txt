@@ -11,7 +11,12 @@ endif()
 # ============================================================
 # 非 Shader 资源 - 目录拷贝
 # ============================================================
-set(ASSET_DIRS anims configs fonts legos locale models paks sfx textures typescript)
+set(ASSET_DIRS anims configs fonts legos locale models omr paks sfx textures typescript)
+
+# LDraw library: only copy if present (large external dependency)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ldraw")
+    list(APPEND ASSET_DIRS ldraw)
+endif()
 
 # 收集所有资源文件
 set(all_asset_files "")
