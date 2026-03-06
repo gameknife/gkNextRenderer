@@ -13,6 +13,7 @@
 #include <algorithm>
 
 #include "Assets/Loaders/FProcModel.h"
+#include "Assets/Loaders/FLDrawLoader.h"
 #include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -309,15 +310,29 @@ void SceneList::ScanScenes()
             if (ext != ".glb" && ext != ".gltf") continue;
             AllScenes.push_back((modelPath / filename).string());
         }
-    
-        // sort the scene
-        std::sort(AllScenes.begin(), AllScenes.end());
-
-        AllScenes.insert(AllScenes.begin(), "RTIO.proc");
-        AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
-    
-        SPDLOG_INFO("Scene found: {}", AllScenes.size());
     }
+
+    // Scan assets/omr/ for .ldr files
+    std::string omrPath = "assets/omr/";
+    std::filesystem::path omrDir = Utilities::FileHelper::GetPlatformFilePath(omrPath.c_str());
+    if (std::filesystem::exists(omrDir))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(omrDir))
+        {
+            std::string ext = entry.path().extension().string();
+            if (ext != ".ldr" && ext != ".mpd") continue;
+            std::filesystem::path filename = entry.path().filename();
+            AllScenes.push_back((omrPath / filename).string());
+        }
+    }
+
+    // sort the scene
+    std::sort(AllScenes.begin(), AllScenes.end());
+
+    AllScenes.insert(AllScenes.begin(), "RTIO.proc");
+    AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
+
+    SPDLOG_INFO("Scene found: {}", AllScenes.size());
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)
@@ -341,6 +356,10 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     if (ext == ".glb" || ext == ".gltf")
     {
         return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+    }
+    if (ext == ".ldr" || ext == ".mpd")
+    {
+        return Assets::FLDrawLoader::LoadLDrawScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
     }
     if (ext == ".proc")
     {

@@ -174,5 +174,6 @@ namespace Assets
 
         friend class FProcModel;
         friend class FSceneLoader;
+        friend class FLDrawLoader;
     };
 }
