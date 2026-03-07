@@ -101,9 +101,9 @@ namespace Assets
                         bfc.certified = true;
                         bfc.localCull = true;
                         if (bfcCmd.find("CW") != std::string::npos && bfcCmd.find("CCW") == std::string::npos)
-                            bfc.windingCCW = false;
+                            bfc.fileWindingCCW = false;
                         else
-                            bfc.windingCCW = true;
+                            bfc.fileWindingCCW = true;
                     }
                     else if (bfcCmd == "NOCERTIFY")
                     {
@@ -111,11 +111,11 @@ namespace Assets
                     }
                     else if (bfcCmd == "CW")
                     {
-                        bfc.windingCCW = false;
+                        bfc.fileWindingCCW = false;
                     }
                     else if (bfcCmd == "CCW")
                     {
-                        bfc.windingCCW = true;
+                        bfc.fileWindingCCW = true;
                     }
                     else if (bfcCmd == "INVERTNEXT")
                     {
@@ -125,9 +125,9 @@ namespace Assets
                     {
                         bfc.localCull = true;
                         if (bfcCmd.find("CW") != std::string::npos && bfcCmd.find("CCW") == std::string::npos)
-                            bfc.windingCCW = false;
+                            bfc.fileWindingCCW = false;
                         else if (bfcCmd.find("CCW") != std::string::npos)
-                            bfc.windingCCW = true;
+                            bfc.fileWindingCCW = true;
                     }
                     else if (bfcCmd == "NOCLIP")
                     {
@@ -177,13 +177,15 @@ namespace Assets
                 BFCState childBfc = bfc;
                 childBfc.invertNext = false;
 
-                bool invert = bfc.invertNext;
+                bool invert = bfc.orientationInverted;
+                if (bfc.invertNext)
+                    invert = !invert;
+
                 glm::mat3 rotPart(subTransform);
                 if (glm::determinant(rotPart) < 0.0f)
                     invert = !invert;
 
-                if (invert)
-                    childBfc.windingCCW = !childBfc.windingCCW;
+                childBfc.orientationInverted = invert;
 
                 // Resolve sub-file path
                 std::string resolvedPath = resolver_.Resolve(subfile);
@@ -213,9 +215,11 @@ namespace Assets
                 v1 = glm::vec3(transform * glm::vec4(v1, 1.0f));
                 v2 = glm::vec3(transform * glm::vec4(v2, 1.0f));
 
+                bool faceWindingCCW = (bfc.fileWindingCCW != bfc.orientationInverted);
+
                 LDrawFace face;
                 face.vertexCount = 3;
-                if (bfc.windingCCW)
+                if (faceWindingCCW)
                 {
                     face.vertices[0] = v0;
                     face.vertices[1] = v1;
@@ -253,7 +257,8 @@ namespace Assets
                     std::swap(v1, v3);
 
                 // Apply BFC winding
-                if (!bfc.windingCCW)
+                bool faceWindingCCW = (bfc.fileWindingCCW != bfc.orientationInverted);
+                if (!faceWindingCCW)
                     std::swap(v1, v3);
 
                 int resolved = ResolveColor(color, parentColor);

@@ -18,7 +18,8 @@ namespace Assets
     {
         bool certified = false;
         bool localCull = true;
-        bool windingCCW = true;
+        bool fileWindingCCW = true;
+        bool orientationInverted = false;
         bool invertNext = false;
     };
 
