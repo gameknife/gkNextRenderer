@@ -35,6 +35,7 @@ namespace Assets
         LDrawParser(LDrawColorTable& colors, LDrawFileResolver& resolver);
 
         LDrawPartTemplate ParseFile(const std::string& filepath);
+        LDrawPartTemplate ParseFileDirectGeometry(const std::string& filepath);
         void ClearCache();
 
         void SetMPDSubfiles(std::unordered_map<std::string, std::string> subfiles);
@@ -43,7 +44,7 @@ namespace Assets
 
     private:
         void ParseStream(std::istream& input, int parentColor,
-                         const glm::mat4& transform, BFCState bfc,
+                         const glm::mat4& transform, BFCState bfc, bool expandSubfiles,
                          std::vector<LDrawFace>& outFaces);
 
         int ResolveColor(int faceColor, int parentColor) const;
@@ -51,6 +52,7 @@ namespace Assets
         LDrawColorTable& colors_;
         LDrawFileResolver& resolver_;
         std::unordered_map<std::string, LDrawPartTemplate> templateCache_;
+        std::unordered_map<std::string, LDrawPartTemplate> directTemplateCache_;
         std::unordered_map<std::string, std::string> mpdSubfiles_;
     };
 }

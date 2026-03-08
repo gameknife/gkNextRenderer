@@ -11,7 +11,10 @@
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <cfloat>
+#include <functional>
+#include <unordered_set>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -20,8 +23,26 @@ namespace Assets
 {
     constexpr float kLDrawScale = 0.001f;
 
+    static std::string ToLowerStr(const std::string& s)
+    {
+        std::string result = s;
+        std::transform(result.begin(), result.end(), result.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return result;
+    }
+
     namespace
     {
+        struct LDrawNodePlacement
+        {
+            int colorCode = 16;
+            glm::mat4 transform = glm::mat4(1.0f);
+            std::string partFile;
+            std::string partKey;
+            bool isHierarchicalSubmodel = false;
+            std::vector<LDrawNodePlacement> children;
+        };
+
         struct SceneBounds
         {
             glm::vec3 min = glm::vec3(FLT_MAX);
@@ -42,6 +63,148 @@ namespace Assets
         glm::vec3 ChromeColor(const glm::vec3& color)
         {
             return glm::mix(color, glm::vec3(1.0f), 0.25f);
+        }
+
+        bool ParseType1Reference(
+            const std::string& line,
+            int parentColor,
+            LDrawNodePlacement& placement)
+        {
+            std::string trimmed = line;
+            size_t start = trimmed.find_first_not_of(" \t\r\n");
+            if (start == std::string::npos)
+                return false;
+
+            trimmed = trimmed.substr(start);
+            if (trimmed.empty() || trimmed[0] != '1')
+                return false;
+
+            std::istringstream iss(trimmed);
+            int type = 0;
+            iss >> type;
+            if (type != 1)
+                return false;
+
+            int color = 16;
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            float a = 1.0f;
+            float b = 0.0f;
+            float c = 0.0f;
+            float d = 0.0f;
+            float e = 1.0f;
+            float f = 0.0f;
+            float g = 0.0f;
+            float h = 0.0f;
+            float i = 1.0f;
+            std::string subfile;
+
+            iss >> color >> x >> y >> z >> a >> b >> c >> d >> e >> f >> g >> h >> i;
+            std::getline(iss, subfile);
+
+            size_t subfileStart = subfile.find_first_not_of(" \t");
+            if (subfileStart == std::string::npos)
+                return false;
+
+            subfile = subfile.substr(subfileStart);
+            size_t subfileEnd = subfile.find_last_not_of(" \t\r\n");
+            if (subfileEnd != std::string::npos)
+                subfile = subfile.substr(0, subfileEnd + 1);
+
+            if (subfile.empty())
+                return false;
+
+            placement.colorCode = (color == 16) ? parentColor : color;
+            placement.transform = glm::mat4(
+                a, d, g, 0.0f,
+                b, e, h, 0.0f,
+                c, f, i, 0.0f,
+                x, y, z, 1.0f);
+            placement.partFile = subfile;
+            placement.partKey = ToLowerStr(subfile);
+            return true;
+        }
+
+        bool IsHierarchicalMPDSubmodel(
+            const std::string& partFile,
+            const std::unordered_map<std::string, std::string>& mpdSubfiles)
+        {
+            std::string key = ToLowerStr(partFile);
+            if (mpdSubfiles.count(key) == 0)
+                return false;
+
+            std::string ext = ToLowerStr(std::filesystem::path(partFile).extension().string());
+            return ext != ".dat";
+        }
+
+        std::vector<LDrawNodePlacement> ParsePlacementTree(
+            const std::string& content,
+            int parentColor,
+            const std::unordered_map<std::string, std::string>& mpdSubfiles,
+            std::unordered_set<std::string>& activeSubmodels)
+        {
+            std::vector<LDrawNodePlacement> placements;
+            std::istringstream stream(content);
+            std::string line;
+
+            while (std::getline(stream, line))
+            {
+                LDrawNodePlacement placement;
+                if (!ParseType1Reference(line, parentColor, placement))
+                    continue;
+
+                placement.isHierarchicalSubmodel =
+                    IsHierarchicalMPDSubmodel(placement.partFile, mpdSubfiles);
+
+                if (placement.isHierarchicalSubmodel)
+                {
+                    if (activeSubmodels.count(placement.partKey) > 0)
+                    {
+                        SPDLOG_WARN("LDraw: detected recursive MPD submodel '{}', skipping nested expansion", placement.partFile);
+                    }
+                    else
+                    {
+                        auto mpdIt = mpdSubfiles.find(placement.partKey);
+                        if (mpdIt != mpdSubfiles.end())
+                        {
+                            activeSubmodels.insert(placement.partKey);
+                            placement.children = ParsePlacementTree(
+                                mpdIt->second,
+                                placement.colorCode,
+                                mpdSubfiles,
+                                activeSubmodels);
+                            activeSubmodels.erase(placement.partKey);
+                        }
+                    }
+                }
+
+                placements.push_back(std::move(placement));
+            }
+
+            return placements;
+        }
+
+        glm::mat4 BuildNodeTransform(const glm::mat4& ldrawMat)
+        {
+            glm::mat4 tfm = ldrawMat;
+            tfm[0][2] = -ldrawMat[0][2];
+            tfm[1][2] = -ldrawMat[1][2];
+            tfm[2][0] = -ldrawMat[2][0];
+            tfm[2][1] = -ldrawMat[2][1];
+            tfm[3][0] = -ldrawMat[3][0] * kLDrawScale;
+            tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;
+            tfm[3][2] = ldrawMat[3][2] * kLDrawScale;
+            tfm[3][3] = 1.0f;
+            return tfm;
+        }
+
+        std::string BuildNodeName(const std::string& partFile, uint32_t serial)
+        {
+            std::string baseName = std::filesystem::path(partFile).filename().string();
+            if (baseName.empty())
+                baseName = partFile;
+            return baseName + "_" + std::to_string(serial);
         }
 
         Material CreateMixtureMaterial(const glm::vec3& diffuse, float roughness, float metalness, float ior)
@@ -215,14 +378,147 @@ namespace Assets
             nodes.push_back(floorNode);
             return true;
         }
-    }
 
-    static std::string ToLowerStr(const std::string& s)
-    {
-        std::string result = s;
-        std::transform(result.begin(), result.end(), result.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return result;
+        PartModelInfo ResolvePartModel(
+            const std::string& partFile,
+            bool directGeometryOnly,
+            LDrawParser& parser,
+            LDrawFileResolver& fileResolver,
+            std::unordered_map<std::string, PartModelInfo>& fullPartModels,
+            std::unordered_map<std::string, PartModelInfo>& directPartModels,
+            const std::function<PartModelInfo(const LDrawPartTemplate&, std::vector<Model>&)>& buildPartModel,
+            std::vector<Model>& models)
+        {
+            std::string partKey = ToLowerStr(partFile);
+            auto& modelCache = directGeometryOnly ? directPartModels : fullPartModels;
+
+            auto modelIt = modelCache.find(partKey);
+            if (modelIt != modelCache.end())
+                return modelIt->second;
+
+            LDrawPartTemplate tmpl;
+            if (parser.HasMPDSubfile(partKey))
+            {
+                tmpl = directGeometryOnly
+                    ? parser.ParseFileDirectGeometry(partFile)
+                    : parser.ParseFile(partFile);
+            }
+            else
+            {
+                std::string resolvedPath = fileResolver.Resolve(partFile);
+                if (!resolvedPath.empty())
+                {
+                    tmpl = directGeometryOnly
+                        ? parser.ParseFileDirectGeometry(resolvedPath)
+                        : parser.ParseFile(resolvedPath);
+                }
+            }
+
+            PartModelInfo info {};
+            info.modelIdx = UINT32_MAX;
+            if (!tmpl.faces.empty())
+                info = buildPartModel(tmpl, models);
+
+            modelCache[partKey] = info;
+            return info;
+        }
+
+        void ApplyPartMaterials(
+            const PartModelInfo& partInfo,
+            int inheritedColorCode,
+            uint32_t defaultMatIdx,
+            const std::unordered_map<int, uint32_t>& colorToMatIdx,
+            std::array<uint32_t, 16>& matArray)
+        {
+            matArray.fill(0);
+            for (size_t sectionIdx = 0; sectionIdx < partInfo.sectionColors.size() && sectionIdx < matArray.size(); ++sectionIdx)
+            {
+                int colorCode = partInfo.sectionColors[sectionIdx];
+                if (colorCode == kLDrawColorInherit)
+                    colorCode = inheritedColorCode;
+
+                auto colorIt = colorToMatIdx.find(colorCode);
+                matArray[sectionIdx] = (colorIt != colorToMatIdx.end()) ? colorIt->second : defaultMatIdx;
+            }
+        }
+
+        void InstantiatePlacementTree(
+            const LDrawNodePlacement& placement,
+            std::shared_ptr<Node> parent,
+            uint32_t& nodeSerial,
+            LDrawParser& parser,
+            LDrawFileResolver& fileResolver,
+            uint32_t defaultMatIdx,
+            const std::unordered_map<int, uint32_t>& colorToMatIdx,
+            std::unordered_map<std::string, PartModelInfo>& fullPartModels,
+            std::unordered_map<std::string, PartModelInfo>& directPartModels,
+            const std::function<PartModelInfo(const LDrawPartTemplate&, std::vector<Model>&)>& buildPartModel,
+            std::vector<std::shared_ptr<Node>>& nodes,
+            std::vector<Model>& models)
+        {
+            glm::vec3 scale;
+            glm::vec3 translation;
+            glm::vec3 skew;
+            glm::quat rotation;
+            glm::vec4 perspective;
+            glm::decompose(
+                BuildNodeTransform(placement.transform),
+                scale,
+                rotation,
+                translation,
+                skew,
+                perspective);
+
+            auto node = Node::CreateNode(
+                BuildNodeName(placement.partFile, nodeSerial++),
+                translation,
+                rotation,
+                scale,
+                static_cast<uint32_t>(nodes.size()));
+
+            nodes.push_back(node);
+            if (parent)
+                node->SetParent(parent);
+
+            const PartModelInfo partInfo = ResolvePartModel(
+                placement.partFile,
+                placement.isHierarchicalSubmodel,
+                parser,
+                fileResolver,
+                fullPartModels,
+                directPartModels,
+                buildPartModel,
+                models);
+
+            if (partInfo.modelIdx != UINT32_MAX)
+            {
+                std::array<uint32_t, 16> matArray = {0};
+                ApplyPartMaterials(partInfo, placement.colorCode, defaultMatIdx, colorToMatIdx, matArray);
+
+                auto renderComp = std::make_shared<Runtime::RenderComponent>();
+                renderComp->SetModelId(partInfo.modelIdx);
+                renderComp->SetVisible(true);
+                renderComp->SetMaterial(matArray);
+                node->AddComponent(renderComp);
+            }
+
+            for (const auto& child : placement.children)
+            {
+                InstantiatePlacementTree(
+                    child,
+                    node,
+                    nodeSerial,
+                    parser,
+                    fileResolver,
+                    defaultMatIdx,
+                    colorToMatIdx,
+                    fullPartModels,
+                    directPartModels,
+                    buildPartModel,
+                    nodes,
+                    models);
+            }
+        }
     }
 
     PartModelInfo FLDrawLoader::BuildPartModel(
@@ -320,11 +616,9 @@ namespace Assets
                                  std::istreambuf_iterator<char>());
         ldrFile.close();
 
-        // Check if this is an MPD file (contains "0 FILE" directives)
-        // Parse MPD sub-files: split by "0 FILE" boundaries
         std::string mainModelContent;
+        std::unordered_map<std::string, std::string> mpdSubfiles;
         {
-            std::unordered_map<std::string, std::string> mpdSubfiles;
             std::istringstream contentStream(fileContent);
             std::string line;
             std::string currentFileName;
@@ -379,7 +673,7 @@ namespace Assets
             if (isMPD)
             {
                 SPDLOG_INFO("LDraw: MPD file with {} embedded sub-files", mpdSubfiles.size());
-                parser.SetMPDSubfiles(std::move(mpdSubfiles));
+                parser.SetMPDSubfiles(mpdSubfiles);
             }
             else
             {
@@ -388,157 +682,35 @@ namespace Assets
             }
         }
 
-        // Parse top-level type-1 references from the main model only
-        struct PartPlacement
-        {
-            int colorCode;
-            glm::mat4 transform;
-            std::string partFile;
-        };
-        std::vector<PartPlacement> placements;
-
-        {
-            std::istringstream mainStream(mainModelContent);
-            std::string line;
-            while (std::getline(mainStream, line))
-            {
-                size_t start = line.find_first_not_of(" \t\r\n");
-                if (start == std::string::npos)
-                    continue;
-                line = line.substr(start);
-                if (line.empty() || line[0] != '1')
-                    continue;
-
-                std::istringstream iss(line);
-                int type;
-                iss >> type;
-                if (type != 1)
-                    continue;
-
-                int color;
-                float x, y, z, a, b, c, d, e, f, g, h, i;
-                std::string subfile;
-
-                iss >> color >> x >> y >> z >> a >> b >> c >> d >> e >> f >> g >> h >> i;
-                std::getline(iss, subfile);
-                {
-                    size_t sp = subfile.find_first_not_of(" \t");
-                    if (sp != std::string::npos)
-                        subfile = subfile.substr(sp);
-                    size_t ep = subfile.find_last_not_of(" \t\r\n");
-                    if (ep != std::string::npos)
-                        subfile = subfile.substr(0, ep + 1);
-                }
-
-                if (subfile.empty())
-                    continue;
-
-                PartPlacement placement;
-                placement.colorCode = color;
-                placement.transform = glm::mat4(
-                    a, d, g, 0.0f,
-                    b, e, h, 0.0f,
-                    c, f, i, 0.0f,
-                    x, y, z, 1.0f
-                );
-                placement.partFile = subfile;
-                placements.push_back(placement);
-            }
-        }
+        std::unordered_set<std::string> activeSubmodels;
+        std::vector<LDrawNodePlacement> placements =
+            ParsePlacementTree(mainModelContent, 16, mpdSubfiles, activeSubmodels);
 
         SPDLOG_INFO("LDraw: found {} part placements in scene", placements.size());
 
-        // Build models for each unique part, storing section info
-        std::unordered_map<std::string, PartModelInfo> partModels;
+        std::unordered_map<std::string, PartModelInfo> fullPartModels;
+        std::unordered_map<std::string, PartModelInfo> directPartModels;
+        uint32_t nodeSerial = 0;
+        auto buildPartModel = [](const LDrawPartTemplate& tmpl, std::vector<Model>& outputModels)
+        {
+            return FLDrawLoader::BuildPartModel(tmpl, outputModels);
+        };
 
         for (const auto& placement : placements)
         {
-            std::string partKey = ToLowerStr(placement.partFile);
-            if (partModels.count(partKey))
-                continue;
-
-            // Try MPD sub-file first, then LDraw library
-            LDrawPartTemplate tmpl;
-            if (parser.HasMPDSubfile(partKey))
-            {
-                tmpl = parser.ParseFile(placement.partFile);
-            }
-            else
-            {
-                std::string resolvedPath = fileResolver.Resolve(placement.partFile);
-                if (resolvedPath.empty())
-                    continue;
-                tmpl = parser.ParseFile(resolvedPath);
-            }
-
-            if (tmpl.faces.empty())
-                continue;
-
-            partModels[partKey] = BuildPartModel(tmpl, models);
-        }
-
-        // Create nodes for each placement
-        for (size_t pi = 0; pi < placements.size(); ++pi)
-        {
-            const auto& placement = placements[pi];
-            std::string partKey = ToLowerStr(placement.partFile);
-
-            auto partIt = partModels.find(partKey);
-            if (partIt == partModels.end() || partIt->second.modelIdx == UINT32_MAX)
-                continue;
-
-            const auto& partInfo = partIt->second;
-
-            // Build conjugated transform: F * T_ldraw * F
-            // F = diag(-1, -1, 1, 1) to match X+Y flip in geometry
-            // (F*M*F)_ij = F_i * M_ij * F_j
-            // F_0=-1, F_1=-1, F_2=1: elements with exactly one index in {0,1} get negated
-            glm::mat4 ldrawMat = placement.transform;
-            glm::mat4 tfm = ldrawMat;
-            // Negate elements where exactly one of (row,col) is in the Z-axis
-            tfm[0][2] = -ldrawMat[0][2];   // col0,row2: F_2*F_0 = 1*(-1) = -1
-            tfm[1][2] = -ldrawMat[1][2];   // col1,row2: F_2*F_1 = 1*(-1) = -1
-            tfm[2][0] = -ldrawMat[2][0];   // col2,row0: F_0*F_2 = (-1)*1 = -1
-            tfm[2][1] = -ldrawMat[2][1];   // col2,row1: F_1*F_2 = (-1)*1 = -1
-            tfm[3][0] = -ldrawMat[3][0] * kLDrawScale;   // -x
-            tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;   // -y
-            tfm[3][2] =  ldrawMat[3][2] * kLDrawScale;   //  z
-            tfm[3][3] = 1.0f;
-
-            // Decompose into TRS
-            glm::vec3 scale, trans, skew;
-            glm::quat rotation;
-            glm::vec4 perspective;
-            glm::decompose(tfm, scale, rotation, trans, skew, perspective);
-
-            std::string nodeName = partKey + "_" + std::to_string(pi);
-            auto node = Node::CreateNode(nodeName, trans, rotation, scale,
-                                        static_cast<uint32_t>(nodes.size()));
-
-            // Set up material array matching section colors
-            std::array<uint32_t, 16> matArray = {0};
-            for (size_t s = 0; s < partInfo.sectionColors.size() && s < 16; ++s)
-            {
-                int colorCode = partInfo.sectionColors[s];
-                if (colorCode == kLDrawColorInherit)
-                {
-                    auto cmIt = colorToMatIdx.find(placement.colorCode);
-                    matArray[s] = (cmIt != colorToMatIdx.end()) ? cmIt->second : defaultMatIdx;
-                }
-                else
-                {
-                    auto cmIt = colorToMatIdx.find(colorCode);
-                    matArray[s] = (cmIt != colorToMatIdx.end()) ? cmIt->second : defaultMatIdx;
-                }
-            }
-
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(partInfo.modelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial(matArray);
-            node->AddComponent(renderComp);
-
-            nodes.push_back(node);
+            InstantiatePlacementTree(
+                placement,
+                nullptr,
+                nodeSerial,
+                parser,
+                fileResolver,
+                defaultMatIdx,
+                colorToMatIdx,
+                fullPartModels,
+                directPartModels,
+                buildPartModel,
+                nodes,
+                models);
         }
 
         // Clean up MPD sub-files from parser

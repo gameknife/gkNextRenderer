@@ -61,7 +61,7 @@ namespace Assets
         if (mpdIt != mpdSubfiles_.end())
         {
             std::istringstream stream(mpdIt->second);
-            ParseStream(stream, 16, glm::mat4(1.0f), bfc, tmpl.faces);
+            ParseStream(stream, 16, glm::mat4(1.0f), bfc, true, tmpl.faces);
         }
         else
         {
@@ -71,7 +71,7 @@ namespace Assets
                 SPDLOG_WARN("LDraw: cannot open file '{}'", filepath);
                 return tmpl;
             }
-            ParseStream(file, 16, glm::mat4(1.0f), bfc, tmpl.faces);
+            ParseStream(file, 16, glm::mat4(1.0f), bfc, true, tmpl.faces);
         }
 
         templateCache_[key] = tmpl;
@@ -79,8 +79,43 @@ namespace Assets
         return tmpl;
     }
 
+    LDrawPartTemplate LDrawParser::ParseFileDirectGeometry(const std::string& filepath)
+    {
+        std::string key = ToLowerStr(std::filesystem::path(filepath).filename().string());
+
+        auto cacheIt = directTemplateCache_.find(key);
+        if (cacheIt != directTemplateCache_.end())
+            return cacheIt->second;
+
+        LDrawPartTemplate tmpl;
+        tmpl.filename = key;
+
+        BFCState bfc;
+
+        auto mpdIt = mpdSubfiles_.find(key);
+        if (mpdIt != mpdSubfiles_.end())
+        {
+            std::istringstream stream(mpdIt->second);
+            ParseStream(stream, 16, glm::mat4(1.0f), bfc, false, tmpl.faces);
+        }
+        else
+        {
+            std::ifstream file(filepath);
+            if (!file.is_open())
+            {
+                SPDLOG_WARN("LDraw: cannot open file '{}'", filepath);
+                return tmpl;
+            }
+            ParseStream(file, 16, glm::mat4(1.0f), bfc, false, tmpl.faces);
+        }
+
+        directTemplateCache_[key] = tmpl;
+        SPDLOG_INFO("LDraw: parsed direct geometry {} -> {} faces", key, tmpl.faces.size());
+        return tmpl;
+    }
+
     void LDrawParser::ParseStream(std::istream& input, int parentColor,
-                                  const glm::mat4& transform, BFCState bfc,
+                                  const glm::mat4& transform, BFCState bfc, bool expandSubfiles,
                                   std::vector<LDrawFace>& outFaces)
     {
         std::string line;
@@ -212,25 +247,28 @@ namespace Assets
 
                 childBfc.orientationInverted = invert;
 
-                // Try to resolve the sub-file: MPD sub-files first, then library
-                std::string subKey = ToLowerStr(subfile);
-                auto mpdIt = mpdSubfiles_.find(subKey);
-                if (mpdIt != mpdSubfiles_.end())
+                if (expandSubfiles)
                 {
-                    std::istringstream subStream(mpdIt->second);
-                    ParseStream(subStream, subColor, combinedTransform,
-                                childBfc, outFaces);
-                }
-                else
-                {
-                    std::string resolvedPath = resolver_.Resolve(subfile);
-                    if (!resolvedPath.empty())
+                    // Try to resolve the sub-file: MPD sub-files first, then library
+                    std::string subKey = ToLowerStr(subfile);
+                    auto mpdIt = mpdSubfiles_.find(subKey);
+                    if (mpdIt != mpdSubfiles_.end())
                     {
-                        std::ifstream subFileStream(resolvedPath);
-                        if (subFileStream.is_open())
+                        std::istringstream subStream(mpdIt->second);
+                        ParseStream(subStream, subColor, combinedTransform,
+                                    childBfc, true, outFaces);
+                    }
+                    else
+                    {
+                        std::string resolvedPath = resolver_.Resolve(subfile);
+                        if (!resolvedPath.empty())
                         {
-                            ParseStream(subFileStream, subColor, combinedTransform,
-                                        childBfc, outFaces);
+                            std::ifstream subFileStream(resolvedPath);
+                            if (subFileStream.is_open())
+                            {
+                                ParseStream(subFileStream, subColor, combinedTransform,
+                                            childBfc, true, outFaces);
+                            }
                         }
                     }
                 }
@@ -339,5 +377,6 @@ namespace Assets
     void LDrawParser::ClearCache()
     {
         templateCache_.clear();
+        directTemplateCache_.clear();
     }
 }
