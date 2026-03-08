@@ -33,6 +33,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LDrawConfig.cpp
 	Tests/Test_LDrawGeometry.cpp
 	Tests/Test_LDrawParser.cpp
+	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_MagicaLegoStyle.cpp
