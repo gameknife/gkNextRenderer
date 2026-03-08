@@ -17,6 +17,98 @@ namespace Assets
 {
     constexpr float kLDrawScale = 0.001f;
 
+    namespace
+    {
+        glm::vec3 LightenTowardsWhite(const glm::vec3& color, float colorRetention)
+        {
+            return glm::mix(glm::vec3(1.0f), color, glm::clamp(colorRetention, 0.0f, 1.0f));
+        }
+
+        glm::vec3 BlendColors(const glm::vec3& baseColor, const glm::vec3& detailColor, float factor)
+        {
+            return glm::mix(baseColor, detailColor, glm::clamp(factor, 0.0f, 1.0f));
+        }
+
+        glm::vec3 ChromeColor(const glm::vec3& color)
+        {
+            return glm::mix(color, glm::vec3(1.0f), 0.25f);
+        }
+
+        Material CreateMixtureMaterial(const glm::vec3& diffuse, float roughness, float metalness, float ior)
+        {
+            Material material = Material::Mixture(diffuse, roughness);
+            material.Metalness = metalness;
+            material.RefractionIndex = ior;
+            material.RefractionIndex2 = ior;
+            return material;
+        }
+
+        Material CreateMetallicMaterial(const glm::vec3& diffuse, float roughness, float ior)
+        {
+            Material material = Material::Metallic(diffuse, roughness);
+            material.RefractionIndex = ior;
+            material.RefractionIndex2 = ior;
+            return material;
+        }
+
+        Material CreateDielectricMaterial(const glm::vec3& diffuse, float alpha, float roughness, float ior)
+        {
+            Material material = Material::Dielectric(ior, roughness);
+            material.Diffuse = glm::vec4(diffuse, alpha);
+            material.RefractionIndex = ior;
+            material.RefractionIndex2 = ior;
+            return material;
+        }
+
+        Material BuildMaterialFromLDrawColor(const LDrawColor& color)
+        {
+            const bool isTransparent = color.alpha < 0.99f;
+
+            switch (color.finish)
+            {
+            case LDrawColor::Finish::Chrome:
+                return CreateMetallicMaterial(ChromeColor(color.diffuse), 0.0f, 2.4f);
+
+            case LDrawColor::Finish::Pearlescent:
+                return CreateMixtureMaterial(LightenTowardsWhite(color.diffuse, 0.9f), 0.2f, 0.5f, 1.6f);
+
+            case LDrawColor::Finish::MatteMetallic:
+                return CreateMixtureMaterial(color.diffuse, 0.2f, 0.8f, 1.45f);
+
+            case LDrawColor::Finish::Rubber:
+                if (isTransparent)
+                    return CreateDielectricMaterial(color.diffuse, color.alpha, 0.4f, 1.45f);
+                return CreateMixtureMaterial(color.diffuse, 0.4f, 0.0f, 1.45f);
+
+            case LDrawColor::Finish::Glitter:
+            {
+                glm::vec3 glitterColor = color.hasSecondaryDiffuse
+                    ? LightenTowardsWhite(color.secondaryDiffuse, 0.5f)
+                    : LightenTowardsWhite(color.diffuse, 0.5f);
+                glm::vec3 blendedColor = BlendColors(color.diffuse, glitterColor, 0.05f);
+                if (isTransparent)
+                    return CreateDielectricMaterial(blendedColor, color.alpha, 0.2f, 1.585f);
+                return CreateMixtureMaterial(blendedColor, 0.2f, 0.05f, 1.585f);
+            }
+
+            case LDrawColor::Finish::Speckle:
+            {
+                glm::vec3 speckleColor = color.hasSecondaryDiffuse
+                    ? LightenTowardsWhite(color.secondaryDiffuse, 0.5f)
+                    : LightenTowardsWhite(color.diffuse, 0.5f);
+                glm::vec3 blendedColor = BlendColors(color.diffuse, speckleColor, 0.05f);
+                return CreateMixtureMaterial(blendedColor, 0.1f, 0.05f, 1.45f);
+            }
+
+            case LDrawColor::Finish::Solid:
+            default:
+                if (isTransparent)
+                    return CreateDielectricMaterial(color.diffuse, color.alpha, 0.05f, 1.585f);
+                return CreateMixtureMaterial(color.diffuse, 0.1f, 0.0f, 1.45f);
+            }
+        }
+    }
+
     static std::string ToLowerStr(const std::string& s)
     {
         std::string result = s;
@@ -143,24 +235,7 @@ namespace Assets
 
         for (const auto& [code, color] : colorTable.AllColors())
         {
-            Material mat;
-            if (color.finish == LDrawColor::Finish::Chrome)
-            {
-                mat = Material::Metallic(color.diffuse, 0.01f);
-            }
-            else if (color.finish == LDrawColor::Finish::Pearlescent || color.finish == LDrawColor::Finish::MatteMetallic)
-            {
-                mat = Material::Metallic(color.diffuse, 0.15f);
-            }
-            else if (color.alpha < 0.99f)
-            {
-                mat = Material::Dielectric(1.5f, 0.01f);
-                mat.Diffuse = glm::vec4(color.diffuse, color.alpha);
-            }
-            else
-            {
-                mat = Material::Lambertian(color.diffuse);
-            }
+            Material mat = BuildMaterialFromLDrawColor(color);
 
             uint32_t idx = static_cast<uint32_t>(materials.size());
             materials.push_back({mat, color.name});

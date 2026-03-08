@@ -10,7 +10,10 @@ namespace Assets
         std::string name;
         glm::vec3 diffuse;      // linear RGB
         glm::vec3 edge;         // linear RGB
+        glm::vec3 secondaryDiffuse; // linear RGB for glitter/speckle style finishes
         float alpha;            // 0-1 (1=opaque)
+        float luminance;        // 0-100
+        bool hasSecondaryDiffuse;
         enum class Finish { Solid, Chrome, Pearlescent, Rubber, MatteMetallic, Glitter, Speckle };
         Finish finish;
     };

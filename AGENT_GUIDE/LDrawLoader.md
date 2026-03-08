@@ -67,11 +67,15 @@ tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;  // 平移 Y 取反 + 缩放
 ### 材质映射
 
 - 颜色表从 `LDConfig.ldr` 解析（322 种颜色）
-- 每种颜色 → 一个 `FMaterial`，按 Finish 类型分配材质模型:
-  - **Solid/Rubber**: `Material::Lambertian(linearColor)`
-  - **Chrome**: `Material::Metallic(linearColor, 0.01f)`
-  - **Pearlescent**: `Material::Metallic(linearColor, 0.15f)`
-  - **Transparent** (alpha < 1): `Material::Dielectric(1.5f, 0.01f)` + `Diffuse.a = alpha`
+- 默认使用一层 realistic color 覆盖，将 `ImportLDraw`/LGEO 的实物色值覆盖到 `LDConfig.ldr` 对应颜色
+- 每种颜色 → 一个 `FMaterial`，按 Finish 类型分配更接近实物的 PBR 参数:
+  - **Solid**: `Mixture(roughness=0.1, metalness=0.0, ior=1.45)`
+  - **Transparent**: `Dielectric(roughness=0.05, ior=1.585)` + `Diffuse.a = alpha`
+  - **Chrome**: `Metallic(roughness=0.0, ior=2.4)`，颜色轻微提亮
+  - **Pearlescent**: `Mixture(roughness=0.2, metalness=0.5, ior=1.6)`
+  - **Matte Metallic**: `Mixture(roughness=0.2, metalness=0.8, ior=1.45)`
+  - **Rubber**: `Mixture(roughness=0.4, metalness=0.0, ior=1.45)`；半透明时退化为 rough dielectric
+  - **Glitter/Speckle**: 解析 `MATERIAL ... VALUE #RRGGBB` 的 secondary color，并用 5% 混合近似 ImportLDraw 的颗粒层
 - 颜色继承: LDraw 颜色 16 = 继承父级颜色 → `kLDrawColorInherit (-1)`
 - Section 机制: 同一零件中不同颜色的面用不同 `MaterialIndex`，Node 的材质数组映射到实际材质
 

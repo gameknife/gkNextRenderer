@@ -29,6 +29,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_ComponentSystem.cpp
+	Tests/Test_LDrawConfig.cpp
 	Tests/Test_LDrawParser.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp
