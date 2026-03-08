@@ -32,6 +32,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_LDrawConfig.cpp
 	Tests/Test_LDrawGeometry.cpp
+	Tests/Test_LDrawLoader.cpp
 	Tests/Test_LDrawParser.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
