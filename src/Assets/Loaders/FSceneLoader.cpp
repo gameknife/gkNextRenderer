@@ -1073,8 +1073,8 @@ namespace Assets
         newCamera.FieldOfView = 40;
         newCamera.Aperture = 0.0f;
         newCamera.name = "AutoCamera";
-        newCamera.NearPlane = glm::min( radius * 0.5f, 0.2f);
-        newCamera.FarPlane = glm::min( radius * 100.f, 1000.f);
+        newCamera.NearPlane = radius < 50.0f ? 0.01f : 0.2f;
+        newCamera.FarPlane = glm::min( radius + 50.0f, 1000.f);
 
         return newCamera;
     }
