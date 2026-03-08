@@ -28,6 +28,21 @@ namespace Assets
         return faceColor;
     }
 
+    void LDrawParser::SetMPDSubfiles(std::unordered_map<std::string, std::string> subfiles)
+    {
+        mpdSubfiles_ = std::move(subfiles);
+    }
+
+    void LDrawParser::ClearMPDSubfiles()
+    {
+        mpdSubfiles_.clear();
+    }
+
+    bool LDrawParser::HasMPDSubfile(const std::string& name) const
+    {
+        return mpdSubfiles_.count(ToLowerStr(name)) > 0;
+    }
+
     LDrawPartTemplate LDrawParser::ParseFile(const std::string& filepath)
     {
         std::string key = ToLowerStr(std::filesystem::path(filepath).filename().string());
@@ -40,26 +55,36 @@ namespace Assets
         tmpl.filename = key;
 
         BFCState bfc;
-        ParseFileRecursive(filepath, 16, glm::mat4(1.0f), bfc, tmpl.faces);
+
+        // Check MPD sub-files first
+        auto mpdIt = mpdSubfiles_.find(key);
+        if (mpdIt != mpdSubfiles_.end())
+        {
+            std::istringstream stream(mpdIt->second);
+            ParseStream(stream, 16, glm::mat4(1.0f), bfc, tmpl.faces);
+        }
+        else
+        {
+            std::ifstream file(filepath);
+            if (!file.is_open())
+            {
+                SPDLOG_WARN("LDraw: cannot open file '{}'", filepath);
+                return tmpl;
+            }
+            ParseStream(file, 16, glm::mat4(1.0f), bfc, tmpl.faces);
+        }
 
         templateCache_[key] = tmpl;
         SPDLOG_INFO("LDraw: parsed part {} -> {} faces", key, tmpl.faces.size());
         return tmpl;
     }
 
-    void LDrawParser::ParseFileRecursive(const std::string& filepath, int parentColor,
-                                         const glm::mat4& transform, BFCState bfc,
-                                         std::vector<LDrawFace>& outFaces)
+    void LDrawParser::ParseStream(std::istream& input, int parentColor,
+                                  const glm::mat4& transform, BFCState bfc,
+                                  std::vector<LDrawFace>& outFaces)
     {
-        std::ifstream file(filepath);
-        if (!file.is_open())
-        {
-            SPDLOG_WARN("LDraw: cannot open file '{}'", filepath);
-            return;
-        }
-
         std::string line;
-        while (std::getline(file, line))
+        while (std::getline(input, line))
         {
             size_t start = line.find_first_not_of(" \t\r\n");
             if (start == std::string::npos)
@@ -121,7 +146,7 @@ namespace Assets
                     {
                         bfc.invertNext = true;
                     }
-                    else if (bfcCmd == "CLIP" || bfcCmd.find("CLIP ") == 0)
+                    else if (bfcCmd.find("CLIP") == 0)
                     {
                         bfc.localCull = true;
                         if (bfcCmd.find("CW") != std::string::npos && bfcCmd.find("CCW") == std::string::npos)
@@ -187,12 +212,27 @@ namespace Assets
 
                 childBfc.orientationInverted = invert;
 
-                // Resolve sub-file path
-                std::string resolvedPath = resolver_.Resolve(subfile);
-                if (!resolvedPath.empty())
+                // Try to resolve the sub-file: MPD sub-files first, then library
+                std::string subKey = ToLowerStr(subfile);
+                auto mpdIt = mpdSubfiles_.find(subKey);
+                if (mpdIt != mpdSubfiles_.end())
                 {
-                    ParseFileRecursive(resolvedPath, subColor, combinedTransform,
-                                       childBfc, outFaces);
+                    std::istringstream subStream(mpdIt->second);
+                    ParseStream(subStream, subColor, combinedTransform,
+                                childBfc, outFaces);
+                }
+                else
+                {
+                    std::string resolvedPath = resolver_.Resolve(subfile);
+                    if (!resolvedPath.empty())
+                    {
+                        std::ifstream subFileStream(resolvedPath);
+                        if (subFileStream.is_open())
+                        {
+                            ParseStream(subFileStream, subColor, combinedTransform,
+                                        childBfc, outFaces);
+                        }
+                    }
                 }
 
                 bfc.invertNext = false;

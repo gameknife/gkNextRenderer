@@ -37,15 +37,20 @@ namespace Assets
         LDrawPartTemplate ParseFile(const std::string& filepath);
         void ClearCache();
 
+        void SetMPDSubfiles(std::unordered_map<std::string, std::string> subfiles);
+        void ClearMPDSubfiles();
+        bool HasMPDSubfile(const std::string& name) const;
+
     private:
-        void ParseFileRecursive(const std::string& filepath, int parentColor,
-                                const glm::mat4& transform, BFCState bfc,
-                                std::vector<LDrawFace>& outFaces);
+        void ParseStream(std::istream& input, int parentColor,
+                         const glm::mat4& transform, BFCState bfc,
+                         std::vector<LDrawFace>& outFaces);
 
         int ResolveColor(int faceColor, int parentColor) const;
 
         LDrawColorTable& colors_;
         LDrawFileResolver& resolver_;
         std::unordered_map<std::string, LDrawPartTemplate> templateCache_;
+        std::unordered_map<std::string, std::string> mpdSubfiles_;
     };
 }

@@ -54,16 +54,15 @@ namespace Assets
                 glm::vec3 v1 = face->vertices[1];
                 glm::vec3 v2 = face->vertices[2];
 
-                // Y-inversion (LDraw Y-down -> engine Y-up) + scale
-                v0.y = -v0.y;
-                v1.y = -v1.y;
-                v2.y = -v2.y;
+                // LDraw to engine coordinate conversion:
+                // Negate both X and Y (det=1, preserves right-handedness)
+                // X-flip corrects the handedness-induced mirroring from Y-flip
+                v0.x = -v0.x; v0.y = -v0.y;
+                v1.x = -v1.x; v1.y = -v1.y;
+                v2.x = -v2.x; v2.y = -v2.y;
                 v0 *= kLDrawScale;
                 v1 *= kLDrawScale;
                 v2 *= kLDrawScale;
-
-                // Swap winding to compensate Y-inversion
-                std::swap(v1, v2);
 
                 // Flat normal
                 glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
@@ -174,7 +173,7 @@ namespace Assets
         if (blackIt != colorToMatIdx.end())
             defaultMatIdx = blackIt->second;
 
-        // Parse the .ldr file
+        // Parse the .ldr/.mpd file
         LDrawParser parser(colorTable, fileResolver);
 
         std::string ldrPath;
@@ -191,7 +190,80 @@ namespace Assets
             return false;
         }
 
-        // Parse top-level type-1 references
+        // Read entire file content
+        std::string fileContent((std::istreambuf_iterator<char>(ldrFile)),
+                                 std::istreambuf_iterator<char>());
+        ldrFile.close();
+
+        // Check if this is an MPD file (contains "0 FILE" directives)
+        // Parse MPD sub-files: split by "0 FILE" boundaries
+        std::string mainModelContent;
+        {
+            std::unordered_map<std::string, std::string> mpdSubfiles;
+            std::istringstream contentStream(fileContent);
+            std::string line;
+            std::string currentFileName;
+            std::string currentContent;
+            bool isMPD = false;
+
+            while (std::getline(contentStream, line))
+            {
+                std::string trimmed = line;
+                size_t start = trimmed.find_first_not_of(" \t\r\n");
+                if (start != std::string::npos)
+                    trimmed = trimmed.substr(start);
+
+                // Check for "0 FILE <name>" directive
+                if (trimmed.find("0 FILE ") == 0)
+                {
+                    // Save previous sub-file if any
+                    if (!currentFileName.empty())
+                    {
+                        std::string key = ToLowerStr(currentFileName);
+                        if (mainModelContent.empty())
+                            mainModelContent = currentContent;
+                        mpdSubfiles[key] = currentContent;
+                    }
+
+                    // Extract new sub-file name
+                    currentFileName = trimmed.substr(7); // after "0 FILE "
+                    size_t ep = currentFileName.find_last_not_of(" \t\r\n");
+                    if (ep != std::string::npos)
+                        currentFileName = currentFileName.substr(0, ep + 1);
+                    currentContent.clear();
+                    isMPD = true;
+                    continue;
+                }
+
+                // Skip "0 NOFILE" lines
+                if (trimmed == "0 NOFILE")
+                    continue;
+
+                currentContent += line + "\n";
+            }
+
+            // Save last sub-file
+            if (!currentFileName.empty() && !currentContent.empty())
+            {
+                std::string key = ToLowerStr(currentFileName);
+                if (mainModelContent.empty())
+                    mainModelContent = currentContent;
+                mpdSubfiles[key] = currentContent;
+            }
+
+            if (isMPD)
+            {
+                SPDLOG_INFO("LDraw: MPD file with {} embedded sub-files", mpdSubfiles.size());
+                parser.SetMPDSubfiles(std::move(mpdSubfiles));
+            }
+            else
+            {
+                // Not an MPD - use entire file as main model
+                mainModelContent = fileContent;
+            }
+        }
+
+        // Parse top-level type-1 references from the main model only
         struct PartPlacement
         {
             int colorCode;
@@ -200,50 +272,53 @@ namespace Assets
         };
         std::vector<PartPlacement> placements;
 
-        std::string line;
-        while (std::getline(ldrFile, line))
         {
-            size_t start = line.find_first_not_of(" \t\r\n");
-            if (start == std::string::npos)
-                continue;
-            line = line.substr(start);
-            if (line.empty() || line[0] != '1')
-                continue;
-
-            std::istringstream iss(line);
-            int type;
-            iss >> type;
-            if (type != 1)
-                continue;
-
-            int color;
-            float x, y, z, a, b, c, d, e, f, g, h, i;
-            std::string subfile;
-
-            iss >> color >> x >> y >> z >> a >> b >> c >> d >> e >> f >> g >> h >> i;
-            std::getline(iss, subfile);
+            std::istringstream mainStream(mainModelContent);
+            std::string line;
+            while (std::getline(mainStream, line))
             {
-                size_t sp = subfile.find_first_not_of(" \t");
-                if (sp != std::string::npos)
-                    subfile = subfile.substr(sp);
-                size_t ep = subfile.find_last_not_of(" \t\r\n");
-                if (ep != std::string::npos)
-                    subfile = subfile.substr(0, ep + 1);
+                size_t start = line.find_first_not_of(" \t\r\n");
+                if (start == std::string::npos)
+                    continue;
+                line = line.substr(start);
+                if (line.empty() || line[0] != '1')
+                    continue;
+
+                std::istringstream iss(line);
+                int type;
+                iss >> type;
+                if (type != 1)
+                    continue;
+
+                int color;
+                float x, y, z, a, b, c, d, e, f, g, h, i;
+                std::string subfile;
+
+                iss >> color >> x >> y >> z >> a >> b >> c >> d >> e >> f >> g >> h >> i;
+                std::getline(iss, subfile);
+                {
+                    size_t sp = subfile.find_first_not_of(" \t");
+                    if (sp != std::string::npos)
+                        subfile = subfile.substr(sp);
+                    size_t ep = subfile.find_last_not_of(" \t\r\n");
+                    if (ep != std::string::npos)
+                        subfile = subfile.substr(0, ep + 1);
+                }
+
+                if (subfile.empty())
+                    continue;
+
+                PartPlacement placement;
+                placement.colorCode = color;
+                placement.transform = glm::mat4(
+                    a, d, g, 0.0f,
+                    b, e, h, 0.0f,
+                    c, f, i, 0.0f,
+                    x, y, z, 1.0f
+                );
+                placement.partFile = subfile;
+                placements.push_back(placement);
             }
-
-            if (subfile.empty())
-                continue;
-
-            PartPlacement placement;
-            placement.colorCode = color;
-            placement.transform = glm::mat4(
-                a, d, g, 0.0f,
-                b, e, h, 0.0f,
-                c, f, i, 0.0f,
-                x, y, z, 1.0f
-            );
-            placement.partFile = subfile;
-            placements.push_back(placement);
         }
 
         SPDLOG_INFO("LDraw: found {} part placements in scene", placements.size());
@@ -257,11 +332,20 @@ namespace Assets
             if (partModels.count(partKey))
                 continue;
 
-            std::string resolvedPath = fileResolver.Resolve(placement.partFile);
-            if (resolvedPath.empty())
-                continue;
+            // Try MPD sub-file first, then LDraw library
+            LDrawPartTemplate tmpl;
+            if (parser.HasMPDSubfile(partKey))
+            {
+                tmpl = parser.ParseFile(placement.partFile);
+            }
+            else
+            {
+                std::string resolvedPath = fileResolver.Resolve(placement.partFile);
+                if (resolvedPath.empty())
+                    continue;
+                tmpl = parser.ParseFile(resolvedPath);
+            }
 
-            LDrawPartTemplate tmpl = parser.ParseFile(resolvedPath);
             if (tmpl.faces.empty())
                 continue;
 
@@ -280,18 +364,20 @@ namespace Assets
 
             const auto& partInfo = partIt->second;
 
-            // Build Y-flip conjugated transform: F * T_ldraw * F
-            // F = diag(1, -1, 1, 1)
-            // (F*R*F)[c][r] = F[r]*F[c]*R[c][r]
+            // Build conjugated transform: F * T_ldraw * F
+            // F = diag(-1, -1, 1, 1) to match X+Y flip in geometry
+            // (F*M*F)_ij = F_i * M_ij * F_j
+            // F_0=-1, F_1=-1, F_2=1: elements with exactly one index in {0,1} get negated
             glm::mat4 ldrawMat = placement.transform;
             glm::mat4 tfm = ldrawMat;
-            tfm[0][1] = -ldrawMat[0][1];
-            tfm[1][0] = -ldrawMat[1][0];
-            tfm[1][2] = -ldrawMat[1][2];
-            tfm[2][1] = -ldrawMat[2][1];
-            tfm[3][0] =  ldrawMat[3][0] * kLDrawScale;
-            tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;
-            tfm[3][2] =  ldrawMat[3][2] * kLDrawScale;
+            // Negate elements where exactly one of (row,col) is in the Z-axis
+            tfm[0][2] = -ldrawMat[0][2];   // col0,row2: F_2*F_0 = 1*(-1) = -1
+            tfm[1][2] = -ldrawMat[1][2];   // col1,row2: F_2*F_1 = 1*(-1) = -1
+            tfm[2][0] = -ldrawMat[2][0];   // col2,row0: F_0*F_2 = (-1)*1 = -1
+            tfm[2][1] = -ldrawMat[2][1];   // col2,row1: F_1*F_2 = (-1)*1 = -1
+            tfm[3][0] = -ldrawMat[3][0] * kLDrawScale;   // -x
+            tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;   // -y
+            tfm[3][2] =  ldrawMat[3][2] * kLDrawScale;   //  z
             tfm[3][3] = 1.0f;
 
             // Decompose into TRS
@@ -329,6 +415,9 @@ namespace Assets
 
             nodes.push_back(node);
         }
+
+        // Clean up MPD sub-files from parser
+        parser.ClearMPDSubfiles();
 
         SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
                      partModels.size(), colorToMatIdx.size(), nodes.size());
