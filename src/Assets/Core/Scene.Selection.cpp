@@ -6,6 +6,8 @@ namespace Assets
 {
     namespace
     {
+        constexpr float kMinimumFocusRadius = 0.001f;
+
         bool IsValidSelectionId(const Scene& scene, uint32_t id)
         {
             return id != SceneSelectionState::invalidNodeId && scene.GetNodeSharedByInstanceId(id) != nullptr;
@@ -179,7 +181,7 @@ namespace Assets
 
         center = (minBounds + maxBounds) * 0.5f;
         radius = glm::length(maxBounds - minBounds) * 0.5f;
-        radius = std::max(radius, 1.0f);
+        radius = std::max(radius, kMinimumFocusRadius);
         return true;
     }
 } // namespace Assets

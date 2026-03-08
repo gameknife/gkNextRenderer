@@ -28,6 +28,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
+	Tests/Test_CameraFocus.cpp
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_LDrawConfig.cpp
 	Tests/Test_LDrawGeometry.cpp
