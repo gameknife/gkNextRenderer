@@ -1,6 +1,7 @@
 #include "Assets/Loaders/FLDrawLoader.h"
 #include "Assets/Loaders/FLDrawGeometry.h"
 #include "Assets/Loaders/FLDrawParser.h"
+#include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Data/Material.hpp"
 #include "Assets/Core/Node.h"
@@ -10,6 +11,7 @@
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <algorithm>
+#include <cfloat>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -20,6 +22,13 @@ namespace Assets
 
     namespace
     {
+        struct SceneBounds
+        {
+            glm::vec3 min = glm::vec3(FLT_MAX);
+            glm::vec3 max = glm::vec3(-FLT_MAX);
+            bool valid = false;
+        };
+
         glm::vec3 LightenTowardsWhite(const glm::vec3& color, float colorRetention)
         {
             return glm::mix(glm::vec3(1.0f), color, glm::clamp(colorRetention, 0.0f, 1.0f));
@@ -98,15 +107,113 @@ namespace Assets
                     ? LightenTowardsWhite(color.secondaryDiffuse, 0.5f)
                     : LightenTowardsWhite(color.diffuse, 0.5f);
                 glm::vec3 blendedColor = BlendColors(color.diffuse, speckleColor, 0.05f);
-                return CreateMixtureMaterial(blendedColor, 0.1f, 0.05f, 1.45f);
+                return CreateMixtureMaterial(blendedColor, 0.05f, 0.05f, 1.45f);
             }
 
             case LDrawColor::Finish::Solid:
             default:
                 if (isTransparent)
                     return CreateDielectricMaterial(color.diffuse, color.alpha, 0.05f, 1.585f);
-                return CreateMixtureMaterial(color.diffuse, 0.1f, 0.0f, 1.45f);
+                return CreateMixtureMaterial(color.diffuse, 0.05f, 0.0f, 1.45f);
             }
+        }
+
+        SceneBounds CalculateSceneBounds(
+            const std::vector<std::shared_ptr<Node>>& nodes,
+            const std::vector<Model>& models)
+        {
+            SceneBounds bounds;
+
+            for (const auto& node : nodes)
+            {
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (!render || !render->IsDrawable())
+                    continue;
+
+                uint32_t modelIdx = render->GetModelId();
+                if (modelIdx >= models.size())
+                    continue;
+
+                const auto& model = models[modelIdx];
+                glm::vec3 aabbMin = model.GetLocalAABBMin();
+                glm::vec3 aabbMax = model.GetLocalAABBMax();
+
+                glm::vec3 corners[8] = {
+                    {aabbMin.x, aabbMin.y, aabbMin.z},
+                    {aabbMax.x, aabbMin.y, aabbMin.z},
+                    {aabbMin.x, aabbMax.y, aabbMin.z},
+                    {aabbMax.x, aabbMax.y, aabbMin.z},
+                    {aabbMin.x, aabbMin.y, aabbMax.z},
+                    {aabbMax.x, aabbMin.y, aabbMax.z},
+                    {aabbMin.x, aabbMax.y, aabbMax.z},
+                    {aabbMax.x, aabbMax.y, aabbMax.z}
+                };
+
+                const glm::mat4& worldTransform = node->WorldTransform();
+                for (const glm::vec3& corner : corners)
+                {
+                    glm::vec3 worldPos = glm::vec3(worldTransform * glm::vec4(corner, 1.0f));
+                    bounds.min = glm::min(bounds.min, worldPos);
+                    bounds.max = glm::max(bounds.max, worldPos);
+                    bounds.valid = true;
+                }
+            }
+
+            return bounds;
+        }
+
+        bool AppendLDrawFloor(
+            const SceneBounds& sceneBounds,
+            std::vector<std::shared_ptr<Node>>& nodes,
+            std::vector<Model>& models,
+            std::vector<FMaterial>& materials)
+        {
+            if (!sceneBounds.valid)
+                return false;
+
+            const glm::vec3 extent = glm::max(sceneBounds.max - sceneBounds.min, glm::vec3(0.001f));
+            const glm::vec3 center = (sceneBounds.min + sceneBounds.max) * 0.5f;
+            const float longestExtent = std::max(extent.x, std::max(extent.y, extent.z));
+            const float halfSizeX = glm::max(extent.x * 1.5f, 2.0f);
+            const float halfSizeZ = glm::max(extent.z * 1.5f, 2.0f);
+            const float thickness = glm::max(longestExtent * 0.1f, 0.5f);
+            const float floorTop = sceneBounds.min.y;
+
+            const glm::vec3 floorMin(
+                center.x - halfSizeX,
+                floorTop - thickness,
+                center.z - halfSizeZ);
+            const glm::vec3 floorMax(
+                center.x + halfSizeX,
+                floorTop,
+                center.z + halfSizeZ);
+
+            const uint32_t floorModelIdx = static_cast<uint32_t>(models.size());
+            models.push_back(FProcModel::CreateBox(floorMin, floorMax));
+
+            Material floorMaterial = CreateMixtureMaterial(glm::vec3(0.97f, 0.97f, 0.97f), 0.2f, 0.0f, 1.45f);
+            const uint32_t floorMaterialIdx = static_cast<uint32_t>(materials.size());
+            materials.push_back({floorMaterial, "LDraw Floor"});
+
+            std::array<uint32_t, 16> floorMaterials = {0};
+            floorMaterials[0] = floorMaterialIdx;
+
+            auto floorNode = Node::CreateNode(
+                "ldraw_floor",
+                glm::vec3(0.0f),
+                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                glm::vec3(1.0f),
+                static_cast<uint32_t>(nodes.size()));
+
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
+            renderComp->SetModelId(floorModelIdx);
+            renderComp->SetVisible(true);
+            renderComp->SetRayCastVisible(false);
+            renderComp->SetMaterial(floorMaterials);
+            floorNode->AddComponent(renderComp);
+
+            nodes.push_back(floorNode);
+            return true;
         }
     }
 
@@ -151,6 +258,10 @@ namespace Assets
         std::vector<AnimationTrack>& tracks,
         std::vector<Skeleton>& skeletons)
     {
+        const size_t initialModelCount = models.size();
+        const size_t initialMaterialCount = materials.size();
+        const size_t initialNodeCount = nodes.size();
+
         // Resolve paths
         std::filesystem::path ldrawRoot = std::filesystem::path("..") / "assets" / "ldraw";
         ldrawRoot = ldrawRoot.lexically_normal();
@@ -433,17 +544,21 @@ namespace Assets
         // Clean up MPD sub-files from parser
         parser.ClearMPDSubfiles();
 
-        SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
-                     partModels.size(), colorToMatIdx.size(), nodes.size());
-
         // Set up camera
         cameraInit.HasSky = true;
-        cameraInit.HasSun = true;
+        cameraInit.HasSun = false;
         cameraInit.SunRotation = 0.5f;
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
 
         Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
+        AppendLDrawFloor(CalculateSceneBounds(nodes, models), nodes, models, materials);
+
+        SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
+                     models.size() - initialModelCount,
+                     materials.size() - initialMaterialCount,
+                     nodes.size() - initialNodeCount);
+
         if (cameraInit.cameras.empty())
         {
             cameraInit.cameras.push_back(defaultCam);

@@ -15,6 +15,7 @@
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Runtime/Config/UserSettings.hpp"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
@@ -1199,18 +1200,18 @@ void NextEngine::OnScroll(const double xoffset, const double yoffset)
 
 void NextEngine::OnDropFile(const char* dropPath)
 {
-    // add glb to the last, and loaded
-    std::string path(dropPath);
-    std::string ext = path.substr(path.find_last_of(".") + 1);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    const std::string path(dropPath);
+    const std::filesystem::path droppedPath(path);
 
-    if (ext == "glb" || ext == "gltf")
+    if (SceneList::IsSupportedScenePath(droppedPath))
     {
-        // userSettings_.SceneIndex = SceneList::AddExternalScene(path);
         RequestLoadScene(path);
+        return;
     }
 
-    if (ext == "hdr")
+    std::string ext = droppedPath.has_extension() ? droppedPath.extension().string() : std::string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    if (ext == ".hdr")
     {
         uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
         scene_->GetEnvSettings().SkyIdx = newTextureId;

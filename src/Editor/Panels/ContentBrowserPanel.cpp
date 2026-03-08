@@ -5,6 +5,7 @@
 #include "Assets/Core/Scene.hpp"
 #include "Assets/GPU/TextureImage.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
@@ -85,10 +86,14 @@ namespace Editor
                 const ContentAssetVisual* visual = nullptr;
             };
 
-            static const std::array<ExtensionVisual, 2> kVisuals{
-                ExtensionVisual{".glb", &kScene},
+            static const std::array<ExtensionVisual, 1> kVisuals{
                 ExtensionVisual{".hdr", &kHdri},
             };
+
+            if (SceneList::IsSupportedSceneExtension(extension))
+            {
+                return kScene;
+            }
 
             for (const auto& entry : kVisuals)
             {

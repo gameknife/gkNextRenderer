@@ -9,6 +9,7 @@
 - **支持格式**: `.ldr`, `.mpd`
 - **资源依赖**: `assets/ldraw/`（LDraw Library）, `assets/omr/`（测试模型）
 - **验证模型**: `assets/omr/102.ldr`（micro cart，43 零件，27 唯一模型）
+- **导入附加内容**: 自动在模型下方补一个白色展示地板，尺寸明显大于模型投影，厚度至少 0.5 米，顶面贴齐模型包围盒最低点；默认相机仍只按 LEGO 模型本体自动对焦；默认开启 sky、关闭 sun light
 
 ## 文件结构
 
@@ -40,6 +41,8 @@ src/Assets/Loaders/
          构建 Model（局部坐标，Y-flip + scale 已烘焙）
                     ↓
     每个放置 → Node（变换 = F * T_ldraw * F 共轭 + scale）
+                    ↓
+       计算模型包围盒 → 追加白色地板（不参与默认相机 autofocus）
 ```
 
 ### 坐标系转换

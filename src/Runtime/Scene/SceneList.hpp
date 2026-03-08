@@ -1,7 +1,10 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Assets
@@ -22,6 +25,9 @@ class SceneList final
 public:
     static void ScanScenes();
     static int32_t AddExternalScene(std::string absPath);
+    static bool IsSupportedSceneExtension(std::string_view extension);
+    static bool IsSupportedScenePath(const std::filesystem::path& path);
+    static std::span<const std::string_view> SupportedSceneExtensions();
     static std::vector<std::string> AllScenes;
 
 	static bool LoadScene(std::string filename, Assets::EnvironmentSetting& camera, std::vector< std::shared_ptr<Assets::Node> >& nodes, std::vector<Assets::Model>& models,
