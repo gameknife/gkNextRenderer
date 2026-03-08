@@ -1,4 +1,5 @@
 #include "Assets/Loaders/FLDrawLoader.h"
+#include "Assets/Loaders/FLDrawGeometry.h"
 #include "Assets/Loaders/FLDrawParser.h"
 #include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Data/Material.hpp"
@@ -121,76 +122,14 @@ namespace Assets
         const LDrawPartTemplate& tmpl,
         std::vector<Model>& models)
     {
-        // Group faces by color code
-        // Deterministic ordering: kLDrawColorInherit first (if present), then sorted color codes
-        std::map<int, std::vector<const LDrawFace*>> facesByColor;
-        for (const auto& face : tmpl.faces)
-            facesByColor[face.colorCode].push_back(&face);
-
-        std::vector<int> sectionColors;
-        // kLDrawColorInherit (-1) sorts first in std::map, so it's already first
-        for (const auto& [colorCode, _] : facesByColor)
-            sectionColors.push_back(colorCode);
-
-        // Build vertex/index arrays
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-
-        uint32_t sectionIdx = 0;
-        for (int colorCode : sectionColors)
-        {
-            const auto& colorFaces = facesByColor[colorCode];
-            for (const LDrawFace* face : colorFaces)
-            {
-                glm::vec3 v0 = face->vertices[0];
-                glm::vec3 v1 = face->vertices[1];
-                glm::vec3 v2 = face->vertices[2];
-
-                // LDraw to engine coordinate conversion:
-                // Negate both X and Y (det=1, preserves right-handedness)
-                // X-flip corrects the handedness-induced mirroring from Y-flip
-                v0.x = -v0.x; v0.y = -v0.y;
-                v1.x = -v1.x; v1.y = -v1.y;
-                v2.x = -v2.x; v2.y = -v2.y;
-                v0 *= kLDrawScale;
-                v1 *= kLDrawScale;
-                v2 *= kLDrawScale;
-
-                // Flat normal
-                glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-                if (glm::any(glm::isnan(normal)))
-                    normal = glm::vec3(0, 1, 0);
-
-                uint32_t baseIdx = static_cast<uint32_t>(vertices.size());
-
-                auto makeVert = [&](const glm::vec3& pos) -> Vertex
-                {
-                    Vertex v{};
-                    v.Position = pos;
-                    v.Normal = normal;
-                    v.Tangent = glm::vec4(1, 0, 0, 1);
-                    v.TexCoord = glm::vec2(0);
-                    v.MaterialIndex = sectionIdx;
-                    return v;
-                };
-
-                vertices.push_back(makeVert(v0));
-                vertices.push_back(makeVert(v1));
-                vertices.push_back(makeVert(v2));
-
-                indices.push_back(baseIdx);
-                indices.push_back(baseIdx + 1);
-                indices.push_back(baseIdx + 2);
-            }
-            sectionIdx++;
-        }
+        LDrawBuiltGeometry geometry = FLDrawGeometry::BuildPartGeometry(tmpl);
 
         PartModelInfo info;
-        info.sectionColors = std::move(sectionColors);
+        info.sectionColors = std::move(geometry.sectionColors);
 
-        if (!vertices.empty())
+        if (!geometry.vertices.empty())
         {
-            Model model(tmpl.filename, std::move(vertices), std::move(indices), false);
+            Model model(tmpl.filename, std::move(geometry.vertices), std::move(geometry.indices), false);
             info.modelIdx = static_cast<uint32_t>(models.size());
             models.push_back(std::move(model));
         }
