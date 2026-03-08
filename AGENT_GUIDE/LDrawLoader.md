@@ -35,7 +35,7 @@ src/Assets/Loaders/
                     ↓
     Parser 递归展开 .dat 文件 → 展平的三角形列表（局部坐标）
                     ↓
-    Loader 按颜色分组 → Vertex(MaterialIndex) + 索引
+    Loader 按颜色分组 + 共享顶点法线平滑 → Vertex(MaterialIndex) + 索引
                     ↓
          构建 Model（局部坐标，Y-flip + scale 已烘焙）
                     ↓
@@ -83,6 +83,12 @@ tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;  // 平移 Y 取反 + 缩放
 
 使用 `std::map<int, ...>`（有序映射）确保 section 颜色排序确定性。`kLDrawColorInherit = -1` 自然排在最前，对应 MaterialIndex 0。这一点很关键——之前用 `std::unordered_map` 导致 Model 构建和 Node 材质数组的排序不一致。
 
+### 法线生成
+
+- 几何构建阶段会按共享顶点位置收集相邻三角形，使用面积加权法线做平滑
+- 平滑仅在相邻面法线夹角不超过 45° 时生效，避免把砖块硬边抹平
+- 结果是 stud、圆柱、圆角等曲面会得到连续法线，而 90° 折边仍保持硬边
+
 ### BFC（Back Face Culling）处理
 
 Parser 维护 `BFCState` 逐文件传递:
@@ -114,9 +120,8 @@ Parser 维护 `BFCState` 逐文件传递:
 1. **无磁盘缓存**: 每次启动都重新解析零件文本文件。计划中的二进制缓存（`.cache/<part>.bin`）未实现。
 2. **无 per-part instancing**: 每个放置创建独立 Node。相同零件+相同颜色的多个放置理论上可以合并为 GPU instancing。
 3. **仅支持顶层 type-1 引用**: `.ldr` 文件中的 type-3/type-4 直接几何被忽略（只处理 type-1 零件引用）。`.mpd` 多模型文件的 `FILE/NOFILE` 指令未处理。
-4. **无平滑法线**: 所有面使用 flat shading。圆柱形零件（如 stud）会有明显的棱角。
-5. **322 个材质全部创建**: 即使场景只用了 5 种颜色，也会创建所有 322 种材质。
-6. **线段（type 2/5）被跳过**: 光追渲染不需要边线，但某些零件可能缺少视觉细节。
+4. **322 个材质全部创建**: 即使场景只用了 5 种颜色，也会创建所有 322 种材质。
+5. **线段（type 2/5）被跳过**: 光追渲染不需要边线，但某些零件可能缺少视觉细节。
 
 ### 推荐的改进优先级
 
@@ -130,8 +135,7 @@ Parser 维护 `BFCState` 逐文件传递:
 - [ ] 文件索引缓存到磁盘（避免每次扫描 44000+ 文件）
 
 **P2 - 视觉质量:**
-- [ ] 平滑法线：对 stud/cylinder 等圆柱形原语使用角度阈值的法线平滑
-- [ ] 更精确的材质：Glitter/Speckle 材质目前退化为 Lambertian
+- [ ] 更精确的材质：Glitter/Speckle 目前仍是无纹理近似，而不是程序化颗粒层
 - [ ] 边缘检测/描边效果：模拟 LDraw 的 edge lines
 
 **P3 - 功能扩展:**
