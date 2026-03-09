@@ -45,7 +45,15 @@ namespace Assets
     private:
         void ParseStream(std::istream& input, int parentColor,
                          const glm::mat4& transform, BFCState bfc, bool expandSubfiles,
-                         std::vector<LDrawFace>& outFaces);
+                         std::vector<LDrawFace>& outFaces,
+                         std::vector<std::string>* dependencyFiles);
+        LDrawPartTemplate ParseFileImpl(const std::string& filepath, bool expandSubfiles);
+        void AppendTemplateInstance(
+            const LDrawPartTemplate& tmpl,
+            int parentColor,
+            const glm::mat4& transform,
+            bool invertWinding,
+            std::vector<LDrawFace>& outFaces) const;
 
         int ResolveColor(int faceColor, int parentColor) const;
 
@@ -53,6 +61,8 @@ namespace Assets
         LDrawFileResolver& resolver_;
         std::unordered_map<std::string, LDrawPartTemplate> templateCache_;
         std::unordered_map<std::string, LDrawPartTemplate> directTemplateCache_;
+        std::unordered_map<std::string, std::vector<std::string>> templateDependencies_;
+        std::unordered_map<std::string, std::vector<std::string>> directTemplateDependencies_;
         std::unordered_map<std::string, std::string> mpdSubfiles_;
     };
 }
