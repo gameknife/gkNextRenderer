@@ -90,6 +90,8 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 The project uses CMake + Ninja with vcpkg for dependencies. Requires GitHub access.
 
+Desktop binaries can now be launched from any working directory, so you usually no longer need to `cd` into `out/build/<preset>/bin` first.
+
 <details>
 <summary><b>Windows (Visual Studio 2022)</b></summary>
 

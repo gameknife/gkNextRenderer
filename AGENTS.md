@@ -59,26 +59,28 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Specific target: `./run.sh --preset default-macos-arm64 --target gkNextEditor`
 - Android: `./run.sh --preset android`
 
+Desktop binaries can now be launched from any working directory; no `cd out/build/<preset>/bin` is required.
+
 **Runtime success indicator:** Log shows `uploaded scene [...] to gpu`
 
 ## Testing
 
-**CRITICAL: Tests must be run from the bin directory (CWD must be `bin`).**
+Tests no longer require the current working directory to be `bin`; launch them via their executable path.
 
 ```bash
 # Unit tests (Catch2)
-cd out/build/<preset>/bin && ./gkNextUnitTests
+./out/build/<preset>/bin/gkNextUnitTests
 
 # Run specific test by name or tag
-cd out/build/<preset>/bin && ./gkNextUnitTests "RenderComponent Usage"
-cd out/build/<preset>/bin && ./gkNextUnitTests "[Unit][RenderComponent]"
+./out/build/<preset>/bin/gkNextUnitTests "RenderComponent Usage"
+./out/build/<preset>/bin/gkNextUnitTests "[Unit][RenderComponent]"
 
 # List available tests/tags
-cd out/build/<preset>/bin && ./gkNextUnitTests --list-tests
-cd out/build/<preset>/bin && ./gkNextUnitTests --list-tags
+./out/build/<preset>/bin/gkNextUnitTests --list-tests
+./out/build/<preset>/bin/gkNextUnitTests --list-tags
 
 # Visual tests (renders scenes, generates screenshots + report)
-cd out/build/<preset>/bin && ./gkNextVisualTest
+./out/build/<preset>/bin/gkNextVisualTest
 ```
 
 **Visual Test Config:** `assets/configs/visual_test.json` defines scenes, frame counts, output directory.
