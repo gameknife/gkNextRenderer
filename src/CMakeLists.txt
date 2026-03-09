@@ -141,6 +141,22 @@ add_subdirectory(ThirdParty/quickjs-ng)
 target_link_libraries(quickjs PRIVATE gk_project_options)
 endif()
 
+set(GK_WHISPER_LINK_LIBS "")
+set(GK_WHISPER_COMPILE_DEFINITIONS "")
+if (WITH_WHISPERCPP)
+	find_package(whisper CONFIG REQUIRED)
+	if (MSVC)
+		message(STATUS "Whisper.cpp is disabled for MSVC Debug builds due to upstream static runtime mismatch")
+		set(GK_WHISPER_LINK_LIBS "$<$<NOT:$<CONFIG:Debug>>:whisper>")
+		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS
+			"$<$<CONFIG:Debug>:WITH_WHISPERCPP=0>"
+			"$<$<NOT:$<CONFIG:Debug>>:WITH_WHISPERCPP=1>")
+	else()
+		set(GK_WHISPER_LINK_LIBS whisper)
+		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS WITH_WHISPERCPP=1)
+	endif()
+endif()
+
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets
@@ -228,9 +244,8 @@ foreach(target IN LISTS AllTargets)
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
-		if ( WITH_WHISPERCPP )
-			find_package(whisper CONFIG REQUIRED)
-			target_link_libraries(${target} PRIVATE whisper)
+		if ( GK_WHISPER_LINK_LIBS )
+			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
 		endif()
 		
 		# handle moltenvk for iOS
@@ -312,8 +327,8 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE quickjs )
 	endif()
 
-	if ( WITH_WHISPERCPP )
-		target_compile_definitions(${target} PUBLIC WITH_WHISPERCPP=1)
+	if ( GK_WHISPER_COMPILE_DEFINITIONS )
+		target_compile_definitions(${target} PUBLIC ${GK_WHISPER_COMPILE_DEFINITIONS})
 	endif()
 
 	if ( WITH_OZZ )
