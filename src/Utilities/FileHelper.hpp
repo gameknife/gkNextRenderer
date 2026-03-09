@@ -9,12 +9,18 @@
 #include <assert.h>
 #include <regex>
 #include <SDL3/SDL.h>
+#include "Runtime/Platform/PlatformCommon.h"
 //#include <spdlog/spdlog.h>
 
 namespace Utilities
 {
     namespace FileHelper
     {
+        static std::filesystem::path GetDesktopRuntimeRoot()
+        {
+            return (NextRenderer::GetExecutableDirectory() / "..").lexically_normal();
+        }
+
         static void EnsureDirectoryExists(const std::filesystem::path& path)
         {
             std::filesystem::create_directories(path);
@@ -33,7 +39,7 @@ namespace Utilities
 #elif IOS
             return std::filesystem::path(SDL_GetBasePath()).append(srcPath).string();
 #else
-            return std::filesystem::path("..").append(srcPath).string();
+            return GetDesktopRuntimeRoot().append(srcPath).string();
 #endif
         }
 
@@ -46,7 +52,7 @@ namespace Utilities
 #elif IOS
             normlizedPath = std::filesystem::path(SDL_GetBasePath()).append(srcPath).string();
 #else
-            normlizedPath = std::string("../") + srcPath;
+            normlizedPath = GetDesktopRuntimeRoot().append(srcPath).string();
 #endif
             std::filesystem::path fullPath(normlizedPath);
             std::filesystem::path directory = fullPath.parent_path();
@@ -94,7 +100,7 @@ namespace Utilities
             #elif IOS
                         normlizedPath = std::string(SDL_GetPrefPath("gknext", "renderer"));
             #else
-                        normlizedPath = std::string("../");
+                        normlizedPath = FileHelper::GetDesktopRuntimeRoot().string();
             #endif
             std::filesystem::create_directories(std::filesystem::path(normlizedPath + "/cooked/"));
             return normlizedPath + "/cooked/" + cooktype + filehash + ".gncook";

@@ -7,7 +7,7 @@ namespace NextRenderer
 {
     inline void PlatformInit()
     {
-    
+        NormalizeWorkingDirectoryToExecutableDirectory();
     }
 
     inline void HideConsole()

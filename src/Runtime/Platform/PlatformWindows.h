@@ -7,6 +7,8 @@ namespace NextRenderer
 {
     inline void PlatformInit()
     {
+        NormalizeWorkingDirectoryToExecutableDirectory();
+
         // Windows console color support
 #if WIN32 && !defined(__MINGW32__)
         HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
