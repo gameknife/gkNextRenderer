@@ -395,7 +395,22 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     }
     if (ext == ".ldr" || ext == ".mpd")
     {
-        return Assets::FLDrawLoader::LoadLDrawScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+        Assets::LDrawLoadOptions ldrawOptions;
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            ldrawOptions.lduToWorldScale = engine->GetUserSettings().LDrawLduToWorldScale;
+        }
+
+        return Assets::FLDrawLoader::LoadLDrawScene(
+            filename,
+            camera,
+            nodes,
+            models,
+            materials,
+            lights,
+            tracks,
+            skeletons,
+            ldrawOptions);
     }
     if (ext == ".proc")
     {

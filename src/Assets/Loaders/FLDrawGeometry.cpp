@@ -9,7 +9,6 @@ namespace Assets
 {
     namespace
     {
-        constexpr float kLDrawScale = 0.001f;
         constexpr float kNormalPositionEpsilon = 1e-6f;
         constexpr float kSmoothNormalAngleDegrees = 45.0f;
         constexpr float kFaceNormalEpsilon = 1e-12f;
@@ -40,19 +39,22 @@ namespace Assets
             };
         }
 
-        glm::vec3 ConvertPosition(const glm::vec3& position)
+        glm::vec3 ConvertPosition(const glm::vec3& position, float lduToWorldScale)
         {
             glm::vec3 converted = position;
             converted.x = -converted.x;
             converted.y = -converted.y;
-            converted *= kLDrawScale;
+            converted *= lduToWorldScale;
             return converted;
         }
 
     }
 
-    LDrawBuiltGeometry FLDrawGeometry::BuildPartGeometry(const LDrawPartTemplate& tmpl)
+    LDrawBuiltGeometry FLDrawGeometry::BuildPartGeometry(const LDrawPartTemplate& tmpl,
+                                                         const LDrawLoadOptions& options)
     {
+        const float lduToWorldScale = SanitizeLDrawLduToWorldScale(options.lduToWorldScale);
+
         std::map<int, std::vector<const LDrawFace*>> facesByColor;
         for (const auto& face : tmpl.faces)
             facesByColor[face.colorCode].push_back(&face);
@@ -75,7 +77,7 @@ namespace Assets
                 faceData.materialIndex = sectionIdx;
 
                 for (int vertexIdx = 0; vertexIdx < 3; ++vertexIdx)
-                    faceData.positions[vertexIdx] = ConvertPosition(face->vertices[vertexIdx]);
+                    faceData.positions[vertexIdx] = ConvertPosition(face->vertices[vertexIdx], lduToWorldScale);
 
                 faceData.weightedNormal = glm::cross(
                     faceData.positions[1] - faceData.positions[0],

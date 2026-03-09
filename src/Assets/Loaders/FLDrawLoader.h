@@ -1,6 +1,7 @@
 #pragma once
 #include "Assets/Core/Model.hpp"
 #include "Assets/Data/Skeleton.hpp"
+#include "Assets/Loaders/FLDrawTypes.h"
 
 namespace Assets
 {
@@ -26,11 +27,13 @@ namespace Assets
             std::vector<FMaterial>& materials,
             std::vector<LightObject>& lights,
             std::vector<AnimationTrack>& tracks,
-            std::vector<Skeleton>& skeletons);
+            std::vector<Skeleton>& skeletons,
+            const LDrawLoadOptions& options = {});
 
     private:
         static PartModelInfo BuildPartModel(
             const LDrawPartTemplate& tmpl,
-            std::vector<Model>& models);
+            std::vector<Model>& models,
+            const LDrawLoadOptions& options);
     };
 }

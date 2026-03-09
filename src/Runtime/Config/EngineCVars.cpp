@@ -109,6 +109,8 @@ namespace NextCVar
         GK_CVAR_BOOL_CB("sys.fullscreen", settings, BorderlessFullscreen, settings.BorderlessFullscreen,
                         ECVarFlags::Archive, "Toggle borderless fullscreen mode",
                         std::bind(ApplyBorderlessFullscreenIfPossible, engine, std::cref(settings)));
+        GK_CVAR_FLOAT("sys.ldrawLduToWorldScale", settings, LDrawLduToWorldScale, 0.01f, ECVarFlags::Archive,
+                      "World-space units represented by one LDraw LDU when loading .ldr/.mpd scenes");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive,
                       "Scene epsilon scale");
         GK_CVAR_FLOAT("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive,

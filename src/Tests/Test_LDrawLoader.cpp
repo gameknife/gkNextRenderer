@@ -11,6 +11,13 @@
 
 namespace
 {
+    void CheckVec3Near(const glm::vec3& actual, const glm::vec3& expected)
+    {
+        CHECK(actual.x == Catch::Approx(expected.x).margin(1e-5f));
+        CHECK(actual.y == Catch::Approx(expected.y).margin(1e-5f));
+        CHECK(actual.z == Catch::Approx(expected.z).margin(1e-5f));
+    }
+
     class ScopedLDrawSceneFile
     {
     public:
@@ -110,4 +117,58 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
     CHECK(models[parentRender->GetModelId()].NumberOfVertices() == 3);
     CHECK(models[childRender->GetModelId()].NumberOfVertices() == 3);
     CHECK(parentRender->Materials()[0] == childRender->Materials()[0]);
+}
+
+TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement", "[Unit][LDraw]")
+{
+    ScopedLDrawSceneFile sceneFile(
+        "0 FILE main.ldr\n"
+        "1 16 10 20 30 1 0 0 0 1 0 0 0 1 brick.dat\n"
+        "0 FILE brick.dat\n"
+        "0 BFC CERTIFY CCW\n"
+        "3 16 0 0 0 2 4 6 0 2 0\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    Assets::LDrawLoadOptions options;
+    options.lduToWorldScale = 0.1f;
+
+    REQUIRE(Assets::FLDrawLoader::LoadLDrawScene(
+        sceneFile.Path().string(),
+        environment,
+        nodes,
+        models,
+        materials,
+        lights,
+        tracks,
+        skeletons,
+        options));
+
+    std::shared_ptr<Assets::Node> partNode;
+    for (const auto& node : nodes)
+    {
+        if (node->GetName() != "ldraw_floor")
+        {
+            partNode = node;
+            break;
+        }
+    }
+
+    REQUIRE(partNode);
+    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, -2.0f, 3.0f));
+
+    auto renderComp = partNode->GetComponent<Runtime::RenderComponent>();
+    REQUIRE(renderComp);
+    REQUIRE(renderComp->GetModelId() < models.size());
+
+    const auto& cpuVertices = models[renderComp->GetModelId()].CPUVertices();
+    REQUIRE(cpuVertices.size() == 3);
+    CheckVec3Near(cpuVertices[1].Position, glm::vec3(-0.2f, -0.4f, 0.6f));
+    CheckVec3Near(cpuVertices[2].Position, glm::vec3(0.0f, -0.2f, 0.0f));
 }
