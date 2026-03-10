@@ -38,9 +38,9 @@ src/Assets/Loaders/
                     ↓
     Loader 按颜色分组 + 共享顶点法线平滑 → Vertex(MaterialIndex) + 索引
                     ↓
-         构建 Model（局部坐标，Y-flip + scale 已烘焙）
+         构建 Model（局部坐标，Y-flip + lduToWorldScale 已烘焙）
                     ↓
-    每个放置 → Node（变换 = F * T_ldraw * F 共轭 + scale）
+    每个放置 → Node（变换 = F * T_ldraw * F 共轭 + lduToWorldScale）
                     ↓
        计算模型包围盒 → 追加白色地板（不参与默认相机 autofocus）
 ```
@@ -50,13 +50,13 @@ src/Assets/Loaders/
 | 属性 | LDraw | 引擎 | 转换方式 |
 |------|-------|------|----------|
 | Y 轴 | 向下为正 | 向上为正 | 顶点 `y *= -1` |
-| 单位 | LDU（≈0.4mm） | 米 | `× 0.001` |
+| 单位 | LDU（≈0.4mm） | 米 | `× lduToWorldScale`，默认 `0.001` |
 | 面朝向 | CCW（BFC 默认） | CCW | Y 翻转后 swap winding 补偿 |
 
 **Node 变换推导:**
-- 模型顶点 = `F * v_local * scale`（Y-flip + 缩放烘焙到几何中）
-- Node 变换 = `F * T_ldraw * F`（Y-flip 共轭，平移也乘以 scale）
-- 最终位置 = `NodeTransform * ModelVertex = scale * F * T_ldraw * v_local`
+- 模型顶点 = `F * v_local * lduToWorldScale`（Y-flip + 缩放烘焙到几何中）
+- Node 变换 = `F * T_ldraw * F`（Y-flip 共轭，平移也乘以 `lduToWorldScale`）
+- 最终位置 = `NodeTransform * ModelVertex = lduToWorldScale * F * T_ldraw * v_local`
 
 其中 `F = diag(1, -1, 1, 1)`，glm column-major 下的具体计算:
 ```cpp
@@ -64,8 +64,14 @@ tfm[0][1] = -ldrawMat[0][1];  // col 0, row 1
 tfm[1][0] = -ldrawMat[1][0];  // col 1, row 0
 tfm[1][2] = -ldrawMat[1][2];  // col 1, row 2
 tfm[2][1] = -ldrawMat[2][1];  // col 2, row 1
-tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;  // 平移 Y 取反 + 缩放
+tfm[3][1] = -ldrawMat[3][1] * lduToWorldScale;  // 平移 Y 取反 + 缩放
 ```
+
+### 缩放配置
+
+- LDraw 导入支持 `LDrawLoadOptions::lduToWorldScale`
+- 引擎默认通过 CVar `sys.ldrawLduToWorldScale` 提供该值，并持久化到 `assets/configs/cvar_user.json`
+- 默认值仍为 `0.001`，旧场景行为保持兼容；调大后可直接与引擎现有世界尺度对齐
 
 ### 材质映射
 

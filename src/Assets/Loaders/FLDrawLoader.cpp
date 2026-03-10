@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
+#include <cmath>
 #include <functional>
 #include <unordered_set>
 
@@ -21,8 +22,6 @@
 
 namespace Assets
 {
-    constexpr float kLDrawScale = 0.001f;
-
     static std::string ToLowerStr(const std::string& s)
     {
         std::string result = s;
@@ -185,16 +184,16 @@ namespace Assets
             return placements;
         }
 
-        glm::mat4 BuildNodeTransform(const glm::mat4& ldrawMat)
+        glm::mat4 BuildNodeTransform(const glm::mat4& ldrawMat, float lduToWorldScale)
         {
             glm::mat4 tfm = ldrawMat;
             tfm[0][2] = -ldrawMat[0][2];
             tfm[1][2] = -ldrawMat[1][2];
             tfm[2][0] = -ldrawMat[2][0];
             tfm[2][1] = -ldrawMat[2][1];
-            tfm[3][0] = -ldrawMat[3][0] * kLDrawScale;
-            tfm[3][1] = -ldrawMat[3][1] * kLDrawScale;
-            tfm[3][2] = ldrawMat[3][2] * kLDrawScale;
+            tfm[3][0] = -ldrawMat[3][0] * lduToWorldScale;
+            tfm[3][1] = -ldrawMat[3][1] * lduToWorldScale;
+            tfm[3][2] = ldrawMat[3][2] * lduToWorldScale;
             tfm[3][3] = 1.0f;
             return tfm;
         }
@@ -270,14 +269,14 @@ namespace Assets
                     ? LightenTowardsWhite(color.secondaryDiffuse, 0.5f)
                     : LightenTowardsWhite(color.diffuse, 0.5f);
                 glm::vec3 blendedColor = BlendColors(color.diffuse, speckleColor, 0.05f);
-                return CreateMixtureMaterial(blendedColor, 0.05f, 0.05f, 1.45f);
+                return CreateMixtureMaterial(blendedColor, 0.025f, 0.05f, 1.45f);
             }
 
             case LDrawColor::Finish::Solid:
             default:
                 if (isTransparent)
                     return CreateDielectricMaterial(color.diffuse, color.alpha, 0.05f, 1.585f);
-                return CreateMixtureMaterial(color.diffuse, 0.05f, 0.0f, 1.45f);
+                return CreateMixtureMaterial(color.diffuse, 0.025f, 0.0f, 1.45f);
             }
         }
 
@@ -446,6 +445,7 @@ namespace Assets
             const LDrawNodePlacement& placement,
             std::shared_ptr<Node> parent,
             uint32_t& nodeSerial,
+            const LDrawLoadOptions& options,
             LDrawParser& parser,
             LDrawFileResolver& fileResolver,
             uint32_t defaultMatIdx,
@@ -462,7 +462,7 @@ namespace Assets
             glm::quat rotation;
             glm::vec4 perspective;
             glm::decompose(
-                BuildNodeTransform(placement.transform),
+                BuildNodeTransform(placement.transform, options.lduToWorldScale),
                 scale,
                 rotation,
                 translation,
@@ -508,6 +508,7 @@ namespace Assets
                     child,
                     node,
                     nodeSerial,
+                    options,
                     parser,
                     fileResolver,
                     defaultMatIdx,
@@ -523,9 +524,10 @@ namespace Assets
 
     PartModelInfo FLDrawLoader::BuildPartModel(
         const LDrawPartTemplate& tmpl,
-        std::vector<Model>& models)
+        std::vector<Model>& models,
+        const LDrawLoadOptions& options)
     {
-        LDrawBuiltGeometry geometry = FLDrawGeometry::BuildPartGeometry(tmpl);
+        LDrawBuiltGeometry geometry = FLDrawGeometry::BuildPartGeometry(tmpl, options);
 
         PartModelInfo info;
         info.sectionColors = std::move(geometry.sectionColors);
@@ -552,8 +554,18 @@ namespace Assets
         std::vector<FMaterial>& materials,
         std::vector<LightObject>& lights,
         std::vector<AnimationTrack>& tracks,
-        std::vector<Skeleton>& skeletons)
+        std::vector<Skeleton>& skeletons,
+        const LDrawLoadOptions& options)
     {
+        LDrawLoadOptions normalizedOptions = options;
+        if (!std::isfinite(normalizedOptions.lduToWorldScale) || normalizedOptions.lduToWorldScale <= 0.0f)
+        {
+            SPDLOG_WARN("LDraw: invalid LDU scale {}, falling back to {}",
+                        normalizedOptions.lduToWorldScale,
+                        defaultLDrawLduToWorldScale);
+            normalizedOptions.lduToWorldScale = defaultLDrawLduToWorldScale;
+        }
+
         const size_t initialModelCount = models.size();
         const size_t initialMaterialCount = materials.size();
         const size_t initialNodeCount = nodes.size();
@@ -691,9 +703,9 @@ namespace Assets
         std::unordered_map<std::string, PartModelInfo> fullPartModels;
         std::unordered_map<std::string, PartModelInfo> directPartModels;
         uint32_t nodeSerial = 0;
-        auto buildPartModel = [](const LDrawPartTemplate& tmpl, std::vector<Model>& outputModels)
+        auto buildPartModel = [&normalizedOptions](const LDrawPartTemplate& tmpl, std::vector<Model>& outputModels)
         {
-            return FLDrawLoader::BuildPartModel(tmpl, outputModels);
+            return FLDrawLoader::BuildPartModel(tmpl, outputModels, normalizedOptions);
         };
 
         for (const auto& placement : placements)
@@ -702,6 +714,7 @@ namespace Assets
                 placement,
                 nullptr,
                 nodeSerial,
+                normalizedOptions,
                 parser,
                 fileResolver,
                 defaultMatIdx,

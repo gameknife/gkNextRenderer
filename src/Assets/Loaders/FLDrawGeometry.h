@@ -2,6 +2,7 @@
 
 #include "Assets/Data/Vertex.hpp"
 #include "Assets/Loaders/FLDrawParser.h"
+#include "Assets/Loaders/FLDrawTypes.h"
 
 namespace Assets
 {
@@ -15,6 +16,7 @@ namespace Assets
     class FLDrawGeometry
     {
     public:
-        static LDrawBuiltGeometry BuildPartGeometry(const LDrawPartTemplate& tmpl);
+        static LDrawBuiltGeometry BuildPartGeometry(const LDrawPartTemplate& tmpl,
+                                                    const LDrawLoadOptions& options = {});
     };
 }
