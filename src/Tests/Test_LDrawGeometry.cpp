@@ -72,3 +72,27 @@ TEST_CASE("LDraw geometry preserves hard edges beyond smoothing threshold", "[Un
     CheckVec3Near(geometry.vertices[3].Normal, glm::vec3(0.0f, 1.0f, 0.0f));
     CheckVec3Near(geometry.vertices[4].Normal, glm::vec3(0.0f, 1.0f, 0.0f));
 }
+
+TEST_CASE("LDraw geometry applies configurable LDU scale", "[Unit][LDraw]")
+{
+    Assets::LDrawPartTemplate tmpl;
+    tmpl.filename = "scaled.dat";
+
+    Assets::LDrawFace face{};
+    face.vertexCount = 3;
+    face.colorCode = 16;
+    face.vertices[0] = glm::vec3(0.0f, 0.0f, 0.0f);
+    face.vertices[1] = glm::vec3(2.0f, 4.0f, 6.0f);
+    face.vertices[2] = glm::vec3(0.0f, 2.0f, 0.0f);
+    tmpl.faces.push_back(face);
+
+    Assets::LDrawLoadOptions options;
+    options.lduToWorldScale = 0.5f;
+
+    const Assets::LDrawBuiltGeometry geometry = Assets::FLDrawGeometry::BuildPartGeometry(tmpl, options);
+    REQUIRE(geometry.vertices.size() == 3);
+
+    CheckVec3Near(geometry.vertices[0].Position, glm::vec3(0.0f, 0.0f, 0.0f));
+    CheckVec3Near(geometry.vertices[1].Position, glm::vec3(-1.0f, -2.0f, 3.0f));
+    CheckVec3Near(geometry.vertices[2].Position, glm::vec3(0.0f, -1.0f, 0.0f));
+}
