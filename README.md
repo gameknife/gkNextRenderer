@@ -90,6 +90,8 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 
 项目使用 CMake + Ninja，依赖由 vcpkg 管理。需要可访问 GitHub 的网络环境。
 
+桌面平台现在可以从任意工作目录启动可执行文件，通常不再需要先 `cd` 到 `out/build/<preset>/bin`。
+
 <details>
 <summary><b>Windows (Visual Studio 2022)</b></summary>
 

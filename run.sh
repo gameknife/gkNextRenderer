@@ -106,6 +106,8 @@ run_native() {
         exit 1
     fi
 
+    resolved_bin="$(cd "$resolved_bin" && pwd)"
+
     if [[ $list_only -eq 1 ]]; then
         echo "Entries in $resolved_bin:"
         ls -1 "$resolved_bin"
@@ -122,16 +124,13 @@ run_native() {
         exit 1
     fi
 
-    local cmd=("./$(basename "$exe")")
+    local cmd=("$exe")
     if [[ ${#cmd_args[@]} -gt 0 ]]; then
         cmd+=("${cmd_args[@]}")
     fi
-    echo "Working dir: $resolved_bin"
     echo "Command: ${cmd[*]}"
     [[ $dry_run -eq 1 ]] && exit 0
-    pushd "$resolved_bin" >/dev/null
     "${cmd[@]}"
-    popd >/dev/null
 }
 
 if [[ "$preset" == "android" ]]; then

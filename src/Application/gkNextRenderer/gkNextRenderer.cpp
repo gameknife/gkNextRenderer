@@ -87,6 +87,10 @@ void NextRendererGameInstance::OnInit()
 		initializedScene = GOption->SceneName;
 	}
 	GetEngine().RequestLoadScene(initializedScene);
+    // GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
+    // GetEngine().GetUserSettings().AmbientCubeUnit = 0.02f;
+    // GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.0f;
+    // GetEngine().GetUserSettings().AmbientCubeOffsetZ = 0.0f;
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)

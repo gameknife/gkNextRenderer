@@ -12,6 +12,7 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Utilities/FileHelper.hpp"
 
@@ -257,9 +258,7 @@ namespace Editor
             return std::nullopt;
         }
 
-        auto IsSceneAsset = [](const fs::path& path) {
-            return path.has_extension() && ToLowerCopy(path.extension().string()) == ".glb";
-        };
+        auto IsSceneAsset = [](const fs::path& path) { return SceneList::IsSupportedScenePath(path); };
 
         fs::path inputPath(sceneRef);
         if (inputPath.is_absolute())
@@ -269,7 +268,7 @@ namespace Editor
                 return fs::absolute(inputPath).string();
             }
 
-            errorMessage = fmt::format("absolute path is not a valid .glb scene: {}", sceneRef);
+            errorMessage = fmt::format("absolute path is not a valid scene asset: {}", sceneRef);
             return std::nullopt;
         }
 
@@ -296,9 +295,14 @@ namespace Editor
 
         if (!relPath.has_extension())
         {
-            if (auto withExt = TryPath((assetsRoot / relPath).replace_extension(".glb")))
+            for (std::string_view extension : SceneList::SupportedSceneExtensions())
             {
-                return withExt;
+                fs::path candidate = assetsRoot / relPath;
+                candidate.replace_extension(std::string(extension));
+                if (auto withExt = TryPath(candidate))
+                {
+                    return withExt;
+                }
             }
         }
 
@@ -349,7 +353,7 @@ namespace Editor
 
         if (matches.empty())
         {
-            errorMessage = fmt::format("no .glb scene matched '{}'", sceneRef);
+            errorMessage = fmt::format("no supported scene matched '{}'", sceneRef);
             return std::nullopt;
         }
 

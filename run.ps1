@@ -167,6 +167,8 @@ if (-not (Test-Path $ResolvedBin)) {
     exit 1
 }
 
+$ResolvedBin = (Resolve-Path -Path $ResolvedBin).Path
+
 if ($List) {
     Write-Host "Entries in ${ResolvedBin}:"
     Get-ChildItem -Path $ResolvedBin | Select-Object -ExpandProperty Name
@@ -195,15 +197,9 @@ if ($Scene) {
 }
 $LaunchArgs += $ExtraArgs
 
-Write-Host "Working dir: $ResolvedBin"
-Write-Host "Command: .\$ExeName $LaunchArgs"
+Write-Host "Command: $ExePath $LaunchArgs"
 
 if ($DryRun) { exit 0 }
 
-Push-Location $ResolvedBin
-try {
-    & ".\$ExeName" $LaunchArgs
-    exit $LASTEXITCODE
-} finally {
-    Pop-Location
-}
+& $ExePath $LaunchArgs
+exit $LASTEXITCODE

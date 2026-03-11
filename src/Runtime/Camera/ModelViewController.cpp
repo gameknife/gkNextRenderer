@@ -196,7 +196,9 @@ void ModelViewController::Focus(const glm::vec3& focusPoint, float radius)
 {
     // Calculate distance to fit the object in view
     float fovRad = glm::radians(fieldOfView_);
-    float dist = radius / glm::sin(fovRad * 0.5f) * 1.1f;
+    float halfFovTan = glm::tan(fovRad * 0.5f);
+    float safeRadius = std::max(radius, 0.001f);
+    float dist = safeRadius / std::max(halfFovTan, 0.001f) * 1.1f;
 
     // Target position: back from focus point along forward vector
     glm::vec3 fwd = GetForward();

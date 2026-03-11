@@ -105,6 +105,10 @@ void EditorGameInstance::OnInit()
                             });
 
     GetEngine().GetShowFlags().ShowEdge = true;
+    // GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
+    // GetEngine().GetUserSettings().AmbientCubeUnit = 0.02f;
+    // GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.0f;
+    // GetEngine().GetUserSettings().AmbientCubeOffsetZ = 0.0f;
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)

@@ -5,6 +5,7 @@
 #include "Editor/EditorContext.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Utilities/FileHelper.hpp"
 
@@ -256,7 +257,7 @@ Editor.log(message)
             }
 
             const fs::path& file = entry.path();
-            if (ToLowerCopy(file.extension().string()) != ".glb")
+            if (!SceneList::IsSupportedScenePath(file))
             {
                 continue;
             }
@@ -267,7 +268,7 @@ Editor.log(message)
         std::sort(scenes.begin(), scenes.end());
         scenes.erase(std::unique(scenes.begin(), scenes.end()), scenes.end());
 
-        std::string result = "## Scene Asset Catalog (.glb)\n";
+        std::string result = "## Scene Asset Catalog (.glb/.gltf/.ldr/.mpd)\n";
         if (scenes.empty())
         {
             result += "No scene assets found.\n\n";

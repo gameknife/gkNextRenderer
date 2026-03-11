@@ -11,8 +11,11 @@
 #include <random>
 #include <filesystem>
 #include <algorithm>
+#include <array>
+#include <cctype>
 
 #include "Assets/Loaders/FProcModel.h"
+#include "Assets/Loaders/FLDrawLoader.h"
 #include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
@@ -37,6 +40,20 @@ using Assets::Texture;
 // 这里保留procedural的场景代码，后续再添加，先去掉functor的场景创建，换成使用loader
 namespace
 {
+    std::string ToLowerCopy(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    }
+
+    constexpr std::array<std::string_view, 4> kSupportedSceneExtensions{
+        ".glb",
+        ".gltf",
+        ".ldr",
+        ".mpd",
+    };
+
     int CreateMaterial(std::vector<Assets::FMaterial>& materials, Material mat)
     {
         materials.push_back({mat});
@@ -292,6 +309,28 @@ namespace
 
 std::vector<std::string> SceneList::AllScenes;
 
+bool SceneList::IsSupportedSceneExtension(std::string_view extension)
+{
+    if (extension.empty())
+    {
+        return false;
+    }
+
+    const std::string normalized = ToLowerCopy(std::string(extension));
+    return std::find(kSupportedSceneExtensions.begin(), kSupportedSceneExtensions.end(), normalized)
+        != kSupportedSceneExtensions.end();
+}
+
+bool SceneList::IsSupportedScenePath(const std::filesystem::path& path)
+{
+    return path.has_extension() && IsSupportedSceneExtension(path.extension().string());
+}
+
+std::span<const std::string_view> SceneList::SupportedSceneExtensions()
+{
+    return kSupportedSceneExtensions;
+}
+
 void SceneList::ScanScenes()
 {
     // add relative path
@@ -305,19 +344,31 @@ void SceneList::ScanScenes()
         for (const auto& entry : std::filesystem::directory_iterator(path))
         {
             std::filesystem::path filename = entry.path().filename();
-            std::string ext = entry.path().extension().string();
-            if (ext != ".glb" && ext != ".gltf") continue;
+            if (!IsSupportedScenePath(entry.path())) continue;
             AllScenes.push_back((modelPath / filename).string());
         }
-    
-        // sort the scene
-        std::sort(AllScenes.begin(), AllScenes.end());
-
-        AllScenes.insert(AllScenes.begin(), "RTIO.proc");
-        AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
-    
-        SPDLOG_INFO("Scene found: {}", AllScenes.size());
     }
+
+    // Scan assets/omr/ for .ldr files
+    std::string omrPath = "assets/omr/";
+    std::filesystem::path omrDir = Utilities::FileHelper::GetPlatformFilePath(omrPath.c_str());
+    if (std::filesystem::exists(omrDir))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(omrDir))
+        {
+            if (!IsSupportedScenePath(entry.path())) continue;
+            std::filesystem::path filename = entry.path().filename();
+            AllScenes.push_back((omrPath / filename).string());
+        }
+    }
+
+    // sort the scene
+    std::sort(AllScenes.begin(), AllScenes.end());
+
+    AllScenes.insert(AllScenes.begin(), "RTIO.proc");
+    AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
+
+    SPDLOG_INFO("Scene found: {}", AllScenes.size());
 }
 
 int32_t SceneList::AddExternalScene(std::string absPath)
@@ -336,11 +387,30 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
                           std::vector<Assets::Skeleton>& skeletons)
 {
     std::filesystem::path filepath = filename;
-    std::string ext = filepath.extension().string();
+    std::string ext = ToLowerCopy(filepath.extension().string());
     materials.push_back({Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)), "root_default"});
     if (ext == ".glb" || ext == ".gltf")
     {
         return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+    }
+    if (ext == ".ldr" || ext == ".mpd")
+    {
+        Assets::LDrawLoadOptions ldrawOptions;
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            ldrawOptions.lduToWorldScale = engine->GetUserSettings().LDrawLduToWorldScale;
+        }
+
+        return Assets::FLDrawLoader::LoadLDrawScene(
+            filename,
+            camera,
+            nodes,
+            models,
+            materials,
+            lights,
+            tracks,
+            skeletons,
+            ldrawOptions);
     }
     if (ext == ".proc")
     {
