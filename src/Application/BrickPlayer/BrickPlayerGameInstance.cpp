@@ -76,7 +76,12 @@ void BrickPlayerGameInstance::OnSceneLoaded()
 
     disassembledNodes_.clear();
     selectedInstanceId_ = UINT32_MAX;
+    hoveredDisassembledInstanceId_ = UINT32_MAX;
+    isDraggingPart_ = false;
+    draggedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().ClearSelection();
+    GetEngine().GetScene().ClearHoveredId();
+    GetEngine().GetShowFlags().ShowEdge = false;
 
     CreateFloorPhysicsBody();
 
@@ -159,7 +164,15 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
         }
     }
 
+    if (isDraggingPart_)
+    {
+        UpdateDraggedPart();
+    }
+
     PerformRaycast();
+
+    GetEngine().GetShowFlags().ShowEdge =
+        GetEngine().GetScene().GetHoveredId() != UINT32_MAX || selectedInstanceId_ != UINT32_MAX;
 }
 
 void BrickPlayerGameInstance::OnInitUI()
@@ -239,7 +252,7 @@ bool BrickPlayerGameInstance::OnCursorPosition(double xpos, double ypos)
 
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
 
-    if (isOrbitDragging_ && mouseLeftDown_)
+    if (isOrbitDragging_ && mouseLeftDown_ && !isDraggingPart_)
     {
         cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
         cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
@@ -264,13 +277,24 @@ bool BrickPlayerGameInstance::OnMouseButton(SDL_Event& event)
     if (event.button.button == SDL_BUTTON_LEFT && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         mouseLeftDown_ = true;
+        if (!mouseCapturedByUI_ && StartDraggingHoveredPart())
+        {
+            isOrbitDragging_ = false;
+            cameraMultiplier_ = 0.0f;
+            return true;
+        }
+
         isOrbitDragging_ = true;
         cameraMultiplier_ = 0.1f;
         return true;
     }
     else if (event.button.button == SDL_BUTTON_LEFT && event.type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
-        if (!isOrbitDragging_ || cameraMultiplier_ < 0.001f)
+        if (isDraggingPart_)
+        {
+            StopDraggingPart();
+        }
+        else if (!isOrbitDragging_ || cameraMultiplier_ < 0.001f)
         {
             // Was a click, not a drag - handled by raycast
         }
@@ -301,38 +325,246 @@ bool BrickPlayerGameInstance::OnScroll(double xoffset, double yoffset)
 
 void BrickPlayerGameInstance::OnRayHitResponse(Assets::RayCastResult& result)
 {
-    if (!result.Hitted)
-        return;
-
-    uint32_t instanceId = result.InstanceId;
-
-    // Check if this node is in our step map (i.e., a LDraw part)
-    if (nodeStepMap_.find(instanceId) == nodeStepMap_.end())
-        return;
-
-    // Check if already disassembled
-    if (disassembledNodes_.count(instanceId))
-        return;
-
-    selectedInstanceId_ = instanceId;
-    selectedHitNormal_ = glm::normalize(glm::vec3(result.Normal));
-    GetEngine().GetScene().SetSelectedId(instanceId);
+    UpdateHitStateFromRaycast(result);
 }
 
 void BrickPlayerGameInstance::PerformRaycast()
 {
-    if (mouseCapturedByUI_)
+    if (isDraggingPart_)
+    {
+        hoveredDisassembledInstanceId_ = draggedInstanceId_;
+        GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
         return;
+    }
+
+    if (mouseCapturedByUI_)
+    {
+        hoveredDisassembledInstanceId_ = UINT32_MAX;
+        GetEngine().GetScene().ClearHoveredId();
+        return;
+    }
 
     glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
-    GetEngine().RayCastGPU(cachedCameraPos_, dir, [this](Assets::RayCastResult result)
+    bool handled = false;
+    GetEngine().RayCastGPU(cachedCameraPos_, dir, [this, &handled](Assets::RayCastResult result)
     {
-        if (result.Hitted)
-        {
-            this->OnRayHitResponse(result);
-        }
+        handled = this->UpdateHitStateFromRaycast(result);
         return true;
     });
+
+    if (!handled)
+    {
+        hoveredDisassembledInstanceId_ = UINT32_MAX;
+        GetEngine().GetScene().ClearHoveredId();
+    }
+}
+
+bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastResult& result)
+{
+    if (!result.Hitted)
+    {
+        return false;
+    }
+
+    const uint32_t instanceId = result.InstanceId;
+    if (nodeStepMap_.find(instanceId) == nodeStepMap_.end())
+    {
+        return false;
+    }
+
+    const glm::vec3 hitNormal = glm::dot(glm::vec3(result.Normal), glm::vec3(result.Normal)) > 0.0f
+        ? glm::normalize(glm::vec3(result.Normal))
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+
+    if (disassembledNodes_.count(instanceId))
+    {
+        hoveredDisassembledInstanceId_ = instanceId;
+        hoveredHitPoint_ = glm::vec3(result.HitPoint);
+        hoveredHitNormal_ = hitNormal;
+        GetEngine().GetScene().SetHoveredId(instanceId);
+        return true;
+    }
+
+    hoveredDisassembledInstanceId_ = UINT32_MAX;
+    GetEngine().GetScene().ClearHoveredId();
+    selectedInstanceId_ = instanceId;
+    selectedHitNormal_ = hitNormal;
+    GetEngine().GetScene().SetSelectedId(instanceId);
+    return true;
+}
+
+bool BrickPlayerGameInstance::StartDraggingHoveredPart()
+{
+#if WITH_PHYSIC
+    if (hoveredDisassembledInstanceId_ == UINT32_MAX)
+    {
+        return false;
+    }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    if (!physics)
+    {
+        return false;
+    }
+
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(hoveredDisassembledInstanceId_);
+    if (!node)
+    {
+        return false;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (!physComp)
+    {
+        return false;
+    }
+
+    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    if (!body)
+    {
+        return false;
+    }
+
+    glm::vec3 viewNormal = realCameraCenter_ - cachedCameraPos_;
+    if (glm::dot(viewNormal, viewNormal) < 1e-6f)
+    {
+        viewNormal = glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+
+    draggedInstanceId_ = hoveredDisassembledInstanceId_;
+    dragPlanePoint_ = hoveredHitPoint_;
+    dragPlaneNormal_ = glm::normalize(viewNormal);
+    dragBodyOffset_ = body->position - hoveredHitPoint_;
+    isDraggingPart_ = true;
+    selectedInstanceId_ = draggedInstanceId_;
+    selectedHitNormal_ = hoveredHitNormal_;
+    GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
+    GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
+    return true;
+#else
+    return false;
+#endif
+}
+
+void BrickPlayerGameInstance::StopDraggingPart()
+{
+#if WITH_PHYSIC
+    if (!isDraggingPart_)
+    {
+        return;
+    }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    if (physics && node)
+    {
+        auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+        if (physComp)
+        {
+            auto* body = physics->GetBody(physComp->GetPhysicsBody());
+            if (body)
+            {
+                physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, body->rotation, true);
+            }
+        }
+    }
+#endif
+
+    hoveredDisassembledInstanceId_ = draggedInstanceId_;
+    isDraggingPart_ = false;
+    draggedInstanceId_ = UINT32_MAX;
+    dragBodyOffset_ = glm::vec3(0.0f);
+}
+
+void BrickPlayerGameInstance::UpdateDraggedPart()
+{
+#if WITH_PHYSIC
+    if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    if (!node || !physics)
+    {
+        StopDraggingPart();
+        return;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (!physComp)
+    {
+        StopDraggingPart();
+        return;
+    }
+
+    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    if (!body)
+    {
+        StopDraggingPart();
+        return;
+    }
+
+    glm::vec3 rayOrigin{0.0f};
+    glm::vec3 rayDir{0.0f};
+    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+
+    glm::vec3 planeHitPoint{0.0f};
+    if (!IntersectDragPlane(rayOrigin, rayDir, planeHitPoint))
+    {
+        return;
+    }
+
+    const glm::vec3 desiredBodyPosition = planeHitPoint + dragBodyOffset_;
+    const glm::quat desiredBodyRotation = body->rotation;
+    physics->SetBodyTransform(physComp->GetPhysicsBody(), desiredBodyPosition, desiredBodyRotation, true);
+    ApplyPhysicsPoseToNode(node, desiredBodyPosition, desiredBodyRotation);
+
+    hoveredDisassembledInstanceId_ = draggedInstanceId_;
+    hoveredHitPoint_ = planeHitPoint;
+    GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
+    GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
+    GetEngine().GetScene().MarkDirty();
+#endif
+}
+
+bool BrickPlayerGameInstance::IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const
+{
+    const float denom = glm::dot(rayDir, dragPlaneNormal_);
+    if (glm::abs(denom) < 1e-4f)
+    {
+        return false;
+    }
+
+    const float t = glm::dot(dragPlanePoint_ - rayOrigin, dragPlaneNormal_) / denom;
+    if (t < 0.0f)
+    {
+        return false;
+    }
+
+    outPoint = rayOrigin + rayDir * t;
+    return true;
+}
+
+void BrickPlayerGameInstance::ApplyPhysicsPoseToNode(Assets::Node* node, const glm::vec3& bodyPosition, const glm::quat& bodyRotation)
+{
+    if (!node)
+    {
+        return;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (!physComp)
+    {
+        return;
+    }
+
+    const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
+    const glm::vec3 newTranslation = bodyPosition - bodyRotation * scaledOffset;
+    node->SetTranslation(newTranslation);
+    node->SetRotation(bodyRotation);
+    node->RecalcTransform(true);
 }
 
 // Timeline
@@ -558,8 +790,10 @@ void BrickPlayerGameInstance::DisassembleSelected()
 #endif
 
     disassembledNodes_[selectedInstanceId_] = {halfExtent};
+    hoveredDisassembledInstanceId_ = UINT32_MAX;
     selectedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().ClearSelection();
+    GetEngine().GetScene().ClearHoveredId();
     GetEngine().GetScene().MarkDirty();
 }
 
@@ -572,7 +806,12 @@ void BrickPlayerGameInstance::ResetAll()
     sceneLoaded_ = false;
     disassembledNodes_.clear();
     selectedInstanceId_ = UINT32_MAX;
+    hoveredDisassembledInstanceId_ = UINT32_MAX;
+    isDraggingPart_ = false;
+    draggedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().ClearSelection();
+    GetEngine().GetScene().ClearHoveredId();
+    GetEngine().GetShowFlags().ShowEdge = false;
 
     // Re-request the same scene
     if (!currentScenePath_.empty())

@@ -598,6 +598,43 @@ void NextPhysics::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position
 #endif
 }
 
+void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, bool resetVelocity)
+{
+#if WITH_PHYSIC
+    if (bodyID.IsInvalid())
+    {
+        return;
+    }
+
+	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+    bodyInterface.SetPositionAndRotationWhenChanged(
+        bodyID,
+        RVec3(position.x, position.y, position.z),
+        Quat(rotation.x, rotation.y, rotation.z, rotation.w),
+        EActivation::Activate);
+
+    if (resetVelocity && bodyInterface.GetMotionType(bodyID) != EMotionType::Static)
+    {
+        bodyInterface.SetLinearAndAngularVelocity(bodyID, Vec3::sZero(), Vec3::sZero());
+    }
+
+    if (bodies_.contains(bodyID))
+    {
+        bodies_[bodyID].position = position;
+        bodies_[bodyID].rotation = rotation;
+        if (resetVelocity)
+        {
+            bodies_[bodyID].velocity = glm::vec3(0.0f);
+        }
+    }
+#else
+    (void)bodyID;
+    (void)position;
+    (void)rotation;
+    (void)resetVelocity;
+#endif
+}
+
 FNextPhysicsBody* NextPhysics::GetBody(NextBodyID bodyID)
 {
 #if WITH_PHYSIC

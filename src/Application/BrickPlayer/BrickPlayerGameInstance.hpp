@@ -65,6 +65,12 @@ private:
     void BuildPerPartOrder();
     void CreateFloorPhysicsBody();
     void PerformRaycast();
+    bool UpdateHitStateFromRaycast(const Assets::RayCastResult& result);
+    bool StartDraggingHoveredPart();
+    void StopDraggingPart();
+    void UpdateDraggedPart();
+    bool IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const;
+    void ApplyPhysicsPoseToNode(Assets::Node* node, const glm::vec3& bodyPosition, const glm::quat& bodyRotation);
 
     NextEngine* engine_;
 
@@ -108,6 +114,14 @@ private:
     std::unordered_map<uint32_t, DisassembledInfo> disassembledNodes_;
     uint32_t selectedInstanceId_ = UINT32_MAX;
     glm::vec3 selectedHitNormal_{0.0f, 1.0f, 0.0f};
+    uint32_t hoveredDisassembledInstanceId_ = UINT32_MAX;
+    glm::vec3 hoveredHitPoint_{0.0f};
+    glm::vec3 hoveredHitNormal_{0.0f, 1.0f, 0.0f};
+    bool isDraggingPart_ = false;
+    uint32_t draggedInstanceId_ = UINT32_MAX;
+    glm::vec3 dragPlanePoint_{0.0f};
+    glm::vec3 dragPlaneNormal_{0.0f, 0.0f, 1.0f};
+    glm::vec3 dragBodyOffset_{0.0f};
     bool showPhysicsDebug_ = false;
 
     // State
