@@ -529,12 +529,13 @@ void BrickPlayerGameInstance::DisassembleSelected()
     glm::vec3 aabbMin = model->GetLocalAABBMin();
     glm::vec3 aabbMax = model->GetLocalAABBMax();
     // CreateBoxBody expects FULL extent (it halves internally for Jolt's BoxShape)
-    glm::vec3 fullExtent = (aabbMax - aabbMin) * worldScale;
+    glm::vec3 fullExtent = (aabbMax - aabbMin) * glm::abs(worldScale);
     fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
     glm::vec3 halfExtent = fullExtent * 0.5f;
     glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
     glm::vec3 worldCenter = glm::vec3(node->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
-    glm::vec3 physicsOffset = worldCenter - worldTranslation;
+    // Physics offset is stored in node local space. Node::TickVelocity applies scale and rotation.
+    glm::vec3 physicsOffset = aabbCenter;
 
 #if WITH_PHYSIC
     if (physics)
