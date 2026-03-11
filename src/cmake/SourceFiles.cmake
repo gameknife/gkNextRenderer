@@ -69,6 +69,11 @@ file(GLOB_RECURSE src_files_magicalego
     "Application/MagicaLego/*.hpp"
 )
 
+file(GLOB_RECURSE src_files_brickplayer
+    "Application/BrickPlayer/*.cpp"
+    "Application/BrickPlayer/*.hpp"
+)
+
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
 
 file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")

@@ -113,6 +113,10 @@ add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+add_executable(BrickPlayer
+	${src_files_brickplayer}
+	DesktopMain.cpp
+)
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
@@ -176,10 +180,11 @@ gkNextMotionBenchmark
 gkNextVisualTest
 gkNextEditor
 Packager
-MagicaLego 
+MagicaLego
+BrickPlayer
 )
 else()
-set(AllTargets 
+set(AllTargets
 gkNextEngine
 gkNextRenderer
 gkNextStillBenchmark
@@ -187,7 +192,8 @@ gkNextMotionBenchmark
 gkNextVisualTest
 gkNextEditor
 Packager
-MagicaLego 
+MagicaLego
+BrickPlayer
 gkNextUnitTests
 )
 endif()
