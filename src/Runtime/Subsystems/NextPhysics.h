@@ -52,6 +52,7 @@ public:
     
     NextBodyID CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType);
     NextBodyID CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType);
+    NextBodyID CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent, NextMotionType motionType);
     NextBodyID CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshShapeSettings, glm::vec3 position, glm::quat rotation, glm::vec3 scale, NextMotionType motionType, NextObjectLayer layer);
     NextBodyID CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType);
     NextMeshShapeSettings* CreateMeshShape(Assets::Model& model);

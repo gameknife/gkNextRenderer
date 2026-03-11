@@ -40,6 +40,7 @@ namespace Assets
             std::string partKey;
             bool isHierarchicalSubmodel = false;
             std::vector<LDrawNodePlacement> children;
+            int32_t buildStep = 0;
         };
 
         struct SceneBounds
@@ -137,21 +138,45 @@ namespace Assets
             return ext != ".dat";
         }
 
+        bool IsStepMetaCommand(const std::string& line)
+        {
+            std::string trimmed = line;
+            size_t start = trimmed.find_first_not_of(" \t\r\n");
+            if (start == std::string::npos)
+                return false;
+            trimmed = trimmed.substr(start);
+            size_t end = trimmed.find_last_not_of(" \t\r\n");
+            if (end != std::string::npos)
+                trimmed = trimmed.substr(0, end + 1);
+            return trimmed == "0 STEP";
+        }
+
         std::vector<LDrawNodePlacement> ParsePlacementTree(
             const std::string& content,
             int parentColor,
             const std::unordered_map<std::string, std::string>& mpdSubfiles,
-            std::unordered_set<std::string>& activeSubmodels)
+            std::unordered_set<std::string>& activeSubmodels,
+            bool trackSteps = true,
+            int32_t inheritedStep = 0)
         {
             std::vector<LDrawNodePlacement> placements;
             std::istringstream stream(content);
             std::string line;
+            int32_t currentStep = 0;
 
             while (std::getline(stream, line))
             {
+                if (trackSteps && IsStepMetaCommand(line))
+                {
+                    ++currentStep;
+                    continue;
+                }
+
                 LDrawNodePlacement placement;
                 if (!ParseType1Reference(line, parentColor, placement))
                     continue;
+
+                placement.buildStep = trackSteps ? currentStep : inheritedStep;
 
                 placement.isHierarchicalSubmodel =
                     IsHierarchicalMPDSubmodel(placement.partFile, mpdSubfiles);
@@ -172,7 +197,9 @@ namespace Assets
                                 mpdIt->second,
                                 placement.colorCode,
                                 mpdSubfiles,
-                                activeSubmodels);
+                                activeSubmodels,
+                                false,
+                                placement.buildStep);
                             activeSubmodels.erase(placement.partKey);
                         }
                     }
@@ -454,7 +481,8 @@ namespace Assets
             std::unordered_map<std::string, PartModelInfo>& directPartModels,
             const std::function<PartModelInfo(const LDrawPartTemplate&, std::vector<Model>&)>& buildPartModel,
             std::vector<std::shared_ptr<Node>>& nodes,
-            std::vector<Model>& models)
+            std::vector<Model>& models,
+            std::unordered_map<uint32_t, int32_t>& outStepMap)
         {
             glm::vec3 scale;
             glm::vec3 translation;
@@ -479,6 +507,8 @@ namespace Assets
             nodes.push_back(node);
             if (parent)
                 node->SetParent(parent);
+
+            outStepMap[node->GetInstanceId()] = placement.buildStep;
 
             const PartModelInfo partInfo = ResolvePartModel(
                 placement.partFile,
@@ -517,9 +547,23 @@ namespace Assets
                     directPartModels,
                     buildPartModel,
                     nodes,
-                    models);
+                    models,
+                    outStepMap);
             }
         }
+    }
+
+    static std::unordered_map<uint32_t, int32_t> sLastLoadStepMap;
+    static int32_t sLastLoadTotalSteps = 0;
+
+    const std::unordered_map<uint32_t, int32_t>& FLDrawLoader::GetLastLoadStepMap()
+    {
+        return sLastLoadStepMap;
+    }
+
+    int32_t FLDrawLoader::GetLastLoadTotalSteps()
+    {
+        return sLastLoadTotalSteps;
     }
 
     PartModelInfo FLDrawLoader::BuildPartModel(
@@ -708,6 +752,7 @@ namespace Assets
             return FLDrawLoader::BuildPartModel(tmpl, outputModels, normalizedOptions);
         };
 
+        std::unordered_map<uint32_t, int32_t> stepMap;
         for (const auto& placement : placements)
         {
             InstantiatePlacementTree(
@@ -723,8 +768,16 @@ namespace Assets
                 directPartModels,
                 buildPartModel,
                 nodes,
-                models);
+                models,
+                stepMap);
         }
+
+        sLastLoadStepMap = std::move(stepMap);
+        sLastLoadTotalSteps = 0;
+        for (const auto& [id, step] : sLastLoadStepMap)
+            sLastLoadTotalSteps = std::max(sLastLoadTotalSteps, step + 1);
+
+        SPDLOG_INFO("LDraw: detected {} build steps", sLastLoadTotalSteps);
 
         // Clean up MPD sub-files from parser
         parser.ClearMPDSubfiles();

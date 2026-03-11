@@ -3,6 +3,8 @@
 #include "Assets/Data/Skeleton.hpp"
 #include "Assets/Loaders/FLDrawTypes.h"
 
+#include <unordered_map>
+
 namespace Assets
 {
     struct FMaterial;
@@ -29,6 +31,11 @@ namespace Assets
             std::vector<AnimationTrack>& tracks,
             std::vector<Skeleton>& skeletons,
             const LDrawLoadOptions& options = {});
+
+        // Step data from last LoadLDrawScene call
+        // Maps node instanceId -> build step index (0-based)
+        static const std::unordered_map<uint32_t, int32_t>& GetLastLoadStepMap();
+        static int32_t GetLastLoadTotalSteps();
 
     private:
         static PartModelInfo BuildPartModel(

@@ -452,9 +452,13 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, Next
 #if WITH_PHYSIC
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	BodyID bodyId(-1);
-    
+
+	Vec3 halfExtent(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f);
+	float minHE = std::min({halfExtent.GetX(), halfExtent.GetY(), halfExtent.GetZ()});
+	float convexRadius = std::min(cDefaultConvexRadius, std::max(0.001f, minHE * 0.5f));
+
 	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
-	BodyCreationSettings floorSettings(new BoxShape(Vec3(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f)), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, NextLayers::MOVING);
+	BodyCreationSettings floorSettings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, NextLayers::MOVING);
 	//floorSettings.mRestitution = 0.05f;
 	floorSettings.mFriction = 0.5f;
     //floorSettings.mInertiaMultiplier = 2.0f;
@@ -463,6 +467,29 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, Next
 	bodyId = bodyInterface.CreateAndAddBody(floorSettings, EActivation::Activate);
 
 	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
+	return AddBodyInternal(body, true);
+#else
+    return NextBodyID();
+#endif
+}
+
+NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent, NextMotionType motionType)
+{
+#if WITH_PHYSIC
+	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+	BodyID bodyId(-1);
+
+	Vec3 halfExtent(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f);
+	float minHE = std::min({halfExtent.GetX(), halfExtent.GetY(), halfExtent.GetZ()});
+	float convexRadius = std::min(cDefaultConvexRadius, std::max(0.001f, minHE * 0.5f));
+
+	Quat joltRot(rotation.x, rotation.y, rotation.z, rotation.w);
+	BodyCreationSettings settings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), joltRot, motionType, NextLayers::MOVING);
+	settings.mFriction = 0.5f;
+    settings.mMotionQuality = EMotionQuality::LinearCast;
+	bodyId = bodyInterface.CreateAndAddBody(settings, EActivation::Activate);
+
+	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
 	return AddBodyInternal(body, true);
 #else
     return NextBodyID();
@@ -595,13 +622,16 @@ void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
 {
 #if WITH_PHYSIC
     if (bodyID.IsInvalid()) return;
-    
+
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     bool isAdded = bodyInterface.IsAdded(bodyID);
 
     if (active && isAdded)
     {
-        bodyInterface.SetObjectLayer(bodyID, NextLayers::NON_MOVING);
+        // Preserve MOVING layer for dynamic bodies so they keep colliding with each other
+        EMotionType mt = bodyInterface.GetMotionType(bodyID);
+        ObjectLayer targetLayer = (mt == EMotionType::Dynamic) ? NextLayers::MOVING : NextLayers::NON_MOVING;
+        bodyInterface.SetObjectLayer(bodyID, targetLayer);
     }
     else if (!active && isAdded)
     {
