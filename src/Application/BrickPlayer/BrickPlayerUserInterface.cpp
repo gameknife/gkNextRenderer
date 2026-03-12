@@ -52,7 +52,9 @@ void BrickPlayerUserInterface::Render()
     }
 
     RenderTimeline();
+    gameInstance_->DrawSnapConfirmation();
     gameInstance_->DrawPhysicsDebug();
+    gameInstance_->DrawSnapDebug();
 }
 
 void BrickPlayerUserInterface::RenderTitleBar()
@@ -176,6 +178,42 @@ void BrickPlayerUserInterface::RenderTitleBar()
             ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Physics Debug (F1)");
+
+        ImGui::SameLine();
+        bool snapDebugOn = gameInstance_->IsShowSnapDebug();
+        if (snapDebugOn)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.45f, 0.0f, 0.75f));
+        if (ImGui::Button("Sn", ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->ToggleSnapDebug();
+        }
+        if (snapDebugOn)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Snap Debug (F2)");
+
+        ImGui::SameLine();
+        bool bgmPaused = gameInstance_->IsBGMPaused();
+        if (ImGui::Button(bgmPaused ? ICON_FA_VOLUME_LOW : ICON_FA_VOLUME_XMARK, ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->PauseBGM(!bgmPaused);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            const std::string currentBgmName = gameInstance_->GetCurrentBGMName();
+            const std::string tooltip = currentBgmName.empty()
+                ? std::string(bgmPaused ? "Play BGM" : "Pause BGM")
+                : std::string(bgmPaused ? "Play BGM\n" : "Pause BGM\n") + currentBgmName;
+            ImGui::SetTooltip("%s", tooltip.c_str());
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_SHUFFLE, ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->PlayNextBGM();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Shuffle BGM");
     }
 
     ImGui::End();

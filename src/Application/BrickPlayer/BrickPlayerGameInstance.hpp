@@ -53,10 +53,20 @@ public:
     void ResetAll();
     bool HasSelection() const { return selectedInstanceId_ != UINT32_MAX; }
 
+    // Music
+    void PlayNextBGM();
+    bool IsBGMPaused() const;
+    void PauseBGM(bool pause);
+    std::string GetCurrentBGMName() const;
+
     // Physics debug
     bool IsShowPhysicsDebug() const { return showPhysicsDebug_; }
     void TogglePhysicsDebug() { showPhysicsDebug_ = !showPhysicsDebug_; }
     void DrawPhysicsDebug();
+    void DrawSnapConfirmation() const;
+    bool IsShowSnapDebug() const { return showSnapDebug_; }
+    void ToggleSnapDebug() { showSnapDebug_ = !showSnapDebug_; }
+    void DrawSnapDebug() const;
 
     // File dialog
     void OpenFileDialog();
@@ -85,6 +95,8 @@ private:
         glm::quat desiredRotation{1.0f, 0.0f, 0.0f, 0.0f};
         glm::vec3 desiredBodyPosition{0.0f};
         bool restoreOriginalHierarchy = false;
+        int32_t draggedConnectorIndex = -1;
+        int32_t targetConnectorIndex = -1;
     };
 
     struct WorldSnapConnector
@@ -96,7 +108,7 @@ private:
         glm::vec3 worldAxis{0.0f, 1.0f, 0.0f};
     };
 
-    void UpdateVisibilityForStep(int32_t step);
+    void UpdateVisibilityForStep(int32_t step, bool playPlacementSound = false);
     void BuildPerPartOrder();
     void CaptureOriginalAssemblyState();
     void CreateFloorPhysicsBody();
@@ -128,6 +140,9 @@ private:
     float GetSnapDistanceThreshold(uint32_t draggedId) const;
     void SetDraggedPartRayCastVisible(bool visible);
     bool ReattachDraggedPart();
+    void PlayRandomPutSound();
+    int32_t FindDraggedConnectorLock(uint32_t instanceId, const glm::vec3& hitPoint, const glm::vec3& hitNormal) const;
+    const BrickPlayer::Shadow::FSnapConnector* GetLockedDraggedConnector(uint32_t instanceId) const;
     bool IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const;
     void ApplyPhysicsPoseToNode(Assets::Node* node, const glm::vec3& bodyPosition, const glm::quat& bodyRotation);
 
@@ -165,6 +180,8 @@ private:
     bool autoPlay_ = false;
     int32_t playSpeedIndex_ = 2;
     float autoPlayTimer_ = 0.0f;
+    uint32_t currentBGM_ = 0;
+    std::vector<std::tuple<std::string, std::string>> bgmArray_;
 
     // Disassemble
     struct DisassembledInfo
@@ -186,8 +203,11 @@ private:
     glm::vec3 dragPlanePoint_{0.0f};
     glm::vec3 dragPlaneNormal_{0.0f, 0.0f, 1.0f};
     glm::vec3 dragBodyOffset_{0.0f};
+    int32_t lockedDraggedConnectorIndex_ = -1;
     DragSnapCandidate activeSnapCandidate_{};
+    float snapFeedbackPulseUntil_ = 0.0f;
     bool showPhysicsDebug_ = false;
+    bool showSnapDebug_ = false;
 
     // State
     bool sceneLoaded_ = false;

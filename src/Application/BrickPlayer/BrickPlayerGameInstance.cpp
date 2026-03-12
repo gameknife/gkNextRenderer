@@ -36,6 +36,19 @@ namespace
 
     constexpr int32_t playSpeedCount = static_cast<int32_t>(std::size(playSpeedPresets));
 
+    const char* GetRandomPutSoundPath()
+    {
+        switch (std::rand() % 3)
+        {
+        case 0:
+            return "assets/sfx/put1.wav";
+        case 1:
+            return "assets/sfx/put2.wav";
+        default:
+            return "assets/sfx/put3.wav";
+        }
+    }
+
     float AxisGap(float minA, float maxA, float minB, float maxB)
     {
         if (maxA < minB)
@@ -120,12 +133,21 @@ void BrickPlayerGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.samples", "16", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
-    cvars.SetDefaultFromString("r.dlss", "true", &error);
-    cvars.SetDefaultFromString("r.dlssrr", "true", &error);
+    // cvars.SetDefaultFromString("r.dlss", "true", &error);
+    // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
 }
 
 void BrickPlayerGameInstance::OnInit()
 {
+    bgmArray_.clear();
+    bgmArray_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
+    bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
+    if (!bgmArray_.empty())
+    {
+        currentBGM_ = static_cast<uint32_t>(bgmArray_.size() - 1);
+        PlayNextBGM();
+    }
+
     if (!GOption->SceneName.empty())
     {
         currentScenePath_ = GOption->SceneName;
@@ -147,7 +169,9 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     hoveredAssemblyInstanceId_ = UINT32_MAX;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
+    snapFeedbackPulseUntil_ = 0.0f;
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().ClearHoveredId();
     GetEngine().GetShowFlags().ShowEdge = false;
@@ -203,7 +227,7 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     // Auto-enable per-part mode if no build steps defined
     perPartMode_ = (totalSteps_ <= 1);
 
-    UpdateVisibilityForStep(currentStep_);
+    UpdateVisibilityForStep(currentStep_, false);
     sceneLoaded_ = true;
 
     SPDLOG_INFO("BrickPlayer: loaded scene with {} steps, {} parts, per-part mode: {}",
@@ -305,6 +329,9 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
             break;
         case SDLK_F1:
             TogglePhysicsDebug();
+            break;
+        case SDLK_F2:
+            ToggleSnapDebug();
             break;
         default:
             break;
@@ -520,6 +547,7 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     dragPlanePoint_ = hoveredHitPoint_;
     dragPlaneNormal_ = glm::normalize(viewNormal);
     dragBodyOffset_ = body->position - hoveredHitPoint_;
+    lockedDraggedConnectorIndex_ = FindDraggedConnectorLock(draggedInstanceId_, hoveredHitPoint_, hoveredHitNormal_);
     isDraggingPart_ = true;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
     activeSnapCandidate_ = {};
@@ -578,7 +606,9 @@ void BrickPlayerGameInstance::StopDraggingPart()
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
     dragBodyOffset_ = glm::vec3(0.0f);
+    lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
+    snapFeedbackPulseUntil_ = 0.0f;
 }
 
 void BrickPlayerGameInstance::UpdateDraggedPart()
@@ -621,29 +651,64 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         return;
     }
 
+    const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
+    const BrickPlayer::Shadow::FSnapConnector* lockedDraggedConnector = GetLockedDraggedConnector(draggedInstanceId_);
     glm::vec3 freeBodyPosition = planeHitPoint + dragBodyOffset_;
+    if (lockedDraggedConnector)
+    {
+        freeBodyPosition = planeHitPoint - body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
+    }
+
     if (hoveredAssemblyInstanceId_ != UINT32_MAX)
     {
         const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
             ? glm::normalize(hoveredAssemblyHitNormal_)
             : glm::vec3(0.0f, 1.0f, 0.0f);
-        const auto disassembledIt = disassembledNodes_.find(draggedInstanceId_);
-        const glm::vec3 halfExtent = disassembledIt != disassembledNodes_.end()
-            ? disassembledIt->second.halfExtent
-            : glm::vec3(0.01f);
         const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
         const float surfaceGap = std::max(8.0f * lduToWorldScale * 0.15f, 0.002f);
-        const float supportDistance = ProjectHalfExtentOnAxis(halfExtent, body->rotation, hoverNormal);
-        freeBodyPosition = hoveredAssemblyHitPoint_ + hoverNormal * (supportDistance + surfaceGap);
+        if (lockedDraggedConnector)
+        {
+            const glm::vec3 connectorAnchor = hoveredAssemblyHitPoint_ + hoverNormal * surfaceGap;
+            freeBodyPosition = connectorAnchor - body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
+        }
+        else
+        {
+            const auto disassembledIt = disassembledNodes_.find(draggedInstanceId_);
+            const glm::vec3 halfExtent = disassembledIt != disassembledNodes_.end()
+                ? disassembledIt->second.halfExtent
+                : glm::vec3(0.01f);
+            const float supportDistance = ProjectHalfExtentOnAxis(halfExtent, body->rotation, hoverNormal);
+            freeBodyPosition = hoveredAssemblyHitPoint_ + hoverNormal * (supportDistance + surfaceGap);
+        }
     }
 
     glm::vec3 desiredBodyPosition = freeBodyPosition;
     glm::quat desiredBodyRotation = body->rotation;
+    const DragSnapCandidate previousSnapCandidate = activeSnapCandidate_;
 
     DragSnapCandidate snapCandidate;
     if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate))
     {
         activeSnapCandidate_ = snapCandidate;
+        const bool snapChanged = !previousSnapCandidate.valid
+            || previousSnapCandidate.restoreOriginalHierarchy != snapCandidate.restoreOriginalHierarchy
+            || previousSnapCandidate.targetInstanceId != snapCandidate.targetInstanceId
+            || previousSnapCandidate.draggedConnectorIndex != snapCandidate.draggedConnectorIndex
+            || previousSnapCandidate.targetConnectorIndex != snapCandidate.targetConnectorIndex
+            || glm::abs(glm::dot(previousSnapCandidate.desiredRotation, snapCandidate.desiredRotation)) < 0.9995f;
+        const bool snapAudioChanged = !previousSnapCandidate.valid
+            || previousSnapCandidate.restoreOriginalHierarchy != snapCandidate.restoreOriginalHierarchy
+            || previousSnapCandidate.targetInstanceId != snapCandidate.targetInstanceId
+            || previousSnapCandidate.draggedConnectorIndex != snapCandidate.draggedConnectorIndex
+            || previousSnapCandidate.targetConnectorIndex != snapCandidate.targetConnectorIndex;
+        if (snapChanged)
+        {
+            snapFeedbackPulseUntil_ = engine_->GetTime() + 0.12f;
+        }
+        if (snapAudioChanged)
+        {
+            PlayRandomPutSound();
+        }
         desiredBodyPosition = snapCandidate.desiredBodyPosition;
         desiredBodyRotation = snapCandidate.desiredRotation;
         hoveredHitPoint_ = snapCandidate.desiredTranslation;
@@ -729,88 +794,136 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
         glm::pi<float>(),
         glm::half_pi<float>() * 3.0f
     };
+    const glm::quat currentDragRotation = node->WorldRotation();
 
     bool foundCandidate = false;
     int bestScore = -1;
     float bestDistance = FLT_MAX;
+    bool bestMatchesActiveCandidate = false;
+    const bool hasLockedConnector = lockedDraggedConnectorIndex_ >= 0
+        && static_cast<size_t>(lockedDraggedConnectorIndex_) < draggedConnectors.size();
 
-    for (const auto& draggedConnector : draggedConnectors)
+    auto evaluateCandidates = [&](bool lockedOnly) -> bool
     {
-        for (const WorldSnapConnector& targetConnector : targetConnectors)
+        const bool foundBeforePass = foundCandidate;
+        for (size_t draggedConnectorIndex = 0; draggedConnectorIndex < draggedConnectors.size(); ++draggedConnectorIndex)
         {
-            if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
+            const bool isLockedConnector = static_cast<int32_t>(draggedConnectorIndex) == lockedDraggedConnectorIndex_;
+            if (lockedOnly && hasLockedConnector && !isLockedConnector)
+            {
+                continue;
+            }
+            if (!lockedOnly && hasLockedConnector && isLockedConnector)
             {
                 continue;
             }
 
-            const float hoverDepthLimit =
-                std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
-            const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
-            const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
-            if (hoverDepth < -hoverDepthLimit)
+            const auto& draggedConnector = draggedConnectors[draggedConnectorIndex];
+            for (size_t targetConnectorIndex = 0; targetConnectorIndex < targetConnectors.size(); ++targetConnectorIndex)
             {
-                continue;
-            }
-
-            const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
-            const float hoverDistance = glm::length(planarHoverOffset);
-            if (hoverDistance > std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f))
-            {
-                continue;
-            }
-
-            if (glm::dot(targetConnector.worldAxis, hoverNormal) < 0.2f)
-            {
-                continue;
-            }
-
-            const glm::quat baseRotation =
-                glm::normalize(targetConnector.worldRotation * glm::inverse(draggedConnector.localRotation));
-
-            for (float twistAngle : twistAngles)
-            {
-                const glm::quat twist = glm::angleAxis(twistAngle, targetConnector.worldAxis);
-                const glm::quat desiredRotation = glm::normalize(twist * baseRotation);
-                const glm::vec3 desiredTranslation = targetConnector.worldPosition - desiredRotation * draggedConnector.localPosition;
-                const glm::vec3 desiredBodyPosition = desiredTranslation + desiredRotation * scaledOffset;
-                const float distanceToSnap = glm::distance(freeBodyPosition, desiredBodyPosition);
-                if (distanceToSnap > snapThreshold)
+                const WorldSnapConnector& targetConnector = targetConnectors[targetConnectorIndex];
+                if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
                 {
                     continue;
                 }
 
-                const int connectivityScore = ScoreShadowCandidate(
-                    draggedInstanceId_,
-                    desiredRotation,
-                    desiredTranslation,
-                    draggedConnector,
-                    targetConnector);
-                const int hoverScore = static_cast<int>(std::round((hoverDistanceLimit - hoverDistance) * 100.0f));
-                const int depthScore = static_cast<int>(std::round((hoverDepthLimit - glm::abs(hoverDepth)) * 100.0f));
-                const int normalScore = static_cast<int>(std::round(glm::dot(targetConnector.worldAxis, hoverNormal) * 1000.0f));
-                const int score = connectivityScore * 10000 + normalScore + depthScore + hoverScore;
-
-                const bool isBetter = !foundCandidate
-                    || score > bestScore
-                    || (score == bestScore && distanceToSnap < bestDistance);
-                if (!isBetter)
+                const float hoverDepthLimit =
+                    std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
+                const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
+                const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
+                if (hoverDepth < -hoverDepthLimit)
                 {
                     continue;
                 }
 
-                foundCandidate = true;
-                bestScore = score;
-                bestDistance = distanceToSnap;
+                const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
+                const float hoverDistance = glm::length(planarHoverOffset);
+                if (hoverDistance > std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f))
+                {
+                    continue;
+                }
 
-                outCandidate.valid = true;
-                outCandidate.targetInstanceId = targetConnector.ownerInstanceId;
-                outCandidate.desiredTranslation = desiredTranslation;
-                outCandidate.desiredRotation = desiredRotation;
-                outCandidate.desiredBodyPosition = desiredBodyPosition;
-                outCandidate.restoreOriginalHierarchy = false;
+                if (glm::dot(targetConnector.worldAxis, hoverNormal) < 0.2f)
+                {
+                    continue;
+                }
+
+                const glm::quat baseRotation =
+                    glm::normalize(targetConnector.worldRotation * glm::inverse(draggedConnector.localRotation));
+
+                for (float twistAngle : twistAngles)
+                {
+                    const glm::quat twist = glm::angleAxis(twistAngle, targetConnector.worldAxis);
+                    const glm::quat desiredRotation = glm::normalize(twist * baseRotation);
+                    const glm::vec3 desiredTranslation = targetConnector.worldPosition - desiredRotation * draggedConnector.localPosition;
+                    const glm::vec3 desiredBodyPosition = desiredTranslation + desiredRotation * scaledOffset;
+                    const float distanceToSnap = glm::distance(freeBodyPosition, desiredBodyPosition);
+                    if (distanceToSnap > snapThreshold)
+                    {
+                        continue;
+                    }
+
+                    const int connectivityScore = ScoreShadowCandidate(
+                        draggedInstanceId_,
+                        desiredRotation,
+                        desiredTranslation,
+                        draggedConnector,
+                        targetConnector);
+                    const int hoverScore = static_cast<int>(std::round((hoverDistanceLimit - hoverDistance) * 100.0f));
+                    const int depthScore = static_cast<int>(std::round((hoverDepthLimit - glm::abs(hoverDepth)) * 100.0f));
+                    const int normalScore = static_cast<int>(std::round(glm::dot(targetConnector.worldAxis, hoverNormal) * 1000.0f));
+                    const int lockScore = isLockedConnector ? 5000 : 0;
+                    const int rotationScore =
+                        static_cast<int>(std::round(glm::abs(glm::dot(desiredRotation, currentDragRotation)) * 1200.0f));
+                    const bool matchesActiveCandidate = activeSnapCandidate_.valid
+                        && !activeSnapCandidate_.restoreOriginalHierarchy
+                        && activeSnapCandidate_.targetInstanceId == targetConnector.ownerInstanceId
+                        && activeSnapCandidate_.draggedConnectorIndex == static_cast<int32_t>(draggedConnectorIndex)
+                        && activeSnapCandidate_.targetConnectorIndex == static_cast<int32_t>(targetConnectorIndex);
+                    const int stickyScore = matchesActiveCandidate ? 6000 : 0;
+                    const int score =
+                        connectivityScore * 10000 + normalScore + depthScore + hoverScore + lockScore + rotationScore + stickyScore;
+
+                    const int replaceMargin = bestMatchesActiveCandidate && !matchesActiveCandidate ? 1500 : 0;
+                    const bool isBetter = !foundCandidate
+                        || score > bestScore + replaceMargin
+                        || (score == bestScore && matchesActiveCandidate && !bestMatchesActiveCandidate)
+                        || (score == bestScore && matchesActiveCandidate == bestMatchesActiveCandidate && distanceToSnap < bestDistance);
+                    if (!isBetter)
+                    {
+                        continue;
+                    }
+
+                    foundCandidate = true;
+                    bestScore = score;
+                    bestDistance = distanceToSnap;
+                    bestMatchesActiveCandidate = matchesActiveCandidate;
+
+                    outCandidate.valid = true;
+                    outCandidate.targetInstanceId = targetConnector.ownerInstanceId;
+                    outCandidate.desiredTranslation = desiredTranslation;
+                    outCandidate.desiredRotation = desiredRotation;
+                    outCandidate.desiredBodyPosition = desiredBodyPosition;
+                    outCandidate.restoreOriginalHierarchy = false;
+                    outCandidate.draggedConnectorIndex = static_cast<int32_t>(draggedConnectorIndex);
+                    outCandidate.targetConnectorIndex = static_cast<int32_t>(targetConnectorIndex);
+                }
             }
         }
+
+        return foundCandidate && !foundBeforePass;
+    };
+
+    if (hasLockedConnector)
+    {
+        evaluateCandidates(true);
+        if (foundCandidate)
+        {
+            return true;
+        }
     }
+
+    evaluateCandidates(false);
 
     return foundCandidate;
 }
@@ -893,6 +1006,75 @@ std::vector<BrickPlayerGameInstance::WorldSnapConnector> BrickPlayerGameInstance
     }
 
     return worldConnectors;
+}
+
+int32_t BrickPlayerGameInstance::FindDraggedConnectorLock(uint32_t instanceId,
+                                                          const glm::vec3& hitPoint,
+                                                          const glm::vec3& hitNormal) const
+{
+    const std::vector<WorldSnapConnector> worldConnectors = BuildWorldConnectors(instanceId);
+    if (worldConnectors.empty())
+    {
+        return -1;
+    }
+
+    const glm::vec3 normalizedHitNormal = glm::dot(hitNormal, hitNormal) > 1e-6f
+        ? glm::normalize(hitNormal)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+
+    float bestScore = FLT_MAX;
+    int32_t bestIndex = -1;
+
+    for (size_t connectorIndex = 0; connectorIndex < worldConnectors.size(); ++connectorIndex)
+    {
+        const WorldSnapConnector& worldConnector = worldConnectors[connectorIndex];
+        if (!worldConnector.connector)
+        {
+            continue;
+        }
+
+        const glm::vec3 hitToConnector = worldConnector.worldPosition - hitPoint;
+        const float depth = glm::abs(glm::dot(hitToConnector, normalizedHitNormal));
+        const glm::vec3 planarOffset = hitToConnector - normalizedHitNormal * glm::dot(hitToConnector, normalizedHitNormal);
+        const float planarDistance = glm::length(planarOffset);
+        const float normalPenalty = 1.0f - glm::abs(glm::dot(worldConnector.worldAxis, normalizedHitNormal));
+        const float score = planarDistance + depth * 0.35f + normalPenalty * studPitch * 0.5f;
+        const float scoreLimit = std::max(studPitch * 1.25f,
+                                          worldConnector.connector->radius * 2.5f + worldConnector.connector->length * 0.5f);
+        if (score > scoreLimit || score >= bestScore)
+        {
+            continue;
+        }
+
+        bestScore = score;
+        bestIndex = static_cast<int32_t>(connectorIndex);
+    }
+
+    return bestIndex;
+}
+
+const BrickPlayer::Shadow::FSnapConnector* BrickPlayerGameInstance::GetLockedDraggedConnector(uint32_t instanceId) const
+{
+    if (lockedDraggedConnectorIndex_ < 0)
+    {
+        return nullptr;
+    }
+
+    auto partIt = nodePartFileMap_.find(instanceId);
+    if (partIt == nodePartFileMap_.end())
+    {
+        return nullptr;
+    }
+
+    const auto& localConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
+    if (static_cast<size_t>(lockedDraggedConnectorIndex_) >= localConnectors.size())
+    {
+        return nullptr;
+    }
+
+    return &localConnectors[lockedDraggedConnectorIndex_];
 }
 
 bool BrickPlayerGameInstance::AreConnectorsCompatible(const BrickPlayer::Shadow::FSnapConnector& dragged,
@@ -1200,6 +1382,11 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
     return true;
 }
 
+void BrickPlayerGameInstance::PlayRandomPutSound()
+{
+    engine_->PlaySound(GetRandomPutSoundPath(), false, 0.55f);
+}
+
 bool BrickPlayerGameInstance::IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const
 {
     const float denom = glm::dot(rayDir, dragPlaneNormal_);
@@ -1245,8 +1432,10 @@ void BrickPlayerGameInstance::SetCurrentStep(int32_t step)
     int32_t maxStep = perPartMode_ ? totalParts_ : totalSteps_;
     if (maxStep <= 0)
         return;
+    const int32_t previousStep = currentStep_;
     currentStep_ = std::clamp(step, 0, maxStep - 1);
-    UpdateVisibilityForStep(currentStep_);
+    const bool playPlacementSound = sceneLoaded_ && currentStep_ > previousStep;
+    UpdateVisibilityForStep(currentStep_, playPlacementSound);
 }
 
 void BrickPlayerGameInstance::SetPerPartMode(bool enabled)
@@ -1258,7 +1447,7 @@ void BrickPlayerGameInstance::SetPerPartMode(bool enabled)
 
     // Reset to step 0 when switching modes
     currentStep_ = 0;
-    UpdateVisibilityForStep(currentStep_);
+    UpdateVisibilityForStep(currentStep_, false);
 }
 
 void BrickPlayerGameInstance::ToggleAutoPlay()
@@ -1273,7 +1462,7 @@ void BrickPlayerGameInstance::ToggleAutoPlay()
         if (currentStep_ >= maxStep - 1)
         {
             currentStep_ = 0;
-            UpdateVisibilityForStep(currentStep_);
+            UpdateVisibilityForStep(currentStep_, false);
         }
     }
 }
@@ -1286,6 +1475,53 @@ void BrickPlayerGameInstance::CyclePlaySpeed()
 const char* BrickPlayerGameInstance::GetPlaySpeedLabel() const
 {
     return playSpeedPresets[playSpeedIndex_].label;
+}
+
+void BrickPlayerGameInstance::PlayNextBGM()
+{
+    if (bgmArray_.empty())
+    {
+        return;
+    }
+
+    const std::string& currentPath = std::get<1>(bgmArray_[currentBGM_]);
+    if (!currentPath.empty())
+    {
+        GetEngine().PauseSound(currentPath, true);
+    }
+
+    currentBGM_ = (currentBGM_ + 1) % static_cast<uint32_t>(bgmArray_.size());
+    GetEngine().PlaySound(std::get<1>(bgmArray_[currentBGM_]), true, 0.45f);
+}
+
+bool BrickPlayerGameInstance::IsBGMPaused() const
+{
+    if (bgmArray_.empty())
+    {
+        return true;
+    }
+
+    return !engine_->IsSoundPlaying(std::get<1>(bgmArray_[currentBGM_]));
+}
+
+void BrickPlayerGameInstance::PauseBGM(bool pause)
+{
+    if (bgmArray_.empty())
+    {
+        return;
+    }
+
+    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), pause);
+}
+
+std::string BrickPlayerGameInstance::GetCurrentBGMName() const
+{
+    if (bgmArray_.empty())
+    {
+        return {};
+    }
+
+    return std::get<0>(bgmArray_[currentBGM_]);
 }
 
 void BrickPlayerGameInstance::BuildPerPartOrder()
@@ -1389,10 +1625,11 @@ void BrickPlayerGameInstance::StepBackward()
     SetCurrentStep(currentStep_ - 1);
 }
 
-void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step)
+void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPlacementSound)
 {
     auto& nodes = GetEngine().GetScene().Nodes();
     bool changed = false;
+    int32_t revealedCount = 0;
 
     const auto& lookupMap = perPartMode_ ? nodePartOrder_ : nodeStepMap_;
 
@@ -1412,17 +1649,32 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step)
         if (it != lookupMap.end())
         {
             bool shouldBeVisible = it->second <= step;
-            if (render->GetVisible() != shouldBeVisible)
+            const bool wasVisible = render->GetVisible();
+            if (wasVisible != shouldBeVisible)
             {
                 render->SetVisible(shouldBeVisible);
                 render->SetRayCastVisible(shouldBeVisible);
                 changed = true;
+                if (playPlacementSound && shouldBeVisible)
+                {
+                    ++revealedCount;
+                }
             }
         }
     }
 
     if (changed)
+    {
         GetEngine().GetScene().MarkDirty();
+    }
+
+    if (playPlacementSound && revealedCount > 0)
+    {
+        for (int32_t i = 0; i < revealedCount; ++i)
+        {
+            PlayRandomPutSound();
+        }
+    }
 }
 
 // Disassemble
@@ -1531,7 +1783,9 @@ void BrickPlayerGameInstance::ResetAll()
     hoveredAssemblyInstanceId_ = UINT32_MAX;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
+    snapFeedbackPulseUntil_ = 0.0f;
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().ClearHoveredId();
     GetEngine().GetShowFlags().ShowEdge = false;
@@ -1643,6 +1897,198 @@ void BrickPlayerGameInstance::DrawPhysicsDebug()
         }
     }
 #endif
+}
+
+void BrickPlayerGameInstance::DrawSnapConfirmation() const
+{
+    if (!sceneLoaded_ || !isDraggingPart_ || !activeSnapCandidate_.valid)
+    {
+        return;
+    }
+
+    const bool pulsing = engine_->GetTime() < snapFeedbackPulseUntil_;
+    const glm::vec4 snapColor = pulsing
+        ? glm::vec4(0.35f, 1.0f, 0.35f, 1.0f)
+        : glm::vec4(0.15f, 0.95f, 0.25f, 0.95f);
+    const float pointSize = pulsing ? 8.0f : 5.5f;
+    const float lineSize = pulsing ? 3.0f : 2.0f;
+
+    NextEngineHelper::DrawAuxPoint(activeSnapCandidate_.desiredTranslation, snapColor, pointSize);
+
+    if (activeSnapCandidate_.restoreOriginalHierarchy
+        || activeSnapCandidate_.draggedConnectorIndex < 0
+        || activeSnapCandidate_.targetConnectorIndex < 0)
+    {
+        return;
+    }
+
+    const std::vector<WorldSnapConnector> draggedConnectors = BuildWorldConnectors(draggedInstanceId_);
+    const std::vector<WorldSnapConnector> targetConnectors = BuildWorldConnectors(activeSnapCandidate_.targetInstanceId);
+    if (static_cast<size_t>(activeSnapCandidate_.draggedConnectorIndex) >= draggedConnectors.size()
+        || static_cast<size_t>(activeSnapCandidate_.targetConnectorIndex) >= targetConnectors.size())
+    {
+        return;
+    }
+
+    const WorldSnapConnector& draggedConnector = draggedConnectors[activeSnapCandidate_.draggedConnectorIndex];
+    const WorldSnapConnector& targetConnector = targetConnectors[activeSnapCandidate_.targetConnectorIndex];
+    if (!draggedConnector.connector || !targetConnector.connector)
+    {
+        return;
+    }
+
+    const float draggedAxisLength = std::max(std::max(draggedConnector.connector->length, draggedConnector.connector->radius * 2.0f), 0.01f);
+    const float targetAxisLength = std::max(std::max(targetConnector.connector->length, targetConnector.connector->radius * 2.0f), 0.01f);
+
+    NextEngineHelper::DrawAuxPoint(draggedConnector.worldPosition, snapColor, pointSize + 1.0f);
+    NextEngineHelper::DrawAuxPoint(targetConnector.worldPosition, glm::vec4(1.0f, 0.95f, 0.35f, 1.0f), pointSize + 1.0f);
+    NextEngineHelper::DrawAuxLine(draggedConnector.worldPosition, targetConnector.worldPosition, snapColor, lineSize);
+    NextEngineHelper::DrawAuxLine(draggedConnector.worldPosition,
+                                  draggedConnector.worldPosition + draggedConnector.worldAxis * draggedAxisLength,
+                                  snapColor,
+                                  lineSize);
+    NextEngineHelper::DrawAuxLine(targetConnector.worldPosition,
+                                  targetConnector.worldPosition + targetConnector.worldAxis * targetAxisLength,
+                                  glm::vec4(1.0f, 0.95f, 0.35f, 1.0f),
+                                  lineSize);
+}
+
+void BrickPlayerGameInstance::DrawSnapDebug() const
+{
+    if (!showSnapDebug_ || !sceneLoaded_ || !isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    const std::vector<WorldSnapConnector> draggedConnectors = BuildWorldConnectors(draggedInstanceId_);
+    if (draggedConnectors.empty())
+    {
+        return;
+    }
+
+    auto drawConnector = [](const WorldSnapConnector& connector, const glm::vec4& color, float pointSize, float lineSize)
+    {
+        if (!connector.connector)
+        {
+            return;
+        }
+
+        const float axisLength = std::max(std::max(connector.connector->length, connector.connector->radius * 2.0f), 0.01f);
+        NextEngineHelper::DrawAuxPoint(connector.worldPosition, color, pointSize);
+        NextEngineHelper::DrawAuxLine(connector.worldPosition,
+                                      connector.worldPosition + connector.worldAxis * axisLength,
+                                      color,
+                                      lineSize);
+    };
+
+    const BrickPlayer::Shadow::FSnapConnector* lockedDraggedConnector = GetLockedDraggedConnector(draggedInstanceId_);
+    const bool hasLockedConnector = lockedDraggedConnector
+        && lockedDraggedConnectorIndex_ >= 0
+        && static_cast<size_t>(lockedDraggedConnectorIndex_) < draggedConnectors.size();
+
+    for (size_t connectorIndex = 0; connectorIndex < draggedConnectors.size(); ++connectorIndex)
+    {
+        glm::vec4 color(0.2f, 0.75f, 1.0f, 1.0f);
+        float pointSize = 4.0f;
+        float lineSize = 1.5f;
+
+        if (static_cast<int32_t>(connectorIndex) == lockedDraggedConnectorIndex_)
+        {
+            color = glm::vec4(0.1f, 1.0f, 1.0f, 1.0f);
+            pointSize = 6.0f;
+            lineSize = 2.0f;
+        }
+        if (activeSnapCandidate_.valid && static_cast<int32_t>(connectorIndex) == activeSnapCandidate_.draggedConnectorIndex)
+        {
+            color = glm::vec4(0.1f, 1.0f, 0.2f, 1.0f);
+            pointSize = 7.0f;
+            lineSize = 2.5f;
+        }
+
+        drawConnector(draggedConnectors[connectorIndex], color, pointSize, lineSize);
+    }
+
+    if (hoveredAssemblyInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    const std::vector<WorldSnapConnector> targetConnectors = BuildWorldConnectors(hoveredAssemblyInstanceId_);
+    if (targetConnectors.empty())
+    {
+        return;
+    }
+
+    const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
+        ? glm::normalize(hoveredAssemblyHitNormal_)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float hoverDistanceLimit = studPitch * 0.75f;
+
+    NextEngineHelper::DrawAuxPoint(hoveredAssemblyHitPoint_, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
+
+    for (size_t targetConnectorIndex = 0; targetConnectorIndex < targetConnectors.size(); ++targetConnectorIndex)
+    {
+        const WorldSnapConnector& targetConnector = targetConnectors[targetConnectorIndex];
+        if (!targetConnector.connector)
+        {
+            continue;
+        }
+
+        bool isCompatible = false;
+        if (hasLockedConnector)
+        {
+            isCompatible = AreConnectorsCompatible(*lockedDraggedConnector, *targetConnector.connector);
+        }
+        else
+        {
+            for (const WorldSnapConnector& draggedConnector : draggedConnectors)
+            {
+                if (draggedConnector.connector
+                    && AreConnectorsCompatible(*draggedConnector.connector, *targetConnector.connector))
+                {
+                    isCompatible = true;
+                    break;
+                }
+            }
+        }
+
+        const float hoverDepthLimit =
+            std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
+        const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
+        const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
+        const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
+        const float hoverDistance = glm::length(planarHoverOffset);
+        const bool passesHoverFilter = hoverDepth >= -hoverDepthLimit
+            && hoverDistance <= std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f)
+            && glm::dot(targetConnector.worldAxis, hoverNormal) >= 0.2f;
+
+        glm::vec4 color = isCompatible ? glm::vec4(1.0f, 0.85f, 0.2f, 1.0f) : glm::vec4(1.0f, 0.3f, 0.3f, 0.65f);
+        float pointSize = passesHoverFilter ? 5.0f : 3.5f;
+        float lineSize = passesHoverFilter ? 2.0f : 1.0f;
+        if (activeSnapCandidate_.valid && static_cast<int32_t>(targetConnectorIndex) == activeSnapCandidate_.targetConnectorIndex)
+        {
+            color = glm::vec4(0.1f, 1.0f, 0.2f, 1.0f);
+            pointSize = 7.0f;
+            lineSize = 2.5f;
+        }
+
+        drawConnector(targetConnector, color, pointSize, lineSize);
+
+        if (hasLockedConnector && isCompatible && passesHoverFilter)
+        {
+            const WorldSnapConnector& lockedWorldConnector = draggedConnectors[lockedDraggedConnectorIndex_];
+            const bool isActivePair = activeSnapCandidate_.valid
+                && activeSnapCandidate_.draggedConnectorIndex == lockedDraggedConnectorIndex_
+                && activeSnapCandidate_.targetConnectorIndex == static_cast<int32_t>(targetConnectorIndex);
+            NextEngineHelper::DrawAuxLine(lockedWorldConnector.worldPosition,
+                                          targetConnector.worldPosition,
+                                          isActivePair ? glm::vec4(0.1f, 1.0f, 0.2f, 1.0f)
+                                                       : glm::vec4(1.0f, 0.85f, 0.2f, 0.8f),
+                                          isActivePair ? 2.5f : 1.0f);
+        }
+    }
 }
 
 void BrickPlayerGameInstance::CreateFloorPhysicsBody()
