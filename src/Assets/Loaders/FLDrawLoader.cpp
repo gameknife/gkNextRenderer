@@ -482,7 +482,8 @@ namespace Assets
             const std::function<PartModelInfo(const LDrawPartTemplate&, std::vector<Model>&)>& buildPartModel,
             std::vector<std::shared_ptr<Node>>& nodes,
             std::vector<Model>& models,
-            std::unordered_map<uint32_t, int32_t>& outStepMap)
+            std::unordered_map<uint32_t, int32_t>& outStepMap,
+            std::unordered_map<uint32_t, std::string>& outPartFileMap)
         {
             glm::vec3 scale;
             glm::vec3 translation;
@@ -509,6 +510,7 @@ namespace Assets
                 node->SetParent(parent);
 
             outStepMap[node->GetInstanceId()] = placement.buildStep;
+            outPartFileMap[node->GetInstanceId()] = placement.partFile;
 
             const PartModelInfo partInfo = ResolvePartModel(
                 placement.partFile,
@@ -548,17 +550,24 @@ namespace Assets
                     buildPartModel,
                     nodes,
                     models,
-                    outStepMap);
+                    outStepMap,
+                    outPartFileMap);
             }
         }
     }
 
     static std::unordered_map<uint32_t, int32_t> sLastLoadStepMap;
+    static std::unordered_map<uint32_t, std::string> sLastLoadPartFileMap;
     static int32_t sLastLoadTotalSteps = 0;
 
     const std::unordered_map<uint32_t, int32_t>& FLDrawLoader::GetLastLoadStepMap()
     {
         return sLastLoadStepMap;
+    }
+
+    const std::unordered_map<uint32_t, std::string>& FLDrawLoader::GetLastLoadPartFileMap()
+    {
+        return sLastLoadPartFileMap;
     }
 
     int32_t FLDrawLoader::GetLastLoadTotalSteps()
@@ -753,6 +762,7 @@ namespace Assets
         };
 
         std::unordered_map<uint32_t, int32_t> stepMap;
+        std::unordered_map<uint32_t, std::string> partFileMap;
         for (const auto& placement : placements)
         {
             InstantiatePlacementTree(
@@ -769,10 +779,12 @@ namespace Assets
                 buildPartModel,
                 nodes,
                 models,
-                stepMap);
+                stepMap,
+                partFileMap);
         }
 
         sLastLoadStepMap = std::move(stepMap);
+        sLastLoadPartFileMap = std::move(partFileMap);
         sLastLoadTotalSteps = 0;
         for (const auto& [id, step] : sLastLoadStepMap)
             sLastLoadTotalSteps = std::max(sLastLoadTotalSteps, step + 1);

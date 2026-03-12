@@ -1,9 +1,12 @@
 #pragma once
 #include "Common/CoreMinimal.hpp"
+#include "BrickPlayerLDrawShadow.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
 
 class BrickPlayerUserInterface;
+namespace Assets { class Node; }
+namespace Runtime { class PhysicsComponent; }
 
 class BrickPlayerGameInstance : public NextGameInstanceBase
 {
@@ -61,14 +64,70 @@ public:
     bool IsSceneLoaded() const { return sceneLoaded_; }
 
 private:
+    struct OriginalAssemblyState
+    {
+        uint32_t parentInstanceId = UINT32_MAX;
+        glm::vec3 localTranslation{0.0f};
+        glm::quat localRotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 localScale{1.0f};
+        glm::vec3 worldTranslation{0.0f};
+        glm::quat worldRotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 worldScale{1.0f};
+        glm::vec3 worldAabbMin{0.0f};
+        glm::vec3 worldAabbMax{0.0f};
+    };
+
+    struct DragSnapCandidate
+    {
+        bool valid = false;
+        uint32_t targetInstanceId = UINT32_MAX;
+        glm::vec3 desiredTranslation{0.0f};
+        glm::quat desiredRotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 desiredBodyPosition{0.0f};
+        bool restoreOriginalHierarchy = false;
+    };
+
+    struct WorldSnapConnector
+    {
+        const BrickPlayer::Shadow::FSnapConnector* connector = nullptr;
+        uint32_t ownerInstanceId = UINT32_MAX;
+        glm::vec3 worldPosition{0.0f};
+        glm::quat worldRotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 worldAxis{0.0f, 1.0f, 0.0f};
+    };
+
     void UpdateVisibilityForStep(int32_t step);
     void BuildPerPartOrder();
+    void CaptureOriginalAssemblyState();
     void CreateFloorPhysicsBody();
     void PerformRaycast();
     bool UpdateHitStateFromRaycast(const Assets::RayCastResult& result);
     bool StartDraggingHoveredPart();
     void StopDraggingPart();
     void UpdateDraggedPart();
+    bool TryBuildSnapCandidate(Assets::Node* node,
+                               const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                               const glm::vec3& freeBodyPosition,
+                               DragSnapCandidate& outCandidate);
+    bool TryBuildShadowSnapCandidate(Assets::Node* node,
+                                     const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                     const glm::vec3& freeBodyPosition,
+                                     DragSnapCandidate& outCandidate);
+    bool TryBuildOriginalSnapCandidate(const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                       const glm::vec3& freeBodyPosition,
+                                       DragSnapCandidate& outCandidate);
+    std::vector<WorldSnapConnector> BuildWorldConnectors(uint32_t instanceId) const;
+    bool AreConnectorsCompatible(const BrickPlayer::Shadow::FSnapConnector& dragged,
+                                 const BrickPlayer::Shadow::FSnapConnector& target) const;
+    int ScoreShadowCandidate(uint32_t draggedId,
+                             const glm::quat& desiredRotation,
+                             const glm::vec3& desiredTranslation,
+                             const BrickPlayer::Shadow::FSnapConnector& anchorDragged,
+                             const WorldSnapConnector& anchorTarget) const;
+    bool AreNodesOriginallyConnectable(uint32_t draggedId, uint32_t targetId) const;
+    float GetSnapDistanceThreshold(uint32_t draggedId) const;
+    void SetDraggedPartRayCastVisible(bool visible);
+    bool ReattachDraggedPart();
     bool IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const;
     void ApplyPhysicsPoseToNode(Assets::Node* node, const glm::vec3& bodyPosition, const glm::quat& bodyRotation);
 
@@ -96,6 +155,7 @@ private:
     // Timeline
     std::unordered_map<uint32_t, int32_t> nodeStepMap_;
     std::unordered_map<uint32_t, int32_t> nodePartOrder_;
+    std::unordered_map<uint32_t, std::string> nodePartFileMap_;
     int32_t totalSteps_ = 0;
     int32_t totalParts_ = 0;
     int32_t currentStep_ = 0;
@@ -112,16 +172,21 @@ private:
         glm::vec3 halfExtent;
     };
     std::unordered_map<uint32_t, DisassembledInfo> disassembledNodes_;
+    std::unordered_map<uint32_t, OriginalAssemblyState> originalAssemblyStates_;
     uint32_t selectedInstanceId_ = UINT32_MAX;
     glm::vec3 selectedHitNormal_{0.0f, 1.0f, 0.0f};
     uint32_t hoveredDisassembledInstanceId_ = UINT32_MAX;
     glm::vec3 hoveredHitPoint_{0.0f};
     glm::vec3 hoveredHitNormal_{0.0f, 1.0f, 0.0f};
+    uint32_t hoveredAssemblyInstanceId_ = UINT32_MAX;
+    glm::vec3 hoveredAssemblyHitPoint_{0.0f};
+    glm::vec3 hoveredAssemblyHitNormal_{0.0f, 1.0f, 0.0f};
     bool isDraggingPart_ = false;
     uint32_t draggedInstanceId_ = UINT32_MAX;
     glm::vec3 dragPlanePoint_{0.0f};
     glm::vec3 dragPlaneNormal_{0.0f, 0.0f, 1.0f};
     glm::vec3 dragBodyOffset_{0.0f};
+    DragSnapCandidate activeSnapCandidate_{};
     bool showPhysicsDebug_ = false;
 
     // State
@@ -131,6 +196,7 @@ private:
 
     // UI
     std::unique_ptr<BrickPlayerUserInterface> userInterface_;
+    BrickPlayer::Shadow::FShadowLibrary shadowLibrary_;
 
     friend class BrickPlayerUserInterface;
 };

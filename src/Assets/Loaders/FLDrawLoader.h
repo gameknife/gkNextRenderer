@@ -35,6 +35,7 @@ namespace Assets
         // Step data from last LoadLDrawScene call
         // Maps node instanceId -> build step index (0-based)
         static const std::unordered_map<uint32_t, int32_t>& GetLastLoadStepMap();
+        static const std::unordered_map<uint32_t, std::string>& GetLastLoadPartFileMap();
         static int32_t GetLastLoadTotalSteps();
 
     private:

@@ -10,9 +10,16 @@
 #include <SDL3/SDL_dialog.h>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
+#include <glm/ext/scalar_constants.hpp>
 
 namespace
 {
+    struct WorldBounds
+    {
+        glm::vec3 min{FLT_MAX};
+        glm::vec3 max{-FLT_MAX};
+    };
+
     struct PlaySpeedPreset
     {
         const char* label;
@@ -28,6 +35,64 @@ namespace
     };
 
     constexpr int32_t playSpeedCount = static_cast<int32_t>(std::size(playSpeedPresets));
+
+    float AxisGap(float minA, float maxA, float minB, float maxB)
+    {
+        if (maxA < minB)
+        {
+            return minB - maxA;
+        }
+        if (maxB < minA)
+        {
+            return minA - maxB;
+        }
+        return 0.0f;
+    }
+
+    std::string ToLowerCopy(const std::string& text)
+    {
+        std::string lower = text;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return lower;
+    }
+
+    WorldBounds TransformLocalBounds(const glm::mat4& worldTransform, const glm::vec3& localMin, const glm::vec3& localMax)
+    {
+        const glm::vec3 corners[8] = {
+            {localMin.x, localMin.y, localMin.z},
+            {localMax.x, localMin.y, localMin.z},
+            {localMin.x, localMax.y, localMin.z},
+            {localMax.x, localMax.y, localMin.z},
+            {localMin.x, localMin.y, localMax.z},
+            {localMax.x, localMin.y, localMax.z},
+            {localMin.x, localMax.y, localMax.z},
+            {localMax.x, localMax.y, localMax.z}
+        };
+
+        WorldBounds bounds;
+        for (const glm::vec3& corner : corners)
+        {
+            const glm::vec3 worldPoint = glm::vec3(worldTransform * glm::vec4(corner, 1.0f));
+            bounds.min = glm::min(bounds.min, worldPoint);
+            bounds.max = glm::max(bounds.max, worldPoint);
+        }
+
+        return bounds;
+    }
+
+    float ProjectHalfExtentOnAxis(const glm::vec3& halfExtent, const glm::quat& rotation, const glm::vec3& axis)
+    {
+        const glm::vec3 normalizedAxis = glm::dot(axis, axis) > 1e-6f
+            ? glm::normalize(axis)
+            : glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::mat3 rotationMatrix = glm::mat3_cast(rotation);
+        const glm::vec3 localAxis = glm::transpose(rotationMatrix) * normalizedAxis;
+        const glm::vec3 absLocalAxis = glm::abs(localAxis);
+        return glm::dot(absLocalAxis, halfExtent);
+    }
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
@@ -71,14 +136,18 @@ void BrickPlayerGameInstance::OnInit()
 void BrickPlayerGameInstance::OnSceneLoaded()
 {
     nodeStepMap_ = Assets::FLDrawLoader::GetLastLoadStepMap();
+    nodePartFileMap_ = Assets::FLDrawLoader::GetLastLoadPartFileMap();
     totalSteps_ = Assets::FLDrawLoader::GetLastLoadTotalSteps();
     currentStep_ = 0;
 
     disassembledNodes_.clear();
+    originalAssemblyStates_.clear();
     selectedInstanceId_ = UINT32_MAX;
     hoveredDisassembledInstanceId_ = UINT32_MAX;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    activeSnapCandidate_ = {};
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().ClearHoveredId();
     GetEngine().GetShowFlags().ShowEdge = false;
@@ -128,6 +197,8 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     }
 
     BuildPerPartOrder();
+    CaptureOriginalAssemblyState();
+    shadowLibrary_.Initialize(Assets::SanitizeLDrawLduToWorldScale(GetEngine().GetUserSettings().LDrawLduToWorldScale));
 
     // Auto-enable per-part mode if no build steps defined
     perPartMode_ = (totalSteps_ <= 1);
@@ -164,12 +235,12 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
         }
     }
 
+    PerformRaycast();
+
     if (isDraggingPart_)
     {
         UpdateDraggedPart();
     }
-
-    PerformRaycast();
 
     GetEngine().GetShowFlags().ShowEdge =
         GetEngine().GetScene().GetHoveredId() != UINT32_MAX || selectedInstanceId_ != UINT32_MAX;
@@ -330,16 +401,11 @@ void BrickPlayerGameInstance::OnRayHitResponse(Assets::RayCastResult& result)
 
 void BrickPlayerGameInstance::PerformRaycast()
 {
-    if (isDraggingPart_)
-    {
-        hoveredDisassembledInstanceId_ = draggedInstanceId_;
-        GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
-        return;
-    }
-
     if (mouseCapturedByUI_)
     {
         hoveredDisassembledInstanceId_ = UINT32_MAX;
+        hoveredAssemblyInstanceId_ = UINT32_MAX;
+        activeSnapCandidate_ = {};
         GetEngine().GetScene().ClearHoveredId();
         return;
     }
@@ -355,6 +421,8 @@ void BrickPlayerGameInstance::PerformRaycast()
     if (!handled)
     {
         hoveredDisassembledInstanceId_ = UINT32_MAX;
+        hoveredAssemblyInstanceId_ = UINT32_MAX;
+        activeSnapCandidate_ = {};
         GetEngine().GetScene().ClearHoveredId();
     }
 }
@@ -376,9 +444,25 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
         ? glm::normalize(glm::vec3(result.Normal))
         : glm::vec3(0.0f, 1.0f, 0.0f);
 
+    if (isDraggingPart_)
+    {
+        if (instanceId == draggedInstanceId_ || disassembledNodes_.count(instanceId))
+        {
+            return false;
+        }
+
+        hoveredDisassembledInstanceId_ = UINT32_MAX;
+        hoveredAssemblyInstanceId_ = instanceId;
+        hoveredAssemblyHitPoint_ = glm::vec3(result.HitPoint);
+        hoveredAssemblyHitNormal_ = hitNormal;
+        GetEngine().GetScene().SetHoveredId(instanceId);
+        return true;
+    }
+
     if (disassembledNodes_.count(instanceId))
     {
         hoveredDisassembledInstanceId_ = instanceId;
+        hoveredAssemblyInstanceId_ = UINT32_MAX;
         hoveredHitPoint_ = glm::vec3(result.HitPoint);
         hoveredHitNormal_ = hitNormal;
         GetEngine().GetScene().SetHoveredId(instanceId);
@@ -386,6 +470,7 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
     }
 
     hoveredDisassembledInstanceId_ = UINT32_MAX;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().ClearHoveredId();
     selectedInstanceId_ = instanceId;
     selectedHitNormal_ = hitNormal;
@@ -436,8 +521,11 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     dragPlaneNormal_ = glm::normalize(viewNormal);
     dragBodyOffset_ = body->position - hoveredHitPoint_;
     isDraggingPart_ = true;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
+    activeSnapCandidate_ = {};
     selectedInstanceId_ = draggedInstanceId_;
     selectedHitNormal_ = hoveredHitNormal_;
+    SetDraggedPartRayCastVisible(false);
     GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
     GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
     return true;
@@ -454,9 +542,16 @@ void BrickPlayerGameInstance::StopDraggingPart()
         return;
     }
 
+    const uint32_t finishedInstanceId = draggedInstanceId_;
+    bool snappedBack = false;
+    if (activeSnapCandidate_.valid)
+    {
+        snappedBack = ReattachDraggedPart();
+    }
+
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
-    if (physics && node)
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(finishedInstanceId);
+    if (!snappedBack && physics && node)
     {
         auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
         if (physComp)
@@ -467,13 +562,23 @@ void BrickPlayerGameInstance::StopDraggingPart()
                 physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, body->rotation, true);
             }
         }
+
+        SetDraggedPartRayCastVisible(true);
+        hoveredDisassembledInstanceId_ = finishedInstanceId;
+        GetEngine().GetScene().SetHoveredId(finishedInstanceId);
+    }
+    else if (snappedBack)
+    {
+        hoveredDisassembledInstanceId_ = UINT32_MAX;
+        GetEngine().GetScene().ClearHoveredId();
     }
 #endif
 
-    hoveredDisassembledInstanceId_ = draggedInstanceId_;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
     dragBodyOffset_ = glm::vec3(0.0f);
+    activeSnapCandidate_ = {};
 }
 
 void BrickPlayerGameInstance::UpdateDraggedPart()
@@ -516,17 +621,583 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         return;
     }
 
-    const glm::vec3 desiredBodyPosition = planeHitPoint + dragBodyOffset_;
-    const glm::quat desiredBodyRotation = body->rotation;
+    glm::vec3 freeBodyPosition = planeHitPoint + dragBodyOffset_;
+    if (hoveredAssemblyInstanceId_ != UINT32_MAX)
+    {
+        const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
+            ? glm::normalize(hoveredAssemblyHitNormal_)
+            : glm::vec3(0.0f, 1.0f, 0.0f);
+        const auto disassembledIt = disassembledNodes_.find(draggedInstanceId_);
+        const glm::vec3 halfExtent = disassembledIt != disassembledNodes_.end()
+            ? disassembledIt->second.halfExtent
+            : glm::vec3(0.01f);
+        const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+        const float surfaceGap = std::max(8.0f * lduToWorldScale * 0.15f, 0.002f);
+        const float supportDistance = ProjectHalfExtentOnAxis(halfExtent, body->rotation, hoverNormal);
+        freeBodyPosition = hoveredAssemblyHitPoint_ + hoverNormal * (supportDistance + surfaceGap);
+    }
+
+    glm::vec3 desiredBodyPosition = freeBodyPosition;
+    glm::quat desiredBodyRotation = body->rotation;
+
+    DragSnapCandidate snapCandidate;
+    if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate))
+    {
+        activeSnapCandidate_ = snapCandidate;
+        desiredBodyPosition = snapCandidate.desiredBodyPosition;
+        desiredBodyRotation = snapCandidate.desiredRotation;
+        hoveredHitPoint_ = snapCandidate.desiredTranslation;
+    }
+    else
+    {
+        activeSnapCandidate_ = {};
+        hoveredHitPoint_ = hoveredAssemblyInstanceId_ != UINT32_MAX ? hoveredAssemblyHitPoint_ : planeHitPoint;
+    }
+
     physics->SetBodyTransform(physComp->GetPhysicsBody(), desiredBodyPosition, desiredBodyRotation, true);
     ApplyPhysicsPoseToNode(node, desiredBodyPosition, desiredBodyRotation);
 
     hoveredDisassembledInstanceId_ = draggedInstanceId_;
-    hoveredHitPoint_ = planeHitPoint;
-    GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
+    if (activeSnapCandidate_.valid)
+    {
+        GetEngine().GetScene().SetHoveredId(activeSnapCandidate_.targetInstanceId);
+    }
+    else if (hoveredAssemblyInstanceId_ != UINT32_MAX)
+    {
+        GetEngine().GetScene().SetHoveredId(hoveredAssemblyInstanceId_);
+    }
+    else
+    {
+        GetEngine().GetScene().ClearHoveredId();
+    }
     GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
     GetEngine().GetScene().MarkDirty();
 #endif
+}
+
+bool BrickPlayerGameInstance::TryBuildSnapCandidate(Assets::Node* node,
+                                                    const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                                    const glm::vec3& freeBodyPosition,
+                                                    DragSnapCandidate& outCandidate)
+{
+    outCandidate = {};
+
+    if (TryBuildShadowSnapCandidate(node, physComp, freeBodyPosition, outCandidate))
+    {
+        return true;
+    }
+
+    return TryBuildOriginalSnapCandidate(physComp, freeBodyPosition, outCandidate);
+}
+
+bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
+                                                          const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                                          const glm::vec3& freeBodyPosition,
+                                                          DragSnapCandidate& outCandidate)
+{
+    outCandidate = {};
+
+    if (!node || !physComp || hoveredAssemblyInstanceId_ == UINT32_MAX)
+    {
+        return false;
+    }
+
+    auto partIt = nodePartFileMap_.find(draggedInstanceId_);
+    if (partIt == nodePartFileMap_.end())
+    {
+        return false;
+    }
+
+    const auto& draggedConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
+    const std::vector<WorldSnapConnector> targetConnectors = BuildWorldConnectors(hoveredAssemblyInstanceId_);
+    if (draggedConnectors.empty() || targetConnectors.empty())
+    {
+        return false;
+    }
+
+    const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
+    const float snapThreshold = GetSnapDistanceThreshold(draggedInstanceId_);
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float hoverDistanceLimit = studPitch * 0.75f;
+    const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
+        ? glm::normalize(hoveredAssemblyHitNormal_)
+        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float twistAngles[] = {
+        0.0f,
+        glm::half_pi<float>(),
+        glm::pi<float>(),
+        glm::half_pi<float>() * 3.0f
+    };
+
+    bool foundCandidate = false;
+    int bestScore = -1;
+    float bestDistance = FLT_MAX;
+
+    for (const auto& draggedConnector : draggedConnectors)
+    {
+        for (const WorldSnapConnector& targetConnector : targetConnectors)
+        {
+            if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
+            {
+                continue;
+            }
+
+            const float hoverDepthLimit =
+                std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
+            const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
+            const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
+            if (hoverDepth < -hoverDepthLimit)
+            {
+                continue;
+            }
+
+            const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
+            const float hoverDistance = glm::length(planarHoverOffset);
+            if (hoverDistance > std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f))
+            {
+                continue;
+            }
+
+            if (glm::dot(targetConnector.worldAxis, hoverNormal) < 0.2f)
+            {
+                continue;
+            }
+
+            const glm::quat baseRotation =
+                glm::normalize(targetConnector.worldRotation * glm::inverse(draggedConnector.localRotation));
+
+            for (float twistAngle : twistAngles)
+            {
+                const glm::quat twist = glm::angleAxis(twistAngle, targetConnector.worldAxis);
+                const glm::quat desiredRotation = glm::normalize(twist * baseRotation);
+                const glm::vec3 desiredTranslation = targetConnector.worldPosition - desiredRotation * draggedConnector.localPosition;
+                const glm::vec3 desiredBodyPosition = desiredTranslation + desiredRotation * scaledOffset;
+                const float distanceToSnap = glm::distance(freeBodyPosition, desiredBodyPosition);
+                if (distanceToSnap > snapThreshold)
+                {
+                    continue;
+                }
+
+                const int connectivityScore = ScoreShadowCandidate(
+                    draggedInstanceId_,
+                    desiredRotation,
+                    desiredTranslation,
+                    draggedConnector,
+                    targetConnector);
+                const int hoverScore = static_cast<int>(std::round((hoverDistanceLimit - hoverDistance) * 100.0f));
+                const int depthScore = static_cast<int>(std::round((hoverDepthLimit - glm::abs(hoverDepth)) * 100.0f));
+                const int normalScore = static_cast<int>(std::round(glm::dot(targetConnector.worldAxis, hoverNormal) * 1000.0f));
+                const int score = connectivityScore * 10000 + normalScore + depthScore + hoverScore;
+
+                const bool isBetter = !foundCandidate
+                    || score > bestScore
+                    || (score == bestScore && distanceToSnap < bestDistance);
+                if (!isBetter)
+                {
+                    continue;
+                }
+
+                foundCandidate = true;
+                bestScore = score;
+                bestDistance = distanceToSnap;
+
+                outCandidate.valid = true;
+                outCandidate.targetInstanceId = targetConnector.ownerInstanceId;
+                outCandidate.desiredTranslation = desiredTranslation;
+                outCandidate.desiredRotation = desiredRotation;
+                outCandidate.desiredBodyPosition = desiredBodyPosition;
+                outCandidate.restoreOriginalHierarchy = false;
+            }
+        }
+    }
+
+    return foundCandidate;
+}
+
+bool BrickPlayerGameInstance::TryBuildOriginalSnapCandidate(const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                                            const glm::vec3& freeBodyPosition,
+                                                            DragSnapCandidate& outCandidate)
+{
+    outCandidate = {};
+
+    if (!physComp || hoveredAssemblyInstanceId_ == UINT32_MAX)
+    {
+        return false;
+    }
+
+    if (!AreNodesOriginallyConnectable(draggedInstanceId_, hoveredAssemblyInstanceId_))
+    {
+        return false;
+    }
+
+    auto originalIt = originalAssemblyStates_.find(draggedInstanceId_);
+    if (originalIt == originalAssemblyStates_.end())
+    {
+        return false;
+    }
+
+    const OriginalAssemblyState& originalState = originalIt->second;
+    const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * originalState.worldScale;
+    const glm::vec3 desiredBodyPosition = originalState.worldTranslation + originalState.worldRotation * scaledOffset;
+    const float distanceToSnap = glm::distance(freeBodyPosition, desiredBodyPosition);
+    if (distanceToSnap > GetSnapDistanceThreshold(draggedInstanceId_))
+    {
+        return false;
+    }
+
+    outCandidate.valid = true;
+    outCandidate.targetInstanceId = hoveredAssemblyInstanceId_;
+    outCandidate.desiredTranslation = originalState.worldTranslation;
+    outCandidate.desiredRotation = originalState.worldRotation;
+    outCandidate.desiredBodyPosition = desiredBodyPosition;
+    outCandidate.restoreOriginalHierarchy = true;
+    return true;
+}
+
+std::vector<BrickPlayerGameInstance::WorldSnapConnector> BrickPlayerGameInstance::BuildWorldConnectors(uint32_t instanceId) const
+{
+    std::vector<WorldSnapConnector> worldConnectors;
+
+    auto partIt = nodePartFileMap_.find(instanceId);
+    if (partIt == nodePartFileMap_.end())
+    {
+        return worldConnectors;
+    }
+
+    auto* node = engine_->GetScene().GetNodeByInstanceId(instanceId);
+    if (!node)
+    {
+        return worldConnectors;
+    }
+
+    const auto& localConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
+    if (localConnectors.empty())
+    {
+        return worldConnectors;
+    }
+
+    worldConnectors.reserve(localConnectors.size());
+    const glm::mat4 worldTransform = node->WorldTransform();
+    const glm::quat nodeRotation = node->WorldRotation();
+
+    for (const BrickPlayer::Shadow::FSnapConnector& localConnector : localConnectors)
+    {
+        WorldSnapConnector worldConnector;
+        worldConnector.connector = &localConnector;
+        worldConnector.ownerInstanceId = instanceId;
+        worldConnector.worldPosition = glm::vec3(worldTransform * glm::vec4(localConnector.localPosition, 1.0f));
+        worldConnector.worldRotation = glm::normalize(nodeRotation * localConnector.localRotation);
+        worldConnector.worldAxis = glm::normalize(worldConnector.worldRotation * glm::vec3(0.0f, 1.0f, 0.0f));
+        worldConnectors.push_back(std::move(worldConnector));
+    }
+
+    return worldConnectors;
+}
+
+bool BrickPlayerGameInstance::AreConnectorsCompatible(const BrickPlayer::Shadow::FSnapConnector& dragged,
+                                                      const BrickPlayer::Shadow::FSnapConnector& target) const
+{
+    if (dragged.kind != BrickPlayer::Shadow::ESnapKind::Cylinder
+        || target.kind != BrickPlayer::Shadow::ESnapKind::Cylinder)
+    {
+        return false;
+    }
+
+    if (dragged.gender == BrickPlayer::Shadow::ESnapGender::Unknown
+        || target.gender == BrickPlayer::Shadow::ESnapGender::Unknown
+        || dragged.gender == target.gender)
+    {
+        return false;
+    }
+
+    const std::string draggedGroup = ToLowerCopy(dragged.group);
+    const std::string targetGroup = ToLowerCopy(target.group);
+    if (!draggedGroup.empty() && !targetGroup.empty() && draggedGroup != targetGroup)
+    {
+        return false;
+    }
+
+    auto classifyProfile = [](const BrickPlayer::Shadow::FSnapConnector& connector) -> std::string
+    {
+        for (const auto& section : connector.sections)
+        {
+            if (section.profile.empty())
+            {
+                continue;
+            }
+
+            const char profileChar = static_cast<char>(std::toupper(section.profile.front()));
+            if (profileChar == 'A')
+            {
+                return "axle";
+            }
+            if (profileChar == 'R' || profileChar == 'S' || profileChar == '_')
+            {
+                return "round";
+            }
+        }
+
+        return "unknown";
+    };
+
+    const std::string draggedProfile = classifyProfile(dragged);
+    const std::string targetProfile = classifyProfile(target);
+    if (draggedProfile != "unknown" && targetProfile != "unknown" && draggedProfile != targetProfile)
+    {
+        return false;
+    }
+
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float radiusTolerance = std::max(studPitch * 0.15f, 0.002f);
+    const float lengthTolerance = std::max(studPitch * 0.2f, 0.004f);
+    if (glm::abs(dragged.radius - target.radius) > radiusTolerance)
+    {
+        return false;
+    }
+
+    const BrickPlayer::Shadow::FSnapConnector& male =
+        dragged.gender == BrickPlayer::Shadow::ESnapGender::Male ? dragged : target;
+    const BrickPlayer::Shadow::FSnapConnector& female =
+        dragged.gender == BrickPlayer::Shadow::ESnapGender::Female ? dragged : target;
+
+    if (male.length > female.length + lengthTolerance && !female.slide)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+int BrickPlayerGameInstance::ScoreShadowCandidate(uint32_t draggedId,
+                                                  const glm::quat& desiredRotation,
+                                                  const glm::vec3& desiredTranslation,
+                                                  const BrickPlayer::Shadow::FSnapConnector& anchorDragged,
+                                                  const WorldSnapConnector& anchorTarget) const
+{
+    auto partIt = nodePartFileMap_.find(draggedId);
+    if (partIt == nodePartFileMap_.end())
+    {
+        return 0;
+    }
+
+    const auto& draggedConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
+    if (draggedConnectors.empty())
+    {
+        return 0;
+    }
+
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float matchDistance = std::max(studPitch * 0.3f, 0.004f);
+    const float searchRadius = std::max(studPitch * 6.0f, GetSnapDistanceThreshold(draggedId) * 6.0f);
+    const float axisDotThreshold = 0.96f;
+
+    std::vector<WorldSnapConnector> nearbyTargets;
+    for (const auto& node : engine_->GetScene().Nodes())
+    {
+        const uint32_t nodeId = node->GetInstanceId();
+        if (nodeId == draggedId || disassembledNodes_.count(nodeId) || nodeStepMap_.find(nodeId) == nodeStepMap_.end())
+        {
+            continue;
+        }
+
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render || !render->IsDrawable() || !render->GetVisible())
+        {
+            continue;
+        }
+
+        if (glm::distance(node->WorldTranslation(), anchorTarget.worldPosition) > searchRadius)
+        {
+            continue;
+        }
+
+        std::vector<WorldSnapConnector> nodeConnectors = BuildWorldConnectors(nodeId);
+        nearbyTargets.insert(nearbyTargets.end(), nodeConnectors.begin(), nodeConnectors.end());
+    }
+
+    int matchedConnectorCount = 0;
+    for (const BrickPlayer::Shadow::FSnapConnector& draggedConnector : draggedConnectors)
+    {
+        const glm::quat worldRotation = glm::normalize(desiredRotation * draggedConnector.localRotation);
+        const glm::vec3 worldAxis = glm::normalize(worldRotation * glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::vec3 worldPosition = desiredTranslation + desiredRotation * draggedConnector.localPosition;
+
+        float bestMatchDistance = FLT_MAX;
+        bool matched = false;
+        for (const WorldSnapConnector& targetConnector : nearbyTargets)
+        {
+            if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
+            {
+                continue;
+            }
+
+            if (glm::dot(worldAxis, targetConnector.worldAxis) < axisDotThreshold)
+            {
+                continue;
+            }
+
+            const float distance = glm::distance(worldPosition, targetConnector.worldPosition);
+            if (distance > matchDistance || distance >= bestMatchDistance)
+            {
+                continue;
+            }
+
+            bestMatchDistance = distance;
+            matched = true;
+        }
+
+        if (matched)
+        {
+            matchedConnectorCount++;
+        }
+    }
+
+    return matchedConnectorCount;
+}
+
+bool BrickPlayerGameInstance::AreNodesOriginallyConnectable(uint32_t draggedId, uint32_t targetId) const
+{
+    const auto draggedIt = originalAssemblyStates_.find(draggedId);
+    const auto targetIt = originalAssemblyStates_.find(targetId);
+    if (draggedIt == originalAssemblyStates_.end() || targetIt == originalAssemblyStates_.end())
+    {
+        return false;
+    }
+
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float plateHeight = 8.0f * lduToWorldScale;
+    const float connectMargin = std::max(studPitch * 0.35f, plateHeight * 1.5f);
+
+    const OriginalAssemblyState& draggedState = draggedIt->second;
+    const OriginalAssemblyState& targetState = targetIt->second;
+
+    const float gapX = AxisGap(
+        draggedState.worldAabbMin.x, draggedState.worldAabbMax.x,
+        targetState.worldAabbMin.x, targetState.worldAabbMax.x);
+    const float gapY = AxisGap(
+        draggedState.worldAabbMin.y, draggedState.worldAabbMax.y,
+        targetState.worldAabbMin.y, targetState.worldAabbMax.y);
+    const float gapZ = AxisGap(
+        draggedState.worldAabbMin.z, draggedState.worldAabbMax.z,
+        targetState.worldAabbMin.z, targetState.worldAabbMax.z);
+
+    return gapX <= connectMargin && gapY <= connectMargin && gapZ <= connectMargin;
+}
+
+float BrickPlayerGameInstance::GetSnapDistanceThreshold(uint32_t draggedId) const
+{
+    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    const float studPitch = 20.0f * lduToWorldScale;
+    const float plateHeight = 8.0f * lduToWorldScale;
+
+    float sizeBasedThreshold = 0.0f;
+    auto it = disassembledNodes_.find(draggedId);
+    if (it != disassembledNodes_.end())
+    {
+        const glm::vec3 halfExtent = it->second.halfExtent;
+        sizeBasedThreshold = std::max(halfExtent.x, std::max(halfExtent.y, halfExtent.z)) * 0.5f;
+    }
+
+    return std::max(std::max(studPitch * 1.25f, plateHeight * 2.0f), sizeBasedThreshold);
+}
+
+void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
+{
+    if (draggedInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    if (!node)
+    {
+        return;
+    }
+
+    auto render = node->GetComponent<Runtime::RenderComponent>();
+    if (!render || render->GetRayCastVisible() == visible)
+    {
+        return;
+    }
+
+    render->SetRayCastVisible(visible);
+    GetEngine().GetScene().MarkDirty();
+}
+
+bool BrickPlayerGameInstance::ReattachDraggedPart()
+{
+    if (draggedInstanceId_ == UINT32_MAX || !activeSnapCandidate_.valid)
+    {
+        return false;
+    }
+
+    auto originalIt = originalAssemblyStates_.find(draggedInstanceId_);
+    auto node = GetEngine().GetScene().GetNodeSharedByInstanceId(draggedInstanceId_);
+    if (originalIt == originalAssemblyStates_.end() || !node)
+    {
+        return false;
+    }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (physComp && physics)
+    {
+        const NextBodyID bodyId = physComp->GetPhysicsBody();
+        if (!bodyId.IsInvalid())
+        {
+            physics->RemoveBody(bodyId);
+        }
+    }
+    node->AddComponent(std::shared_ptr<Runtime::PhysicsComponent>{});
+
+    if (activeSnapCandidate_.restoreOriginalHierarchy)
+    {
+        const OriginalAssemblyState& originalState = originalIt->second;
+        if (originalState.parentInstanceId != UINT32_MAX)
+        {
+            auto parent = GetEngine().GetScene().GetNodeSharedByInstanceId(originalState.parentInstanceId);
+            if (parent)
+            {
+                node->SetParent(parent);
+                node->SetTranslation(originalState.localTranslation);
+                node->SetRotation(originalState.localRotation);
+                node->SetScale(originalState.localScale);
+            }
+            else
+            {
+                node->ClearParent();
+                node->SetTranslation(originalState.worldTranslation);
+                node->SetRotation(originalState.worldRotation);
+                node->SetScale(originalState.worldScale);
+            }
+        }
+        else
+        {
+            node->ClearParent();
+            node->SetTranslation(originalState.localTranslation);
+            node->SetRotation(originalState.localRotation);
+            node->SetScale(originalState.localScale);
+        }
+    }
+    else
+    {
+        node->ClearParent();
+        node->SetTranslation(activeSnapCandidate_.desiredTranslation);
+        node->SetRotation(activeSnapCandidate_.desiredRotation);
+    }
+
+    node->RecalcTransform(true);
+    SetDraggedPartRayCastVisible(true);
+
+    disassembledNodes_.erase(draggedInstanceId_);
+    selectedInstanceId_ = draggedInstanceId_;
+    GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
+    GetEngine().GetScene().MarkDirty();
+    return true;
 }
 
 bool BrickPlayerGameInstance::IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const
@@ -658,6 +1329,54 @@ void BrickPlayerGameInstance::BuildPerPartOrder()
     }
 
     totalParts_ = static_cast<int32_t>(entries.size());
+}
+
+void BrickPlayerGameInstance::CaptureOriginalAssemblyState()
+{
+    originalAssemblyStates_.clear();
+
+    auto& scene = GetEngine().GetScene();
+    const auto& models = scene.Models();
+
+    for (const auto& node : scene.Nodes())
+    {
+        const uint32_t instanceId = node->GetInstanceId();
+        if (nodeStepMap_.find(instanceId) == nodeStepMap_.end())
+        {
+            continue;
+        }
+
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render || !render->IsDrawable())
+        {
+            continue;
+        }
+
+        const uint32_t modelId = render->GetModelId();
+        if (modelId >= models.size())
+        {
+            continue;
+        }
+
+        const Assets::Model& model = models[modelId];
+        const WorldBounds worldBounds = TransformLocalBounds(
+            node->WorldTransform(),
+            model.GetLocalAABBMin(),
+            model.GetLocalAABBMax());
+
+        OriginalAssemblyState state;
+        state.parentInstanceId = node->GetParent() ? node->GetParent()->GetInstanceId() : UINT32_MAX;
+        state.localTranslation = node->Translation();
+        state.localRotation = node->Rotation();
+        state.localScale = node->Scale();
+        state.worldTranslation = node->WorldTranslation();
+        state.worldRotation = node->WorldRotation();
+        state.worldScale = node->WorldScale();
+        state.worldAabbMin = worldBounds.min;
+        state.worldAabbMax = worldBounds.max;
+
+        originalAssemblyStates_[instanceId] = state;
+    }
 }
 
 void BrickPlayerGameInstance::StepForward()
@@ -805,10 +1524,14 @@ void BrickPlayerGameInstance::ResetAll()
     // Reload the scene to restore all transforms and remove physics bodies
     sceneLoaded_ = false;
     disassembledNodes_.clear();
+    originalAssemblyStates_.clear();
+    nodePartFileMap_.clear();
     selectedInstanceId_ = UINT32_MAX;
     hoveredDisassembledInstanceId_ = UINT32_MAX;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    activeSnapCandidate_ = {};
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().ClearHoveredId();
     GetEngine().GetShowFlags().ShowEdge = false;

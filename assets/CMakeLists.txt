@@ -18,6 +18,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ldraw")
     list(APPEND ASSET_DIRS ldraw)
 endif()
 
+# LDCad shadow library patches: copy when present so runtime snapping can resolve meta files.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ldrawShadow")
+    list(APPEND ASSET_DIRS ldrawShadow)
+endif()
+
 # 收集所有资源文件
 set(all_asset_files "")
 set(all_asset_stamps "")
