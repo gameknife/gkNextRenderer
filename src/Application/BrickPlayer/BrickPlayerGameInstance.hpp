@@ -145,6 +145,10 @@ private:
     const BrickPlayer::Shadow::FSnapConnector* GetLockedDraggedConnector(uint32_t instanceId) const;
     bool IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const;
     void ApplyPhysicsPoseToNode(Assets::Node* node, const glm::vec3& bodyPosition, const glm::quat& bodyRotation);
+    bool GetDraggedBodyMinimumY(Assets::Node* node, const glm::quat& bodyRotation, float& outMinBodyY) const;
+    bool ClampDraggedBodyPositionAboveFloor(Assets::Node* node,
+                                            const glm::quat& bodyRotation,
+                                            glm::vec3& inOutBodyPosition) const;
 
     NextEngine* engine_;
 
@@ -208,6 +212,9 @@ private:
     float snapFeedbackPulseUntil_ = 0.0f;
     bool showPhysicsDebug_ = false;
     bool showSnapDebug_ = false;
+    bool hasFloorPlane_ = false;
+    float floorPlaneY_ = 0.0f;
+    float floorSurfaceY_ = 0.0f;
 
     // State
     bool sceneLoaded_ = false;

@@ -106,6 +106,23 @@ namespace
         const glm::vec3 absLocalAxis = glm::abs(localAxis);
         return glm::dot(absLocalAxis, halfExtent);
     }
+
+    bool IntersectHorizontalPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, float planeY, glm::vec3& outPoint)
+    {
+        if (glm::abs(rayDir.y) < 1e-4f)
+        {
+            return false;
+        }
+
+        const float t = (planeY - rayOrigin.y) / rayDir.y;
+        if (t < 0.0f)
+        {
+            return false;
+        }
+
+        outPoint = rayOrigin + rayDir * t;
+        return true;
+    }
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
@@ -167,6 +184,9 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     selectedInstanceId_ = UINT32_MAX;
     hoveredDisassembledInstanceId_ = UINT32_MAX;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hasFloorPlane_ = false;
+    floorPlaneY_ = 0.0f;
+    floorSurfaceY_ = 0.0f;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
     lockedDraggedConnectorIndex_ = -1;
@@ -653,11 +673,12 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
 
     const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
     const BrickPlayer::Shadow::FSnapConnector* lockedDraggedConnector = GetLockedDraggedConnector(draggedInstanceId_);
-    glm::vec3 freeBodyPosition = planeHitPoint + dragBodyOffset_;
+    glm::vec3 dragAnchorToBodyOffset = dragBodyOffset_;
     if (lockedDraggedConnector)
     {
-        freeBodyPosition = planeHitPoint - body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
+        dragAnchorToBodyOffset = -body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
     }
+    glm::vec3 freeBodyPosition = planeHitPoint + dragAnchorToBodyOffset;
 
     if (hoveredAssemblyInstanceId_ != UINT32_MAX)
     {
@@ -681,13 +702,29 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
             freeBodyPosition = hoveredAssemblyHitPoint_ + hoverNormal * (supportDistance + surfaceGap);
         }
     }
+    else
+    {
+        float minBodyY = 0.0f;
+        if (GetDraggedBodyMinimumY(node, body->rotation, minBodyY) && freeBodyPosition.y < minBodyY)
+        {
+            glm::vec3 floorAnchorPoint{0.0f};
+            const float anchorPlaneY = minBodyY - dragAnchorToBodyOffset.y;
+            if (IntersectHorizontalPlane(rayOrigin, rayDir, anchorPlaneY, floorAnchorPoint))
+            {
+                freeBodyPosition = floorAnchorPoint + dragAnchorToBodyOffset;
+            }
+            freeBodyPosition.y = minBodyY;
+        }
+    }
+    ClampDraggedBodyPositionAboveFloor(node, body->rotation, freeBodyPosition);
 
     glm::vec3 desiredBodyPosition = freeBodyPosition;
     glm::quat desiredBodyRotation = body->rotation;
     const DragSnapCandidate previousSnapCandidate = activeSnapCandidate_;
 
     DragSnapCandidate snapCandidate;
-    if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate))
+    if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate)
+        && !ClampDraggedBodyPositionAboveFloor(node, snapCandidate.desiredRotation, snapCandidate.desiredBodyPosition))
     {
         activeSnapCandidate_ = snapCandidate;
         const bool snapChanged = !previousSnapCandidate.valid
@@ -1425,6 +1462,56 @@ void BrickPlayerGameInstance::ApplyPhysicsPoseToNode(Assets::Node* node, const g
     node->RecalcTransform(true);
 }
 
+bool BrickPlayerGameInstance::GetDraggedBodyMinimumY(Assets::Node* node,
+                                                     const glm::quat& bodyRotation,
+                                                     float& outMinBodyY) const
+{
+    if (!hasFloorPlane_)
+    {
+        return false;
+    }
+
+    if (!node)
+    {
+        return false;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    auto render = node->GetComponent<Runtime::RenderComponent>();
+    if (!physComp || !render || !render->IsDrawable())
+    {
+        return false;
+    }
+
+    const auto* model = engine_->GetScene().GetModel(render->GetModelId());
+    if (!model)
+    {
+        return false;
+    }
+
+    const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
+    const glm::mat4 bodyLocalTransform = glm::translate(glm::mat4(1.0f), -bodyRotation * scaledOffset)
+        * glm::mat4_cast(bodyRotation)
+        * glm::scale(glm::mat4(1.0f), node->Scale());
+    const WorldBounds bounds = TransformLocalBounds(bodyLocalTransform, model->GetLocalAABBMin(), model->GetLocalAABBMax());
+    outMinBodyY = floorSurfaceY_ - bounds.min.y;
+    return true;
+}
+
+bool BrickPlayerGameInstance::ClampDraggedBodyPositionAboveFloor(Assets::Node* node,
+                                                                 const glm::quat& bodyRotation,
+                                                                 glm::vec3& inOutBodyPosition) const
+{
+    float minBodyY = 0.0f;
+    if (!GetDraggedBodyMinimumY(node, bodyRotation, minBodyY) || inOutBodyPosition.y >= minBodyY)
+    {
+        return false;
+    }
+
+    inOutBodyPosition.y = minBodyY;
+    return true;
+}
+
 // Timeline
 
 void BrickPlayerGameInstance::SetCurrentStep(int32_t step)
@@ -1781,6 +1868,9 @@ void BrickPlayerGameInstance::ResetAll()
     selectedInstanceId_ = UINT32_MAX;
     hoveredDisassembledInstanceId_ = UINT32_MAX;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hasFloorPlane_ = false;
+    floorPlaneY_ = 0.0f;
+    floorSurfaceY_ = 0.0f;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
     lockedDraggedConnectorIndex_ = -1;
@@ -2095,11 +2185,15 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
 {
 #if WITH_PHYSIC
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    hasFloorPlane_ = false;
+    floorPlaneY_ = 0.0f;
+    floorSurfaceY_ = 0.0f;
     if (!physics)
         return;
 
-    // Find the floor y position from scene bounds
+    // Prefer the auto-generated LDraw floor top surface; otherwise fall back to scene bounds.
     float minY = FLT_MAX;
+    float floorTopY = FLT_MAX;
     auto& nodes = GetEngine().GetScene().Nodes();
     auto& models = GetEngine().GetScene().Models();
 
@@ -2113,16 +2207,25 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
         if (modelIdx >= models.size())
             continue;
 
-        glm::vec3 worldPos = node->WorldTranslation();
         const auto& model = models[modelIdx];
-        float yLow = worldPos.y + model.GetLocalAABBMin().y * node->WorldScale().y;
-        minY = std::min(minY, yLow);
+        const WorldBounds bounds =
+            TransformLocalBounds(node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax());
+        if (node->GetName() == "ldraw_floor")
+        {
+            floorTopY = bounds.max.y;
+            continue;
+        }
+
+        minY = std::min(minY, bounds.min.y);
     }
 
-    if (minY < FLT_MAX)
+    if (floorTopY < FLT_MAX || minY < FLT_MAX)
     {
+        floorSurfaceY_ = floorTopY < FLT_MAX ? floorTopY : minY;
+        floorPlaneY_ = floorSurfaceY_;
+        hasFloorPlane_ = true;
         physics->CreatePlaneBody(
-            glm::vec3(0.0f, minY - 0.01f, 0.0f),
+            glm::vec3(0.0f, floorPlaneY_, 0.0f),
             glm::vec3(0.0f, 1.0f, 0.0f),
             NextMotionType::Static);
     }
