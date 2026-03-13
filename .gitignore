@@ -369,6 +369,7 @@ src/ThirdParty/Streamline/
 .claude/
 lib/
 
-assets/ldraw/
-
-assets/ldrawShadow/
+tools/ldraw/source/ldraw/
+tools/ldraw/source/ldrawShadow/
+tools/ldraw/output/
+assets/paks/ldraw.pak
