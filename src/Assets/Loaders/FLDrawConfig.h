@@ -4,6 +4,13 @@
 
 namespace Assets
 {
+    inline constexpr const char* kLDrawLibraryRootEntry = "assets/ldraw";
+    inline constexpr const char* kLDrawShadowLibraryRootEntry = "assets/ldrawShadow";
+    inline constexpr const char* kLDrawLibraryPakPath = "assets/paks/ldraw.pak";
+
+    bool EnsureLDrawLibraryPakMounted();
+    bool LoadLDrawTextResource(const std::string& pathOrEntry, std::string& outText);
+
     struct LDrawColor
     {
         int code;
@@ -34,10 +41,12 @@ namespace Assets
     {
     public:
         void BuildIndex(const std::string& ldrawRoot);
+        bool BuildIndexFromMountedRoot(const std::string& ldrawRootEntry);
+        void SetWarnOnMissing(bool enable) { warnOnMissing_ = enable; }
         std::string Resolve(const std::string& filename) const;
 
     private:
-        std::string ldrawRoot_;
-        std::unordered_map<std::string, std::string> pathIndex_;  // lowercase -> actual path
+        std::unordered_map<std::string, std::string> pathIndex_;  // lowercase -> resolved path or pak entry
+        bool warnOnMissing_ = true;
     };
 }

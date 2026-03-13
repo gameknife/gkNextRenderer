@@ -126,6 +126,13 @@ namespace Assets
             return true;
         }
 
+        bool HasFilesystemSignature(const std::string& path)
+        {
+            uint64_t fileSize = 0;
+            int64_t writeTime = 0;
+            return QueryFileSignature(path, fileSize, writeTime);
+        }
+
         void SerializeTemplate(const LDrawPartTemplate& tmpl, std::vector<uint8_t>& outData)
         {
             outData.clear();
@@ -498,11 +505,12 @@ namespace Assets
             return tmpl;
         }
 
-        const std::string normalizedPath = NormalizeCachePath(filepath);
-        const std::string cacheFileName = BuildCacheFileName(normalizedPath, expandSubfiles);
-
         std::vector<std::string> dependencies;
-        if (LoadTemplateCache(cacheFileName, tmpl, dependencies))
+        const bool allowDiskCache = HasFilesystemSignature(filepath);
+        const std::string normalizedPath = allowDiskCache ? NormalizeCachePath(filepath) : std::string();
+        const std::string cacheFileName = allowDiskCache ? BuildCacheFileName(normalizedPath, expandSubfiles) : std::string();
+
+        if (allowDiskCache && LoadTemplateCache(cacheFileName, tmpl, dependencies))
         {
             templateCache[key] = tmpl;
             dependencyCache[key] = std::move(dependencies);
@@ -513,19 +521,29 @@ namespace Assets
             return tmpl;
         }
 
-        std::ifstream file(filepath);
-        if (!file.is_open())
+        std::string fileContent;
+        if (!LoadLDrawTextResource(filepath, fileContent))
         {
             SPDLOG_WARN("LDraw: cannot open file '{}'", filepath);
             return tmpl;
         }
 
-        AppendUniqueDependency(dependencies, normalizedPath);
-        ParseStream(file, 16, glm::mat4(1.0f), bfc, expandSubfiles, tmpl.faces, &dependencies);
+        std::istringstream file(fileContent);
+        std::vector<std::string>* dependencyFiles = nullptr;
+        if (allowDiskCache)
+        {
+            AppendUniqueDependency(dependencies, normalizedPath);
+            dependencyFiles = &dependencies;
+        }
+
+        ParseStream(file, 16, glm::mat4(1.0f), bfc, expandSubfiles, tmpl.faces, dependencyFiles);
 
         templateCache[key] = tmpl;
         dependencyCache[key] = dependencies;
-        SaveTemplateCache(cacheFileName, tmpl, dependencies);
+        if (allowDiskCache)
+        {
+            SaveTemplateCache(cacheFileName, tmpl, dependencies);
+        }
 
         SPDLOG_INFO("LDraw: parsed {} {} -> {} faces",
                     expandSubfiles ? "part" : "direct geometry",

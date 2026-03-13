@@ -623,21 +623,32 @@ namespace Assets
         const size_t initialMaterialCount = materials.size();
         const size_t initialNodeCount = nodes.size();
 
-        // Resolve paths
-        std::filesystem::path ldrawRoot = std::filesystem::path("..") / "assets" / "ldraw";
-        ldrawRoot = ldrawRoot.lexically_normal();
-        std::string ldrawRootStr = ldrawRoot.string() + "/";
-        std::string ldconfigPath = (ldrawRoot / "LDConfig.ldr").string();
+        const bool libraryPakAvailable = EnsureLDrawLibraryPakMounted();
+        const std::string ldconfigPath = std::string(kLDrawLibraryRootEntry) + "/LDConfig.ldr";
 
         // Initialize LDraw subsystem (static lazy init)
         static LDrawColorTable colorTable;
         static LDrawFileResolver fileResolver;
-        static bool initialized = false;
-        if (!initialized)
+        static bool colorsInitialized = false;
+        static bool libraryIndexed = false;
+        if (libraryPakAvailable && !colorsInitialized)
         {
             colorTable.Parse(ldconfigPath);
-            fileResolver.BuildIndex(ldrawRootStr);
-            initialized = true;
+            colorsInitialized = true;
+        }
+
+        if (libraryPakAvailable && !libraryIndexed)
+        {
+            if (!fileResolver.BuildIndexFromMountedRoot(kLDrawLibraryRootEntry))
+            {
+                SPDLOG_ERROR("LDraw: failed to index library from pak root '{}'", kLDrawLibraryRootEntry);
+                return false;
+            }
+            libraryIndexed = true;
+        }
+        else if (!libraryPakAvailable)
+        {
+            SPDLOG_WARN("LDraw: pak '{}' is not available, loading embedded-only scene data", kLDrawLibraryPakPath);
         }
 
         // Create materials from color table
@@ -651,6 +662,13 @@ namespace Assets
             uint32_t idx = static_cast<uint32_t>(materials.size());
             materials.push_back({mat, color.name});
             colorToMatIdx[code] = idx;
+        }
+
+        if (colorToMatIdx.empty())
+        {
+            const uint32_t idx = static_cast<uint32_t>(materials.size());
+            materials.push_back({Material::Lambertian(glm::vec3(0.8f, 0.8f, 0.8f)), "LDraw Default"});
+            colorToMatIdx[0] = idx;
         }
 
         // Default material for unresolved colors

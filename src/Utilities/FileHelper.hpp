@@ -138,6 +138,9 @@ namespace Utilities
             void Reset();
             void MountPak(const std::string& pakFile);
             bool LoadFile(const std::string& entry, std::vector<uint8_t>& outData);
+            bool LoadMountedFile(const std::string& entry, std::vector<uint8_t>& outData) const;
+            bool HasMountedEntry(const std::string& entry) const;
+            std::vector<std::string> ListMountedEntries(const std::string& prefix = "") const;
             
             // Recording
             //void RecordUsage(const std::string& entry);
@@ -150,6 +153,11 @@ namespace Utilities
             static FPackageFileSystem& GetInstance()
             {
                 return *instance_;
+            }
+
+            static FPackageFileSystem* TryGetInstance()
+            {
+                return instance_;
             }
         private:
             // pak index

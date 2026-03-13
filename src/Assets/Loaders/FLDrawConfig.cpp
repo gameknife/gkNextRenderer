@@ -1,4 +1,5 @@
 #include "Assets/Loaders/FLDrawConfig.h"
+#include "Utilities/FileHelper.hpp"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <array>
@@ -10,6 +11,14 @@ namespace Assets
 {
     namespace
     {
+        constexpr std::array<const char*, 5> kLDrawIndexedDirectories = {
+            "parts",
+            "p",
+            "parts/s",
+            "p/48",
+            "p/8"
+        };
+
         struct RealisticColorOverride
         {
             int code;
@@ -147,6 +156,37 @@ namespace Assets
                 it->second.diffuse = LDrawColorTable::SrgbToLinear(overrideColor.srgb);
             }
         }
+
+        std::string ToLower(const std::string& s)
+        {
+            std::string result = s;
+            std::transform(result.begin(), result.end(), result.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return result;
+        }
+
+        void IndexLDrawPath(
+            std::unordered_map<std::string, std::string>& pathIndex,
+            const std::string& filename,
+            const std::string& resolvedPath,
+            const std::string& prefix)
+        {
+            const std::string key = ToLower(filename);
+            if (pathIndex.find(key) == pathIndex.end())
+            {
+                pathIndex[key] = resolvedPath;
+            }
+
+            if (prefix.find('/') != std::string::npos)
+            {
+                const std::string subPrefix = prefix.substr(prefix.find('/') + 1);
+                const std::string subKey = ToLower(subPrefix + "/" + filename);
+                if (pathIndex.find(subKey) == pathIndex.end())
+                {
+                    pathIndex[subKey] = resolvedPath;
+                }
+            }
+        }
     }
 
     static glm::vec3 HexToVec3(const std::string& hex)
@@ -171,13 +211,14 @@ namespace Assets
 
     void LDrawColorTable::Parse(const std::string& ldconfigPath)
     {
-        std::ifstream file(ldconfigPath);
-        if (!file.is_open())
+        std::string ldconfigContent;
+        if (!LoadLDrawTextResource(ldconfigPath, ldconfigContent))
         {
             SPDLOG_WARN("LDraw: cannot open LDConfig at {}", ldconfigPath);
             return;
         }
 
+        std::istringstream file(ldconfigContent);
         std::string line;
         while (std::getline(file, line))
         {
@@ -289,60 +330,95 @@ namespace Assets
     // LDrawFileResolver
     // ------------------------------------------------------------------
 
-    static std::string ToLower(const std::string& s)
-    {
-        std::string result = s;
-        std::transform(result.begin(), result.end(), result.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return result;
-    }
-
     void LDrawFileResolver::BuildIndex(const std::string& ldrawRoot)
     {
-        ldrawRoot_ = ldrawRoot;
+        pathIndex_.clear();
 
-        // Scan directories (non-recursive) in priority order.
-        // Each entry: {dirToScan, relativePrefix} where prefix is from ldrawRoot.
-        const std::vector<std::pair<std::string, std::string>> dirs = {
-            {"parts",   "parts"},
-            {"p",       "p"},
-            {"parts/s", "parts/s"},
-            {"p/48",    "p/48"},
-            {"p/8",     "p/8"}
-        };
-
-        for (const auto& [subdir, prefix] : dirs)
+        for (const char* subdir : kLDrawIndexedDirectories)
         {
-            std::filesystem::path dirPath = std::filesystem::path(ldrawRoot) / subdir;
+            const std::string prefix(subdir);
+            std::filesystem::path dirPath = std::filesystem::path(ldrawRoot) / prefix;
             if (!std::filesystem::exists(dirPath))
+            {
                 continue;
+            }
 
             for (const auto& entry : std::filesystem::directory_iterator(dirPath))
             {
                 if (!entry.is_regular_file())
-                    continue;
-
-                std::string filename = entry.path().filename().string();
-                std::string key = ToLower(filename);
-                std::string relPath = prefix + "/" + filename;
-
-                // Only insert first occurrence (priority order)
-                if (pathIndex_.find(key) == pathIndex_.end())
-                    pathIndex_[key] = relPath;
-
-                // Also index with subdirectory prefix (e.g., "s/3024s01.dat")
-                if (prefix.find('/') != std::string::npos)
                 {
-                    // e.g., "parts/s" -> subKey = "s/filename"
-                    std::string subPrefix = prefix.substr(prefix.find('/') + 1);
-                    std::string subKey = ToLower(subPrefix + "/" + filename);
-                    if (pathIndex_.find(subKey) == pathIndex_.end())
-                        pathIndex_[subKey] = relPath;
+                    continue;
                 }
+
+                const std::string filename = entry.path().filename().string();
+                const std::string resolvedPath = entry.path().lexically_normal().generic_string();
+                IndexLDrawPath(pathIndex_, filename, resolvedPath, prefix);
             }
         }
 
         SPDLOG_INFO("LDraw: indexed {} files in library", pathIndex_.size());
+    }
+
+    bool LDrawFileResolver::BuildIndexFromMountedRoot(const std::string& ldrawRootEntry)
+    {
+        pathIndex_.clear();
+
+        if (!EnsureLDrawLibraryPakMounted())
+        {
+            return false;
+        }
+
+        Utilities::Package::FPackageFileSystem* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
+        if (pakSystem == nullptr)
+        {
+            return false;
+        }
+
+        std::string normalizedRoot = ldrawRootEntry;
+        std::replace(normalizedRoot.begin(), normalizedRoot.end(), '\\', '/');
+        if (!normalizedRoot.empty() && normalizedRoot.back() == '/')
+        {
+            normalizedRoot.pop_back();
+        }
+
+        const std::string rootPrefix = normalizedRoot + "/";
+        const std::vector<std::string> mountedEntries = pakSystem->ListMountedEntries(rootPrefix);
+        if (mountedEntries.empty())
+        {
+            SPDLOG_WARN("LDraw: no mounted entries found under '{}'", normalizedRoot);
+            return false;
+        }
+
+        for (const char* subdir : kLDrawIndexedDirectories)
+        {
+            const std::string relativePrefix = std::string(subdir) + "/";
+            for (const std::string& mountedEntry : mountedEntries)
+            {
+                std::string normalizedEntry = mountedEntry;
+                std::replace(normalizedEntry.begin(), normalizedEntry.end(), '\\', '/');
+                if (normalizedEntry.rfind(rootPrefix, 0) != 0)
+                {
+                    continue;
+                }
+
+                const std::string relativePath = normalizedEntry.substr(rootPrefix.size());
+                if (relativePath.rfind(relativePrefix, 0) != 0)
+                {
+                    continue;
+                }
+
+                const std::string filename = relativePath.substr(relativePrefix.size());
+                if (filename.empty() || filename.find('/') != std::string::npos)
+                {
+                    continue;
+                }
+
+                IndexLDrawPath(pathIndex_, filename, normalizedEntry, subdir);
+            }
+        }
+
+        SPDLOG_INFO("LDraw: indexed {} files in mounted pak root '{}'", pathIndex_.size(), normalizedRoot);
+        return !pathIndex_.empty();
     }
 
     std::string LDrawFileResolver::Resolve(const std::string& filename) const
@@ -354,7 +430,7 @@ namespace Assets
 
         auto it = pathIndex_.find(normalized);
         if (it != pathIndex_.end())
-            return ldrawRoot_ + it->second;
+            return it->second;
 
         // Try just the filename part
         auto slashPos = normalized.rfind('/');
@@ -363,10 +439,87 @@ namespace Assets
             std::string nameOnly = normalized.substr(slashPos + 1);
             it = pathIndex_.find(nameOnly);
             if (it != pathIndex_.end())
-                return ldrawRoot_ + it->second;
+                return it->second;
         }
 
-        SPDLOG_WARN("LDraw: cannot resolve file '{}'", filename);
+        if (warnOnMissing_)
+        {
+            SPDLOG_WARN("LDraw: cannot resolve file '{}'", filename);
+        }
         return {};
+    }
+
+    bool EnsureLDrawLibraryPakMounted()
+    {
+        Utilities::Package::FPackageFileSystem* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
+        if (pakSystem == nullptr)
+        {
+            return false;
+        }
+
+        const std::string ldconfigEntry = std::string(kLDrawLibraryRootEntry) + "/LDConfig.ldr";
+        if (pakSystem->HasMountedEntry(ldconfigEntry))
+        {
+            return true;
+        }
+
+        const std::string pakPath = Utilities::FileHelper::GetPlatformFilePath(kLDrawLibraryPakPath);
+        if (!std::filesystem::exists(pakPath))
+        {
+            SPDLOG_WARN("LDraw: pak file not found at '{}'", pakPath);
+            return false;
+        }
+
+        pakSystem->MountPak(pakPath);
+        if (!pakSystem->HasMountedEntry(ldconfigEntry))
+        {
+            SPDLOG_WARN("LDraw: pak '{}' mounted but '{}' was not found", pakPath, ldconfigEntry);
+            return false;
+        }
+
+        return true;
+    }
+
+    bool LoadLDrawTextResource(const std::string& pathOrEntry, std::string& outText)
+    {
+        outText.clear();
+
+        std::error_code ec;
+        const std::filesystem::path path(pathOrEntry);
+        if (path.is_absolute() || std::filesystem::exists(path, ec))
+        {
+            std::ifstream file(path, std::ios::binary);
+            if (!file.is_open())
+            {
+                return false;
+            }
+
+            outText.assign(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>());
+            return true;
+        }
+
+        Utilities::Package::FPackageFileSystem* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
+        if (pakSystem != nullptr)
+        {
+            std::vector<uint8_t> fileData;
+            if (pakSystem->LoadMountedFile(pathOrEntry, fileData))
+            {
+                outText.assign(fileData.begin(), fileData.end());
+                return true;
+            }
+        }
+
+        std::ifstream file(pathOrEntry, std::ios::binary);
+        if (!file.is_open())
+        {
+            return false;
+        }
+
+        outText.assign(
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>());
+        return true;
     }
 }

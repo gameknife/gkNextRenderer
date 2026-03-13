@@ -497,19 +497,20 @@ namespace BrickPlayer::Shadow
             return true;
         }
 
-        const std::filesystem::path runtimeRoot = Utilities::FileHelper::GetDesktopRuntimeRoot();
-        const std::filesystem::path ldrawRoot = (runtimeRoot / "assets" / "ldraw").lexically_normal();
-        const std::filesystem::path shadowRoot = (runtimeRoot / "assets" / "ldrawShadow").lexically_normal();
-        if (!std::filesystem::exists(ldrawRoot) || !std::filesystem::exists(shadowRoot))
+        if (!Assets::EnsureLDrawLibraryPakMounted())
         {
-            SPDLOG_WARN("BrickPlayer: LDraw shadow library roots not found ('{}', '{}')",
-                        ldrawRoot.string(),
-                        shadowRoot.string());
+            SPDLOG_WARN("BrickPlayer: LDraw pak '{}' is not available", Assets::kLDrawLibraryPakPath);
             return false;
         }
 
-        originalResolver_.BuildIndex(ldrawRoot.string() + "/");
-        shadowResolver_.BuildIndex(shadowRoot.string() + "/");
+        if (!originalResolver_.BuildIndexFromMountedRoot(Assets::kLDrawLibraryRootEntry)
+            || !shadowResolver_.BuildIndexFromMountedRoot(Assets::kLDrawShadowLibraryRootEntry))
+        {
+            SPDLOG_WARN("BrickPlayer: failed to index LDraw library roots from pak");
+            return false;
+        }
+
+        shadowResolver_.SetWarnOnMissing(false);
         lduToWorldScale_ = lduToWorldScale;
         connectorCache_.clear();
         initialized_ = true;
@@ -555,12 +556,13 @@ namespace BrickPlayer::Shadow
                 return connectors;
             }
 
-            std::ifstream shadowStream(resolvedShadow);
-            if (!shadowStream.is_open())
+            std::string shadowContent;
+            if (!Assets::LoadLDrawTextResource(resolvedShadow, shadowContent))
             {
                 return connectors;
             }
 
+            std::istringstream shadowStream(shadowContent);
             std::string line;
             while (std::getline(shadowStream, line))
             {
@@ -651,28 +653,32 @@ namespace BrickPlayer::Shadow
             std::vector<FRawConnector> connectors;
 
             std::string resolvedOriginal = originalResolver_.Resolve(logicalRef);
-            if (resolvedOriginal.empty() && std::filesystem::exists(logicalRef))
+            if (resolvedOriginal.empty())
             {
                 resolvedOriginal = logicalRef;
             }
 
             if (!resolvedOriginal.empty())
             {
-                std::ifstream originalStream(resolvedOriginal);
-                std::string line;
-                while (std::getline(originalStream, line))
+                std::string originalContent;
+                if (Assets::LoadLDrawTextResource(resolvedOriginal, originalContent))
                 {
-                    glm::mat4 referenceTransform(1.0f);
-                    std::string subfile;
-                    if (!ParseLDrawReference(line, referenceTransform, subfile))
+                    std::istringstream originalStream(originalContent);
+                    std::string line;
+                    while (std::getline(originalStream, line))
                     {
-                        continue;
-                    }
+                        glm::mat4 referenceTransform(1.0f);
+                        std::string subfile;
+                        if (!ParseLDrawReference(line, referenceTransform, subfile))
+                        {
+                            continue;
+                        }
 
-                    const std::vector<FRawConnector> childConnectors = collectOriginal(subfile);
-                    for (const FRawConnector& childConnector : childConnectors)
-                    {
-                        connectors.push_back(ApplyTransformToConnector(childConnector, referenceTransform));
+                        const std::vector<FRawConnector> childConnectors = collectOriginal(subfile);
+                        for (const FRawConnector& childConnector : childConnectors)
+                        {
+                            connectors.push_back(ApplyTransformToConnector(childConnector, referenceTransform));
+                        }
                     }
                 }
             }

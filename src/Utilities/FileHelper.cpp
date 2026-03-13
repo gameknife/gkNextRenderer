@@ -8,6 +8,73 @@ namespace Utilities
 {
     namespace Package
     {
+        namespace
+        {
+            bool LoadMountedEntryData(
+                const std::map<std::string, FPakEntry>& filemaps,
+                const std::vector<std::string>& mountedPaks,
+                const std::string& entry,
+                std::vector<uint8_t>& outData)
+            {
+                outData.clear();
+
+                auto pakEntryIt = filemaps.find(entry);
+                if (pakEntryIt == filemaps.end())
+                {
+                    return false;
+                }
+
+                const FPakEntry& pakEntry = pakEntryIt->second;
+                if (pakEntry.pkgIdx >= mountedPaks.size())
+                {
+                    SPDLOG_ERROR("LoadFile: Invalid pak index for entry: {}", entry);
+                    return false;
+                }
+
+                const std::string& pakFile = mountedPaks[pakEntry.pkgIdx];
+                std::ifstream reader(pakFile, std::ios::binary);
+                if (!reader.is_open())
+                {
+                    SPDLOG_ERROR("LoadFile: Failed to open pak file: {}", pakFile);
+                    return false;
+                }
+
+                void* compBuf = malloc(pakEntry.size);
+                if (compBuf == nullptr)
+                {
+                    SPDLOG_ERROR("LoadFile: Failed to allocate buffer for entry: {}", entry);
+                    return false;
+                }
+
+                reader.seekg(pakEntry.offset, std::ios::beg);
+                reader.read(reinterpret_cast<char*>(compBuf), pakEntry.size);
+                reader.close();
+
+                outData.resize(pakEntry.uncompressSize);
+                const int decompressedSize = lzav_decompress(
+                    compBuf,
+                    outData.data(),
+                    pakEntry.size,
+                    pakEntry.uncompressSize);
+                if (decompressedSize < 0)
+                {
+                    if (pakEntry.size == pakEntry.uncompressSize)
+                    {
+                        memcpy(outData.data(), compBuf, pakEntry.size);
+                        free(compBuf);
+                        return true;
+                    }
+
+                    SPDLOG_ERROR("LoadFile: Failed to decompress entry: {}", entry);
+                    free(compBuf);
+                    return false;
+                }
+
+                free(compBuf);
+                return true;
+            }
+        }
+
         FPackageFileSystem* FPackageFileSystem::instance_ = nullptr;
 
         FPackageFileSystem::FPackageFileSystem(EPackageRunMode runMode): runMode_(runMode)
@@ -46,40 +113,34 @@ namespace Utilities
                 return true;
             }
 
-            // from pak
-            FPakEntry pakEntry = filemaps[entry];
-            auto pakFile = mountedPaks[pakEntry.pkgIdx];
-            
-            std::ifstream reader(pakFile, std::ios::binary);
-            if (!reader.is_open()) {
-                SPDLOG_ERROR("LoadFile: Failed to open pak file: {}", "pakfile");
-                return false;
-            }
+            return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
+        }
 
-            void* compBuf = malloc( pakEntry.size );
-            reader.seekg(pakEntry.offset, std::ios::beg);
-            reader.read(reinterpret_cast<char*>(compBuf), pakEntry.size);
-            reader.close();
+        bool FPackageFileSystem::LoadMountedFile(const std::string& entry, std::vector<uint8_t>& outData) const
+        {
+            return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
+        }
 
-            outData.resize(pakEntry.uncompressSize);
-            int l = lzav_decompress( compBuf, outData.data(), pakEntry.size, pakEntry.uncompressSize );
-            if (l < 0)
+        bool FPackageFileSystem::HasMountedEntry(const std::string& entry) const
+        {
+            return filemaps.find(entry) != filemaps.end();
+        }
+
+        std::vector<std::string> FPackageFileSystem::ListMountedEntries(const std::string& prefix) const
+        {
+            std::vector<std::string> entries;
+            entries.reserve(filemaps.size());
+
+            for (const auto& [name, pakEntry] : filemaps)
             {
-                if (pakEntry.size == pakEntry.uncompressSize)
+                (void)pakEntry;
+                if (prefix.empty() || name.rfind(prefix, 0) == 0)
                 {
-                    memcpy(outData.data(), compBuf, pakEntry.size);
-                    free(compBuf);
-                    return true;
+                    entries.push_back(name);
                 }
-
-                SPDLOG_ERROR("LoadFile: Failed to decompress entry: {}", entry);
-                free(compBuf);
-                return false;
             }
 
-            free(compBuf);
-
-            return true;
+            return entries;
         }
 
         void FPackageFileSystem::PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex, bool enableCompression, const std::string& manifestPath )
