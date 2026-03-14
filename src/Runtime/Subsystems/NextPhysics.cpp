@@ -485,7 +485,11 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, gl
 
 	Quat joltRot(rotation.x, rotation.y, rotation.z, rotation.w);
 	BodyCreationSettings settings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), joltRot, motionType, NextLayers::MOVING);
-	settings.mFriction = 0.5f;
+	settings.mFriction = 0.32f;
+	settings.mGravityFactor = 1.35f;
+	settings.mLinearDamping = 0.02f;
+	settings.mAngularDamping = 0.01f;
+	settings.mInertiaMultiplier = 0.45f;
     settings.mMotionQuality = EMotionQuality::LinearCast;
 	bodyId = bodyInterface.CreateAndAddBody(settings, EActivation::Activate);
 
@@ -632,6 +636,36 @@ void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
     (void)position;
     (void)rotation;
     (void)resetVelocity;
+#endif
+}
+
+void NextPhysics::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity)
+{
+#if WITH_PHYSIC
+    if (bodyID.IsInvalid())
+    {
+        return;
+    }
+
+    BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+    if (bodyInterface.GetMotionType(bodyID) == EMotionType::Static)
+    {
+        return;
+    }
+
+    bodyInterface.SetLinearAndAngularVelocity(
+        bodyID,
+        Vec3(linearVelocity.x, linearVelocity.y, linearVelocity.z),
+        Vec3(angularVelocity.x, angularVelocity.y, angularVelocity.z));
+
+    if (bodies_.contains(bodyID))
+    {
+        bodies_[bodyID].velocity = linearVelocity;
+    }
+#else
+    (void)bodyID;
+    (void)linearVelocity;
+    (void)angularVelocity;
 #endif
 }
 

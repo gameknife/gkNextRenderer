@@ -189,6 +189,9 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     floorSurfaceY_ = 0.0f;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
+    lastDraggedBodyPosition_ = glm::vec3(0.0f);
+    hasDraggedBodyPositionSample_ = false;
     lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
     snapFeedbackPulseUntil_ = 0.0f;
@@ -567,6 +570,9 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     dragPlanePoint_ = hoveredHitPoint_;
     dragPlaneNormal_ = glm::normalize(viewNormal);
     dragBodyOffset_ = body->position - hoveredHitPoint_;
+    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
+    lastDraggedBodyPosition_ = body->position;
+    hasDraggedBodyPositionSample_ = true;
     lockedDraggedConnectorIndex_ = FindDraggedConnectorLock(draggedInstanceId_, hoveredHitPoint_, hoveredHitNormal_);
     isDraggingPart_ = true;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
@@ -608,6 +614,17 @@ void BrickPlayerGameInstance::StopDraggingPart()
             if (body)
             {
                 physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, body->rotation, true);
+                glm::vec3 releaseVelocity = dragReleaseLinearVelocity_ * 0.82f;
+                const float maxReleaseSpeed = 6.5f;
+                const float releaseSpeed = glm::length(releaseVelocity);
+                if (releaseSpeed > maxReleaseSpeed)
+                {
+                    releaseVelocity *= maxReleaseSpeed / releaseSpeed;
+                }
+                if (glm::dot(releaseVelocity, releaseVelocity) > 0.01f * 0.01f)
+                {
+                    physics->SetBodyVelocity(physComp->GetPhysicsBody(), releaseVelocity, glm::vec3(0.0f));
+                }
             }
         }
 
@@ -626,6 +643,9 @@ void BrickPlayerGameInstance::StopDraggingPart()
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
     dragBodyOffset_ = glm::vec3(0.0f);
+    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
+    lastDraggedBodyPosition_ = glm::vec3(0.0f);
+    hasDraggedBodyPositionSample_ = false;
     lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
     snapFeedbackPulseUntil_ = 0.0f;
@@ -755,6 +775,26 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         activeSnapCandidate_ = {};
         hoveredHitPoint_ = hoveredAssemblyInstanceId_ != UINT32_MAX ? hoveredAssemblyHitPoint_ : planeHitPoint;
     }
+
+    const float deltaSeconds = std::max(engine_->GetDeltaSeconds(), 1.0f / 240.0f);
+    if (hasDraggedBodyPositionSample_)
+    {
+        glm::vec3 frameVelocity = (desiredBodyPosition - lastDraggedBodyPosition_) / deltaSeconds;
+        const float maxTrackedSpeed = 10.0f;
+        const float trackedSpeed = glm::length(frameVelocity);
+        if (trackedSpeed > maxTrackedSpeed)
+        {
+            frameVelocity *= maxTrackedSpeed / trackedSpeed;
+        }
+
+        const glm::vec3 targetVelocity = activeSnapCandidate_.valid ? glm::vec3(0.0f) : frameVelocity;
+        dragReleaseLinearVelocity_ = glm::mix(dragReleaseLinearVelocity_, targetVelocity, 0.35f);
+    }
+    else
+    {
+        hasDraggedBodyPositionSample_ = true;
+    }
+    lastDraggedBodyPosition_ = desiredBodyPosition;
 
     physics->SetBodyTransform(physComp->GetPhysicsBody(), desiredBodyPosition, desiredBodyRotation, true);
     ApplyPhysicsPoseToNode(node, desiredBodyPosition, desiredBodyRotation);
@@ -1873,6 +1913,9 @@ void BrickPlayerGameInstance::ResetAll()
     floorSurfaceY_ = 0.0f;
     isDraggingPart_ = false;
     draggedInstanceId_ = UINT32_MAX;
+    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
+    lastDraggedBodyPosition_ = glm::vec3(0.0f);
+    hasDraggedBodyPositionSample_ = false;
     lockedDraggedConnectorIndex_ = -1;
     activeSnapCandidate_ = {};
     snapFeedbackPulseUntil_ = 0.0f;

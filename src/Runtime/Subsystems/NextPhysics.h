@@ -61,6 +61,7 @@ public:
 
     void MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, float deltaSeconds);
     void SetBodyTransform(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, bool resetVelocity);
+    void SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity);
 
     FNextPhysicsBody* GetBody(NextBodyID bodyID);
     void RemoveBody(NextBodyID bodyID);

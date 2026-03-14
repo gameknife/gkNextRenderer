@@ -207,6 +207,9 @@ private:
     glm::vec3 dragPlanePoint_{0.0f};
     glm::vec3 dragPlaneNormal_{0.0f, 0.0f, 1.0f};
     glm::vec3 dragBodyOffset_{0.0f};
+    glm::vec3 dragReleaseLinearVelocity_{0.0f};
+    glm::vec3 lastDraggedBodyPosition_{0.0f};
+    bool hasDraggedBodyPositionSample_ = false;
     int32_t lockedDraggedConnectorIndex_ = -1;
     DragSnapCandidate activeSnapCandidate_{};
     float snapFeedbackPulseUntil_ = 0.0f;
