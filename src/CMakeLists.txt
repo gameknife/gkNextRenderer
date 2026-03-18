@@ -37,6 +37,8 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp
+	Tests/Test_BrickPlayerSnapLogic.cpp
+	Application/BrickPlayer/BrickPlayerSnapLogic.cpp
 	Tests/Test_MagicaLegoStyle.cpp
 	Tests/Test_MagicaLegoScript.cpp
 	Tests/Test_MagicaLegoPlacementRules.cpp
