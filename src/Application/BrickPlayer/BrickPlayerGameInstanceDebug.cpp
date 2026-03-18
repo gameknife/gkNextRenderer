@@ -1,4 +1,5 @@
 #include "BrickPlayerGameInstance.hpp"
+#include "BrickPlayerSnapLogic.hpp"
 
 #include "Assets/Core/Node.h"
 #include "Assets/Loaders/FLDrawTypes.h"
@@ -288,14 +289,18 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
             bool isCompatible = false;
             if (hasLockedConnector)
             {
-                isCompatible = AreConnectorsCompatible(*lockedDraggedConnector, *targetConnector.connector);
+                isCompatible = BrickPlayer::Snap::AreConnectorsCompatible(*lockedDraggedConnector,
+                                                                         *targetConnector.connector,
+                                                                         GetLduToWorldScale());
             }
             else
             {
                 for (const WorldSnapConnector& draggedConnector : draggedConnectors)
                 {
                     if (draggedConnector.connector
-                        && AreConnectorsCompatible(*draggedConnector.connector, *targetConnector.connector))
+                        && BrickPlayer::Snap::AreConnectorsCompatible(*draggedConnector.connector,
+                                                                      *targetConnector.connector,
+                                                                      GetLduToWorldScale()))
                     {
                         isCompatible = true;
                         break;
@@ -360,12 +365,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
 
         if (!hoveredTargetConnectors.empty())
         {
-            const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
-                ? glm::normalize(hoveredAssemblyHitNormal_)
-                : glm::vec3(0.0f, 1.0f, 0.0f);
-            const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-            const float studPitch = 20.0f * lduToWorldScale;
-            const float hoverDistanceLimit = studPitch * 0.75f;
+            const float lduToWorldScale = GetLduToWorldScale();
 
             NextEngineHelper::DrawAuxPoint(hoveredAssemblyHitPoint_, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
 
@@ -380,14 +380,18 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                 bool isCompatible = false;
                 if (hasLockedConnector)
                 {
-                    isCompatible = AreConnectorsCompatible(*lockedDraggedConnector, *targetConnector.connector);
+                    isCompatible = BrickPlayer::Snap::AreConnectorsCompatible(*lockedDraggedConnector,
+                                                                             *targetConnector.connector,
+                                                                             lduToWorldScale);
                 }
                 else
                 {
                     for (const WorldSnapConnector& draggedConnector : draggedConnectors)
                     {
                         if (draggedConnector.connector
-                            && AreConnectorsCompatible(*draggedConnector.connector, *targetConnector.connector))
+                            && BrickPlayer::Snap::AreConnectorsCompatible(*draggedConnector.connector,
+                                                                          *targetConnector.connector,
+                                                                          lduToWorldScale))
                         {
                             isCompatible = true;
                             break;
@@ -395,15 +399,14 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                     }
                 }
 
-                const float hoverDepthLimit =
-                    std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
-                const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
-                const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
-                const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
-                const float hoverDistance = glm::length(planarHoverOffset);
-                const bool passesHoverFilter = hoverDepth >= -hoverDepthLimit
-                    && hoverDistance <= std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f)
-                    && glm::dot(targetConnector.worldAxis, hoverNormal) >= 0.2f;
+                const BrickPlayer::Snap::FHoverFilterResult hoverFilter =
+                    BrickPlayer::Snap::EvaluateHoverFilter(*targetConnector.connector,
+                                                           targetConnector.worldPosition,
+                                                           targetConnector.worldAxis,
+                                                           hoveredAssemblyHitPoint_,
+                                                           hoveredAssemblyHitNormal_,
+                                                           lduToWorldScale);
+                const bool passesHoverFilter = hoverFilter.passes;
 
                 if (isCompatible && passesHoverFilter)
                 {

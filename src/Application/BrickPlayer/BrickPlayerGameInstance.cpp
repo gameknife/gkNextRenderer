@@ -1,4 +1,5 @@
 #include "BrickPlayerGameInstance.hpp"
+#include "BrickPlayerSnapLogic.hpp"
 #include "BrickPlayerUserInterface.hpp"
 #include "Assets/Loaders/FLDrawLoader.h"
 #include "Assets/Core/Node.h"
@@ -59,16 +60,6 @@ namespace
             return minA - maxB;
         }
         return 0.0f;
-    }
-
-    std::string ToLowerCopy(const std::string& text)
-    {
-        std::string lower = text;
-        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c)
-        {
-            return static_cast<char>(std::tolower(c));
-        });
-        return lower;
     }
 
     WorldBounds TransformLocalBounds(const glm::mat4& worldTransform, const glm::vec3& localMin, const glm::vec3& localMax)
@@ -153,14 +144,169 @@ void BrickPlayerGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
     // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
 }
 
+void BrickPlayerGameInstance::InitializeDefaultBGMPlaylist()
+{
+    bgmTracks_.clear();
+    bgmTracks_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
+    bgmTracks_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
+    currentBGM_ = bgmTracks_.empty()
+        ? 0
+        : static_cast<uint32_t>(bgmTracks_.size() - 1);
+}
+
+void BrickPlayerGameInstance::ResetDragState()
+{
+    isDraggingPart_ = false;
+    draggedInstanceId_ = UINT32_MAX;
+    dragPlanePoint_ = glm::vec3(0.0f);
+    dragPlaneNormal_ = glm::vec3(0.0f, 0.0f, 1.0f);
+    dragBodyOffset_ = glm::vec3(0.0f);
+    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
+    lastDraggedBodyPosition_ = glm::vec3(0.0f);
+    hasDraggedBodyPositionSample_ = false;
+    lockedDraggedConnectorIndex_ = -1;
+    activeSnapCandidate_ = {};
+    snapFeedbackPulseUntil_ = 0.0f;
+}
+
+void BrickPlayerGameInstance::ClearHoverTargets(bool clearSceneHovered)
+{
+    hoveredDisassembledInstanceId_ = UINT32_MAX;
+    hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hoveredHitPoint_ = glm::vec3(0.0f);
+    hoveredHitNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    hoveredAssemblyHitPoint_ = glm::vec3(0.0f);
+    hoveredAssemblyHitNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    activeSnapCandidate_ = {};
+
+    if (clearSceneHovered)
+    {
+        GetEngine().GetScene().ClearHoveredId();
+    }
+}
+
+void BrickPlayerGameInstance::ResetInteractiveSceneState()
+{
+    disassembledNodes_.clear();
+    originalAssemblyStates_.clear();
+    selectedInstanceId_ = UINT32_MAX;
+    selectedHitNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    hasFloorPlane_ = false;
+    floorPlaneY_ = 0.0f;
+    floorSurfaceY_ = 0.0f;
+
+    ResetDragState();
+    ClearHoverTargets(false);
+
+    GetEngine().GetScene().ClearSelection();
+    GetEngine().GetScene().ClearHoveredId();
+    GetEngine().GetShowFlags().ShowEdge = false;
+}
+
+float BrickPlayerGameInstance::GetLduToWorldScale() const
+{
+    return Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+}
+
+int32_t BrickPlayerGameInstance::GetMaxTimelineStep() const
+{
+    return perPartMode_ ? totalParts_ : totalSteps_;
+}
+
+const BrickPlayerGameInstance::BGMTrack* BrickPlayerGameInstance::GetCurrentBGMTrack() const
+{
+    if (bgmTracks_.empty() || currentBGM_ >= bgmTracks_.size())
+    {
+        return nullptr;
+    }
+
+    return &bgmTracks_[currentBGM_];
+}
+
+void BrickPlayerGameInstance::FocusCameraOnLoadedScene()
+{
+    float minY = FLT_MAX;
+    float maxY = -FLT_MAX;
+    glm::vec3 center{0.0f};
+    int count = 0;
+
+    auto& nodes = GetEngine().GetScene().Nodes();
+    auto& models = GetEngine().GetScene().Models();
+    for (auto& node : nodes)
+    {
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render || !render->IsDrawable())
+        {
+            continue;
+        }
+
+        uint32_t modelIdx = render->GetModelId();
+        if (modelIdx >= models.size())
+        {
+            continue;
+        }
+
+        const glm::vec3 worldPos = node->WorldTranslation();
+        center += worldPos;
+        count++;
+
+        const auto& model = models[modelIdx];
+        const glm::vec3 localMin = model.GetLocalAABBMin();
+        const glm::vec3 localMax = model.GetLocalAABBMax();
+        const glm::vec3 scale = node->WorldScale();
+        minY = std::min(minY, worldPos.y + localMin.y * scale.y);
+        maxY = std::max(maxY, worldPos.y + localMax.y * scale.y);
+    }
+
+    if (count <= 0)
+    {
+        return;
+    }
+
+    center /= static_cast<float>(count);
+    cameraCenter_ = center;
+    realCameraCenter_ = center;
+
+    const float sceneHeight = maxY - minY;
+    cameraArm_ = std::max(1.0f, sceneHeight * 3.0f);
+}
+
+void BrickPlayerGameInstance::UpdateAutoPlay(double deltaSeconds)
+{
+    if (!autoPlay_)
+    {
+        return;
+    }
+
+    const float interval = playSpeedPresets[playSpeedIndex_].interval;
+    autoPlayTimer_ += static_cast<float>(deltaSeconds);
+    if (autoPlayTimer_ < interval)
+    {
+        return;
+    }
+
+    autoPlayTimer_ -= interval;
+    const int32_t maxStep = GetMaxTimelineStep();
+    if (currentStep_ < maxStep - 1)
+    {
+        StepForward();
+        return;
+    }
+
+    autoPlay_ = false;
+}
+
+void BrickPlayerGameInstance::SyncEdgeHighlight()
+{
+    GetEngine().GetShowFlags().ShowEdge =
+        GetEngine().GetScene().GetHoveredId() != UINT32_MAX || selectedInstanceId_ != UINT32_MAX;
+}
+
 void BrickPlayerGameInstance::OnInit()
 {
-    bgmArray_.clear();
-    bgmArray_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
-    bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
-    if (!bgmArray_.empty())
+    InitializeDefaultBGMPlaylist();
+    if (!bgmTracks_.empty())
     {
-        currentBGM_ = static_cast<uint32_t>(bgmArray_.size() - 1);
         PlayNextBGM();
     }
 
@@ -178,73 +324,13 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     totalSteps_ = Assets::FLDrawLoader::GetLastLoadTotalSteps();
     currentStep_ = 0;
 
-    disassembledNodes_.clear();
-    originalAssemblyStates_.clear();
-    selectedInstanceId_ = UINT32_MAX;
-    hoveredDisassembledInstanceId_ = UINT32_MAX;
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
-    hasFloorPlane_ = false;
-    floorPlaneY_ = 0.0f;
-    floorSurfaceY_ = 0.0f;
-    isDraggingPart_ = false;
-    draggedInstanceId_ = UINT32_MAX;
-    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
-    lastDraggedBodyPosition_ = glm::vec3(0.0f);
-    hasDraggedBodyPositionSample_ = false;
-    lockedDraggedConnectorIndex_ = -1;
-    activeSnapCandidate_ = {};
-    snapFeedbackPulseUntil_ = 0.0f;
-    GetEngine().GetScene().ClearSelection();
-    GetEngine().GetScene().ClearHoveredId();
-    GetEngine().GetShowFlags().ShowEdge = false;
+    ResetInteractiveSceneState();
 
     CreateFloorPhysicsBody();
-
-    // Auto-focus camera based on scene bounds
-    float minY = FLT_MAX;
-    float maxY = -FLT_MAX;
-    glm::vec3 center{0.0f};
-    int count = 0;
-
-    auto& nodes = GetEngine().GetScene().Nodes();
-    auto& models = GetEngine().GetScene().Models();
-    for (auto& node : nodes)
-    {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
-            continue;
-
-        uint32_t modelIdx = render->GetModelId();
-        if (modelIdx >= models.size())
-            continue;
-
-        glm::vec3 worldPos = node->WorldTranslation();
-        center += worldPos;
-        count++;
-
-        const auto& model = models[modelIdx];
-        glm::vec3 localMin = model.GetLocalAABBMin();
-        glm::vec3 localMax = model.GetLocalAABBMax();
-        glm::vec3 scale = node->WorldScale();
-        float yLow = worldPos.y + localMin.y * scale.y;
-        float yHigh = worldPos.y + localMax.y * scale.y;
-        minY = std::min(minY, yLow);
-        maxY = std::max(maxY, yHigh);
-    }
-
-    if (count > 0)
-    {
-        center /= static_cast<float>(count);
-        cameraCenter_ = center;
-        realCameraCenter_ = center;
-
-        float sceneHeight = maxY - minY;
-        cameraArm_ = std::max(1.0f, sceneHeight * 3.0f);
-    }
-
+    FocusCameraOnLoadedScene();
     BuildPerPartOrder();
     CaptureOriginalAssemblyState();
-    shadowLibrary_.Initialize(Assets::SanitizeLDrawLduToWorldScale(GetEngine().GetUserSettings().LDrawLduToWorldScale));
+    shadowLibrary_.Initialize(GetLduToWorldScale());
 
     // Auto-enable per-part mode if no build steps defined
     perPartMode_ = (totalSteps_ <= 1);
@@ -261,25 +347,7 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
     if (!sceneLoaded_)
         return;
 
-    // Auto-play
-    if (autoPlay_)
-    {
-        float interval = playSpeedPresets[playSpeedIndex_].interval;
-        autoPlayTimer_ += static_cast<float>(deltaSeconds);
-        if (autoPlayTimer_ >= interval)
-        {
-            autoPlayTimer_ -= interval;
-            int32_t maxStep = perPartMode_ ? totalParts_ : totalSteps_;
-            if (currentStep_ < maxStep - 1)
-            {
-                StepForward();
-            }
-            else
-            {
-                autoPlay_ = false;
-            }
-        }
-    }
+    UpdateAutoPlay(deltaSeconds);
 
     PerformRaycast();
 
@@ -288,8 +356,7 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
         UpdateDraggedPart();
     }
 
-    GetEngine().GetShowFlags().ShowEdge =
-        GetEngine().GetScene().GetHoveredId() != UINT32_MAX || selectedInstanceId_ != UINT32_MAX;
+    SyncEdgeHighlight();
 }
 
 void BrickPlayerGameInstance::OnInitUI()
@@ -321,8 +388,8 @@ bool BrickPlayerGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCame
     glm::vec3 left = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), forward));
     left.y = 0.0f;
 
-    const_cast<BrickPlayerGameInstance*>(this)->panForward_ = glm::normalize(forward);
-    const_cast<BrickPlayerGameInstance*>(this)->panLeft_ = glm::normalize(left);
+    panForward_ = glm::normalize(forward);
+    panLeft_ = glm::normalize(left);
 
     OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     OutRenderCamera.FieldOfView = cameraFOV_;
@@ -372,14 +439,14 @@ bool BrickPlayerGameInstance::OnCursorPosition(double xpos, double ypos)
 
     glm::dvec2 delta = glm::dvec2(xpos, ypos) - mousePos_;
 
-    if (isOrbitDragging_ && mouseLeftDown_ && !isDraggingPart_)
+    if (isOrbitDragging_ && mouseLeftDown_ && !isDraggingPart_ && !mouseCapturedByUI_)
     {
         cameraRotX_ += static_cast<float>(delta.x) * cameraMultiplier_;
         cameraRotY_ += static_cast<float>(delta.y) * cameraMultiplier_;
         cameraRotY_ = std::clamp(cameraRotY_, -89.0f, 89.0f);
     }
 
-    if (mouseRightDown_)
+    if (mouseRightDown_ && !mouseCapturedByUI_)
     {
         float panSpeed = cameraMultiplier_ * cameraArm_ * 0.002f;
         glm::vec3 panDelta = panForward_ * static_cast<float>(delta.y) * panSpeed;
@@ -397,6 +464,13 @@ bool BrickPlayerGameInstance::OnMouseButton(SDL_Event& event)
     if (event.button.button == SDL_BUTTON_LEFT && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         mouseLeftDown_ = true;
+        if (mouseCapturedByUI_)
+        {
+            isOrbitDragging_ = false;
+            cameraMultiplier_ = 0.0f;
+            return true;
+        }
+
         if (!mouseCapturedByUI_ && StartDraggingHoveredPart())
         {
             isOrbitDragging_ = false;
@@ -424,6 +498,13 @@ bool BrickPlayerGameInstance::OnMouseButton(SDL_Event& event)
     }
     else if (event.button.button == SDL_BUTTON_RIGHT && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
+        if (mouseCapturedByUI_)
+        {
+            mouseRightDown_ = false;
+            cameraMultiplier_ = 0.0f;
+            return true;
+        }
+
         mouseRightDown_ = true;
         cameraMultiplier_ = 0.1f;
     }
@@ -437,6 +518,11 @@ bool BrickPlayerGameInstance::OnMouseButton(SDL_Event& event)
 
 bool BrickPlayerGameInstance::OnScroll(double xoffset, double yoffset)
 {
+    if (mouseCapturedByUI_)
+    {
+        return true;
+    }
+
     const float scrollSpeed = 0.5f;
     cameraArm_ -= static_cast<float>(yoffset) * scrollSpeed;
     cameraArm_ = std::clamp(cameraArm_, 0.1f, 50.0f);
@@ -452,10 +538,7 @@ void BrickPlayerGameInstance::PerformRaycast()
 {
     if (mouseCapturedByUI_)
     {
-        hoveredDisassembledInstanceId_ = UINT32_MAX;
-        hoveredAssemblyInstanceId_ = UINT32_MAX;
-        activeSnapCandidate_ = {};
-        GetEngine().GetScene().ClearHoveredId();
+        ClearHoverTargets();
         return;
     }
 
@@ -469,10 +552,7 @@ void BrickPlayerGameInstance::PerformRaycast()
 
     if (!handled)
     {
-        hoveredDisassembledInstanceId_ = UINT32_MAX;
-        hoveredAssemblyInstanceId_ = UINT32_MAX;
-        activeSnapCandidate_ = {};
-        GetEngine().GetScene().ClearHoveredId();
+        ClearHoverTargets();
     }
 }
 
@@ -489,9 +569,8 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
         return false;
     }
 
-    const glm::vec3 hitNormal = glm::dot(glm::vec3(result.Normal), glm::vec3(result.Normal)) > 0.0f
-        ? glm::normalize(glm::vec3(result.Normal))
-        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 hitNormal =
+        BrickPlayer::Snap::NormalizeOrDefault(glm::vec3(result.Normal), glm::vec3(0.0f, 1.0f, 0.0f));
 
     if (isDraggingPart_)
     {
@@ -559,15 +638,12 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
         return false;
     }
 
-    glm::vec3 viewNormal = realCameraCenter_ - cachedCameraPos_;
-    if (glm::dot(viewNormal, viewNormal) < 1e-6f)
-    {
-        viewNormal = glm::vec3(0.0f, 0.0f, 1.0f);
-    }
+    const glm::vec3 viewNormal =
+        BrickPlayer::Snap::NormalizeOrDefault(realCameraCenter_ - cachedCameraPos_, glm::vec3(0.0f, 0.0f, 1.0f));
 
     draggedInstanceId_ = hoveredDisassembledInstanceId_;
     dragPlanePoint_ = hoveredHitPoint_;
-    dragPlaneNormal_ = glm::normalize(viewNormal);
+    dragPlaneNormal_ = viewNormal;
     dragBodyOffset_ = body->position - hoveredHitPoint_;
     dragReleaseLinearVelocity_ = glm::vec3(0.0f);
     lastDraggedBodyPosition_ = body->position;
@@ -639,15 +715,7 @@ void BrickPlayerGameInstance::StopDraggingPart()
 #endif
 
     hoveredAssemblyInstanceId_ = UINT32_MAX;
-    isDraggingPart_ = false;
-    draggedInstanceId_ = UINT32_MAX;
-    dragBodyOffset_ = glm::vec3(0.0f);
-    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
-    lastDraggedBodyPosition_ = glm::vec3(0.0f);
-    hasDraggedBodyPositionSample_ = false;
-    lockedDraggedConnectorIndex_ = -1;
-    activeSnapCandidate_ = {};
-    snapFeedbackPulseUntil_ = 0.0f;
+    ResetDragState();
 }
 
 void BrickPlayerGameInstance::UpdateDraggedPart()
@@ -701,10 +769,9 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
 
     if (hoveredAssemblyInstanceId_ != UINT32_MAX)
     {
-        const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
-            ? glm::normalize(hoveredAssemblyHitNormal_)
-            : glm::vec3(0.0f, 1.0f, 0.0f);
-        const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+        const glm::vec3 hoverNormal =
+            BrickPlayer::Snap::NormalizeOrDefault(hoveredAssemblyHitNormal_, glm::vec3(0.0f, 1.0f, 0.0f));
+        const float lduToWorldScale = GetLduToWorldScale();
         const float surfaceGap = std::max(8.0f * lduToWorldScale * 0.15f, 0.002f);
         if (lockedDraggedConnector)
         {
@@ -858,12 +925,7 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
 
     const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
     const float snapThreshold = GetSnapDistanceThreshold(draggedInstanceId_);
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
-    const float hoverDistanceLimit = studPitch * 0.75f;
-    const glm::vec3 hoverNormal = glm::dot(hoveredAssemblyHitNormal_, hoveredAssemblyHitNormal_) > 1e-6f
-        ? glm::normalize(hoveredAssemblyHitNormal_)
-        : glm::vec3(0.0f, 1.0f, 0.0f);
+    const float lduToWorldScale = GetLduToWorldScale();
     const float twistAngles[] = {
         0.0f,
         glm::half_pi<float>(),
@@ -898,28 +960,20 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
             for (size_t targetConnectorIndex = 0; targetConnectorIndex < targetConnectors.size(); ++targetConnectorIndex)
             {
                 const WorldSnapConnector& targetConnector = targetConnectors[targetConnectorIndex];
-                if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
+                if (!targetConnector.connector
+                    || !BrickPlayer::Snap::AreConnectorsCompatible(draggedConnector, *targetConnector.connector, lduToWorldScale))
                 {
                     continue;
                 }
 
-                const float hoverDepthLimit =
-                    std::max(targetConnector.connector->length * 1.25f, studPitch * 0.3f);
-                const glm::vec3 hoverToConnector = targetConnector.worldPosition - hoveredAssemblyHitPoint_;
-                const float hoverDepth = glm::dot(hoverToConnector, hoverNormal);
-                if (hoverDepth < -hoverDepthLimit)
-                {
-                    continue;
-                }
-
-                const glm::vec3 planarHoverOffset = hoverToConnector - hoverNormal * hoverDepth;
-                const float hoverDistance = glm::length(planarHoverOffset);
-                if (hoverDistance > std::max(hoverDistanceLimit, targetConnector.connector->radius * 2.0f))
-                {
-                    continue;
-                }
-
-                if (glm::dot(targetConnector.worldAxis, hoverNormal) < 0.2f)
+                const BrickPlayer::Snap::FHoverFilterResult hoverFilter =
+                    BrickPlayer::Snap::EvaluateHoverFilter(*targetConnector.connector,
+                                                           targetConnector.worldPosition,
+                                                           targetConnector.worldAxis,
+                                                           hoveredAssemblyHitPoint_,
+                                                           hoveredAssemblyHitNormal_,
+                                                           lduToWorldScale);
+                if (!hoverFilter.passes)
                 {
                     continue;
                 }
@@ -943,11 +997,13 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
                         draggedInstanceId_,
                         desiredRotation,
                         desiredTranslation,
-                        draggedConnector,
                         targetConnector);
-                    const int hoverScore = static_cast<int>(std::round((hoverDistanceLimit - hoverDistance) * 100.0f));
-                    const int depthScore = static_cast<int>(std::round((hoverDepthLimit - glm::abs(hoverDepth)) * 100.0f));
-                    const int normalScore = static_cast<int>(std::round(glm::dot(targetConnector.worldAxis, hoverNormal) * 1000.0f));
+                    const int hoverScore = static_cast<int>(std::round(
+                        (hoverFilter.hoverDistanceLimit - hoverFilter.hoverDistance) * 100.0f));
+                    const int depthScore = static_cast<int>(std::round(
+                        (hoverFilter.hoverDepthLimit - glm::abs(hoverFilter.hoverDepth)) * 100.0f));
+                    const int normalScore = static_cast<int>(std::round(
+                        glm::dot(targetConnector.worldAxis, hoverFilter.hoverNormal) * 1000.0f));
                     const int lockScore = isLockedConnector ? 5000 : 0;
                     const int rotationScore =
                         static_cast<int>(std::round(glm::abs(glm::dot(desiredRotation, currentDragRotation)) * 1200.0f));
@@ -1094,11 +1150,9 @@ int32_t BrickPlayerGameInstance::FindDraggedConnectorLock(uint32_t instanceId,
         return -1;
     }
 
-    const glm::vec3 normalizedHitNormal = glm::dot(hitNormal, hitNormal) > 1e-6f
-        ? glm::normalize(hitNormal)
-        : glm::vec3(0.0f, 1.0f, 0.0f);
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
+    const glm::vec3 normalizedHitNormal =
+        BrickPlayer::Snap::NormalizeOrDefault(hitNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+    const BrickPlayer::Snap::FScaleMetrics scaleMetrics = BrickPlayer::Snap::BuildScaleMetrics(GetLduToWorldScale());
 
     float bestScore = FLT_MAX;
     int32_t bestIndex = -1;
@@ -1116,8 +1170,8 @@ int32_t BrickPlayerGameInstance::FindDraggedConnectorLock(uint32_t instanceId,
         const glm::vec3 planarOffset = hitToConnector - normalizedHitNormal * glm::dot(hitToConnector, normalizedHitNormal);
         const float planarDistance = glm::length(planarOffset);
         const float normalPenalty = 1.0f - glm::abs(glm::dot(worldConnector.worldAxis, normalizedHitNormal));
-        const float score = planarDistance + depth * 0.35f + normalPenalty * studPitch * 0.5f;
-        const float scoreLimit = std::max(studPitch * 1.25f,
+        const float score = planarDistance + depth * 0.35f + normalPenalty * scaleMetrics.studPitch * 0.5f;
+        const float scoreLimit = std::max(scaleMetrics.studPitch * 1.25f,
                                           worldConnector.connector->radius * 2.5f + worldConnector.connector->length * 0.5f);
         if (score > scoreLimit || score >= bestScore)
         {
@@ -1153,85 +1207,9 @@ const BrickPlayer::Shadow::FSnapConnector* BrickPlayerGameInstance::GetLockedDra
     return &localConnectors[lockedDraggedConnectorIndex_];
 }
 
-bool BrickPlayerGameInstance::AreConnectorsCompatible(const BrickPlayer::Shadow::FSnapConnector& dragged,
-                                                      const BrickPlayer::Shadow::FSnapConnector& target) const
-{
-    if (dragged.kind != BrickPlayer::Shadow::ESnapKind::Cylinder
-        || target.kind != BrickPlayer::Shadow::ESnapKind::Cylinder)
-    {
-        return false;
-    }
-
-    if (dragged.gender == BrickPlayer::Shadow::ESnapGender::Unknown
-        || target.gender == BrickPlayer::Shadow::ESnapGender::Unknown
-        || dragged.gender == target.gender)
-    {
-        return false;
-    }
-
-    const std::string draggedGroup = ToLowerCopy(dragged.group);
-    const std::string targetGroup = ToLowerCopy(target.group);
-    if (!draggedGroup.empty() && !targetGroup.empty() && draggedGroup != targetGroup)
-    {
-        return false;
-    }
-
-    auto classifyProfile = [](const BrickPlayer::Shadow::FSnapConnector& connector) -> std::string
-    {
-        for (const auto& section : connector.sections)
-        {
-            if (section.profile.empty())
-            {
-                continue;
-            }
-
-            const char profileChar = static_cast<char>(std::toupper(section.profile.front()));
-            if (profileChar == 'A')
-            {
-                return "axle";
-            }
-            if (profileChar == 'R' || profileChar == 'S' || profileChar == '_')
-            {
-                return "round";
-            }
-        }
-
-        return "unknown";
-    };
-
-    const std::string draggedProfile = classifyProfile(dragged);
-    const std::string targetProfile = classifyProfile(target);
-    if (draggedProfile != "unknown" && targetProfile != "unknown" && draggedProfile != targetProfile)
-    {
-        return false;
-    }
-
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
-    const float radiusTolerance = std::max(studPitch * 0.15f, 0.002f);
-    const float lengthTolerance = std::max(studPitch * 0.2f, 0.004f);
-    if (glm::abs(dragged.radius - target.radius) > radiusTolerance)
-    {
-        return false;
-    }
-
-    const BrickPlayer::Shadow::FSnapConnector& male =
-        dragged.gender == BrickPlayer::Shadow::ESnapGender::Male ? dragged : target;
-    const BrickPlayer::Shadow::FSnapConnector& female =
-        dragged.gender == BrickPlayer::Shadow::ESnapGender::Female ? dragged : target;
-
-    if (male.length > female.length + lengthTolerance && !female.slide)
-    {
-        return false;
-    }
-
-    return true;
-}
-
 int BrickPlayerGameInstance::ScoreShadowCandidate(uint32_t draggedId,
                                                   const glm::quat& desiredRotation,
                                                   const glm::vec3& desiredTranslation,
-                                                  const BrickPlayer::Shadow::FSnapConnector& anchorDragged,
                                                   const WorldSnapConnector& anchorTarget) const
 {
     auto partIt = nodePartFileMap_.find(draggedId);
@@ -1246,10 +1224,10 @@ int BrickPlayerGameInstance::ScoreShadowCandidate(uint32_t draggedId,
         return 0;
     }
 
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
-    const float matchDistance = std::max(studPitch * 0.3f, 0.004f);
-    const float searchRadius = std::max(studPitch * 6.0f, GetSnapDistanceThreshold(draggedId) * 6.0f);
+    const BrickPlayer::Snap::FScaleMetrics scaleMetrics =
+        BrickPlayer::Snap::BuildScaleMetrics(GetLduToWorldScale());
+    const float matchDistance = std::max(scaleMetrics.studPitch * 0.3f, 0.004f);
+    const float searchRadius = std::max(scaleMetrics.studPitch * 6.0f, GetSnapDistanceThreshold(draggedId) * 6.0f);
     const float axisDotThreshold = 0.96f;
 
     std::vector<WorldSnapConnector> nearbyTargets;
@@ -1287,7 +1265,10 @@ int BrickPlayerGameInstance::ScoreShadowCandidate(uint32_t draggedId,
         bool matched = false;
         for (const WorldSnapConnector& targetConnector : nearbyTargets)
         {
-            if (!targetConnector.connector || !AreConnectorsCompatible(draggedConnector, *targetConnector.connector))
+            if (!targetConnector.connector
+                || !BrickPlayer::Snap::AreConnectorsCompatible(draggedConnector,
+                                                               *targetConnector.connector,
+                                                               scaleMetrics.lduToWorldScale))
             {
                 continue;
             }
@@ -1325,10 +1306,9 @@ bool BrickPlayerGameInstance::AreNodesOriginallyConnectable(uint32_t draggedId, 
         return false;
     }
 
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
-    const float plateHeight = 8.0f * lduToWorldScale;
-    const float connectMargin = std::max(studPitch * 0.35f, plateHeight * 1.5f);
+    const BrickPlayer::Snap::FScaleMetrics scaleMetrics =
+        BrickPlayer::Snap::BuildScaleMetrics(GetLduToWorldScale());
+    const float connectMargin = std::max(scaleMetrics.studPitch * 0.35f, scaleMetrics.plateHeight * 1.5f);
 
     const OriginalAssemblyState& draggedState = draggedIt->second;
     const OriginalAssemblyState& targetState = targetIt->second;
@@ -1348,9 +1328,8 @@ bool BrickPlayerGameInstance::AreNodesOriginallyConnectable(uint32_t draggedId, 
 
 float BrickPlayerGameInstance::GetSnapDistanceThreshold(uint32_t draggedId) const
 {
-    const float lduToWorldScale = Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
-    const float studPitch = 20.0f * lduToWorldScale;
-    const float plateHeight = 8.0f * lduToWorldScale;
+    const BrickPlayer::Snap::FScaleMetrics scaleMetrics =
+        BrickPlayer::Snap::BuildScaleMetrics(GetLduToWorldScale());
 
     float sizeBasedThreshold = 0.0f;
     auto it = disassembledNodes_.find(draggedId);
@@ -1360,7 +1339,7 @@ float BrickPlayerGameInstance::GetSnapDistanceThreshold(uint32_t draggedId) cons
         sizeBasedThreshold = std::max(halfExtent.x, std::max(halfExtent.y, halfExtent.z)) * 0.5f;
     }
 
-    return std::max(std::max(studPitch * 1.25f, plateHeight * 2.0f), sizeBasedThreshold);
+    return std::max(std::max(scaleMetrics.studPitch * 1.25f, scaleMetrics.plateHeight * 2.0f), sizeBasedThreshold);
 }
 
 void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
@@ -1555,7 +1534,7 @@ bool BrickPlayerGameInstance::ClampDraggedBodyPositionAboveFloor(Assets::Node* n
 
 void BrickPlayerGameInstance::SetCurrentStep(int32_t step)
 {
-    int32_t maxStep = perPartMode_ ? totalParts_ : totalSteps_;
+    const int32_t maxStep = GetMaxTimelineStep();
     if (maxStep <= 0)
         return;
     const int32_t previousStep = currentStep_;
@@ -1584,7 +1563,7 @@ void BrickPlayerGameInstance::ToggleAutoPlay()
     // If starting auto-play and already at the end, restart from 0
     if (autoPlay_)
     {
-        int32_t maxStep = perPartMode_ ? totalParts_ : totalSteps_;
+        const int32_t maxStep = GetMaxTimelineStep();
         if (currentStep_ >= maxStep - 1)
         {
             currentStep_ = 0;
@@ -1605,49 +1584,56 @@ const char* BrickPlayerGameInstance::GetPlaySpeedLabel() const
 
 void BrickPlayerGameInstance::PlayNextBGM()
 {
-    if (bgmArray_.empty())
+    const BGMTrack* currentTrack = GetCurrentBGMTrack();
+    if (!currentTrack)
     {
         return;
     }
 
-    const std::string& currentPath = std::get<1>(bgmArray_[currentBGM_]);
-    if (!currentPath.empty())
+    if (!currentTrack->path.empty())
     {
-        GetEngine().PauseSound(currentPath, true);
+        GetEngine().PauseSound(currentTrack->path, true);
     }
 
-    currentBGM_ = (currentBGM_ + 1) % static_cast<uint32_t>(bgmArray_.size());
-    GetEngine().PlaySound(std::get<1>(bgmArray_[currentBGM_]), true, 0.45f);
+    currentBGM_ = (currentBGM_ + 1) % static_cast<uint32_t>(bgmTracks_.size());
+    currentTrack = GetCurrentBGMTrack();
+    if (currentTrack && !currentTrack->path.empty())
+    {
+        GetEngine().PlaySound(currentTrack->path, true, 0.45f);
+    }
 }
 
 bool BrickPlayerGameInstance::IsBGMPaused() const
 {
-    if (bgmArray_.empty())
+    const BGMTrack* currentTrack = GetCurrentBGMTrack();
+    if (!currentTrack)
     {
         return true;
     }
 
-    return !engine_->IsSoundPlaying(std::get<1>(bgmArray_[currentBGM_]));
+    return !engine_->IsSoundPlaying(currentTrack->path);
 }
 
 void BrickPlayerGameInstance::PauseBGM(bool pause)
 {
-    if (bgmArray_.empty())
+    const BGMTrack* currentTrack = GetCurrentBGMTrack();
+    if (!currentTrack)
     {
         return;
     }
 
-    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), pause);
+    GetEngine().PauseSound(currentTrack->path, pause);
 }
 
 std::string BrickPlayerGameInstance::GetCurrentBGMName() const
 {
-    if (bgmArray_.empty())
+    const BGMTrack* currentTrack = GetCurrentBGMTrack();
+    if (!currentTrack)
     {
         return {};
     }
 
-    return std::get<0>(bgmArray_[currentBGM_]);
+    return currentTrack->name;
 }
 
 void BrickPlayerGameInstance::BuildPerPartOrder()
@@ -1901,26 +1887,10 @@ void BrickPlayerGameInstance::ResetAll()
 
     // Reload the scene to restore all transforms and remove physics bodies
     sceneLoaded_ = false;
-    disassembledNodes_.clear();
-    originalAssemblyStates_.clear();
+    ResetInteractiveSceneState();
+    nodeStepMap_.clear();
+    nodePartOrder_.clear();
     nodePartFileMap_.clear();
-    selectedInstanceId_ = UINT32_MAX;
-    hoveredDisassembledInstanceId_ = UINT32_MAX;
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
-    hasFloorPlane_ = false;
-    floorPlaneY_ = 0.0f;
-    floorSurfaceY_ = 0.0f;
-    isDraggingPart_ = false;
-    draggedInstanceId_ = UINT32_MAX;
-    dragReleaseLinearVelocity_ = glm::vec3(0.0f);
-    lastDraggedBodyPosition_ = glm::vec3(0.0f);
-    hasDraggedBodyPositionSample_ = false;
-    lockedDraggedConnectorIndex_ = -1;
-    activeSnapCandidate_ = {};
-    snapFeedbackPulseUntil_ = 0.0f;
-    GetEngine().GetScene().ClearSelection();
-    GetEngine().GetScene().ClearHoveredId();
-    GetEngine().GetShowFlags().ShowEdge = false;
 
     // Re-request the same scene
     if (!currentScenePath_.empty())

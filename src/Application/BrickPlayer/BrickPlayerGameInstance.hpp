@@ -70,10 +70,17 @@ public:
 
     // File dialog
     void OpenFileDialog();
+    void SetMouseCapturedByUI(bool captured) { mouseCapturedByUI_ = captured; }
 
     bool IsSceneLoaded() const { return sceneLoaded_; }
 
 private:
+    struct BGMTrack
+    {
+        std::string name;
+        std::string path;
+    };
+
     struct OriginalAssemblyState
     {
         uint32_t parentInstanceId = UINT32_MAX;
@@ -129,12 +136,9 @@ private:
                                        const glm::vec3& freeBodyPosition,
                                        DragSnapCandidate& outCandidate);
     std::vector<WorldSnapConnector> BuildWorldConnectors(uint32_t instanceId) const;
-    bool AreConnectorsCompatible(const BrickPlayer::Shadow::FSnapConnector& dragged,
-                                 const BrickPlayer::Shadow::FSnapConnector& target) const;
     int ScoreShadowCandidate(uint32_t draggedId,
                              const glm::quat& desiredRotation,
                              const glm::vec3& desiredTranslation,
-                             const BrickPlayer::Shadow::FSnapConnector& anchorDragged,
                              const WorldSnapConnector& anchorTarget) const;
     bool AreNodesOriginallyConnectable(uint32_t draggedId, uint32_t targetId) const;
     float GetSnapDistanceThreshold(uint32_t draggedId) const;
@@ -149,6 +153,16 @@ private:
     bool ClampDraggedBodyPositionAboveFloor(Assets::Node* node,
                                             const glm::quat& bodyRotation,
                                             glm::vec3& inOutBodyPosition) const;
+    void InitializeDefaultBGMPlaylist();
+    void ResetInteractiveSceneState();
+    void ResetDragState();
+    void ClearHoverTargets(bool clearSceneHovered = true);
+    void FocusCameraOnLoadedScene();
+    void UpdateAutoPlay(double deltaSeconds);
+    void SyncEdgeHighlight();
+    float GetLduToWorldScale() const;
+    int32_t GetMaxTimelineStep() const;
+    const BGMTrack* GetCurrentBGMTrack() const;
 
     NextEngine* engine_;
 
@@ -160,8 +174,8 @@ private:
     glm::vec3 cameraCenter_{0.0f};
     glm::vec3 realCameraCenter_{0.0f};
     mutable glm::vec3 cachedCameraPos_{0.0f};
-    glm::vec3 panForward_{0.0f, 0.0f, 1.0f};
-    glm::vec3 panLeft_{1.0f, 0.0f, 0.0f};
+    mutable glm::vec3 panForward_{0.0f, 0.0f, 1.0f};
+    mutable glm::vec3 panLeft_{1.0f, 0.0f, 0.0f};
     float cameraMultiplier_ = 0.0f;
 
     // Mouse
@@ -185,7 +199,7 @@ private:
     int32_t playSpeedIndex_ = 2;
     float autoPlayTimer_ = 0.0f;
     uint32_t currentBGM_ = 0;
-    std::vector<std::tuple<std::string, std::string>> bgmArray_;
+    std::vector<BGMTrack> bgmTracks_;
 
     // Disassemble
     struct DisassembledInfo
@@ -227,6 +241,4 @@ private:
     // UI
     std::unique_ptr<BrickPlayerUserInterface> userInterface_;
     BrickPlayer::Shadow::FShadowLibrary shadowLibrary_;
-
-    friend class BrickPlayerUserInterface;
 };

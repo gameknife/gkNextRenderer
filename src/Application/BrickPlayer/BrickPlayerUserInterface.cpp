@@ -41,7 +41,7 @@ void BrickPlayerUserInterface::ApplyStyle()
 
 void BrickPlayerUserInterface::Render()
 {
-    gameInstance_->mouseCapturedByUI_ = ImGui::GetIO().WantCaptureMouse;
+    gameInstance_->SetMouseCapturedByUI(ImGui::GetIO().WantCaptureMouse);
 
     RenderTitleBar();
 
