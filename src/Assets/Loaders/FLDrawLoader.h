@@ -37,6 +37,7 @@ namespace Assets
         static const std::unordered_map<uint32_t, int32_t>& GetLastLoadStepMap();
         static const std::unordered_map<uint32_t, std::string>& GetLastLoadPartFileMap();
         static int32_t GetLastLoadTotalSteps();
+        static bool GetLastLoadIsFreeBuild();
 
     private:
         static PartModelInfo BuildPartModel(

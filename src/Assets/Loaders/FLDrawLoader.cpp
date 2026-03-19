@@ -559,6 +559,7 @@ namespace Assets
     static std::unordered_map<uint32_t, int32_t> sLastLoadStepMap;
     static std::unordered_map<uint32_t, std::string> sLastLoadPartFileMap;
     static int32_t sLastLoadTotalSteps = 0;
+    static bool sLastLoadIsFreeBuild = false;
 
     const std::unordered_map<uint32_t, int32_t>& FLDrawLoader::GetLastLoadStepMap()
     {
@@ -573,6 +574,11 @@ namespace Assets
     int32_t FLDrawLoader::GetLastLoadTotalSteps()
     {
         return sLastLoadTotalSteps;
+    }
+
+    bool FLDrawLoader::GetLastLoadIsFreeBuild()
+    {
+        return sLastLoadIsFreeBuild;
     }
 
     PartModelInfo FLDrawLoader::BuildPartModel(
@@ -610,6 +616,8 @@ namespace Assets
         std::vector<Skeleton>& skeletons,
         const LDrawLoadOptions& options)
     {
+        sLastLoadIsFreeBuild = false;
+
         LDrawLoadOptions normalizedOptions = options;
         if (!std::isfinite(normalizedOptions.lduToWorldScale) || normalizedOptions.lduToWorldScale <= 0.0f)
         {
@@ -740,6 +748,13 @@ namespace Assets
                 // Skip "0 NOFILE" lines
                 if (trimmed == "0 NOFILE")
                     continue;
+
+                // Detect FreeBuild mode meta comment
+                if (trimmed.find("0 !BRICKPLAYER MODE FREEBUILD") == 0)
+                {
+                    sLastLoadIsFreeBuild = true;
+                    continue;
+                }
 
                 currentContent += line + "\n";
             }

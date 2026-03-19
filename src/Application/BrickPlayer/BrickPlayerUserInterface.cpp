@@ -51,7 +51,10 @@ void BrickPlayerUserInterface::Render()
         return;
     }
 
-    RenderTimeline();
+    if (gameInstance_->IsFreeBuildMode())
+        RenderFreeBuildToolbar();
+    else
+        RenderTimeline();
     gameInstance_->DrawSnapConfirmation();
     gameInstance_->DrawPhysicsDebug();
     gameInstance_->DrawSnapDebug();
@@ -311,6 +314,40 @@ void BrickPlayerUserInterface::RenderTimeline()
     ImGui::End();
 }
 
+void BrickPlayerUserInterface::RenderFreeBuildToolbar()
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    float panelHeight = 50.0f;
+    float panelY = viewport->Pos.y + viewport->Size.y - panelHeight;
+
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, panelY));
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, panelHeight));
+    ImGui::SetNextWindowBgAlpha(0.8f);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    if (ImGui::Begin("##FreeBuild", nullptr, flags))
+    {
+        ImGui::Text(ICON_FA_CUBES " FreeBuild");
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        if (ImGui::Button(ICON_FA_PLUS " Spawn Bricks (N)"))
+        {
+            gameInstance_->SpawnRandomBricks(6);
+        }
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        ImGui::Text("Available: %d", gameInstance_->CountAvailableBricks());
+    }
+    ImGui::End();
+}
+
 void BrickPlayerUserInterface::RenderWelcomeScreen()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -327,14 +364,20 @@ void BrickPlayerUserInterface::RenderWelcomeScreen()
     {
         ImGui::Text("BrickPlayer");
         ImGui::Separator();
-        ImGui::TextWrapped("Open an LDraw file (.ldr / .mpd) to begin.");
+        ImGui::TextWrapped("Open an LDraw file (.ldr / .mpd) to begin, or start FreeBuild mode.");
         ImGui::Spacing();
 
         float buttonWidth = 120.0f;
-        ImGui::SetCursorPosX((400.0f - buttonWidth) * 0.5f);
+        float totalWidth = buttonWidth * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetCursorPosX((400.0f - totalWidth) * 0.5f);
         if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open File", ImVec2(buttonWidth, 0)))
         {
             gameInstance_->OpenFileDialog();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_CUBES " FreeBuild", ImVec2(buttonWidth, 0)))
+        {
+            gameInstance_->StartFreeBuild();
         }
     }
     ImGui::End();

@@ -13,6 +13,7 @@ public:
 private:
     void RenderTitleBar();
     void RenderTimeline();
+    void RenderFreeBuildToolbar();
     void RenderWelcomeScreen();
 
     BrickPlayerGameInstance* gameInstance_;

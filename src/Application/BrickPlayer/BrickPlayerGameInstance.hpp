@@ -53,6 +53,12 @@ public:
     void ResetAll();
     bool HasSelection() const { return selectedInstanceId_ != UINT32_MAX; }
 
+    // FreeBuild
+    bool IsFreeBuildMode() const { return isFreeBuildMode_; }
+    void StartFreeBuild();
+    void SpawnRandomBricks(int count = 6);
+    int CountAvailableBricks();
+
     // Music
     void PlayNextBGM();
     bool IsBGMPaused() const;
@@ -232,6 +238,18 @@ private:
     bool hasFloorPlane_ = false;
     float floorPlaneY_ = 0.0f;
     float floorSurfaceY_ = 0.0f;
+
+    // FreeBuild
+    bool isFreeBuildMode_ = false;
+    struct InventoryTemplate
+    {
+        uint32_t sourceInstanceId;
+        uint32_t modelId;
+        std::array<uint32_t, 16> materials;
+        std::string partFile;
+    };
+    std::vector<InventoryTemplate> freeBuildInventory_;
+    void BuildFreeBuildInventory();
 
     // State
     bool sceneLoaded_ = false;

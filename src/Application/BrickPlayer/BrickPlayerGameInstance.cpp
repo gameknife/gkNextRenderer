@@ -335,11 +335,98 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     // Auto-enable per-part mode if no build steps defined
     perPartMode_ = (totalSteps_ <= 1);
 
+    // Detect FreeBuild mode
+    isFreeBuildMode_ = Assets::FLDrawLoader::GetLastLoadIsFreeBuild();
+
+    if (isFreeBuildMode_)
+    {
+        // Show all parts immediately — GetTotalSteps() accounts for perPartMode_
+        currentStep_ = std::max(0, GetTotalSteps() - 1);
+        BuildFreeBuildInventory();
+    }
+
     UpdateVisibilityForStep(currentStep_, false);
+
+    // In FreeBuild mode, make inventory bricks (step > 0) draggable;
+    // baseplates (step 0) stay assembled as static snap targets.
+    if (isFreeBuildMode_)
+    {
+        auto& scene = GetEngine().GetScene();
+        for (auto& node : scene.Nodes())
+        {
+            uint32_t instanceId = node->GetInstanceId();
+            if (node->GetName() == "ldraw_floor")
+                continue;
+            auto stepIt = nodeStepMap_.find(instanceId);
+            if (stepIt == nodeStepMap_.end())
+                continue;
+            // Step 0 = baseplate, keep assembled and non-draggable
+            if (stepIt->second <= 0)
+                continue;
+
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (!render || !render->IsDrawable())
+                continue;
+
+            uint32_t modelId = render->GetModelId();
+            const auto* model = scene.GetModel(modelId);
+            if (!model)
+                continue;
+
+            // Detach from any parent so physics operates in world space
+            glm::vec3 worldTranslation = node->WorldTranslation();
+            glm::quat worldRotation = node->WorldRotation();
+            glm::vec3 worldScale = node->WorldScale();
+            if (node->GetParent())
+            {
+                node->ClearParent();
+                node->SetTranslation(worldTranslation);
+                node->SetRotation(worldRotation);
+                node->Scale() = worldScale;
+                node->RecalcTransform(true);
+            }
+
+            // Create dynamic physics body
+            glm::vec3 aabbMin = model->GetLocalAABBMin();
+            glm::vec3 aabbMax = model->GetLocalAABBMax();
+            glm::vec3 fullExtent = (aabbMax - aabbMin) * glm::abs(worldScale);
+            fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
+            glm::vec3 halfExtent = fullExtent * 0.5f;
+            glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
+            glm::vec3 worldCenter = glm::vec3(node->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
+            glm::vec3 physicsOffset = aabbCenter;
+
+            // Remove existing physics body if any
+            auto existingPhys = node->GetComponent<Runtime::PhysicsComponent>();
+#if WITH_PHYSIC
+            auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+            if (existingPhys && physics)
+            {
+                NextBodyID oldBody = existingPhys->GetPhysicsBody();
+                if (!oldBody.IsInvalid())
+                    physics->RemoveBody(oldBody);
+            }
+
+            if (physics)
+            {
+                auto phys = std::make_shared<Runtime::PhysicsComponent>();
+                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+                auto bodyId = physics->CreateBoxBody(worldCenter, worldRotation, fullExtent, NextMotionType::Dynamic);
+                phys->BindPhysicsBody(bodyId);
+                phys->SetPhysicsOffset(physicsOffset);
+                node->AddComponent(phys);
+            }
+#endif
+
+            disassembledNodes_[instanceId] = {halfExtent};
+        }
+        scene.MarkDirty();
+    }
+
     sceneLoaded_ = true;
 
-    SPDLOG_INFO("BrickPlayer: loaded scene with {} steps, {} parts, per-part mode: {}",
-                totalSteps_, totalParts_, perPartMode_ ? "on" : "off");
+    SPDLOG_INFO("BrickPlayer: loaded scene with {} steps, {} parts, per-part mode: {}, freebuild: {}",
+                totalSteps_, totalParts_, perPartMode_ ? "on" : "off", isFreeBuildMode_ ? "on" : "off");
 }
 
 void BrickPlayerGameInstance::OnTick(double deltaSeconds)
@@ -347,7 +434,8 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
     if (!sceneLoaded_)
         return;
 
-    UpdateAutoPlay(deltaSeconds);
+    if (!isFreeBuildMode_)
+        UpdateAutoPlay(deltaSeconds);
 
     PerformRaycast();
 
@@ -357,6 +445,16 @@ void BrickPlayerGameInstance::OnTick(double deltaSeconds)
     }
 
     SyncEdgeHighlight();
+
+    // FreeBuild: auto-spawn when running low on loose bricks
+    if (isFreeBuildMode_ && !isDraggingPart_)
+    {
+        int available = CountAvailableBricks();
+        if (available < 6)
+        {
+            SpawnRandomBricks(12 - available);
+        }
+    }
 }
 
 void BrickPlayerGameInstance::OnInitUI()
@@ -404,10 +502,12 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
         switch (event.key.key)
         {
         case SDLK_LEFT:
-            StepBackward();
+            if (!isFreeBuildMode_)
+                StepBackward();
             break;
         case SDLK_RIGHT:
-            StepForward();
+            if (!isFreeBuildMode_)
+                StepForward();
             break;
         case SDLK_SPACE:
         case SDLK_D:
@@ -415,6 +515,10 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
             break;
         case SDLK_R:
             ResetAll();
+            break;
+        case SDLK_N:
+            if (isFreeBuildMode_)
+                SpawnRandomBricks(6);
             break;
         case SDLK_F1:
             TogglePhysicsDebug();
@@ -1799,6 +1903,14 @@ void BrickPlayerGameInstance::DisassembleSelected()
     if (disassembledNodes_.count(selectedInstanceId_))
         return;
 
+    // In FreeBuild mode, prevent disassembling baseplates (step 0)
+    if (isFreeBuildMode_)
+    {
+        auto stepIt = nodeStepMap_.find(selectedInstanceId_);
+        if (stepIt != nodeStepMap_.end() && stepIt->second <= 0)
+            return;
+    }
+
     auto* node = GetEngine().GetScene().GetNodeByInstanceId(selectedInstanceId_);
     if (!node)
         return;
@@ -1892,9 +2004,160 @@ void BrickPlayerGameInstance::ResetAll()
     nodePartOrder_.clear();
     nodePartFileMap_.clear();
 
+    // Clear FreeBuild state
+    freeBuildInventory_.clear();
+    isFreeBuildMode_ = false;
+
     // Re-request the same scene
     if (!currentScenePath_.empty())
         GetEngine().RequestLoadScene(currentScenePath_);
+}
+
+void BrickPlayerGameInstance::StartFreeBuild()
+{
+    currentScenePath_ = "assets/omr/freebuild.ldr";
+    GetEngine().RequestLoadScene(currentScenePath_);
+}
+
+void BrickPlayerGameInstance::BuildFreeBuildInventory()
+{
+    freeBuildInventory_.clear();
+    auto& scene = GetEngine().GetScene();
+
+    for (auto& node : scene.Nodes())
+    {
+        if (node->GetName() == "ldraw_floor")
+            continue;
+
+        uint32_t instanceId = node->GetInstanceId();
+
+        // Only include inventory bricks (step > 0), skip baseplates (step 0)
+        auto stepIt = nodeStepMap_.find(instanceId);
+        if (stepIt == nodeStepMap_.end() || stepIt->second <= 0)
+            continue;
+
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render || !render->IsDrawable())
+            continue;
+
+        auto partIt = nodePartFileMap_.find(instanceId);
+        if (partIt == nodePartFileMap_.end())
+            continue;
+
+        InventoryTemplate tmpl;
+        tmpl.sourceInstanceId = instanceId;
+        tmpl.modelId = render->GetModelId();
+        tmpl.materials = render->Materials();
+        tmpl.partFile = partIt->second;
+        freeBuildInventory_.push_back(tmpl);
+    }
+
+    SPDLOG_INFO("BrickPlayer: FreeBuild inventory built with {} templates", freeBuildInventory_.size());
+}
+
+void BrickPlayerGameInstance::SpawnRandomBricks(int count)
+{
+    if (freeBuildInventory_.empty())
+        return;
+
+    auto& scene = GetEngine().GetScene();
+
+    for (int i = 0; i < count; ++i)
+    {
+        // Pick random template
+        int idx = std::rand() % static_cast<int>(freeBuildInventory_.size());
+        const auto& tmpl = freeBuildInventory_[idx];
+
+        uint32_t newId = scene.GenerateInstanceId();
+
+        // Scatter outside the baseplate (-Z side), so bricks land on the table
+        // Baseplate is ~320 LDU half-size, place bricks at Z = -400 to -600 LDU
+        float lduScale = GetLduToWorldScale();
+        float x = ((std::rand() % 600) - 300) * lduScale; // ±300 LDU in X
+        float z = -(400.0f + (std::rand() % 200)) * lduScale; // -400 to -600 LDU in Z
+        // Drop from ~1m above floor, staggered per brick
+        float y = floorSurfaceY_ + 1.0f + static_cast<float>(i) * 0.12f
+                  + (std::rand() % 50) * 0.005f;
+
+        auto clone = Assets::Node::CreateNode(
+            "freebuild_" + std::to_string(newId),
+            glm::vec3(x, y, z),
+            glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+            glm::vec3(1.0f),
+            newId);
+
+        auto newRender = std::make_shared<Runtime::RenderComponent>();
+        newRender->SetModelId(tmpl.modelId);
+        newRender->SetMaterial(tmpl.materials);
+        newRender->SetVisible(true);
+        newRender->SetRayCastVisible(true);
+        clone->AddComponent(newRender);
+
+        scene.AddNode(clone);
+
+        // Register in tracking maps (step 1 = inventory, not baseplate)
+        nodeStepMap_[newId] = 1;
+        nodePartFileMap_[newId] = tmpl.partFile;
+
+        // Create dynamic physics body
+        const auto* model = scene.GetModel(tmpl.modelId);
+        if (model)
+        {
+            glm::vec3 aabbMin = model->GetLocalAABBMin();
+            glm::vec3 aabbMax = model->GetLocalAABBMax();
+            glm::vec3 fullExtent = aabbMax - aabbMin;
+            fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
+            glm::vec3 halfExtent = fullExtent * 0.5f;
+            glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
+            glm::vec3 worldCenter = glm::vec3(clone->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
+
+#if WITH_PHYSIC
+            auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+            if (physics)
+            {
+                auto phys = std::make_shared<Runtime::PhysicsComponent>();
+                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+                auto bodyId = physics->CreateBoxBody(worldCenter, glm::quat(1, 0, 0, 0), fullExtent, NextMotionType::Dynamic);
+                phys->BindPhysicsBody(bodyId);
+                phys->SetPhysicsOffset(aabbCenter);
+                clone->AddComponent(phys);
+            }
+#endif
+
+            disassembledNodes_[newId] = {halfExtent};
+        }
+
+        // Capture assembly state for snap system
+        OriginalAssemblyState state;
+        state.parentInstanceId = UINT32_MAX;
+        state.localTranslation = clone->Translation();
+        state.localRotation = clone->Rotation();
+        state.localScale = clone->Scale();
+        state.worldTranslation = clone->WorldTranslation();
+        state.worldRotation = clone->WorldRotation();
+        state.worldScale = clone->WorldScale();
+        if (model)
+        {
+            state.worldAabbMin = model->GetLocalAABBMin();
+            state.worldAabbMax = model->GetLocalAABBMax();
+        }
+        originalAssemblyStates_[newId] = state;
+    }
+
+    scene.MarkDirty();
+    SPDLOG_INFO("BrickPlayer: spawned {} random bricks", count);
+}
+
+int BrickPlayerGameInstance::CountAvailableBricks()
+{
+    int count = 0;
+    for (const auto& [id, info] : disassembledNodes_)
+    {
+        auto* node = GetEngine().GetScene().GetNodeByInstanceId(id);
+        if (node && node->GetName() != "ldraw_floor")
+            count++;
+    }
+    return count;
 }
 
 void BrickPlayerGameInstance::CreateFloorPhysicsBody()
