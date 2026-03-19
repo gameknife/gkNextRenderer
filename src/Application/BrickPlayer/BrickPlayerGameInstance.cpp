@@ -913,8 +913,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     const DragSnapCandidate previousSnapCandidate = activeSnapCandidate_;
 
     DragSnapCandidate snapCandidate;
-    if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate)
-        && !ClampDraggedBodyPositionAboveFloor(node, snapCandidate.desiredRotation, snapCandidate.desiredBodyPosition))
+    if (TryBuildSnapCandidate(node, physComp, freeBodyPosition, snapCandidate))
     {
         activeSnapCandidate_ = snapCandidate;
         const bool snapChanged = !previousSnapCandidate.valid
@@ -1091,7 +1090,22 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
                     const glm::quat desiredRotation = glm::normalize(twist * baseRotation);
                     const glm::vec3 desiredTranslation = targetConnector.worldPosition - desiredRotation * draggedConnector.localPosition;
                     const glm::vec3 desiredBodyPosition = desiredTranslation + desiredRotation * scaledOffset;
-                    const float distanceToSnap = glm::distance(freeBodyPosition, desiredBodyPosition);
+
+                    // When the locked connector differs from the tested one, freeBodyPosition
+                    // was anchored to the locked connector's surface contact.  Re-anchor it to
+                    // the tested connector so the distance comparison reflects the actual
+                    // proximity (e.g. picking up a brick by its top stud but snapping via
+                    // bottom anti-studs would otherwise produce a full-brick-height offset).
+                    glm::vec3 adjustedFreeBodyPosition = freeBodyPosition;
+                    if (hasLockedConnector && !isLockedConnector)
+                    {
+                        const glm::vec3 connectorDelta =
+                            currentDragRotation * (draggedConnector.localPosition
+                                                   - draggedConnectors[lockedDraggedConnectorIndex_].localPosition);
+                        adjustedFreeBodyPosition -= connectorDelta;
+                    }
+
+                    const float distanceToSnap = glm::distance(adjustedFreeBodyPosition, desiredBodyPosition);
                     if (distanceToSnap > snapThreshold)
                     {
                         continue;
@@ -1443,7 +1457,7 @@ float BrickPlayerGameInstance::GetSnapDistanceThreshold(uint32_t draggedId) cons
         sizeBasedThreshold = std::max(halfExtent.x, std::max(halfExtent.y, halfExtent.z)) * 0.5f;
     }
 
-    return std::max(std::max(scaleMetrics.studPitch * 1.25f, scaleMetrics.plateHeight * 2.0f), sizeBasedThreshold);
+    return std::max(std::max(scaleMetrics.studPitch * 1.25f, scaleMetrics.plateHeight * 8.0f), sizeBasedThreshold);
 }
 
 void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
