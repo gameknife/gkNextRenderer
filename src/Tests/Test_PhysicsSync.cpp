@@ -99,3 +99,27 @@ TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "
 
     physics->RemoveBody(bodyId);
 }
+
+TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic Body", "[Integration][Physics]") {
+    auto physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    auto floorBodyId = physics->CreateBoxBody(glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(8.0f, 1.0f, 8.0f), NextMotionType::Static);
+    auto boxBodyId = physics->CreateBoxBody(glm::vec3(0.0f, 1.5f, 0.0f), glm::quat(1, 0, 0, 0), glm::vec3(0.4f, 0.4f, 0.4f), NextMotionType::Dynamic);
+
+    Simulate(180);
+
+    auto* restingBody = physics->GetBody(boxBodyId);
+    REQUIRE(restingBody != nullptr);
+    const float restingX = restingBody->position.x;
+
+    physics->SetBodyVelocity(boxBodyId, glm::vec3(1.5f, 0.0f, 0.0f), glm::vec3(0.0f));
+    Simulate(30);
+
+    auto* movedBody = physics->GetBody(boxBodyId);
+    REQUIRE(movedBody != nullptr);
+    CHECK(movedBody->position.x > restingX + 0.05f);
+
+    physics->RemoveBody(boxBodyId);
+    physics->RemoveBody(floorBodyId);
+}
