@@ -130,6 +130,8 @@ namespace NextCVar
                      "Debug draw lighting");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None,
                      "Debug draw bounding box");
+        GK_CVAR_BOOL("show.debugPhysicsBodies", showFlags, DebugDraw_PhysicsBodies, false, ECVarFlags::None,
+                     "Debug draw physics bodies");
         GK_CVAR_BOOL("show.visualDebug", showFlags, ShowVisualDebug, false, ECVarFlags::None,
                      "Show visual debug");
         GK_CVAR_BOOL("show.edge", showFlags, ShowEdge, false, ECVarFlags::None,

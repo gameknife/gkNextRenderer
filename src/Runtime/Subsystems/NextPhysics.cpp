@@ -29,6 +29,7 @@
 #include <glm/ext.hpp>
 
 #include "Runtime/Engine.hpp"
+#include "Runtime/Utilities/NextEngineHelper.h"
 #include "Assets/Core/Model.hpp"
 
 #if WITH_PHYSIC
@@ -41,6 +42,90 @@ using namespace JPH;
 
 // If you want your code to compile using single or double precision write 0.0_r to get a Real value that compiles to double or float depending if JPH_DOUBLE_PRECISION is set or not.
 using namespace JPH::literals;
+
+namespace
+{
+	constexpr float kSleepVelocityThreshold = 0.01f;
+	constexpr float kTimeBeforeSleep = 1.25f;
+	constexpr float kDynamicBoxFriction = 0.22f;
+	constexpr float kDynamicBoxGravityFactor = 1.15f;
+	constexpr float kDynamicBoxLinearDamping = 0.025f;
+	constexpr float kDynamicBoxAngularDamping = 0.02f;
+	constexpr float kDynamicBoxInertiaMultiplier = 1.0f;
+
+	float ComputeBoxConvexRadius(const Vec3& halfExtent)
+	{
+		const float minHE = std::min({halfExtent.GetX(), halfExtent.GetY(), halfExtent.GetZ()});
+		return std::min(cDefaultConvexRadius, std::max(0.00025f, minHE * 0.1f));
+	}
+
+	void ConfigureDynamicBoxSettings(BodyCreationSettings& settings)
+	{
+		settings.mFriction = kDynamicBoxFriction;
+		settings.mGravityFactor = kDynamicBoxGravityFactor;
+		settings.mLinearDamping = kDynamicBoxLinearDamping;
+		settings.mAngularDamping = kDynamicBoxAngularDamping;
+		settings.mInertiaMultiplier = kDynamicBoxInertiaMultiplier;
+		settings.mMotionQuality = EMotionQuality::LinearCast;
+	}
+
+	void WakeDynamicBody(BodyInterface& bodyInterface, const BodyID& bodyId)
+	{
+		if (bodyId.IsInvalid() || bodyInterface.GetMotionType(bodyId) == EMotionType::Static)
+		{
+			return;
+		}
+
+		bodyInterface.ActivateBody(bodyId);
+		bodyInterface.ResetSleepTimer(bodyId);
+	}
+
+	glm::vec3 ToGlmVec3(const Vec3& value)
+	{
+		return glm::vec3(value.GetX(), value.GetY(), value.GetZ());
+	}
+
+	glm::mat4 ToGlmMat4(const Mat44& value)
+	{
+		const Vec4 col0 = value.GetColumn4(0);
+		const Vec4 col1 = value.GetColumn4(1);
+		const Vec4 col2 = value.GetColumn4(2);
+		const Vec4 col3 = value.GetColumn4(3);
+		return glm::mat4(
+			glm::vec4(col0.GetX(), col0.GetY(), col0.GetZ(), col0.GetW()),
+			glm::vec4(col1.GetX(), col1.GetY(), col1.GetZ(), col1.GetW()),
+			glm::vec4(col2.GetX(), col2.GetY(), col2.GetZ(), col2.GetW()),
+			glm::vec4(col3.GetX(), col3.GetY(), col3.GetZ(), col3.GetW()));
+	}
+
+	glm::vec4 SelectDebugBodyColor(BodyInterface& bodyInterface, const BodyID& bodyId)
+	{
+		if (!bodyInterface.IsAdded(bodyId))
+		{
+			return glm::vec4(1.0f, 0.0f, 1.0f, 1.0f);
+		}
+
+		const ObjectLayer objectLayer = bodyInterface.GetObjectLayer(bodyId);
+		if (objectLayer == NextLayers::HIDDEN)
+		{
+			return glm::vec4(1.0f, 0.2f, 0.2f, 1.0f);
+		}
+
+		switch (bodyInterface.GetMotionType(bodyId))
+		{
+		case EMotionType::Static:
+			return glm::vec4(0.35f, 0.65f, 1.0f, 1.0f);
+		case EMotionType::Kinematic:
+			return glm::vec4(0.2f, 0.95f, 0.95f, 1.0f);
+		case EMotionType::Dynamic:
+			return bodyInterface.IsActive(bodyId)
+				? glm::vec4(0.25f, 1.0f, 0.35f, 1.0f)
+				: glm::vec4(1.0f, 0.75f, 0.2f, 1.0f);
+		default:
+			return glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
+		}
+	}
+}
 
 // Callback for traces, connect this to your own trace function if you have one
 static void TraceImpl(const char *inFMT, ...)
@@ -241,10 +326,10 @@ struct FNextPhysicsContext
 		
 		physicsSystem.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broadPhaseLayerInterface, objectVsBroadphaseLayerFilter, objectVsObjectLayerFilter);
 
-		// PhysicsSettings settings;
-		// settings.mPointVelocitySleepThreshold = 0.01f;
-		// settings.mTimeBeforeSleep = 0.1f;
-		// physics_system.SetPhysicsSettings(settings);
+		PhysicsSettings settings = physicsSystem.GetPhysicsSettings();
+		settings.mPointVelocitySleepThreshold = kSleepVelocityThreshold;
+		settings.mTimeBeforeSleep = kTimeBeforeSleep;
+		physicsSystem.SetPhysicsSettings(settings);
 		
 		
 		physicsSystem.SetBodyActivationListener(&bodyActivationListener);
@@ -454,17 +539,22 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, Next
 	BodyID bodyId(-1);
 
 	Vec3 halfExtent(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f);
-	float minHE = std::min({halfExtent.GetX(), halfExtent.GetY(), halfExtent.GetZ()});
-	float convexRadius = std::min(cDefaultConvexRadius, std::max(0.001f, minHE * 0.5f));
+	float convexRadius = ComputeBoxConvexRadius(halfExtent);
 
 	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
 	BodyCreationSettings floorSettings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, NextLayers::MOVING);
 	//floorSettings.mRestitution = 0.05f;
-	floorSettings.mFriction = 0.5f;
-    //floorSettings.mInertiaMultiplier = 2.0f;
-    floorSettings.mMotionQuality = EMotionQuality::LinearCast;
+	if (motionType == EMotionType::Dynamic)
+	{
+		ConfigureDynamicBoxSettings(floorSettings);
+	}
+	else
+	{
+		floorSettings.mFriction = 0.5f;
+	}
 	// Create the actual rigid body
 	bodyId = bodyInterface.CreateAndAddBody(floorSettings, EActivation::Activate);
+	WakeDynamicBody(bodyInterface, bodyId);
 
 	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
 	return AddBodyInternal(body, true);
@@ -480,18 +570,20 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, gl
 	BodyID bodyId(-1);
 
 	Vec3 halfExtent(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f);
-	float minHE = std::min({halfExtent.GetX(), halfExtent.GetY(), halfExtent.GetZ()});
-	float convexRadius = std::min(cDefaultConvexRadius, std::max(0.001f, minHE * 0.5f));
+	float convexRadius = ComputeBoxConvexRadius(halfExtent);
 
 	Quat joltRot(rotation.x, rotation.y, rotation.z, rotation.w);
 	BodyCreationSettings settings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), joltRot, motionType, NextLayers::MOVING);
-	settings.mFriction = 0.32f;
-	settings.mGravityFactor = 1.35f;
-	settings.mLinearDamping = 0.02f;
-	settings.mAngularDamping = 0.01f;
-	settings.mInertiaMultiplier = 0.45f;
-    settings.mMotionQuality = EMotionQuality::LinearCast;
+	if (motionType == EMotionType::Dynamic)
+	{
+		ConfigureDynamicBoxSettings(settings);
+	}
+	else
+	{
+		settings.mFriction = 0.5f;
+	}
 	bodyId = bodyInterface.CreateAndAddBody(settings, EActivation::Activate);
+	WakeDynamicBody(bodyInterface, bodyId);
 
 	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
 	return AddBodyInternal(body, true);
@@ -621,6 +713,7 @@ void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
     {
         bodyInterface.SetLinearAndAngularVelocity(bodyID, Vec3::sZero(), Vec3::sZero());
     }
+	WakeDynamicBody(bodyInterface, bodyID);
 
     if (bodies_.contains(bodyID))
     {
@@ -657,6 +750,7 @@ void NextPhysics::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelo
         bodyID,
         Vec3(linearVelocity.x, linearVelocity.y, linearVelocity.z),
         Vec3(angularVelocity.x, angularVelocity.y, angularVelocity.z));
+	WakeDynamicBody(bodyInterface, bodyID);
 
     if (bodies_.contains(bodyID))
     {
@@ -708,6 +802,49 @@ void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
     {
         bodyInterface.SetObjectLayer(bodyID, NextLayers::HIDDEN);
     }
+#endif
+}
+
+void NextPhysics::DrawDebugBodies() const
+{
+#if WITH_PHYSIC
+	if (!context_)
+	{
+		return;
+	}
+
+	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+	for (const auto& [bodyId, bodyInfo] : bodies_)
+	{
+		(void)bodyInfo;
+
+		if (bodyId.IsInvalid())
+		{
+			continue;
+		}
+
+		if (!bodyInterface.IsAdded(bodyId))
+		{
+			continue;
+		}
+
+		const TransformedShape transformedShape = bodyInterface.GetTransformedShape(bodyId);
+		const AABox worldBounds = transformedShape.GetWorldSpaceBounds();
+		if (!worldBounds.IsValid() || transformedShape.mShape == nullptr)
+		{
+			continue;
+		}
+
+		const glm::vec4 color = SelectDebugBodyColor(bodyInterface, bodyId);
+		const AABox localBounds = transformedShape.mShape->GetLocalBounds();
+		const glm::mat4 worldTransform = ToGlmMat4(transformedShape.GetWorldTransform().ToMat44());
+		NextEngineHelper::DrawAuxOBB(worldTransform, ToGlmVec3(localBounds.mMin), ToGlmVec3(localBounds.mMax), color,
+		                             1.75f);
+
+		const glm::vec3 localCenter = ToGlmVec3(localBounds.GetCenter());
+		const glm::vec3 center = glm::vec3(worldTransform * glm::vec4(localCenter, 1.0f));
+		NextEngineHelper::DrawAuxPoint(center, color, 2.0f);
+	}
 #endif
 }
 

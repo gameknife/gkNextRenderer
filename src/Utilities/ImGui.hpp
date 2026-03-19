@@ -20,6 +20,7 @@ namespace Utilities
             ImGui::Separator();
             DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);
             DrawShowFlagItem("Bounding Box", showFlags.DebugDraw_BoundingBox);
+            DrawShowFlagItem("Physics Bodies", showFlags.DebugDraw_PhysicsBodies);
             DrawShowFlagItem("Visual Debug", showFlags.ShowVisualDebug);
             DrawShowFlagItem("Edge", showFlags.ShowEdge);
             DrawShowFlagItem("Skeleton", showFlags.ShowDebugSkeleton);

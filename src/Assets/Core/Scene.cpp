@@ -564,6 +564,16 @@ namespace Assets
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
         nodes_.push_back(node);
+        EnsureNodePhysicsBody(node.get());
+    }
+
+    void Scene::EnsureNodePhysicsBody(Node* node)
+    {
+        if (!node)
+        {
+            return;
+        }
+
         if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
@@ -573,36 +583,47 @@ namespace Assets
                 auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
-                if (mobility != Node::ENodeMobility::Dynamic)
+                if (mobility == Node::ENodeMobility::Dynamic)
                 {
-                    NextMotionType motionType =
-                        mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
-                    NextObjectLayer layer =
-                        mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+                    return;
+                }
 
-                    bool validShape = false;
+                if (phys)
+                {
+                    const NextBodyID oldBodyId = phys->GetPhysicsBody();
+                    if (!oldBodyId.IsInvalid())
+                    {
+                        physicsEngine->RemoveBody(oldBodyId);
+                    }
+                }
+
+                NextMotionType motionType =
+                    mobility == Node::ENodeMobility::Static ? NextMotionType::Static : NextMotionType::Kinematic;
+                NextObjectLayer layer =
+                    mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
+
+                bool validShape = false;
 #if WITH_PHYSIC
-                    if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
-                        cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
-                        validShape = true;
+                if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
+                    cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
+                    validShape = true;
 #endif
 
-                    if (validShape)
+                if (validShape)
+                {
+                    NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()],
+                                                                  node->WorldTranslation(), node->WorldRotation(),
+                                                                  node->WorldScale(), motionType, layer);
+
+                    if (!phys)
                     {
-                        NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()],
-                                                                      node->WorldTranslation(), node->WorldRotation(),
-                                                                      node->WorldScale(), motionType, layer);
-
-                        if (!phys)
-                        {
-                            phys = std::make_shared<Runtime::PhysicsComponent>();
-                            phys->SetMobility(mobility);
-                            node->AddComponent(phys);
-                        }
-                        phys->BindPhysicsBody(id);
-
-                        physicsEngine->SetBodyActive(id, render->GetVisible());
+                        phys = std::make_shared<Runtime::PhysicsComponent>();
+                        phys->SetMobility(mobility);
+                        node->AddComponent(phys);
                     }
+                    phys->BindPhysicsBody(id);
+
+                    physicsEngine->SetBodyActive(id, render->GetVisible());
                 }
             }
         }
@@ -922,6 +943,14 @@ namespace Assets
                 }
 
                 NextEngineHelper::DrawAuxBox(worldAABBMin, worldAABBMax, glm::vec4(0.2f, 0.8f, 1.0f, 1.0f), 1.5f);
+            }
+        }
+
+        if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_PhysicsBodies)
+        {
+            if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                physicsEngine->DrawDebugBodies();
             }
         }
 

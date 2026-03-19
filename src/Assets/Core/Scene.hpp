@@ -139,6 +139,7 @@ namespace Assets
         void MarkEnvDirty();
 
         void AddNode(std::shared_ptr<Node> node);
+        void EnsureNodePhysicsBody(Node* node);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
         uint32_t GenerateInstanceId() const;

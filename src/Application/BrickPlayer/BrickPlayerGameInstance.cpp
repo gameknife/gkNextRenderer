@@ -113,6 +113,40 @@ namespace
         outPoint = rayOrigin + rayDir * t;
         return true;
     }
+
+    uint32_t HashLoosePartSeed(uint32_t value)
+    {
+        value ^= value >> 16;
+        value *= 0x7feb352dU;
+        value ^= value >> 15;
+        value *= 0x846ca68bU;
+        value ^= value >> 16;
+        return value;
+    }
+
+    float HashToSignedUnit(uint32_t value)
+    {
+        const float normalized = static_cast<float>(HashLoosePartSeed(value) & 0xffffU) / 65535.0f;
+        return normalized * 2.0f - 1.0f;
+    }
+
+    void WakeLoosePartBody(NextPhysics* physics, const NextBodyID& bodyId, uint32_t instanceId)
+    {
+        if (!physics || bodyId.IsInvalid())
+        {
+            return;
+        }
+
+        const glm::vec3 linearVelocity(
+            HashToSignedUnit(instanceId ^ 0x13572468U) * 0.08f,
+            -0.18f,
+            HashToSignedUnit(instanceId ^ 0x24681357U) * 0.08f);
+        const glm::vec3 angularVelocity(
+            HashToSignedUnit(instanceId ^ 0x89abcdefU) * 1.2f,
+            HashToSignedUnit(instanceId ^ 0xfedcba98U) * 2.0f,
+            HashToSignedUnit(instanceId ^ 0x31415926U) * 1.2f);
+        physics->SetBodyVelocity(bodyId, linearVelocity, angularVelocity);
+    }
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
@@ -415,6 +449,7 @@ void BrickPlayerGameInstance::OnSceneLoaded()
                 phys->BindPhysicsBody(bodyId);
                 phys->SetPhysicsOffset(physicsOffset);
                 node->AddComponent(phys);
+                WakeLoosePartBody(physics, bodyId, instanceId);
             }
 #endif
 
@@ -525,6 +560,9 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
             break;
         case SDLK_F2:
             ToggleSnapDebug();
+            break;
+        case SDLK_F3:
+            ToggleGlobalPhysicsBodies();
             break;
         default:
             break;
@@ -1546,6 +1584,7 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
     }
 
     node->RecalcTransform(true);
+    GetEngine().GetScene().EnsureNodePhysicsBody(node.get());
     SetDraggedPartRayCastVisible(true);
 
     disassembledNodes_.erase(draggedInstanceId_);
@@ -1860,6 +1899,7 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
     auto& nodes = GetEngine().GetScene().Nodes();
     bool changed = false;
     int32_t revealedCount = 0;
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
 
     const auto& lookupMap = perPartMode_ ? nodePartOrder_ : nodeStepMap_;
 
@@ -1880,14 +1920,31 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
         {
             bool shouldBeVisible = it->second <= step;
             const bool wasVisible = render->GetVisible();
+            auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (wasVisible != shouldBeVisible)
             {
                 render->SetVisible(shouldBeVisible);
                 render->SetRayCastVisible(shouldBeVisible);
+                if (physComp && physics)
+                {
+                    const NextBodyID bodyId = physComp->GetPhysicsBody();
+                    if (!bodyId.IsInvalid())
+                    {
+                        physics->SetBodyActive(bodyId, shouldBeVisible);
+                    }
+                }
                 changed = true;
                 if (playPlacementSound && shouldBeVisible)
                 {
                     ++revealedCount;
+                }
+            }
+            else if (physComp && physics)
+            {
+                const NextBodyID bodyId = physComp->GetPhysicsBody();
+                if (!bodyId.IsInvalid())
+                {
+                    physics->SetBodyActive(bodyId, shouldBeVisible);
                 }
             }
         }
@@ -2107,12 +2164,6 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         newRender->SetRayCastVisible(true);
         clone->AddComponent(newRender);
 
-        scene.AddNode(clone);
-
-        // Register in tracking maps (step 1 = inventory, not baseplate)
-        nodeStepMap_[newId] = 1;
-        nodePartFileMap_[newId] = tmpl.partFile;
-
         // Create dynamic physics body
         const auto* model = scene.GetModel(tmpl.modelId);
         if (model)
@@ -2135,11 +2186,18 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
                 phys->BindPhysicsBody(bodyId);
                 phys->SetPhysicsOffset(aabbCenter);
                 clone->AddComponent(phys);
+                WakeLoosePartBody(physics, bodyId, newId);
             }
 #endif
 
             disassembledNodes_[newId] = {halfExtent};
         }
+
+        scene.AddNode(clone);
+
+        // Register in tracking maps (step 1 = inventory, not baseplate)
+        nodeStepMap_[newId] = 1;
+        nodePartFileMap_[newId] = tmpl.partFile;
 
         // Capture assembly state for snap system
         OriginalAssemblyState state;

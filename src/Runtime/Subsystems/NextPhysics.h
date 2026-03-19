@@ -67,6 +67,7 @@ public:
     void RemoveBody(NextBodyID bodyID);
 
     void SetBodyActive(NextBodyID bodyID, bool active);
+    void DrawDebugBodies() const;
 
     void OnSceneStarted();
     void OnSceneDestroyed();

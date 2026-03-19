@@ -68,6 +68,11 @@ public:
     // Physics debug
     bool IsShowPhysicsDebug() const { return showPhysicsDebug_; }
     void TogglePhysicsDebug() { showPhysicsDebug_ = !showPhysicsDebug_; }
+    bool IsShowGlobalPhysicsBodies() const { return engine_->GetShowFlags().DebugDraw_PhysicsBodies; }
+    void ToggleGlobalPhysicsBodies()
+    {
+        engine_->GetShowFlags().DebugDraw_PhysicsBodies = !engine_->GetShowFlags().DebugDraw_PhysicsBodies;
+    }
     void DrawPhysicsDebug();
     void DrawSnapConfirmation() const;
     bool IsShowSnapDebug() const { return showSnapDebug_; }

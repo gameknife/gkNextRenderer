@@ -183,6 +183,19 @@ void BrickPlayerUserInterface::RenderTitleBar()
             ImGui::SetTooltip("Physics Debug (F1)");
 
         ImGui::SameLine();
+        bool globalPhysicsOn = gameInstance_->IsShowGlobalPhysicsBodies();
+        if (globalPhysicsOn)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.1f, 0.1f, 0.75f));
+        if (ImGui::Button(ICON_FA_CUBES_STACKED, ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->ToggleGlobalPhysicsBodies();
+        }
+        if (globalPhysicsOn)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Engine Physics Bodies Debug (F3)");
+
+        ImGui::SameLine();
         bool snapDebugOn = gameInstance_->IsShowSnapDebug();
         if (snapDebugOn)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.45f, 0.0f, 0.75f));
