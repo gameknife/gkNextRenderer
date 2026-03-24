@@ -564,6 +564,13 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
         case SDLK_F3:
             ToggleGlobalPhysicsBodies();
             break;
+        case SDLK_F4:
+            ToggleDragPlaneMode();
+            SwitchDragPlaneWhileDragging();
+            break;
+        case SDLK_Q:
+            RotateDraggedPart90();
+            break;
         default:
             break;
         }
@@ -780,17 +787,36 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
         return false;
     }
 
-    const glm::vec3 viewNormal =
-        BrickPlayer::Snap::NormalizeOrDefault(realCameraCenter_ - cachedCameraPos_, glm::vec3(0.0f, 0.0f, 1.0f));
-
     draggedInstanceId_ = hoveredDisassembledInstanceId_;
     dragPlanePoint_ = hoveredHitPoint_;
-    dragPlaneNormal_ = viewNormal;
-    dragBodyOffset_ = body->position - hoveredHitPoint_;
+    if (useHorizontalDragPlane_)
+    {
+        dragPlaneNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    else
+    {
+        dragPlaneNormal_ = BrickPlayer::Snap::NormalizeOrDefault(
+            realCameraCenter_ - cachedCameraPos_, glm::vec3(0.0f, 0.0f, 1.0f));
+    }
     dragReleaseLinearVelocity_ = glm::vec3(0.0f);
     lastDraggedBodyPosition_ = body->position;
     hasDraggedBodyPositionSample_ = true;
     lockedDraggedConnectorIndex_ = FindDraggedConnectorLock(draggedInstanceId_, hoveredHitPoint_, hoveredHitNormal_);
+
+    // Compute dragBodyOffset_ using the same CPU ray-plane intersection that
+    // UpdateDraggedPart uses, so the first drag frame produces no positional jump.
+    glm::vec3 rayOrigin{0.0f};
+    glm::vec3 rayDir{0.0f};
+    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    glm::vec3 initialPlaneHit{0.0f};
+    if (IntersectDragPlane(rayOrigin, rayDir, initialPlaneHit))
+    {
+        dragBodyOffset_ = body->position - initialPlaneHit;
+    }
+    else
+    {
+        dragBodyOffset_ = body->position - hoveredHitPoint_;
+    }
     isDraggingPart_ = true;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
     activeSnapCandidate_ = {};
@@ -860,6 +886,99 @@ void BrickPlayerGameInstance::StopDraggingPart()
     ResetDragState();
 }
 
+void BrickPlayerGameInstance::SwitchDragPlaneWhileDragging()
+{
+#if WITH_PHYSIC
+    if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    if (!node || !physics)
+    {
+        return;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (!physComp)
+    {
+        return;
+    }
+
+    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    if (!body)
+    {
+        return;
+    }
+
+    // Switch the plane normal
+    if (useHorizontalDragPlane_)
+    {
+        dragPlaneNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    else
+    {
+        dragPlaneNormal_ = BrickPlayer::Snap::NormalizeOrDefault(
+            realCameraCenter_ - cachedCameraPos_, glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+
+    // Reposition the plane to pass through the current body position so there's no jump
+    dragPlanePoint_ = body->position;
+
+    // Recompute dragBodyOffset_ with the new plane
+    glm::vec3 rayOrigin{0.0f};
+    glm::vec3 rayDir{0.0f};
+    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    glm::vec3 planeHit{0.0f};
+    if (IntersectDragPlane(rayOrigin, rayDir, planeHit))
+    {
+        dragBodyOffset_ = body->position - planeHit;
+    }
+#endif
+}
+
+void BrickPlayerGameInstance::RotateDraggedPart90()
+{
+#if WITH_PHYSIC
+    if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
+    {
+        return;
+    }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    if (!node || !physics)
+    {
+        return;
+    }
+
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+    if (!physComp)
+    {
+        return;
+    }
+
+    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    if (!body)
+    {
+        return;
+    }
+
+    // Rotate 90 degrees around world Y axis
+    const glm::quat rotation90 = glm::angleAxis(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::quat newRotation = glm::normalize(rotation90 * body->rotation);
+
+    // Apply rotation, keeping the body at the same position
+    physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, newRotation, true);
+    ApplyPhysicsPoseToNode(node, body->position, newRotation);
+
+    // Clear snap state so it re-evaluates with the new rotation
+    activeSnapCandidate_ = {};
+#endif
+}
+
 void BrickPlayerGameInstance::UpdateDraggedPart()
 {
 #if WITH_PHYSIC
@@ -902,12 +1021,9 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
 
     const glm::vec3 scaledOffset = physComp->GetPhysicsOffset() * node->Scale();
     const BrickPlayer::Shadow::FSnapConnector* lockedDraggedConnector = GetLockedDraggedConnector(draggedInstanceId_);
-    glm::vec3 dragAnchorToBodyOffset = dragBodyOffset_;
-    if (lockedDraggedConnector)
-    {
-        dragAnchorToBodyOffset = -body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
-    }
-    glm::vec3 freeBodyPosition = planeHitPoint + dragAnchorToBodyOffset;
+    // Always use dragBodyOffset_ for free dragging so the part follows the mouse
+    // without any jump. Connector-based offsets are only used in the snap case below.
+    glm::vec3 freeBodyPosition = planeHitPoint + dragBodyOffset_;
 
     if (hoveredAssemblyInstanceId_ != UINT32_MAX)
     {
@@ -936,10 +1052,10 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         if (GetDraggedBodyMinimumY(node, body->rotation, minBodyY) && freeBodyPosition.y < minBodyY)
         {
             glm::vec3 floorAnchorPoint{0.0f};
-            const float anchorPlaneY = minBodyY - dragAnchorToBodyOffset.y;
+            const float anchorPlaneY = minBodyY - dragBodyOffset_.y;
             if (IntersectHorizontalPlane(rayOrigin, rayDir, anchorPlaneY, floorAnchorPoint))
             {
-                freeBodyPosition = floorAnchorPoint + dragAnchorToBodyOffset;
+                freeBodyPosition = floorAnchorPoint + dragBodyOffset_;
             }
             freeBodyPosition.y = minBodyY;
         }
@@ -1149,11 +1265,6 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
                         continue;
                     }
 
-                    const int connectivityScore = ScoreShadowCandidate(
-                        draggedInstanceId_,
-                        desiredRotation,
-                        desiredTranslation,
-                        targetConnector);
                     const int hoverScore = static_cast<int>(std::round(
                         (hoverFilter.hoverDistanceLimit - hoverFilter.hoverDistance) * 100.0f));
                     const int depthScore = static_cast<int>(std::round(
@@ -1162,17 +1273,17 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
                         glm::dot(targetConnector.worldAxis, hoverFilter.hoverNormal) * 1000.0f));
                     const int lockScore = isLockedConnector ? 5000 : 0;
                     const int rotationScore =
-                        static_cast<int>(std::round(glm::abs(glm::dot(desiredRotation, currentDragRotation)) * 1200.0f));
+                        static_cast<int>(std::round(glm::abs(glm::dot(desiredRotation, currentDragRotation)) * 4000.0f));
                     const bool matchesActiveCandidate = activeSnapCandidate_.valid
                         && !activeSnapCandidate_.restoreOriginalHierarchy
                         && activeSnapCandidate_.targetInstanceId == targetConnector.ownerInstanceId
                         && activeSnapCandidate_.draggedConnectorIndex == static_cast<int32_t>(draggedConnectorIndex)
                         && activeSnapCandidate_.targetConnectorIndex == static_cast<int32_t>(targetConnectorIndex);
-                    const int stickyScore = matchesActiveCandidate ? 6000 : 0;
+                    const int stickyScore = matchesActiveCandidate ? 2000 : 0;
                     const int score =
-                        connectivityScore * 10000 + normalScore + depthScore + hoverScore + lockScore + rotationScore + stickyScore;
+                        normalScore + depthScore + hoverScore + lockScore + rotationScore + stickyScore;
 
-                    const int replaceMargin = bestMatchesActiveCandidate && !matchesActiveCandidate ? 1500 : 0;
+                    const int replaceMargin = bestMatchesActiveCandidate && !matchesActiveCandidate ? 800 : 0;
                     const bool isBetter = !foundCandidate
                         || score > bestScore + replaceMargin
                         || (score == bestScore && matchesActiveCandidate && !bestMatchesActiveCandidate)

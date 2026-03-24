@@ -209,6 +209,27 @@ void BrickPlayerUserInterface::RenderTitleBar()
             ImGui::SetTooltip("Snap Debug (F2)");
 
         ImGui::SameLine();
+        ImGui::GetForegroundDrawList()->AddLine(
+            ImGui::GetCursorPos() + ImVec2(4, titleBarHeight / 2 - 5),
+            ImGui::GetCursorPos() + ImVec2(4, titleBarHeight / 2 + 5),
+            IM_COL32(255, 255, 255, 160), 2.0f);
+        ImGui::SameLine(0.0f, 8.0f);
+
+        bool horizontalDrag = gameInstance_->IsHorizontalDragPlane();
+        if (horizontalDrag)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.7f, 0.75f));
+        if (ImGui::Button(horizontalDrag ? ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT : ICON_FA_ARROW_UP,
+                          ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->ToggleDragPlaneMode();
+            gameInstance_->SwitchDragPlaneWhileDragging();
+        }
+        if (horizontalDrag)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(horizontalDrag ? "Drag: XZ Plane (F4)" : "Drag: Screen Plane (F4)");
+
+        ImGui::SameLine();
         bool bgmPaused = gameInstance_->IsBGMPaused();
         if (ImGui::Button(bgmPaused ? ICON_FA_VOLUME_LOW : ICON_FA_VOLUME_XMARK, ImVec2(titleBarHeight, titleBarHeight)))
         {

@@ -77,6 +77,10 @@ public:
     void DrawSnapConfirmation() const;
     bool IsShowSnapDebug() const { return showSnapDebug_; }
     void ToggleSnapDebug() { showSnapDebug_ = !showSnapDebug_; }
+    bool IsHorizontalDragPlane() const { return useHorizontalDragPlane_; }
+    void ToggleDragPlaneMode() { useHorizontalDragPlane_ = !useHorizontalDragPlane_; }
+    void SwitchDragPlaneWhileDragging();
+    void RotateDraggedPart90();
     void DrawSnapDebug() const;
 
     // File dialog
@@ -240,6 +244,7 @@ private:
     float snapFeedbackPulseUntil_ = 0.0f;
     bool showPhysicsDebug_ = false;
     bool showSnapDebug_ = false;
+    bool useHorizontalDragPlane_ = true;
     bool hasFloorPlane_ = false;
     float floorPlaneY_ = 0.0f;
     float floorSurfaceY_ = 0.0f;
