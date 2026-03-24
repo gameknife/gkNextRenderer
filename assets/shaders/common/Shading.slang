@@ -1102,6 +1102,9 @@ public struct FPathTracingRendererV2
         const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
+        const float cosTheta = min(dot(-rayDir, outwardNormal), 1.0f);
+        const float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+        const bool cannotRefract = niOverNt * sinTheta > 1.0f;
         const float metalProb = metalness;
 
         bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
@@ -1117,7 +1120,15 @@ public struct FPathTracingRendererV2
         {
             if (!chanceReflect)
             {
-                trace_dir = refract(rayDir, outwardNormal, niOverNt);
+                if (cannotRefract)
+                {
+                    trace_dir = ggxSampling(RandomSeed, sqrt(roughness), reflect(rayDir, outwardNormal));
+                    hitReflect = true;
+                }
+                else
+                {
+                    trace_dir = refract(rayDir, outwardNormal, niOverNt);
+                }
             }
         }
 
@@ -1256,7 +1267,14 @@ public struct FPathTracingRendererV2
                         // 终结路径
                         if (b == maxBounces - 1 || earlyExit)
                         {
-                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                            if (mat.MaterialModel == MaterialDielectric)
+                            {
+                                RayColor *= float4(0, 0, 0, 1);
+                            }
+                            else
+                            {
+                                RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                            }
                             break;
                         }
                     }
