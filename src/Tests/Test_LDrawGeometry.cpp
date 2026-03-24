@@ -34,9 +34,11 @@ TEST_CASE("LDraw geometry smooths normals across shallow shared edges", "[Unit][
     tmpl.faces.push_back(faceB);
 
     const Assets::LDrawBuiltGeometry geometry = Assets::FLDrawGeometry::BuildPartGeometry(tmpl);
+    // 2 input faces × 3 vertices = 6
     REQUIRE(geometry.vertices.size() == 6);
 
     const glm::vec3 expectedNormal = glm::normalize(glm::vec3(0.0f, 0.5f, 1.8660254f));
+    // Face A: vertices 0,1,2; Face B: vertices 3,4,5
     CheckVec3Near(geometry.vertices[0].Normal, expectedNormal);
     CheckVec3Near(geometry.vertices[1].Normal, expectedNormal);
     CheckVec3Near(geometry.vertices[3].Normal, expectedNormal);
@@ -65,8 +67,10 @@ TEST_CASE("LDraw geometry preserves hard edges beyond smoothing threshold", "[Un
     tmpl.faces.push_back(faceB);
 
     const Assets::LDrawBuiltGeometry geometry = Assets::FLDrawGeometry::BuildPartGeometry(tmpl);
+    // 2 input faces × 3 vertices = 6
     REQUIRE(geometry.vertices.size() == 6);
 
+    // Face A: vertices 0,1,2; Face B: vertices 3,4,5
     CheckVec3Near(geometry.vertices[0].Normal, glm::vec3(0.0f, 0.0f, 1.0f));
     CheckVec3Near(geometry.vertices[1].Normal, glm::vec3(0.0f, 0.0f, 1.0f));
     CheckVec3Near(geometry.vertices[3].Normal, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -90,8 +94,10 @@ TEST_CASE("LDraw geometry applies configurable LDU scale", "[Unit][LDraw]")
     options.lduToWorldScale = 0.5f;
 
     const Assets::LDrawBuiltGeometry geometry = Assets::FLDrawGeometry::BuildPartGeometry(tmpl, options);
+    // 1 input face × 3 vertices = 3
     REQUIRE(geometry.vertices.size() == 3);
 
+    // Face vertices (indices 0,1,2)
     CheckVec3Near(geometry.vertices[0].Position, glm::vec3(0.0f, 0.0f, 0.0f));
     CheckVec3Near(geometry.vertices[1].Position, glm::vec3(-1.0f, -2.0f, 3.0f));
     CheckVec3Near(geometry.vertices[2].Position, glm::vec3(0.0f, -1.0f, 0.0f));
