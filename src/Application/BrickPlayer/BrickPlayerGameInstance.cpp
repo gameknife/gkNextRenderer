@@ -742,6 +742,12 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
         hoveredAssemblyInstanceId_ = UINT32_MAX;
         hoveredHitPoint_ = glm::vec3(result.HitPoint);
         hoveredHitNormal_ = hitNormal;
+        // Clear any assembly hover selection so only one outline is visible at a time
+        if (selectedInstanceId_ != UINT32_MAX)
+        {
+            selectedInstanceId_ = UINT32_MAX;
+            GetEngine().GetScene().ClearSelection();
+        }
         GetEngine().GetScene().SetHoveredId(instanceId);
         return true;
     }
@@ -820,10 +826,11 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     isDraggingPart_ = true;
     hoveredAssemblyInstanceId_ = UINT32_MAX;
     activeSnapCandidate_ = {};
-    selectedInstanceId_ = draggedInstanceId_;
+    selectedInstanceId_ = UINT32_MAX;
     selectedHitNormal_ = hoveredHitNormal_;
     SetDraggedPartRayCastVisible(false);
-    GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
+    // Use hovered (green) outline for dragged part to distinguish from assembly hover (orange)
+    GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
     return true;
 #else
@@ -1123,19 +1130,10 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     ApplyPhysicsPoseToNode(node, desiredBodyPosition, desiredBodyRotation);
 
     hoveredDisassembledInstanceId_ = draggedInstanceId_;
-    if (activeSnapCandidate_.valid)
-    {
-        GetEngine().GetScene().SetHoveredId(activeSnapCandidate_.targetInstanceId);
-    }
-    else if (hoveredAssemblyInstanceId_ != UINT32_MAX)
-    {
-        GetEngine().GetScene().SetHoveredId(hoveredAssemblyInstanceId_);
-    }
-    else
-    {
-        GetEngine().GetScene().ClearHoveredId();
-    }
-    GetEngine().GetScene().SetSelectedId(draggedInstanceId_);
+    // Use hovered (green) outline for dragged part to distinguish from assembly hover (orange)
+    GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
+    GetEngine().GetScene().ClearSelection();
+    selectedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().MarkDirty();
 #endif
 }
