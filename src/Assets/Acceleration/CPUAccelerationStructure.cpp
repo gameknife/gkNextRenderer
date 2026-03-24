@@ -353,7 +353,7 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
     {
         tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
         GCpuBvh.Intersect(ray);
-    
+
         if (ray.hit.t < 2000.f)
         {
             vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
@@ -363,6 +363,9 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
             FCPUBLASContext& context = (*GbvhBlasContexts)[instance.blasIdx];
             mat4* worldTS = (mat4*)instance.transform;
             vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
+            // Ensure normal faces toward the ray origin (flip if we hit a back face)
+            if (glm::dot(glm::vec3(normalWS), rayDir) > 0.0f)
+                normalWS = -normalWS;
             result.HitPoint = vec4(hitPos, 0);
             result.Normal = normalWS;
             result.Hitted = true;
