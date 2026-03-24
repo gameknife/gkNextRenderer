@@ -786,7 +786,7 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_CAMERA, ImVec2(TitlebarSize, TitlebarSize)))
     {
-		RequestScreenshot(true, "");
+		GetEngine().RequestHighQualityScreenShot("", 512);
     }
     BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
 	ImGui::SameLine();

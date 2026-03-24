@@ -202,6 +202,8 @@ public:
 
     // capture
     void RequestScreenShot(std::string filename);
+    void RequestHighQualityScreenShot(const std::string& filename, uint32_t accumulateFrames);
+    bool IsCapturingHighQuality() const { return hqCaptureFramesRemaining_ > 0; }
 
     // scene loading
     void RequestLoadScene(std::string sceneFileName);
@@ -318,6 +320,13 @@ private:
     double lastFrameTime_{};
     bool progressiveRendering_{};
     uint32_t progressivePreFrames_{};
+
+    // high quality capture state
+    uint32_t hqCaptureFramesRemaining_{};
+    uint32_t hqCaptureTotalFrames_{};
+    std::string hqCaptureFilename_;
+    bool hqCapturePrevProgressive_{};
+    uint32_t hqCapturePrevPreFrames_{};
 
     // game instance
     std::unique_ptr<NextGameInstanceBase> gameInstance_;

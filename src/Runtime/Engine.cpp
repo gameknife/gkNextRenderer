@@ -491,6 +491,24 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
+    // High quality capture: count down accumulated frames after DrawFrame
+    if (hqCaptureFramesRemaining_ > 0)
+    {
+        hqCaptureFramesRemaining_--;
+        if (hqCaptureFramesRemaining_ == 0)
+        {
+            // All frames accumulated, capture now
+            renderer_->Device().WaitIdle();
+            ScreenShot::SaveSwapChainToFile(renderer_.get(), hqCaptureFilename_, 0, 0, 0, 0);
+            spdlog::info("High quality capture saved: {} ({} frames accumulated)",
+                         hqCaptureFilename_, hqCaptureTotalFrames_);
+
+            // Restore previous state
+            progressiveRendering_ = hqCapturePrevProgressive_;
+            progressivePreFrames_ = hqCapturePrevPreFrames_;
+        }
+    }
+
     // sample gamepad stats
 
     TickGamepadInput();
@@ -643,6 +661,33 @@ void NextEngine::RequestScreenShot(std::string filename)
     std::string screenshotFilename =
         filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
     SaveScreenShot(screenshotFilename, 0, 0, 0, 0);
+}
+
+void NextEngine::RequestHighQualityScreenShot(const std::string& filename, uint32_t accumulateFrames)
+{
+    if (hqCaptureFramesRemaining_ > 0)
+    {
+        spdlog::warn("High quality capture already in progress, ignoring request");
+        return;
+    }
+
+    // Save current state
+    hqCapturePrevProgressive_ = progressiveRendering_;
+    hqCapturePrevPreFrames_ = progressivePreFrames_;
+
+    // Setup capture
+    hqCaptureTotalFrames_ = accumulateFrames;
+    hqCaptureFramesRemaining_ = accumulateFrames;
+
+    auto time = std::time(nullptr);
+    hqCaptureFilename_ =
+        filename.empty() ? fmt::format("hq_screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
+
+    // Enable progressive rendering directly (skip pre-frames warmup)
+    progressiveRendering_ = true;
+    progressivePreFrames_ = 0;
+
+    spdlog::info("High quality capture started: accumulating {} frames...", accumulateFrames);
 }
 
 // 生成一个随机抖动偏移
