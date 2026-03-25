@@ -576,7 +576,7 @@ bool NextEngine::IsSoundPlaying(const std::string& soundName)
 
 void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
 {
-    ScreenShot::SaveSwapChainToFileFast(renderer_.get(), filename, x, y, width, height);
+    ScreenShot::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
 }
 
 glm::dvec2 NextEngine::GetMousePos()

@@ -568,7 +568,7 @@ namespace Assets
             auto emissiveExtension = mat.extensions.find("KHR_materials_emissive_strength");
             if (emissiveExtension != mat.extensions.end())
             {
-                emissiveStrength = static_cast<float>(emissiveExtension->second.Get("emissiveStrength").GetNumberAsDouble()) * 100.f;
+                emissiveStrength = static_cast<float>(emissiveExtension->second.Get("emissiveStrength").GetNumberAsDouble()) * 50.f;
             }
 
             bool isPureEmissiveMaterial = (glm::length(emissiveColor) > 0.001f) && (mat.emissiveTexture.index == -1);
