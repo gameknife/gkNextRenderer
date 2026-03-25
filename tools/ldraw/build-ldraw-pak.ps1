@@ -1,5 +1,6 @@
 param(
     [string]$LibraryDir = "",
+    [string]$StudioDir = "",
     [string]$ShadowDir = "",
     [string]$OutputPak = "",
     [string]$ManifestPath = "",
@@ -51,7 +52,7 @@ function Find-Packager
         return (Resolve-NormalizedPath $discoveredPackager.FullName)
     }
 
-    throw "Packager.exe not found. Build it first, e.g. `cmake --build --preset full-windows --target Packager`."
+    throw "Packager.exe not found. Build it first, e.g. ``cmake --build --preset full-windows --target Packager``."
 }
 
 function Sync-Directory
@@ -72,12 +73,53 @@ function Sync-Directory
     }
 }
 
+function Merge-Directory
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+        [Parameter(Mandatory = $true)]
+        [string]$TargetDir,
+        [string]$Label = "supplement"
+    )
+
+    if (-not (Test-Path $SourceDir))
+    {
+        return 0
+    }
+
+    $beforeCount = (Get-ChildItem -Path $TargetDir -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+    & robocopy $SourceDir $TargetDir /S /XC /XN /XO /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8)
+    {
+        throw "robocopy failed while merging '$SourceDir' to '$TargetDir' (exit code $LASTEXITCODE)."
+    }
+    $afterCount = (Get-ChildItem -Path $TargetDir -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+    $added = $afterCount - $beforeCount
+
+    if ($added -gt 0)
+    {
+        Write-Host "  Merged $Label from $SourceDir -> +$added files"
+    }
+
+    return $added
+}
+
 $repoRoot = Resolve-NormalizedPath (Join-Path $PSScriptRoot "..\\..")
 $defaultSourceRoot = Join-Path $PSScriptRoot "source"
+$defaultStudioDir = "C:\Program Files\Studio 2.0\ldraw"
 
 if ([string]::IsNullOrWhiteSpace($LibraryDir))
 {
     $LibraryDir = Join-Path $defaultSourceRoot "ldraw"
+}
+
+if ([string]::IsNullOrWhiteSpace($StudioDir))
+{
+    if (Test-Path $defaultStudioDir)
+    {
+        $StudioDir = $defaultStudioDir
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($ShadowDir))
@@ -105,6 +147,11 @@ $ShadowDir = Resolve-NormalizedPath $ShadowDir
 $OutputPak = Resolve-NormalizedPath $OutputPak
 $ManifestPath = Resolve-NormalizedPath $ManifestPath
 $PackLogPath = Resolve-NormalizedPath $PackLogPath
+
+if (-not [string]::IsNullOrWhiteSpace($StudioDir))
+{
+    $StudioDir = Resolve-NormalizedPath $StudioDir
+}
 
 if ([string]::IsNullOrWhiteSpace($PackagerPath))
 {
@@ -141,7 +188,45 @@ New-Item -ItemType Directory -Force -Path (Split-Path $OutputPak -Parent) | Out-
 New-Item -ItemType Directory -Force -Path (Split-Path $ManifestPath -Parent) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path $PackLogPath -Parent) | Out-Null
 
+# Stage 1: sync base LDraw library (mirror)
+Write-Host "Syncing base LDraw library: $LibraryDir"
 Sync-Directory -SourceDir $LibraryDir -TargetDir $stageLibraryDir
+
+# Stage 2: merge Studio 2.0 parts (only add missing files, never overwrite)
+if (-not [string]::IsNullOrWhiteSpace($StudioDir) -and (Test-Path $StudioDir))
+{
+    Write-Host "Merging Studio 2.0 library: $StudioDir"
+
+    $studioMergeDirs = @("parts", "parts/s", "p", "p/48", "p/8", "p/4")
+    $totalAdded = 0
+    foreach ($sub in $studioMergeDirs)
+    {
+        $studioSub = Join-Path $StudioDir $sub
+        $stageSub = Join-Path $stageLibraryDir $sub
+        $totalAdded += Merge-Directory -SourceDir $studioSub -TargetDir $stageSub -Label "Studio Official/$sub"
+    }
+
+    # Merge Studio UnOfficial parts (lowest priority, only add missing)
+    $studioUnofficial = Join-Path $StudioDir "UnOfficial"
+    if (Test-Path $studioUnofficial)
+    {
+        $unofficialMergeDirs = @("parts", "p")
+        foreach ($sub in $unofficialMergeDirs)
+        {
+            $studioSub = Join-Path $studioUnofficial $sub
+            $stageSub = Join-Path $stageLibraryDir $sub
+            $totalAdded += Merge-Directory -SourceDir $studioSub -TargetDir $stageSub -Label "Studio UnOfficial/$sub"
+        }
+    }
+
+    Write-Host "Studio 2.0 merge complete: +$totalAdded files added"
+}
+else
+{
+    Write-Host "Studio 2.0 library not found, skipping supplement merge"
+}
+
+# Stage 3: sync shadow library
 Sync-Directory -SourceDir $ShadowDir -TargetDir $stageShadowDir
 
 $packagerArgs = @(

@@ -376,6 +376,7 @@ void BrickPlayerGameInstance::FocusCameraOnLoadedScene()
     cameraArm_ = std::max(1.0f, sceneHeight * 3.0f);
 }
 
+
 void BrickPlayerGameInstance::UpdateAutoPlay(double deltaSeconds)
 {
     if (!autoPlay_)

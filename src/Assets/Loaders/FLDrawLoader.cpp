@@ -351,6 +351,26 @@ namespace Assets
             return bounds;
         }
 
+        void EnsureSceneAboveGround(
+            const SceneBounds& sceneBounds,
+            std::vector<std::shared_ptr<Node>>& nodes)
+        {
+            if (!sceneBounds.valid || sceneBounds.min.y >= 0.0f)
+                return;
+
+            const glm::vec3 offset(0.0f, -sceneBounds.min.y, 0.0f);
+            for (auto& node : nodes)
+            {
+                if (!node->GetParent())
+                {
+                    node->SetTranslation(node->Translation() + offset);
+                    node->RecalcTransform(true);
+                }
+            }
+
+            SPDLOG_INFO("LDraw: shifted scene up by {:.4f} to keep all parts above Y=0", -sceneBounds.min.y);
+        }
+
         bool AppendLDrawFloor(
             const SceneBounds& sceneBounds,
             std::vector<std::shared_ptr<Node>>& nodes,
@@ -833,6 +853,10 @@ namespace Assets
         cameraInit.SunRotation = 0.5f;
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
+
+        // Shift scene so all parts are above Y=0, then place floor at new ground level
+        SceneBounds sceneBounds = CalculateSceneBounds(nodes, models);
+        EnsureSceneAboveGround(sceneBounds, nodes);
 
         Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
         AppendLDrawFloor(CalculateSceneBounds(nodes, models), nodes, models, materials);

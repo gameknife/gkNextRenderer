@@ -11,12 +11,13 @@ namespace Assets
 {
     namespace
     {
-        constexpr std::array<const char*, 5> kLDrawIndexedDirectories = {
+        constexpr std::array<const char*, 6> kLDrawIndexedDirectories = {
             "parts",
             "p",
             "parts/s",
             "p/48",
-            "p/8"
+            "p/8",
+            "p/4"
         };
 
         struct RealisticColorOverride

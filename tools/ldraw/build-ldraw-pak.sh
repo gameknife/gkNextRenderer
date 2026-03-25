@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_SOURCE_ROOT="${SCRIPT_DIR}/source"
 
 LIBRARY_DIR=""
+STUDIO_DIR=""
 SHADOW_DIR=""
 OUTPUT_PAK=""
 MANIFEST_PATH=""
@@ -20,6 +21,7 @@ Usage: build-ldraw-pak.sh [options]
 
 Options:
   --library-dir PATH   LDraw library source directory
+  --studio-dir PATH    Studio 2.0 ldraw directory (supplement, never overwrites)
   --shadow-dir PATH    LDraw shadow library source directory
   --output-pak PATH    Output pak path
   --manifest PATH      Manifest json path
@@ -82,10 +84,55 @@ sync_directory() {
     cp -R "${source_dir}/." "${target_dir}/"
 }
 
+# Merge source into target, only adding files that do not already exist.
+# Returns the number of files added via stdout.
+merge_directory() {
+    local source_dir="$1"
+    local target_dir="$2"
+    local label="${3:-supplement}"
+
+    if [[ ! -d "${source_dir}" ]]; then
+        echo 0
+        return 0
+    fi
+
+    mkdir -p "${target_dir}"
+
+    local before after added
+    before="$(find "${target_dir}" -type f | wc -l)"
+
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --ignore-existing "${source_dir}/" "${target_dir}/"
+    else
+        # cp without overwrite
+        find "${source_dir}" -type f | while IFS= read -r src_file; do
+            local rel="${src_file#"${source_dir}/"}"
+            local dst="${target_dir}/${rel}"
+            if [[ ! -f "${dst}" ]]; then
+                mkdir -p "$(dirname "${dst}")"
+                cp "${src_file}" "${dst}"
+            fi
+        done
+    fi
+
+    after="$(find "${target_dir}" -type f | wc -l)"
+    added=$((after - before))
+
+    if [[ ${added} -gt 0 ]]; then
+        echo "  Merged ${label} from ${source_dir} -> +${added} files" >&2
+    fi
+
+    echo "${added}"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --library-dir)
             LIBRARY_DIR="$2"
+            shift 2
+            ;;
+        --studio-dir)
+            STUDIO_DIR="$2"
             shift 2
             ;;
         --shadow-dir)
@@ -154,6 +201,10 @@ OUTPUT_PAK="$(resolve_path "${OUTPUT_PAK}")"
 MANIFEST_PATH="$(resolve_path "${MANIFEST_PATH}")"
 PACK_LOG_PATH="$(resolve_path "${PACK_LOG_PATH}")"
 
+if [[ -n "${STUDIO_DIR}" ]]; then
+    STUDIO_DIR="$(resolve_path "${STUDIO_DIR}")"
+fi
+
 if [[ -z "${PACKAGER_PATH}" ]]; then
     PACKAGER_PATH="$(find_packager)"
 else
@@ -186,7 +237,39 @@ mkdir -p "$(dirname "${OUTPUT_PAK}")"
 mkdir -p "$(dirname "${MANIFEST_PATH}")"
 mkdir -p "$(dirname "${PACK_LOG_PATH}")"
 
+# Stage 1: sync base LDraw library (mirror)
+echo "Syncing base LDraw library: ${LIBRARY_DIR}"
 sync_directory "${LIBRARY_DIR}" "${STAGE_LIBRARY_DIR}"
+
+# Stage 2: merge Studio 2.0 parts (only add missing files, never overwrite)
+if [[ -n "${STUDIO_DIR}" && -d "${STUDIO_DIR}" ]]; then
+    echo "Merging Studio 2.0 library: ${STUDIO_DIR}"
+
+    TOTAL_ADDED=0
+    for sub in parts parts/s p p/48 p/8 p/4; do
+        studio_sub="${STUDIO_DIR}/${sub}"
+        stage_sub="${STAGE_LIBRARY_DIR}/${sub}"
+        added="$(merge_directory "${studio_sub}" "${stage_sub}" "Studio Official/${sub}")"
+        TOTAL_ADDED=$((TOTAL_ADDED + added))
+    done
+
+    # Merge Studio UnOfficial parts (lowest priority, only add missing)
+    studio_unofficial="${STUDIO_DIR}/UnOfficial"
+    if [[ -d "${studio_unofficial}" ]]; then
+        for sub in parts p; do
+            studio_sub="${studio_unofficial}/${sub}"
+            stage_sub="${STAGE_LIBRARY_DIR}/${sub}"
+            added="$(merge_directory "${studio_sub}" "${stage_sub}" "Studio UnOfficial/${sub}")"
+            TOTAL_ADDED=$((TOTAL_ADDED + added))
+        done
+    fi
+
+    echo "Studio 2.0 merge complete: +${TOTAL_ADDED} files added"
+else
+    echo "Studio 2.0 library not found, skipping supplement merge"
+fi
+
+# Stage 3: sync shadow library
 sync_directory "${SHADOW_DIR}" "${STAGE_SHADOW_DIR}"
 
 PACKAGER_ARGS=(

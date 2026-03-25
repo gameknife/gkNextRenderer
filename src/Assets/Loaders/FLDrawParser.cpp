@@ -498,7 +498,7 @@ namespace Assets
             ParseStream(stream, 16, glm::mat4(1.0f), bfc, expandSubfiles, tmpl.faces, nullptr);
             templateCache[key] = tmpl;
             dependencyCache[key].clear();
-            SPDLOG_INFO("LDraw: parsed {} {} -> {} faces",
+            SPDLOG_DEBUG("LDraw: parsed {} {} -> {} faces",
                         expandSubfiles ? "part" : "direct geometry",
                         key,
                         tmpl.faces.size());
@@ -514,7 +514,7 @@ namespace Assets
         {
             templateCache[key] = tmpl;
             dependencyCache[key] = std::move(dependencies);
-            SPDLOG_INFO("LDraw: loaded cached {} {} -> {} faces",
+            SPDLOG_DEBUG("LDraw: loaded cached {} {} -> {} faces",
                         expandSubfiles ? "part" : "direct geometry",
                         key,
                         tmpl.faces.size());
@@ -545,7 +545,7 @@ namespace Assets
             SaveTemplateCache(cacheFileName, tmpl, dependencies);
         }
 
-        SPDLOG_INFO("LDraw: parsed {} {} -> {} faces",
+        SPDLOG_DEBUG("LDraw: parsed {} {} -> {} faces",
                     expandSubfiles ? "part" : "direct geometry",
                     key,
                     tmpl.faces.size());
