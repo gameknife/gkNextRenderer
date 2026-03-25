@@ -1201,11 +1201,11 @@ public struct FPathTracingRendererV2
         Material mat = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
-            FinalColor = mat.Diffuse;
+            FinalColor = min(mat.Diffuse, float4(1000, 1000, 1000, 1));
             OutSingleDiffuse.Store(pixel_, FinalColor);
             OutSingleSpecular.Store(pixel_, FinalReflection);
-            OutDiffuseHitDist.Store(pixel_, 0);
-            OutSpecularHitDist.Store(pixel_, 0);
+            OutDiffuseHitDist.Store(pixel_, primaryRayLength_);
+            OutSpecularHitDist.Store(pixel_, primaryRayLength_);
             return;
         }
 
@@ -1310,8 +1310,8 @@ public struct FPathTracingRendererV2
 
         OutSingleDiffuse.Store(pixel_, FinalColor);
         OutSingleSpecular.Store(pixel_, FinalReflection);
-        OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist);
-        OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist);
+        OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist + primaryRayLength_);
+        OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist + primaryRayLength_);
     }
 
     [mutating]
@@ -1328,8 +1328,8 @@ public struct FPathTracingRendererV2
             OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
             OutNormal.Store(pixel_, float4(0, 1, 0, 1));
             OutObjectID.Store(pixel_, 0);
-            OutDiffuseHitDist.Store(pixel_, 0);
-            OutSpecularHitDist.Store(pixel_, 0);
+            OutDiffuseHitDist.Store(pixel_, 1000);
+            OutSpecularHitDist.Store(pixel_, 1000);
             OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
 
             return false;
