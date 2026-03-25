@@ -130,6 +130,14 @@ private:
         glm::vec3 worldAxis{0.0f, 1.0f, 0.0f};
     };
 
+    struct PhysicsBodyResult
+    {
+        glm::vec3 halfExtent{0.0f};
+        bool created = false;
+    };
+    PhysicsBodyResult CreateDynamicPhysicsBody(Assets::Node* node, const glm::vec3& worldScale,
+                                               const glm::quat& worldRotation);
+
     void UpdateVisibilityForStep(int32_t step, bool playPlacementSound = false);
     void BuildPerPartOrder();
     void CaptureOriginalAssemblyState();
@@ -140,21 +148,17 @@ private:
     void StopDraggingPart();
     void UpdateDraggedPart();
     bool TryBuildSnapCandidate(Assets::Node* node,
-                               const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                               const Runtime::PhysicsComponent* physComp,
                                const glm::vec3& freeBodyPosition,
                                DragSnapCandidate& outCandidate);
     bool TryBuildShadowSnapCandidate(Assets::Node* node,
-                                     const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                     const Runtime::PhysicsComponent* physComp,
                                      const glm::vec3& freeBodyPosition,
                                      DragSnapCandidate& outCandidate);
-    bool TryBuildOriginalSnapCandidate(const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+    bool TryBuildOriginalSnapCandidate(const Runtime::PhysicsComponent* physComp,
                                        const glm::vec3& freeBodyPosition,
                                        DragSnapCandidate& outCandidate);
     std::vector<WorldSnapConnector> BuildWorldConnectors(uint32_t instanceId) const;
-    int ScoreShadowCandidate(uint32_t draggedId,
-                             const glm::quat& desiredRotation,
-                             const glm::vec3& desiredTranslation,
-                             const WorldSnapConnector& anchorTarget) const;
     bool AreNodesOriginallyConnectable(uint32_t draggedId, uint32_t targetId) const;
     float GetSnapDistanceThreshold(uint32_t draggedId) const;
     void SetDraggedPartRayCastVisible(bool visible);
@@ -225,12 +229,15 @@ private:
     std::unordered_map<uint32_t, OriginalAssemblyState> originalAssemblyStates_;
     uint32_t selectedInstanceId_ = UINT32_MAX;
     glm::vec3 selectedHitNormal_{0.0f, 1.0f, 0.0f};
-    uint32_t hoveredDisassembledInstanceId_ = UINT32_MAX;
-    glm::vec3 hoveredHitPoint_{0.0f};
-    glm::vec3 hoveredHitNormal_{0.0f, 1.0f, 0.0f};
-    uint32_t hoveredAssemblyInstanceId_ = UINT32_MAX;
-    glm::vec3 hoveredAssemblyHitPoint_{0.0f};
-    glm::vec3 hoveredAssemblyHitNormal_{0.0f, 1.0f, 0.0f};
+    struct HoverTarget
+    {
+        uint32_t instanceId = UINT32_MAX;
+        glm::vec3 hitPoint{0.0f};
+        glm::vec3 hitNormal{0.0f, 1.0f, 0.0f};
+        void Clear() { instanceId = UINT32_MAX; hitPoint = glm::vec3(0.0f); hitNormal = glm::vec3(0.0f, 1.0f, 0.0f); }
+    };
+    HoverTarget hoveredDisassembled_;
+    HoverTarget hoveredAssembly_;
     bool isDraggingPart_ = false;
     uint32_t draggedInstanceId_ = UINT32_MAX;
     glm::vec3 dragPlanePoint_{0.0f};

@@ -20,6 +20,33 @@ namespace
         glm::vec3 max{-FLT_MAX};
     };
 
+    struct PhysicsBodyRef
+    {
+        Runtime::PhysicsComponent* physComp = nullptr;
+        FNextPhysicsBody* body = nullptr;
+        explicit operator bool() const { return body != nullptr; }
+    };
+
+    PhysicsBodyRef GetPhysicsBody([[maybe_unused]] Assets::Node* node)
+    {
+#if WITH_PHYSIC
+        if (!node)
+            return {};
+        auto comp = node->GetComponent<Runtime::PhysicsComponent>();
+        if (!comp)
+            return {};
+        auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+        if (!physics)
+            return {};
+        auto* body = physics->GetBody(comp->GetPhysicsBody());
+        if (!body)
+            return {};
+        return {comp.get(), body};
+#else
+        return {};
+#endif
+    }
+
     struct PlaySpeedPreset
     {
         const char* label;
@@ -154,6 +181,54 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<BrickPlayerGameInstance>(config, options, engine);
 }
 
+BrickPlayerGameInstance::PhysicsBodyResult BrickPlayerGameInstance::CreateDynamicPhysicsBody(
+    Assets::Node* node, const glm::vec3& worldScale, const glm::quat& worldRotation)
+{
+    PhysicsBodyResult result;
+    if (!node)
+        return result;
+
+    auto render = node->GetComponent<Runtime::RenderComponent>();
+    if (!render || !render->IsDrawable())
+        return result;
+
+    const auto* model = GetEngine().GetScene().GetModel(render->GetModelId());
+    if (!model)
+        return result;
+
+    const glm::vec3 aabbMin = model->GetLocalAABBMin();
+    const glm::vec3 aabbMax = model->GetLocalAABBMax();
+    const glm::vec3 fullExtent = glm::max((aabbMax - aabbMin) * glm::abs(worldScale), glm::vec3(0.002f));
+    result.halfExtent = fullExtent * 0.5f;
+    const glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
+    const glm::vec3 worldCenter = glm::vec3(node->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
+
+    // Remove existing physics body if any
+    auto existingPhys = node->GetComponent<Runtime::PhysicsComponent>();
+#if WITH_PHYSIC
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+    if (existingPhys && physics)
+    {
+        NextBodyID oldBody = existingPhys->GetPhysicsBody();
+        if (!oldBody.IsInvalid())
+            physics->RemoveBody(oldBody);
+    }
+
+    if (physics)
+    {
+        auto phys = std::make_shared<Runtime::PhysicsComponent>();
+        phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+        auto bodyId = physics->CreateBoxBody(worldCenter, worldRotation, fullExtent, NextMotionType::Dynamic);
+        phys->BindPhysicsBody(bodyId);
+        phys->SetPhysicsOffset(aabbCenter);
+        node->AddComponent(phys);
+        result.created = true;
+    }
+#endif
+
+    return result;
+}
+
 BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
     , engine_(engine)
@@ -205,12 +280,8 @@ void BrickPlayerGameInstance::ResetDragState()
 
 void BrickPlayerGameInstance::ClearHoverTargets(bool clearSceneHovered)
 {
-    hoveredDisassembledInstanceId_ = UINT32_MAX;
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
-    hoveredHitPoint_ = glm::vec3(0.0f);
-    hoveredHitNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
-    hoveredAssemblyHitPoint_ = glm::vec3(0.0f);
-    hoveredAssemblyHitNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    hoveredDisassembled_.Clear();
+    hoveredAssembly_.Clear();
     activeSnapCandidate_ = {};
 
     if (clearSceneHovered)
@@ -398,15 +469,6 @@ void BrickPlayerGameInstance::OnSceneLoaded()
             if (stepIt->second <= 0)
                 continue;
 
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (!render || !render->IsDrawable())
-                continue;
-
-            uint32_t modelId = render->GetModelId();
-            const auto* model = scene.GetModel(modelId);
-            if (!model)
-                continue;
-
             // Detach from any parent so physics operates in world space
             glm::vec3 worldTranslation = node->WorldTranslation();
             glm::quat worldRotation = node->WorldRotation();
@@ -420,40 +482,16 @@ void BrickPlayerGameInstance::OnSceneLoaded()
                 node->RecalcTransform(true);
             }
 
-            // Create dynamic physics body
-            glm::vec3 aabbMin = model->GetLocalAABBMin();
-            glm::vec3 aabbMax = model->GetLocalAABBMax();
-            glm::vec3 fullExtent = (aabbMax - aabbMin) * glm::abs(worldScale);
-            fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
-            glm::vec3 halfExtent = fullExtent * 0.5f;
-            glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
-            glm::vec3 worldCenter = glm::vec3(node->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
-            glm::vec3 physicsOffset = aabbCenter;
-
-            // Remove existing physics body if any
-            auto existingPhys = node->GetComponent<Runtime::PhysicsComponent>();
+            auto bodyResult = CreateDynamicPhysicsBody(node.get(), worldScale, worldRotation);
+            if (!bodyResult.created)
+                continue;
 #if WITH_PHYSIC
-            auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-            if (existingPhys && physics)
-            {
-                NextBodyID oldBody = existingPhys->GetPhysicsBody();
-                if (!oldBody.IsInvalid())
-                    physics->RemoveBody(oldBody);
-            }
-
-            if (physics)
-            {
-                auto phys = std::make_shared<Runtime::PhysicsComponent>();
-                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-                auto bodyId = physics->CreateBoxBody(worldCenter, worldRotation, fullExtent, NextMotionType::Dynamic);
-                phys->BindPhysicsBody(bodyId);
-                phys->SetPhysicsOffset(physicsOffset);
-                node->AddComponent(phys);
-                WakeLoosePartBody(physics, bodyId, instanceId);
-            }
+            auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
+            if (physComp)
+                WakeLoosePartBody(NextEngine::GetInstance()->GetPhysicsEngine(), physComp->GetPhysicsBody(), instanceId);
 #endif
 
-            disassembledNodes_[instanceId] = {halfExtent};
+            disassembledNodes_[instanceId] = {bodyResult.halfExtent};
         }
         scene.MarkDirty();
     }
@@ -728,20 +766,20 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
             return false;
         }
 
-        hoveredDisassembledInstanceId_ = UINT32_MAX;
-        hoveredAssemblyInstanceId_ = instanceId;
-        hoveredAssemblyHitPoint_ = glm::vec3(result.HitPoint);
-        hoveredAssemblyHitNormal_ = hitNormal;
+        hoveredDisassembled_.instanceId = UINT32_MAX;
+        hoveredAssembly_.instanceId = instanceId;
+        hoveredAssembly_.hitPoint = glm::vec3(result.HitPoint);
+        hoveredAssembly_.hitNormal = hitNormal;
         GetEngine().GetScene().SetHoveredId(instanceId);
         return true;
     }
 
     if (disassembledNodes_.count(instanceId))
     {
-        hoveredDisassembledInstanceId_ = instanceId;
-        hoveredAssemblyInstanceId_ = UINT32_MAX;
-        hoveredHitPoint_ = glm::vec3(result.HitPoint);
-        hoveredHitNormal_ = hitNormal;
+        hoveredDisassembled_.instanceId = instanceId;
+        hoveredAssembly_.instanceId = UINT32_MAX;
+        hoveredDisassembled_.hitPoint = glm::vec3(result.HitPoint);
+        hoveredDisassembled_.hitNormal = hitNormal;
         // Clear any assembly hover selection so only one outline is visible at a time
         if (selectedInstanceId_ != UINT32_MAX)
         {
@@ -752,8 +790,8 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
         return true;
     }
 
-    hoveredDisassembledInstanceId_ = UINT32_MAX;
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hoveredDisassembled_.instanceId = UINT32_MAX;
+    hoveredAssembly_.instanceId = UINT32_MAX;
     GetEngine().GetScene().ClearHoveredId();
     selectedInstanceId_ = instanceId;
     selectedHitNormal_ = hitNormal;
@@ -764,37 +802,16 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
 bool BrickPlayerGameInstance::StartDraggingHoveredPart()
 {
 #if WITH_PHYSIC
-    if (hoveredDisassembledInstanceId_ == UINT32_MAX)
-    {
+    if (hoveredDisassembled_.instanceId == UINT32_MAX)
         return false;
-    }
 
-    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    if (!physics)
-    {
-        return false;
-    }
-
-    auto* node = GetEngine().GetScene().GetNodeByInstanceId(hoveredDisassembledInstanceId_);
-    if (!node)
-    {
-        return false;
-    }
-
-    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-    if (!physComp)
-    {
-        return false;
-    }
-
-    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(hoveredDisassembled_.instanceId);
+    auto [physComp, body] = GetPhysicsBody(node);
     if (!body)
-    {
         return false;
-    }
 
-    draggedInstanceId_ = hoveredDisassembledInstanceId_;
-    dragPlanePoint_ = hoveredHitPoint_;
+    draggedInstanceId_ = hoveredDisassembled_.instanceId;
+    dragPlanePoint_ = hoveredDisassembled_.hitPoint;
     if (useHorizontalDragPlane_)
     {
         dragPlaneNormal_ = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -807,7 +824,7 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     dragReleaseLinearVelocity_ = glm::vec3(0.0f);
     lastDraggedBodyPosition_ = body->position;
     hasDraggedBodyPositionSample_ = true;
-    lockedDraggedConnectorIndex_ = FindDraggedConnectorLock(draggedInstanceId_, hoveredHitPoint_, hoveredHitNormal_);
+    lockedDraggedConnectorIndex_ = FindDraggedConnectorLock(draggedInstanceId_, hoveredDisassembled_.hitPoint, hoveredDisassembled_.hitNormal);
 
     // Compute dragBodyOffset_ using the same CPU ray-plane intersection that
     // UpdateDraggedPart uses, so the first drag frame produces no positional jump.
@@ -821,13 +838,13 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     }
     else
     {
-        dragBodyOffset_ = body->position - hoveredHitPoint_;
+        dragBodyOffset_ = body->position - hoveredDisassembled_.hitPoint;
     }
     isDraggingPart_ = true;
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hoveredAssembly_.instanceId = UINT32_MAX;
     activeSnapCandidate_ = {};
     selectedInstanceId_ = UINT32_MAX;
-    selectedHitNormal_ = hoveredHitNormal_;
+    selectedHitNormal_ = hoveredDisassembled_.hitNormal;
     SetDraggedPartRayCastVisible(false);
     // Use hovered (green) outline for dragged part to distinguish from assembly hover (orange)
     GetEngine().GetScene().ClearSelection();
@@ -853,43 +870,36 @@ void BrickPlayerGameInstance::StopDraggingPart()
         snappedBack = ReattachDraggedPart();
     }
 
-    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     auto* node = GetEngine().GetScene().GetNodeByInstanceId(finishedInstanceId);
-    if (!snappedBack && physics && node)
+    auto [physComp, body] = GetPhysicsBody(node);
+    if (!snappedBack && body)
     {
-        auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-        if (physComp)
+        auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+        physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, body->rotation, true);
+        glm::vec3 releaseVelocity = dragReleaseLinearVelocity_ * 0.82f;
+        const float maxReleaseSpeed = 6.5f;
+        const float releaseSpeed = glm::length(releaseVelocity);
+        if (releaseSpeed > maxReleaseSpeed)
         {
-            auto* body = physics->GetBody(physComp->GetPhysicsBody());
-            if (body)
-            {
-                physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, body->rotation, true);
-                glm::vec3 releaseVelocity = dragReleaseLinearVelocity_ * 0.82f;
-                const float maxReleaseSpeed = 6.5f;
-                const float releaseSpeed = glm::length(releaseVelocity);
-                if (releaseSpeed > maxReleaseSpeed)
-                {
-                    releaseVelocity *= maxReleaseSpeed / releaseSpeed;
-                }
-                if (glm::dot(releaseVelocity, releaseVelocity) > 0.01f * 0.01f)
-                {
-                    physics->SetBodyVelocity(physComp->GetPhysicsBody(), releaseVelocity, glm::vec3(0.0f));
-                }
-            }
+            releaseVelocity *= maxReleaseSpeed / releaseSpeed;
+        }
+        if (glm::dot(releaseVelocity, releaseVelocity) > 0.01f * 0.01f)
+        {
+            physics->SetBodyVelocity(physComp->GetPhysicsBody(), releaseVelocity, glm::vec3(0.0f));
         }
 
         SetDraggedPartRayCastVisible(true);
-        hoveredDisassembledInstanceId_ = finishedInstanceId;
+        hoveredDisassembled_.instanceId = finishedInstanceId;
         GetEngine().GetScene().SetHoveredId(finishedInstanceId);
     }
     else if (snappedBack)
     {
-        hoveredDisassembledInstanceId_ = UINT32_MAX;
+        hoveredDisassembled_.instanceId = UINT32_MAX;
         GetEngine().GetScene().ClearHoveredId();
     }
 #endif
 
-    hoveredAssemblyInstanceId_ = UINT32_MAX;
+    hoveredAssembly_.instanceId = UINT32_MAX;
     ResetDragState();
 }
 
@@ -897,28 +907,12 @@ void BrickPlayerGameInstance::SwitchDragPlaneWhileDragging()
 {
 #if WITH_PHYSIC
     if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
-    {
         return;
-    }
 
-    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
-    if (!node || !physics)
-    {
-        return;
-    }
-
-    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-    if (!physComp)
-    {
-        return;
-    }
-
-    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    auto [physComp, body] = GetPhysicsBody(node);
     if (!body)
-    {
         return;
-    }
 
     // Switch the plane normal
     if (useHorizontalDragPlane_)
@@ -950,34 +944,19 @@ void BrickPlayerGameInstance::RotateDraggedPart90()
 {
 #if WITH_PHYSIC
     if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
-    {
         return;
-    }
+
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    auto [physComp, body] = GetPhysicsBody(node);
+    if (!body)
+        return;
 
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
-    if (!node || !physics)
-    {
-        return;
-    }
-
-    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-    if (!physComp)
-    {
-        return;
-    }
-
-    auto* body = physics->GetBody(physComp->GetPhysicsBody());
-    if (!body)
-    {
-        return;
-    }
 
     // Rotate 90 degrees around world Y axis
     const glm::quat rotation90 = glm::angleAxis(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
     const glm::quat newRotation = glm::normalize(rotation90 * body->rotation);
 
-    // Apply rotation, keeping the body at the same position
     physics->SetBodyTransform(physComp->GetPhysicsBody(), body->position, newRotation, true);
     ApplyPhysicsPoseToNode(node, body->position, newRotation);
 
@@ -995,26 +974,14 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     }
 
     auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
-    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    if (!node || !physics)
-    {
-        StopDraggingPart();
-        return;
-    }
-
-    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-    if (!physComp)
-    {
-        StopDraggingPart();
-        return;
-    }
-
-    auto* body = physics->GetBody(physComp->GetPhysicsBody());
+    auto [physComp, body] = GetPhysicsBody(node);
     if (!body)
     {
         StopDraggingPart();
         return;
     }
+
+    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
 
     glm::vec3 rayOrigin{0.0f};
     glm::vec3 rayDir{0.0f};
@@ -1032,15 +999,15 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     // without any jump. Connector-based offsets are only used in the snap case below.
     glm::vec3 freeBodyPosition = planeHitPoint + dragBodyOffset_;
 
-    if (hoveredAssemblyInstanceId_ != UINT32_MAX)
+    if (hoveredAssembly_.instanceId != UINT32_MAX)
     {
         const glm::vec3 hoverNormal =
-            BrickPlayer::Snap::NormalizeOrDefault(hoveredAssemblyHitNormal_, glm::vec3(0.0f, 1.0f, 0.0f));
+            BrickPlayer::Snap::NormalizeOrDefault(hoveredAssembly_.hitNormal, glm::vec3(0.0f, 1.0f, 0.0f));
         const float lduToWorldScale = GetLduToWorldScale();
         const float surfaceGap = std::max(8.0f * lduToWorldScale * 0.15f, 0.002f);
         if (lockedDraggedConnector)
         {
-            const glm::vec3 connectorAnchor = hoveredAssemblyHitPoint_ + hoverNormal * surfaceGap;
+            const glm::vec3 connectorAnchor = hoveredAssembly_.hitPoint + hoverNormal * surfaceGap;
             freeBodyPosition = connectorAnchor - body->rotation * lockedDraggedConnector->localPosition + body->rotation * scaledOffset;
         }
         else
@@ -1050,7 +1017,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
                 ? disassembledIt->second.halfExtent
                 : glm::vec3(0.01f);
             const float supportDistance = ProjectHalfExtentOnAxis(halfExtent, body->rotation, hoverNormal);
-            freeBodyPosition = hoveredAssemblyHitPoint_ + hoverNormal * (supportDistance + surfaceGap);
+            freeBodyPosition = hoveredAssembly_.hitPoint + hoverNormal * (supportDistance + surfaceGap);
         }
     }
     else
@@ -1098,12 +1065,12 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         }
         desiredBodyPosition = snapCandidate.desiredBodyPosition;
         desiredBodyRotation = snapCandidate.desiredRotation;
-        hoveredHitPoint_ = snapCandidate.desiredTranslation;
+        hoveredDisassembled_.hitPoint = snapCandidate.desiredTranslation;
     }
     else
     {
         activeSnapCandidate_ = {};
-        hoveredHitPoint_ = hoveredAssemblyInstanceId_ != UINT32_MAX ? hoveredAssemblyHitPoint_ : planeHitPoint;
+        hoveredDisassembled_.hitPoint = hoveredAssembly_.instanceId != UINT32_MAX ? hoveredAssembly_.hitPoint : planeHitPoint;
     }
 
     const float deltaSeconds = std::max(engine_->GetDeltaSeconds(), 1.0f / 240.0f);
@@ -1129,7 +1096,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     physics->SetBodyTransform(physComp->GetPhysicsBody(), desiredBodyPosition, desiredBodyRotation, true);
     ApplyPhysicsPoseToNode(node, desiredBodyPosition, desiredBodyRotation);
 
-    hoveredDisassembledInstanceId_ = draggedInstanceId_;
+    hoveredDisassembled_.instanceId = draggedInstanceId_;
     // Use hovered (green) outline for dragged part to distinguish from assembly hover (orange)
     GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
     GetEngine().GetScene().ClearSelection();
@@ -1139,7 +1106,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
 }
 
 bool BrickPlayerGameInstance::TryBuildSnapCandidate(Assets::Node* node,
-                                                    const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                                    const Runtime::PhysicsComponent* physComp,
                                                     const glm::vec3& freeBodyPosition,
                                                     DragSnapCandidate& outCandidate)
 {
@@ -1154,13 +1121,13 @@ bool BrickPlayerGameInstance::TryBuildSnapCandidate(Assets::Node* node,
 }
 
 bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
-                                                          const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+                                                          const Runtime::PhysicsComponent* physComp,
                                                           const glm::vec3& freeBodyPosition,
                                                           DragSnapCandidate& outCandidate)
 {
     outCandidate = {};
 
-    if (!node || !physComp || hoveredAssemblyInstanceId_ == UINT32_MAX)
+    if (!node || !physComp || hoveredAssembly_.instanceId == UINT32_MAX)
     {
         return false;
     }
@@ -1172,7 +1139,7 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
     }
 
     const auto& draggedConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
-    const std::vector<WorldSnapConnector> targetConnectors = BuildWorldConnectors(hoveredAssemblyInstanceId_);
+    const std::vector<WorldSnapConnector> targetConnectors = BuildWorldConnectors(hoveredAssembly_.instanceId);
     if (draggedConnectors.empty() || targetConnectors.empty())
     {
         return false;
@@ -1225,8 +1192,8 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
                     BrickPlayer::Snap::EvaluateHoverFilter(*targetConnector.connector,
                                                            targetConnector.worldPosition,
                                                            targetConnector.worldAxis,
-                                                           hoveredAssemblyHitPoint_,
-                                                           hoveredAssemblyHitNormal_,
+                                                           hoveredAssembly_.hitPoint,
+                                                           hoveredAssembly_.hitNormal,
                                                            lduToWorldScale);
                 if (!hoverFilter.passes)
                 {
@@ -1325,18 +1292,18 @@ bool BrickPlayerGameInstance::TryBuildShadowSnapCandidate(Assets::Node* node,
     return foundCandidate;
 }
 
-bool BrickPlayerGameInstance::TryBuildOriginalSnapCandidate(const std::shared_ptr<Runtime::PhysicsComponent>& physComp,
+bool BrickPlayerGameInstance::TryBuildOriginalSnapCandidate(const Runtime::PhysicsComponent* physComp,
                                                             const glm::vec3& freeBodyPosition,
                                                             DragSnapCandidate& outCandidate)
 {
     outCandidate = {};
 
-    if (!physComp || hoveredAssemblyInstanceId_ == UINT32_MAX)
+    if (!physComp || hoveredAssembly_.instanceId == UINT32_MAX)
     {
         return false;
     }
 
-    if (!AreNodesOriginallyConnectable(draggedInstanceId_, hoveredAssemblyInstanceId_))
+    if (!AreNodesOriginallyConnectable(draggedInstanceId_, hoveredAssembly_.instanceId))
     {
         return false;
     }
@@ -1357,7 +1324,7 @@ bool BrickPlayerGameInstance::TryBuildOriginalSnapCandidate(const std::shared_pt
     }
 
     outCandidate.valid = true;
-    outCandidate.targetInstanceId = hoveredAssemblyInstanceId_;
+    outCandidate.targetInstanceId = hoveredAssembly_.instanceId;
     outCandidate.desiredTranslation = originalState.worldTranslation;
     outCandidate.desiredRotation = originalState.worldRotation;
     outCandidate.desiredBodyPosition = desiredBodyPosition;
@@ -1470,96 +1437,6 @@ const BrickPlayer::Shadow::FSnapConnector* BrickPlayerGameInstance::GetLockedDra
     }
 
     return &localConnectors[lockedDraggedConnectorIndex_];
-}
-
-int BrickPlayerGameInstance::ScoreShadowCandidate(uint32_t draggedId,
-                                                  const glm::quat& desiredRotation,
-                                                  const glm::vec3& desiredTranslation,
-                                                  const WorldSnapConnector& anchorTarget) const
-{
-    auto partIt = nodePartFileMap_.find(draggedId);
-    if (partIt == nodePartFileMap_.end())
-    {
-        return 0;
-    }
-
-    const auto& draggedConnectors = shadowLibrary_.GetConnectorsForPart(partIt->second);
-    if (draggedConnectors.empty())
-    {
-        return 0;
-    }
-
-    const BrickPlayer::Snap::FScaleMetrics scaleMetrics =
-        BrickPlayer::Snap::BuildScaleMetrics(GetLduToWorldScale());
-    const float matchDistance = std::max(scaleMetrics.studPitch * 0.3f, 0.004f);
-    const float searchRadius = std::max(scaleMetrics.studPitch * 6.0f, GetSnapDistanceThreshold(draggedId) * 6.0f);
-    const float axisDotThreshold = 0.96f;
-
-    std::vector<WorldSnapConnector> nearbyTargets;
-    for (const auto& node : engine_->GetScene().Nodes())
-    {
-        const uint32_t nodeId = node->GetInstanceId();
-        if (nodeId == draggedId || disassembledNodes_.count(nodeId) || nodeStepMap_.find(nodeId) == nodeStepMap_.end())
-        {
-            continue;
-        }
-
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable() || !render->GetVisible())
-        {
-            continue;
-        }
-
-        if (glm::distance(node->WorldTranslation(), anchorTarget.worldPosition) > searchRadius)
-        {
-            continue;
-        }
-
-        std::vector<WorldSnapConnector> nodeConnectors = BuildWorldConnectors(nodeId);
-        nearbyTargets.insert(nearbyTargets.end(), nodeConnectors.begin(), nodeConnectors.end());
-    }
-
-    int matchedConnectorCount = 0;
-    for (const BrickPlayer::Shadow::FSnapConnector& draggedConnector : draggedConnectors)
-    {
-        const glm::quat worldRotation = glm::normalize(desiredRotation * draggedConnector.localRotation);
-        const glm::vec3 worldAxis = glm::normalize(worldRotation * glm::vec3(0.0f, 1.0f, 0.0f));
-        const glm::vec3 worldPosition = desiredTranslation + desiredRotation * draggedConnector.localPosition;
-
-        float bestMatchDistance = FLT_MAX;
-        bool matched = false;
-        for (const WorldSnapConnector& targetConnector : nearbyTargets)
-        {
-            if (!targetConnector.connector
-                || !BrickPlayer::Snap::AreConnectorsCompatible(draggedConnector,
-                                                               *targetConnector.connector,
-                                                               scaleMetrics.lduToWorldScale))
-            {
-                continue;
-            }
-
-            if (glm::dot(worldAxis, targetConnector.worldAxis) < axisDotThreshold)
-            {
-                continue;
-            }
-
-            const float distance = glm::distance(worldPosition, targetConnector.worldPosition);
-            if (distance > matchDistance || distance >= bestMatchDistance)
-            {
-                continue;
-            }
-
-            bestMatchDistance = distance;
-            matched = true;
-        }
-
-        if (matched)
-        {
-            matchedConnectorCount++;
-        }
-    }
-
-    return matchedConnectorCount;
 }
 
 bool BrickPlayerGameInstance::AreNodesOriginallyConnectable(uint32_t draggedId, uint32_t targetId) const
@@ -2095,15 +1972,6 @@ void BrickPlayerGameInstance::DisassembleSelected()
     if (!node)
         return;
 
-    auto render = node->GetComponent<Runtime::RenderComponent>();
-    if (!render || !render->IsDrawable())
-        return;
-
-    uint32_t modelId = render->GetModelId();
-    const auto* model = GetEngine().GetScene().GetModel(modelId);
-    if (!model)
-        return;
-
     // Record world transform before detaching from parent
     glm::vec3 worldTranslation = node->WorldTranslation();
     glm::quat worldRotation = node->WorldRotation();
@@ -2119,42 +1987,20 @@ void BrickPlayerGameInstance::DisassembleSelected()
         node->RecalcTransform(true);
     }
 
-    // Remove any existing physics body before creating a new one
-    auto existingPhys = node->GetComponent<Runtime::PhysicsComponent>();
+    auto bodyResult = CreateDynamicPhysicsBody(node, worldScale, worldRotation);
+    if (!bodyResult.created)
+        return;
+
 #if WITH_PHYSIC
+    // Apply force along the hit surface normal so the part pops outward
+    auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    if (existingPhys && physics)
+    if (physComp && physics)
     {
-        NextBodyID oldBody = existingPhys->GetPhysicsBody();
-        if (!oldBody.IsInvalid())
-        {
-            physics->RemoveBody(oldBody);
-        }
-    }
-#endif
-
-    glm::vec3 aabbMin = model->GetLocalAABBMin();
-    glm::vec3 aabbMax = model->GetLocalAABBMax();
-    // CreateBoxBody expects FULL extent (it halves internally for Jolt's BoxShape)
-    glm::vec3 fullExtent = (aabbMax - aabbMin) * glm::abs(worldScale);
-    fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
-    glm::vec3 halfExtent = fullExtent * 0.5f;
-    glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
-    glm::vec3 worldCenter = glm::vec3(node->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
-    // Physics offset is stored in node local space. Node::TickVelocity applies scale and rotation.
-    glm::vec3 physicsOffset = aabbCenter;
-
-#if WITH_PHYSIC
-    if (physics)
-    {
-        auto phys = std::make_shared<Runtime::PhysicsComponent>();
-        phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-        auto bodyId = physics->CreateBoxBody(worldCenter, worldRotation, fullExtent, NextMotionType::Dynamic);
-        phys->BindPhysicsBody(bodyId);
-        phys->SetPhysicsOffset(physicsOffset);
-        node->AddComponent(phys);
-
-        // Apply force along the hit surface normal so the part pops outward
+        const NextBodyID bodyId = physComp->GetPhysicsBody();
+        const auto* model = GetEngine().GetScene().GetModel(
+            node->GetComponent<Runtime::RenderComponent>()->GetModelId());
+        glm::vec3 fullExtent = glm::max((model->GetLocalAABBMax() - model->GetLocalAABBMin()) * glm::abs(worldScale), glm::vec3(0.002f));
         float volume = fullExtent.x * fullExtent.y * fullExtent.z;
         float impulseMagnitude = std::max(volume * 80000.0f, 800.0f);
         glm::vec3 forceDir = glm::length(selectedHitNormal_) > 0.001f
@@ -2164,8 +2010,8 @@ void BrickPlayerGameInstance::DisassembleSelected()
     }
 #endif
 
-    disassembledNodes_[selectedInstanceId_] = {halfExtent};
-    hoveredDisassembledInstanceId_ = UINT32_MAX;
+    disassembledNodes_[selectedInstanceId_] = {bodyResult.halfExtent};
+    hoveredDisassembled_.instanceId = UINT32_MAX;
     selectedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().ClearHoveredId();
@@ -2273,36 +2119,18 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         newRender->SetRayCastVisible(true);
         clone->AddComponent(newRender);
 
-        // Create dynamic physics body
-        const auto* model = scene.GetModel(tmpl.modelId);
-        if (model)
-        {
-            glm::vec3 aabbMin = model->GetLocalAABBMin();
-            glm::vec3 aabbMax = model->GetLocalAABBMax();
-            glm::vec3 fullExtent = aabbMax - aabbMin;
-            fullExtent = glm::max(fullExtent, glm::vec3(0.002f));
-            glm::vec3 halfExtent = fullExtent * 0.5f;
-            glm::vec3 aabbCenter = (aabbMin + aabbMax) * 0.5f;
-            glm::vec3 worldCenter = glm::vec3(clone->WorldTransform() * glm::vec4(aabbCenter, 1.0f));
-
-#if WITH_PHYSIC
-            auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-            if (physics)
-            {
-                auto phys = std::make_shared<Runtime::PhysicsComponent>();
-                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-                auto bodyId = physics->CreateBoxBody(worldCenter, glm::quat(1, 0, 0, 0), fullExtent, NextMotionType::Dynamic);
-                phys->BindPhysicsBody(bodyId);
-                phys->SetPhysicsOffset(aabbCenter);
-                clone->AddComponent(phys);
-                WakeLoosePartBody(physics, bodyId, newId);
-            }
-#endif
-
-            disassembledNodes_[newId] = {halfExtent};
-        }
-
         scene.AddNode(clone);
+
+        auto bodyResult = CreateDynamicPhysicsBody(clone.get(), glm::vec3(1.0f), glm::quat(1, 0, 0, 0));
+        if (bodyResult.created)
+        {
+#if WITH_PHYSIC
+            auto physComp = clone->GetComponent<Runtime::PhysicsComponent>();
+            if (physComp)
+                WakeLoosePartBody(NextEngine::GetInstance()->GetPhysicsEngine(), physComp->GetPhysicsBody(), newId);
+#endif
+            disassembledNodes_[newId] = {bodyResult.halfExtent};
+        }
 
         // Register in tracking maps (step 1 = inventory, not baseplate)
         nodeStepMap_[newId] = 1;
@@ -2317,6 +2145,7 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         state.worldTranslation = clone->WorldTranslation();
         state.worldRotation = clone->WorldRotation();
         state.worldScale = clone->WorldScale();
+        const auto* model = scene.GetModel(tmpl.modelId);
         if (model)
         {
             state.worldAabbMin = model->GetLocalAABBMin();

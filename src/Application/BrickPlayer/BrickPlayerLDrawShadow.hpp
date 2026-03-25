@@ -3,6 +3,22 @@
 #include "Common/CoreMinimal.hpp"
 #include "Assets/Loaders/FLDrawConfig.h"
 
+#include <algorithm>
+#include <cctype>
+
+namespace BrickPlayer
+{
+    inline std::string ToLowerCopy(const std::string& text)
+    {
+        std::string lower = text;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return lower;
+    }
+}
+
 namespace BrickPlayer::Shadow
 {
     enum class ESnapKind : uint8_t

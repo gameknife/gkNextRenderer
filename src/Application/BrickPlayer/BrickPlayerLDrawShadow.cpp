@@ -6,9 +6,6 @@
 
 #include <fstream>
 #include <sstream>
-#include <algorithm>
-#include <cctype>
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
@@ -47,16 +44,6 @@ namespace BrickPlayer::Shadow
 
             const size_t end = text.find_last_not_of(" \t\r\n");
             return text.substr(begin, end - begin + 1);
-        }
-
-        std::string ToLowerCopy(const std::string& text)
-        {
-            std::string lower = text;
-            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c)
-            {
-                return static_cast<char>(std::tolower(c));
-            });
-            return lower;
         }
 
         std::vector<std::string> SplitWhitespace(const std::string& text)

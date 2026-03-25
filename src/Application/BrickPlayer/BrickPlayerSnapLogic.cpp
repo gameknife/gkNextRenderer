@@ -1,22 +1,7 @@
 #include "BrickPlayerSnapLogic.hpp"
 
-#include <algorithm>
-#include <cctype>
-
 namespace BrickPlayer::Snap
 {
-    namespace
-    {
-        std::string ToLowerCopy(const std::string& text)
-        {
-            std::string lower = text;
-            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c)
-            {
-                return static_cast<char>(std::tolower(c));
-            });
-            return lower;
-        }
-    }
 
     FScaleMetrics BuildScaleMetrics(float lduToWorldScale)
     {

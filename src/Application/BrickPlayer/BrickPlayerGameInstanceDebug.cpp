@@ -271,50 +271,30 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
         return partIt->second;
     };
 
+    const float lduScale = GetLduToWorldScale();
+    auto isTargetCompatible = [&](const BrickPlayer::Shadow::FSnapConnector& target) -> bool
+    {
+        if (hasLockedConnector)
+            return BrickPlayer::Snap::AreConnectorsCompatible(*lockedDraggedConnector, target, lduScale);
+        for (const WorldSnapConnector& dc : draggedConnectors)
+        {
+            if (dc.connector && BrickPlayer::Snap::AreConnectorsCompatible(*dc.connector, target, lduScale))
+                return true;
+        }
+        return false;
+    };
+
     auto countCompatibleTargetConnectors = [&](const std::vector<WorldSnapConnector>& candidateConnectors) -> int
     {
         if (!hasDraggedPart || draggedConnectors.empty())
-        {
             return 0;
-        }
-
-        int compatibleCount = 0;
-        for (const WorldSnapConnector& targetConnector : candidateConnectors)
+        int count = 0;
+        for (const WorldSnapConnector& tc : candidateConnectors)
         {
-            if (!targetConnector.connector)
-            {
-                continue;
-            }
-
-            bool isCompatible = false;
-            if (hasLockedConnector)
-            {
-                isCompatible = BrickPlayer::Snap::AreConnectorsCompatible(*lockedDraggedConnector,
-                                                                         *targetConnector.connector,
-                                                                         GetLduToWorldScale());
-            }
-            else
-            {
-                for (const WorldSnapConnector& draggedConnector : draggedConnectors)
-                {
-                    if (draggedConnector.connector
-                        && BrickPlayer::Snap::AreConnectorsCompatible(*draggedConnector.connector,
-                                                                      *targetConnector.connector,
-                                                                      GetLduToWorldScale()))
-                    {
-                        isCompatible = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isCompatible)
-            {
-                compatibleCount++;
-            }
+            if (tc.connector && isTargetCompatible(*tc.connector))
+                count++;
         }
-
-        return compatibleCount;
+        return count;
     };
 
     auto drawConnector = [](const WorldSnapConnector& connector, const glm::vec4& color, float pointSize, float lineSize)
@@ -359,15 +339,13 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
 
     std::vector<WorldSnapConnector> hoveredTargetConnectors;
     int hoverFilteredCompatibleCount = 0;
-    if (hasDraggedPart && hoveredAssemblyInstanceId_ != UINT32_MAX)
+    if (hasDraggedPart && hoveredAssembly_.instanceId != UINT32_MAX)
     {
-        hoveredTargetConnectors = BuildWorldConnectors(hoveredAssemblyInstanceId_);
+        hoveredTargetConnectors = BuildWorldConnectors(hoveredAssembly_.instanceId);
 
         if (!hoveredTargetConnectors.empty())
         {
-            const float lduToWorldScale = GetLduToWorldScale();
-
-            NextEngineHelper::DrawAuxPoint(hoveredAssemblyHitPoint_, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
+            NextEngineHelper::DrawAuxPoint(hoveredAssembly_.hitPoint, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
 
             for (size_t targetConnectorIndex = 0; targetConnectorIndex < hoveredTargetConnectors.size(); ++targetConnectorIndex)
             {
@@ -377,35 +355,15 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                     continue;
                 }
 
-                bool isCompatible = false;
-                if (hasLockedConnector)
-                {
-                    isCompatible = BrickPlayer::Snap::AreConnectorsCompatible(*lockedDraggedConnector,
-                                                                             *targetConnector.connector,
-                                                                             lduToWorldScale);
-                }
-                else
-                {
-                    for (const WorldSnapConnector& draggedConnector : draggedConnectors)
-                    {
-                        if (draggedConnector.connector
-                            && BrickPlayer::Snap::AreConnectorsCompatible(*draggedConnector.connector,
-                                                                          *targetConnector.connector,
-                                                                          lduToWorldScale))
-                        {
-                            isCompatible = true;
-                            break;
-                        }
-                    }
-                }
+                const bool isCompatible = isTargetCompatible(*targetConnector.connector);
 
                 const BrickPlayer::Snap::FHoverFilterResult hoverFilter =
                     BrickPlayer::Snap::EvaluateHoverFilter(*targetConnector.connector,
                                                            targetConnector.worldPosition,
                                                            targetConnector.worldAxis,
-                                                           hoveredAssemblyHitPoint_,
-                                                           hoveredAssemblyHitNormal_,
-                                                           lduToWorldScale);
+                                                           hoveredAssembly_.hitPoint,
+                                                           hoveredAssembly_.hitNormal,
+                                                           lduScale);
                 const bool passesHoverFilter = hoverFilter.passes;
 
                 if (isCompatible && passesHoverFilter)
@@ -441,7 +399,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
         }
     }
 
-    const uint32_t debugTargetInstanceId = activeSnapCandidate_.valid ? activeSnapCandidate_.targetInstanceId : hoveredAssemblyInstanceId_;
+    const uint32_t debugTargetInstanceId = activeSnapCandidate_.valid ? activeSnapCandidate_.targetInstanceId : hoveredAssembly_.instanceId;
     const std::vector<WorldSnapConnector> debugTargetConnectors = debugTargetInstanceId != UINT32_MAX
         ? BuildWorldConnectors(debugTargetInstanceId)
         : std::vector<WorldSnapConnector>{};
@@ -528,18 +486,18 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                                             activeSnapCandidate_.targetConnectorIndex);
                 }
             }
-            else if (hoveredAssemblyInstanceId_ != UINT32_MAX)
+            else if (hoveredAssembly_.instanceId != UINT32_MAX)
             {
                 snapState = "Hovering assembled part, no valid candidate";
             }
 
             const ImVec4 stateColor = activeSnapCandidate_.valid
                 ? (activeSnapCandidate_.restoreOriginalHierarchy ? warningColor : successColor)
-                : (hoveredAssemblyInstanceId_ != UINT32_MAX ? warningColor : accentColor);
+                : (hoveredAssembly_.instanceId != UINT32_MAX ? warningColor : accentColor);
 
             drawKeyValue("State:", snapState, stateColor);
-            drawKeyValue("Hover target:", hoveredAssemblyInstanceId_ != UINT32_MAX ? "yes" : "no",
-                         boolColor(hoveredAssemblyInstanceId_ != UINT32_MAX));
+            drawKeyValue("Hover target:", hoveredAssembly_.instanceId != UINT32_MAX ? "yes" : "no",
+                         boolColor(hoveredAssembly_.instanceId != UINT32_MAX));
 
             drawSectionTitle("Dragged Part");
             drawKeyValue("Node name:", draggedNode ? draggedNode->GetName() : "<missing>",
@@ -605,16 +563,16 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                 drawKeyValue("Connector count:", fmt::format("{}", static_cast<int>(debugTargetConnectors.size())),
                              debugTargetConnectors.empty() ? subtleColor : valueColor);
                 drawKeyValue("Hovered target:",
-                             debugTargetInstanceId == hoveredAssemblyInstanceId_ ? "yes" : "no",
-                             boolColor(debugTargetInstanceId == hoveredAssemblyInstanceId_));
+                             debugTargetInstanceId == hoveredAssembly_.instanceId ? "yes" : "no",
+                             boolColor(debugTargetInstanceId == hoveredAssembly_.instanceId));
 
-                if (hoveredAssemblyInstanceId_ != UINT32_MAX)
+                if (hoveredAssembly_.instanceId != UINT32_MAX)
                 {
                     drawKeyValue("Hover point:",
                                  fmt::format("{:.4f}, {:.4f}, {:.4f}",
-                                             hoveredAssemblyHitPoint_.x,
-                                             hoveredAssemblyHitPoint_.y,
-                                             hoveredAssemblyHitPoint_.z),
+                                             hoveredAssembly_.hitPoint.x,
+                                             hoveredAssembly_.hitPoint.y,
+                                             hoveredAssembly_.hitPoint.z),
                                  valueColor);
                 }
 
