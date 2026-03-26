@@ -6,6 +6,7 @@ namespace Assets
 {
     inline constexpr const char* kLDrawLibraryRootEntry = "assets/ldraw";
     inline constexpr const char* kLDrawShadowLibraryRootEntry = "assets/ldrawShadow";
+    inline constexpr const char* kLDrawConnectivityRootEntry = "assets/ldrawConn";
     inline constexpr const char* kLDrawLibraryPakPath = "assets/paks/ldraw.pak";
 
     bool EnsureLDrawLibraryPakMounted();

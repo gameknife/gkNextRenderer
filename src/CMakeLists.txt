@@ -34,6 +34,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LDrawGeometry.cpp
 	Tests/Test_LDrawLoader.cpp
 	Tests/Test_LDrawParser.cpp
+	Tests/Test_LDrawConnectivity.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp

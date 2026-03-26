@@ -63,8 +63,11 @@ namespace BrickPlayer::Shadow
 
     private:
         std::vector<FSnapConnector> LoadConnectorsForPart(const std::string& partFile) const;
+        std::vector<FSnapConnector> LoadConnectorsFromConnFile(const std::string& partFile) const;
+        std::vector<FSnapConnector> LoadConnectorsFromShadow(const std::string& partFile) const;
 
         bool initialized_ = false;
+        bool connAvailable_ = false;
         float lduToWorldScale_ = 0.0f;
         Assets::LDrawFileResolver originalResolver_;
         Assets::LDrawFileResolver shadowResolver_;

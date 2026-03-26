@@ -1,5 +1,6 @@
 #include "BrickPlayerLDrawShadow.hpp"
 
+#include "Assets/Loaders/FLDrawConnectivity.h"
 #include "Utilities/FileHelper.hpp"
 
 #include <spdlog/spdlog.h>
@@ -500,6 +501,16 @@ namespace BrickPlayer::Shadow
         shadowResolver_.SetWarnOnMissing(false);
         lduToWorldScale_ = lduToWorldScale;
         connectorCache_.clear();
+
+        // Check if Studio .conn files are available in the pak
+        auto* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
+        connAvailable_ = pakSystem && pakSystem->HasMountedEntry(
+            std::string(Assets::kLDrawConnectivityRootEntry) + "/3001.conn");
+        if (connAvailable_)
+        {
+            SPDLOG_INFO("BrickPlayer: Studio .conn connectivity data available");
+        }
+
         initialized_ = true;
         return true;
     }
@@ -525,6 +536,171 @@ namespace BrickPlayer::Shadow
     }
 
     std::vector<FSnapConnector> FShadowLibrary::LoadConnectorsForPart(const std::string& partFile) const
+    {
+        // Try Studio .conn file first (broader coverage)
+        if (connAvailable_)
+        {
+            std::vector<FSnapConnector> connResult = LoadConnectorsFromConnFile(partFile);
+            if (!connResult.empty())
+            {
+                return connResult;
+            }
+        }
+
+        // Fall back to shadow library (text-based LDCAD SNAP_CYL)
+        return LoadConnectorsFromShadow(partFile);
+    }
+
+    std::vector<FSnapConnector> FShadowLibrary::LoadConnectorsFromConnFile(const std::string& partFile) const
+    {
+        // Extract part number from filename: "parts/3001.dat" -> "3001"
+        std::string partNumber = partFile;
+        const size_t lastSlash = partNumber.find_last_of("/\\");
+        if (lastSlash != std::string::npos)
+        {
+            partNumber = partNumber.substr(lastSlash + 1);
+        }
+        const size_t dotPos = partNumber.rfind('.');
+        if (dotPos != std::string::npos)
+        {
+            partNumber = partNumber.substr(0, dotPos);
+        }
+        partNumber = ToLowerCopy(partNumber);
+
+        const std::string connEntry = std::string(Assets::kLDrawConnectivityRootEntry)
+            + "/" + partNumber + ".conn";
+
+        Assets::LDrawConn::FConnFile connFile;
+        if (!Assets::LDrawConn::LoadConnFile(connEntry, connFile))
+        {
+            return {};
+        }
+
+        std::vector<FSnapConnector> connectors;
+
+        // Convert grid elements: extract stud/anti-stud center positions
+        for (const auto& grid : connFile.grids)
+        {
+            // Only process top stud (3,23) and bottom anti-stud (2,0)/(2,1) grids
+            const bool isTopStud = (grid.id1 == 3 && grid.id2 == 23);
+            const bool isBotAntiStud = (grid.id1 == 2 && (grid.id2 == 0 || grid.id2 == 1));
+            if (!isTopStud && !isBotAntiStud)
+            {
+                continue;
+            }
+
+            const ESnapGender gender = isTopStud ? ESnapGender::Male : ESnapGender::Female;
+
+            // Grid spacing: 10 LDU per half-stud unit (full stud pitch = 20 LDU)
+            constexpr float kHalfStudPitch = 10.0f;
+            constexpr float kStudRadius = 3.0f;   // LDU
+            constexpr float kStudLength = 4.0f;    // LDU
+
+            // Iterate vertices; stud centers have type=10 or type=20, value=4
+            for (uint16_t row = 0; row <= grid.gridZ; ++row)
+            {
+                for (uint16_t col = 0; col <= grid.gridX; ++col)
+                {
+                    const size_t idx = static_cast<size_t>(row) * (grid.gridX + 1) + col;
+                    const auto& vertex = grid.vertices[idx];
+
+                    if (!vertex.IsStudCenter())
+                    {
+                        continue;
+                    }
+
+                    // Compute LDU position relative to grid origin
+                    const float localX = static_cast<float>(col) * kHalfStudPitch;
+                    const float localZ = -static_cast<float>(row) * kHalfStudPitch;
+                    const glm::vec3 gridOffset(localX, 0.0f, localZ);
+
+                    // Transform to part-local LDU coordinates
+                    const glm::vec3 lduPos = grid.transform.position
+                        + grid.transform.rotation * gridOffset;
+
+                    // Convert from LDraw coordinate system to engine
+                    // LDraw: X-right, Y-down, Z-back -> Engine: X-left, Y-up, Z-back
+                    const glm::vec3 enginePos = ConvertPointToEngine(lduPos, lduToWorldScale_);
+                    const glm::mat3 engineBasis = ConvertBasisToEngine(grid.transform.rotation);
+
+                    FSnapConnector connector;
+                    connector.kind = ESnapKind::Cylinder;
+                    connector.gender = gender;
+                    connector.localPosition = enginePos;
+                    connector.localRotation = glm::quat_cast(engineBasis);
+                    connector.radius = kStudRadius * lduToWorldScale_;
+                    connector.length = kStudLength * lduToWorldScale_;
+                    connector.sections.push_back({"R", connector.radius, connector.length});
+                    connectors.push_back(std::move(connector));
+                }
+            }
+        }
+
+        // Convert point connectors (Technic pin/axle/clip/bar)
+        for (const auto& point : connFile.points)
+        {
+            ESnapGender gender = ESnapGender::Unknown;
+            float radius = 0.0f;
+            std::string profile = "R";  // Round by default
+
+            switch (point.subType)
+            {
+            case 3:   // Technic Pin (male)
+                gender = ESnapGender::Male;
+                radius = 3.0f;
+                break;
+            case 2:   // Technic Pinhole (female)
+                gender = ESnapGender::Female;
+                radius = 3.0f;
+                break;
+            case 7:   // Technic Axle (male)
+                gender = ESnapGender::Male;
+                radius = 3.0f;
+                profile = "A";
+                break;
+            case 6:   // Technic Axlehole (female)
+                gender = ESnapGender::Female;
+                radius = 3.0f;
+                profile = "A";
+                break;
+            case 13:  // Bar (male)
+                gender = ESnapGender::Male;
+                radius = 1.6f;
+                break;
+            case 11:  // Bar for Round Hole (male)
+                gender = ESnapGender::Male;
+                radius = 1.6f;
+                break;
+            case 12:  // Clip (female)
+                gender = ESnapGender::Female;
+                radius = 2.0f;
+                break;
+            case 10:  // Round Hole (female)
+                gender = ESnapGender::Female;
+                radius = 1.6f;
+                break;
+            default:
+                continue;  // Unknown sub-type, skip
+            }
+
+            const glm::vec3 enginePos = ConvertPointToEngine(point.transform.position, lduToWorldScale_);
+            const glm::mat3 engineBasis = ConvertBasisToEngine(point.transform.rotation);
+
+            FSnapConnector connector;
+            connector.kind = ESnapKind::Cylinder;
+            connector.gender = gender;
+            connector.localPosition = enginePos;
+            connector.localRotation = glm::quat_cast(engineBasis);
+            connector.radius = radius * lduToWorldScale_;
+            connector.length = point.length * lduToWorldScale_;
+            connector.sections.push_back({profile, connector.radius, connector.length});
+            connectors.push_back(std::move(connector));
+        }
+
+        return connectors;
+    }
+
+    std::vector<FSnapConnector> FShadowLibrary::LoadConnectorsFromShadow(const std::string& partFile) const
     {
         std::unordered_map<std::string, std::vector<FRawConnector>> originalCache;
         std::unordered_map<std::string, std::vector<FRawConnector>> shadowOnlyCache;
