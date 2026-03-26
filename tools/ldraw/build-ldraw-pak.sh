@@ -232,6 +232,7 @@ STAGE_ROOT="${PACKAGER_RUNTIME_ROOT}/ldraw_pak_stage"
 STAGE_ASSETS_ROOT="${STAGE_ROOT}/assets"
 STAGE_LIBRARY_DIR="${STAGE_ASSETS_ROOT}/ldraw"
 STAGE_SHADOW_DIR="${STAGE_ASSETS_ROOT}/ldrawShadow"
+STAGE_CONN_DIR="${STAGE_ASSETS_ROOT}/ldrawConn"
 
 mkdir -p "$(dirname "${OUTPUT_PAK}")"
 mkdir -p "$(dirname "${MANIFEST_PATH}")"
@@ -267,6 +268,17 @@ if [[ -n "${STUDIO_DIR}" && -d "${STUDIO_DIR}" ]]; then
     echo "Studio 2.0 merge complete: +${TOTAL_ADDED} files added"
 else
     echo "Studio 2.0 library not found, skipping supplement merge"
+fi
+
+# Stage 2c: copy Studio 2.0 connectivity files (.conn)
+if [[ -n "${STUDIO_DIR}" && -d "${STUDIO_DIR}" ]]; then
+    studio_conn_dir="${STUDIO_DIR}/connectivity"
+    if [[ -d "${studio_conn_dir}" ]]; then
+        echo "Copying Studio 2.0 connectivity: ${studio_conn_dir}"
+        sync_directory "${studio_conn_dir}" "${STAGE_CONN_DIR}"
+        conn_count="$(find "${STAGE_CONN_DIR}" -name '*.conn' -type f | wc -l)"
+        echo "  ${conn_count} .conn files staged"
+    fi
 fi
 
 # Stage 3: sync shadow library

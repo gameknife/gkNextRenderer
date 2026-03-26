@@ -183,6 +183,7 @@ $stageRoot = Join-Path $packagerRuntimeRoot "ldraw_pak_stage"
 $stageAssetsRoot = Join-Path $stageRoot "assets"
 $stageLibraryDir = Join-Path $stageAssetsRoot "ldraw"
 $stageShadowDir = Join-Path $stageAssetsRoot "ldrawShadow"
+$stageConnDir = Join-Path $stageAssetsRoot "ldrawConn"
 
 New-Item -ItemType Directory -Force -Path (Split-Path $OutputPak -Parent) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path $ManifestPath -Parent) | Out-Null
@@ -224,6 +225,19 @@ if (-not [string]::IsNullOrWhiteSpace($StudioDir) -and (Test-Path $StudioDir))
 else
 {
     Write-Host "Studio 2.0 library not found, skipping supplement merge"
+}
+
+# Stage 2c: copy Studio 2.0 connectivity files (.conn)
+if (-not [string]::IsNullOrWhiteSpace($StudioDir) -and (Test-Path $StudioDir))
+{
+    $studioConnDir = Join-Path $StudioDir "connectivity"
+    if (Test-Path $studioConnDir)
+    {
+        Write-Host "Copying Studio 2.0 connectivity: $studioConnDir"
+        Sync-Directory -SourceDir $studioConnDir -TargetDir $stageConnDir
+        $connCount = (Get-ChildItem -Path $stageConnDir -File -Filter "*.conn" -ErrorAction SilentlyContinue | Measure-Object).Count
+        Write-Host "  $connCount .conn files staged"
+    }
 }
 
 # Stage 3: sync shadow library
