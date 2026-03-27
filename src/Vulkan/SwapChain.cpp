@@ -165,6 +165,7 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 		}
 	}
 
+#if ANDROID
 	// display p3 for android
 	for (const auto& format : formats)
 	{
@@ -174,7 +175,8 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 			return format;
 		}
 	}
-	
+#endif
+    
 	// sdr fallback
 	for (const auto& format : formats)
 	{

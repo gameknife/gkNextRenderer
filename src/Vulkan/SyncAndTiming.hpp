@@ -13,7 +13,12 @@
 #define SCOPED_GPU_TIMER_FOLDER(name, folder) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name, folder)
 #define SCOPED_GPU_TIMER(name) ScopedGpuTimer scopedGpuTimer(commandBuffer, GpuTimer(), name)
 #define SCOPED_CPU_TIMER(name) ScopedCpuTimer scopedCpuTimer(GpuTimer(), name)
+
+#if __APPLE__
+#define BENCH_MARK_CHECK() return
+#else
 #define BENCH_MARK_CHECK() if(!GOption->HardwareQuery || !valid_) return
+#endif
 
 namespace Vulkan
 {
