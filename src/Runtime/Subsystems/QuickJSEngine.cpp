@@ -17,6 +17,7 @@
 #include <fstream>
 #include <entt/core/hashed_string.hpp>
 #include <cstdlib>
+#include <limits>
 
 #if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
@@ -125,6 +126,18 @@ namespace
         }
 
         return hasTimestamp;
+    }
+
+    int ToQuickJSArity(entt::meta_func::size_type arity)
+    {
+        constexpr auto maxQuickJSArity = static_cast<entt::meta_func::size_type>(std::numeric_limits<int>::max());
+        if (arity > maxQuickJSArity)
+        {
+            SPDLOG_WARN("QuickJS method arity {} exceeds int range; clamping.", static_cast<size_t>(arity));
+            return std::numeric_limits<int>::max();
+        }
+
+        return static_cast<int>(arity);
     }
 
     bool GetLatestTypeScriptTimestamp(const std::filesystem::path& projectDir,
@@ -547,7 +560,7 @@ namespace
             data[1] = JS_NewString(ctx, componentType.c_str());
             data[2] = JS_NewString(ctx, funcName);
 
-            JSValue jsFunc = JS_NewCFunctionData(ctx, ComponentMethodInvoker, func.arity(), 0, 3, data);
+            JSValue jsFunc = JS_NewCFunctionData(ctx, ComponentMethodInvoker, ToQuickJSArity(func.arity()), 0, 3, data);
             JS_SetPropertyStr(ctx, obj, funcName, jsFunc);
         }
 
@@ -793,7 +806,7 @@ namespace
             data[0] = JS_NewUint32(ctx, nodeId);
             data[1] = JS_NewString(ctx, funcName);
 
-            JSValue jsFunc = JS_NewCFunctionData(ctx, NodeMethodInvoker, func.arity(), 0, 2, data);
+            JSValue jsFunc = JS_NewCFunctionData(ctx, NodeMethodInvoker, ToQuickJSArity(func.arity()), 0, 2, data);
             JS_SetPropertyStr(ctx, obj, funcName, jsFunc);
         }
 
@@ -989,7 +1002,7 @@ void QuickJSEngine::RegisterTickCallback(std::function<void(double)> callback)
 #if WITH_QUICKJS
 void QuickJSEngine::TickHotReload(double deltaSeconds)
 {
-#if ANDROID
+#if ANDROID || IOS
     (void)deltaSeconds;
     return;
 #else
@@ -1023,7 +1036,9 @@ bool QuickJSEngine::EnsureTscAvailable(const std::filesystem::path& localTsc)
         return true;
     }
 
-#if WIN32
+#if IOS
+    tscAvailable_ = false;
+#elif WIN32
     int result = std::system("where tsc >nul 2>&1");
     tscAvailable_ = (result == 0);
 #else
