@@ -45,11 +45,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
-
-
-#if __APPLE__
-    setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 1);
-#endif   
+    
     if(GOption->RenderDoc)
     {
 #if WIN32
@@ -67,13 +63,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
 #endif
 
-#if __APPLE__
-        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
-        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
-        setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
-        setenv("MTL_CAPTURE_ENABLED", "1", 1);
-        setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
-#endif
+// #if __APPLE__
+//         setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_OUTPUT_FILE", "~/capture/cap.gputrace", 1);
+//         setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_FAMILY_INDEX", "0", 1);
+//         setenv("MVK_CONFIG_DEFAULT_GPU_CAPTURE_SCOPE_QUEUE_INDEX", "0", 1);
+//         setenv("MTL_CAPTURE_ENABLED", "1", 1);
+//         setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
+// #endif
     }
 
     // Init
