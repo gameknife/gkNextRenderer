@@ -386,6 +386,58 @@ struct FNextPhysicsContext {};
 
 #endif
 
+// Accessor functions for NextCharacterController to reach Jolt internals
+#if WITH_PHYSIC
+JPH::PhysicsSystem* GetJoltPhysicsSystem(NextPhysics* physics);
+JPH::TempAllocator* GetJoltTempAllocator(NextPhysics* physics);
+#endif
+
+// These are defined after FNextPhysicsContext so the type is complete.
+#if WITH_PHYSIC
+
+static FNextPhysicsContext* GetPhysicsContext(NextPhysics* physics)
+{
+    // Access via the public interface: NextPhysics stores context_ as unique_ptr.
+    // We use a small trick: NextCharacterController.cpp declares these as extern.
+    // We implement them here where FNextPhysicsContext is fully defined.
+    return nullptr; // placeholder, real impl below
+}
+
+#endif
+
+// Real accessor implementations using a friend-like pattern:
+// NextPhysics exposes its context_ pointer through these free functions.
+// We store a static map from NextPhysics* -> FNextPhysicsContext* set during Start().
+#include <unordered_map>
+static std::unordered_map<NextPhysics*, FNextPhysicsContext*> sPhysicsContextMap;
+
+#if WITH_PHYSIC
+JPH::PhysicsSystem* GetJoltPhysicsSystem(NextPhysics* physics)
+{
+    auto it = sPhysicsContextMap.find(physics);
+    if (it != sPhysicsContextMap.end() && it->second)
+    {
+        return &it->second->physicsSystem;
+    }
+    return nullptr;
+}
+
+JPH::TempAllocator* GetJoltTempAllocator(NextPhysics* physics)
+{
+    auto it = sPhysicsContextMap.find(physics);
+    if (it != sPhysicsContextMap.end() && it->second)
+    {
+        return &it->second->tempAllocator;
+    }
+    return nullptr;
+}
+#else
+// Stub implementations when physics is disabled
+namespace JPH { class PhysicsSystem; class TempAllocator; }
+JPH::PhysicsSystem* GetJoltPhysicsSystem(NextPhysics*) { return nullptr; }
+JPH::TempAllocator* GetJoltTempAllocator(NextPhysics*) { return nullptr; }
+#endif
+
 NextPhysics::NextPhysics()
 {
     
@@ -417,6 +469,7 @@ void NextPhysics::Start()
 	RegisterTypes();
 
 	context_.reset(new FNextPhysicsContext());
+	sPhysicsContextMap[this] = context_.get();
 
 	//context_->physics_system.SetGravity(Vec3(0,-9.8f,0));
 	// The main way to interact with the bodies in the physics system is through the body interface. There is a locking and a non-locking
@@ -493,6 +546,7 @@ void NextPhysics::Stop()
 	delete Factory::sInstance;
 	Factory::sInstance = nullptr;
 
+	sPhysicsContextMap.erase(this);
 	context_.reset();
 #endif
 }

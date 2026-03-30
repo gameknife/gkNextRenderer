@@ -1,0 +1,63 @@
+#pragma once
+
+#include <memory>
+#include <glm/glm.hpp>
+#include <glm/detail/type_quat.hpp>
+
+#include "Runtime/Subsystems/NextPhysicsTypes.h"
+
+class NextPhysics;
+struct FNextCharacterControllerContext;
+
+enum class ECharacterGroundState
+{
+    OnGround,
+    OnSteepGround,
+    NotSupported,
+    InAir
+};
+
+struct FCharacterControllerSettings
+{
+    float height = 1.75f;          // capsule total height (including caps)
+    float radius = 0.3f;           // capsule radius
+    float maxSlopeAngle = 50.0f;   // degrees
+    float maxStepHeight = 0.35f;   // step-up height
+    float mass = 70.0f;
+    float maxStrength = 100.0f;    // push force on dynamic bodies
+    float padding = 0.02f;         // character padding
+    glm::vec3 initialPosition{0.0f, 1.0f, 0.0f};
+};
+
+class NextCharacterController final
+{
+public:
+    NextCharacterController();
+    ~NextCharacterController();
+
+    /// Create the character. Must be called after NextPhysics::Start().
+    void Create(NextPhysics* physics, const FCharacterControllerSettings& settings);
+
+    /// Destroy the character virtual.
+    void Destroy();
+
+    /// Must be called every frame before physics tick.
+    /// @param inputDirection  World-space horizontal movement direction (normalized or zero).
+    /// @param speed           Movement speed (m/s).
+    /// @param jump            True on the frame the player presses jump.
+    /// @param deltaSeconds    Frame delta time.
+    void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds);
+
+    glm::vec3 GetPosition() const;
+    glm::vec3 GetLinearVelocity() const;
+    ECharacterGroundState GetGroundState() const;
+    bool IsOnGround() const;
+
+    bool IsValid() const;
+
+private:
+    std::unique_ptr<FNextCharacterControllerContext> context_;
+    NextPhysics* physics_ = nullptr;
+    glm::vec3 velocity_{0.0f};
+    FCharacterControllerSettings settings_{};
+};

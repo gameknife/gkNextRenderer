@@ -120,6 +120,10 @@ add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
 )
+add_executable(CharacterDemo
+	${src_files_characterdemo}
+	DesktopMain.cpp
+)
 add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
@@ -185,6 +189,7 @@ gkNextEditor
 Packager
 MagicaLego
 BrickPlayer
+CharacterDemo
 )
 else()
 set(AllTargets
@@ -197,6 +202,7 @@ gkNextEditor
 Packager
 MagicaLego
 BrickPlayer
+CharacterDemo
 gkNextUnitTests
 )
 endif()

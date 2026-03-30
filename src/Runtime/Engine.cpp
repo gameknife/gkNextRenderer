@@ -363,7 +363,14 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         OnMouseButton(event);
         break;
     case SDL_EVENT_MOUSE_MOTION:
-        OnCursorPosition(event.motion.x, event.motion.y);
+        if (window_ && SDL_GetWindowRelativeMouseMode(window_->Handle()))
+        {
+            OnCursorPosition(event.motion.xrel, event.motion.yrel);
+        }
+        else
+        {
+            OnCursorPosition(event.motion.x, event.motion.y);
+        }
         break;
     case SDL_EVENT_MOUSE_WHEEL:
         OnScroll(event.wheel.x, event.wheel.y);

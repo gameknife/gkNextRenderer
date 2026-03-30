@@ -305,6 +305,141 @@ namespace
             nodes.push_back(newNode);
         }
     }
+
+    void CharacterPlayground(Assets::EnvironmentSetting& cameraInit,
+                             std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                             std::vector<Assets::Model>& models,
+                             std::vector<Assets::FMaterial>& materials,
+                             std::vector<Assets::LightObject>& lights,
+                             std::vector<Assets::AnimationTrack>& tracks)
+    {
+        // Camera: slightly elevated, looking at origin
+        Assets::Camera defaultCam;
+        defaultCam.name = "PlaygroundCam";
+        defaultCam.ModelView = lookAt(vec3(0, 3, 10), vec3(0, 1, 0), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 60;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 10;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SunIntensity = 800.0f;
+        cameraInit.SkyIntensity = 150.0f;
+
+        // -- Materials --
+        uint32_t matBase = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.5f, 0.5f, 0.5f)), "ground"});         // 0: ground grey
+        materials.push_back({Material::Lambertian(vec3(0.85f, 0.35f, 0.25f)), "box_red"});      // 1: red
+        materials.push_back({Material::Lambertian(vec3(0.25f, 0.55f, 0.85f)), "box_blue"});     // 2: blue
+        materials.push_back({Material::Lambertian(vec3(0.35f, 0.75f, 0.35f)), "box_green"});    // 3: green
+        materials.push_back({Material::Lambertian(vec3(0.9f, 0.8f, 0.3f)), "box_yellow"});      // 4: yellow
+        materials.push_back({Material::Mixture(vec3(0.9f, 0.9f, 0.9f), 0.05f), "box_shiny"});   // 5: shiny white
+
+        // -- Ground plane: large flat box --
+        const float groundHalfSize = 50.0f;
+        const float groundThickness = 0.5f;
+        models.push_back(Assets::FProcModel::CreateBox(
+            vec3(-groundHalfSize, -groundThickness, -groundHalfSize),
+            vec3(groundHalfSize, 0.0f, groundHalfSize)));
+        uint32_t groundModelId = static_cast<uint32_t>(models.size() - 1);
+
+        {
+            auto node = Assets::Node::CreateNode("Ground", vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1), static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(groundModelId);
+            rc->SetVisible(true);
+            rc->SetMaterial({matBase + 0});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        }
+
+        // -- Obstacle box models (3 sizes) --
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f, 0, -0.5f), vec3(0.5f, 1.0f, 0.5f)));
+        uint32_t smallBoxId = static_cast<uint32_t>(models.size() - 1);
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-1.0f, 0, -1.0f), vec3(1.0f, 2.0f, 1.0f)));
+        uint32_t medBoxId = static_cast<uint32_t>(models.size() - 1);
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-1.5f, 0, -1.5f), vec3(1.5f, 3.0f, 1.5f)));
+        uint32_t largeBoxId = static_cast<uint32_t>(models.size() - 1);
+
+        // -- A ramp model (wedge-like box) --
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-2.0f, 0, -4.0f), vec3(2.0f, 1.5f, 4.0f)));
+        uint32_t rampBoxId = static_cast<uint32_t>(models.size() - 1);
+
+        // -- Stair step model --
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-2.0f, 0, -0.5f), vec3(2.0f, 0.3f, 0.5f)));
+        uint32_t stairStepId = static_cast<uint32_t>(models.size() - 1);
+
+        // -- Random obstacle boxes --
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<float> posDist(-30.0f, 30.0f);
+        std::uniform_int_distribution<int> sizeDist(0, 2);
+        std::uniform_int_distribution<int> matDist(1, 5);
+        std::uniform_real_distribution<float> yawDist(0.0f, glm::two_pi<float>());
+
+        constexpr int numBoxes = 30;
+        for (int i = 0; i < numBoxes; ++i)
+        {
+            float x = posDist(rng);
+            float z = posDist(rng);
+
+            // Keep a clear area around spawn
+            if (std::abs(x) < 4.0f && std::abs(z) < 4.0f)
+            {
+                x += (x >= 0 ? 4.0f : -4.0f);
+            }
+
+            int size = sizeDist(rng);
+            uint32_t modelId = (size == 0) ? smallBoxId : (size == 1) ? medBoxId : largeBoxId;
+            uint32_t matId = matBase + static_cast<uint32_t>(matDist(rng));
+            float yaw = yawDist(rng);
+
+            auto node = Assets::Node::CreateNode(
+                "Obstacle_" + std::to_string(i),
+                vec3(x, 0, z),
+                glm::angleAxis(yaw, vec3(0, 1, 0)),
+                vec3(1), static_cast<uint32_t>(nodes.size()));
+
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelId);
+            rc->SetVisible(true);
+            rc->SetMaterial({matId});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        }
+
+        // -- A ramp for testing slope walking --
+        {
+            auto node = Assets::Node::CreateNode("Ramp", vec3(5, 0, -5),
+                glm::angleAxis(glm::radians(15.0f), vec3(1, 0, 0)),
+                vec3(1), static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(rampBoxId);
+            rc->SetVisible(true);
+            rc->SetMaterial({matBase + 4});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        }
+
+        // -- Stairs for step-up testing --
+        for (int i = 0; i < 6; ++i)
+        {
+            float y = static_cast<float>(i) * 0.3f;
+            float z = -10.0f + static_cast<float>(i) * 1.0f;
+            auto node = Assets::Node::CreateNode(
+                "Stair_" + std::to_string(i),
+                vec3(-5, y, z), quat(1, 0, 0, 0), vec3(1),
+                static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(stairStepId);
+            rc->SetVisible(true);
+            rc->SetMaterial({matBase + 2});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        }
+    }
 }
 
 std::vector<std::string> SceneList::AllScenes;
@@ -365,6 +500,7 @@ void SceneList::ScanScenes()
     // sort the scene
     std::sort(AllScenes.begin(), AllScenes.end());
 
+    AllScenes.insert(AllScenes.begin(), "CharacterPlayground.proc");
     AllScenes.insert(AllScenes.begin(), "RTIO.proc");
     AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
 
@@ -422,6 +558,11 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
         if (filename == "RTIO.proc")
         {
             RayTracingInOneWeekend(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "CharacterPlayground.proc")
+        {
+            CharacterPlayground(camera, nodes, models, materials, lights, tracks);
             return true;
         }
         return false;
