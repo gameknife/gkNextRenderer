@@ -10,6 +10,7 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
@@ -43,8 +44,8 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     }
 
     // Build movement direction in world space from camera yaw
-    glm::vec3 forward(std::sin(yaw_), 0.0f, std::cos(yaw_));
-    glm::vec3 right(-std::cos(yaw_), 0.0f, std::sin(yaw_));
+    glm::vec3 forward = GetMoveForward();
+    glm::vec3 right = GetMoveRight();
 
     glm::vec3 moveDir(0.0f);
     if (keyForward_) moveDir += forward;
@@ -89,6 +90,15 @@ void CharacterDemoGameInstance::BeforeSceneRebuild(
     // A distinct green material for the character
     materials.push_back({Assets::Material::Lambertian(glm::vec3(0.2f, 0.8f, 0.3f))});
     characterMatId_ = static_cast<uint32_t>(materials.size() - 1);
+
+    const float halfProjectile = projectileSize_ * 0.5f;
+    models.push_back(Assets::FProcModel::CreateBox(
+        glm::vec3(-halfProjectile),
+        glm::vec3(halfProjectile)));
+    projectileModelId_ = static_cast<uint32_t>(models.size() - 1);
+
+    materials.push_back({Assets::Material::Mixture(glm::vec3(0.95f, 0.95f, 0.98f), 0.1f)});
+    projectileMatId_ = static_cast<uint32_t>(materials.size() - 1);
 }
 
 void CharacterDemoGameInstance::OnSceneLoaded()
@@ -99,6 +109,7 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     FCharacterControllerSettings settings;
     settings.height = 1.75f;
     settings.radius = 0.3f;
+    settings.maxStrength = 2000.0f;
 
     // Place character at scene camera position or a default spawn
     const auto& cam = engine_->GetScene().GetRenderCamera();
@@ -130,6 +141,7 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     characterNode_->AddComponent(physicsComp);
 
     engine_->GetScene().AddNode(characterNode_);
+    SetFirstPersonMode(firstPersonMode_);
     engine_->GetScene().MarkDirty();
 
     // Capture mouse
@@ -157,9 +169,13 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Position: %.1f, %.1f, %.1f", pos.x, pos.y, pos.z);
     ImGui::Text("Velocity: %.1f, %.1f, %.1f", vel.x, vel.y, vel.z);
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
+    ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
+    ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
     ImGui::Separator();
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
+    ImGui::Text("V - Toggle FPS/TPS | LMB - Shoot");
+    ImGui::Text("F1 - Physics Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
@@ -167,6 +183,12 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::SliderFloat("Camera Dist", &cameraDistance_, 1.0f, 15.0f);
 
     ImGui::End();
+
+    if (showPhysicsDebug_)
+    {
+        Runtime::DrawPhysicsDebugOverlay(engine_->GetScene(), engine_->GetScene().GetRenderCamera());
+    }
+
     return true;
 }
 
@@ -178,27 +200,26 @@ bool CharacterDemoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCa
     }
 
     glm::vec3 charPos = characterController_.GetPosition();
-    // Camera target: character feet + some height
-    glm::vec3 target = charPos + glm::vec3(0.0f, cameraHeight_, 0.0f);
-
-    // Spherical coordinates for camera offset
-    float cosP = std::cos(pitch_);
-    glm::vec3 cameraOffset(
-        -std::sin(yaw_) * cosP * cameraDistance_,
-        std::sin(pitch_) * cameraDistance_,
-        -std::cos(yaw_) * cosP * cameraDistance_
-    );
-
-    glm::vec3 cameraPos = target + cameraOffset;
-
-    // Compute a stable up vector to avoid gimbal lock at extreme pitch.
-    // The camera "right" is always horizontal for an orbit camera:
-    glm::vec3 right(-std::cos(yaw_), 0.0f, std::sin(yaw_));
-    glm::vec3 forward = glm::normalize(target - cameraPos);
+    glm::vec3 forward = GetViewForward();
+    glm::vec3 right = GetMoveRight();
     glm::vec3 up = glm::normalize(glm::cross(right, forward));
+    glm::vec3 target(0.0f);
+    glm::vec3 cameraPos(0.0f);
+
+    if (firstPersonMode_)
+    {
+        cameraPos = GetEyePosition();
+        target = cameraPos + forward;
+        OutRenderCamera.FieldOfView = 75.0f;
+    }
+    else
+    {
+        target = charPos + glm::vec3(0.0f, cameraHeight_, 0.0f);
+        cameraPos = target - forward * cameraDistance_;
+        OutRenderCamera.FieldOfView = 60.0f;
+    }
 
     OutRenderCamera.ModelView = glm::lookAt(cameraPos, target, up);
-    OutRenderCamera.FieldOfView = 60.0f;
 
     return true;
 }
@@ -225,6 +246,18 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
     case SDLK_LSHIFT:
     case SDLK_RSHIFT:
         keySprint_ = pressed;
+        return true;
+    case SDLK_V:
+        if (pressed)
+        {
+            SetFirstPersonMode(!firstPersonMode_);
+        }
+        return true;
+    case SDLK_F1:
+        if (pressed)
+        {
+            showPhysicsDebug_ = !showPhysicsDebug_;
+        }
         return true;
     case SDLK_ESCAPE:
         if (pressed)
@@ -282,23 +315,118 @@ bool CharacterDemoGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool CharacterDemoGameInstance::OnMouseButton(SDL_Event& event)
 {
+    if (event.type != SDL_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        return false;
+    }
+
     // Click to capture mouse if not captured
-    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !mouseCaptured_)
+    if (!mouseCaptured_)
     {
         mouseCaptured_ = true;
         resetMouse_ = true;
         SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), true);
         return true;
     }
+
+    if (event.button.button == SDL_BUTTON_LEFT)
+    {
+        FireProjectile();
+        return true;
+    }
+
     return false;
 }
 
 bool CharacterDemoGameInstance::OnScroll(double xoffset, double yoffset)
 {
+    if (firstPersonMode_)
+    {
+        return true;
+    }
+
     // Zoom camera in/out
     cameraDistance_ -= static_cast<float>(yoffset) * 0.5f;
     cameraDistance_ = glm::clamp(cameraDistance_, 1.0f, 20.0f);
     return true;
+}
+
+glm::vec3 CharacterDemoGameInstance::GetMoveForward() const
+{
+    return glm::vec3(std::sin(yaw_), 0.0f, std::cos(yaw_));
+}
+
+glm::vec3 CharacterDemoGameInstance::GetMoveRight() const
+{
+    return glm::vec3(-std::cos(yaw_), 0.0f, std::sin(yaw_));
+}
+
+glm::vec3 CharacterDemoGameInstance::GetViewForward() const
+{
+    const float cosPitch = std::cos(pitch_);
+    return glm::normalize(glm::vec3(
+        std::sin(yaw_) * cosPitch,
+        -std::sin(pitch_),
+        std::cos(yaw_) * cosPitch));
+}
+
+glm::vec3 CharacterDemoGameInstance::GetEyePosition() const
+{
+    return characterController_.GetPosition() + glm::vec3(0.0f, firstPersonEyeHeight_, 0.0f);
+}
+
+void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
+{
+    firstPersonMode_ = enabled;
+
+    if (characterNode_)
+    {
+        if (auto renderComp = characterNode_->GetComponent<Runtime::RenderComponent>())
+        {
+            renderComp->SetVisible(!firstPersonMode_);
+        }
+    }
+
+    engine_->GetScene().MarkDirty();
+}
+
+void CharacterDemoGameInstance::FireProjectile()
+{
+    if (!characterController_.IsValid())
+    {
+        return;
+    }
+
+    const glm::vec3 shotDir = GetViewForward();
+    const glm::vec3 spawnCenter = GetEyePosition() + shotDir * projectileSpawnDistance_;
+
+    const uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
+    auto newNode = Assets::Node::CreateNode(
+        "ShotBox",
+        spawnCenter,
+        glm::quat(1, 0, 0, 0),
+        glm::vec3(1.0f),
+        instanceId);
+
+    auto renderComp = std::make_shared<Runtime::RenderComponent>();
+    renderComp->SetModelId(projectileModelId_);
+    renderComp->SetMaterial({projectileMatId_});
+    renderComp->SetVisible(true);
+    newNode->AddComponent(renderComp);
+
+    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+    NextBodyID bodyId = engine_->GetPhysicsEngine()->CreateBoxBody(
+        spawnCenter,
+        glm::vec3(projectileSize_),
+        NextMotionType::Dynamic);
+    phys->BindPhysicsBody(bodyId);
+    newNode->AddComponent(phys);
+
+    engine_->GetScene().AddNode(newNode);
+    engine_->GetScene().MarkDirty();
+
+    engine_->GetPhysicsEngine()->AddForceToBody(bodyId, shotDir * projectileForce_);
 }
 
 void CharacterDemoGameInstance::UpdateCharacterNode()

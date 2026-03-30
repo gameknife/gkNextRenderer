@@ -407,6 +407,22 @@ namespace
             rc->SetVisible(true);
             rc->SetMaterial({matId});
             node->AddComponent(rc);
+
+            if (size == 0)
+            {
+                auto phys = std::make_shared<Runtime::PhysicsComponent>();
+                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+                phys->SetPhysicsOffset(vec3(0.0f, 0.5f, 0.0f));
+
+                NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
+                    vec3(x, 0.5f, z),
+                    glm::angleAxis(yaw, vec3(0, 1, 0)),
+                    vec3(1.0f, 1.0f, 1.0f),
+                    NextMotionType::Dynamic);
+                phys->BindPhysicsBody(bodyId);
+                node->AddComponent(phys);
+            }
+
             nodes.push_back(node);
         }
 

@@ -5,6 +5,7 @@
 #include "Assets/Loaders/FLDrawTypes.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Subsystems/NextPhysics.h"
+#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 
 #include <imgui.h>
 
@@ -93,99 +94,12 @@ namespace
 
 void BrickPlayerGameInstance::DrawPhysicsDebug()
 {
-#if WITH_PHYSIC
     if (!showPhysicsDebug_ || !sceneLoaded_)
+    {
         return;
-
-    auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
-    if (!physics)
-        return;
-
-    ImVec2 vpSize = ImGui::GetMainViewport()->Size;
-    ImVec2 vpPos = ImGui::GetMainViewport()->Pos;
-    float aspect = vpSize.x / vpSize.y;
-    glm::mat4 proj = glm::perspective(glm::radians(cameraFOV_), aspect, 0.2f, 2000.0f);
-    glm::mat4 view = glm::lookAtRH(cachedCameraPos_, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 vp = proj * view;
-
-    auto* drawList = ImGui::GetForegroundDrawList();
-
-    auto projectToScreen = [&](const glm::vec3& worldPos, ImVec2& screenPos) -> bool
-    {
-        glm::vec4 clip = vp * glm::vec4(worldPos, 1.0f);
-        if (clip.w <= 0.0f)
-            return false;
-        glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        screenPos.x = vpPos.x + (ndc.x * 0.5f + 0.5f) * vpSize.x;
-        screenPos.y = vpPos.y + (-ndc.y * 0.5f + 0.5f) * vpSize.y;
-        return true;
-    };
-
-    auto drawEdge = [&](const glm::vec3& a, const glm::vec3& b, ImU32 color)
-    {
-        ImVec2 sa, sb;
-        if (projectToScreen(a, sa) && projectToScreen(b, sb))
-        {
-            drawList->AddLine(sa, sb, color, 1.5f);
-        }
-    };
-
-    static const int edges[12][2] = {
-        {0,1},{1,3},{3,2},{2,0},
-        {4,5},{5,7},{7,6},{6,4},
-        {0,4},{1,5},{2,6},{3,7}
-    };
-
-    for (auto& pair : disassembledNodes_)
-    {
-        uint32_t instanceId = pair.first;
-        glm::vec3 he = pair.second.halfExtent;
-
-        auto* node = GetEngine().GetScene().GetNodeByInstanceId(instanceId);
-        if (!node)
-            continue;
-
-        auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-        if (!physComp)
-            continue;
-
-        auto* body = physics->GetBody(physComp->GetPhysicsBody());
-        if (!body)
-            continue;
-
-        glm::vec3 pos = body->position;
-        glm::quat rot = body->rotation;
-
-        glm::vec3 localCorners[8] = {
-            {-he.x, -he.y, -he.z},
-            { he.x, -he.y, -he.z},
-            {-he.x, -he.y,  he.z},
-            { he.x, -he.y,  he.z},
-            {-he.x,  he.y, -he.z},
-            { he.x,  he.y, -he.z},
-            {-he.x,  he.y,  he.z},
-            { he.x,  he.y,  he.z},
-        };
-
-        glm::vec3 worldCorners[8];
-        for (int i = 0; i < 8; ++i)
-        {
-            worldCorners[i] = pos + rot * localCorners[i];
-        }
-
-        ImU32 color = IM_COL32(0, 255, 0, 200);
-        for (const auto& edge : edges)
-        {
-            drawEdge(worldCorners[edge[0]], worldCorners[edge[1]], color);
-        }
-
-        ImVec2 sc;
-        if (projectToScreen(pos, sc))
-        {
-            drawList->AddCircle(sc, 4.0f, IM_COL32(255, 255, 0, 255), 8, 2.0f);
-        }
     }
-#endif
+
+    Runtime::DrawPhysicsDebugOverlay(GetEngine().GetScene(), GetEngine().GetScene().GetRenderCamera());
 }
 
 void BrickPlayerGameInstance::DrawSnapConfirmation() const
