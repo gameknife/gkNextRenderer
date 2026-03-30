@@ -62,7 +62,7 @@
                 "ENABLE_OIDN": "OFF",
                 "ENABLE_QUICKJS": "ON",
                 "ENABLE_WHISPERCPP": "ON",
-                "ENABLE_UNITY_BUILD": "OFF"
+                "ENABLE_UNITY_BUILD": "ON"
             }
         },
         {
