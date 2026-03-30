@@ -195,9 +195,9 @@ namespace Assets
         // hex format: #RRGGBB
         if (hex.size() < 7 || hex[0] != '#')
             return glm::vec3(0);
-        unsigned int r = std::stoul(hex.substr(1, 2), nullptr, 16);
-        unsigned int g = std::stoul(hex.substr(3, 2), nullptr, 16);
-        unsigned int b = std::stoul(hex.substr(5, 2), nullptr, 16);
+        const unsigned int r = static_cast<unsigned int>(std::stoul(hex.substr(1, 2), nullptr, 16));
+        const unsigned int g = static_cast<unsigned int>(std::stoul(hex.substr(3, 2), nullptr, 16));
+        const unsigned int b = static_cast<unsigned int>(std::stoul(hex.substr(5, 2), nullptr, 16));
         return glm::vec3(r / 255.0f, g / 255.0f, b / 255.0f);
     }
 

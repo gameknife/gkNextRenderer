@@ -287,10 +287,7 @@ void NextEngine::Start()
 
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
-#ifndef NDEBUG
-    shouldEnableValidation = true;
-#endif
-
+    
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(userSettings_.RendererType), window_.get(),
                                                  static_cast<VkPresentModeKHR>(options_->PresentMode),
                                                  shouldEnableValidation));

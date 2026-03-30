@@ -281,9 +281,6 @@ namespace Vulkan
         {
             // VK_KHR_swapchain
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-#if __APPLE__
-		    "VK_KHR_portability_subset",
-#endif
         };
 
         VkPhysicalDeviceFeatures deviceFeatures = {};
@@ -347,7 +344,7 @@ namespace Vulkan
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        deviceFeatures.fillModeNonSolid = true;
+        deviceFeatures.fillModeNonSolid = false;
         deviceFeatures.samplerAnisotropy = true;
         deviceFeatures.shaderStorageImageReadWithoutFormat = true;
         deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
