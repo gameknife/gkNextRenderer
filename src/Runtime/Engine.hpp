@@ -327,6 +327,8 @@ private:
     std::string hqCaptureFilename_;
     bool hqCapturePrevProgressive_{};
     uint32_t hqCapturePrevPreFrames_{};
+    bool screenShotRequested_{};
+    std::string screenShotFilename_;
 
     // game instance
     std::unique_ptr<NextGameInstanceBase> gameInstance_;

@@ -8,6 +8,7 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
@@ -69,6 +70,13 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
 void CharacterDemoGameInstance::OnDestroy()
 {
     characterController_.Destroy();
+}
+
+void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+{
+    std::string error;
+    cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
+    cvars.SetDefaultFromString("r.dlss", "true", &error);
 }
 
 void CharacterDemoGameInstance::BeforeSceneRebuild(

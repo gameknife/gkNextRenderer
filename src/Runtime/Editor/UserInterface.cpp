@@ -693,8 +693,15 @@ void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer*
     DrawConsoleWindow();
 }
 
-void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx)
+void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
+                               bool suppressAllUi)
 {
+    if (suppressAllUi)
+    {
+        ImGui::EndFrame();
+        return;
+    }
+
     if (GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading)
         DrawIndicator(GetEngine().GetTotalFrames());
 

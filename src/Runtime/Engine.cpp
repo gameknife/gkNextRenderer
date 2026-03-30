@@ -485,6 +485,13 @@ bool NextEngine::Tick(bool forcingDelta)
     }
     totalFrames_ = renderer_->FrameCount();
 
+    if (screenShotRequested_)
+    {
+        renderer_->Device().WaitIdle();
+        ScreenShot::SaveSwapChainToFile(renderer_.get(), screenShotFilename_, 0, 0, 0, 0);
+        screenShotRequested_ = false;
+        screenShotFilename_.clear();
+    }
 
     if (progressivePreFrames_ > 0)
     {
@@ -662,9 +669,9 @@ void NextEngine::ToggleMaximize()
 void NextEngine::RequestScreenShot(std::string filename)
 {
     auto time = std::time(nullptr);
-    std::string screenshotFilename =
+    screenShotFilename_ =
         filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
-    SaveScreenShot(screenshotFilename, 0, 0, 0, 0);
+    screenShotRequested_ = true;
 }
 
 void NextEngine::RequestHighQualityScreenShot(const std::string& filename, uint32_t accumulateFrames)
@@ -1056,11 +1063,13 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 
     // Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
     userInterface_->PreRender();
-    if (!gameInstance_->OnRenderUI())
+    const bool uiHandled = gameInstance_->OnRenderUI();
+    const bool suppressAllUi = screenShotRequested_;
+    if (!uiHandled && !suppressAllUi)
     {
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
     }
-    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex);
+    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
 }
 
 void NextEngine::OnKey(SDL_Event& event)

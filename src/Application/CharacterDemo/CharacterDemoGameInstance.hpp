@@ -13,6 +13,7 @@ public:
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override;
+    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 
     void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                             std::vector<Assets::Model>& models,
@@ -74,5 +75,5 @@ private:
     float cameraHeight_ = 2.0f;    // camera height offset above character
     float projectileSize_ = 0.2f;
     float projectileSpawnDistance_ = 0.9f;
-    float projectileForce_ = 1000.0f;
+    float projectileForce_ = 5000.0f;
 };
