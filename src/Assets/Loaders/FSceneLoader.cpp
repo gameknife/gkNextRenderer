@@ -1078,4 +1078,17 @@ namespace Assets
 
         return newCamera;
     }
+
+    bool FSceneLoader::LoadAnimationTracks(const std::string& filename,
+                                           std::vector<AnimationTrack>& outTracks)
+    {
+        EnvironmentSetting dummyCam;
+        std::vector<std::shared_ptr<Node>> dummyNodes;
+        std::vector<Model> dummyModels;
+        std::vector<FMaterial> dummyMats;
+        std::vector<LightObject> dummyLights;
+        std::vector<Skeleton> dummySkels;
+        return LoadGLTFScene(filename, dummyCam, dummyNodes, dummyModels,
+                             dummyMats, dummyLights, outTracks, dummySkels);
+    }
 }
