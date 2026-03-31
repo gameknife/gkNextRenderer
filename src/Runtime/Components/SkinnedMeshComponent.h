@@ -40,8 +40,6 @@ namespace Runtime
 
     private:
         void UpdateJoints();
-
-        Assets::Skeleton skeleton_;
         
         struct RuntimeJoint
         {
@@ -67,5 +65,16 @@ namespace Runtime
         // Map: AnimationName -> List of tracks targeting joints in this skeleton
         std::map<std::string, std::vector<Assets::AnimationTrack>> animations_;
         AnimationState currentState_;
+        AnimationState blendSourceState_;
+        std::vector<RuntimeJoint> blendSourceJoints_;
+        bool blendActive_ = false;
+        float blendElapsed_ = 0.0f;
+        float blendDuration_ = 0.12f;
+        void ResetJointsToBindPose(std::vector<RuntimeJoint>& joints) const;
+        void EvaluateAnimationState(const AnimationState& state, std::vector<RuntimeJoint>& joints) const;
+        void AdvanceAnimationState(AnimationState& state, float deltaTime) const;
+
+        Assets::Skeleton skeleton_;
+        std::map<std::string, int> jointMap_;
     };
 }

@@ -81,3 +81,47 @@ TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
         REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f));
     }
 }
+
+TEST_CASE("SkinnedMeshComponent Animation CrossFade", "[Runtime][Animation]") {
+    Assets::Skeleton skeleton;
+    Assets::Joint joint;
+    joint.Name = "Joint1";
+    joint.ParentIndex = -1;
+    joint.InverseBindMatrix = glm::mat4(1.0f);
+    skeleton.Joints.push_back(joint);
+
+    Runtime::SkinnedMeshComponent component(skeleton);
+
+    std::vector<Assets::AnimationTrack> tracks;
+
+    Assets::AnimationTrack idleTrack;
+    idleTrack.AnimationName = "Idle";
+    idleTrack.NodeName_ = "Joint1";
+    idleTrack.Duration_ = 1.0f;
+    idleTrack.TranslationChannel.Keys.push_back({0.0f, glm::vec3(0, 0, 0)});
+    idleTrack.TranslationChannel.Keys.push_back({1.0f, glm::vec3(0, 0, 0)});
+    tracks.push_back(idleTrack);
+
+    Assets::AnimationTrack runTrack;
+    runTrack.AnimationName = "Run";
+    runTrack.NodeName_ = "Joint1";
+    runTrack.Duration_ = 1.0f;
+    runTrack.TranslationChannel.Keys.push_back({0.0f, glm::vec3(10, 0, 0)});
+    runTrack.TranslationChannel.Keys.push_back({1.0f, glm::vec3(10, 0, 0)});
+    tracks.push_back(runTrack);
+
+    component.AddAnimations(tracks);
+
+    component.PlayAnimation("Idle", true);
+    component.Update(0.05f);
+    REQUIRE(component.GetJointMatrices()[0][3][0] == Catch::Approx(0.0f));
+
+    component.PlayAnimation("Run", true);
+    component.Update(0.06f);
+    const float blendedValue = component.GetJointMatrices()[0][3][0];
+    REQUIRE(blendedValue > 0.0f);
+    REQUIRE(blendedValue < 10.0f);
+
+    component.Update(0.06f);
+    REQUIRE(component.GetJointMatrices()[0][3][0] == Catch::Approx(10.0f));
+}

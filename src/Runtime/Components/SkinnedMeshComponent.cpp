@@ -39,32 +39,31 @@ namespace Runtime
         : skeleton_(skeleton)
     {
         runtimeJoints_.resize(skeleton_.Joints.size());
+        blendSourceJoints_.resize(skeleton_.Joints.size());
         jointMatrices_.resize(skeleton_.Joints.size(), glm::mat4(1.0f));
         
         for (size_t i = 0; i < skeleton_.Joints.size(); ++i)
         {
+            jointMap_[skeleton_.Joints[i].Name] = static_cast<int>(i);
             runtimeJoints_[i].Translation = skeleton_.Joints[i].Translation;
             runtimeJoints_[i].Rotation = skeleton_.Joints[i].Rotation;
             runtimeJoints_[i].Scale = skeleton_.Joints[i].Scale;
+            blendSourceJoints_[i] = runtimeJoints_[i];
         }
         
         UpdateJoints();
         
         currentState_.Playing = false;
         currentState_.CurrentTime = 0.0f;
+        blendSourceState_.Playing = false;
+        blendSourceState_.CurrentTime = 0.0f;
     }
 
     void SkinnedMeshComponent::AddAnimations(const std::vector<Assets::AnimationTrack>& allTracks)
     {
-        std::map<std::string, int> jointMap;
-        for(size_t i=0; i<skeleton_.Joints.size(); ++i)
-        {
-            jointMap[skeleton_.Joints[i].Name] = static_cast<int>(i);
-        }
-        
         for (const auto& track : allTracks)
         {
-            if (jointMap.find(track.NodeName_) != jointMap.end())
+            if (jointMap_.find(track.NodeName_) != jointMap_.end())
             {
                 animations_[track.AnimationName].push_back(track);
             }
@@ -73,27 +72,44 @@ namespace Runtime
 
     void SkinnedMeshComponent::PlayAnimation(const std::string& name, bool loop)
     {
-        if (animations_.find(name) == animations_.end())
+        auto animIt = animations_.find(name);
+        if (animIt == animations_.end())
         {
             SPDLOG_WARN("Animation '{}' not found", name);
             return;
         }
-        
-        currentState_.Name = name;
-        currentState_.Loop = loop;
-        currentState_.CurrentTime = 0.0f;
-        currentState_.Playing = true;
-        
-        currentState_.Duration = 0.0f;
-        for (const auto& track : animations_[name])
+
+        AnimationState nextState {};
+        nextState.Name = name;
+        nextState.Loop = loop;
+        nextState.CurrentTime = 0.0f;
+        nextState.Playing = true;
+        nextState.PlaySpeed = currentState_.PlaySpeed;
+        nextState.Duration = 0.0f;
+        for (const auto& track : animIt->second)
         {
-            currentState_.Duration = std::max(currentState_.Duration, track.Duration_);
+            nextState.Duration = std::max(nextState.Duration, track.Duration_);
         }
+
+        if (!currentState_.Name.empty() && currentState_.Name != name)
+        {
+            blendSourceState_ = currentState_;
+            EvaluateAnimationState(blendSourceState_, blendSourceJoints_);
+            blendActive_ = true;
+            blendElapsed_ = 0.0f;
+        }
+        else
+        {
+            blendActive_ = false;
+        }
+
+        currentState_ = nextState;
     }
 
     void SkinnedMeshComponent::StopAnimation()
     {
         currentState_.Playing = false;
+        blendActive_ = false;
     }
 
     std::vector<std::string> SkinnedMeshComponent::GetAnimationNames() const
@@ -108,61 +124,38 @@ namespace Runtime
 
     void SkinnedMeshComponent::Update(float deltaTime)
     {
-        if (!currentState_.Playing) return;
-        
-        currentState_.CurrentTime += deltaTime * currentState_.PlaySpeed;
-        
-        if (currentState_.CurrentTime > currentState_.Duration)
+        if (currentState_.Name.empty())
         {
-            if (currentState_.Loop)
-            {
-                currentState_.CurrentTime = fmod(currentState_.CurrentTime, currentState_.Duration);
-            }
-            else
-            {
-                currentState_.CurrentTime = currentState_.Duration;
-                currentState_.Playing = false;
-            }
-        }
-        else if (currentState_.CurrentTime < 0.0f)
-        {
-            if (currentState_.Loop)
-            {
-                currentState_.CurrentTime = currentState_.Duration + fmod(currentState_.CurrentTime, currentState_.Duration);
-            }
-            else
-            {
-                currentState_.CurrentTime = 0.0f;
-                currentState_.Playing = false;
-            }
-        }
-        
-        const auto& tracks = animations_[currentState_.Name];
-        
-        std::map<std::string, int> jointMap;
-        for(size_t i=0; i<skeleton_.Joints.size(); ++i)
-        {
-            jointMap[skeleton_.Joints[i].Name] = static_cast<int>(i);
+            return;
         }
 
-        for (const auto& track : tracks)
+        AdvanceAnimationState(currentState_, deltaTime);
+        EvaluateAnimationState(currentState_, runtimeJoints_);
+
+        if (blendActive_)
         {
-            if (jointMap.find(track.NodeName_) == jointMap.end()) continue;
-            
-            int jointIdx = jointMap[track.NodeName_];
-            auto& joint = runtimeJoints_[jointIdx];
-            
-            glm::vec3 t = joint.Translation;
-            glm::quat r = joint.Rotation;
-            glm::vec3 s = joint.Scale;
-            
-            const_cast<Assets::AnimationTrack&>(track).Sample(currentState_.CurrentTime, t, r, s);
-            
-            joint.Translation = t;
-            joint.Rotation = r;
-            joint.Scale = s;
+            AdvanceAnimationState(blendSourceState_, deltaTime);
+            EvaluateAnimationState(blendSourceState_, blendSourceJoints_);
+
+            blendElapsed_ += deltaTime;
+            const float blendAlpha = glm::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f);
+
+            for (size_t i = 0; i < runtimeJoints_.size(); ++i)
+            {
+                runtimeJoints_[i].Translation =
+                    glm::mix(blendSourceJoints_[i].Translation, runtimeJoints_[i].Translation, blendAlpha);
+                runtimeJoints_[i].Rotation =
+                    glm::slerp(blendSourceJoints_[i].Rotation, runtimeJoints_[i].Rotation, blendAlpha);
+                runtimeJoints_[i].Scale =
+                    glm::mix(blendSourceJoints_[i].Scale, runtimeJoints_[i].Scale, blendAlpha);
+            }
+
+            if (blendAlpha >= 1.0f)
+            {
+                blendActive_ = false;
+            }
         }
-        
+
         UpdateJoints();
     }
 
@@ -206,6 +199,84 @@ namespace Runtime
             if (skeleton_.Joints[i].ParentIndex == -1)
             {
                 traverse(static_cast<int>(i), glm::mat4(1.0f));
+            }
+        }
+    }
+
+    void SkinnedMeshComponent::ResetJointsToBindPose(std::vector<RuntimeJoint>& joints) const
+    {
+        joints.resize(skeleton_.Joints.size());
+        for (size_t i = 0; i < skeleton_.Joints.size(); ++i)
+        {
+            joints[i].Translation = skeleton_.Joints[i].Translation;
+            joints[i].Rotation = skeleton_.Joints[i].Rotation;
+            joints[i].Scale = skeleton_.Joints[i].Scale;
+            joints[i].GlobalTransform = glm::mat4(1.0f);
+        }
+    }
+
+    void SkinnedMeshComponent::EvaluateAnimationState(const AnimationState& state, std::vector<RuntimeJoint>& joints) const
+    {
+        ResetJointsToBindPose(joints);
+
+        auto animIt = animations_.find(state.Name);
+        if (animIt == animations_.end())
+        {
+            return;
+        }
+
+        for (const auto& track : animIt->second)
+        {
+            auto jointIt = jointMap_.find(track.NodeName_);
+            if (jointIt == jointMap_.end())
+            {
+                continue;
+            }
+
+            RuntimeJoint& joint = joints[jointIt->second];
+            glm::vec3 translation = joint.Translation;
+            glm::quat rotation = joint.Rotation;
+            glm::vec3 scale = joint.Scale;
+
+            const_cast<Assets::AnimationTrack&>(track).Sample(state.CurrentTime, translation, rotation, scale);
+
+            joint.Translation = translation;
+            joint.Rotation = rotation;
+            joint.Scale = scale;
+        }
+    }
+
+    void SkinnedMeshComponent::AdvanceAnimationState(AnimationState& state, float deltaTime) const
+    {
+        if (!state.Playing)
+        {
+            return;
+        }
+
+        state.CurrentTime += deltaTime * state.PlaySpeed;
+
+        if (state.CurrentTime > state.Duration)
+        {
+            if (state.Loop && state.Duration > 0.0f)
+            {
+                state.CurrentTime = fmod(state.CurrentTime, state.Duration);
+            }
+            else
+            {
+                state.CurrentTime = state.Duration;
+                state.Playing = false;
+            }
+        }
+        else if (state.CurrentTime < 0.0f)
+        {
+            if (state.Loop && state.Duration > 0.0f)
+            {
+                state.CurrentTime = state.Duration + fmod(state.CurrentTime, state.Duration);
+            }
+            else
+            {
+                state.CurrentTime = 0.0f;
+                state.Playing = false;
             }
         }
     }
