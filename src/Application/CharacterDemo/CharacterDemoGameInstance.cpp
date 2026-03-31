@@ -83,6 +83,7 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     UpdateCharacterFacingYaw(moveDir, currentVelocity, static_cast<float>(deltaSeconds));
     UpdateCharacterNode();
     UpdateAnimationState(static_cast<float>(deltaSeconds));
+    UpdateCharacterAnimationPostProcess();
 }
 
 void CharacterDemoGameInstance::OnDestroy()
@@ -220,6 +221,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
     ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
+    ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     if (characterModelLoaded_)
     {
         ImGui::Text("Anim State: %s", GetAnimStateName());
@@ -236,7 +238,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics Debug");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Foot IK");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
@@ -330,6 +332,12 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
         if (pressed)
         {
             showPhysicsDebug_ = !showPhysicsDebug_;
+        }
+        return true;
+    case SDLK_F2:
+        if (pressed)
+        {
+            showFootIKDebug_ = !showFootIKDebug_;
         }
         return true;
     case SDLK_ESCAPE:
@@ -645,6 +653,24 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
 
     // Apply current first-person visibility and start idle animation
     SetFirstPersonMode(firstPersonMode_);
+    SetNodeRayCastVisibilityRecursive(skinnedCharacterRoot_, false);
+
+    Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
+    footPlacementSettings.Enabled = true;
+    footPlacementSettings.Weight = characterController_.IsOnGround() ? 1.0f : 0.0f;
+    footPlacementSettings.TraceUpDistance = 0.45f;
+    footPlacementSettings.TraceDownDistance = 0.90f;
+    footPlacementSettings.FootHeight = 0.025f;
+    footPlacementSettings.MaxFootLift = 0.28f;
+    footPlacementSettings.MaxFootDrop = 0.35f;
+    footPlacementSettings.PelvisWeight = 0.75f;
+    footPlacementSettings.PelvisMaxOffset = 0.22f;
+    footPlacementSettings.DebugDraw = showFootIKDebug_;
+    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+    {
+        skinnedMeshComp->SetFootPlacementIKSettings(footPlacementSettings);
+    }
+
     if (!animIdle_.empty())
     {
         PlayCharacterAnimation(animIdle_, true);
@@ -925,6 +951,24 @@ void CharacterDemoGameInstance::SetNodeVisibilityRecursive(const std::shared_ptr
     }
 }
 
+void CharacterDemoGameInstance::SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
+{
+    if (!node)
+    {
+        return;
+    }
+
+    if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
+    {
+        renderComp->SetRayCastVisible(visible);
+    }
+
+    for (const auto& child : node->Children())
+    {
+        SetNodeRayCastVisibilityRecursive(child, visible);
+    }
+}
+
 void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)
 {
     if (name.empty())
@@ -936,6 +980,26 @@ void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, 
     {
         skinnedMeshComp->SetPlaySpeed(playSpeed);
         skinnedMeshComp->PlayAnimation(name, loop);
+    }
+}
+
+void CharacterDemoGameInstance::UpdateCharacterAnimationPostProcess()
+{
+    if (skinnedMeshComps_.empty())
+    {
+        return;
+    }
+
+    const float ikWeight =
+        (characterController_.IsOnGround() && currentAnimState_ == ECharacterAnimState::Idle) ? 1.0f : 0.0f;
+
+    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+    {
+        skinnedMeshComp->SetFootPlacementIKEnabled(true);
+        skinnedMeshComp->SetFootPlacementIKWeight(ikWeight);
+        auto settings = skinnedMeshComp->GetFootPlacementIKSettings();
+        settings.DebugDraw = showFootIKDebug_;
+        skinnedMeshComp->SetFootPlacementIKSettings(settings);
     }
 }
 

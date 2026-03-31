@@ -15,6 +15,27 @@ namespace Runtime
     {
     public:
         REFLECT_COMPONENT(SkinnedMeshComponent)
+
+        struct FootPlacementIKSettings
+        {
+            bool Enabled = false;
+            float Weight = 1.0f;
+            float BlendInSpeed = 10.0f;
+            float BlendOutSpeed = 14.0f;
+            float TraceUpDistance = 0.45f;
+            float TraceDownDistance = 0.85f;
+            float FootHeight = 0.03f;
+            float MaxFootLift = 0.30f;
+            float MaxFootDrop = 0.35f;
+            float MaxFootPitchDegrees = 18.0f;
+            float MaxFootRollDegrees = 14.0f;
+            float PelvisWeight = 0.75f;
+            float PelvisMaxOffset = 0.25f;
+            float FootOffsetSharpness = 14.0f;
+            float PelvisSharpness = 10.0f;
+            float MinGroundNormalY = 0.35f;
+            bool DebugDraw = false;
+        };
         
         SkinnedMeshComponent(const Assets::Skeleton& skeleton);
         
@@ -34,6 +55,10 @@ namespace Runtime
         const Assets::Skeleton& GetSkeleton() const { return skeleton_; }
         std::vector<std::string> GetAnimationNames() const;
         std::string GetCurrentAnimationName() const { return currentState_.Playing ? currentState_.Name : ""; }
+        void SetFootPlacementIKSettings(const FootPlacementIKSettings& settings) { footPlacementIKSettings_ = settings; }
+        const FootPlacementIKSettings& GetFootPlacementIKSettings() const { return footPlacementIKSettings_; }
+        void SetFootPlacementIKEnabled(bool enabled) { footPlacementIKSettings_.Enabled = enabled; }
+        void SetFootPlacementIKWeight(float weight) { footPlacementIKSettings_.Weight = weight; }
         
         bool IsPlaying() const { return currentState_.Playing; }
         bool GetIsPlaying() const { return currentState_.Playing; }
@@ -73,8 +98,42 @@ namespace Runtime
         void ResetJointsToBindPose(std::vector<RuntimeJoint>& joints) const;
         void EvaluateAnimationState(const AnimationState& state, std::vector<RuntimeJoint>& joints) const;
         void AdvanceAnimationState(AnimationState& state, float deltaTime) const;
+        void ApplyFootPlacementIK(float deltaTime);
+        int FindJointIndex(std::initializer_list<std::string_view> aliases,
+                           std::initializer_list<std::string_view> containsTokens = {}) const;
+        glm::quat ExtractJointGlobalRotation(int jointIndex) const;
+        glm::quat MakeRotationBetween(const glm::vec3& from, const glm::vec3& to) const;
+        bool ResolveFootPlacementChains();
+        bool SampleGroundHeight(const glm::mat4& componentWorldTransform, int footJointIndex,
+                                float& outFootOffset, glm::vec3& outGroundNormal) const;
+        void SolveTwoBoneIK(int upperJointIndex, int lowerJointIndex, int endJointIndex, const glm::vec3& targetModelSpace);
+
+        struct FootPlacementChain
+        {
+            int upperLeg = -1;
+            int lowerLeg = -1;
+            int foot = -1;
+            int toe = -1;
+            float currentOffset = 0.0f;
+            glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 localForwardAxis = glm::vec3(0.0f, 0.0f, 1.0f);
+            glm::vec3 localRightAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+            glm::vec3 localUpAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+            bool footHitValid = false;
+            bool toeHitValid = false;
+            glm::vec3 footHitPoint = glm::vec3(0.0f);
+            glm::vec3 toeHitPoint = glm::vec3(0.0f);
+        };
 
         Assets::Skeleton skeleton_;
         std::map<std::string, int> jointMap_;
+        FootPlacementIKSettings footPlacementIKSettings_;
+        FootPlacementChain leftFootPlacementChain_;
+        FootPlacementChain rightFootPlacementChain_;
+        int hipsJointIndex_ = -1;
+        bool footPlacementChainsResolved_ = false;
+        bool footPlacementChainsValid_ = false;
+        float footPlacementBlendWeight_ = 0.0f;
+        float pelvisOffset_ = 0.0f;
     };
 }

@@ -48,8 +48,10 @@ private:
     const char* GetAnimStateName() const;
     void ResetCharacterState();
     void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
+    void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
     void PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed = 1.0f);
     void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
+    void UpdateCharacterAnimationPostProcess();
     const char* GetMovementModeName() const;
 
     NextEngine* engine_;
@@ -121,6 +123,7 @@ private:
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
     bool showPhysicsDebug_ = false;
+    bool showFootIKDebug_ = false;
     glm::dvec2 mousePos_{0.0, 0.0};
 
     // Camera
