@@ -2,11 +2,14 @@
 
 #include <imgui.h>
 #include <SDL3/SDL_events.h>
+#include <spdlog/spdlog.h>
 
 #include "Assets/Loaders/FProcModel.h"
+#include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/SceneList.hpp"
@@ -28,6 +31,11 @@ CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& confi
 
 void CharacterDemoGameInstance::OnInit()
 {
+    // CharacterDemo appends the skinned character after the base playground is already loaded.
+    // The append path triggers a full scene mesh-buffer rebuild, so the original scene meshes must
+    // keep their CPU copy alive instead of being discarded after the first upload.
+    GOption->KeepCPUMeshData = true;
+
     // Default to procedural playground; user can override via command line --scene
     std::string initialScene = "CharacterPlayground.proc";
     if (!GOption->SceneName.empty())
@@ -42,6 +50,12 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     if (!characterController_.IsValid())
     {
         return;
+    }
+
+    // Try to find and init the skinned character model once it's loaded
+    if (characterLoadRequested_ && !characterModelLoaded_)
+    {
+        TryInitCharacterModel();
     }
 
     // Build movement direction in world space from camera yaw
@@ -64,7 +78,11 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     characterController_.Update(moveDir, speed, keyJump_, static_cast<float>(deltaSeconds));
     keyJump_ = false; // consume jump
 
+    const glm::vec3 currentVelocity = characterController_.GetLinearVelocity();
+
+    UpdateCharacterFacingYaw(moveDir, currentVelocity, static_cast<float>(deltaSeconds));
     UpdateCharacterNode();
+    UpdateAnimationState(static_cast<float>(deltaSeconds));
 }
 
 void CharacterDemoGameInstance::OnDestroy()
@@ -76,7 +94,7 @@ void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
-    cvars.SetDefaultFromString("r.dlss", "true", &error);
+    //cvars.SetDefaultFromString("r.dlss", "true", &error);
 }
 
 void CharacterDemoGameInstance::BeforeSceneRebuild(
@@ -86,6 +104,11 @@ void CharacterDemoGameInstance::BeforeSceneRebuild(
     std::vector<Assets::LightObject>& lights,
     std::vector<Assets::AnimationTrack>& tracks)
 {
+    if (sceneHelpersInjected_)
+    {
+        return;
+    }
+
     // Create a capsule-like visual: a box that approximates the character shape
     // Height 1.75, width 0.6
     const float halfW = 0.3f;
@@ -107,6 +130,8 @@ void CharacterDemoGameInstance::BeforeSceneRebuild(
 
     materials.push_back({Assets::Material::Mixture(glm::vec3(0.95f, 0.95f, 0.98f), 0.1f)});
     projectileMatId_ = static_cast<uint32_t>(materials.size() - 1);
+
+    sceneHelpersInjected_ = true;
 }
 
 void CharacterDemoGameInstance::OnSceneLoaded()
@@ -126,11 +151,15 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     settings.initialPosition = glm::vec3(camPos.x, camPos.y, camPos.z);
 
     characterController_.Create(engine_->GetPhysicsEngine(), settings);
+    wasOnGroundLastFrame_ = true;
+    jumpStartHoldTimeRemaining_ = 0.0f;
+    jumpLandHoldTimeRemaining_ = 0.0f;
 
     // Extract yaw from camera
     glm::vec3 camForward = -glm::vec3(invModelView[2]);
     yaw_ = std::atan2(camForward.x, camForward.z);
     pitch_ = std::asin(glm::clamp(camForward.y, -1.0f, 1.0f));
+    characterYaw_ = yaw_;
 
     // Create the character visual node
     uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
@@ -152,10 +181,21 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     SetFirstPersonMode(firstPersonMode_);
     engine_->GetScene().MarkDirty();
 
+    // Load the skinned character model asynchronously
+    engine_->RequestLoadSceneAdd("assets/models/characters/Mannequin_Medium.glb");
+    characterLoadRequested_ = true;
+
     // Capture mouse
     mouseCaptured_ = true;
     resetMouse_ = true;
     SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), true);
+}
+
+void CharacterDemoGameInstance::OnSceneUnloaded()
+{
+    NextGameInstanceBase::OnSceneUnloaded();
+    ResetCharacterState();
+    sceneHelpersInjected_ = false;
 }
 
 bool CharacterDemoGameInstance::OnRenderUI()
@@ -178,12 +218,25 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Velocity: %.1f, %.1f, %.1f", vel.x, vel.y, vel.z);
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
+    ImGui::Text("Move Mode: %s", GetMovementModeName());
     ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
+    if (characterModelLoaded_)
+    {
+        ImGui::Text("Anim State: %s", GetAnimStateName());
+        if (primarySkinnedMeshComp_)
+        {
+            ImGui::Text("Playing: %s", primarySkinnedMeshComp_->GetCurrentAnimationName().c_str());
+        }
+    }
+    else if (characterLoadRequested_)
+    {
+        ImGui::Text("Character: Loading...");
+    }
     ImGui::Separator();
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
-    ImGui::Text("V - Toggle FPS/TPS | LMB - Shoot");
-    ImGui::Text("F1 - Physics Debug");
+    ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
+    ImGui::Text("LMB - Shoot | F1 - Physics Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
@@ -259,6 +312,18 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
         if (pressed)
         {
             SetFirstPersonMode(!firstPersonMode_);
+        }
+        return true;
+    case SDLK_TAB:
+        if (pressed)
+        {
+            movementMode_ = movementMode_ == ECharacterMovementMode::CameraAligned
+                ? ECharacterMovementMode::MoveAligned
+                : ECharacterMovementMode::CameraAligned;
+            if (movementMode_ == ECharacterMovementMode::CameraAligned || firstPersonMode_)
+            {
+                characterYaw_ = yaw_;
+            }
         }
         return true;
     case SDLK_F1:
@@ -383,6 +448,15 @@ glm::vec3 CharacterDemoGameInstance::GetEyePosition() const
     return characterController_.GetPosition() + glm::vec3(0.0f, firstPersonEyeHeight_, 0.0f);
 }
 
+float CharacterDemoGameInstance::GetCharacterYaw() const
+{
+    if (firstPersonMode_ || movementMode_ == ECharacterMovementMode::CameraAligned)
+    {
+        return yaw_;
+    }
+    return characterYaw_;
+}
+
 void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
 {
     firstPersonMode_ = enabled;
@@ -391,9 +465,11 @@ void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
     {
         if (auto renderComp = characterNode_->GetComponent<Runtime::RenderComponent>())
         {
-            renderComp->SetVisible(!firstPersonMode_);
+            renderComp->SetVisible(!firstPersonMode_ && !characterModelLoaded_);
         }
     }
+
+    SetNodeVisibilityRecursive(skinnedCharacterRoot_, !firstPersonMode_);
 
     engine_->GetScene().MarkDirty();
 }
@@ -439,18 +515,499 @@ void CharacterDemoGameInstance::FireProjectile()
 
 void CharacterDemoGameInstance::UpdateCharacterNode()
 {
-    if (!characterNode_)
+    glm::vec3 pos = characterController_.GetPosition();
+    glm::quat rotation = glm::angleAxis(GetCharacterYaw(), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    // Update box placeholder (visible until skinned model loads)
+    if (characterNode_)
+    {
+        characterNode_->SetTranslation(pos);
+        characterNode_->SetRotation(rotation);
+        characterNode_->RecalcTransform(true);
+    }
+
+    // Update the entire appended character hierarchy instead of only one skinned mesh node.
+    if (skinnedCharacterRoot_)
+    {
+        skinnedCharacterRoot_->SetTranslation(pos);
+        skinnedCharacterRoot_->SetRotation(rotation);
+        skinnedCharacterRoot_->RecalcTransform(true);
+    }
+
+    engine_->GetScene().MarkDirty();
+}
+
+void CharacterDemoGameInstance::TryInitCharacterModel()
+{
+    if (!skinnedCharacterRoot_)
+    {
+        for (auto& node : engine_->GetScene().Nodes())
+        {
+            if (node->GetParent() == nullptr && node->GetName() == characterAppendRootName_)
+            {
+                skinnedCharacterRoot_ = node;
+                break;
+            }
+        }
+    }
+
+    if (!skinnedCharacterRoot_)
+    {
+        for (auto& node : engine_->GetScene().Nodes())
+        {
+            if (node->GetParent() == nullptr &&
+                node->GetName().starts_with(characterAppendRootName_ + "_"))
+            {
+                skinnedCharacterRoot_ = node;
+                break;
+            }
+        }
+    }
+
+    if (!skinnedCharacterRoot_)
+    {
+        return; // Not loaded yet, try again next tick
+    }
+
+    skinnedMeshComps_.clear();
+    primarySkinnedMeshComp_ = nullptr;
+
+    std::function<void(const std::shared_ptr<Assets::Node>&)> collectSkinnedMeshes;
+    collectSkinnedMeshes = [this, &collectSkinnedMeshes](const std::shared_ptr<Assets::Node>& node)
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        if (auto comp = node->GetComponent<Runtime::SkinnedMeshComponent>())
+        {
+            if (!primarySkinnedMeshComp_)
+            {
+                primarySkinnedMeshComp_ = comp.get();
+            }
+            skinnedMeshComps_.push_back(comp.get());
+        }
+
+        for (const auto& child : node->Children())
+        {
+            collectSkinnedMeshes(child);
+        }
+    };
+    collectSkinnedMeshes(skinnedCharacterRoot_);
+
+    if (skinnedMeshComps_.empty())
+    {
+        return; // Append root exists, but components are not fully attached yet.
+    }
+
+    SPDLOG_INFO("Character model root '{}' found with {} skinned mesh nodes, loading animation packs...",
+                skinnedCharacterRoot_->GetName(), skinnedMeshComps_.size());
+
+    // Load animation tracks from separate GLB files
+    const std::vector<std::string> animFiles = {
+        "assets/models/characters/animations/Rig_Medium_General.glb",
+        "assets/models/characters/animations/Rig_Medium_MovementBasic.glb",
+        "assets/models/characters/animations/Rig_Medium_MovementAdvanced.glb",
+    };
+
+    for (const auto& animFile : animFiles)
+    {
+        std::vector<Assets::AnimationTrack> tracks;
+        if (Assets::FSceneLoader::LoadAnimationTracks(animFile, tracks))
+        {
+            SPDLOG_INFO("Loaded {} animation tracks from {}", tracks.size(), animFile);
+            for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+            {
+                skinnedMeshComp->AddAnimations(tracks);
+            }
+        }
+        else
+        {
+            SPDLOG_WARN("Failed to load animation file: {}", animFile);
+        }
+    }
+
+    // Log and map all discovered animation names
+    auto names = primarySkinnedMeshComp_->GetAnimationNames();
+    for (const auto& name : names)
+    {
+        SPDLOG_INFO("Character animation: '{}'", name);
+    }
+    MapAnimationNames(names);
+
+    // Remove the temporary placeholder once the real character is ready.
+    if (characterNode_)
+    {
+        engine_->GetScene().RemoveNodeByInstanceId(characterNode_->GetInstanceId());
+        characterNode_.reset();
+    }
+
+    // Apply current first-person visibility and start idle animation
+    SetFirstPersonMode(firstPersonMode_);
+    if (!animIdle_.empty())
+    {
+        PlayCharacterAnimation(animIdle_, true);
+    }
+
+    characterModelLoaded_ = true;
+    SPDLOG_INFO("Character model initialized with {} animations", names.size());
+}
+
+void CharacterDemoGameInstance::MapAnimationNames(const std::vector<std::string>& names)
+{
+    auto findFirst = [&names](std::initializer_list<const char*> candidates) -> std::string
+    {
+        for (const char* candidate : candidates)
+        {
+            auto it = std::find(names.begin(), names.end(), candidate);
+            if (it != names.end())
+            {
+                return *it;
+            }
+        }
+        return {};
+    };
+
+    // Exact mapping based on the three 3C-oriented packs:
+    // General: Idle_A / Idle_B
+    // MovementBasic: Walking_A/B/C, Running_A/B, Jump_Start/Idle/Land
+    // MovementAdvanced: Walking_Backwards, Running_Strafe_Left/Right
+    animIdle_ = findFirst({"Idle_A", "Idle_B"});
+    animWalkForward_ = findFirst({"Walking_A", "Walking_B", "Walking_C"});
+    animWalkBackward_ = findFirst({"Walking_Backwards", "Walking_B", "Walking_A"});
+    animStrafeLeft_ = findFirst({"Running_Strafe_Left", "Dodge_Left"});
+    animStrafeRight_ = findFirst({"Running_Strafe_Right", "Dodge_Right"});
+    animRunForward_ = findFirst({"Running_A", "Running_B"});
+    animRunBackward_ = animWalkBackward_;
+    animRunStrafeLeft_ = animStrafeLeft_;
+    animRunStrafeRight_ = animStrafeRight_;
+    animJumpStart_ = findFirst({"Jump_Start", "Jump_Full_Short", "Jump_Full_Long"});
+    animJumpLoop_ = findFirst({"Jump_Idle", "Jump_Full_Long", "Jump_Full_Short"});
+    animJumpLand_ = findFirst({"Jump_Land", "Jump_Full_Short"});
+
+    if (animIdle_.empty() && !names.empty())
+    {
+        animIdle_ = names.front();
+    }
+    if (animWalkForward_.empty())
+    {
+        animWalkForward_ = animIdle_;
+    }
+    if (animWalkBackward_.empty())
+    {
+        animWalkBackward_ = animWalkForward_;
+    }
+    if (animStrafeLeft_.empty())
+    {
+        animStrafeLeft_ = animWalkForward_;
+    }
+    if (animStrafeRight_.empty())
+    {
+        animStrafeRight_ = animWalkForward_;
+    }
+    if (animRunForward_.empty())
+    {
+        animRunForward_ = animWalkForward_;
+    }
+    if (animRunBackward_.empty())
+    {
+        animRunBackward_ = animWalkBackward_;
+    }
+    if (animRunStrafeLeft_.empty())
+    {
+        animRunStrafeLeft_ = animStrafeLeft_;
+    }
+    if (animRunStrafeRight_.empty())
+    {
+        animRunStrafeRight_ = animStrafeRight_;
+    }
+    if (animJumpStart_.empty())
+    {
+        animJumpStart_ = animJumpLoop_.empty() ? animIdle_ : animJumpLoop_;
+    }
+    if (animJumpLoop_.empty())
+    {
+        animJumpLoop_ = animJumpStart_;
+    }
+    if (animJumpLand_.empty())
+    {
+        animJumpLand_ = animJumpLoop_;
+    }
+
+    SPDLOG_INFO(
+        "3C animation mapping: Idle='{}', WalkF='{}', WalkB='{}', StrafeL='{}', StrafeR='{}', RunF='{}', JumpStart='{}', JumpLoop='{}', JumpLand='{}'",
+        animIdle_, animWalkForward_, animWalkBackward_, animStrafeLeft_, animStrafeRight_, animRunForward_,
+        animJumpStart_, animJumpLoop_, animJumpLand_);
+}
+
+void CharacterDemoGameInstance::UpdateAnimationState(float deltaSeconds)
+{
+    if (skinnedMeshComps_.empty())
     {
         return;
     }
 
-    glm::vec3 pos = characterController_.GetPosition();
-    characterNode_->SetTranslation(pos);
+    glm::vec3 vel = characterController_.GetLinearVelocity();
+    float horizontalSpeed = glm::length(glm::vec2(vel.x, vel.z));
+    bool onGround = characterController_.IsOnGround();
 
-    // Rotate character to face movement direction (yaw)
-    glm::quat rotation = glm::angleAxis(yaw_, glm::vec3(0.0f, 1.0f, 0.0f));
-    characterNode_->SetRotation(rotation);
-    characterNode_->RecalcTransform(true);
+    jumpStartHoldTimeRemaining_ = std::max(0.0f, jumpStartHoldTimeRemaining_ - deltaSeconds);
+    jumpLandHoldTimeRemaining_ = std::max(0.0f, jumpLandHoldTimeRemaining_ - deltaSeconds);
 
-    engine_->GetScene().MarkDirty();
+    const glm::vec2 horizontalVelocity(vel.x, vel.z);
+    const glm::vec2 forward2D = glm::normalize(glm::vec2(GetMoveForward().x, GetMoveForward().z));
+    const glm::vec2 right2D = glm::normalize(glm::vec2(GetMoveRight().x, GetMoveRight().z));
+    const float localForwardSpeed = glm::dot(horizontalVelocity, forward2D);
+    const float localRightSpeed = glm::dot(horizontalVelocity, right2D);
+
+    ECharacterAnimState newState = ECharacterAnimState::Idle;
+    std::string animationToPlay = animIdle_;
+    bool loop = true;
+    float playSpeed = 1.0f;
+
+    if (onGround && !wasOnGroundLastFrame_)
+    {
+        jumpLandHoldTimeRemaining_ = jumpLandHoldTime_;
+    }
+    if (!onGround && wasOnGroundLastFrame_ && vel.y > 0.1f)
+    {
+        jumpStartHoldTimeRemaining_ = jumpStartHoldTime_;
+        jumpLandHoldTimeRemaining_ = 0.0f;
+    }
+
+    if (!onGround)
+    {
+        if (jumpStartHoldTimeRemaining_ > 0.0f && vel.y >= 0.0f)
+        {
+            newState = ECharacterAnimState::JumpStart;
+            animationToPlay = animJumpStart_;
+            loop = false;
+        }
+        else
+        {
+            newState = ECharacterAnimState::JumpLoop;
+            animationToPlay = animJumpLoop_;
+        }
+    }
+    else if (jumpLandHoldTimeRemaining_ > 0.0f)
+    {
+        newState = ECharacterAnimState::JumpLand;
+        animationToPlay = animJumpLand_;
+        loop = false;
+    }
+    else if (horizontalSpeed > 0.35f)
+    {
+        if (!firstPersonMode_ && movementMode_ == ECharacterMovementMode::MoveAligned)
+        {
+            if (keySprint_)
+            {
+                newState = ECharacterAnimState::RunForward;
+                animationToPlay = animRunForward_;
+            }
+            else
+            {
+                newState = ECharacterAnimState::WalkForward;
+                animationToPlay = animWalkForward_;
+            }
+        }
+        else
+        {
+            const float absForward = std::abs(localForwardSpeed);
+            const float absRight = std::abs(localRightSpeed);
+            const bool strafeDominant = absRight > absForward * 1.1f;
+            const bool backwardDominant = !strafeDominant && localForwardSpeed < -0.2f;
+            const bool sprinting = keySprint_ && localForwardSpeed > 0.2f;
+
+            if (strafeDominant)
+            {
+                const bool moveRight = localRightSpeed > 0.0f;
+                if (keySprint_)
+                {
+                    newState = moveRight ? ECharacterAnimState::RunStrafeRight : ECharacterAnimState::RunStrafeLeft;
+                    animationToPlay = moveRight ? animRunStrafeRight_ : animRunStrafeLeft_;
+                    playSpeed = 1.0f;
+                }
+                else
+                {
+                    newState = moveRight ? ECharacterAnimState::WalkStrafeRight : ECharacterAnimState::WalkStrafeLeft;
+                    animationToPlay = moveRight ? animStrafeRight_ : animStrafeLeft_;
+                    playSpeed = walkStrafePlaySpeed_;
+                }
+            }
+            else if (backwardDominant)
+            {
+                if (keySprint_)
+                {
+                    newState = ECharacterAnimState::RunBackward;
+                    animationToPlay = animRunBackward_;
+                    playSpeed = runBackwardPlaySpeed_;
+                }
+                else
+                {
+                    newState = ECharacterAnimState::WalkBackward;
+                    animationToPlay = animWalkBackward_;
+                }
+            }
+            else
+            {
+                if (sprinting)
+                {
+                    newState = ECharacterAnimState::RunForward;
+                    animationToPlay = animRunForward_;
+                }
+                else
+                {
+                    newState = ECharacterAnimState::WalkForward;
+                    animationToPlay = animWalkForward_;
+                }
+            }
+        }
+    }
+
+    wasOnGroundLastFrame_ = onGround;
+
+    if (newState != currentAnimState_)
+    {
+        currentAnimState_ = newState;
+        PlayCharacterAnimation(animationToPlay, loop, playSpeed);
+        return;
+    }
+
+    // Keep directional fallback states responsive when they share the same source clip but a different speed profile.
+    if (loop && primarySkinnedMeshComp_ && primarySkinnedMeshComp_->GetCurrentAnimationName() != animationToPlay)
+    {
+        PlayCharacterAnimation(animationToPlay, loop, playSpeed);
+    }
+}
+
+void CharacterDemoGameInstance::ResetCharacterState()
+{
+    skinnedCharacterRoot_.reset();
+    primarySkinnedMeshComp_ = nullptr;
+    skinnedMeshComps_.clear();
+    characterModelLoaded_ = false;
+    characterLoadRequested_ = false;
+    currentAnimState_ = ECharacterAnimState::Idle;
+    animIdle_.clear();
+    animWalkForward_.clear();
+    animWalkBackward_.clear();
+    animStrafeLeft_.clear();
+    animStrafeRight_.clear();
+    animRunForward_.clear();
+    animRunBackward_.clear();
+    animRunStrafeLeft_.clear();
+    animRunStrafeRight_.clear();
+    animJumpStart_.clear();
+    animJumpLoop_.clear();
+    animJumpLand_.clear();
+    wasOnGroundLastFrame_ = true;
+    jumpStartHoldTimeRemaining_ = 0.0f;
+    jumpLandHoldTimeRemaining_ = 0.0f;
+    characterYaw_ = yaw_;
+}
+
+void CharacterDemoGameInstance::SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
+{
+    if (!node)
+    {
+        return;
+    }
+
+    if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
+    {
+        renderComp->SetVisible(visible);
+    }
+
+    for (const auto& child : node->Children())
+    {
+        SetNodeVisibilityRecursive(child, visible);
+    }
+}
+
+void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)
+{
+    if (name.empty())
+    {
+        return;
+    }
+
+    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+    {
+        skinnedMeshComp->SetPlaySpeed(playSpeed);
+        skinnedMeshComp->PlayAnimation(name, loop);
+    }
+}
+
+void CharacterDemoGameInstance::UpdateCharacterFacingYaw(const glm::vec3& moveDir,
+                                                         const glm::vec3& currentVelocity,
+                                                         float deltaSeconds)
+{
+    if (firstPersonMode_ || movementMode_ == ECharacterMovementMode::CameraAligned)
+    {
+        characterYaw_ = yaw_;
+        return;
+    }
+
+    glm::vec2 horizontalVelocity(currentVelocity.x, currentVelocity.z);
+    glm::vec2 desiredDirection(moveDir.x, moveDir.z);
+
+    glm::vec2 facingDirection(0.0f);
+    if (glm::length(horizontalVelocity) > 0.1f)
+    {
+        facingDirection = glm::normalize(horizontalVelocity);
+    }
+    else if (glm::length(desiredDirection) > 0.001f)
+    {
+        facingDirection = glm::normalize(desiredDirection);
+    }
+
+    if (glm::length(facingDirection) > 0.0f)
+    {
+        const float targetYaw = std::atan2(facingDirection.x, facingDirection.y);
+        const float yawDelta = std::remainder(targetYaw - characterYaw_, glm::two_pi<float>());
+        const float maxStep = characterTurnSpeed_ * deltaSeconds;
+
+        if (std::abs(yawDelta) <= maxStep)
+        {
+            characterYaw_ = targetYaw;
+        }
+        else
+        {
+            characterYaw_ += glm::sign(yawDelta) * maxStep;
+        }
+    }
+}
+
+const char* CharacterDemoGameInstance::GetMovementModeName() const
+{
+    switch (movementMode_)
+    {
+    case ECharacterMovementMode::CameraAligned:
+        return "CameraAligned";
+    case ECharacterMovementMode::MoveAligned:
+        return "MoveAligned";
+    default:
+        return "Unknown";
+    }
+}
+
+const char* CharacterDemoGameInstance::GetAnimStateName() const
+{
+    switch (currentAnimState_)
+    {
+    case ECharacterAnimState::Idle: return "Idle";
+    case ECharacterAnimState::WalkForward: return "WalkForward";
+    case ECharacterAnimState::WalkBackward: return "WalkBackward";
+    case ECharacterAnimState::WalkStrafeLeft: return "WalkStrafeLeft";
+    case ECharacterAnimState::WalkStrafeRight: return "WalkStrafeRight";
+    case ECharacterAnimState::RunForward: return "RunForward";
+    case ECharacterAnimState::RunBackward: return "RunBackward";
+    case ECharacterAnimState::RunStrafeLeft: return "RunStrafeLeft";
+    case ECharacterAnimState::RunStrafeRight: return "RunStrafeRight";
+    case ECharacterAnimState::JumpStart: return "JumpStart";
+    case ECharacterAnimState::JumpLoop: return "JumpLoop";
+    case ECharacterAnimState::JumpLand: return "JumpLand";
+    default: return "Unknown";
+    }
 }
