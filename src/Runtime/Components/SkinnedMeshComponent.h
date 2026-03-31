@@ -119,11 +119,17 @@ namespace Runtime
             glm::vec3 localForwardAxis = glm::vec3(0.0f, 0.0f, 1.0f);
             glm::vec3 localRightAxis = glm::vec3(1.0f, 0.0f, 0.0f);
             glm::vec3 localUpAxis = glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 toeLocalForwardAxis = glm::vec3(0.0f, 0.0f, 1.0f);
+            glm::vec3 toeLocalRightAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+            glm::vec3 toeLocalUpAxis = glm::vec3(0.0f, 1.0f, 0.0f);
             bool footHitValid = false;
             bool toeHitValid = false;
             glm::vec3 footHitPoint = glm::vec3(0.0f);
             glm::vec3 toeHitPoint = glm::vec3(0.0f);
+            glm::vec3 toeGroundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
         };
+        void DrawFootPlacementDebug(const FootPlacementChain& chain, const glm::mat4& componentWorldTransform) const;
+        void AlignToeToGround(const FootPlacementChain& chain, const glm::mat4& componentWorldTransform);
 
         Assets::Skeleton skeleton_;
         std::map<std::string, int> jointMap_;

@@ -636,6 +636,17 @@ namespace Assets
             if ((*it)->GetInstanceId() == id)
             {
                 auto node = *it;
+                if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+                {
+                    if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                    {
+                        const NextBodyID bodyId = phys->GetPhysicsBody();
+                        if (!bodyId.IsInvalid())
+                        {
+                            physicsEngine->RemoveBody(bodyId);
+                        }
+                    }
+                }
                 selectionState_.Remove(id);
                 if (hoveredId_ == id)
                 {

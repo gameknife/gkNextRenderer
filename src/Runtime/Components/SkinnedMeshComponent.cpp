@@ -506,6 +506,12 @@ namespace Runtime
             chain.localForwardAxis = glm::normalize(inverseBindRotation * bindForward);
             chain.localRightAxis = glm::normalize(inverseBindRotation * bindRight);
             chain.localUpAxis = glm::normalize(inverseBindRotation * bindUp);
+
+            const glm::quat toeBindGlobalRotation = glm::normalize(glm::quat_cast(glm::mat3(bindGlobals[chain.toe])));
+            const glm::quat inverseToeBindRotation = glm::inverse(toeBindGlobalRotation);
+            chain.toeLocalForwardAxis = glm::normalize(inverseToeBindRotation * bindForward);
+            chain.toeLocalRightAxis = glm::normalize(inverseToeBindRotation * bindRight);
+            chain.toeLocalUpAxis = glm::normalize(inverseToeBindRotation * bindUp);
         };
 
         footPlacementChainsValid_ =
@@ -651,27 +657,159 @@ namespace Runtime
             glm::normalize(glm::inverse(lowerParentGlobalRotation) * lowerDelta * lowerGlobalRotation);
     }
 
+    void SkinnedMeshComponent::AlignToeToGround(const FootPlacementChain& chain, const glm::mat4& componentWorldTransform)
+    {
+        if (chain.toe == -1 || !chain.toeHitValid)
+        {
+            return;
+        }
+
+        const glm::mat3 worldToModelNormalMatrix = glm::transpose(glm::inverse(glm::mat3(componentWorldTransform)));
+        glm::vec3 desiredUp = worldToModelNormalMatrix * chain.toeGroundNormal;
+        if (glm::length2(desiredUp) < 1e-5f)
+        {
+            return;
+        }
+        desiredUp = glm::normalize(desiredUp);
+
+        const glm::quat toeGlobalRotation = ExtractJointGlobalRotation(chain.toe);
+        const glm::vec3 currentNormalAxis = glm::normalize(toeGlobalRotation * glm::vec3(0.0f, 0.0f, 1.0f));
+        const glm::vec3 currentForwardAxis = glm::normalize(toeGlobalRotation * glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::vec3 currentSideAxis = glm::normalize(toeGlobalRotation * glm::vec3(1.0f, 0.0f, 0.0f));
+        if (glm::length2(currentNormalAxis) < 1e-5f ||
+            glm::length2(currentForwardAxis) < 1e-5f ||
+            glm::length2(currentSideAxis) < 1e-5f)
+        {
+            return;
+        }
+
+        const glm::quat alignUpDelta = MakeRotationBetween(currentNormalAxis, desiredUp);
+
+        glm::vec3 alignedForward = ProjectOntoPlane(alignUpDelta * currentForwardAxis, desiredUp);
+        glm::vec3 desiredForward = ProjectOntoPlane(currentForwardAxis, desiredUp);
+        if (glm::length2(desiredForward) < 1e-5f)
+        {
+            desiredForward = glm::cross(desiredUp, currentSideAxis);
+        }
+        if (glm::length2(alignedForward) < 1e-5f)
+        {
+            alignedForward = desiredForward;
+        }
+        if (glm::length2(desiredForward) < 1e-5f || glm::length2(alignedForward) < 1e-5f)
+        {
+            return;
+        }
+
+        desiredForward = glm::normalize(desiredForward);
+        alignedForward = glm::normalize(alignedForward);
+
+        const float twistAngle = SignedAngleAroundAxis(alignedForward, desiredForward, desiredUp);
+        const glm::quat twistDelta = glm::angleAxis(twistAngle, desiredUp);
+        const glm::quat targetGlobalRotation = glm::normalize(twistDelta * alignUpDelta * toeGlobalRotation);
+
+        const int toeParentIndex = skeleton_.Joints[chain.toe].ParentIndex;
+        const glm::quat toeParentGlobalRotation =
+            toeParentIndex >= 0 ? ExtractJointGlobalRotation(toeParentIndex) : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+        runtimeJoints_[chain.toe].Rotation =
+            glm::normalize(glm::inverse(toeParentGlobalRotation) * targetGlobalRotation);
+    }
+
+    void SkinnedMeshComponent::DrawFootPlacementDebug(const FootPlacementChain& chain,
+                                                     const glm::mat4& componentWorldTransform) const
+    {
+        constexpr float axisLength = 0.18f;
+        constexpr float footAxisLength = 0.14f;
+        constexpr float toeAxisLength = 0.12f;
+
+        const glm::vec3 footDebugNormal = glm::normalize(chain.groundNormal);
+        const glm::vec3 toeDebugNormal = chain.toeHitValid ? glm::normalize(chain.toeGroundNormal) : footDebugNormal;
+
+        if (chain.footHitValid)
+        {
+            NextEngineHelper::DrawAuxPoint(chain.footHitPoint, glm::vec4(1.0f, 0.5f, 0.1f, 1.0f), 5.0f);
+            NextEngineHelper::DrawAuxLine(chain.footHitPoint, chain.footHitPoint + footDebugNormal * axisLength,
+                                          glm::vec4(1.0f, 0.7f, 0.1f, 1.0f), 2.0f);
+        }
+
+        if (chain.toeHitValid)
+        {
+            NextEngineHelper::DrawAuxPoint(chain.toeHitPoint, glm::vec4(1.0f, 0.1f, 0.8f, 1.0f), 5.0f);
+            NextEngineHelper::DrawAuxLine(chain.toeHitPoint, chain.toeHitPoint + toeDebugNormal * axisLength,
+                                          glm::vec4(1.0f, 0.2f, 0.9f, 1.0f), 2.0f);
+        }
+
+        if (chain.foot != -1)
+        {
+            const glm::vec3 footWorldPos =
+                glm::vec3(componentWorldTransform * runtimeJoints_[chain.foot].GlobalTransform * glm::vec4(0, 0, 0, 1));
+            const glm::quat footGlobalRotation = ExtractJointGlobalRotation(chain.foot);
+            const glm::vec3 footRightAxisModel = glm::normalize(footGlobalRotation * glm::vec3(1.0f, 0.0f, 0.0f));
+            const glm::vec3 footUpAxisModel = glm::normalize(footGlobalRotation * glm::vec3(0.0f, 1.0f, 0.0f));
+            const glm::vec3 footForwardAxisModel = glm::normalize(footGlobalRotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 footRightAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(footRightAxisModel, 0.0f)));
+            const glm::vec3 footUpAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(footUpAxisModel, 0.0f)));
+            const glm::vec3 footForwardAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(footForwardAxisModel, 0.0f)));
+
+            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footRightAxis * footAxisLength,
+                                          glm::vec4(0.75f, 0.0f, 0.0f, 1.0f), 2.0f);
+            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footUpAxis * footAxisLength,
+                                          glm::vec4(0.0f, 0.75f, 0.0f, 1.0f), 2.0f);
+            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footForwardAxis * footAxisLength,
+                                          glm::vec4(0.0f, 0.35f, 0.75f, 1.0f), 2.0f);
+        }
+
+        if (chain.toe != -1)
+        {
+            const glm::vec3 toeWorldPos =
+                glm::vec3(componentWorldTransform * runtimeJoints_[chain.toe].GlobalTransform * glm::vec4(0, 0, 0, 1));
+            const glm::quat toeGlobalRotation = ExtractJointGlobalRotation(chain.toe);
+            const glm::vec3 toeRightAxisModel = glm::normalize(toeGlobalRotation * glm::vec3(1.0f, 0.0f, 0.0f));
+            const glm::vec3 toeUpAxisModel = glm::normalize(toeGlobalRotation * glm::vec3(0.0f, 1.0f, 0.0f));
+            const glm::vec3 toeForwardAxisModel = glm::normalize(toeGlobalRotation * glm::vec3(0.0f, 0.0f, 1.0f));
+            const glm::vec3 toeRightAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(toeRightAxisModel, 0.0f)));
+            const glm::vec3 toeUpAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(toeUpAxisModel, 0.0f)));
+            const glm::vec3 toeForwardAxis =
+                glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(toeForwardAxisModel, 0.0f)));
+
+            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeRightAxis * toeAxisLength,
+                                          glm::vec4(1.0f, 0.15f, 0.15f, 1.0f), 2.0f);
+            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeUpAxis * toeAxisLength,
+                                          glm::vec4(0.15f, 1.0f, 0.15f, 1.0f), 2.0f);
+            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeForwardAxis * toeAxisLength,
+                                          glm::vec4(0.2f, 0.55f, 1.0f, 1.0f), 2.0f);
+        }
+    }
+
     void SkinnedMeshComponent::ApplyFootPlacementIK(float deltaTime)
     {
+        if (!owner_ || !ResolveFootPlacementChains())
+        {
+            return;
+        }
+
         const float targetBlendWeight = footPlacementIKSettings_.Enabled ? footPlacementIKSettings_.Weight : 0.0f;
         const float blendSharpness =
             targetBlendWeight > footPlacementBlendWeight_ ? footPlacementIKSettings_.BlendInSpeed : footPlacementIKSettings_.BlendOutSpeed;
         footPlacementBlendWeight_ = DampToward(footPlacementBlendWeight_, targetBlendWeight, blendSharpness, deltaTime);
+        const glm::mat4 componentWorldTransform = owner_->WorldTransform();
 
         if (footPlacementBlendWeight_ < 0.001f)
         {
             leftFootPlacementChain_.currentOffset = 0.0f;
             rightFootPlacementChain_.currentOffset = 0.0f;
             pelvisOffset_ = 0.0f;
+            if (footPlacementIKSettings_.DebugDraw)
+            {
+                DrawFootPlacementDebug(leftFootPlacementChain_, componentWorldTransform);
+                DrawFootPlacementDebug(rightFootPlacementChain_, componentWorldTransform);
+            }
             return;
         }
-
-        if (!owner_ || !ResolveFootPlacementChains())
-        {
-            return;
-        }
-
-        const glm::mat4 componentWorldTransform = owner_->WorldTransform();
 
         auto updateChainOffset = [this, &componentWorldTransform, deltaTime](FootPlacementChain& chain)
         {
@@ -692,12 +830,14 @@ namespace Runtime
             const bool hasToeHit =
                 chain.toe != -1 && SampleGroundHeight(componentWorldTransform, chain.toe, toeOffset, toeNormal);
             chain.toeHitValid = false;
+            chain.toeGroundNormal = glm::vec3(0.0f, 1.0f, 0.0f);
             if (hasToeHit)
             {
                 const glm::vec3 toeWorldPos =
                     glm::vec3(componentWorldTransform * runtimeJoints_[chain.toe].GlobalTransform * glm::vec4(0, 0, 0, 1));
                 chain.toeHitPoint = toeWorldPos + glm::vec3(0.0f, toeOffset - footPlacementIKSettings_.FootHeight, 0.0f);
                 chain.toeHitValid = true;
+                chain.toeGroundNormal = toeNormal;
             }
 
             float targetOffset = 0.0f;
@@ -751,40 +891,31 @@ namespace Runtime
         auto solveChain = [this, &componentWorldTransform, &componentWorldInverse](const FootPlacementChain& chain)
         {
             const float remainingOffset = chain.currentOffset - pelvisOffset_;
-            if (std::abs(remainingOffset) < 0.001f)
+            if (std::abs(remainingOffset) >= 0.001f)
             {
-                return;
+                const glm::vec3 footWorldPos =
+                    glm::vec3(componentWorldTransform * runtimeJoints_[chain.foot].GlobalTransform * glm::vec4(0, 0, 0, 1));
+                const glm::vec3 targetWorldPos = footWorldPos + glm::vec3(0.0f, remainingOffset, 0.0f);
+                const glm::vec3 targetModelPos = glm::vec3(componentWorldInverse * glm::vec4(targetWorldPos, 1.0f));
+                SolveTwoBoneIK(chain.upperLeg, chain.lowerLeg, chain.foot, targetModelPos);
+                UpdateJoints();
             }
 
-            const glm::vec3 footWorldPos =
-                glm::vec3(componentWorldTransform * runtimeJoints_[chain.foot].GlobalTransform * glm::vec4(0, 0, 0, 1));
-            const glm::vec3 targetWorldPos = footWorldPos + glm::vec3(0.0f, remainingOffset, 0.0f);
-            const glm::vec3 targetModelPos = glm::vec3(componentWorldInverse * glm::vec4(targetWorldPos, 1.0f));
-            SolveTwoBoneIK(chain.upperLeg, chain.lowerLeg, chain.foot, targetModelPos);
-            UpdateJoints();
-
-            if (footPlacementIKSettings_.DebugDraw)
+            if (chain.toeHitValid)
             {
-                constexpr float axisLength = 0.18f;
-                const glm::vec3 debugNormal = glm::normalize(chain.groundNormal);
-
-                if (chain.footHitValid)
-                {
-                    NextEngineHelper::DrawAuxPoint(chain.footHitPoint, glm::vec4(1.0f, 0.5f, 0.1f, 1.0f), 5.0f);
-                    NextEngineHelper::DrawAuxLine(chain.footHitPoint, chain.footHitPoint + debugNormal * axisLength,
-                                                  glm::vec4(1.0f, 0.7f, 0.1f, 1.0f), 2.0f);
-                }
-
-                if (chain.toeHitValid)
-                {
-                    NextEngineHelper::DrawAuxPoint(chain.toeHitPoint, glm::vec4(1.0f, 0.1f, 0.8f, 1.0f), 5.0f);
-                    NextEngineHelper::DrawAuxLine(chain.toeHitPoint, chain.toeHitPoint + debugNormal * axisLength,
-                                                  glm::vec4(1.0f, 0.2f, 0.9f, 1.0f), 2.0f);
-                }
+                AlignToeToGround(chain, componentWorldTransform);
+                UpdateJoints();
             }
+
         };
 
         solveChain(leftFootPlacementChain_);
         solveChain(rightFootPlacementChain_);
+
+        if (footPlacementIKSettings_.DebugDraw)
+        {
+            DrawFootPlacementDebug(leftFootPlacementChain_, componentWorldTransform);
+            DrawFootPlacementDebug(rightFootPlacementChain_, componentWorldTransform);
+        }
     }
 }

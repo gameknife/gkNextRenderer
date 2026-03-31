@@ -141,9 +141,10 @@ void CharacterDemoGameInstance::OnSceneLoaded()
 
     // Create the character controller
     FCharacterControllerSettings settings;
-    settings.height = 1.75f;
-    settings.radius = 0.3f;
-    settings.maxStrength = 2000.0f;
+    settings.height = 2.0f;
+    settings.radius = 0.5f;
+    settings.maxStrength = 4000.0f;
+    settings.mass = 200.f;
 
     // Place character at scene camera position or a default spawn
     const auto& cam = engine_->GetScene().GetRenderCamera();
@@ -221,6 +222,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
     ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
+    ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     if (characterModelLoaded_)
     {
@@ -238,7 +240,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Foot IK");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - IK Debug | F3 - Foot IK");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
@@ -249,7 +251,10 @@ bool CharacterDemoGameInstance::OnRenderUI()
 
     if (showPhysicsDebug_)
     {
-        Runtime::DrawPhysicsDebugOverlay(engine_->GetScene(), engine_->GetScene().GetRenderCamera());
+        Assets::Camera debugCamera = engine_->GetScene().GetRenderCamera();
+        OverrideRenderCamera(debugCamera);
+        Runtime::DrawPhysicsDebugOverlay(engine_->GetScene(), debugCamera);
+        Runtime::DrawCharacterControllerDebugOverlay(characterController_, debugCamera);
     }
 
     return true;
@@ -338,6 +343,12 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
         if (pressed)
         {
             showFootIKDebug_ = !showFootIKDebug_;
+        }
+        return true;
+    case SDLK_F3:
+        if (pressed)
+        {
+            footIKEnabled_ = !footIKEnabled_;
         }
         return true;
     case SDLK_ESCAPE:
@@ -647,16 +658,21 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
     // Remove the temporary placeholder once the real character is ready.
     if (characterNode_)
     {
+        DisableNodePhysicsRecursive(characterNode_);
         engine_->GetScene().RemoveNodeByInstanceId(characterNode_->GetInstanceId());
         characterNode_.reset();
     }
+
+    // Character collision should come only from the controller, not the imported skinned mesh hierarchy.
+    // Otherwise the appended mannequin can leave kinematic mesh colliders around the origin / T-pose.
+    DisableNodePhysicsRecursive(skinnedCharacterRoot_);
 
     // Apply current first-person visibility and start idle animation
     SetFirstPersonMode(firstPersonMode_);
     SetNodeRayCastVisibilityRecursive(skinnedCharacterRoot_, false);
 
     Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
-    footPlacementSettings.Enabled = true;
+    footPlacementSettings.Enabled = footIKEnabled_;
     footPlacementSettings.Weight = characterController_.IsOnGround() ? 1.0f : 0.0f;
     footPlacementSettings.TraceUpDistance = 0.45f;
     footPlacementSettings.TraceDownDistance = 0.90f;
@@ -969,6 +985,36 @@ void CharacterDemoGameInstance::SetNodeRayCastVisibilityRecursive(const std::sha
     }
 }
 
+void CharacterDemoGameInstance::DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node)
+{
+    if (!node)
+    {
+        return;
+    }
+
+    if (auto physComp = node->GetComponent<Runtime::PhysicsComponent>())
+    {
+        if (NextPhysics* physicsEngine = engine_->GetPhysicsEngine())
+        {
+            const NextBodyID bodyId = physComp->GetPhysicsBody();
+            if (!bodyId.IsInvalid())
+            {
+                physicsEngine->RemoveBody(bodyId);
+            }
+        }
+
+        auto disabledPhysicsComp = std::make_shared<Runtime::PhysicsComponent>();
+        disabledPhysicsComp->SetMobility(Runtime::ENodeMobility::Dynamic);
+        disabledPhysicsComp->SetPhysicsOffset(physComp->GetPhysicsOffset());
+        node->AddComponent(disabledPhysicsComp);
+    }
+
+    for (const auto& child : node->Children())
+    {
+        DisableNodePhysicsRecursive(child);
+    }
+}
+
 void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)
 {
     if (name.empty())
@@ -991,11 +1037,11 @@ void CharacterDemoGameInstance::UpdateCharacterAnimationPostProcess()
     }
 
     const float ikWeight =
-        (characterController_.IsOnGround() && currentAnimState_ == ECharacterAnimState::Idle) ? 1.0f : 0.0f;
+        footIKEnabled_ && (characterController_.IsOnGround() && currentAnimState_ == ECharacterAnimState::Idle) ? 1.0f : 0.0f;
 
     for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
     {
-        skinnedMeshComp->SetFootPlacementIKEnabled(true);
+        skinnedMeshComp->SetFootPlacementIKEnabled(footIKEnabled_);
         skinnedMeshComp->SetFootPlacementIKWeight(ikWeight);
         auto settings = skinnedMeshComp->GetFootPlacementIKSettings();
         settings.DebugDraw = showFootIKDebug_;

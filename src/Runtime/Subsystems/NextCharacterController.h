@@ -52,6 +52,8 @@ public:
     glm::vec3 GetLinearVelocity() const;
     ECharacterGroundState GetGroundState() const;
     bool IsOnGround() const;
+    float GetHeight() const { return settings_.height; }
+    float GetRadius() const { return settings_.radius; }
 
     bool IsValid() const;
 

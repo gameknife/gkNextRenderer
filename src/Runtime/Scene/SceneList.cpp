@@ -331,7 +331,7 @@ namespace
 
         // -- Materials --
         uint32_t matBase = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Mixture(vec3(0.5f, 0.5f, 0.5f), 0.05f), "ground"});         // 0: ground grey
+        materials.push_back({Material::Mixture(vec3(0.5f, 0.5f, 0.5f), 0.5f), "ground"});         // 0: ground grey
         materials.push_back({Material::Lambertian(vec3(0.85f, 0.35f, 0.25f)), "box_red"});      // 1: red
         materials.push_back({Material::Lambertian(vec3(0.25f, 0.55f, 0.85f)), "box_blue"});     // 2: blue
         materials.push_back({Material::Lambertian(vec3(0.35f, 0.75f, 0.35f)), "box_green"});    // 3: green
