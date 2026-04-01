@@ -141,9 +141,9 @@ private:
     float mouseSensitivity_ = 0.002f;
     float cameraDistance_ = 5.0f;   // third-person camera distance
     float cameraHeight_ = 2.0f;    // camera height offset above character
-    float projectileSize_ = 0.2f;
+    float projectileSize_ = 0.3f;
     float projectileSpawnDistance_ = 0.9f;
-    float projectileForce_ = 5000.0f;
+    float projectileForce_ = 60000.0f;
     float walkStrafePlaySpeed_ = 0.82f;
     float runBackwardPlaySpeed_ = 1.35f;
     float jumpStartHoldTime_ = 0.12f;
