@@ -98,27 +98,26 @@ namespace
 			glm::vec4(col3.GetX(), col3.GetY(), col3.GetZ(), col3.GetW()));
 	}
 
-	glm::vec4 SelectDebugBodyColor(BodyInterface& bodyInterface, const BodyID& bodyId)
+	glm::vec4 SelectDebugBodyColor(NextMotionType motionType, NextObjectLayer objectLayer, bool isActive, bool isValid)
 	{
-		if (!bodyInterface.IsAdded(bodyId))
+		if (!isValid)
 		{
 			return glm::vec4(1.0f, 0.0f, 1.0f, 1.0f);
 		}
 
-		const ObjectLayer objectLayer = bodyInterface.GetObjectLayer(bodyId);
 		if (objectLayer == NextLayers::HIDDEN)
 		{
 			return glm::vec4(1.0f, 0.2f, 0.2f, 1.0f);
 		}
 
-		switch (bodyInterface.GetMotionType(bodyId))
+		switch (motionType)
 		{
 		case EMotionType::Static:
 			return glm::vec4(0.35f, 0.65f, 1.0f, 1.0f);
 		case EMotionType::Kinematic:
 			return glm::vec4(0.2f, 0.95f, 0.95f, 1.0f);
 		case EMotionType::Dynamic:
-			return bodyInterface.IsActive(bodyId)
+			return isActive
 				? glm::vec4(0.25f, 1.0f, 0.35f, 1.0f)
 				: glm::vec4(1.0f, 0.75f, 0.2f, 1.0f);
 		default:
@@ -670,7 +669,7 @@ NextBodyID NextPhysics::CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshS
 	
 	bodyId = bodyInterface.CreateAndAddBody(bodyCreation, EActivation::Activate);
 
-	FNextPhysicsBody body { glm::vec3(0,0,0), glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Sphere, bodyId, motionType };
+	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Mesh, bodyId, motionType };
 	return AddBodyInternal(body, false);
 #else
     return NextBodyID();
@@ -745,6 +744,11 @@ void NextPhysics::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position
 #if WITH_PHYSIC
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	bodyInterface.MoveKinematic(bodyID, RVec3(position.x, position.y, position.z), Quat(rotation.x, rotation.y, rotation.z, rotation.w), deltaSeconds);
+	if (bodies_.contains(bodyID))
+	{
+		bodies_[bodyID].position = position;
+		bodies_[bodyID].rotation = rotation;
+	}
 #endif
 }
 
@@ -828,6 +832,37 @@ FNextPhysicsBody* NextPhysics::GetBody(NextBodyID bodyID)
 	return nullptr;
 }
 
+FNextPhysicsDebugState NextPhysics::GetBodyDebugState(NextBodyID bodyID) const
+{
+	FNextPhysicsDebugState state;
+#if WITH_PHYSIC
+	if (!context_ || bodyID.IsInvalid())
+	{
+		return state;
+	}
+
+	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+	if (!bodyInterface.IsAdded(bodyID))
+	{
+		return state;
+	}
+
+	state.motionType = bodyInterface.GetMotionType(bodyID);
+	state.objectLayer = bodyInterface.GetObjectLayer(bodyID);
+	state.isActive = bodyInterface.IsActive(bodyID);
+	state.isValid = true;
+#else
+	(void)bodyID;
+#endif
+	return state;
+}
+
+glm::vec4 NextPhysics::GetBodyDebugColor(NextBodyID bodyID) const
+{
+	const FNextPhysicsDebugState state = GetBodyDebugState(bodyID);
+	return SelectDebugBodyColor(state.motionType, state.objectLayer, state.isActive, state.isValid);
+}
+
 void NextPhysics::RemoveBody(NextBodyID bodyID)
 {
 #if WITH_PHYSIC
@@ -889,7 +924,9 @@ void NextPhysics::DrawDebugBodies() const
 			continue;
 		}
 
-		const glm::vec4 color = SelectDebugBodyColor(bodyInterface, bodyId);
+		const FNextPhysicsDebugState debugState = GetBodyDebugState(bodyId);
+		const glm::vec4 color =
+			SelectDebugBodyColor(debugState.motionType, debugState.objectLayer, debugState.isActive, debugState.isValid);
 		const AABox localBounds = transformedShape.mShape->GetLocalBounds();
 		const glm::mat4 worldTransform = ToGlmMat4(transformedShape.GetWorldTransform().ToMat44());
 		NextEngineHelper::DrawAuxOBB(worldTransform, ToGlmVec3(localBounds.mMin), ToGlmVec3(localBounds.mMax), color,

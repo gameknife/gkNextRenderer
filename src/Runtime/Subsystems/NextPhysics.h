@@ -38,6 +38,14 @@ struct FNextPhysicsBody
     NextMotionType motionType;
 };
 
+struct FNextPhysicsDebugState
+{
+    NextMotionType motionType = NextMotionType::Static;
+    NextObjectLayer objectLayer = NextLayers::NON_MOVING;
+    bool isActive = false;
+    bool isValid = false;
+};
+
 class NextPhysics final
 {
 public:
@@ -64,6 +72,8 @@ public:
     void SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity);
 
     FNextPhysicsBody* GetBody(NextBodyID bodyID);
+    FNextPhysicsDebugState GetBodyDebugState(NextBodyID bodyID) const;
+    glm::vec4 GetBodyDebugColor(NextBodyID bodyID) const;
     void RemoveBody(NextBodyID bodyID);
 
     void SetBodyActive(NextBodyID bodyID, bool active);

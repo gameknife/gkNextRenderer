@@ -1,5 +1,7 @@
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 
+#include <cmath>
+
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -14,18 +16,14 @@
 
 namespace
 {
-    ImU32 GetDebugColor(Runtime::ENodeMobility mobility)
+    ImU32 ToImU32(const glm::vec4& color)
     {
-        switch (mobility)
+        const auto clampByte = [](float value) -> int
         {
-        case Runtime::ENodeMobility::Dynamic:
-            return IM_COL32(80, 255, 120, 220);
-        case Runtime::ENodeMobility::Kinematic:
-            return IM_COL32(255, 210, 70, 220);
-        case Runtime::ENodeMobility::Static:
-        default:
-            return IM_COL32(90, 180, 255, 220);
-        }
+            return static_cast<int>(std::round(glm::clamp(value, 0.0f, 1.0f) * 255.0f));
+        };
+
+        return IM_COL32(clampByte(color.r), clampByte(color.g), clampByte(color.b), clampByte(color.a));
     }
 
     struct FOverlayProjector
@@ -96,6 +94,105 @@ namespace
 
         return radius;
     }
+
+    struct FPhysicsLegendEntry
+    {
+        const char* label;
+        glm::vec4 color;
+    };
+
+    enum class EPhysicsLegendCategory : uint8_t
+    {
+        Static = 0,
+        Kinematic,
+        DynamicAwake,
+        DynamicSleeping,
+        Hidden,
+        Count
+    };
+
+    struct FPhysicsDebugStats
+    {
+        std::array<int, static_cast<size_t>(EPhysicsLegendCategory::Count)> counts{};
+        int total = 0;
+
+        void Add(EPhysicsLegendCategory category)
+        {
+            counts[static_cast<size_t>(category)]++;
+            total++;
+        }
+    };
+
+    EPhysicsLegendCategory ClassifyBodyDebugState(const FNextPhysicsDebugState& state)
+    {
+        if (!state.isValid || state.objectLayer == NextLayers::HIDDEN)
+        {
+            return EPhysicsLegendCategory::Hidden;
+        }
+
+        switch (state.motionType)
+        {
+        case NextMotionType::Static:
+            return EPhysicsLegendCategory::Static;
+        case NextMotionType::Kinematic:
+            return EPhysicsLegendCategory::Kinematic;
+        case NextMotionType::Dynamic:
+            return state.isActive ? EPhysicsLegendCategory::DynamicAwake : EPhysicsLegendCategory::DynamicSleeping;
+        default:
+            return EPhysicsLegendCategory::Hidden;
+        }
+    }
+
+    std::array<FPhysicsLegendEntry, 5> BuildPhysicsLegendEntries()
+    {
+        return {
+            FPhysicsLegendEntry{"Static", glm::vec4(0.35f, 0.65f, 1.0f, 1.0f)},
+            FPhysicsLegendEntry{"Kinematic", glm::vec4(0.2f, 0.95f, 0.95f, 1.0f)},
+            FPhysicsLegendEntry{"Dynamic (Awake)", glm::vec4(0.25f, 1.0f, 0.35f, 1.0f)},
+            FPhysicsLegendEntry{"Dynamic (Sleeping)", glm::vec4(1.0f, 0.75f, 0.2f, 1.0f)},
+            FPhysicsLegendEntry{"Hidden / Disabled", glm::vec4(1.0f, 0.2f, 0.2f, 1.0f)},
+        };
+    }
+
+    void DrawPhysicsDebugLegend(const FPhysicsDebugStats& stats)
+    {
+        const auto legendEntries = BuildPhysicsLegendEntries();
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float margin = 12.0f;
+
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->Pos.x + viewport->Size.x - margin, viewport->Pos.y + margin),
+            ImGuiCond_Always,
+            ImVec2(1.0f, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.72f);
+
+        constexpr ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoInputs;
+
+        if (ImGui::Begin("Physics Debug Legend", nullptr, flags))
+        {
+            ImGui::TextUnformatted("Physics Debug");
+            ImGui::Separator();
+            for (size_t i = 0; i < legendEntries.size(); ++i)
+            {
+                const auto& entry = legendEntries[i];
+                ImGui::ColorButton(entry.label, ImVec4(entry.color.r, entry.color.g, entry.color.b, entry.color.a),
+                                   ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                                   ImVec2(12.0f, 12.0f));
+                ImGui::SameLine();
+                ImGui::Text("%s: %d", entry.label, stats.counts[i]);
+            }
+            ImGui::Separator();
+            ImGui::Text("Total Bodies: %d", stats.total);
+            ImGui::TextUnformatted("Circle: body center / mass center");
+        }
+        ImGui::End();
+    }
 }
 
 void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::Camera& camera)
@@ -114,6 +211,7 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
     }
 
     auto* drawList = ImGui::GetForegroundDrawList();
+    FPhysicsDebugStats stats;
 
     static constexpr int kEdges[12][2] = {
         {0, 1}, {1, 3}, {3, 2}, {2, 0},
@@ -130,13 +228,21 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
 
         auto renderComp = node->GetComponent<Runtime::RenderComponent>();
         auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-        if (!renderComp || !physComp || !renderComp->GetVisible() || !renderComp->IsDrawable())
+        if (!renderComp || !physComp || !renderComp->IsDrawable())
         {
             continue;
         }
 
         auto* body = physics->GetBody(physComp->GetPhysicsBody());
         if (!body)
+        {
+            continue;
+        }
+
+        const FNextPhysicsDebugState debugState = physics->GetBodyDebugState(physComp->GetPhysicsBody());
+        stats.Add(ClassifyBodyDebugState(debugState));
+
+        if (!renderComp->GetVisible())
         {
             continue;
         }
@@ -167,7 +273,7 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
         corners[6] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f));
         corners[7] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f));
 
-        const ImU32 color = GetDebugColor(physComp->GetMobility());
+        const ImU32 color = ToImU32(physics->GetBodyDebugColor(physComp->GetPhysicsBody()));
         for (const auto& edge : kEdges)
         {
             DrawProjectedLine(drawList, *projector, corners[edge[0]], corners[edge[1]], color, 1.5f);
@@ -179,6 +285,8 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
             drawList->AddCircle(center, 3.5f, color, 10, 1.5f);
         }
     }
+
+    DrawPhysicsDebugLegend(stats);
 #else
     (void)scene;
     (void)camera;

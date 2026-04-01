@@ -11,6 +11,7 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
+#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -153,6 +154,13 @@ bool NextRendererGameInstance::OnRenderUI()
 	DrawTitleBar();
 	DrawSettings();
 
+    if (showPhysicsDebug_)
+    {
+        Assets::Camera debugCamera = GetEngine().GetScene().GetRenderCamera();
+        OverrideRenderCamera(debugCamera);
+        Runtime::DrawPhysicsDebugOverlay(GetEngine().GetScene(), debugCamera);
+    }
+
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
 		auto& swapChain = GetEngine().GetRenderer().SwapChain();
@@ -270,10 +278,9 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
                 }
             }
             break;
-		case SDLK_F1: GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings; return true;
-			break;
-		case SDLK_F2: GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay; return true;
-			break;
+		case SDLK_F1:
+            showPhysicsDebug_ = !showPhysicsDebug_;
+            return true;
 		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
 		default: break;
@@ -453,16 +460,6 @@ void NextRendererGameInstance::DrawSettings()
 
 	if (ImGui::Begin("Settings", &userSetting.ShowSettings, flags))
 	{
-		// if( ImGui::CollapsingHeader(LOCTEXT("Help"), ImGuiTreeNodeFlags_None) )
-		// {
-		// 	ImGui::Separator();
-		// 	ImGui::BulletText("%s", LOCTEXT("F1: toggle Settings."));
-		// 	ImGui::BulletText("%s", LOCTEXT("F2: toggle Statistics."));
-		// 	ImGui::BulletText("%s", LOCTEXT("Click: Click Object to Focus."));
-		// 	ImGui::BulletText("%s", LOCTEXT("DropFile: if glb file, load it."));
-		// 	ImGui::NewLine();
-		// }
-
 		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
 			struct RendererOption

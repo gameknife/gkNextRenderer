@@ -55,4 +55,5 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;
+    bool showPhysicsDebug_ = false;
 };
