@@ -214,6 +214,7 @@ assets/
   - `coding-standards.md` - Detailed code review guidelines
   - `quick-commands.md` - Command reference (Layer 3)
   - `ReflectionSystem.md` - Reflection system documentation
+  - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow and review rules
   - `MagicaLego.md` - MagicaLego subproject notes
 - **README.en.md** - Project overview and quick start
 - **.clang-tidy** - Naming conventions (source of truth)

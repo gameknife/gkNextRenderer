@@ -17,6 +17,7 @@
 #include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FLDrawLoader.h"
 #include "Assets/Loaders/FSceneLoader.h"
+#include "Assets/Loaders/KayKitPieceLoader.h"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
@@ -329,16 +330,90 @@ namespace
         cameraInit.SunIntensity = 200.0f;
         cameraInit.SkyIntensity = 50.0f;
 
-        // -- Materials --
+        // -- Materials for procedural elements (ground, walls) --
         uint32_t matBase = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Mixture(vec3(0.5f, 0.5f, 0.5f), 0.5f), "ground"});         // 0: ground grey
-        materials.push_back({Material::Lambertian(vec3(0.85f, 0.35f, 0.25f)), "box_red"});      // 1: red
-        materials.push_back({Material::Lambertian(vec3(0.25f, 0.55f, 0.85f)), "box_blue"});     // 2: blue
-        materials.push_back({Material::Lambertian(vec3(0.35f, 0.75f, 0.35f)), "box_green"});    // 3: green
-        materials.push_back({Material::Lambertian(vec3(0.9f, 0.8f, 0.3f)), "box_yellow"});      // 4: yellow
-        materials.push_back({Material::Mixture(vec3(0.9f, 0.9f, 0.9f), 0.05f), "box_shiny"});   // 5: shiny white
+        materials.push_back({Material::Mixture(vec3(0.5f, 0.5f, 0.5f), 0.5f), "ground"});
+        materials.push_back({Material::Mixture(vec3(0.9f, 0.9f, 0.9f), 0.05f), "wall_shiny"});
 
-        // -- Ground plane: large flat box --
+        // -- Load KayKit pieces --
+        Assets::KayKitPieceLoader loader;
+
+        // Platforms (green - main color)
+        int platSmall   = loader.LoadPiece("platform_1x1x1", "green", models, materials);
+        int platMed     = loader.LoadPiece("platform_2x2x1", "green", models, materials);
+        int platLarge   = loader.LoadPiece("platform_4x4x1", "green", models, materials);
+        int platHuge    = loader.LoadPiece("platform_6x6x1", "green", models, materials);
+        int platTall    = loader.LoadPiece("platform_4x4x2", "green", models, materials);
+        int platMedTall = loader.LoadPiece("platform_2x2x2", "green", models, materials);
+        int platWide    = loader.LoadPiece("platform_4x2x1", "green", models, materials);
+        int platLong    = loader.LoadPiece("platform_6x2x1", "green", models, materials);
+
+        // Slopes
+        int slopeLarge  = loader.LoadPiece("platform_slope_4x4x4", "green", models, materials);
+        int slopeSmall  = loader.LoadPiece("platform_slope_2x2x2", "green", models, materials);
+        int slopeBlueLarge = loader.LoadPiece("platform_slope_4x4x4", "blue", models, materials);
+        int slopeBlueSmall = loader.LoadPiece("platform_slope_2x2x2", "blue", models, materials);
+
+        // Barriers and pillars
+        int barrierTall = loader.LoadPiece("barrier_4x1x4", "green", models, materials);
+        int barrierLow  = loader.LoadPiece("barrier_2x1x2", "green", models, materials);
+        int pillarTall  = loader.LoadPiece("pillar_1x1x4", "neutral", models, materials);
+        int pillarShort = loader.LoadPiece("pillar_2x2x2", "neutral", models, materials);
+
+        // Accent color platforms
+        int platBlueMed = loader.LoadPiece("platform_2x2x1", "blue", models, materials);
+        int platBlue    = loader.LoadPiece("platform_4x4x1", "blue", models, materials);
+        int platBlueWide = loader.LoadPiece("platform_4x2x1", "blue", models, materials);
+        int platBlueLong = loader.LoadPiece("platform_6x2x1", "blue", models, materials);
+        int platRed     = loader.LoadPiece("platform_4x4x1", "red", models, materials);
+        int platYellow  = loader.LoadPiece("platform_2x2x1", "yellow", models, materials);
+        int platHoleBlue = loader.LoadPiece("platform_hole_6x6x1", "blue", models, materials);
+        int platDecoBlue = loader.LoadPiece("platform_decorative_2x2x2", "blue", models, materials);
+        int platDecoYellow = loader.LoadPiece("platform_decorative_2x2x2", "yellow", models, materials);
+        int woodPlatform = loader.LoadPiece("platform_wood_1x1x1", "neutral", models, materials);
+
+        // Decorations
+        int flagA       = loader.LoadPiece("flag_A", "green", models, materials);
+        int flagB       = loader.LoadPiece("flag_B", "yellow", models, materials);
+        int flagC       = loader.LoadPiece("flag_C", "blue", models, materials);
+        int cone        = loader.LoadPiece("cone", "red", models, materials);
+        int diamond     = loader.LoadPiece("diamond", "yellow", models, materials);
+        int star        = loader.LoadPiece("star", "blue", models, materials);
+        int heart       = loader.LoadPiece("heart", "red", models, materials);
+        int power       = loader.LoadPiece("power", "blue", models, materials);
+        int archGreen   = loader.LoadPiece("arch", "green", models, materials);
+        int archWide    = loader.LoadPiece("arch_wide", "green", models, materials);
+        int spring      = loader.LoadPiece("spring", "neutral", models, materials);
+        int springPad   = loader.LoadPiece("spring_pad", "green", models, materials);
+        int hoop        = loader.LoadPiece("hoop", "red", models, materials);
+        int hoopAngled  = loader.LoadPiece("hoop_angled", "red", models, materials);
+        int buttonBase  = loader.LoadPiece("button_base", "yellow", models, materials);
+        int arrowStand  = loader.LoadPiece("signage_arrow_stand", "green", models, materials);
+        int arrowsLeft  = loader.LoadPiece("signage_arrows_left", "green", models, materials);
+        int arrowsRight = loader.LoadPiece("signage_arrows_right", "green", models, materials);
+        int finishSign  = loader.LoadPiece("signage_finish_wide", "neutral", models, materials);
+        int railingStraight = loader.LoadPiece("railing_straight_single", "yellow", models, materials);
+        int railingCorner = loader.LoadPiece("railing_corner_single", "yellow", models, materials);
+        int braceLarge  = loader.LoadPiece("bracing_large", "green", models, materials);
+        int braceMedium = loader.LoadPiece("bracing_medium", "green", models, materials);
+        int pillarMini  = loader.LoadPiece("pillar_1x1x2", "neutral", models, materials);
+        int pillarMega  = loader.LoadPiece("pillar_1x1x8", "neutral", models, materials);
+        int pillarWide  = loader.LoadPiece("pillar_2x2x4", "neutral", models, materials);
+        int floorWoodSquare = loader.LoadPiece("floor_wood_2x2", "neutral", models, materials);
+        int floorWoodLong   = loader.LoadPiece("floor_wood_2x6", "neutral", models, materials);
+        int structureA  = loader.LoadPiece("structure_A", "neutral", models, materials);
+        int structureB  = loader.LoadPiece("structure_B", "neutral", models, materials);
+        int structureC  = loader.LoadPiece("structure_C", "neutral", models, materials);
+        int strutHorizontal = loader.LoadPiece("strut_horizontal", "neutral", models, materials);
+        int strutVertical = loader.LoadPiece("strut_vertical", "neutral", models, materials);
+        int pipeTurn    = loader.LoadPiece("pipe_180_A", "red", models, materials);
+        int pipeElbow   = loader.LoadPiece("pipe_90_A", "red", models, materials);
+        int pipeStraightBlue = loader.LoadPiece("pipe_straight_A", "blue", models, materials);
+        int pipeStraightYellow = loader.LoadPiece("pipe_straight_A", "yellow", models, materials);
+        int pipeStraightGreen = loader.LoadPiece("pipe_straight_A", "green", models, materials);
+        int pipeEndGreen = loader.LoadPiece("pipe_end", "green", models, materials);
+
+        // -- Ground plane: large flat box (procedural, 100x100) --
         const float groundHalfSize = 50.0f;
         const float groundThickness = 0.5f;
         models.push_back(Assets::FProcModel::CreateBox(
@@ -356,46 +431,9 @@ namespace
             nodes.push_back(node);
         }
 
-        // -- Obstacle box models (3 sizes) --
-        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f, 0, -0.5f), vec3(0.5f, 1.0f, 0.5f)));
-        uint32_t smallBoxId = static_cast<uint32_t>(models.size() - 1);
-        models.push_back(Assets::FProcModel::CreateBox(vec3(-1.0f, 0, -1.0f), vec3(1.0f, 2.0f, 1.0f)));
-        uint32_t medBoxId = static_cast<uint32_t>(models.size() - 1);
-        models.push_back(Assets::FProcModel::CreateBox(vec3(-1.5f, 0, -1.5f), vec3(1.5f, 3.0f, 1.5f)));
-        uint32_t largeBoxId = static_cast<uint32_t>(models.size() - 1);
-
-        const float stairStepHeight = 0.15f;
-        const float stairStepDepth = 1.0f;
-        const float landingDepth = 1.2f;
-        const float landingThickness = 0.08f;
-        const float rampHalfWidth = 2.0f;
-        const float rampHalfLength = 4.0f;
-        const float rampThickness = 0.18f;
+        // -- Perimeter walls (procedural, mostly invisible) --
         const float wallThickness = 1.0f;
         const float wallHeight = 12.0f;
-        const float roomWallThickness = 0.2f;
-        const float surfaceSink = 0.01f;
-        const float landingOverlap = 0.08f;
-
-        // -- A thin ramp model with its walkable surface on local y = 0 --
-        models.push_back(Assets::FProcModel::CreateBox(
-            vec3(-rampHalfWidth, -rampThickness, -rampHalfLength),
-            vec3(rampHalfWidth, 0.0f, rampHalfLength)));
-        uint32_t rampBoxId = static_cast<uint32_t>(models.size() - 1);
-
-        // -- Stair step model, half the previous step height --
-        models.push_back(Assets::FProcModel::CreateBox(
-            vec3(-2.0f, -stairStepHeight, -0.5f),
-            vec3(2.0f, 0.0f, 0.5f)));
-        uint32_t stairStepId = static_cast<uint32_t>(models.size() - 1);
-
-        // -- Landing platform to bridge ramps / stairs with the floor --
-        models.push_back(Assets::FProcModel::CreateBox(
-            vec3(-2.0f, -landingThickness, -landingDepth * 0.5f),
-            vec3(2.0f, 0.0f, landingDepth * 0.5f)));
-        uint32_t landingId = static_cast<uint32_t>(models.size() - 1);
-
-        // -- Perimeter wall models to keep bullets and physics objects inside the test area --
         models.push_back(Assets::FProcModel::CreateBox(
             vec3(-(groundHalfSize + wallThickness), -0.25f, -wallThickness * 0.5f),
             vec3(groundHalfSize + wallThickness, wallHeight, wallThickness * 0.5f)));
@@ -406,350 +444,120 @@ namespace
             vec3(wallThickness * 0.5f, wallHeight, groundHalfSize + wallThickness)));
         uint32_t wallWideId = static_cast<uint32_t>(models.size() - 1);
 
-        models.push_back(Assets::FProcModel::CreateBox(
-            vec3(-0.5f, 0.0f, -roomWallThickness * 0.5f),
-            vec3(0.5f, 1.0f, roomWallThickness * 0.5f)));
-        uint32_t roomWallPanelId = static_cast<uint32_t>(models.size() - 1);
-
-        // -- Random obstacle boxes --
-        std::mt19937 rng(42);
-        std::uniform_real_distribution<float> posDist(-30.0f, 30.0f);
-        std::uniform_int_distribution<int> sizeDist(0, 2);
-        std::uniform_int_distribution<int> matDist(1, 5);
-        std::uniform_real_distribution<float> yawDist(0.0f, glm::two_pi<float>());
-
-        constexpr int numBoxes = 30;
-        for (int i = 0; i < numBoxes; ++i)
+        auto addProcNode = [&](const std::string& name, const vec3& pos, const quat& rot,
+                               uint32_t modelId, uint32_t materialId)
         {
-            float x = posDist(rng);
-            float z = posDist(rng);
-
-            // Keep a clear area around spawn
-            if (std::abs(x) < 4.0f && std::abs(z) < 4.0f)
-            {
-                x += (x >= 0 ? 4.0f : -4.0f);
-            }
-
-            int size = sizeDist(rng);
-            uint32_t modelId = (size == 0) ? smallBoxId : (size == 1) ? medBoxId : largeBoxId;
-            uint32_t matId = matBase + static_cast<uint32_t>(matDist(rng));
-            float yaw = yawDist(rng);
-
-            auto node = Assets::Node::CreateNode(
-                "Obstacle_" + std::to_string(i),
-                vec3(x, 0, z),
-                glm::angleAxis(yaw, vec3(0, 1, 0)),
-                vec3(1), static_cast<uint32_t>(nodes.size()));
-
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelId);
-            rc->SetVisible(true);
-            rc->SetMaterial({matId});
-            node->AddComponent(rc);
-
-            if (size == 0)
-            {
-                auto phys = std::make_shared<Runtime::PhysicsComponent>();
-                phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-                phys->SetPhysicsOffset(vec3(0.0f, 0.5f, 0.0f));
-
-                NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
-                    vec3(x, 0.5f, z),
-                    glm::angleAxis(yaw, vec3(0, 1, 0)),
-                    vec3(1.0f, 1.0f, 1.0f),
-                    NextMotionType::Dynamic);
-                phys->BindPhysicsBody(bodyId);
-                node->AddComponent(phys);
-            }
-
-            nodes.push_back(node);
-        }
-
-        std::uniform_real_distribution<float> dynamicPosXDist(-22.0f, 22.0f);
-        std::uniform_real_distribution<float> dynamicPosZDist(8.0f, 28.0f);
-
-        constexpr int numDynamicBoxes = 18;
-        for (int i = 0; i < numDynamicBoxes; ++i)
-        {
-            const float x = dynamicPosXDist(rng);
-            const float z = dynamicPosZDist(rng);
-            const uint32_t matId = matBase + static_cast<uint32_t>(matDist(rng));
-            const float yaw = yawDist(rng);
-
-            auto node = Assets::Node::CreateNode(
-                "DynamicObstacle_" + std::to_string(i),
-                vec3(x, 0, z),
-                glm::angleAxis(yaw, vec3(0, 1, 0)),
-                vec3(1),
-                static_cast<uint32_t>(nodes.size()));
-
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(smallBoxId);
-            rc->SetVisible(true);
-            rc->SetMaterial({matId});
-            node->AddComponent(rc);
-
-            auto phys = std::make_shared<Runtime::PhysicsComponent>();
-            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            phys->SetPhysicsOffset(vec3(0.0f, 0.5f, 0.0f));
-
-            NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
-                vec3(x, 0.5f, z),
-                glm::angleAxis(yaw, vec3(0, 1, 0)),
-                vec3(1.0f, 1.0f, 1.0f),
-                NextMotionType::Dynamic);
-            phys->BindPhysicsBody(bodyId);
-            node->AddComponent(phys);
-
-            nodes.push_back(node);
-        }
-
-        auto addScaledStaticNode =
-            [&](const std::string& name, const vec3& position, const quat& rotation, const vec3& scale, uint32_t modelId, uint32_t materialId)
-        {
-            auto node = Assets::Node::CreateNode(
-                name,
-                position,
-                rotation,
-                scale,
-                static_cast<uint32_t>(nodes.size()));
-
+            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
             auto rc = std::make_shared<Runtime::RenderComponent>();
             rc->SetModelId(modelId);
             rc->SetVisible(true);
             rc->SetMaterial({materialId});
             node->AddComponent(rc);
+            nodes.push_back(node);
+        };
+
+        addProcNode("Wall_North", vec3(0, 0, -(groundHalfSize + wallThickness * 0.5f)), quat(1, 0, 0, 0), wallLongId, matBase + 1);
+        addProcNode("Wall_South", vec3(0, 0, groundHalfSize + wallThickness * 0.5f), quat(1, 0, 0, 0), wallLongId, matBase + 1);
+        addProcNode("Wall_West", vec3(-(groundHalfSize + wallThickness * 0.5f), 0, 0), quat(1, 0, 0, 0), wallWideId, matBase + 1);
+        addProcNode("Wall_East", vec3(groundHalfSize + wallThickness * 0.5f, 0, 0), quat(1, 0, 0, 0), wallWideId, matBase + 1);
+
+        // -- Helper: place a KayKit piece with optional static physics --
+        auto placePiece = [&](const std::string& name, int pieceIdx, const vec3& pos,
+                              const quat& rot = quat(1, 0, 0, 0), bool withPhysics = true)
+        {
+            if (pieceIdx < 0) return;
+            const auto& piece = loader.GetPiece(pieceIdx);
+            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(piece.modelId);
+            rc->SetVisible(true);
+            rc->SetMaterial({piece.materialId});
+            node->AddComponent(rc);
+
+            if (withPhysics)
+            {
+                // Static KayKit pieces should use the scene's mesh-collider path instead of a
+                // manually created AABB box. Box proxies are acceptable for cubes, but they make
+                // sloped meshes behave like invisible blocks and cause the character to hover.
+                auto phys = std::make_shared<Runtime::PhysicsComponent>();
+                phys->SetMobility(Runtime::ENodeMobility::Static);
+                node->AddComponent(phys);
+            }
 
             nodes.push_back(node);
         };
 
-        auto addStaticNode =
-            [&](const std::string& name, const vec3& position, const quat& rotation, uint32_t modelId, uint32_t materialId)
+        auto placeDynamic = [&](const std::string& name, int pieceIdx, const vec3& pos,
+                                const quat& rot = quat(1, 0, 0, 0))
         {
-            addScaledStaticNode(name, position, rotation, vec3(1), modelId, materialId);
+            if (pieceIdx < 0) return;
+            const auto& piece = loader.GetPiece(pieceIdx);
+            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(piece.modelId);
+            rc->SetVisible(true);
+            rc->SetMaterial({piece.materialId});
+            node->AddComponent(rc);
+
+            auto phys = std::make_shared<Runtime::PhysicsComponent>();
+            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+            glm::vec3 offset = loader.GetCollisionOffset(pieceIdx);
+            glm::vec3 extent = loader.GetCollisionExtent(pieceIdx);
+            phys->SetPhysicsOffset(offset);
+            NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
+                pos + rot * offset, rot, extent, NextMotionType::Dynamic);
+            phys->BindPhysicsBody(bodyId);
+            node->AddComponent(phys);
+
+            nodes.push_back(node);
         };
 
-        auto addWallPanel =
-            [&](const std::string& name, const vec3& position, const quat& rotation, float length, float height, uint32_t materialId)
+        struct PrefabPiecePlacement
         {
-            addScaledStaticNode(name,
-                                position,
-                                rotation,
-                                vec3(length, height, 1.0f),
-                                roomWallPanelId,
-                                materialId);
+            std::string suffix;
+            int pieceIdx = -1;
+            vec3 offset = vec3(0.0f);
+            quat rotation = quat(1, 0, 0, 0);
+            bool withPhysics = true;
         };
 
-        auto addWindowWall =
-            [&](const std::string& prefix, const vec3& center, const quat& rotation, float wallLength, float localBottomY,
-                float totalHeight, float windowWidth, float sillHeight, float windowHeight, uint32_t materialId)
+        auto placePrefab = [&](const std::string& prefix, const vec3& anchor, const quat& baseRotation,
+                               const std::vector<PrefabPiecePlacement>& pieces)
         {
-            addWallPanel(prefix + "_Lower",
-                         center + rotation * vec3(0.0f, localBottomY, 0.0f),
-                         rotation,
-                         wallLength,
-                         sillHeight,
-                         materialId);
-
-            const float upperHeight = totalHeight - sillHeight - windowHeight;
-            if (upperHeight > 0.05f)
+            for (const auto& piece : pieces)
             {
-                addWallPanel(prefix + "_Upper",
-                             center + rotation * vec3(0.0f, localBottomY + sillHeight + windowHeight, 0.0f),
-                             rotation,
-                             wallLength,
-                             upperHeight,
-                             materialId);
-            }
+                if (piece.pieceIdx < 0)
+                {
+                    continue;
+                }
 
-            const float sideLength = (wallLength - windowWidth) * 0.5f;
-            if (sideLength > 0.05f)
-            {
-                addWallPanel(prefix + "_SideL",
-                             center + rotation * vec3(-(windowWidth * 0.5f + sideLength * 0.5f), localBottomY + sillHeight, 0.0f),
-                             rotation,
-                             sideLength,
-                             windowHeight,
-                             materialId);
-                addWallPanel(prefix + "_SideR",
-                             center + rotation * vec3(windowWidth * 0.5f + sideLength * 0.5f, localBottomY + sillHeight, 0.0f),
-                             rotation,
-                             sideLength,
-                             windowHeight,
-                             materialId);
+                const vec3 worldPosition = anchor + baseRotation * piece.offset;
+                const quat worldRotation = baseRotation * piece.rotation;
+                placePiece(prefix + "_" + piece.suffix, piece.pieceIdx, worldPosition, worldRotation, piece.withPhysics);
             }
         };
 
-        auto addDoorWall =
-            [&](const std::string& prefix, const vec3& center, const quat& rotation, float wallLength, float localBottomY,
-                float totalHeight, float doorWidth, float doorHeight, uint32_t materialId)
-        {
-            const float sideLength = (wallLength - doorWidth) * 0.5f;
-            if (sideLength > 0.05f)
-            {
-                addWallPanel(prefix + "_SideL",
-                             center + rotation * vec3(-(doorWidth * 0.5f + sideLength * 0.5f), localBottomY, 0.0f),
-                             rotation,
-                             sideLength,
-                             doorHeight,
-                             materialId);
-                addWallPanel(prefix + "_SideR",
-                             center + rotation * vec3(doorWidth * 0.5f + sideLength * 0.5f, localBottomY, 0.0f),
-                             rotation,
-                             sideLength,
-                             doorHeight,
-                             materialId);
-            }
+        const quat rotY90 = glm::angleAxis(glm::half_pi<float>(), vec3(0, 1, 0));
+        const quat rotY180 = glm::angleAxis(glm::pi<float>(), vec3(0, 1, 0));
+        const quat rotY270 = glm::angleAxis(glm::half_pi<float>() * 3.0f, vec3(0, 1, 0));
 
-            const float headerHeight = totalHeight - doorHeight;
-            if (headerHeight > 0.05f)
-            {
-                addWallPanel(prefix + "_Header",
-                             center + rotation * vec3(0.0f, localBottomY + doorHeight, 0.0f),
-                             rotation,
-                             doorWidth,
-                             headerHeight,
-                             materialId);
-            }
+        // ====================================================================
+        // LEVEL LAYOUT - Single reviewed prefab
+        // ====================================================================
+
+        placePiece("Spawn_Platform", platHuge, vec3(0, 0, 0));
+
+        const std::vector<PrefabPiecePlacement> scaffoldPrefab{
+            {"LeftTowerLower", structureC, vec3(-3.9f, 0.0f, 0.0f)},
+            {"LeftTowerUpper", structureC, vec3(-3.9f, 1.9f, 0.0f)},
+            {"RightTowerLower", structureC, vec3(3.9f, 0.0f, 0.0f)},
+            {"RightTowerUpper", structureC, vec3(3.9f, 1.9f, 0.0f)},
+            {"TopPadLeft", floorWoodSquare, vec3(-3.9f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
+            {"TopPadRight", floorWoodSquare, vec3(3.9f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
+            {"TopBridge", floorWoodLong, vec3(0.0f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
         };
 
-        auto addSimpleRoom =
-            [&](const std::string& prefix, const vec3& center, float width, float depth, float roomHeight, uint32_t materialId)
-        {
-            const float halfWidth = width * 0.5f;
-            const float halfDepth = depth * 0.5f;
-            const float panelOverlap = roomWallThickness;
-            const float doorWidth = glm::min(1.6f, width - 1.0f);
-            const float doorHeight = glm::min(2.3f, roomHeight - 0.3f);
-            const float windowWidth = glm::min(2.2f, width - 1.2f);
-            const float sideWindowWidth = glm::min(1.8f, depth - 1.2f);
-            const float sillHeight = 1.0f;
-            const float windowHeight = glm::min(1.1f, roomHeight - sillHeight - 0.3f);
-            const float baseY = -surfaceSink;
-
-            addDoorWall(prefix + "_Front",
-                        center + vec3(0.0f, 0.0f, -halfDepth),
-                        quat(1, 0, 0, 0),
-                        width + panelOverlap,
-                        baseY,
-                        roomHeight,
-                        doorWidth,
-                        doorHeight,
-                        materialId);
-
-            addWindowWall(prefix + "_Back",
-                          center + vec3(0.0f, 0.0f, halfDepth),
-                          quat(1, 0, 0, 0),
-                          width + panelOverlap,
-                          baseY,
-                          roomHeight,
-                          windowWidth,
-                          sillHeight,
-                          windowHeight,
-                          materialId);
-
-            addWindowWall(prefix + "_Left",
-                          center + vec3(-halfWidth, 0.0f, 0.0f),
-                          glm::angleAxis(glm::half_pi<float>(), vec3(0, 1, 0)),
-                          depth + panelOverlap,
-                          baseY,
-                          roomHeight,
-                          sideWindowWidth,
-                          sillHeight,
-                          windowHeight,
-                          materialId);
-
-            addWallPanel(prefix + "_Right",
-                         center + vec3(halfWidth, baseY, 0.0f),
-                         glm::angleAxis(glm::half_pi<float>(), vec3(0, 1, 0)),
-                         depth + panelOverlap,
-                         roomHeight,
-                         materialId);
-        };
-
-        auto addStairFlight =
-            [&](const std::string& prefix, const vec3& startPosition, float yawDegrees, int stepCount, uint32_t materialId)
-        {
-            const quat rotation = glm::angleAxis(glm::radians(yawDegrees), vec3(0, 1, 0));
-            const float topHeight = stairStepHeight * static_cast<float>(stepCount);
-
-            addStaticNode(prefix + "_LandingLow",
-                          startPosition + rotation * vec3(0.0f, -surfaceSink, -landingDepth * 0.5f),
-                          rotation,
-                          landingId,
-                          matBase + 0);
-
-            for (int i = 0; i < stepCount; ++i)
-            {
-                const float stepTop = stairStepHeight * static_cast<float>(i + 1) - surfaceSink;
-                const float stepForward = static_cast<float>(i) * stairStepDepth;
-                addStaticNode(prefix + "_Stair_" + std::to_string(i),
-                              startPosition + rotation * vec3(0.0f, stepTop, stepForward),
-                              rotation,
-                              stairStepId,
-                              materialId);
-            }
-
-            addStaticNode(prefix + "_LandingHigh",
-                          startPosition + rotation * vec3(0.0f, topHeight - surfaceSink, stepCount * stairStepDepth),
-                          rotation,
-                          landingId,
-                          matBase + 0);
-        };
-
-        auto addRampSet =
-            [&](const std::string& prefix, const vec3& rampCenterXZ, float angleDegrees, uint32_t materialId)
-        {
-            const float angleRadians = glm::radians(angleDegrees);
-            const float halfHeightGain = rampHalfLength * std::sin(angleRadians);
-            const float totalHeightGain = halfHeightGain * 2.0f;
-            const float halfRun = rampHalfLength * std::cos(angleRadians);
-            const float landingHalfDepth = landingDepth * 0.5f;
-            const quat rotation = glm::angleAxis(angleRadians, vec3(1, 0, 0));
-
-            addStaticNode(prefix + "_Ramp",
-                          vec3(rampCenterXZ.x, halfHeightGain - surfaceSink, rampCenterXZ.z),
-                          rotation,
-                          rampBoxId,
-                          materialId);
-
-            addStaticNode(prefix + "_LandingLow",
-                          vec3(rampCenterXZ.x,
-                               -surfaceSink,
-                               rampCenterXZ.z + halfRun + landingHalfDepth - landingOverlap),
-                          quat(1, 0, 0, 0),
-                          landingId,
-                          matBase + 0);
-
-            addStaticNode(prefix + "_LandingHigh",
-                          vec3(rampCenterXZ.x,
-                               totalHeightGain - surfaceSink,
-                               rampCenterXZ.z - halfRun - landingHalfDepth + landingOverlap),
-                          quat(1, 0, 0, 0),
-                          landingId,
-                          matBase + 0);
-        };
-
-        addStaticNode("Wall_North", vec3(0.0f, 0.0f, -(groundHalfSize + wallThickness * 0.5f)), quat(1, 0, 0, 0), wallLongId, matBase + 5);
-        addStaticNode("Wall_South", vec3(0.0f, 0.0f, groundHalfSize + wallThickness * 0.5f), quat(1, 0, 0, 0), wallLongId, matBase + 5);
-        addStaticNode("Wall_West", vec3(-(groundHalfSize + wallThickness * 0.5f), 0.0f, 0.0f), quat(1, 0, 0, 0), wallWideId, matBase + 5);
-        addStaticNode("Wall_East", vec3(groundHalfSize + wallThickness * 0.5f, 0.0f, 0.0f), quat(1, 0, 0, 0), wallWideId, matBase + 5);
-
-        // -- Open-top room shells for traversal and projectile testing --
-        addSimpleRoom("Room_A", vec3(30.0f, 0.0f, 18.0f), 8.0f, 6.0f, 3.2f, matBase + 1);
-        addSimpleRoom("Room_B", vec3(-30.0f, 0.0f, 18.0f), 7.0f, 7.0f, 3.0f, matBase + 2);
-        addSimpleRoom("Room_C", vec3(0.0f, 0.0f, 32.0f), 9.0f, 6.5f, 3.4f, matBase + 3);
-
-        // -- Multiple ramps for testing different slope angles --
-        addRampSet("Ramp_Gentle", vec3(6.0f, 0.0f, -6.0f), 8.0f, matBase + 4);
-        addRampSet("Ramp_Medium", vec3(12.0f, 0.0f, -6.5f), 14.0f, matBase + 5);
-        addRampSet("Ramp_Steep", vec3(18.0f, 0.0f, -7.0f), 20.0f, matBase + 3);
-        addRampSet("Ramp_Sharp", vec3(24.0f, 0.0f, -7.5f), 26.0f, matBase + 1);
-
-        // -- Multiple stair runs with lower steps --
-        addStairFlight("StairRun_A", vec3(-6.0f, 0.0f, -11.0f), 0.0f, 8, matBase + 2);
-        addStairFlight("StairRun_B", vec3(-20.0f, 0.0f, -6.0f), 90.0f, 8, matBase + 3);
-        addStairFlight("StairRun_C", vec3(-10.0f, 0.0f, -20.0f), 180.0f, 8, matBase + 1);
+        placePrefab("Scaffold", vec3(0, 0, 14), quat(1, 0, 0, 0), scaffoldPrefab);
     }
 }
 
