@@ -353,6 +353,10 @@ namespace
         int slopeSmall  = loader.LoadPiece("platform_slope_2x2x2", "green", models, materials);
         int slopeBlueLarge = loader.LoadPiece("platform_slope_4x4x4", "blue", models, materials);
         int slopeBlueSmall = loader.LoadPiece("platform_slope_2x2x2", "blue", models, materials);
+        int slopeBlueMediumNarrow = loader.LoadPiece("platform_slope_4x6x4", "blue", models, materials);
+        int slopeBlueNarrow = loader.LoadPiece("platform_slope_2x6x4", "blue", models, materials);
+        int slopeBlueWide = loader.LoadPiece("platform_slope_6x4x4", "blue", models, materials);
+        int slopeBlueHuge = loader.LoadPiece("platform_slope_6x6x4", "blue", models, materials);
 
         // Barriers and pillars
         int barrierTall = loader.LoadPiece("barrier_4x1x4", "green", models, materials);
@@ -362,9 +366,14 @@ namespace
 
         // Accent color platforms
         int platBlueMed = loader.LoadPiece("platform_2x2x1", "blue", models, materials);
+        int platBlueMedTall = loader.LoadPiece("platform_2x2x4", "blue", models, materials);
         int platBlue    = loader.LoadPiece("platform_4x4x1", "blue", models, materials);
+        int platBlueTall = loader.LoadPiece("platform_4x2x4", "blue", models, materials);
         int platBlueWide = loader.LoadPiece("platform_4x2x1", "blue", models, materials);
         int platBlueLong = loader.LoadPiece("platform_6x2x1", "blue", models, materials);
+        int platBlueHuge = loader.LoadPiece("platform_6x6x1", "blue", models, materials);
+        int platBlueHugeTall = loader.LoadPiece("platform_6x6x2", "blue", models, materials);
+        int platBlueTallLong = loader.LoadPiece("platform_6x2x4", "blue", models, materials);
         int platRed     = loader.LoadPiece("platform_4x4x1", "red", models, materials);
         int platYellow  = loader.LoadPiece("platform_2x2x1", "yellow", models, materials);
         int platHoleBlue = loader.LoadPiece("platform_hole_6x6x1", "blue", models, materials);
@@ -381,6 +390,9 @@ namespace
         int star        = loader.LoadPiece("star", "blue", models, materials);
         int heart       = loader.LoadPiece("heart", "red", models, materials);
         int power       = loader.LoadPiece("power", "blue", models, materials);
+        int ballBlue    = loader.LoadPiece("ball", "blue", models, materials);
+        int bombABlue   = loader.LoadPiece("bomb_A", "blue", models, materials);
+        int bombBBlue   = loader.LoadPiece("bomb_B", "blue", models, materials);
         int archGreen   = loader.LoadPiece("arch", "green", models, materials);
         int archWide    = loader.LoadPiece("arch_wide", "green", models, materials);
         int spring      = loader.LoadPiece("spring", "neutral", models, materials);
@@ -388,6 +400,8 @@ namespace
         int hoop        = loader.LoadPiece("hoop", "red", models, materials);
         int hoopAngled  = loader.LoadPiece("hoop_angled", "red", models, materials);
         int buttonBase  = loader.LoadPiece("button_base", "yellow", models, materials);
+        int buttonBaseBlue = loader.LoadPiece("button_base", "blue", models, materials);
+        int leverFloorBlue = loader.LoadPiece("lever_floor_base", "blue", models, materials);
         int arrowStand  = loader.LoadPiece("signage_arrow_stand", "green", models, materials);
         int arrowsLeft  = loader.LoadPiece("signage_arrows_left", "green", models, materials);
         int arrowsRight = loader.LoadPiece("signage_arrows_right", "green", models, materials);
@@ -487,10 +501,14 @@ namespace
             nodes.push_back(node);
         };
 
-        auto placeDynamic = [&](const std::string& name, int pieceIdx, const vec3& pos,
-                                const quat& rot = quat(1, 0, 0, 0))
+        auto createKayKitNode = [&](const std::string& name, int pieceIdx, const vec3& pos,
+                                    const quat& rot = quat(1, 0, 0, 0)) -> std::shared_ptr<Assets::Node>
         {
-            if (pieceIdx < 0) return;
+            if (pieceIdx < 0)
+            {
+                return nullptr;
+            }
+
             const auto& piece = loader.GetPiece(pieceIdx);
             auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
             auto rc = std::make_shared<Runtime::RenderComponent>();
@@ -498,14 +516,74 @@ namespace
             rc->SetVisible(true);
             rc->SetMaterial({piece.materialId});
             node->AddComponent(rc);
+            return node;
+        };
+
+        auto placeDynamicBoxApprox = [&](const std::string& name, int pieceIdx, const vec3& pos,
+                                         const vec3& physicsOffset, const vec3& extent,
+                                         const quat& rot = quat(1, 0, 0, 0))
+        {
+            const auto& piece = loader.GetPiece(pieceIdx);
+            const vec3 fullExtent = piece.aabbMax - piece.aabbMin;
+            const vec3 nodePos = pos + vec3(0.0f, -piece.aabbMin.y, 0.0f);
+            const vec3 bodyExtent = fullExtent;
+            const vec3 localPhysicsOffset = physicsOffset;
+
+            auto node = createKayKitNode(name, pieceIdx, nodePos, rot);
+            if (!node)
+            {
+                return;
+            }
 
             auto phys = std::make_shared<Runtime::PhysicsComponent>();
             phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            glm::vec3 offset = loader.GetCollisionOffset(pieceIdx);
-            glm::vec3 extent = loader.GetCollisionExtent(pieceIdx);
-            phys->SetPhysicsOffset(offset);
+            phys->SetPhysicsOffset(localPhysicsOffset);
             NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
-                pos + rot * offset, rot, extent, NextMotionType::Dynamic);
+                nodePos + rot * localPhysicsOffset, rot, bodyExtent, NextMotionType::Dynamic);
+            phys->BindPhysicsBody(bodyId);
+            node->AddComponent(phys);
+
+            nodes.push_back(node);
+        };
+
+        auto surfaceAlignedPos = [&](int pieceIdx, const vec3& supportPos)
+        {
+            if (pieceIdx < 0)
+            {
+                return supportPos;
+            }
+
+            const auto& piece = loader.GetPiece(pieceIdx);
+            return supportPos + vec3(0.0f, -piece.aabbMin.y, 0.0f);
+        };
+
+        auto placeSurfacePiece = [&](const std::string& name, int pieceIdx, const vec3& supportPos,
+                                     const quat& rot = quat(1, 0, 0, 0), bool withPhysics = false)
+        {
+            placePiece(name, pieceIdx, surfaceAlignedPos(pieceIdx, supportPos), rot, withPhysics);
+        };
+
+        auto placeDynamicSphereApprox = [&](const std::string& name, int pieceIdx, const vec3& pos,
+                                            const vec3& physicsOffset, float radius,
+                                            const quat& rot = quat(1, 0, 0, 0))
+        {
+            const auto& piece = loader.GetPiece(pieceIdx);
+            const vec3 fullExtent = piece.aabbMax - piece.aabbMin;
+            const vec3 nodePos = pos + vec3(0.0f, -piece.aabbMin.y, 0.0f);
+            const vec3 localPhysicsOffset = physicsOffset;
+            const float bodyRadius = std::max(radius, fullExtent.y * 0.5f);
+
+            auto node = createKayKitNode(name, pieceIdx, nodePos, rot);
+            if (!node)
+            {
+                return;
+            }
+
+            auto phys = std::make_shared<Runtime::PhysicsComponent>();
+            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+            phys->SetPhysicsOffset(localPhysicsOffset);
+            NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(
+                nodePos + rot * localPhysicsOffset, bodyRadius, NextMotionType::Dynamic);
             phys->BindPhysicsBody(bodyId);
             node->AddComponent(phys);
 
@@ -542,22 +620,153 @@ namespace
         const quat rotY270 = glm::angleAxis(glm::half_pi<float>() * 3.0f, vec3(0, 1, 0));
 
         // ====================================================================
-        // LEVEL LAYOUT - Single reviewed prefab
+        // LEVEL LAYOUT - Rich 3C playground using reviewed ramp prefabs
         // ====================================================================
 
-        placePiece("Spawn_Platform", platHuge, vec3(0, 0, 0));
+        const vec3 spawnAnchor(0.0f, 0.0f, 0.0f);
+        const vec3 largeMainAnchor(0.0f, 0.0f, 14.0f);
+        const quat largeMainRot = quat(1, 0, 0, 0);
+        const vec3 steepMainAnchor(0.0f, 2.0f, 27.0f);
+        const quat steepMainRot = quat(1, 0, 0, 0);
+        const vec3 narrowFinishAnchor(0.0f, 5.0f, 39.0f);
+        const quat narrowFinishRot = quat(1, 0, 0, 0);
+        const vec3 mediumLeftAnchor(-18.0f, 0.0f, 18.0f);
+        const quat mediumLeftRot = rotY90;
+        const vec3 steepRightAnchor(18.0f, 0.0f, 18.0f);
+        const quat steepRightRot = rotY270;
+        const vec3 largeBackLeftAnchor(-24.0f, 0.0f, 34.0f);
+        const quat largeBackLeftRot = rotY180;
+        const vec3 mediumBackRightAnchor(24.0f, 0.0f, 34.0f);
+        const quat mediumBackRightRot = rotY180;
 
-        const std::vector<PrefabPiecePlacement> scaffoldPrefab{
-            {"LeftTowerLower", structureC, vec3(-3.9f, 0.0f, 0.0f)},
-            {"LeftTowerUpper", structureC, vec3(-3.9f, 1.9f, 0.0f)},
-            {"RightTowerLower", structureC, vec3(3.9f, 0.0f, 0.0f)},
-            {"RightTowerUpper", structureC, vec3(3.9f, 1.9f, 0.0f)},
-            {"TopPadLeft", floorWoodSquare, vec3(-3.9f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
-            {"TopPadRight", floorWoodSquare, vec3(3.9f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
-            {"TopBridge", floorWoodLong, vec3(0.0f, 3.88f, 0.0f), quat(1, 0, 0, 0)},
+        auto prefabPoint = [&](const vec3& anchor, const quat& rotation, const vec3& local)
+        {
+            return anchor + rotation * local;
         };
 
-        placePrefab("Scaffold", vec3(0, 0, 14), quat(1, 0, 0, 0), scaffoldPrefab);
+        const vec3 largeMainLowerTop = prefabPoint(largeMainAnchor, largeMainRot, vec3(0.0f, 1.0f, 0.0f));
+        const vec3 largeMainUpperTop = prefabPoint(largeMainAnchor, largeMainRot, vec3(0.0f, 4.0f, 10.0f));
+        const vec3 steepMainLowerTop = prefabPoint(steepMainAnchor, steepMainRot, vec3(0.0f, 2.0f, 0.0f));
+        const vec3 steepMainUpperTop = prefabPoint(steepMainAnchor, steepMainRot, vec3(0.0f, 4.0f, 8.0f));
+        const vec3 narrowFinishLowerTop = prefabPoint(narrowFinishAnchor, narrowFinishRot, vec3(0.0f, 1.0f, 0.0f));
+        const vec3 narrowFinishUpperTop = prefabPoint(narrowFinishAnchor, narrowFinishRot, vec3(0.0f, 4.0f, 8.0f));
+        const vec3 mediumLeftLowerTop = prefabPoint(mediumLeftAnchor, mediumLeftRot, vec3(0.0f, 1.0f, 0.0f));
+        const vec3 mediumLeftUpperTop = prefabPoint(mediumLeftAnchor, mediumLeftRot, vec3(0.0f, 4.0f, 9.0f));
+        const vec3 steepRightLowerTop = prefabPoint(steepRightAnchor, steepRightRot, vec3(0.0f, 2.0f, 0.0f));
+        const vec3 steepRightUpperTop = prefabPoint(steepRightAnchor, steepRightRot, vec3(0.0f, 4.0f, 8.0f));
+        const vec3 largeBackLeftUpperTop = prefabPoint(largeBackLeftAnchor, largeBackLeftRot, vec3(0.0f, 4.0f, 10.0f));
+        const vec3 mediumBackRightUpperTop = prefabPoint(mediumBackRightAnchor, mediumBackRightRot, vec3(0.0f, 4.0f, 9.0f));
+        const vec3 flagSurfaceBias(0.0f, -0.05f, 0.0f);
+
+        placePiece("Spawn_Platform", platHuge, spawnAnchor);
+        placePiece("WarmupPad_Left", platBlueMed, vec3(-4.5f, 0.0f, 6.5f));
+        placePiece("WarmupPad_Right", platBlueMed, vec3(4.5f, 0.0f, 6.5f));
+        placePiece("WarmupBridge", platBlueWide, vec3(0.0f, 0.0f, 9.5f));
+
+        const std::vector<PrefabPiecePlacement> bluePlatformRampPrefab{
+            {"LowerDeck", platBlueHuge, vec3(0.0f, 0.0f, 0.0f)},
+            {"MainSlope", slopeBlueHuge, vec3(0.0f, 0.0f, 6.0f), rotY180},
+            {"UpperDeck", platBlueTallLong, vec3(0.0f, 0.0f, 10.0f)},
+        };
+
+        placePrefab("BluePlatformRamp_Main", largeMainAnchor, largeMainRot, bluePlatformRampPrefab);
+
+        const std::vector<PrefabPiecePlacement> bluePlatformRampSteepPrefab{
+            {"LowerDeck", platBlueHugeTall, vec3(0.0f, 0.0f, 0.0f)},
+            {"MainSlope", slopeBlueWide, vec3(0.0f, 0.0f, 5.0f), rotY180},
+            {"UpperDeck", platBlueTallLong, vec3(0.0f, 0.0f, 8.0f)},
+        };
+
+        placePrefab("BluePlatformRampSteep_Main", steepMainAnchor, steepMainRot, bluePlatformRampSteepPrefab);
+        placePrefab("BluePlatformRampSteep_Right", steepRightAnchor, steepRightRot, bluePlatformRampSteepPrefab);
+
+        const std::vector<PrefabPiecePlacement> bluePlatformRampMediumWidthPrefab{
+            {"LowerDeck", platBlue, vec3(0.0f, 0.0f, 0.0f)},
+            {"MainSlope", slopeBlueMediumNarrow, vec3(0.0f, 0.0f, 5.0f), rotY180},
+            {"UpperDeck", platBlueTall, vec3(0.0f, 0.0f, 9.0f)},
+        };
+
+        placePrefab("BluePlatformRampMediumWidth_Left", mediumLeftAnchor, mediumLeftRot, bluePlatformRampMediumWidthPrefab);
+        placePrefab("BluePlatformRampMediumWidth_BackRight", mediumBackRightAnchor, mediumBackRightRot, bluePlatformRampMediumWidthPrefab);
+
+        const std::vector<PrefabPiecePlacement> bluePlatformRampNarrowPrefab{
+            {"LowerDeck", platBlueMed, vec3(0.0f, 0.0f, 0.0f)},
+            {"MainSlope", slopeBlueNarrow, vec3(0.0f, 0.0f, 4.0f), rotY180},
+            {"UpperDeck", platBlueMedTall, vec3(0.0f, 0.0f, 8.0f)},
+        };
+
+        placePrefab("BluePlatformRampNarrow_Finish", narrowFinishAnchor, narrowFinishRot, bluePlatformRampNarrowPrefab);
+        placePrefab("BluePlatformRamp_BackLeft", largeBackLeftAnchor, largeBackLeftRot, bluePlatformRampPrefab);
+
+        // Connectors expand the reviewed prefab set into a less linear route.
+        placePiece("Connector_CentralHigh", platBlueLong, vec3(0.0f, 5.0f, 37.0f));
+        placePiece("Connector_CentralHigh_LeftLip", platBlueMed, vec3(-4.0f, 5.0f, 37.0f));
+        placePiece("Connector_CentralHigh_RightLip", platBlueMed, vec3(4.0f, 5.0f, 37.0f));
+        placePiece("Connector_LeftBranch", platBlueLong, vec3(-12.0f, 0.0f, 11.5f), rotY90);
+        placePiece("Connector_RightBranch", platBlueLong, vec3(12.0f, 0.0f, 11.5f), rotY90);
+        placePiece("Connector_BackLeft", platBlueWide, vec3(-18.0f, 0.0f, 34.0f), quat(1, 0, 0, 0));
+        placePiece("Connector_BackRight", platBlueWide, vec3(18.0f, 0.0f, 34.0f), quat(1, 0, 0, 0));
+
+        // Route markers and set dressing. These stay non-physical so the reviewed ramps
+        // remain the primary collision geometry for character traversal.
+        placeSurfacePiece("StartGate", archWide, vec3(0.0f, 0.0f, 5.5f), rotY90);
+        placeSurfacePiece("StartHoop_Left", hoop, vec3(-8.5f, 0.0f, 7.0f), rotY90);
+        placeSurfacePiece("StartHoop_Right", hoopAngled, vec3(8.5f, 0.0f, 7.0f), rotY90);
+        placeSurfacePiece("GuideArrow_LargeRamp", arrowStand, prefabPoint(largeMainAnchor, largeMainRot, vec3(-2.8f, 0.0f, -3.4f)), largeMainRot);
+        placeSurfacePiece("GuideArrow_SteepRamp", arrowStand, prefabPoint(steepMainAnchor, steepMainRot, vec3(2.6f, 0.0f, -3.2f)), steepMainRot);
+        placeSurfacePiece("GuideArrow_LeftBranch", arrowStand, prefabPoint(mediumLeftAnchor, mediumLeftRot, vec3(0.0f, 0.0f, -3.2f)), mediumLeftRot);
+        placeSurfacePiece("GuideArrow_RightBranch", arrowStand, prefabPoint(steepRightAnchor, steepRightRot, vec3(0.0f, 0.0f, -3.2f)), steepRightRot);
+        placeSurfacePiece("GuideArrow_FinishRamp", arrowStand, prefabPoint(narrowFinishAnchor, narrowFinishRot, vec3(0.0f, 1.0f, -3.0f)), narrowFinishRot);
+        placeSurfacePiece("GuideSign_Left", arrowsLeft, vec3(-13.0f, 0.0f, 11.5f), rotY90);
+        placeSurfacePiece("GuideSign_Right", arrowsRight, vec3(13.0f, 0.0f, 11.5f), rotY270);
+        placeSurfacePiece("RampFlag_Large", flagC, largeMainUpperTop + largeMainRot * vec3(-1.6f, 0.0f, 0.4f) + flagSurfaceBias, rotY180);
+        placeSurfacePiece("RampFlag_Steep", flagA, steepMainUpperTop + steepMainRot * vec3(1.3f, 0.0f, -0.4f) + flagSurfaceBias, rotY90);
+        placeSurfacePiece("RampFlag_Left", flagB, mediumLeftUpperTop + mediumLeftRot * vec3(0.3f, 0.0f, -0.6f) + flagSurfaceBias, rotY180);
+        placeSurfacePiece("RampFlag_Right", flagC, steepRightUpperTop + steepRightRot * vec3(-1.2f, 0.0f, 0.3f) + flagSurfaceBias, rotY270);
+        placeSurfacePiece("RampFlag_Finish", flagC, narrowFinishUpperTop + narrowFinishRot * vec3(0.2f, 0.0f, 0.0f) + flagSurfaceBias, rotY90);
+        placeSurfacePiece("RampFlag_BackLeft", flagA, largeBackLeftUpperTop + largeBackLeftRot * vec3(1.2f, 0.0f, -0.2f) + flagSurfaceBias, rotY270);
+        placeSurfacePiece("RampFlag_BackRight", flagB, mediumBackRightUpperTop + mediumBackRightRot * vec3(-0.4f, 0.0f, 0.4f) + flagSurfaceBias, rotY180);
+        placeSurfacePiece("RampSpring_Large", springPad, largeMainUpperTop + vec3(2.0f, 0.0f, -0.8f));
+        placeSurfacePiece("RampSpring_Finish", springPad, narrowFinishUpperTop + vec3(0.0f, 0.0f, -0.8f));
+        placeSurfacePiece("FinishSign", finishSign, vec3(0.0f, 9.0f, 48.0f));
+        placeSurfacePiece("PipeShowcase_Straight", pipeStraightBlue, vec3(40.0f, 0.0f, 6.0f), rotY90);
+        placeSurfacePiece("PipeShowcase_Elbow", pipeElbow, vec3(41.8f, 0.0f, 8.0f));
+        placeSurfacePiece("PipeShowcase_End", pipeEndGreen, vec3(43.0f, 0.0f, 9.8f), rotY90);
+
+        // Small decorations use approximate dynamic physics bodies so they can be pushed
+        // around during traversal and shooting tests without dominating the collision scene.
+        placeDynamicSphereApprox("Prop_Ball_Start", ballBlue, vec3(-9.0f, 0.0f, 2.0f),
+                                 loader.GetCollisionOffset(ballBlue), 0.55f);
+        placeDynamicBoxApprox("Prop_Cone_Start", cone, vec3(-5.5f, 0.0f, 3.8f),
+                              loader.GetCollisionOffset(cone), vec3(0.16f, 0.22f, 0.16f));
+        placeDynamicBoxApprox("Prop_Diamond_Start", diamond, vec3(-1.2f, 0.0f, 5.2f),
+                              loader.GetCollisionOffset(diamond), vec3(0.24f, 0.24f, 0.24f), rotY90);
+        placeDynamicBoxApprox("Prop_Heart_Start", heart, vec3(1.6f, 0.0f, 5.4f),
+                              loader.GetCollisionOffset(heart), vec3(0.28f, 0.24f, 0.28f));
+        placeDynamicBoxApprox("Prop_Star_Start", star, vec3(4.6f, 0.0f, 4.4f),
+                              loader.GetCollisionOffset(star), vec3(0.32f, 0.18f, 0.32f));
+        placeDynamicBoxApprox("Prop_Button_Warmup", buttonBaseBlue, vec3(5.0f, 1.0f, 8.5f),
+                              loader.GetCollisionOffset(buttonBaseBlue), vec3(0.45f, 0.16f, 0.45f));
+        placeDynamicSphereApprox("Prop_Bomb_LargeTop", bombABlue, largeMainUpperTop + vec3(-2.0f, 0.0f, -0.7f),
+                                 loader.GetCollisionOffset(bombABlue), 0.24f);
+        placeDynamicBoxApprox("Prop_Power_SteepTop", power, steepMainUpperTop + vec3(-2.2f, 0.0f, 0.8f),
+                              loader.GetCollisionOffset(power), vec3(0.24f, 0.36f, 0.24f));
+        placeDynamicBoxApprox("Prop_Lever_SteepLow", leverFloorBlue, steepMainLowerTop + vec3(2.2f, 0.0f, -1.2f),
+                              loader.GetCollisionOffset(leverFloorBlue), vec3(0.32f, 0.22f, 0.32f));
+        placeDynamicSphereApprox("Prop_Bomb_MediumTop", bombBBlue, mediumLeftUpperTop + mediumLeftRot * vec3(0.8f, 0.0f, 1.0f),
+                                 loader.GetCollisionOffset(bombBBlue), 0.24f);
+        placeDynamicBoxApprox("Prop_Diamond_MediumTop", diamond, mediumBackRightUpperTop + mediumBackRightRot * vec3(-1.0f, 0.0f, -0.8f),
+                              loader.GetCollisionOffset(diamond), vec3(0.24f, 0.24f, 0.24f), rotY90);
+        placeDynamicBoxApprox("Prop_Cone_NarrowLow", cone, narrowFinishLowerTop + vec3(0.9f, 0.0f, -0.8f),
+                              loader.GetCollisionOffset(cone), vec3(0.16f, 0.22f, 0.16f));
+        placeDynamicBoxApprox("Prop_Heart_NarrowTop", heart, narrowFinishUpperTop + vec3(-0.8f, 0.0f, 0.9f),
+                              loader.GetCollisionOffset(heart), vec3(0.28f, 0.24f, 0.28f));
+        placeDynamicSphereApprox("Prop_Ball_RightBranchTop", ballBlue, steepRightUpperTop + steepRightRot * vec3(-2.2f, 0.0f, -0.8f),
+                                 loader.GetCollisionOffset(ballBlue), 0.48f);
+        placeDynamicSphereApprox("Prop_Ball_BackLeftTop", ballBlue, largeBackLeftUpperTop + largeBackLeftRot * vec3(2.1f, 0.0f, 0.8f),
+                                 loader.GetCollisionOffset(ballBlue), 0.48f);
+        placeDynamicBoxApprox("Prop_Spring_Ground", spring, vec3(38.8f, 0.0f, 8.4f),
+                              loader.GetCollisionOffset(spring), vec3(0.30f, 0.42f, 0.30f));
     }
 }
 
