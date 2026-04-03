@@ -41,6 +41,14 @@ private:
         Running,
     };
 
+    enum class EBehaviorDebugState
+    {
+        Inactive,
+        Failure,
+        Success,
+        Running,
+    };
+
     enum class ECharacterAnimState
     {
         Idle,
@@ -62,6 +70,7 @@ private:
         Disabled,
         Patrol,
         Chase,
+        Evade,
         Attack,
     };
 
@@ -92,6 +101,11 @@ private:
         bool wasOnGroundLastFrame = true;
         float jumpStartHoldTimeRemaining = 0.0f;
         float jumpLandHoldTimeRemaining = 0.0f;
+        EBehaviorDebugState behaviorRootStatus = EBehaviorDebugState::Inactive;
+        EBehaviorDebugState behaviorEvadeStatus = EBehaviorDebugState::Inactive;
+        EBehaviorDebugState behaviorAttackStatus = EBehaviorDebugState::Inactive;
+        EBehaviorDebugState behaviorChaseStatus = EBehaviorDebugState::Inactive;
+        EBehaviorDebugState behaviorPatrolStatus = EBehaviorDebugState::Inactive;
     };
 
     glm::vec3 GetMoveForward() const;
@@ -119,6 +133,7 @@ private:
     bool TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const;
     bool HasLineOfSightToPlayer() const;
     EBehaviorTreeStatus RunAIBotBehaviorTree(float deltaSeconds);
+    EBehaviorTreeStatus RunAIBotEvade(float deltaSeconds);
     EBehaviorTreeStatus RunAIBotAttack(float deltaSeconds);
     EBehaviorTreeStatus RunAIBotChase(float deltaSeconds);
     EBehaviorTreeStatus RunAIBotPatrol(float deltaSeconds);
@@ -129,6 +144,9 @@ private:
     void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
     void UpdateCharacterAnimationPostProcess();
     const char* GetMovementModeName() const;
+    const char* GetBehaviorDebugStateName(EBehaviorDebugState state) const;
+    EBehaviorDebugState ToBehaviorDebugState(EBehaviorTreeStatus status) const;
+    void DrawAIBotBehaviorTreeUI() const;
 
     NextEngine* engine_;
     NextCharacterController characterController_;
@@ -214,6 +232,7 @@ private:
     float aiMemoryTime_ = 3.5f;
     float aiPreferredCombatRangeMin_ = 7.0f;
     float aiPreferredCombatRangeMax_ = 16.0f;
+    float aiCombatRangeHysteresis_ = 1.25f;
     float aiFireRange_ = 22.0f;
     float aiFireCooldown_ = 1.25f;
     float aiAimTolerance_ = 0.92f;

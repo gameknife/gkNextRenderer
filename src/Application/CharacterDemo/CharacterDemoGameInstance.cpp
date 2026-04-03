@@ -382,6 +382,8 @@ bool CharacterDemoGameInstance::OnRenderUI()
 
     ImGui::End();
 
+    DrawAIBotBehaviorTreeUI();
+
     if (showPhysicsDebug_)
     {
         Assets::Camera debugCamera = engine_->GetScene().GetRenderCamera();
@@ -876,6 +878,11 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
 {
     if (!aiBot_.controller.IsValid())
     {
+        aiBot_.behaviorRootStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorEvadeStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorChaseStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorPatrolStatus = EBehaviorDebugState::Inactive;
         return;
     }
 
@@ -911,6 +918,11 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     if (!aiEnabled_)
     {
         aiBot_.state = EAIBotState::Disabled;
+        aiBot_.behaviorRootStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorEvadeStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorChaseStatus = EBehaviorDebugState::Inactive;
+        aiBot_.behaviorPatrolStatus = EBehaviorDebugState::Inactive;
         aiBot_.controller.Update(glm::vec3(0.0f), 0.0f, false, deltaSeconds);
         UpdateAIBotAnimationState(deltaSeconds);
         UpdateAIBotNode();
@@ -921,6 +933,10 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
 
     float speed = aiWalkSpeed_;
     if (aiBot_.state == EAIBotState::Chase)
+    {
+        speed = aiRunSpeed_;
+    }
+    else if (aiBot_.state == EAIBotState::Evade)
     {
         speed = aiRunSpeed_;
     }
@@ -944,17 +960,71 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotBehaviorTree(float deltaSeconds)
 {
-    if (RunAIBotAttack(deltaSeconds) != EBehaviorTreeStatus::Failure)
+    aiBot_.behaviorRootStatus = EBehaviorDebugState::Running;
+    aiBot_.behaviorEvadeStatus = EBehaviorDebugState::Inactive;
+    aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
+    aiBot_.behaviorChaseStatus = EBehaviorDebugState::Inactive;
+    aiBot_.behaviorPatrolStatus = EBehaviorDebugState::Inactive;
+
+    const EBehaviorTreeStatus evadeStatus = RunAIBotEvade(deltaSeconds);
+    aiBot_.behaviorEvadeStatus = ToBehaviorDebugState(evadeStatus);
+    if (evadeStatus != EBehaviorTreeStatus::Failure)
     {
+        aiBot_.behaviorRootStatus = ToBehaviorDebugState(evadeStatus);
         return EBehaviorTreeStatus::Running;
     }
 
-    if (RunAIBotChase(deltaSeconds) != EBehaviorTreeStatus::Failure)
+    const EBehaviorTreeStatus attackStatus = RunAIBotAttack(deltaSeconds);
+    aiBot_.behaviorAttackStatus = ToBehaviorDebugState(attackStatus);
+    if (attackStatus != EBehaviorTreeStatus::Failure)
     {
+        aiBot_.behaviorRootStatus = ToBehaviorDebugState(attackStatus);
         return EBehaviorTreeStatus::Running;
     }
 
-    return RunAIBotPatrol(deltaSeconds);
+    const EBehaviorTreeStatus chaseStatus = RunAIBotChase(deltaSeconds);
+    aiBot_.behaviorChaseStatus = ToBehaviorDebugState(chaseStatus);
+    if (chaseStatus != EBehaviorTreeStatus::Failure)
+    {
+        aiBot_.behaviorRootStatus = ToBehaviorDebugState(chaseStatus);
+        return EBehaviorTreeStatus::Running;
+    }
+
+    const EBehaviorTreeStatus patrolStatus = RunAIBotPatrol(deltaSeconds);
+    aiBot_.behaviorPatrolStatus = ToBehaviorDebugState(patrolStatus);
+    aiBot_.behaviorRootStatus = ToBehaviorDebugState(patrolStatus);
+    return patrolStatus;
+}
+
+CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotEvade(float deltaSeconds)
+{
+    (void)deltaSeconds;
+
+    if (!aiBot_.targetVisible)
+    {
+        return EBehaviorTreeStatus::Failure;
+    }
+
+    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+    const glm::vec3 playerEyePos = GetEyePosition();
+    const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
+    const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
+    const float distanceToPlayer = glm::length(glm::vec2(playerEyePos.x - aiPos.x, playerEyePos.z - aiPos.z));
+    const float evadeThreshold =
+        aiPreferredCombatRangeMin_ +
+        (aiBot_.state == EAIBotState::Evade ? aiCombatRangeHysteresis_ : 0.0f);
+    if (distanceToPlayer >= evadeThreshold)
+    {
+        return EBehaviorTreeStatus::Failure;
+    }
+
+    aiBot_.state = EAIBotState::Evade;
+    aiBot_.lookDir = glm::length(toPlayerDir) > 0.001f ? toPlayerDir : aiBot_.lookDir;
+
+    const glm::vec3 strafeDir =
+        NormalizeHorizontalOrZero(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), toPlayerDir)) * aiBot_.strafeSign;
+    aiBot_.moveDir = NormalizeHorizontalOrZero(-toPlayerDir + strafeDir * 0.5f);
+    return EBehaviorTreeStatus::Running;
 }
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotAttack(float deltaSeconds)
@@ -971,7 +1041,11 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
     const float distanceToPlayer = glm::length(glm::vec2(playerEyePos.x - aiPos.x, playerEyePos.z - aiPos.z));
-    if (distanceToPlayer > aiFireRange_)
+    const float attackMaxRange =
+        std::min(aiFireRange_,
+                 aiPreferredCombatRangeMax_ +
+                     (aiBot_.state == EAIBotState::Attack ? aiCombatRangeHysteresis_ : 0.0f));
+    if (distanceToPlayer < aiPreferredCombatRangeMin_ || distanceToPlayer > attackMaxRange)
     {
         return EBehaviorTreeStatus::Failure;
     }
@@ -983,15 +1057,9 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     const glm::vec3 strafeDir = NormalizeHorizontalOrZero(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), toPlayerDir)) * aiBot_.strafeSign;
     const glm::vec3 botForward(std::sin(aiBot_.yaw), 0.0f, std::cos(aiBot_.yaw));
     const float aimDot = glm::length(toPlayerDir) > 0.001f ? glm::dot(botForward, toPlayerDir) : 1.0f;
-    const bool inPreferredRange =
-        distanceToPlayer >= aiPreferredCombatRangeMin_ &&
-        distanceToPlayer <= aiPreferredCombatRangeMax_;
+    const bool inPreferredRange = distanceToPlayer <= aiPreferredCombatRangeMax_;
 
-    if (distanceToPlayer < aiPreferredCombatRangeMin_)
-    {
-        moveDir = -toPlayerDir + strafeDir * 0.5f;
-    }
-    else if (distanceToPlayer > aiPreferredCombatRangeMax_)
+    if (distanceToPlayer > aiPreferredCombatRangeMax_)
     {
         moveDir = toPlayerDir;
     }
@@ -1037,6 +1105,17 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     const glm::vec3 toTarget = chaseTarget - aiBot_.controller.GetPosition();
     const glm::vec3 chaseDir = NormalizeHorizontalOrZero(toTarget);
     const float distanceToTarget = glm::length(glm::vec2(toTarget.x, toTarget.z));
+    if (aiBot_.targetVisible)
+    {
+        const float chaseExitRange =
+            std::max(aiPreferredCombatRangeMin_,
+                     aiPreferredCombatRangeMax_ -
+                         (aiBot_.state == EAIBotState::Chase ? aiCombatRangeHysteresis_ : 0.0f));
+        if (distanceToTarget <= chaseExitRange)
+        {
+            return EBehaviorTreeStatus::Failure;
+        }
+    }
 
     aiBot_.lookDir = glm::length(chaseDir) > 0.001f ? chaseDir : aiBot_.lookDir;
     aiBot_.moveDir = chaseDir;
@@ -1253,7 +1332,9 @@ void CharacterDemoGameInstance::UpdateAIBotAnimationState(float deltaSeconds)
     const float desiredSpeed =
         aiBot_.state == EAIBotState::Chase
             ? aiRunSpeed_
-            : (aiBot_.state == EAIBotState::Attack ? std::max(aiWalkSpeed_, aiRunSpeed_ * 0.85f) : aiWalkSpeed_);
+            : (aiBot_.state == EAIBotState::Evade
+                   ? aiRunSpeed_
+                   : (aiBot_.state == EAIBotState::Attack ? std::max(aiWalkSpeed_, aiRunSpeed_ * 0.85f) : aiWalkSpeed_));
     const glm::vec3 commandedMoveDir = NormalizeHorizontalOrZero(aiBot_.moveDir);
     const glm::vec2 commandedHorizontalVelocity(commandedMoveDir.x * desiredSpeed, commandedMoveDir.z * desiredSpeed);
     const glm::vec3 botForward(std::sin(aiBot_.yaw), 0.0f, std::cos(aiBot_.yaw));
@@ -1301,6 +1382,12 @@ void CharacterDemoGameInstance::UpdateAIBotAnimationState(float deltaSeconds)
         {
             newState = ECharacterAnimState::RunForward;
             animationToPlay = animRunForward_;
+        }
+        else if (aiBot_.state == EAIBotState::Evade && localForwardSpeed < -0.2f)
+        {
+            newState = ECharacterAnimState::RunBackward;
+            animationToPlay = animRunBackward_;
+            playSpeed = runBackwardPlaySpeed_;
         }
         else if (std::abs(localRightSpeed) > std::abs(localForwardSpeed) * 1.1f)
         {
@@ -1902,6 +1989,198 @@ const char* CharacterDemoGameInstance::GetMovementModeName() const
     }
 }
 
+const char* CharacterDemoGameInstance::GetBehaviorDebugStateName(EBehaviorDebugState state) const
+{
+    switch (state)
+    {
+    case EBehaviorDebugState::Inactive:
+        return "Inactive";
+    case EBehaviorDebugState::Failure:
+        return "Failure";
+    case EBehaviorDebugState::Success:
+        return "Success";
+    case EBehaviorDebugState::Running:
+        return "Running";
+    default:
+        return "Unknown";
+    }
+}
+
+CharacterDemoGameInstance::EBehaviorDebugState CharacterDemoGameInstance::ToBehaviorDebugState(
+    EBehaviorTreeStatus status) const
+{
+    switch (status)
+    {
+    case EBehaviorTreeStatus::Failure:
+        return EBehaviorDebugState::Failure;
+    case EBehaviorTreeStatus::Success:
+        return EBehaviorDebugState::Success;
+    case EBehaviorTreeStatus::Running:
+        return EBehaviorDebugState::Running;
+    default:
+        return EBehaviorDebugState::Inactive;
+    }
+}
+
+void CharacterDemoGameInstance::DrawAIBotBehaviorTreeUI() const
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 overlaySize(760.0f, 360.0f);
+    const ImVec2 overlayPos(
+        viewport->WorkPos.x + viewport->WorkSize.x - overlaySize.x - 18.0f,
+        viewport->WorkPos.y + 14.0f);
+
+    ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(overlaySize, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::Begin(
+        "##AIBehaviorTreeOverlay",
+        nullptr,
+        ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoInputs |
+            ImGuiWindowFlags_NoBackground);
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    const ImVec2 base = ImGui::GetWindowPos();
+    const float rounding = 12.0f;
+
+    auto getStateColors = [](EBehaviorDebugState state, bool emphasize) -> std::pair<ImU32, ImU32>
+    {
+        ImVec4 border(0.45f, 0.48f, 0.54f, emphasize ? 0.95f : 0.55f);
+        ImVec4 fill(0.07f, 0.09f, 0.12f, emphasize ? 0.88f : 0.68f);
+        switch (state)
+        {
+        case EBehaviorDebugState::Failure:
+            border = ImVec4(0.88f, 0.36f, 0.32f, emphasize ? 1.0f : 0.78f);
+            fill = ImVec4(0.26f, 0.08f, 0.08f, emphasize ? 0.92f : 0.72f);
+            break;
+        case EBehaviorDebugState::Success:
+            border = ImVec4(0.30f, 0.82f, 0.45f, emphasize ? 1.0f : 0.80f);
+            fill = ImVec4(0.08f, 0.20f, 0.12f, emphasize ? 0.92f : 0.72f);
+            break;
+        case EBehaviorDebugState::Running:
+            border = ImVec4(1.00f, 0.78f, 0.22f, emphasize ? 1.0f : 0.86f);
+            fill = ImVec4(0.26f, 0.20f, 0.06f, emphasize ? 0.94f : 0.76f);
+            break;
+        case EBehaviorDebugState::Inactive:
+        default:
+            break;
+        }
+        return {ImGui::GetColorU32(fill), ImGui::GetColorU32(border)};
+    };
+
+    auto drawNodeBox = [&](const ImVec2& center,
+                           const ImVec2& size,
+                           const char* typeLabel,
+                           const char* title,
+                           const char* subtitle,
+                           EBehaviorDebugState state,
+                           bool emphasize)
+    {
+        const auto [fillColor, borderColor] = getStateColors(state, emphasize);
+        const ImVec2 min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
+        const ImVec2 max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
+        const ImVec2 shadowOffset(0.0f, 10.0f);
+
+        drawList->AddRectFilled(min + shadowOffset, max + shadowOffset, IM_COL32(0, 0, 0, 72), rounding + 2.0f);
+        drawList->AddRectFilled(min, max, fillColor, rounding);
+        drawList->AddRect(min, max, borderColor, rounding, 0, emphasize ? 3.0f : 2.0f);
+
+        const ImVec2 typePos(min.x + 14.0f, min.y + 10.0f);
+        drawList->AddText(typePos, IM_COL32(235, 238, 242, emphasize ? 245 : 190), typeLabel);
+
+        const ImVec2 titleSize = ImGui::CalcTextSize(title);
+        const ImVec2 titlePos(center.x - titleSize.x * 0.5f, min.y + 32.0f);
+        drawList->AddText(titlePos, IM_COL32(248, 249, 250, 255), title);
+
+        const ImVec2 subtitleSize = ImGui::CalcTextSize(subtitle);
+        const ImVec2 subtitlePos(center.x - subtitleSize.x * 0.5f, min.y + 56.0f);
+        drawList->AddText(subtitlePos, IM_COL32(186, 194, 204, 220), subtitle);
+
+        const char* stateLabel = GetBehaviorDebugStateName(state);
+        const ImVec2 stateSize = ImGui::CalcTextSize(stateLabel);
+        const ImVec2 badgeMin(max.x - stateSize.x - 24.0f, min.y + 10.0f);
+        const ImVec2 badgeMax(max.x - 12.0f, min.y + 28.0f);
+        drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(255, 255, 255, emphasize ? 26 : 16), 9.0f);
+        drawList->AddText(ImVec2(badgeMin.x + 8.0f, badgeMin.y + 2.0f), borderColor, stateLabel);
+
+        return std::pair<ImVec2, ImVec2>(
+            ImVec2(center.x, max.y),
+            ImVec2(center.x, min.y));
+    };
+
+    auto drawConnection = [&](const ImVec2& from, const ImVec2& to, EBehaviorDebugState state, bool emphasize)
+    {
+        const auto [fillColor, borderColor] = getStateColors(state, emphasize);
+        (void)fillColor;
+        const ImVec2 controlA(from.x, from.y + 34.0f);
+        const ImVec2 controlB(to.x, to.y - 34.0f);
+        drawList->AddBezierCubic(from, controlA, controlB, to, borderColor, emphasize ? 3.0f : 2.0f);
+    };
+
+    drawList->AddText(ImVec2(base.x + 18.0f, base.y + 8.0f), IM_COL32(245, 246, 247, 255), "AI Behavior Tree");
+    drawList->AddText(ImVec2(base.x + 18.0f, base.y + 28.0f), IM_COL32(180, 188, 198, 225),
+                      "Runtime Overlay  |  Unreal-style debug view");
+
+    std::string summary = "State: ";
+    summary += aiEnabled_ ? GetAIBotStateName() : "Disabled";
+    if (aiBot_.controller.IsValid())
+    {
+        const glm::vec3 playerPos = characterController_.GetPosition();
+        const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+        const float distance = glm::length(glm::vec2(playerPos.x - aiPos.x, playerPos.z - aiPos.z));
+        summary += fmt::format("  |  Dist {:.1f}  |  Visible {}  |  LOS {}",
+                               distance,
+                               aiBot_.targetVisible ? "Yes" : "No",
+                               HasLineOfSightToPlayer() ? "Yes" : "No");
+    }
+    drawList->AddText(ImVec2(base.x + 18.0f, base.y + 52.0f), IM_COL32(215, 221, 228, 230), summary.c_str());
+
+    const ImVec2 rootCenter(base.x + overlaySize.x * 0.50f, base.y + 102.0f);
+    const ImVec2 selectorCenter(base.x + overlaySize.x * 0.50f, base.y + 186.0f);
+    const ImVec2 leafRowY = ImVec2(0.0f, base.y + 292.0f);
+    const ImVec2 leafSize(150.0f, 90.0f);
+    const ImVec2 topSize(180.0f, 76.0f);
+    const ImVec2 selectorSize(220.0f, 86.0f);
+
+    const auto rootSockets = drawNodeBox(rootCenter, topSize, "ROOT", "BT Root", "CharacterDemo AI", aiBot_.behaviorRootStatus,
+                                         aiBot_.behaviorRootStatus == EBehaviorDebugState::Running);
+    const auto selectorSockets =
+        drawNodeBox(selectorCenter, selectorSize, "SELECTOR", "Combat Root", "Evade -> Attack -> Chase -> Patrol",
+                    aiBot_.behaviorRootStatus, aiBot_.behaviorRootStatus == EBehaviorDebugState::Running);
+
+    drawConnection(rootSockets.first, selectorSockets.second, aiBot_.behaviorRootStatus,
+                   aiBot_.behaviorRootStatus == EBehaviorDebugState::Running);
+
+    struct FLeafDebugNode
+    {
+        const char* title;
+        const char* subtitle;
+        EBehaviorDebugState state;
+        float x;
+    };
+
+    const std::array<FLeafDebugNode, 4> leafNodes{{
+        {"Evade", "Too close, break contact", aiBot_.behaviorEvadeStatus, 130.0f},
+        {"Attack", "Hold lane and fire", aiBot_.behaviorAttackStatus, 305.0f},
+        {"Chase", "Close distance to target", aiBot_.behaviorChaseStatus, 480.0f},
+        {"Patrol", "Fallback route sweep", aiBot_.behaviorPatrolStatus, 655.0f},
+    }};
+
+    for (const auto& leaf : leafNodes)
+    {
+        const ImVec2 center(base.x + leaf.x, leafRowY.y);
+        const bool emphasize = leaf.state == EBehaviorDebugState::Running || leaf.state == EBehaviorDebugState::Success;
+        const auto sockets = drawNodeBox(center, leafSize, "TASK", leaf.title, leaf.subtitle, leaf.state, emphasize);
+        drawConnection(selectorSockets.first, sockets.second, leaf.state, emphasize);
+    }
+
+    ImGui::End();
+}
+
 const char* CharacterDemoGameInstance::GetAIBotStateName() const
 {
     switch (aiBot_.state)
@@ -1912,6 +2191,8 @@ const char* CharacterDemoGameInstance::GetAIBotStateName() const
         return "Patrol";
     case EAIBotState::Chase:
         return "Chase";
+    case EAIBotState::Evade:
+        return "Evade";
     case EAIBotState::Attack:
         return "Attack";
     default:
