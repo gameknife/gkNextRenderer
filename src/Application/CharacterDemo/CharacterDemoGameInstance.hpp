@@ -34,47 +34,13 @@ public:
     bool OnScroll(double xoffset, double yoffset) override;
 
 private:
-    glm::vec3 GetMoveForward() const;
-    glm::vec3 GetMoveRight() const;
-    glm::vec3 GetViewForward() const;
-    glm::vec3 GetEyePosition() const;
-    float GetCharacterYaw() const;
-    void SetFirstPersonMode(bool enabled);
-    void FireProjectile();
-    void UpdateCharacterNode();
-    void TryInitCharacterModel();
-    void UpdateAnimationState(float deltaSeconds);
-    void MapAnimationNames(const std::vector<std::string>& names);
-    const char* GetAnimStateName() const;
-    void ResetCharacterState();
-    void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
-    void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
-    void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node);
-    void PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed = 1.0f);
-    void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
-    void UpdateCharacterAnimationPostProcess();
-    const char* GetMovementModeName() const;
+    enum class EBehaviorTreeStatus
+    {
+        Failure,
+        Success,
+        Running,
+    };
 
-    NextEngine* engine_;
-    NextCharacterController characterController_;
-
-    // Character visual node (box placeholder, hidden once skinned model loads)
-    std::shared_ptr<Assets::Node> characterNode_;
-    uint32_t capsuleModelId_ = 0;
-    uint32_t characterMatId_ = 0;
-    uint32_t projectileModelId_ = 0;
-    uint32_t projectileMatId_ = 0;
-
-    // Skinned character model
-    std::shared_ptr<Assets::Node> skinnedCharacterRoot_;
-    Runtime::SkinnedMeshComponent* primarySkinnedMeshComp_ = nullptr;
-    std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps_;
-    bool characterModelLoaded_ = false;
-    bool characterLoadRequested_ = false;
-    bool sceneHelpersInjected_ = false;
-    std::string characterAppendRootName_ = "Mannequin_Medium";
-
-    // Animation state machine
     enum class ECharacterAnimState
     {
         Idle,
@@ -90,6 +56,101 @@ private:
         JumpLoop,
         JumpLand,
     };
+
+    enum class EAIBotState
+    {
+        Disabled,
+        Patrol,
+        Chase,
+        Attack,
+    };
+
+    struct FAIBot
+    {
+        NextCharacterController controller;
+        std::shared_ptr<Assets::Node> visualNode;
+        std::vector<glm::vec3> patrolPoints;
+        glm::vec3 moveDir{0.0f};
+        glm::vec3 lookDir{0.0f, 0.0f, 1.0f};
+        glm::vec3 lastKnownTargetPosition{0.0f};
+        float yaw = 0.0f;
+        float fireCooldownRemaining = 0.0f;
+        float targetMemoryRemaining = 0.0f;
+        float patrolPauseRemaining = 0.0f;
+        float strafeSign = 1.0f;
+        size_t patrolIndex = 0;
+        bool targetVisible = false;
+        bool triggerJump = false;
+        EAIBotState state = EAIBotState::Disabled;
+        std::shared_ptr<Assets::Node> skinnedRoot;
+        Runtime::SkinnedMeshComponent* primarySkinnedMeshComp = nullptr;
+        std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps;
+        std::string appendRootName = "Mannequin_Medium_1";
+        ECharacterAnimState animState = ECharacterAnimState::Idle;
+        bool characterModelLoaded = false;
+        bool characterLoadRequested = false;
+        bool wasOnGroundLastFrame = true;
+        float jumpStartHoldTimeRemaining = 0.0f;
+        float jumpLandHoldTimeRemaining = 0.0f;
+    };
+
+    glm::vec3 GetMoveForward() const;
+    glm::vec3 GetMoveRight() const;
+    glm::vec3 GetViewForward() const;
+    glm::vec3 GetEyePosition() const;
+    glm::vec3 GetAIBotEyePosition() const;
+    float GetCharacterYaw() const;
+    void SetFirstPersonMode(bool enabled);
+    void FireProjectile();
+    void SpawnProjectile(const std::string& nodeName, const glm::vec3& spawnCenter, const glm::vec3& shotDir);
+    void UpdateCharacterNode();
+    void TryInitCharacterModel();
+    void UpdateAnimationState(float deltaSeconds);
+    void TryInitAIBotCharacterModel();
+    void UpdateAIBotAnimationState(float deltaSeconds);
+    void MapAnimationNames(const std::vector<std::string>& names);
+    const char* GetAnimStateName() const;
+    const char* GetAIBotStateName() const;
+    void ResetCharacterState();
+    void InitAIBot();
+    void UpdateAIBot(float deltaSeconds);
+    void UpdateAIBotNode();
+    void CollectAIBotPatrolPoints();
+    bool TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const;
+    bool HasLineOfSightToPlayer() const;
+    EBehaviorTreeStatus RunAIBotBehaviorTree(float deltaSeconds);
+    EBehaviorTreeStatus RunAIBotAttack(float deltaSeconds);
+    EBehaviorTreeStatus RunAIBotChase(float deltaSeconds);
+    EBehaviorTreeStatus RunAIBotPatrol(float deltaSeconds);
+    void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
+    void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
+    void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node);
+    void PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed = 1.0f);
+    void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
+    void UpdateCharacterAnimationPostProcess();
+    const char* GetMovementModeName() const;
+
+    NextEngine* engine_;
+    NextCharacterController characterController_;
+
+    // Character visual node (box placeholder, hidden once skinned model loads)
+    std::shared_ptr<Assets::Node> characterNode_;
+    uint32_t capsuleModelId_ = 0;
+    uint32_t characterMatId_ = 0;
+    uint32_t aiCharacterMatId_ = 0;
+    uint32_t projectileModelId_ = 0;
+    uint32_t projectileMatId_ = 0;
+    FAIBot aiBot_;
+
+    // Skinned character model
+    std::shared_ptr<Assets::Node> skinnedCharacterRoot_;
+    Runtime::SkinnedMeshComponent* primarySkinnedMeshComp_ = nullptr;
+    std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps_;
+    bool characterModelLoaded_ = false;
+    bool characterLoadRequested_ = false;
+    bool sceneHelpersInjected_ = false;
+    std::string characterAppendRootName_ = "Mannequin_Medium";
+
     ECharacterAnimState currentAnimState_ = ECharacterAnimState::Idle;
     std::string animIdle_;
     std::string animWalkForward_;
@@ -126,6 +187,7 @@ private:
     bool showPhysicsDebug_ = false;
     bool footIKEnabled_ = true;
     bool showFootIKDebug_ = false;
+    bool aiEnabled_ = true;
     glm::dvec2 mousePos_{0.0, 0.0};
 
     // Camera
@@ -136,14 +198,28 @@ private:
 
     // Settings
     float firstPersonEyeHeight_ = 1.55f;
+    float aiEyeHeight_ = 1.55f;
     float walkSpeed_ = 4.0f;
     float runSpeed_ = 8.0f;
+    float aiWalkSpeed_ = 3.8f;
+    float aiRunSpeed_ = 6.2f;
     float mouseSensitivity_ = 0.002f;
     float cameraDistance_ = 5.0f;   // third-person camera distance
     float cameraHeight_ = 2.0f;    // camera height offset above character
     float projectileSize_ = 0.3f;
     float projectileSpawnDistance_ = 0.9f;
     float projectileForce_ = 60000.0f;
+    float aiSightRange_ = 28.0f;
+    float aiLoseSightRange_ = 34.0f;
+    float aiMemoryTime_ = 3.5f;
+    float aiPreferredCombatRangeMin_ = 7.0f;
+    float aiPreferredCombatRangeMax_ = 16.0f;
+    float aiFireRange_ = 22.0f;
+    float aiFireCooldown_ = 1.25f;
+    float aiAimTolerance_ = 0.92f;
+    float aiPatrolPointRadius_ = 1.25f;
+    float aiPatrolPauseTime_ = 0.6f;
+    float aiTurnSpeed_ = 6.5f;
     float walkStrafePlaySpeed_ = 0.82f;
     float runBackwardPlaySpeed_ = 1.35f;
     float jumpStartHoldTime_ = 0.12f;

@@ -782,13 +782,34 @@ namespace Vulkan
             Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
             if (skinnedVertexBuffer_)
             {
-                uint32_t proxyIdx = 0;
                 for ( size_t i = 0; i < skinModelUpdateRequests_.size(); i++ )
                 {
                     uint32_t modelId = skinModelUpdateRequests_[i];
                     if (modelId != -1)
                     {
-                       auto model = scene.GetModel(modelId);
+                        const auto* model = scene.GetModel(modelId);
+                        if (!model)
+                        {
+                            continue;
+                        }
+
+                        uint32_t proxyIdx = std::numeric_limits<uint32_t>::max();
+                        const uint32_t skinnedProxyModelId = modelId * 10;
+                        const auto& nodeProxys = scene.GetNodeProxys();
+                        for (uint32_t nodeIdx = 0; nodeIdx < nodeProxys.size(); ++nodeIdx)
+                        {
+                            if (nodeProxys[nodeIdx].modelId == skinnedProxyModelId)
+                            {
+                                proxyIdx = nodeIdx;
+                                break;
+                            }
+                        }
+
+                        if (proxyIdx == std::numeric_limits<uint32_t>::max())
+                        {
+                            continue;
+                        }
+
                         uint32_t vertexOffset = scene.Offsets()[modelId * 10].vertexOffset;
                         uint32_t vertexCount = model->NumberOfVertices();
 
