@@ -40,6 +40,7 @@ public:
     void CreateBoxAndPush();
 
 private:
+    void DrawGraphicsDebugPanel();
     void DrawSettings();
     void DrawTitleBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
@@ -55,5 +56,6 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;
+    bool showGraphicsDebug_ = false;
     bool showPhysicsDebug_ = false;
 };

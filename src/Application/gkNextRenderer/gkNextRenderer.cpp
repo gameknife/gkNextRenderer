@@ -11,6 +11,7 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
+#include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
@@ -153,6 +154,7 @@ bool NextRendererGameInstance::OnRenderUI()
 
 	DrawTitleBar();
 	DrawSettings();
+    DrawGraphicsDebugPanel();
 
     if (showPhysicsDebug_)
     {
@@ -281,6 +283,31 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 		case SDLK_F1:
             showPhysicsDebug_ = !showPhysicsDebug_;
             return true;
+        case SDLK_F2:
+            showGraphicsDebug_ = !showGraphicsDebug_;
+            return true;
+        case SDLK_1:
+        case SDLK_2:
+        case SDLK_3:
+        case SDLK_4:
+        case SDLK_5:
+        case SDLK_6:
+        case SDLK_7:
+        case SDLK_8:
+        case SDLK_KP_1:
+        case SDLK_KP_2:
+        case SDLK_KP_3:
+        case SDLK_KP_4:
+        case SDLK_KP_5:
+        case SDLK_KP_6:
+        case SDLK_KP_7:
+        case SDLK_KP_8:
+            if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
+                    event.key.key, true, showGraphicsDebug_, GetEngine().GetShowFlags()))
+            {
+                return true;
+            }
+            break;
 		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
 		default: break;
@@ -460,56 +487,12 @@ void NextRendererGameInstance::DrawSettings()
 
 	if (ImGui::Begin("Settings", &userSetting.ShowSettings, flags))
 	{
-		if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
-		{
-			struct RendererOption
+			if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 			{
-				const char* label;
-				Vulkan::ERendererType type;
-			};
-			const RendererOption kRendererOptions[] = {
-				{"SoftTracing", Vulkan::ERT_ModernDeferred},
-				{"SoftModern", Vulkan::ERT_LegacyDeferred},
-				{"VoxelTracing", Vulkan::ERT_VoxelTracing},
-				{"PathTracing", Vulkan::ERT_PathTracing},
-			};
-			const bool supportsRayTracing = GetEngine().GetRenderer().SupportsRayTracing();
-			const int rendererOptionCount = supportsRayTracing
-				? static_cast<int>(std::size(kRendererOptions))
-				: static_cast<int>(std::size(kRendererOptions)) - 1;
-
-			int currentRendererIndex = 0;
-			bool rendererFound = false;
-			for (int index = 0; index < rendererOptionCount; ++index)
-			{
-				if (kRendererOptions[index].type == static_cast<Vulkan::ERendererType>(userSetting.RendererType))
-				{
-					currentRendererIndex = index;
-					rendererFound = true;
-					break;
-				}
+				ImGui::Text("%s", LOCTEXT("Renderer"));
+                Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), userSetting, "##RendererList");
+				ImGui::NewLine();
 			}
-			if (!rendererFound)
-			{
-				userSetting.RendererType = static_cast<int32_t>(kRendererOptions[0].type);
-			}
-			
-			ImGui::Text("%s", LOCTEXT("Renderer"));
-			
-			ImGui::PushItemWidth(-1);
-			auto renderersGetter = [](void* data, int index, const char** outText)
-			{
-				const auto* options = static_cast<const RendererOption*>(data);
-				*outText = options[index].label;
-				return true;
-			};
-			if (ImGui::Combo("##RendererList", &currentRendererIndex, renderersGetter, const_cast<RendererOption*>(kRendererOptions), rendererOptionCount))
-			{
-				userSetting.RendererType = static_cast<int32_t>(kRendererOptions[currentRendererIndex].type);
-			}
-			ImGui::PopItemWidth();
-			ImGui::NewLine();
-		}
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Scene"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
@@ -715,6 +698,11 @@ void NextRendererGameInstance::DrawSettings()
 		}
 	}
 	ImGui::End();
+}
+
+void NextRendererGameInstance::DrawGraphicsDebugPanel()
+{
+    Runtime::GraphicsDebugPanel::DrawPanel(GetEngine(), showGraphicsDebug_, TitlebarSize);
 }
 
 

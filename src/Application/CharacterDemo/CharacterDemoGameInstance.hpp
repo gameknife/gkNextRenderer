@@ -202,6 +202,7 @@ private:
     bool keySprint_ = false;
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
+    bool showGraphicsDebug_ = false;
     bool showPhysicsDebug_ = false;
     bool footIKEnabled_ = true;
     bool showFootIKDebug_ = false;

@@ -462,7 +462,7 @@ namespace Runtime
             return bindGlobals;
         };
 
-        auto initializeFootAxes = [this](FootPlacementChain& chain, const std::vector<glm::mat4>& bindGlobals)
+        auto initializeFootAxes = [](FootPlacementChain& chain, const std::vector<glm::mat4>& bindGlobals)
         {
             if (chain.foot == -1 || chain.lowerLeg == -1 || chain.toe == -1)
             {

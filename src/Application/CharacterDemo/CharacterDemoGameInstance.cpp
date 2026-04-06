@@ -14,6 +14,7 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
@@ -128,6 +129,8 @@ CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& confi
     : NextGameInstanceBase(config, options, engine)
     , engine_(engine)
 {
+    config.Height = 720;
+    config.Width = 1280;
 }
 
 void CharacterDemoGameInstance::OnInit()
@@ -337,6 +340,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
+    ImGui::Text("Graphics Debug: %s", showGraphicsDebug_ ? "On" : "Off");
     ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
@@ -369,7 +373,8 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - IK Debug | F3 - Foot IK");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F3 - Foot IK");
+    ImGui::Text("1-8 - View Modes | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
@@ -383,6 +388,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::End();
 
     DrawAIBotBehaviorTreeUI();
+    Runtime::GraphicsDebugPanel::DrawPanel(*engine_, showGraphicsDebug_, 0.0f);
 
     if (showPhysicsDebug_)
     {
@@ -481,6 +487,12 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
     case SDLK_F2:
         if (pressed)
         {
+            showGraphicsDebug_ = !showGraphicsDebug_;
+        }
+        return true;
+    case SDLK_F9:
+        if (pressed)
+        {
             showFootIKDebug_ = !showFootIKDebug_;
         }
         return true;
@@ -498,6 +510,28 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), mouseCaptured_);
         }
         return true;
+    case SDLK_1:
+    case SDLK_2:
+    case SDLK_3:
+    case SDLK_4:
+    case SDLK_5:
+    case SDLK_6:
+    case SDLK_7:
+    case SDLK_8:
+    case SDLK_KP_1:
+    case SDLK_KP_2:
+    case SDLK_KP_3:
+    case SDLK_KP_4:
+    case SDLK_KP_5:
+    case SDLK_KP_6:
+    case SDLK_KP_7:
+    case SDLK_KP_8:
+        if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(key, pressed, showGraphicsDebug_,
+                                                                   engine_->GetShowFlags()))
+        {
+            return true;
+        }
+        return false;
     default:
         return false;
     }
