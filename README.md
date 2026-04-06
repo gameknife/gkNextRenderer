@@ -1,6 +1,6 @@
 # gkNextEngine
 
-**实时路径追踪，游戏级性能**
+**面向实时路径追踪、游戏原型与高质量视觉表现的跨平台 3D 引擎**
 
 [English](README.en.md) | [简体中文](README.md)
 
@@ -15,67 +15,123 @@
 
 ---
 
+gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。它一方面追求 **实时路径追踪、Hybrid Rendering 与 HDR 光照表现** 带来的高质量视觉呈现，另一方面也持续强调 **真正可运行、可扩展、可用于游戏原型验证的引擎能力**。
+
+项目以渲染器能力为核心，同时围绕编辑器、脚本、物理、内容导入与玩法原型持续扩展。LDraw / BrickPlayer 是其中一条很有代表性的内容方向：引擎层可以直接导入 LDraw 模型，并将这类结构化资产纳入统一的 Runtime、渲染与交互系统。
+
+如果你关注以下方向，这个项目会比较值得参考：
+
+- 想看实时路径追踪、金属/玻璃/塑料材质、HDR 环境光和高密度场景的实际画面
+- 想研究一套更贴近游戏运行时的 Vulkan 渲染架构，而不是只会离线出图的 demo
+- 想看一个引擎如何把 **渲染、编辑器、脚本、物理、内容导入与玩法原型** 串成完整系统
+- 想读一套规模可控、强调工程清晰度、适合学习现代 Vulkan 渲染与引擎实现的代码库
+
+**支持平台：** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
+
+---
+
+## 项目特性
+
+- **实时路径追踪与 Hybrid Rendering**  
+  项目围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
+
+- **游戏级性能取向的 GPU 架构**  
+  通过 Visibility Buffer、全 Bindless、GPU-Driven、Multi-Draw Indirect 等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
+
+- **引擎能力服务于内容与玩法原型**  
+  包括 ECS、反射、编辑器、脚本热重载、物理同步、运行时导入和稳定的渲染行为。这些能力共同支撑更完整的可玩内容系统。
+
+- **多格式内容导入与互操作**  
+  引擎完整支持 glTF 运行时导入，并支持部分导出；同时也可以直接导入 `.ldr` / `.mpd`，将结构化的 LDraw 场景纳入统一的 Runtime、渲染与交互系统。
+
+---
+
 ## 性能数据
 
 > 测试场景：`city.glb`
 
 | 平台 | 硬件 | 分辨率 | 渲染模式 | 帧率 |
 |------|------|--------|----------|------|
-| Windows | RTX 5070ti | 1080p | PathTracing (4spp + temporal) | **120 fps** |
-| Windows | RTX 5070ti | 1080p | PathTracing + OIDN | **~80 fps** |
+| Windows | RTX 5070 Ti | 1080p | PathTracing (4spp + temporal) | **120 fps** |
+| Windows | RTX 5070 Ti | 1080p | PathTracing + OIDN | **~80 fps** |
 | Android | Snapdragon 8 Gen2 | 720p | Hardware RT Hybrid | **50 fps** |
 
 ---
 
-## 是什么？
+## 核心能力
 
-gkNextEngine 是一个跨平台 3D 游戏引擎，基于现代 C++ 与 Vulkan，具备现代渲染特性。
+### 1. 面向运行时的高质量渲染
 
-**三个核心定位：**
+- **实时路径追踪**：围绕 1spp + temporal reuse 持续推进，关注真实运行时条件下的画面质量与可用性能
+- **Hybrid Rendering**：在移动平台与游戏级工况下，把传统光栅与光追做合理混合
+- **多套渲染器热切换**：同一套资产与场景，可直接切换不同管线做对比和验证
+- **HDR 截图与高质量素材导出**：便于做视觉验证、展示与回归对比
 
-- **真实感渲染的实时可用性** — 路径追踪不再是离线专属，Visibility Buffer + GPU-Driven + 全 Bindless 架构让它跑在游戏帧率
-- **完整的开发工具链** — ImGui 编辑器、节点式材质、QuickJS 脚本热重载、游戏示例，加上 CMake Preset + vcpkg 的现代构建流程
-- **可学习的代码库** — 核心目标 < 50k LOC（当前 ~15k），拒绝过度设计，拥抱成熟三方库
+### 2. 完整的运行时与工具链能力
 
-**支持平台：** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
+- **ECS + Reflection**：基于 entt 的组件系统，加上反射层，服务于运行时、编辑器和脚本绑定
+- **ImGui 编辑器**：`gkNextEditor` 面向材质、场景和运行时内容的编辑工作流
+- **QuickJS 脚本热重载**：让运行时逻辑、工具能力和实验功能更快迭代
+- **Jolt Physics**：为交互原型、拖拽玩法和游戏化验证提供更真实的物理基础
 
----
+### 3. 代码规模可控，适合学习和扩展
 
-## 核心技术
+- **目标代码规模 < 50k LOC**：当前代码量仍然保持在便于理解和持续演进的区间
+- **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题
+- **适合阅读现代引擎实现**：从 Vulkan 渲染、资源管理到脚本、编辑器、反射与测试链路，都能看到较完整的工程组织方式
 
-### 渲染技术
-- **实时路径追踪** — 1spp + 时域复用，支持 JBF/OIDN/DLSS RR 降噪
-- **Hybrid Rendering** — 混合光栅化与光追
-- **渲染器热切换** — 运行时切换对比
+### 4. glTF 与 LDraw 的内容导入能力
 
-### GPU 架构
-- **Visibility Buffer** — 延迟材质求值
-- **全 Bindless + GPU-Driven** — 减少 CPU 开销
-- **Multi-Draw Indirect** — 合并绘制调用
-
-### 引擎能力
-- **ECS 架构** — entt + 反射系统
-- **ImGui 编辑器** — 节点式材质编辑
-- **QuickJS 脚本** — 支持热重载
-- **Jolt Physics** — 物理模拟
+- **glTF 完整导入**：面向运行时支持 glTF 场景、材质、动画、骨骼蒙皮等完整内容导入
+- **glTF 部分导出**：支持将部分运行时内容回写到 glTF 工作流
+- **LDraw 直接导入 Runtime**：`.ldr` / `.mpd` 可直接进入 Runtime
+- **颜色与材质映射**：从 `LDConfig.ldr`、LGEO realistic color 到引擎 PBR 材质的完整映射
+- **Shadow / Connector 抽象**：不是只导入网格，而是开始把零件连接语义转换成搭建系统可理解的数据
 
 ---
 
-## 图库 / 视频
+## 技术特长
 
-https://github.com/user-attachments/assets/2d1c61ab-8daa-4f1f-ad14-1f211fca19b0
+### 渲染与 GPU 架构
 
-> MagicaLego 片段
+- **Visibility Buffer**
+- **全 Bindless + GPU-Driven**
+- **Multi-Draw Indirect**
+- **Hardware / Software Ray Tracing**
+- **Temporal Reprojection / JBF / OIDN / DLSS RR**
 
-https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
+### 引擎与工具链
 
-> 10 秒展示视频
+- **现代 CMake Presets + vcpkg**
+- **跨平台运行时：桌面 / Android / iOS**
+- **ImGui Editor + Node-based Material Workflow**
+- **QuickJS Runtime Scripting**
+- **Visual Test / Benchmark / Packager**
+
+### LDraw / BrickPlayer 方向
+
+- **LDraw 文件解析**：`FLDrawConfig` / `FLDrawParser` / `FLDrawLoader`
+- **引擎层运行时导入**：从 LDraw 数据直接创建 Scene / Node / Model / Material
+- **搭建语义层**：`BrickPlayerLDrawShadow`
+- **交互规则层**：`BrickPlayerSnapLogic`
+- **玩法原型层**：FreeBuild、拖拽、吸附、确认反馈、物理同步、调试绘制
+
+---
+
+## 图库
+
+> 这里将放置 BrickPlayer / LDraw 的动态图，README 内的媒体素材统一使用 GIF 与 AVIF。
+
+<!-- 推荐在这里补一张新的动态图，例如：
+![BrickPlayer Gameplay](gallery/BrickPlayer.gif)
+-->
 
 <details>
-<summary><b>更多截图</b></summary>
+<summary><b>示例截图</b></summary>
 
 | 场景 | 截图 |
 |------|------|
+| Kitchen | ![Kitchen](gallery/Kitchen.avif) |
 | LuxBall | ![LuxBall](gallery/LuxBall.avif) |
 | Living Room | ![LivingRoom](gallery/LivingRoom.avif) |
 | Qx50 | ![Qx50](gallery/Qx50.avif) |
@@ -96,15 +152,16 @@ https://github.com/user-attachments/assets/636c5b3f-f5c8-4233-9268-7b6e8c0606e7
 <summary><b>Windows (Visual Studio 2022)</b></summary>
 
 **前置条件：**
+
 - CMake 3.26+
 - Visual Studio 2022（C++ 工作负载）
 - Vulkan SDK 1.4.313.2
-- 启用「使用 Unicode UTF-8 提供全球语言支持」
+- 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
 vcpkg.bat windows
-.\build.bat windows-dev
-.\run.bat
+.\build.bat --preset default-windows
+.\run.bat --preset default-windows
 ```
 
 </details>
@@ -160,17 +217,45 @@ run.bat --preset android
 
 </details>
 
+### 运行示例
+
+```shell
+# 主渲染器
+./run.sh --preset default-macos-arm64 --target gkNextRenderer
+
+# Editor
+./run.sh --preset default-macos-arm64 --target gkNextEditor
+
+# BrickPlayer（数字乐高 / LDraw 搭建原型）
+./run.sh --preset default-macos-arm64 --target BrickPlayer
+```
+
+```shell
+# 直接加载 LDraw 示例
+./out/build/<preset>/bin/gkNextRenderer --load-scene "assets/omr/102.ldr"
+```
+
 ---
 
 ## 子项目
 
 | 项目 | 说明 |
 |------|------|
-| `gkNextRenderer` | 主渲染器（路径追踪 / 混合渲染） |
-| `gkNextEditor` | ImGui 编辑器，GLB 场景读写 |
-| `MagicaLego` | Voxel/乐高风格原型，路径追踪验证场景 |
-| `gkNextBenchmark` | 静态与实时场景基准测试 |
+| `gkNextRenderer` | 主渲染器，路径追踪 / Hybrid Rendering / 多管线对比 |
+| `gkNextEditor` | ImGui 编辑器，服务于材质、场景与运行时工具链 |
+| `BrickPlayer` | 基于 LDraw 的数字乐高搭建原型 |
+| `MagicaLego` | 更轻量的乐高 / voxel 风格玩法实验场 |
+| `gkNextBenchmark` | 静态与动态场景基准测试 |
+| `gkNextVisualTest` | 自动化视觉测试与截图报告 |
 | `Packager` | 资产打包为 `.pkg` |
+
+---
+
+## 文档入口
+
+- 思考记录：[docs/Thoughts.md](docs/Thoughts.md)
+- LDraw 导入说明：[AGENT_GUIDE/LDrawLoader.md](AGENT_GUIDE/LDrawLoader.md)
+- BrickPlayer / LDraw 技术总结：[docs/BrickPlayer-LDraw-Technical-Summary-2026-03.md](docs/BrickPlayer-LDraw-Technical-Summary-2026-03.md)
 
 ---
 
@@ -180,9 +265,16 @@ run.bat --preset android
 - [Vulkan Tutorial](https://vulkan-tutorial.com/)
 - [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
+---
+
 ## 参与贡献
 
-欢迎 Issue / PR · 开发协作见 `AGENTS.md` · 思考记录见 `doc/Thoughts.md`
+欢迎 Issue / PR。
+
+- 开发协作说明见 `AGENTS.md`
+- 如果你对实时路径追踪、现代渲染架构、LDraw、编辑器工具链或玩法原型验证感兴趣，欢迎交流
+
+---
 
 ## 第三方依赖
 

@@ -628,7 +628,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         }
 
         // 累积，gpu直接只保留4帧
-        float currWeight = 0.125f;
+        float currWeight = 1.0f;//0.25f;
         SkyVisOut = uint(lerp(float(SkyVisOut), 255.0 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
@@ -755,7 +755,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
         uint4 upacked = unpack_bytes(Voxels[CubeIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 8) // 只处理表面，增值算法的时候可以具体的把他做好
+        if (upacked.x < 16) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Voxels[CubeIdx].age;
             Voxels[CubeIdx].age = Voxels[CubeIdx].age + 1;
