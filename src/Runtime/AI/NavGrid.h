@@ -10,12 +10,14 @@ class FCPUAccelerationStructure;
 struct FNavCell
 {
     float groundHeight = 0.0f;
+    bool baseWalkable = false;
     bool walkable = false;
 };
 
 struct FNavGridSettings
 {
     float cellSize = 0.75f;
+    float agentRadius = 0.0f;
     float maxSlopeAngle = 50.0f;
     float clearanceHeight = 2.2f;
     float maxStepHeight = 0.5f;
@@ -29,6 +31,7 @@ class FNavGrid
 {
 public:
     void Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& settings);
+    void RebuildDirtyRegion(FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin, const glm::vec3& dirtyWorldMax);
 
     std::vector<glm::vec3> FindPath(const glm::vec3& from, const glm::vec3& to, float referenceHeight) const;
 
@@ -45,6 +48,14 @@ public:
     std::vector<uint8_t> BuildReachabilityMask(const glm::vec3& from, float referenceHeight) const;
 
 private:
+    struct FGridRect
+    {
+        int minGx = 0;
+        int minGz = 0;
+        int maxGx = -1;
+        int maxGz = -1;
+    };
+
     glm::ivec2 WorldToGrid(const glm::vec3& worldPos) const;
     glm::vec3 GridToWorld(int gx, int gz) const;
     int CellIndex(int gx, int gz) const;
@@ -54,6 +65,14 @@ private:
     bool GridLineWalkable(const glm::ivec2& a, const glm::ivec2& b) const;
     bool CanTraverse(int fromGx, int fromGz, int toGx, int toGz) const;
     bool CanTraverseByIndex(int fromIdx, int toIdx) const;
+    FGridRect MakeGridRectFromWorldBounds(const glm::vec3& worldMin, const glm::vec3& worldMax) const;
+    FGridRect ExpandGridRect(const FGridRect& rect, int margin) const;
+    bool IsGridRectValid(const FGridRect& rect) const;
+    void SampleBaseWalkability(FCPUAccelerationStructure& bvh, const FGridRect& rect);
+    void UpdateWalkabilityFromBase(const FGridRect& rect);
+    bool SampleBaseCell(FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const;
+    int GetFootprintMarginCells() const;
+    int GetExtraErosionCells() const;
 
     std::vector<FNavCell> cells_;
     FNavGridSettings settings_;

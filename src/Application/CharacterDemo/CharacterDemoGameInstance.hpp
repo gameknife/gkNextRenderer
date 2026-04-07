@@ -5,6 +5,7 @@
 #include "Runtime/Subsystems/NextCharacterController.h"
 #include "Runtime/AI/NavGrid.h"
 #include "Runtime/AI/PathFollower.h"
+#include <random>
 
 namespace Runtime { class SkinnedMeshComponent; }
 
@@ -88,11 +89,14 @@ private:
         float fireCooldownRemaining = 0.0f;
         float targetMemoryRemaining = 0.0f;
         float patrolPauseRemaining = 0.0f;
+        float targetVisibleGraceRemaining = 0.0f;
+        float stateHoldRemaining = 0.0f;
         float strafeSign = 1.0f;
         size_t patrolIndex = 0;
         bool targetVisible = false;
         bool triggerJump = false;
         EAIBotState state = EAIBotState::Disabled;
+        EAIBotState desiredState = EAIBotState::Disabled;
         std::shared_ptr<Assets::Node> skinnedRoot;
         Runtime::SkinnedMeshComponent* primarySkinnedMeshComp = nullptr;
         std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps;
@@ -108,6 +112,19 @@ private:
         EBehaviorDebugState behaviorAttackStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorChaseStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorPatrolStatus = EBehaviorDebugState::Inactive;
+        bool patrolReachableFound = false;
+        bool patrolUsedNearFallback = false;
+        size_t patrolRequestedIndex = 0;
+        size_t patrolSelectedIndex = 0;
+        int patrolCandidatesTested = 0;
+        int patrolWaypointCount = 0;
+        float patrolSelectionMs = 0.0f;
+        float patrolSelectedDistance = 0.0f;
+        float patrolStuckTime = 0.0f;
+        bool patrolAbandonedTarget = false;
+        size_t patrolLastCommittedIndex = std::numeric_limits<size_t>::max();
+        glm::vec3 patrolSelectedTarget{0.0f};
+        glm::vec3 patrolProgressAnchor{0.0f};
         FPathFollower pathFollower;
         EAIBotState previousState = EAIBotState::Disabled;
     };
@@ -134,8 +151,12 @@ private:
     void UpdateAIBot(float deltaSeconds);
     void UpdateAIBotNode();
     void CollectAIBotPatrolPoints();
+    bool TryBuildReachablePatrolPath(const glm::vec3& currentPos, float referenceHeight, size_t startIndex,
+                                     size_t& outPatrolIndex, glm::vec3& outTarget,
+                                     std::vector<glm::vec3>& outPath);
     bool TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const;
     bool HasLineOfSightToPlayer() const;
+    EAIBotState DetermineDesiredAIBotState(float distanceToPlayer, bool hasCombatTarget) const;
     EBehaviorTreeStatus RunAIBotBehaviorTree(float deltaSeconds);
     EBehaviorTreeStatus RunAIBotEvade(float deltaSeconds);
     EBehaviorTreeStatus RunAIBotAttack(float deltaSeconds);
@@ -152,6 +173,8 @@ private:
     EBehaviorDebugState ToBehaviorDebugState(EBehaviorTreeStatus status) const;
     void DrawAIBotBehaviorTreeUI() const;
     void DrawNavGridDebugOverlay() const;
+    FNavGridSettings CreateNavGridSettings() const;
+    void RefreshNavGridFromSceneDirtyRegion();
 
     NextEngine* engine_;
     NextCharacterController characterController_;
@@ -165,6 +188,7 @@ private:
     uint32_t projectileMatId_ = 0;
     FAIBot aiBot_;
     FNavGrid navGrid_;
+    std::mt19937 patrolRng_{std::random_device{}()};
 
     // Skinned character model
     std::shared_ptr<Assets::Node> skinnedCharacterRoot_;
@@ -238,6 +262,8 @@ private:
     float aiSightRange_ = 28.0f;
     float aiLoseSightRange_ = 34.0f;
     float aiMemoryTime_ = 3.5f;
+    float aiTargetVisibleGraceTime_ = 0.75f;
+    float aiStateMinHoldTime_ = 0.75f;
     float aiPreferredCombatRangeMin_ = 7.0f;
     float aiPreferredCombatRangeMax_ = 16.0f;
     float aiCombatRangeHysteresis_ = 1.25f;
@@ -245,7 +271,11 @@ private:
     float aiFireCooldown_ = 1.25f;
     float aiAimTolerance_ = 0.92f;
     float aiPatrolPointRadius_ = 1.25f;
+    float aiPatrolMinTravelDistance_ = 3.0f;
     float aiPatrolPauseTime_ = 0.6f;
+    float aiPatrolProgressResetDistance_ = 0.75f;
+    float aiPatrolStuckSpeedThreshold_ = 0.2f;
+    float aiPatrolStuckTimeout_ = 0.85f;
     float aiTurnSpeed_ = 6.5f;
     float walkStrafePlaySpeed_ = 0.82f;
     float runBackwardPlaySpeed_ = 1.35f;

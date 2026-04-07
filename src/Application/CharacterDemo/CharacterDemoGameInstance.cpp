@@ -130,8 +130,8 @@ CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& confi
     : NextGameInstanceBase(config, options, engine)
     , engine_(engine)
 {
-    config.Height = 720;
-    config.Width = 1280;
+    // config.Height = 720;
+    // config.Width = 1280;
 }
 
 void CharacterDemoGameInstance::OnInit()
@@ -166,6 +166,8 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     {
         TryInitAIBotCharacterModel();
     }
+
+    RefreshNavGridFromSceneDirtyRegion();
 
     // Build movement direction in world space from camera yaw
     glm::vec3 forward = GetMoveForward();
@@ -287,6 +289,7 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     renderComp->SetModelId(capsuleModelId_);
     renderComp->SetMaterial({characterMatId_});
     renderComp->SetVisible(true);
+    renderComp->SetRayCastVisible(false);
     characterNode_->AddComponent(renderComp);
 
     // Prevent Scene::AddNode from auto-creating a static mesh body for the visual-only character node.
@@ -299,14 +302,9 @@ void CharacterDemoGameInstance::OnSceneLoaded()
 
     // Build navigation grid from scene BVH for AI pathfinding
     {
-        const glm::vec3 sceneMin = engine_->GetScene().GetSceneAABBMin();
-        const glm::vec3 sceneMax = engine_->GetScene().GetSceneAABBMax();
-        FNavGridSettings navSettings;
-        navSettings.cellSize = 0.75f;
-        navSettings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
-        navSettings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
-        navSettings.sampleCeiling = sceneMax.y + 5.0f;
+        const FNavGridSettings navSettings = CreateNavGridSettings();
         navGrid_.Build(engine_->GetScene().GetCPUAccelerationStructure(), navSettings);
+        engine_->GetScene().GetCPUAccelerationStructure().ClearNavRelevantDirtyBounds();
     }
 
     SetFirstPersonMode(firstPersonMode_);
@@ -331,6 +329,46 @@ void CharacterDemoGameInstance::OnSceneUnloaded()
     NextGameInstanceBase::OnSceneUnloaded();
     ResetCharacterState();
     sceneHelpersInjected_ = false;
+}
+
+FNavGridSettings CharacterDemoGameInstance::CreateNavGridSettings() const
+{
+    const glm::vec3 sceneMin = engine_->GetScene().GetSceneAABBMin();
+    const glm::vec3 sceneMax = engine_->GetScene().GetSceneAABBMax();
+
+    FNavGridSettings navSettings;
+    navSettings.cellSize = 0.75f;
+    navSettings.agentRadius = characterController_.GetRadius() + 0.02f;
+    navSettings.maxSlopeAngle = 50.0f;
+    navSettings.clearanceHeight = std::max(characterController_.GetHeight(), 0.1f);
+    navSettings.maxStepHeight = 0.35f;
+    navSettings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
+    navSettings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
+    navSettings.sampleCeiling = sceneMax.y + 5.0f;
+    navSettings.floorHeightTolerance = 1.0f;
+    return navSettings;
+}
+
+void CharacterDemoGameInstance::RefreshNavGridFromSceneDirtyRegion()
+{
+    glm::vec3 dirtyWorldMin(0.0f);
+    glm::vec3 dirtyWorldMax(0.0f);
+    auto& cpuAS = engine_->GetScene().GetCPUAccelerationStructure();
+    if (!cpuAS.ConsumeNavRelevantDirtyBounds(dirtyWorldMin, dirtyWorldMax))
+    {
+        return;
+    }
+
+    if (!navGrid_.IsBuilt())
+    {
+        navGrid_.Build(cpuAS, CreateNavGridSettings());
+    }
+    else
+    {
+        navGrid_.RebuildDirtyRegion(cpuAS, dirtyWorldMin, dirtyWorldMax);
+    }
+
+    aiBot_.pathFollower.Clear();
 }
 
 bool CharacterDemoGameInstance::OnRenderUI()
@@ -778,11 +816,27 @@ void CharacterDemoGameInstance::InitAIBot()
     aiBot_.fireCooldownRemaining = 0.0f;
     aiBot_.targetMemoryRemaining = 0.0f;
     aiBot_.patrolPauseRemaining = 0.0f;
+    aiBot_.targetVisibleGraceRemaining = 0.0f;
+    aiBot_.stateHoldRemaining = 0.0f;
     aiBot_.strafeSign = 1.0f;
     aiBot_.patrolIndex = 0;
     aiBot_.targetVisible = false;
     aiBot_.triggerJump = false;
     aiBot_.state = aiEnabled_ ? EAIBotState::Patrol : EAIBotState::Disabled;
+    aiBot_.desiredState = aiBot_.state;
+    aiBot_.patrolReachableFound = false;
+    aiBot_.patrolUsedNearFallback = false;
+    aiBot_.patrolRequestedIndex = 0;
+    aiBot_.patrolSelectedIndex = 0;
+    aiBot_.patrolCandidatesTested = 0;
+    aiBot_.patrolWaypointCount = 0;
+    aiBot_.patrolSelectionMs = 0.0f;
+    aiBot_.patrolSelectedDistance = 0.0f;
+    aiBot_.patrolStuckTime = 0.0f;
+    aiBot_.patrolAbandonedTarget = false;
+    aiBot_.patrolLastCommittedIndex = std::numeric_limits<size_t>::max();
+    aiBot_.patrolSelectedTarget = glm::vec3(0.0f);
+    aiBot_.patrolProgressAnchor = aiBot_.controller.IsValid() ? aiBot_.controller.GetPosition() : glm::vec3(0.0f);
     aiBot_.appendRootName = characterAppendRootName_ + "_1";
     aiBot_.animState = ECharacterAnimState::Idle;
     aiBot_.characterModelLoaded = false;
@@ -806,6 +860,7 @@ void CharacterDemoGameInstance::InitAIBot()
     settings.mass = 180.0f;
     settings.initialPosition = aiSpawn;
     aiBot_.controller.Create(engine_->GetPhysicsEngine(), settings);
+    aiBot_.patrolProgressAnchor = aiSpawn;
 
     const glm::vec3 toPlayer = characterController_.GetPosition() - aiSpawn;
     const glm::vec3 lookDir = NormalizeHorizontalOrZero(toPlayer);
@@ -889,6 +944,194 @@ void CharacterDemoGameInstance::CollectAIBotPatrolPoints()
     }
 }
 
+bool CharacterDemoGameInstance::TryBuildReachablePatrolPath(const glm::vec3& currentPos, float referenceHeight,
+                                                            size_t startIndex, size_t& outPatrolIndex,
+                                                            glm::vec3& outTarget,
+                                                            std::vector<glm::vec3>& outPath)
+{
+    outPath.clear();
+    outTarget = currentPos;
+
+    aiBot_.patrolReachableFound = false;
+    aiBot_.patrolUsedNearFallback = false;
+    aiBot_.patrolRequestedIndex = startIndex;
+    aiBot_.patrolSelectedIndex = startIndex;
+    aiBot_.patrolCandidatesTested = 0;
+    aiBot_.patrolWaypointCount = 0;
+    aiBot_.patrolSelectionMs = 0.0f;
+    aiBot_.patrolSelectedDistance = 0.0f;
+    aiBot_.patrolSelectedTarget = currentPos;
+
+    if (aiBot_.patrolPoints.empty() || !navGrid_.IsBuilt())
+    {
+        return false;
+    }
+
+    const auto startTime = std::chrono::high_resolution_clock::now();
+    const size_t patrolCount = aiBot_.patrolPoints.size();
+    const float minTravelDistance = std::max(aiPatrolMinTravelDistance_, aiPatrolPointRadius_ * 2.0f);
+    const std::vector<uint8_t> reachableMask = navGrid_.BuildReachabilityMask(currentPos, referenceHeight);
+    const int gridWidth = navGrid_.GetWidth();
+    const int gridHeight = navGrid_.GetHeight();
+
+    struct FPatrolCandidateOption
+    {
+        size_t patrolIndex = 0;
+        glm::vec3 resolvedTarget{0.0f};
+        std::vector<glm::vec3> path;
+        float travelDistance = 0.0f;
+        float score = 0.0f;
+    };
+
+    std::vector<size_t> candidateOrder(patrolCount);
+    for (size_t i = 0; i < patrolCount; ++i)
+    {
+        candidateOrder[i] = i;
+    }
+    if (patrolCount > 1)
+    {
+        std::shuffle(candidateOrder.begin(), candidateOrder.end(), patrolRng_);
+    }
+
+    const size_t requestedIndex = startIndex % patrolCount;
+    const auto requestedIt = std::find(candidateOrder.begin(), candidateOrder.end(), requestedIndex);
+    if (requestedIt != candidateOrder.end())
+    {
+        candidateOrder.erase(requestedIt);
+        candidateOrder.insert(candidateOrder.begin(), requestedIndex);
+    }
+
+    auto collectCandidates = [&](bool requireMinDistance, bool avoidLastCommitted) -> std::vector<FPatrolCandidateOption>
+    {
+        std::vector<FPatrolCandidateOption> candidates;
+        candidates.reserve(patrolCount);
+
+        for (size_t candidateIndex : candidateOrder)
+        {
+            const glm::vec3& candidateTarget = aiBot_.patrolPoints[candidateIndex];
+            ++aiBot_.patrolCandidatesTested;
+
+            if (avoidLastCommitted && patrolCount > 1 && candidateIndex == aiBot_.patrolLastCommittedIndex)
+            {
+                continue;
+            }
+
+            float bestScore = std::numeric_limits<float>::max();
+            float bestTravelDistance = 0.0f;
+            glm::vec3 bestReachableTarget(0.0f);
+            bool foundReachableTarget = false;
+
+            for (int gz = 0; gz < gridHeight; ++gz)
+            {
+                for (int gx = 0; gx < gridWidth; ++gx)
+                {
+                    const size_t cellIndex = static_cast<size_t>(gz * gridWidth + gx);
+                    if (cellIndex >= reachableMask.size() || reachableMask[cellIndex] == 0)
+                    {
+                        continue;
+                    }
+
+                    const glm::vec3 cellWorld = navGrid_.GetCellWorldPosition(gx, gz);
+                    const float travelDistance =
+                        glm::length(glm::vec2(cellWorld.x - currentPos.x, cellWorld.z - currentPos.z));
+                    if (requireMinDistance && travelDistance < minTravelDistance)
+                    {
+                        continue;
+                    }
+
+                    const float targetDistance =
+                        glm::length(glm::vec2(cellWorld.x - candidateTarget.x, cellWorld.z - candidateTarget.z));
+                    const float score = targetDistance + travelDistance * 0.05f;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestTravelDistance = travelDistance;
+                        bestReachableTarget = cellWorld;
+                        foundReachableTarget = true;
+                    }
+                }
+            }
+
+            if (!foundReachableTarget)
+            {
+                continue;
+            }
+
+            std::vector<glm::vec3> candidatePath = navGrid_.FindPath(currentPos, bestReachableTarget, referenceHeight);
+            if (candidatePath.empty())
+            {
+                continue;
+            }
+
+            candidates.push_back(FPatrolCandidateOption{
+                .patrolIndex = candidateIndex,
+                .resolvedTarget = bestReachableTarget,
+                .path = std::move(candidatePath),
+                .travelDistance = bestTravelDistance,
+                .score = bestScore
+            });
+        }
+
+        return candidates;
+    };
+
+    auto commitCandidate = [&](std::vector<FPatrolCandidateOption>& candidates, bool usedNearFallback) -> bool
+    {
+        if (candidates.empty())
+        {
+            return false;
+        }
+
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const FPatrolCandidateOption& lhs, const FPatrolCandidateOption& rhs)
+                  {
+                      if (lhs.score != rhs.score)
+                      {
+                          return lhs.score < rhs.score;
+                      }
+                      return lhs.travelDistance < rhs.travelDistance;
+                  });
+
+        const size_t selectionPoolSize = std::min<size_t>(3, candidates.size());
+        std::uniform_int_distribution<size_t> distribution(0, selectionPoolSize - 1);
+        FPatrolCandidateOption selected = std::move(candidates[distribution(patrolRng_)]);
+
+        outPatrolIndex = selected.patrolIndex;
+        outTarget = selected.resolvedTarget;
+        outPath = std::move(selected.path);
+        aiBot_.patrolReachableFound = true;
+        aiBot_.patrolUsedNearFallback = usedNearFallback;
+        aiBot_.patrolSelectedIndex = selected.patrolIndex;
+        aiBot_.patrolWaypointCount = static_cast<int>(outPath.size());
+        aiBot_.patrolSelectedDistance = selected.travelDistance;
+        aiBot_.patrolSelectedTarget = selected.resolvedTarget;
+        aiBot_.patrolLastCommittedIndex = selected.patrolIndex;
+        aiBot_.patrolSelectionMs =
+            std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - startTime).count();
+        return true;
+    };
+
+    if (auto candidates = collectCandidates(true, true); commitCandidate(candidates, false))
+    {
+        return true;
+    }
+
+    if (auto candidates = collectCandidates(true, false); commitCandidate(candidates, false))
+    {
+        return true;
+    }
+
+    if (auto candidates = collectCandidates(false, true); commitCandidate(candidates, true))
+    {
+        return true;
+    }
+
+    aiBot_.patrolSelectionMs =
+        std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - startTime).count();
+    auto candidates = collectCandidates(false, false);
+    return commitCandidate(candidates, true);
+}
+
 bool CharacterDemoGameInstance::TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const
 {
     Assets::Node* node = engine_->GetScene().GetNode(nodeName);
@@ -928,6 +1171,62 @@ bool CharacterDemoGameInstance::HasLineOfSightToPlayer() const
     return hit.T >= distance - 0.35f;
 }
 
+CharacterDemoGameInstance::EAIBotState CharacterDemoGameInstance::DetermineDesiredAIBotState(
+    float distanceToPlayer, bool hasCombatTarget) const
+{
+    const bool hasChaseTarget = hasCombatTarget || aiBot_.targetMemoryRemaining > 0.0f;
+    const bool hasRecentCombatTarget = hasCombatTarget || aiBot_.targetVisibleGraceRemaining > 0.0f ||
+                                       aiBot_.targetMemoryRemaining > 0.0f;
+    if (!hasChaseTarget)
+    {
+        return aiBot_.patrolPoints.empty() ? EAIBotState::Disabled : EAIBotState::Patrol;
+    }
+
+    const float hysteresis = aiCombatRangeHysteresis_;
+    const float evadeEnter = aiPreferredCombatRangeMin_;
+    const float evadeExit = aiPreferredCombatRangeMin_ + hysteresis;
+    const float attackEnterMax =
+        std::min(aiFireRange_, std::max(aiPreferredCombatRangeMin_, aiPreferredCombatRangeMax_ - hysteresis * 0.5f));
+    const float attackMinSticky = std::max(0.0f, aiPreferredCombatRangeMin_ - hysteresis);
+    const float attackMaxSticky = std::min(aiFireRange_, aiPreferredCombatRangeMax_ + hysteresis);
+
+    switch (aiBot_.previousState)
+    {
+    case EAIBotState::Evade:
+        if (hasCombatTarget && distanceToPlayer < evadeExit)
+        {
+            return EAIBotState::Evade;
+        }
+        break;
+    case EAIBotState::Attack:
+        if (hasRecentCombatTarget && distanceToPlayer >= attackMinSticky && distanceToPlayer <= attackMaxSticky)
+        {
+            return EAIBotState::Attack;
+        }
+        break;
+    case EAIBotState::Chase:
+        if (hasChaseTarget && (!hasCombatTarget || distanceToPlayer > attackEnterMax))
+        {
+            return EAIBotState::Chase;
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (hasCombatTarget && distanceToPlayer < evadeEnter)
+    {
+        return EAIBotState::Evade;
+    }
+
+    if (hasCombatTarget && distanceToPlayer <= attackEnterMax)
+    {
+        return EAIBotState::Attack;
+    }
+
+    return EAIBotState::Chase;
+}
+
 void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
 {
     if (!aiBot_.controller.IsValid())
@@ -943,6 +1242,8 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     aiBot_.fireCooldownRemaining = std::max(0.0f, aiBot_.fireCooldownRemaining - deltaSeconds);
     aiBot_.targetMemoryRemaining = std::max(0.0f, aiBot_.targetMemoryRemaining - deltaSeconds);
     aiBot_.patrolPauseRemaining = std::max(0.0f, aiBot_.patrolPauseRemaining - deltaSeconds);
+    aiBot_.targetVisibleGraceRemaining = std::max(0.0f, aiBot_.targetVisibleGraceRemaining - deltaSeconds);
+    aiBot_.stateHoldRemaining = std::max(0.0f, aiBot_.stateHoldRemaining - deltaSeconds);
     aiBot_.moveDir = glm::vec3(0.0f);
     aiBot_.triggerJump = false;
 
@@ -956,22 +1257,26 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     const bool closeThreat = distanceToPlayer <= aiPreferredCombatRangeMin_;
     const bool hasLineOfSight = closeThreat || HasLineOfSightToPlayer();
     const float sightRange = aiBot_.targetVisible ? aiLoseSightRange_ : aiSightRange_;
-    aiBot_.targetVisible =
+    const bool rawTargetVisible =
         aiEnabled_ &&
         distanceToPlayer <= sightRange &&
         std::abs(toPlayer.y) <= 4.0f &&
         hasLineOfSight &&
         (closeThreat || fovDot >= std::cos(glm::radians(75.0f)));
 
-    if (aiBot_.targetVisible)
+    if (rawTargetVisible)
     {
         aiBot_.lastKnownTargetPosition = playerPos;
         aiBot_.targetMemoryRemaining = aiMemoryTime_;
+        aiBot_.targetVisibleGraceRemaining = aiTargetVisibleGraceTime_;
     }
+
+    aiBot_.targetVisible = rawTargetVisible || aiBot_.targetVisibleGraceRemaining > 0.0f;
 
     if (!aiEnabled_)
     {
         aiBot_.state = EAIBotState::Disabled;
+        aiBot_.desiredState = EAIBotState::Disabled;
         aiBot_.behaviorRootStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorEvadeStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
@@ -983,11 +1288,38 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
         return;
     }
 
+    aiBot_.previousState = aiBot_.state;
+    auto getStatePriority = [](EAIBotState state) -> int
+    {
+        switch (state)
+        {
+        case EAIBotState::Evade:
+            return 3;
+        case EAIBotState::Attack:
+            return 2;
+        case EAIBotState::Chase:
+            return 1;
+        case EAIBotState::Patrol:
+            return 0;
+        case EAIBotState::Disabled:
+        default:
+            return -1;
+        }
+    };
+    aiBot_.desiredState = DetermineDesiredAIBotState(distanceToPlayer, aiBot_.targetVisible);
+    if (aiBot_.desiredState != aiBot_.state &&
+        aiBot_.stateHoldRemaining > 0.0f &&
+        getStatePriority(aiBot_.desiredState) <= getStatePriority(aiBot_.state))
+    {
+        aiBot_.desiredState = aiBot_.state;
+    }
+
     const EAIBotState stateBefore = aiBot_.state;
     RunAIBotBehaviorTree(deltaSeconds);
     if (aiBot_.state != stateBefore)
     {
         aiBot_.pathFollower.Clear();
+        aiBot_.stateHoldRemaining = aiStateMinHoldTime_;
     }
 
     float speed = aiWalkSpeed_;
@@ -1007,7 +1339,8 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     aiBot_.controller.Update(aiBot_.moveDir, speed, aiBot_.triggerJump, deltaSeconds);
 
     glm::vec3 facingDirection = aiBot_.lookDir;
-    if (glm::length(aiBot_.controller.GetLinearVelocity()) > 0.2f)
+    if (aiBot_.state != EAIBotState::Attack &&
+        glm::length(aiBot_.controller.GetLinearVelocity()) > 0.2f)
     {
         facingDirection = aiBot_.controller.GetLinearVelocity();
     }
@@ -1057,7 +1390,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotEvade(float deltaSeconds)
 {
-    if (!aiBot_.targetVisible)
+    if (aiBot_.desiredState != EAIBotState::Evade)
     {
         return EBehaviorTreeStatus::Failure;
     }
@@ -1067,14 +1400,6 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
     const float distanceToPlayer = glm::length(glm::vec2(playerEyePos.x - aiPos.x, playerEyePos.z - aiPos.z));
-    const float evadeThreshold =
-        aiPreferredCombatRangeMin_ +
-        (aiBot_.state == EAIBotState::Evade ? aiCombatRangeHysteresis_ : 0.0f);
-    if (distanceToPlayer >= evadeThreshold)
-    {
-        return EBehaviorTreeStatus::Failure;
-    }
-
     aiBot_.state = EAIBotState::Evade;
     aiBot_.lookDir = glm::length(toPlayerDir) > 0.001f ? toPlayerDir : aiBot_.lookDir;
 
@@ -1109,7 +1434,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 {
     (void)deltaSeconds;
 
-    if (!aiBot_.targetVisible)
+    if (aiBot_.desiredState != EAIBotState::Attack)
     {
         return EBehaviorTreeStatus::Failure;
     }
@@ -1119,20 +1444,10 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
     const float distanceToPlayer = glm::length(glm::vec2(playerEyePos.x - aiPos.x, playerEyePos.z - aiPos.z));
-    const float attackMaxRange =
-        std::min(aiFireRange_,
-                 aiPreferredCombatRangeMax_ +
-                     (aiBot_.state == EAIBotState::Attack ? aiCombatRangeHysteresis_ : 0.0f));
-    if (distanceToPlayer < aiPreferredCombatRangeMin_ || distanceToPlayer > attackMaxRange)
-    {
-        return EBehaviorTreeStatus::Failure;
-    }
-
     aiBot_.state = EAIBotState::Attack;
     aiBot_.lookDir = glm::length(toPlayerDir) > 0.001f ? toPlayerDir : aiBot_.lookDir;
 
     glm::vec3 moveDir(0.0f);
-    const glm::vec3 strafeDir = NormalizeHorizontalOrZero(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), toPlayerDir)) * aiBot_.strafeSign;
     const glm::vec3 botForward(std::sin(aiBot_.yaw), 0.0f, std::cos(aiBot_.yaw));
     const float aimDot = glm::length(toPlayerDir) > 0.001f ? glm::dot(botForward, toPlayerDir) : 1.0f;
     const bool inPreferredRange = distanceToPlayer <= aiPreferredCombatRangeMax_;
@@ -1140,10 +1455,6 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     if (distanceToPlayer > aiPreferredCombatRangeMax_)
     {
         moveDir = toPlayerDir;
-    }
-    else if (aimDot < aiAimTolerance_ - 0.08f)
-    {
-        moveDir = strafeDir * 0.35f;
     }
     else
     {
@@ -1170,30 +1481,17 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotChase(float deltaSeconds)
 {
-    if (!aiBot_.targetVisible && aiBot_.targetMemoryRemaining <= 0.0f)
+    if (aiBot_.desiredState != EAIBotState::Chase)
     {
         return EBehaviorTreeStatus::Failure;
     }
-
-    aiBot_.state = EAIBotState::Chase;
 
     const glm::vec3 aiPos = aiBot_.controller.GetPosition();
     const glm::vec3 chaseTarget = aiBot_.targetVisible ? characterController_.GetPosition() : aiBot_.lastKnownTargetPosition;
     const glm::vec3 toTarget = chaseTarget - aiPos;
     const glm::vec3 chaseDir = NormalizeHorizontalOrZero(toTarget);
     const float distanceToTarget = glm::length(glm::vec2(toTarget.x, toTarget.z));
-    if (aiBot_.targetVisible)
-    {
-        const float chaseExitRange =
-            std::max(aiPreferredCombatRangeMin_,
-                     aiPreferredCombatRangeMax_ -
-                         (aiBot_.state == EAIBotState::Chase ? aiCombatRangeHysteresis_ : 0.0f));
-        if (distanceToTarget <= chaseExitRange)
-        {
-            return EBehaviorTreeStatus::Failure;
-        }
-    }
-
+    aiBot_.state = EAIBotState::Chase;
     aiBot_.lookDir = glm::length(chaseDir) > 0.001f ? chaseDir : aiBot_.lookDir;
 
     if (navGrid_.IsBuilt())
@@ -1236,34 +1534,149 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     }
 
     aiBot_.patrolIndex %= aiBot_.patrolPoints.size();
-    const glm::vec3 patrolTarget = aiBot_.patrolPoints[aiBot_.patrolIndex];
     const glm::vec3 aiPos = aiBot_.controller.GetPosition();
-    const glm::vec3 toPatrol = patrolTarget - aiPos;
-    const glm::vec3 patrolDir = NormalizeHorizontalOrZero(toPatrol);
-    const float distanceToPatrol = glm::length(glm::vec2(toPatrol.x, toPatrol.z));
-    if (distanceToPatrol <= aiPatrolPointRadius_)
-    {
-        aiBot_.patrolIndex = (aiBot_.patrolIndex + 1) % aiBot_.patrolPoints.size();
-        aiBot_.patrolPauseRemaining = aiPatrolPauseTime_;
-        aiBot_.strafeSign *= -1.0f;
-        return EBehaviorTreeStatus::Success;
-    }
-
-    aiBot_.lookDir = glm::length(patrolDir) > 0.001f ? patrolDir : aiBot_.lookDir;
 
     if (navGrid_.IsBuilt())
     {
-        if (aiBot_.pathFollower.NeedsRepath(patrolTarget, deltaSeconds, 1.0f, 0.5f))
+        auto assignPatrolPath = [&](size_t reachablePatrolIndex, const glm::vec3& reachableTarget,
+                                    std::vector<glm::vec3>&& reachablePath) -> void
         {
-            auto path = navGrid_.FindPath(aiPos, patrolTarget, aiPos.y);
-            aiBot_.pathFollower.SetPath(std::move(path), patrolTarget);
+            aiBot_.patrolIndex = reachablePatrolIndex;
+            aiBot_.pathFollower.SetPath(std::move(reachablePath), reachableTarget);
+            aiBot_.patrolProgressAnchor = aiPos;
+            aiBot_.patrolStuckTime = 0.0f;
+            aiBot_.patrolAbandonedTarget = false;
+        };
+
+        auto trySelectNewPatrolTarget = [&](size_t startIndex, bool abandonedCurrentTarget) -> bool
+        {
+            size_t reachablePatrolIndex = startIndex;
+            glm::vec3 reachableTarget(0.0f);
+            std::vector<glm::vec3> reachablePath;
+            if (!TryBuildReachablePatrolPath(aiPos, aiPos.y, startIndex,
+                                             reachablePatrolIndex, reachableTarget, reachablePath))
+            {
+                aiBot_.pathFollower.Clear();
+                aiBot_.moveDir = glm::vec3(0.0f);
+                aiBot_.patrolStuckTime = 0.0f;
+                aiBot_.patrolAbandonedTarget = abandonedCurrentTarget;
+                aiBot_.patrolPauseRemaining = aiPatrolPauseTime_;
+                aiBot_.patrolIndex = startIndex % aiBot_.patrolPoints.size();
+                return false;
+            }
+
+            assignPatrolPath(reachablePatrolIndex, reachableTarget, std::move(reachablePath));
+            aiBot_.patrolAbandonedTarget = abandonedCurrentTarget;
+            return true;
+        };
+
+        if (!aiBot_.pathFollower.waypoints.empty() &&
+            aiBot_.pathFollower.IsFinished(aiPos, aiPatrolPointRadius_))
+        {
+            aiBot_.pathFollower.Clear();
+            aiBot_.patrolStuckTime = 0.0f;
+            aiBot_.patrolAbandonedTarget = false;
+            aiBot_.patrolIndex = (aiBot_.patrolIndex + 1) % aiBot_.patrolPoints.size();
+            aiBot_.patrolPauseRemaining = aiPatrolPauseTime_;
+            aiBot_.strafeSign *= -1.0f;
+            return EBehaviorTreeStatus::Success;
         }
+
+        const bool hasCommittedPatrolTarget = !aiBot_.pathFollower.waypoints.empty() && aiBot_.patrolReachableFound;
+        const glm::vec3 requestedTarget = aiBot_.patrolPoints[aiBot_.patrolIndex];
+        const glm::vec3 repathTarget = hasCommittedPatrolTarget ? aiBot_.patrolSelectedTarget : requestedTarget;
+        if (aiBot_.pathFollower.NeedsRepath(repathTarget, deltaSeconds, 4.0f, 0.5f))
+        {
+            if (hasCommittedPatrolTarget)
+            {
+                std::vector<glm::vec3> refreshedPath = navGrid_.FindPath(aiPos, aiBot_.patrolSelectedTarget, aiPos.y);
+                if (!refreshedPath.empty())
+                {
+                    assignPatrolPath(aiBot_.patrolIndex, aiBot_.patrolSelectedTarget, std::move(refreshedPath));
+                }
+                else if (!trySelectNewPatrolTarget((aiBot_.patrolIndex + 1) % aiBot_.patrolPoints.size(), true))
+                {
+                    return EBehaviorTreeStatus::Running;
+                }
+            }
+            else if (!trySelectNewPatrolTarget(aiBot_.patrolIndex, false))
+            {
+                return EBehaviorTreeStatus::Running;
+            }
+        }
+
         glm::vec3 pathDir = aiBot_.pathFollower.GetMoveDirection(aiPos);
-        aiBot_.moveDir = glm::length(pathDir) > 0.001f ? pathDir : patrolDir;
+        if (glm::length(pathDir) > 0.001f)
+        {
+            aiBot_.moveDir = pathDir;
+            aiBot_.lookDir = pathDir;
+
+            const glm::vec3 anchorDelta = aiPos - aiBot_.patrolProgressAnchor;
+            const float progressSinceAnchor = glm::length(glm::vec2(anchorDelta.x, anchorDelta.z));
+            if (progressSinceAnchor >= aiPatrolProgressResetDistance_)
+            {
+                aiBot_.patrolProgressAnchor = aiPos;
+                aiBot_.patrolStuckTime = 0.0f;
+                aiBot_.patrolAbandonedTarget = false;
+            }
+            else
+            {
+                glm::vec3 horizontalVelocity = aiBot_.controller.GetLinearVelocity();
+                horizontalVelocity.y = 0.0f;
+                if (glm::length(horizontalVelocity) <= aiPatrolStuckSpeedThreshold_)
+                {
+                    aiBot_.patrolStuckTime += deltaSeconds;
+                }
+                else
+                {
+                    aiBot_.patrolStuckTime = 0.0f;
+                }
+
+                if (aiBot_.patrolStuckTime >= aiPatrolStuckTimeout_)
+                {
+                    const size_t nextPatrolIndex = (aiBot_.patrolIndex + 1) % aiBot_.patrolPoints.size();
+                    aiBot_.pathFollower.Clear();
+                    if (!trySelectNewPatrolTarget(nextPatrolIndex, true))
+                    {
+                        return EBehaviorTreeStatus::Running;
+                    }
+
+                    pathDir = aiBot_.pathFollower.GetMoveDirection(aiPos);
+                    if (glm::length(pathDir) > 0.001f)
+                    {
+                        aiBot_.moveDir = pathDir;
+                        aiBot_.lookDir = pathDir;
+                    }
+                    else
+                    {
+                        aiBot_.moveDir = glm::vec3(0.0f);
+                    }
+                }
+            }
+        }
+        else
+        {
+            aiBot_.pathFollower.Clear();
+            aiBot_.moveDir = glm::vec3(0.0f);
+            aiBot_.patrolStuckTime = 0.0f;
+        }
     }
     else
     {
+        const glm::vec3 patrolTarget = aiBot_.patrolPoints[aiBot_.patrolIndex];
+        const glm::vec3 toPatrol = patrolTarget - aiPos;
+        const glm::vec3 patrolDir = NormalizeHorizontalOrZero(toPatrol);
+        const float distanceToPatrol = glm::length(glm::vec2(toPatrol.x, toPatrol.z));
+        if (distanceToPatrol <= aiPatrolPointRadius_)
+        {
+            aiBot_.patrolIndex = (aiBot_.patrolIndex + 1) % aiBot_.patrolPoints.size();
+            aiBot_.patrolPauseRemaining = aiPatrolPauseTime_;
+            aiBot_.strafeSign *= -1.0f;
+            return EBehaviorTreeStatus::Success;
+        }
+
         aiBot_.moveDir = patrolDir;
+        aiBot_.lookDir = glm::length(patrolDir) > 0.001f ? patrolDir : aiBot_.lookDir;
     }
 
     return EBehaviorTreeStatus::Running;
@@ -1906,11 +2319,27 @@ void CharacterDemoGameInstance::ResetCharacterState()
     aiBot_.fireCooldownRemaining = 0.0f;
     aiBot_.targetMemoryRemaining = 0.0f;
     aiBot_.patrolPauseRemaining = 0.0f;
+    aiBot_.targetVisibleGraceRemaining = 0.0f;
+    aiBot_.stateHoldRemaining = 0.0f;
     aiBot_.strafeSign = 1.0f;
     aiBot_.patrolIndex = 0;
     aiBot_.targetVisible = false;
     aiBot_.triggerJump = false;
     aiBot_.state = EAIBotState::Disabled;
+    aiBot_.desiredState = EAIBotState::Disabled;
+    aiBot_.patrolReachableFound = false;
+    aiBot_.patrolUsedNearFallback = false;
+    aiBot_.patrolRequestedIndex = 0;
+    aiBot_.patrolSelectedIndex = 0;
+    aiBot_.patrolCandidatesTested = 0;
+    aiBot_.patrolWaypointCount = 0;
+    aiBot_.patrolSelectionMs = 0.0f;
+    aiBot_.patrolSelectedDistance = 0.0f;
+    aiBot_.patrolStuckTime = 0.0f;
+    aiBot_.patrolAbandonedTarget = false;
+    aiBot_.patrolLastCommittedIndex = std::numeric_limits<size_t>::max();
+    aiBot_.patrolSelectedTarget = glm::vec3(0.0f);
+    aiBot_.patrolProgressAnchor = glm::vec3(0.0f);
     aiBot_.animState = ECharacterAnimState::Idle;
     aiBot_.characterModelLoaded = false;
     aiBot_.characterLoadRequested = false;
@@ -2244,6 +2673,23 @@ void CharacterDemoGameInstance::DrawAIBotBehaviorTreeUI() const
                                HasLineOfSightToPlayer() ? "Yes" : "No");
     }
     drawList->AddText(ImVec2(base.x + 18.0f, base.y + 52.0f), IM_COL32(215, 221, 228, 230), summary.c_str());
+
+    if (navGrid_.IsBuilt())
+    {
+        std::string patrolDebug = fmt::format(
+            "Patrol Reachable: {} | Req {} -> Sel {} | Tested {} | Waypoints {} | Dist {:.1f} | NearFallback {} | Abandoned {} | Stuck {:.2f}s | {:.2f} ms",
+            aiBot_.patrolReachableFound ? "Yes" : "No",
+            aiBot_.patrolRequestedIndex,
+            aiBot_.patrolSelectedIndex,
+            aiBot_.patrolCandidatesTested,
+            aiBot_.patrolWaypointCount,
+            aiBot_.patrolSelectedDistance,
+            aiBot_.patrolUsedNearFallback ? "Yes" : "No",
+            aiBot_.patrolAbandonedTarget ? "Yes" : "No",
+            aiBot_.patrolStuckTime,
+            aiBot_.patrolSelectionMs);
+        drawList->AddText(ImVec2(base.x + 18.0f, base.y + 72.0f), IM_COL32(170, 210, 255, 230), patrolDebug.c_str());
+    }
 
     const ImVec2 rootCenter(base.x + overlaySize.x * 0.50f, base.y + 102.0f);
     const ImVec2 selectorCenter(base.x + overlaySize.x * 0.50f, base.y + 186.0f);

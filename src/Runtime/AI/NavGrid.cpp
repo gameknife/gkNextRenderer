@@ -3,6 +3,7 @@
 #include "Assets/GPU/UniformBuffer.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <queue>
 
@@ -12,6 +13,7 @@ namespace
 {
     constexpr int kDirX[] = {1, -1, 0, 0, 1, -1, 1, -1};
     constexpr int kDirZ[] = {0, 0, 1, -1, 1, -1, -1, 1};
+    constexpr float kDiagonalInvSqrt = 0.70710678f;
 }
 
 void FNavGrid::Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& settings)
@@ -27,86 +29,54 @@ void FNavGrid::Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& set
         return;
     }
 
-    cells_.resize(width_ * height_);
+    cells_.assign(width_ * height_, {});
 
-    const float maxSlopeCos = std::cos(glm::radians(settings_.maxSlopeAngle));
+    const FGridRect fullRect{0, 0, width_ - 1, height_ - 1};
+    SampleBaseWalkability(bvh, fullRect);
+    UpdateWalkabilityFromBase(fullRect);
+
     int walkableCount = 0;
-
-    for (int gz = 0; gz < height_; ++gz)
+    for (const FNavCell& cell : cells_)
     {
-        for (int gx = 0; gx < width_; ++gx)
+        if (cell.walkable)
         {
-            FNavCell& cell = cells_[CellIndex(gx, gz)];
-            cell.walkable = false;
-
-            const glm::vec3 worldCenter = GridToWorld(gx, gz);
-            const glm::vec3 rayOrigin(worldCenter.x, settings_.sampleCeiling, worldCenter.z);
-            const glm::vec3 rayDir(0.0f, -1.0f, 0.0f);
-
-            Assets::RayCastResult hit = bvh.RayCastInCPU(rayOrigin, rayDir);
-            if (!hit.Hitted)
-            {
-                continue;
-            }
-
-            const float groundY = rayOrigin.y - hit.T;
-            cell.groundHeight = groundY;
-
-            const glm::vec3 normal(hit.Normal.x, hit.Normal.y, hit.Normal.z);
-            const float slopeCos = glm::dot(normal, glm::vec3(0.0f, 1.0f, 0.0f));
-            if (slopeCos < maxSlopeCos)
-            {
-                continue;
-            }
-
-            const glm::vec3 clearOrigin(worldCenter.x, groundY + 0.1f, worldCenter.z);
-            const glm::vec3 upDir(0.0f, 1.0f, 0.0f);
-            Assets::RayCastResult clearHit = bvh.RayCastInCPU(clearOrigin, upDir);
-            if (clearHit.Hitted && clearHit.T < settings_.clearanceHeight)
-            {
-                continue;
-            }
-
-            cell.walkable = true;
             ++walkableCount;
         }
     }
 
-    // Edge erosion: mark walkable cells adjacent to blocked cells as blocked
-    std::vector<bool> eroded(cells_.size(), false);
-    for (int gz = 0; gz < height_; ++gz)
+    spdlog::info("NavGrid built: {}x{} cells, {} walkable, cellSize={:.2f}m, agentRadius={:.2f}m",
+                 width_, height_, walkableCount, settings_.cellSize, settings_.agentRadius);
+}
+
+void FNavGrid::RebuildDirtyRegion(FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin,
+                                  const glm::vec3& dirtyWorldMax)
+{
+    if (cells_.empty() || width_ <= 0 || height_ <= 0)
     {
-        for (int gx = 0; gx < width_; ++gx)
-        {
-            if (!cells_[CellIndex(gx, gz)].walkable)
-            {
-                continue;
-            }
-            for (int d = 0; d < 8; ++d)
-            {
-                int nx = gx + kDirX[d];
-                int nz = gz + kDirZ[d];
-                if (!InBounds(nx, nz) || !cells_[CellIndex(nx, nz)].walkable)
-                {
-                    eroded[CellIndex(gx, gz)] = true;
-                    break;
-                }
-            }
-        }
+        return;
     }
 
-    int erodedCount = 0;
-    for (int i = 0; i < static_cast<int>(cells_.size()); ++i)
+    const FGridRect dirtyRect = MakeGridRectFromWorldBounds(dirtyWorldMin, dirtyWorldMax);
+    if (!IsGridRectValid(dirtyRect))
     {
-        if (eroded[i])
-        {
-            cells_[i].walkable = false;
-            ++erodedCount;
-        }
+        return;
     }
 
-    spdlog::info("NavGrid built: {}x{} cells, {} walkable ({} eroded), cellSize={:.2f}m",
-                 width_, height_, walkableCount - erodedCount, erodedCount, settings_.cellSize);
+    const FGridRect changedBaseRect = ExpandGridRect(dirtyRect, GetFootprintMarginCells());
+    if (!IsGridRectValid(changedBaseRect))
+    {
+        return;
+    }
+
+    SampleBaseWalkability(bvh, changedBaseRect);
+
+    const FGridRect walkableRect = ExpandGridRect(changedBaseRect, GetExtraErosionCells());
+    UpdateWalkabilityFromBase(walkableRect);
+
+    spdlog::info("NavGrid partial rebuild: worldMin=({:.2f}, {:.2f}, {:.2f}) worldMax=({:.2f}, {:.2f}, {:.2f}) grid=[{},{}]-[{},{}]",
+                 dirtyWorldMin.x, dirtyWorldMin.y, dirtyWorldMin.z,
+                 dirtyWorldMax.x, dirtyWorldMax.y, dirtyWorldMax.z,
+                 walkableRect.minGx, walkableRect.minGz, walkableRect.maxGx, walkableRect.maxGz);
 }
 
 std::vector<glm::vec3> FNavGrid::FindPath(const glm::vec3& from, const glm::vec3& to, float referenceHeight) const
@@ -531,4 +501,212 @@ bool FNavGrid::CanTraverseByIndex(int fromIdx, int toIdx) const
     }
 
     return std::abs(toCell.groundHeight - fromCell.groundHeight) <= settings_.maxStepHeight;
+}
+
+FNavGrid::FGridRect FNavGrid::MakeGridRectFromWorldBounds(const glm::vec3& worldMin, const glm::vec3& worldMax) const
+{
+    if (cells_.empty())
+    {
+        return {};
+    }
+
+    const glm::vec3 clampedMin(
+        glm::clamp(std::min(worldMin.x, worldMax.x), settings_.worldMin.x, settings_.worldMax.x),
+        0.0f,
+        glm::clamp(std::min(worldMin.z, worldMax.z), settings_.worldMin.z, settings_.worldMax.z));
+    const glm::vec3 clampedMax(
+        glm::clamp(std::max(worldMin.x, worldMax.x), settings_.worldMin.x, settings_.worldMax.x),
+        0.0f,
+        glm::clamp(std::max(worldMin.z, worldMax.z), settings_.worldMin.z, settings_.worldMax.z));
+
+    const int minGx =
+        static_cast<int>(std::floor((clampedMin.x - settings_.worldMin.x) / settings_.cellSize));
+    const int minGz =
+        static_cast<int>(std::floor((clampedMin.z - settings_.worldMin.z) / settings_.cellSize));
+    const int maxGx =
+        static_cast<int>(std::floor((clampedMax.x - settings_.worldMin.x) / settings_.cellSize));
+    const int maxGz =
+        static_cast<int>(std::floor((clampedMax.z - settings_.worldMin.z) / settings_.cellSize));
+
+    return ExpandGridRect({minGx, minGz, maxGx, maxGz}, 0);
+}
+
+FNavGrid::FGridRect FNavGrid::ExpandGridRect(const FGridRect& rect, int margin) const
+{
+    if (width_ <= 0 || height_ <= 0)
+    {
+        return {};
+    }
+
+    FGridRect expanded;
+    expanded.minGx = glm::clamp(rect.minGx - margin, 0, width_ - 1);
+    expanded.minGz = glm::clamp(rect.minGz - margin, 0, height_ - 1);
+    expanded.maxGx = glm::clamp(rect.maxGx + margin, 0, width_ - 1);
+    expanded.maxGz = glm::clamp(rect.maxGz + margin, 0, height_ - 1);
+    return expanded;
+}
+
+bool FNavGrid::IsGridRectValid(const FGridRect& rect) const
+{
+    return rect.minGx <= rect.maxGx && rect.minGz <= rect.maxGz;
+}
+
+void FNavGrid::SampleBaseWalkability(FCPUAccelerationStructure& bvh, const FGridRect& rect)
+{
+    if (!IsGridRectValid(rect))
+    {
+        return;
+    }
+
+    for (int gz = rect.minGz; gz <= rect.maxGz; ++gz)
+    {
+        for (int gx = rect.minGx; gx <= rect.maxGx; ++gx)
+        {
+            FNavCell sampledCell;
+            SampleBaseCell(bvh, gx, gz, sampledCell);
+            cells_[CellIndex(gx, gz)] = sampledCell;
+        }
+    }
+}
+
+void FNavGrid::UpdateWalkabilityFromBase(const FGridRect& rect)
+{
+    if (!IsGridRectValid(rect))
+    {
+        return;
+    }
+
+    const int erosionCells = GetExtraErosionCells();
+    for (int gz = rect.minGz; gz <= rect.maxGz; ++gz)
+    {
+        for (int gx = rect.minGx; gx <= rect.maxGx; ++gx)
+        {
+            FNavCell& cell = cells_[CellIndex(gx, gz)];
+            cell.walkable = cell.baseWalkable;
+            if (!cell.baseWalkable)
+            {
+                continue;
+            }
+
+            bool blockedByNeighbor = false;
+            for (int dz = -erosionCells; dz <= erosionCells && !blockedByNeighbor; ++dz)
+            {
+                for (int dx = -erosionCells; dx <= erosionCells; ++dx)
+                {
+                    if (dx == 0 && dz == 0)
+                    {
+                        continue;
+                    }
+
+                    const int nx = gx + dx;
+                    const int nz = gz + dz;
+                    if (!InBounds(nx, nz) || !cells_[CellIndex(nx, nz)].baseWalkable)
+                    {
+                        blockedByNeighbor = true;
+                        break;
+                    }
+                }
+            }
+
+            if (blockedByNeighbor)
+            {
+                cell.walkable = false;
+            }
+        }
+    }
+}
+
+bool FNavGrid::SampleBaseCell(FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const
+{
+    outCell = {};
+
+    const glm::vec3 worldCenter = GridToWorld(gx, gz);
+    const glm::vec3 rayDir(0.0f, -1.0f, 0.0f);
+    const glm::vec3 upDir(0.0f, 1.0f, 0.0f);
+    const float maxSlopeCos = std::cos(glm::radians(settings_.maxSlopeAngle));
+
+    const glm::vec3 rayOrigin(worldCenter.x, settings_.sampleCeiling, worldCenter.z);
+    const Assets::RayCastResult centerHit = bvh.RayCastInCPU(rayOrigin, rayDir);
+    if (!centerHit.Hitted)
+    {
+        return false;
+    }
+
+    const float groundY = rayOrigin.y - centerHit.T;
+    outCell.groundHeight = groundY;
+
+    const glm::vec3 normal(centerHit.Normal.x, centerHit.Normal.y, centerHit.Normal.z);
+    if (glm::dot(normal, glm::vec3(0.0f, 1.0f, 0.0f)) < maxSlopeCos)
+    {
+        return false;
+    }
+
+    const glm::vec3 clearOrigin(worldCenter.x, groundY + 0.1f, worldCenter.z);
+    const Assets::RayCastResult clearHit = bvh.RayCastInCPU(clearOrigin, upDir);
+    if (clearHit.Hitted && clearHit.T < settings_.clearanceHeight)
+    {
+        return false;
+    }
+
+    if (settings_.agentRadius > 0.001f)
+    {
+        const std::array<glm::vec2, 8> footprintOffsets = {
+            glm::vec2(1.0f, 0.0f),
+            glm::vec2(-1.0f, 0.0f),
+            glm::vec2(0.0f, 1.0f),
+            glm::vec2(0.0f, -1.0f),
+            glm::vec2(kDiagonalInvSqrt, kDiagonalInvSqrt),
+            glm::vec2(-kDiagonalInvSqrt, kDiagonalInvSqrt),
+            glm::vec2(kDiagonalInvSqrt, -kDiagonalInvSqrt),
+            glm::vec2(-kDiagonalInvSqrt, -kDiagonalInvSqrt)
+        };
+
+        for (const glm::vec2& unitOffset : footprintOffsets)
+        {
+            const glm::vec2 offset = unitOffset * settings_.agentRadius;
+            const glm::vec3 sampleOrigin(worldCenter.x + offset.x, settings_.sampleCeiling, worldCenter.z + offset.y);
+            const Assets::RayCastResult sampleHit = bvh.RayCastInCPU(sampleOrigin, rayDir);
+            if (!sampleHit.Hitted)
+            {
+                return false;
+            }
+
+            const float sampleGroundY = sampleOrigin.y - sampleHit.T;
+            if (std::abs(sampleGroundY - groundY) > settings_.maxStepHeight)
+            {
+                return false;
+            }
+
+            const glm::vec3 sampleNormal(sampleHit.Normal.x, sampleHit.Normal.y, sampleHit.Normal.z);
+            if (glm::dot(sampleNormal, glm::vec3(0.0f, 1.0f, 0.0f)) < maxSlopeCos)
+            {
+                return false;
+            }
+
+            const glm::vec3 sampleClearOrigin(sampleOrigin.x, sampleGroundY + 0.1f, sampleOrigin.z);
+            const Assets::RayCastResult sampleClearHit = bvh.RayCastInCPU(sampleClearOrigin, upDir);
+            if (sampleClearHit.Hitted && sampleClearHit.T < settings_.clearanceHeight)
+            {
+                return false;
+            }
+        }
+    }
+
+    outCell.baseWalkable = true;
+    outCell.walkable = true;
+    return true;
+}
+
+int FNavGrid::GetFootprintMarginCells() const
+{
+    if (settings_.agentRadius <= 0.001f || settings_.cellSize <= 0.001f)
+    {
+        return 0;
+    }
+    return static_cast<int>(std::ceil(settings_.agentRadius / settings_.cellSize));
+}
+
+int FNavGrid::GetExtraErosionCells() const
+{
+    return std::max(0, GetFootprintMarginCells() - 1);
 }

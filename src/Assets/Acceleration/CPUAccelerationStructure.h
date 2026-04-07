@@ -59,6 +59,9 @@ struct FCPUTLASInstanceInfo
 {
     std::array<uint32_t, 16> matIdxs;
     uint32_t nodeId;
+    glm::vec3 worldBoundsMin{0.0f};
+    glm::vec3 worldBoundsMax{0.0f};
+    bool navRelevant = false;
 };
 
 struct FCPUBLASContext
@@ -110,6 +113,8 @@ public:
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
+    bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
+    void ClearNavRelevantDirtyBounds();
 
     void GenShadowMap(Assets::Scene& scene);
     
@@ -132,6 +137,9 @@ private:
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
+    bool hasNavRelevantDirtyBounds_ = false;
+    glm::vec3 navRelevantDirtyWorldMin_{0.0f};
+    glm::vec3 navRelevantDirtyWorldMax_{0.0f};
 
     std::vector<FCPUProbeBaker> cascadeBakers;
     FCPUPageIndex cpuPageIndex;

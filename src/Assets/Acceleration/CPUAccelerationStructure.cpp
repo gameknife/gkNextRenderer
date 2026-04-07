@@ -3,11 +3,13 @@
 #include "Vulkan/MemoryAndShader.hpp"
 #include "Assets/Core/Node.h"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Assets/GPU/TextureImage.hpp"
 #include "Runtime/Engine.hpp"
 #include "Assets/Core/Scene.hpp"
 
 #include <chrono>
+#include <unordered_map>
 #include <xxhash.h>
 
 #define TINYBVH_IMPLEMENTATION
@@ -24,6 +26,58 @@ Assets::SphericalHarmonics HdrsHs[100];
 namespace
 {
     constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+
+    struct FWorldBounds
+    {
+        glm::vec3 min{FLT_MAX, FLT_MAX, FLT_MAX};
+        glm::vec3 max{-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    };
+
+    FWorldBounds ComputeWorldBounds(const Assets::Model& model, const glm::mat4& worldTransform)
+    {
+        const glm::vec3 localMin = model.GetLocalAABBMin();
+        const glm::vec3 localMax = model.GetLocalAABBMax();
+
+        glm::vec3 corners[8];
+        corners[0] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMin.y, localMin.z, 1.0f));
+        corners[1] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMin.y, localMin.z, 1.0f));
+        corners[2] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMax.y, localMin.z, 1.0f));
+        corners[3] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMax.y, localMin.z, 1.0f));
+        corners[4] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMin.y, localMax.z, 1.0f));
+        corners[5] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMin.y, localMax.z, 1.0f));
+        corners[6] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f));
+        corners[7] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f));
+
+        FWorldBounds bounds;
+        bounds.min = corners[0];
+        bounds.max = corners[0];
+        for (int i = 1; i < 8; ++i)
+        {
+            bounds.min = glm::min(bounds.min, corners[i]);
+            bounds.max = glm::max(bounds.max, corners[i]);
+        }
+        return bounds;
+    }
+
+    bool BoundsNearlyEqual(const FWorldBounds& lhs, const FWorldBounds& rhs, float epsilon = 0.01f)
+    {
+        return glm::all(glm::lessThanEqual(glm::abs(lhs.min - rhs.min), glm::vec3(epsilon))) &&
+               glm::all(glm::lessThanEqual(glm::abs(lhs.max - rhs.max), glm::vec3(epsilon)));
+    }
+
+    void AccumulateBounds(bool& hasBounds, glm::vec3& minBounds, glm::vec3& maxBounds, const FWorldBounds& bounds)
+    {
+        if (!hasBounds)
+        {
+            minBounds = bounds.min;
+            maxBounds = bounds.max;
+            hasBounds = true;
+            return;
+        }
+
+        minBounds = glm::min(minBounds, bounds.min);
+        maxBounds = glm::max(maxBounds, bounds.max);
+    }
 }
 
 using namespace Assets;
@@ -297,19 +351,33 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 {
     std::vector<tinybvh::BLASInstance> tmpbvhInstanceList;
     std::vector<FCPUTLASInstanceInfo> tmpbvhTLASContexts;
+    std::unordered_map<uint32_t, FWorldBounds> previousNavBounds;
+    std::unordered_map<uint32_t, FWorldBounds> currentNavBounds;
+
+    previousNavBounds.reserve(bvhTLASContexts.size());
+    for (const FCPUTLASInstanceInfo& previousInfo : bvhTLASContexts)
+    {
+        if (!previousInfo.navRelevant)
+        {
+            continue;
+        }
+        previousNavBounds[previousInfo.nodeId] = {previousInfo.worldBoundsMin, previousInfo.worldBoundsMax};
+    }
 
     for (auto& node : scene.Nodes())
     {
         auto render = node->GetComponent<Runtime::RenderComponent>();
         if (!render) continue;
-        uint32_t modelId = render->GetModelId();
+        const uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
         if (!render->GetVisible()) continue;
         if (!render->GetRayCastVisible()) continue;
 
         node->RecalcTransform(true);
-        mat4 worldTS = node->WorldTransform();
-        worldTS = transpose(worldTS);
+        const glm::mat4 nodeWorldTransform = node->WorldTransform();
+        const FWorldBounds worldBounds = ComputeWorldBounds(scene.Models()[modelId], nodeWorldTransform);
+
+        mat4 worldTS = transpose(nodeWorldTransform);
 
         tinybvh::BLASInstance instance;
         instance.blasIdx = modelId;
@@ -317,16 +385,59 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 
         tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
+        info.matIdxs.fill(0);
         info.nodeId = node->GetInstanceId();
+        info.worldBoundsMin = worldBounds.min;
+        info.worldBoundsMax = worldBounds.max;
+        if (const auto physics = node->GetComponent<Runtime::PhysicsComponent>())
+        {
+            info.navRelevant = physics->GetMobility() != Runtime::ENodeMobility::Dynamic;
+        }
+        else
+        {
+            info.navRelevant = true;
+        }
+
         auto& mats = render->Materials();
-        for ( int i = 0; i < mats.size(); ++i )
+        for (int i = 0; i < mats.size() && i < static_cast<int>(info.matIdxs.size()); ++i)
         {
             uint32_t matId = mats[i];
-            FMaterial& mat = scene.Materials()[matId];
             info.matIdxs[i] = matId;
-            
+        }
+
+        if (info.navRelevant)
+        {
+            currentNavBounds[info.nodeId] = worldBounds;
         }
         tmpbvhTLASContexts.push_back( info );
+    }
+
+    bool hasNavDirtyBounds = false;
+    glm::vec3 navDirtyWorldMin(0.0f);
+    glm::vec3 navDirtyWorldMax(0.0f);
+
+    for (const auto& [nodeId, currentBounds] : currentNavBounds)
+    {
+        const auto previousIt = previousNavBounds.find(nodeId);
+        if (previousIt == previousNavBounds.end())
+        {
+            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, currentBounds);
+            continue;
+        }
+
+        if (!BoundsNearlyEqual(currentBounds, previousIt->second))
+        {
+            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, currentBounds);
+            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, previousIt->second);
+        }
+    }
+
+    for (const auto& [nodeId, previousBounds] : previousNavBounds)
+    {
+        if (currentNavBounds.find(nodeId) == currentNavBounds.end())
+        {
+            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, previousBounds);
+        }
     }
 
     if (tmpbvhInstanceList.size() > 0)
@@ -343,6 +454,21 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
     GbvhInstanceList = &bvhInstanceList;
     GbvhTlasContexts = &bvhTLASContexts;
     GbvhBlasContexts = &bvhBLASContexts;
+
+    if (hasNavDirtyBounds)
+    {
+        if (!hasNavRelevantDirtyBounds_)
+        {
+            navRelevantDirtyWorldMin_ = navDirtyWorldMin;
+            navRelevantDirtyWorldMax_ = navDirtyWorldMax;
+            hasNavRelevantDirtyBounds_ = true;
+        }
+        else
+        {
+            navRelevantDirtyWorldMin_ = glm::min(navRelevantDirtyWorldMin_, navDirtyWorldMin);
+            navRelevantDirtyWorldMax_ = glm::max(navRelevantDirtyWorldMax_, navDirtyWorldMax);
+        }
+    }
 }
 
 RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDir)
@@ -534,6 +660,7 @@ void FCPUAccelerationStructure::ClearAllTasks()
     
     // 重置刷新标志
     needFlush = false;
+    ClearNavRelevantDirtyBounds();
 }
 
 void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
@@ -601,6 +728,28 @@ void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
             }
         }
     }
+}
+
+bool FCPUAccelerationStructure::ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax)
+{
+    if (!hasNavRelevantDirtyBounds_)
+    {
+        return false;
+    }
+
+    outWorldMin = navRelevantDirtyWorldMin_;
+    outWorldMax = navRelevantDirtyWorldMax_;
+    hasNavRelevantDirtyBounds_ = false;
+    navRelevantDirtyWorldMin_ = glm::vec3(0.0f);
+    navRelevantDirtyWorldMax_ = glm::vec3(0.0f);
+    return true;
+}
+
+void FCPUAccelerationStructure::ClearNavRelevantDirtyBounds()
+{
+    hasNavRelevantDirtyBounds_ = false;
+    navRelevantDirtyWorldMin_ = glm::vec3(0.0f);
+    navRelevantDirtyWorldMax_ = glm::vec3(0.0f);
 }
 
 void FCPUProbeBaker::ClearAmbientCubes()
